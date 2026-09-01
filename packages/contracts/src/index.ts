@@ -1,0 +1,425 @@
+// Shared API contract types for the Dynamic Knowledge Platform.
+// Plain types only — no runtime deps, no server imports.
+
+export type RevisionStatus = 'draft' | 'finalized' | 'indexing' | 'indexed' | 'failed';
+export type IngestionJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+
+export interface DocumentSummary {
+  documentId: string;
+  workspaceId: string;
+  title: string;
+  defaultBranch: string;
+  headRevisionId: string | null;
+  headRevisionStatus: RevisionStatus | null;
+  createdAt: string;
+}
+
+export interface RevisionInfo {
+  revisionId: string;
+  documentId: string;
+  revisionNumber: number;
+  contentHash: string | null;
+  contentType: string;
+  status: RevisionStatus;
+  message: string | null;
+  createdAt: string;
+  finalizedAt: string | null;
+}
+
+export interface ChunkSummary {
+  chunkId: string;
+  headingPath: string[];
+  snippet: string;
+}
+
+// POST /v1/documents
+export interface CreateDocumentRequest {
+  workspaceId: string;
+  title: string;
+  content?: { mode: 'inline'; format: string; text: string };
+  /** Explicit relations (plan.md §5 "explicit" fact class) written as graph edges with provenance. */
+  relations?: RelationInput[];
+}
+export interface CreateDocumentResponse {
+  documentId: string;
+  revisionId: string;
+  branch: string;
+  status: RevisionStatus;
+}
+
+// POST /v1/documents/:id/uploads
+export interface CreateUploadRequest {
+  revisionId?: string;
+  contentType: string;
+  filename: string;
+}
+export interface CreateUploadResponse {
+  documentId: string;
+  revisionId: string;
+  upload: { method: 'PUT'; url: string; objectKey: string };
+}
+
+// POST /v1/documents/:id/revisions/:revisionId/finalize
+export interface FinalizeRevisionResponse {
+  revisionId: string;
+  status: RevisionStatus;
+  ingestionJobId: string | null;
+  deduplicated: boolean;
+}
+
+// GET /v1/documents/:id
+export interface DocumentDetailResponse {
+  document: DocumentSummary;
+  revision: RevisionInfo;
+  chunks: ChunkSummary[];
+}
+
+// GET /v1/documents
+export interface ListDocumentsResponse {
+  items: DocumentSummary[];
+  nextCursor: string | null;
+}
+
+// POST /v1/search
+export interface SearchRequest {
+  workspaceId: string;
+  query: string;
+  mode?: 'hybrid' | 'semantic';
+  limit?: number;
+  /**
+   * Phase 4 hybrid expansion: walk relation edges out from the vector hits.
+   * depth = entity hops (default 1, max 3); relationTypes filters edge types.
+   */
+  expandGraph?: { depth?: number; relationTypes?: string[] };
+}
+export interface SearchResult {
+  documentId: string;
+  revisionId: string;
+  chunkId: string;
+  title: string;
+  snippet: string;
+  score: number;
+  /** Entities related to the result's document (present when expandGraph is used). */
+  entities?: EntityRef[];
+}
+export interface SearchResponse {
+  results: SearchResult[];
+  /** Documents reached only via graph expansion (not in the vector hits). */
+  related?: RelatedDocumentResult[];
+}
+/** A document discovered by graph expansion, with the connecting evidence. */
+export interface RelatedDocumentResult {
+  documentId: string;
+  title: string;
+  /** Entity hops from the nearest vector hit (1 = shares an entity with a hit). */
+  distance: number;
+  /** Edges that connect this document into the hit set. */
+  via: Array<{ entityKey: string; relationType: string; confidence: number }>;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — revision DAG, branches, compare, deterministic relations
+// ---------------------------------------------------------------------------
+
+export interface BranchInfo {
+  branchId: string;
+  documentId: string;
+  name: string;
+  headRevisionId: string | null;
+  protected: boolean;
+  createdAt: string;
+}
+
+// POST /v1/documents/:id/branches
+export interface CreateBranchRequest {
+  name: string;
+  /** Defaults to the current head of the document's default branch. */
+  fromRevisionId?: string;
+}
+export interface CreateBranchResponse {
+  branch: BranchInfo;
+}
+
+// GET /v1/documents/:id/branches
+export interface ListBranchesResponse {
+  branches: BranchInfo[];
+}
+
+/** RevisionInfo + DAG parentage (revision_parents) and owning branch. */
+export interface RevisionNode extends RevisionInfo {
+  branch: string | null;
+  parentRevisionIds: string[];
+}
+
+// GET /v1/documents/:id/revisions
+export interface ListRevisionsResponse {
+  documentId: string;
+  revisions: RevisionNode[];
+}
+
+// GET /v1/documents/:id/compare?from&to&mode=direct|merge-base
+export type CompareMode = 'direct' | 'merge-base';
+
+export interface DiffLine {
+  kind: 'context' | 'added' | 'deleted';
+  old?: number;
+  new?: number;
+  text: string;
+}
+export interface DiffHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: DiffLine[];
+}
+export interface CompareRevisionRef {
+  revisionId: string;
+  revisionNumber: number;
+  branch: string | null;
+  contentHash: string | null;
+}
+export interface CompareResponse {
+  documentId: string;
+  from: CompareRevisionRef;
+  to: CompareRevisionRef;
+  comparisonMode: CompareMode;
+  /** Present in merge-base mode; the nearest common ancestor actually diffed against. */
+  mergeBaseRevisionId: string | null;
+  summary: { additions: number; deletions: number };
+  hunks: DiffHunk[];
+  /** Path-level structural diff (JSON/YAML content or markdown frontmatter); null when not applicable. */
+  structural?: StructuralDiff | null;
+  /** Graph-projection diff between the two revisions; null when neither side is indexed. */
+  semantic?: SemanticDiff | null;
+}
+
+/**
+ * Deterministic/explicit relation target (plan.md §5 fact classes).
+ * `key` is a stable entity key such as "service:identity".
+ */
+export interface RelationTarget {
+  type: string;
+  key: string;
+  name?: string;
+}
+export interface RelationInput {
+  /** Edge type, e.g. DESCRIBES, DEPENDS_ON, IMPLEMENTS, RELATED_TO. */
+  type: string;
+  target: RelationTarget;
+}
+
+export interface EntityRef {
+  key: string;
+  type: string;
+  name: string;
+}
+export interface RelationWithProvenance {
+  type: string;
+  from: string;
+  to: EntityRef;
+  provenance: {
+    revisionId: string;
+    extractor: FactExtractor;
+    confidence: number;
+    /** Present on inferred facts: the chunk the relation was extracted from. */
+    sourceChunkId?: string;
+    /** Present on inferred facts: excerpt supporting the relation. */
+    snippet?: string;
+  };
+}
+
+// GET /v1/documents/:id/relations
+export interface ListDocumentRelationsResponse {
+  documentId: string;
+  relations: RelationWithProvenance[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — merge requests, structural & semantic diff, optimistic concurrency
+// ---------------------------------------------------------------------------
+
+/** Path-level structural diff (plan.md §8): JSON/YAML content, or markdown frontmatter. */
+export interface StructuralChange {
+  /** Dotted path, e.g. "metadata.tags[0]". Empty string is the document root. */
+  path: string;
+  kind: 'added' | 'removed' | 'changed';
+  before?: unknown;
+  after?: unknown;
+}
+export interface StructuralDiff {
+  /** What was diffed: the parsed content body (JSON/YAML) or markdown frontmatter. */
+  source: 'content' | 'frontmatter';
+  changes: StructuralChange[];
+  summary: { added: number; removed: number; changed: number };
+}
+
+/** Semantic (graph-projection) diff between two revisions (plan.md §8). */
+export interface SemanticRelationChange {
+  type: string;
+  targetKey: string;
+  extractor: string;
+  confidence: number;
+}
+export interface SemanticDiff {
+  entities: { added: string[]; removed: string[] };
+  relations: { added: SemanticRelationChange[]; removed: SemanticRelationChange[] };
+  /** 1 - cosine(mean chunk embedding); null when either side has no indexed chunks. */
+  embeddingShift: { score: number; meaningful: boolean } | null;
+}
+
+export type MergeRequestStatus = 'open' | 'merged' | 'closed';
+export type MergeStrategy = 'merge-commit' | 'squash';
+
+export interface MergeRequestInfo {
+  mergeRequestId: string;
+  documentId: string;
+  title: string;
+  description: string | null;
+  sourceBranch: string;
+  targetBranch: string;
+  sourceHeadRevisionId: string | null;
+  targetHeadRevisionId: string | null;
+  /** Nearest common ancestor of the two heads at read time; null when unrelated or target is empty. */
+  mergeBaseRevisionId: string | null;
+  status: MergeRequestStatus;
+  approvedBy: string[];
+  strategy: MergeStrategy | null;
+  mergedRevisionId: string | null;
+  createdAt: string;
+  mergedAt: string | null;
+  closedAt: string | null;
+}
+
+// POST /v1/documents/:id/merge-requests
+export interface CreateMergeRequestRequest {
+  sourceBranch: string;
+  /** Defaults to the document's default branch. */
+  targetBranch?: string;
+  title: string;
+  description?: string;
+}
+export interface CreateMergeRequestResponse {
+  mergeRequest: MergeRequestInfo;
+}
+
+// GET /v1/documents/:id/merge-requests
+export interface ListMergeRequestsResponse {
+  documentId: string;
+  mergeRequests: MergeRequestInfo[];
+}
+
+// GET /v1/merge-requests/:id/diff
+export interface MergeRequestDiffResponse {
+  mergeRequest: MergeRequestInfo;
+  /** merge-base comparison targetHead...sourceHead, with structural + semantic sections. */
+  compare: CompareResponse;
+}
+
+// POST /v1/merge-requests/:id/merge
+export interface MergeMergeRequestRequest {
+  strategy?: MergeStrategy;
+}
+export interface MergeMergeRequestResponse {
+  mergeRequest: MergeRequestInfo;
+  mergedRevision: RevisionInfo | null;
+}
+
+/** 409 body for If-Match / merge conflicts (plan.md §7): always carries a comparison link. */
+export interface RevisionConflictResponse {
+  statusCode: 409;
+  message: string;
+  currentHeadRevisionId: string | null;
+  comparisonUrl: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — inference, confidence-classed facts, entity traversal
+// ---------------------------------------------------------------------------
+
+/**
+ * Fact classes (plan.md §5), by trust: explicit > frontmatter (deterministic)
+ * > curated (user-confirmed) > inferred (LLM). Curated facts are never
+ * silently overwritten by automated re-extraction.
+ */
+export type FactExtractor = 'explicit' | 'frontmatter' | 'inferred' | 'curated';
+
+// POST /v1/documents/:id/relations/curate
+export interface CurateRelationRequest {
+  relation: RelationInput;
+}
+
+export interface EntitySummary {
+  key: string;
+  type: string;
+  name: string;
+  /** Number of relation edges touching this entity in the workspace. */
+  degree: number;
+}
+
+// GET /v1/entities?workspaceId=
+export interface ListEntitiesResponse {
+  entities: EntitySummary[];
+}
+
+export interface EntityRelationEdge {
+  documentId: string;
+  documentTitle: string;
+  entityKey: string;
+  relationType: string;
+  extractor: FactExtractor | string;
+  confidence: number;
+  /** 'out' = document → entity (all stored edges point that way). */
+  direction: 'out';
+}
+
+// GET /v1/entities/:key/neighbors (plan.md §9 knowledge.find_relations)
+export interface EntityNeighborsResponse {
+  entity: EntityRef;
+  /** Edges touching the entity (depth 1). */
+  edges: EntityRelationEdge[];
+  /** Entities reachable within `depth` hops via shared documents. */
+  relatedEntities: Array<EntityRef & { distance: number }>;
+}
+
+// POST /v1/entities/:key/impact-analysis
+export interface ImpactAnalysisRequest {
+  workspaceId: string;
+  /**
+   * 'dependents' (default): what is impacted if this entity changes —
+   * documents referencing it, then the entities those documents DESCRIBE.
+   * 'dependencies': what this entity relies on — entities referenced by the
+   * documents that DESCRIBE it.
+   */
+  direction?: 'dependents' | 'dependencies';
+  /** Entity hops, default 3, max 5. */
+  maxDepth?: number;
+}
+export interface ImpactPathStep {
+  kind: 'entity' | 'document';
+  id: string;
+  label: string;
+  /** Edge type that led here (absent on the starting node). */
+  viaType?: string;
+}
+export interface ImpactedNode {
+  entity: EntityRef;
+  distance: number;
+  path: ImpactPathStep[];
+}
+export interface ImpactAnalysisResponse {
+  entity: EntityRef;
+  direction: 'dependents' | 'dependencies';
+  impactedEntities: ImpactedNode[];
+  /** Documents on any impact path. */
+  affectedDocuments: Array<{ documentId: string; title: string; distance: number }>;
+}
+
+// GET /v1/entities/trace?workspaceId&from&to (plan.md §9 knowledge.trace_relation)
+export interface TraceRelationResponse {
+  from: string;
+  to: string;
+  /** Alternating entity/document steps, or null when no path exists. */
+  path: ImpactPathStep[] | null;
+  hops: number | null;
+}

@@ -1,0 +1,258 @@
+import { Injectable } from '@nestjs/common';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { StorageService } from '../storage/storage.service.js';
+import { DocumentsService } from '../documents/documents.service.js';
+import { CompareService } from '../documents/compare.service.js';
+import { MergeRequestsService } from '../documents/merge-requests.service.js';
+import { SearchService } from '../search/search.service.js';
+import { EntitiesService } from '../entities/entities.service.js';
+
+/**
+ * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
+ * match [a-zA-Z0-9_-]) but map 1:1 onto the plan's dotted names:
+ *
+ *   knowledge_search            → knowledge.search            (Phase 1)
+ *   knowledge_get_document      → knowledge.get_document      (Phase 1)
+ *   knowledge_list_revisions    → knowledge.list_revisions    (Phase 2)
+ *   knowledge_compare_revisions → knowledge.compare_revisions (Phase 2)
+ *   knowledge_create_branch     → knowledge.create_branch     (Phase 2)
+ *   knowledge_create_revision   → knowledge.create_revision   (Phase 2)
+ *   knowledge_find_relations    → knowledge.find_relations    (Phase 4)
+ *   knowledge_impact_analysis   → knowledge.impact_analysis   (Phase 4)
+ *   knowledge_trace_relation    → knowledge.trace_relation    (Phase 4)
+ *   knowledge_create_relation   → knowledge.create_relation   (Phase 4, curated)
+ */
+@Injectable()
+export class McpService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+    private readonly documents: DocumentsService,
+    private readonly compare: CompareService,
+    private readonly search: SearchService,
+    private readonly mergeRequests: MergeRequestsService,
+    private readonly entities: EntitiesService,
+  ) {}
+
+  async serveStdio(): Promise<void> {
+    const server = new McpServer({ name: 'knowledge', version: '0.2.0' });
+
+    server.registerTool(
+      'knowledge_search',
+      {
+        description:
+          'Semantic search over the knowledge base. Every result carries document/revision/chunk citations.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          query: z.string().min(1),
+          limit: z.number().int().min(1).max(100).optional(),
+        },
+      },
+      async ({ workspaceId, query, limit }) =>
+        this.json(await this.search.search({ workspaceId, query, limit: limit ?? 20 })),
+    );
+
+    server.registerTool(
+      'knowledge_find_relations',
+      {
+        description:
+          'Neighborhood of an entity: documents referencing it (with relation type, fact class, confidence) and entities within N hops.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          entity: z.string().min(1).describe('Entity key, e.g. "service:identity"'),
+          relationship: z.string().optional().describe('Filter to one relation type, e.g. DEPENDS_ON'),
+          depth: z.number().int().min(1).max(3).optional(),
+        },
+      },
+      async ({ workspaceId, entity, relationship, depth }) =>
+        this.json(
+          await this.entities.neighbors(workspaceId, entity, depth ?? 1, relationship ? [relationship] : undefined),
+        ),
+    );
+
+    server.registerTool(
+      'knowledge_impact_analysis',
+      {
+        description:
+          'Transitive impact of changing an entity: dependents (what breaks) or dependencies (what it relies on), with document evidence paths.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          entityId: z.string().min(1).describe('Entity key, e.g. "service:identity"'),
+          direction: z.enum(['dependents', 'dependencies']).optional(),
+          maxDepth: z.number().int().min(1).max(5).optional(),
+        },
+      },
+      async ({ workspaceId, entityId, direction, maxDepth }) =>
+        this.json(await this.entities.impactAnalysis(workspaceId, entityId, direction ?? 'dependents', maxDepth ?? 3)),
+    );
+
+    server.registerTool(
+      'knowledge_trace_relation',
+      {
+        description: 'Shortest relation path between two entities, alternating entity/document steps with edge types.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          fromEntityId: z.string().min(1),
+          toEntityId: z.string().min(1),
+          maxDepth: z.number().int().min(1).max(6).optional(),
+        },
+      },
+      async ({ workspaceId, fromEntityId, toEntityId, maxDepth }) =>
+        this.json(await this.entities.trace(workspaceId, fromEntityId, toEntityId, maxDepth ?? 4)),
+    );
+
+    server.registerTool(
+      'knowledge_get_document',
+      {
+        description: 'Get a document, its head (or a given) revision and indexed chunk summaries.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          revisionId: z.string().uuid().optional(),
+        },
+      },
+      async ({ documentId, revisionId }) =>
+        this.json(await this.documents.getDocument(documentId, revisionId)),
+    );
+
+    server.registerTool(
+      'knowledge_list_revisions',
+      {
+        description: 'List the immutable revision DAG of a document (parent ids, branch, status).',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          branch: z.string().optional(),
+        },
+      },
+      async ({ documentId, branch }) =>
+        this.json(await this.documents.listRevisions(documentId, branch)),
+    );
+
+    server.registerTool(
+      'knowledge_compare_revisions',
+      {
+        description:
+          'GitLab-style comparison of two revisions: "direct" (diff from..to) or "merge-base" (diff from...to against the nearest common ancestor).',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          fromRevisionId: z.string().uuid(),
+          toRevisionId: z.string().uuid(),
+          mode: z.enum(['direct', 'merge-base']).optional(),
+          includeSemanticDiff: z.boolean().optional(),
+        },
+      },
+      async ({ documentId, fromRevisionId, toRevisionId, mode, includeSemanticDiff }) =>
+        this.json(
+          await this.compare.compare(documentId, fromRevisionId, toRevisionId, mode ?? 'direct', {
+            structural: true,
+            semantic: includeSemanticDiff ?? false,
+          }),
+        ),
+    );
+
+    server.registerTool(
+      'knowledge_create_branch',
+      {
+        description: 'Create a branch on a document, from a given revision or the default-branch head.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          name: z.string().min(1),
+          fromRevisionId: z.string().uuid().optional(),
+        },
+      },
+      async ({ documentId, name, fromRevisionId }) =>
+        this.json(await this.documents.createBranch(documentId, { name, fromRevisionId })),
+    );
+
+    server.registerTool(
+      'knowledge_create_revision',
+      {
+        description:
+          'Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          branch: z.string().optional(),
+          baseRevisionId: z.string().uuid().optional(),
+          content: z.string().min(1),
+          message: z.string().optional(),
+        },
+      },
+      async ({ documentId, branch, baseRevisionId, content, message }) =>
+        this.json(await this.createRevision(documentId, { branch, baseRevisionId, content, message })),
+    );
+
+    server.registerTool(
+      'knowledge_create_merge_request',
+      {
+        description:
+          'Open a GitLab-style merge request between two branches of a document. Target defaults to the default branch.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          sourceBranch: z.string().min(1),
+          targetBranch: z.string().min(1).optional(),
+          title: z.string().min(1),
+          description: z.string().optional(),
+        },
+      },
+      async ({ documentId, sourceBranch, targetBranch, title, description }) =>
+        this.json(await this.mergeRequests.create(documentId, { sourceBranch, targetBranch, title, description })),
+    );
+
+    server.registerTool(
+      'knowledge_merge_revision',
+      {
+        description:
+          'Merge an open merge request ("merge-commit" creates a two-parent DAG node, "squash" a single-parent one). ' +
+          'Fails with a comparison link when the target branch diverged — rebase the source branch first.',
+        inputSchema: {
+          mergeRequestId: z.string().uuid(),
+          strategy: z.enum(['merge-commit', 'squash']).optional(),
+        },
+      },
+      async ({ mergeRequestId, strategy }) =>
+        this.json(await this.mergeRequests.merge(mergeRequestId, strategy ?? 'merge-commit')),
+    );
+
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+  }
+
+  /** Inline-content revision flow: draft on branch head → put bytes → finalize. */
+  private async createRevision(
+    documentId: string,
+    opts: { branch?: string; baseRevisionId?: string; content: string; message?: string },
+  ) {
+    const document = await this.prisma.document.findUnique({ where: { id: documentId } });
+    if (!document) throw new Error(`Document ${documentId} not found`);
+
+    const branchName = opts.branch ?? document.defaultBranch;
+    if (opts.baseRevisionId) {
+      const branchRow = await this.prisma.documentBranch.findUnique({
+        where: { documentId_name: { documentId, name: branchName } },
+      });
+      if (!branchRow) throw new Error(`Branch ${branchName} not found on document ${documentId}`);
+      if (branchRow.headRevisionId !== opts.baseRevisionId) {
+        // plan.md §7 optimistic concurrency: equivalent of HTTP 409 + comparison link.
+        throw new Error(
+          `Conflict: branch ${branchName} head is ${branchRow.headRevisionId}, not ${opts.baseRevisionId}. ` +
+            `Compare with knowledge_compare_revisions before retrying.`,
+        );
+      }
+    }
+
+    const draft = await this.documents.createRevision(documentId, {
+      branch: branchName,
+      message: opts.message,
+      contentType: 'text/markdown',
+    });
+    const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
+    await this.storage.putObjectText(row.s3Key, opts.content, 'text/markdown');
+    return this.documents.finalizeRevision(documentId, draft.revisionId);
+  }
+
+  private json(value: unknown) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] };
+  }
+}

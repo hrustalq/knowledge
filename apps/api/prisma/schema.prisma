@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Document {
+  id            String   @id @default(uuid()) @db.Uuid
+  workspaceId   String   @map("workspace_id") @db.Uuid
+  title         String
+  defaultBranch String   @default("main") @map("default_branch")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  branches      DocumentBranch[]
+  revisions     DocumentRevision[]
+  mergeRequests MergeRequest[]
+
+  @@index([workspaceId, createdAt])
+  @@map("documents")
+}
+
+model DocumentBranch {
+  id             String   @id @default(uuid()) @db.Uuid
+  documentId     String   @map("document_id") @db.Uuid
+  name           String
+  headRevisionId String?  @map("head_revision_id") @db.Uuid
+  protected      Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  document  Document           @relation(fields: [documentId], references: [id])
+  revisions DocumentRevision[]
+  mrAsSource MergeRequest[] @relation("mrSource")
+  mrAsTarget MergeRequest[] @relation("mrTarget")
+
+  @@unique([documentId, name])
+  @@map("document_branches")
+}
+
+model DocumentRevision {
+  id             String    @id @default(uuid()) @db.Uuid
+  documentId     String    @map("document_id") @db.Uuid
+  branchId       String?   @map("branch_id") @db.Uuid
+  revisionNumber Int       @map("revision_number")
+  // Unknown until finalize (presigned upload flow); PG unique constraints ignore NULLs.
+  contentHash    String?   @map("content_hash")
+  contentType    String    @map("content_type")
+  s3Key          String    @map("s3_key")
+  s3VersionId    String?   @map("s3_version_id")
+  authorId       String    @map("author_id") @db.Uuid
+  message        String?
+  status         String    @default("draft")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  finalizedAt    DateTime? @map("finalized_at") @db.Timestamptz
+
+  document Document         @relation(fields: [documentId], references: [id])
+  branch   DocumentBranch?  @relation(fields: [branchId], references: [id])
+  parents  RevisionParent[] @relation("child")
+  children RevisionParent[] @relation("parent")
+
+  @@unique([documentId, revisionNumber])
+  // Branch-scoped: a merge revision legitimately repeats the source head's
+  // content on the target branch (plan.md §8); dedupe stays per-branch.
+  @@unique([documentId, branchId, contentHash])
+  @@map("document_revisions")
+}
+
+model RevisionParent {
+  revisionId       String @map("revision_id") @db.Uuid
+  parentRevisionId String @map("parent_revision_id") @db.Uuid
+  parentOrder      Int    @default(1) @map("parent_order") @db.SmallInt
+
+  revision DocumentRevision @relation("child", fields: [revisionId], references: [id])
+  parent   DocumentRevision @relation("parent", fields: [parentRevisionId], references: [id])
+
+  @@id([revisionId, parentRevisionId])
+  @@map("revision_parents")
+}
+
+// Table created in Phase 1; compare endpoints land in Phase 2.
+model RevisionDiff {
+  id             String   @id @default(uuid()) @db.Uuid
+  fromRevisionId String   @map("from_revision_id") @db.Uuid
+  toRevisionId   String   @map("to_revision_id") @db.Uuid
+  format         String
+  additions      Int      @default(0)
+  deletions      Int      @default(0)
+  changes        Json
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([fromRevisionId, toRevisionId, format])
+  @@map("revision_diffs")
+}
+
+model IngestionJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  revisionId  String    @map("revision_id") @db.Uuid
+  type        String
+  status      String    @default("queued")
+  attempts    Int       @default(0)
+  payload     Json
+  error       Json?
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Outbox sweeper scan
+  @@index([status, createdAt])
+  @@map("ingestion_jobs")
+}
+
+// Phase 3 (plan.md §8): GitLab-style merge requests over the revision DAG.
+model MergeRequest {
+  id             String  @id @default(uuid()) @db.Uuid
+  documentId     String  @map("document_id") @db.Uuid
+  sourceBranchId String  @map("source_branch_id") @db.Uuid
+  targetBranchId String  @map("target_branch_id") @db.Uuid
+
+  title       String
+  description String?
+  // open | merged | closed
+  status      String  @default("open")
+  authorId    String  @map("author_id") @db.Uuid
+  // Author ids that approved (auth stub until Phase 5).
+  approvedBy  Json    @default("[]") @map("approved_by")
+
+  // merge-commit | squash — set when merged.
+  strategy         String?
+  mergedRevisionId String?   @map("merged_revision_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  mergedAt         DateTime? @map("merged_at") @db.Timestamptz
+  closedAt         DateTime? @map("closed_at") @db.Timestamptz
+
+  document     Document       @relation(fields: [documentId], references: [id])
+  sourceBranch DocumentBranch @relation("mrSource", fields: [sourceBranchId], references: [id])
+  targetBranch DocumentBranch @relation("mrTarget", fields: [targetBranchId], references: [id])
+
+  @@index([documentId, status])
+  @@map("merge_requests")
+}

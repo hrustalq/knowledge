@@ -1,0 +1,15 @@
+{
+  "name": "@knowledge/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "lint": "echo contracts: no lint",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@knowledge/tsconfig": "workspace:*",
+    "typescript": "^5.7.0"
+  }
+}

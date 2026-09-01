@@ -64,7 +64,27 @@ services:
       timeout: 5s
       retries: 12
 
+  # Phase 5 optional BM25 layer (plan.md §11). Not started by default:
+  # make infra-up-opensearch  (+ FULLTEXT_PROVIDER=opensearch in apps/api/.env)
+  opensearch:
+    image: opensearchproject/opensearch:2
+    profiles: ["opensearch"]
+    ports: ["9200:9200"]
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "Knowledge#Dev1"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - osdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
 volumes:
   pgdata:
   miniodata:
   arcadedata:
+  osdata:

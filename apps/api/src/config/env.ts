@@ -32,6 +32,22 @@ export const envSchema = z.object({
   EXTRACTOR_API_KEY: z.string().optional().default(''),
   EXTRACTOR_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.5),
   EXTRACTOR_MAX_CHUNKS: z.coerce.number().int().positive().default(20),
+
+  /** Phase 5 auth: 'none' = dev principal with full access (Phase 0-4 flows keep working); 'api-key' = Bearer key lookup against users.api_key_hash. */
+  AUTH_MODE: z.enum(['none', 'api-key']).default('none'),
+
+  /** Phase 5 optional BM25 layer (plan.md §11) — 'none' keeps search vector-only. */
+  FULLTEXT_PROVIDER: z.enum(['none', 'opensearch']).default('none'),
+  OPENSEARCH_URL: z.string().optional().default('http://localhost:9200'),
+  OPENSEARCH_INDEX: z.string().optional().default('knowledge-chunks'),
+
+  /** Phase 5 stale-doc detection & reindex scheduling (worker sweeper). */
+  STALE_SWEEP_ENABLED: z.coerce.boolean().default(true),
+  STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
+  STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+
+  /** Phase 5 trusted-operator graph queries: hard row cap per call. */
+  GRAPH_QUERY_MAX_ROWS: z.coerce.number().int().positive().max(1000).default(200),
 });
 
 export type Env = z.infer<typeof envSchema>;

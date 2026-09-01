@@ -1,9 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { RelatedDocumentResult, SearchResponse, SearchResult } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { GraphService } from '../graph/graph.service.js';
+import { GraphService, type ChunkHit } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
+import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import type { SearchDto } from './search.dto.js';
+
+/** Reciprocal-rank-fusion constant (standard k=60). */
+const RRF_K = 60;
 
 @Injectable()
 export class SearchService {
@@ -11,11 +15,27 @@ export class SearchService {
     private readonly prisma: PrismaService,
     private readonly graph: GraphService,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
+    @Inject(FULLTEXT_PROVIDER) private readonly fulltext: FulltextProvider,
   ) {}
 
   async search(dto: SearchDto): Promise<SearchResponse> {
-    const queryEmbedding = await this.embeddings.embed(dto.query);
-    const hits = await this.graph.searchChunks(dto.workspaceId, queryEmbedding, dto.limit ?? 20);
+    const mode = dto.mode ?? 'hybrid';
+    const k = dto.limit ?? 20;
+
+    // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
+    // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
+    // is BM25-only. Without a provider both fall back to vector search.
+    const useText = this.fulltext.enabled && mode !== 'semantic';
+    const useVector = mode !== 'keyword' || !this.fulltext.enabled;
+
+    const [vectorHits, textHits] = await Promise.all([
+      useVector
+        ? this.embeddings.embed(dto.query).then((e) => this.graph.searchChunks(dto.workspaceId, e, k))
+        : Promise.resolve([] as ChunkHit[]),
+      useText ? this.fulltext.search(dto.workspaceId, dto.query, k) : Promise.resolve([]),
+    ]);
+
+    const hits = this.fuse(vectorHits, textHits, k);
     if (hits.length === 0) return { results: [] };
 
     // Join PG for authoritative titles (three-store separation: PG owns metadata).
@@ -36,7 +56,7 @@ export class SearchService {
 
     // Phase 4 hybrid mode: vectors find evidence, the graph expands it
     // (plan.md §12.7). Walk relation edges out from the hit documents.
-    if ((dto.mode ?? 'hybrid') === 'hybrid' && dto.expandGraph) {
+    if (mode === 'hybrid' && dto.expandGraph) {
       const related = await this.expandGraph(
         dto.workspaceId,
         results,
@@ -46,6 +66,29 @@ export class SearchService {
       return { results, related };
     }
     return { results };
+  }
+
+  /**
+   * Merge vector and BM25 rankings. Single-source results keep their native
+   * score (BM25 normalized to 0..1 by the max); two-source results use
+   * reciprocal rank fusion — raw cosine and BM25 scores are not comparable.
+   */
+  private fuse(vectorHits: ChunkHit[], textHits: ChunkHit[] | { chunkId: string; documentId: string; revisionId: string; text: string; headingPath: string[]; score: number }[], k: number): ChunkHit[] {
+    if (textHits.length === 0) return vectorHits.slice(0, k);
+    if (vectorHits.length === 0) {
+      const max = Math.max(...textHits.map((h) => h.score), 1e-9);
+      return textHits.slice(0, k).map((h) => ({ ...h, score: h.score / max }));
+    }
+    const fused = new Map<string, ChunkHit>();
+    const add = (list: { chunkId: string; documentId: string; revisionId: string; text: string; headingPath: string[] }[], rank: number, hit: (typeof list)[number]) => {
+      const existing = fused.get(hit.chunkId);
+      const increment = 1 / (RRF_K + rank + 1);
+      if (existing) existing.score += increment;
+      else fused.set(hit.chunkId, { ...hit, score: increment });
+    };
+    vectorHits.forEach((h, i) => add(vectorHits, i, h));
+    textHits.forEach((h, i) => add(textHits, i, h));
+    return [...fused.values()].sort((a, b) => b.score - a.score).slice(0, k);
   }
 
   /**

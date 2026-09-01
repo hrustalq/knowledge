@@ -7,11 +7,12 @@ import { DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
 import { MergeRequestsService } from './merge-requests.service.js';
+import { HistoryService } from './history.service.js';
 
 @Module({
   imports: [StorageModule, GraphModule, IngestionModule],
   controllers: [DocumentsController, MergeRequestsController],
-  providers: [DocumentsService, CompareService, MergeRequestsService],
-  exports: [DocumentsService, CompareService, MergeRequestsService],
+  providers: [DocumentsService, CompareService, MergeRequestsService, HistoryService],
+  exports: [DocumentsService, CompareService, MergeRequestsService, HistoryService],
 })
 export class DocumentsModule {}

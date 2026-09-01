@@ -3,6 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from '../config/env.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { StorageModule } from '../storage/storage.module.js';
+import { AuthModule } from '../auth/auth.module.js';
+import { GraphModule } from '../graph/graph.module.js';
+import { IngestionAdminModule } from '../ingestion/ingestion-admin.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { SearchModule } from '../search/search.module.js';
 import { EntitiesModule } from '../entities/entities.module.js';
@@ -17,6 +20,9 @@ import { McpService } from './mcp.service.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     PrismaModule,
+    AuthModule,
+    GraphModule,
+    IngestionAdminModule,
     StorageModule,
     DocumentsModule,
     SearchModule,

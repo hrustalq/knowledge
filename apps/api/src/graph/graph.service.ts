@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ArcadeClient } from './arcade.client.js';
 
 export interface ChunkInput {
@@ -488,6 +488,33 @@ export class GraphService {
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, k);
+  }
+
+  /**
+   * Phase 5 trusted-operator queries (plan.md §9): read-only, single
+   * statement, row-capped. The caller's query is wrapped in an outer SELECT
+   * carrying the mandatory workspace predicate, so rows without a matching
+   * workspaceId property are filtered out — deny by default.
+   */
+  async operatorQuery(
+    workspaceId: string,
+    query: string,
+    limit: number,
+  ): Promise<{ rows: Record<string, unknown>[]; truncated: boolean }> {
+    const q = query.trim().replace(/;+\s*$/, '');
+    if (!/^select\b/i.test(q)) throw new BadRequestException('Only SELECT queries are allowed');
+    if (q.includes(';')) throw new BadRequestException('Multiple statements are not allowed');
+    const forbidden = /\b(insert|update|delete|create|drop|alter|truncate|grant|revoke|backup|import|export)\b/i;
+    if (forbidden.test(q)) {
+      throw new BadRequestException('Query contains a write/DDL keyword — operator queries are read-only');
+    }
+    const cap = Math.max(1, Math.floor(limit));
+    const rows = await this.arcade.query<Record<string, unknown>>(
+      'sql',
+      `SELECT FROM ( ${q} ) WHERE workspaceId = :workspaceId LIMIT ${cap + 1}`,
+      { workspaceId },
+    );
+    return { rows: rows.slice(0, cap), truncated: rows.length > cap };
   }
 }
 

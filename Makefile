@@ -96,6 +96,11 @@ infra-up: ## Start postgres, minio (+bucket init), redis, arcadedb
 	$(COMPOSE) up -d
 	$(COMPOSE) ps
 
+.PHONY: infra-up-opensearch
+infra-up-opensearch: ## Start infra INCLUDING the optional OpenSearch BM25 node (set FULLTEXT_PROVIDER=opensearch)
+	$(COMPOSE) --profile opensearch up -d
+	$(COMPOSE) --profile opensearch ps
+
 .PHONY: infra-down
 infra-down: ## Stop infra containers (volumes kept)
 	$(COMPOSE) down
@@ -147,6 +152,13 @@ db-reset: ## DESTRUCTIVE: drop & recreate DB, replay all migrations
 .PHONY: db-studio
 db-studio: ## Open Prisma Studio on the local DB
 	$(API) exec prisma studio
+
+.PHONY: auth-bootstrap
+auth-bootstrap: ## Phase 5: create user + API key + workspace membership: make auth-bootstrap email=you@x.dev [workspace_id=<uuid>] [role=admin] [operator=true]
+	@[ -n "$(email)" ] || (echo "Usage: make auth-bootstrap email=<email> [workspace_id=] [role=] [operator=]"; exit 1)
+	$(API) run build >/dev/null
+	node --env-file=apps/api/.env apps/api/dist/scripts/bootstrap-auth.main.js --email $(email) \
+	    $(if $(workspace_id),--workspace-id $(workspace_id),) $(if $(role),--role $(role),) $(if $(operator),--operator $(operator),)
 
 .PHONY: db-psql
 db-psql: ## Open a psql shell in the postgres container

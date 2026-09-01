@@ -21,4 +21,24 @@ export class IngestionProducer {
       },
     );
   }
+
+  /**
+   * Phase 5 sweeper retries: BullMQ dedupes by jobId and keeps failed jobs
+   * (removeOnFail: false), so a retry needs a fresh id. The processor is
+   * idempotent (completed-guard + delete-before-recreate), making any
+   * resulting double-run harmless.
+   */
+  async enqueueRetry(ingestionJobId: string, salt: string | number): Promise<void> {
+    await this.queue.add(
+      'index',
+      { ingestionJobId },
+      {
+        jobId: `${ingestionJobId}#${salt}`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: true,
+        removeOnFail: false,
+      },
+    );
+  }
 }

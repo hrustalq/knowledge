@@ -2,10 +2,13 @@ import { Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import matter from 'gray-matter';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
-import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
+import { EMBEDDING_PROVIDER, embeddingSignature, type EmbeddingProvider } from '../embedding/embedding.provider.js';
+import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { INGESTION_QUEUE } from './ingestion.constants.js';
 import { chunkSections, splitMarkdown } from './markdown.js';
 import { extractFrontmatterFacts } from './relations.js';
@@ -25,6 +28,8 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     private readonly graph: GraphService,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
     @Inject(RELATION_EXTRACTOR) private readonly extractor: RelationExtractor,
+    @Inject(FULLTEXT_PROVIDER) private readonly fulltext: FulltextProvider,
+    private readonly config: ConfigService<Env, true>,
   ) {
     super();
   }
@@ -105,6 +110,26 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         })),
       });
 
+      // 6b. Phase 5 optional BM25 layer: mirror the chunks into the fulltext
+      //     index (idempotent per revision). Non-fatal — the vector index in
+      //     the graph store stays authoritative.
+      try {
+        await this.fulltext.indexRevisionChunks(
+          revision.document.workspaceId,
+          revision.id,
+          drafts.map((c) => ({
+            chunkId: `${revision.id}:${c.index}`,
+            documentId: revision.documentId,
+            revisionId: revision.id,
+            index: c.index,
+            text: c.text,
+            headingPath: c.headingPath,
+          })),
+        );
+      } catch (e) {
+        this.logger.warn(`Fulltext indexing failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
+      }
+
       // 7. Deterministic relation extraction (plan.md §5 "deterministic" class):
       //    frontmatter `relations:`/`tags:` → typed edges with provenance.
       const facts = extractFrontmatterFacts(parsed.data ?? {});
@@ -152,7 +177,12 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         }),
         this.prisma.documentRevision.update({
           where: { id: revision.id },
-          data: { status: 'indexed' },
+          data: {
+            status: 'indexed',
+            indexedAt: new Date(),
+            // Phase 5 stale detection: record the embedding space; drift → reindex.
+            embeddingModel: embeddingSignature(this.config),
+          },
         }),
       ]);
       this.logger.log(`Indexed revision ${revision.id} (${drafts.length} chunks)`);

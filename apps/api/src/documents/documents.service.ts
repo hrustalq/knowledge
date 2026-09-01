@@ -29,7 +29,7 @@ import type {
 } from './dto/documents.dto.js';
 import type { DocumentBranch, DocumentRevision } from '@prisma/client';
 
-/** Phase 1 auth stub — replaced by real auth in Phase 5 (plan.md §11). */
+/** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 @Injectable()
@@ -41,7 +41,7 @@ export class DocumentsService {
     private readonly ingestion: IngestionProducer,
   ) {}
 
-  async createDocument(dto: CreateDocumentDto): Promise<CreateDocumentResponse> {
+  async createDocument(dto: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
     const contentType = dto.content ? `text/${dto.content.format}` : 'text/markdown';
 
     const { document, revision } = await this.prisma.$transaction(async (tx) => {
@@ -58,7 +58,7 @@ export class DocumentsService {
           revisionNumber: 1,
           contentType,
           s3Key: '',
-          authorId: AUTHOR_ID_STUB,
+          authorId,
           status: 'draft',
         },
       });
@@ -88,7 +88,11 @@ export class DocumentsService {
     return { documentId: document.id, revisionId: revision.id, branch: 'main', status };
   }
 
-  async createUpload(documentId: string, dto: CreateUploadDto): Promise<CreateUploadResponse> {
+  async createUpload(
+    documentId: string,
+    dto: CreateUploadDto,
+    authorId: string = AUTHOR_ID_STUB,
+  ): Promise<CreateUploadResponse> {
     const document = await this.getDocumentOrThrow(documentId);
 
     let revision: DocumentRevision;
@@ -98,7 +102,7 @@ export class DocumentsService {
         throw new BadRequestException(`Revision ${revision.id} is ${revision.status}, expected draft`);
       }
     } else {
-      revision = await this.createDraftRevision(documentId, { contentType: dto.contentType });
+      revision = await this.createDraftRevision(documentId, { contentType: dto.contentType, authorId });
     }
 
     const objectKey = revision.s3Key;
@@ -120,6 +124,7 @@ export class DocumentsService {
     documentId: string,
     dto: CreateRevisionDto,
     expectedHeadRevisionId?: string,
+    authorId: string = AUTHOR_ID_STUB,
   ): Promise<RevisionInfo> {
     const document = await this.getDocumentOrThrow(documentId);
 
@@ -147,6 +152,7 @@ export class DocumentsService {
       branch: dto.branch,
       message: dto.message,
       contentType: dto.contentType ?? 'text/markdown',
+      authorId,
     });
     return this.toRevisionInfo(revision);
   }
@@ -455,7 +461,7 @@ export class DocumentsService {
 
   private async createDraftRevision(
     documentId: string,
-    opts: { branch?: string; message?: string; contentType?: string },
+    opts: { branch?: string; message?: string; contentType?: string; authorId?: string },
   ): Promise<DocumentRevision> {
     const document = await this.getDocumentOrThrow(documentId);
     const branchName = opts.branch ?? document.defaultBranch;
@@ -476,7 +482,7 @@ export class DocumentsService {
           revisionNumber: (max._max.revisionNumber ?? 0) + 1,
           contentType: opts.contentType ?? 'text/markdown',
           s3Key: '',
-          authorId: AUTHOR_ID_STUB,
+          authorId: opts.authorId ?? AUTHOR_ID_STUB,
           message: opts.message,
           status: 'draft',
         },

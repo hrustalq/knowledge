@@ -9,6 +9,10 @@ import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { SearchService } from '../search/search.service.js';
 import { EntitiesService } from '../entities/entities.service.js';
+import { GraphService } from '../graph/graph.service.js';
+import { AuditService } from '../auth/audit.service.js';
+import { HistoryService } from '../documents/history.service.js';
+import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -24,6 +28,9 @@ import { EntitiesService } from '../entities/entities.service.js';
  *   knowledge_impact_analysis   → knowledge.impact_analysis   (Phase 4)
  *   knowledge_trace_relation    → knowledge.trace_relation    (Phase 4)
  *   knowledge_create_relation   → knowledge.create_relation   (Phase 4, curated)
+ *   knowledge_query_graph       → knowledge.query_graph       (Phase 5, audited)
+ *   knowledge_get_historical_context → knowledge.get_historical_context (Phase 5)
+ *   knowledge_ingest            → knowledge.ingest            (Phase 5)
  */
 @Injectable()
 export class McpService {
@@ -35,10 +42,14 @@ export class McpService {
     private readonly search: SearchService,
     private readonly mergeRequests: MergeRequestsService,
     private readonly entities: EntitiesService,
+    private readonly graph: GraphService,
+    private readonly audit: AuditService,
+    private readonly history: HistoryService,
+    private readonly ingestionAdmin: IngestionAdminService,
   ) {}
 
   async serveStdio(): Promise<void> {
-    const server = new McpServer({ name: 'knowledge', version: '0.2.0' });
+    const server = new McpServer({ name: 'knowledge', version: '0.3.0' });
 
     server.registerTool(
       'knowledge_search',
@@ -213,6 +224,89 @@ export class McpService {
       },
       async ({ mergeRequestId, strategy }) =>
         this.json(await this.mergeRequests.merge(mergeRequestId, strategy ?? 'merge-commit')),
+    );
+
+    server.registerTool(
+      'knowledge_query_graph',
+      {
+        description:
+          'TRUSTED-OPERATOR ONLY (plan.md §9): read-only SQL over the graph store. Single SELECT statement, ' +
+          'row-limited, workspace predicate enforced server-side; every call is written to the audit log.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          query: z.string().min(1).describe('A single read-only SELECT (ArcadeDB SQL)'),
+          limit: z.number().int().min(1).max(1000).optional(),
+        },
+      },
+      async ({ workspaceId, query, limit }) => {
+        const started = Date.now();
+        const base = {
+          workspaceId,
+          actor: 'mcp-operator',
+          action: 'graph.query',
+          params: { query, limit: limit ?? 200 },
+        };
+        try {
+          const { rows, truncated } = await this.graph.operatorQuery(workspaceId, query, limit ?? 200);
+          await this.audit.record({ ...base, rowCount: rows.length, durationMs: Date.now() - started, ok: true });
+          return this.json({ rows, rowCount: rows.length, truncated });
+        } catch (e) {
+          await this.audit.record({
+            ...base,
+            durationMs: Date.now() - started,
+            ok: false,
+            error: (e as Error).message,
+          });
+          throw e;
+        }
+      },
+    );
+
+    server.registerTool(
+      'knowledge_get_historical_context',
+      {
+        description:
+          'What the knowledge base stated about an entity at a given revision (plan.md §11 historical queries): ' +
+          'the fact snapshot at that point in the revision DAG, plus the entity\u2019s current neighborhood for contrast.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          entityId: z.string().min(1).describe('Entity key, e.g. "service:identity"'),
+          atRevisionId: z.string().uuid(),
+        },
+      },
+      async ({ workspaceId, entityId, atRevisionId }) => {
+        const revision = await this.prisma.documentRevision.findUnique({
+          where: { id: atRevisionId },
+          include: { document: true },
+        });
+        if (!revision || revision.document.workspaceId !== workspaceId) {
+          throw new Error(`Revision ${atRevisionId} not found in workspace ${workspaceId}`);
+        }
+        const at = await this.history.factsAt(revision.documentId, atRevisionId);
+        const currentNeighborhood = await this.entities.neighbors(workspaceId, entityId, 1).catch(() => null);
+        return this.json({
+          entityId,
+          atRevisionId,
+          document: { documentId: revision.documentId, title: revision.document.title },
+          factsAboutEntity: at.facts.filter((f) => f.targetKey === entityId),
+          allFactsAtRevision: at.facts,
+          effectiveRevisionId: at.effectiveRevisionId,
+          currentNeighborhood,
+        });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_ingest',
+      {
+        description:
+          'Force reindex of a document\u2019s branch-head revisions (or every branch head in the workspace).',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          documentId: z.string().uuid().optional(),
+        },
+      },
+      async ({ workspaceId, documentId }) => this.json(await this.ingestionAdmin.reindex(workspaceId, documentId)),
     );
 
     const transport = new StdioServerTransport();

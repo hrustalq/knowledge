@@ -40,10 +40,10 @@ export class SearchDto {
   @IsNotEmpty()
   query!: string;
 
-  @ApiPropertyOptional({ enum: ['hybrid', 'semantic'], default: 'hybrid' })
+  @ApiPropertyOptional({ enum: ['hybrid', 'semantic', 'keyword'], default: 'hybrid' })
   @IsOptional()
-  @IsIn(['hybrid', 'semantic'])
-  mode?: 'hybrid' | 'semantic';
+  @IsIn(['hybrid', 'semantic', 'keyword'])
+  mode?: 'hybrid' | 'semantic' | 'keyword';
 
   @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
   @IsOptional()

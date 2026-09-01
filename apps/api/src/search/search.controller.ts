@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Access } from '../auth/access.decorator.js';
 import { SearchService } from './search.service.js';
 import { SearchDto } from './search.dto.js';
 
@@ -10,7 +11,8 @@ export class SearchController {
 
   @Post()
   @HttpCode(200)
-  @ApiOperation({ summary: 'Semantic search over indexed chunks (hybrid graph expansion: Phase 2)' })
+  @Access('viewer', 'body')
+  @ApiOperation({ summary: 'Search indexed chunks: semantic, keyword (BM25) or hybrid (RRF fusion + graph expansion)' })
   run(@Body() dto: SearchDto) {
     return this.search.search(dto);
   }

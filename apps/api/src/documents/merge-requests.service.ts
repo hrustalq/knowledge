@@ -17,7 +17,7 @@ import { DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
 import type { CreateMergeRequestDto } from './dto/merge-requests.dto.js';
 
-/** Phase 1 auth stub — replaced by real auth in Phase 5 (plan.md §11). */
+/** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
 
 type MrWithBranches = MergeRequest & { sourceBranch: DocumentBranch; targetBranch: DocumentBranch };
@@ -43,7 +43,11 @@ export class MergeRequestsService {
     private readonly compare: CompareService,
   ) {}
 
-  async create(documentId: string, dto: CreateMergeRequestDto): Promise<CreateMergeRequestResponse> {
+  async create(
+    documentId: string,
+    dto: CreateMergeRequestDto,
+    authorId: string = AUTHOR_ID_STUB,
+  ): Promise<CreateMergeRequestResponse> {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!document) throw new NotFoundException(`Document ${documentId} not found`);
 
@@ -76,7 +80,7 @@ export class MergeRequestsService {
         targetBranchId: target.id,
         title: dto.title,
         description: dto.description ?? null,
-        authorId: AUTHOR_ID_STUB,
+        authorId,
       },
       include: { sourceBranch: true, targetBranch: true },
     });
@@ -115,13 +119,16 @@ export class MergeRequestsService {
     return { mergeRequest: await this.toInfo(mr), compare };
   }
 
-  /** Records approval (auth stub → one distinct approver until Phase 5); merge does not require it. */
-  async approve(mergeRequestId: string): Promise<{ mergeRequest: MergeRequestInfo }> {
+  /** Records approval by the calling principal; merge does not require it (yet). */
+  async approve(
+    mergeRequestId: string,
+    approverId: string = AUTHOR_ID_STUB,
+  ): Promise<{ mergeRequest: MergeRequestInfo }> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     if (mr.status !== 'open') {
       throw new BadRequestException(`Merge request ${mr.id} is ${mr.status} — only open merge requests can be approved`);
     }
-    const approved = [...new Set([...this.approvers(mr), AUTHOR_ID_STUB])];
+    const approved = [...new Set([...this.approvers(mr), approverId])];
     const updated = await this.prisma.mergeRequest.update({
       where: { id: mr.id },
       data: { approvedBy: approved },

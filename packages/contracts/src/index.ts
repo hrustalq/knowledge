@@ -84,7 +84,8 @@ export interface ListDocumentsResponse {
 export interface SearchRequest {
   workspaceId: string;
   query: string;
-  mode?: 'hybrid' | 'semantic';
+  /** 'hybrid' fuses vector + BM25 (when a fulltext provider is configured); 'keyword' is BM25-only. */
+  mode?: 'hybrid' | 'semantic' | 'keyword';
   limit?: number;
   /**
    * Phase 4 hybrid expansion: walk relation edges out from the vector hits.
@@ -422,4 +423,150 @@ export interface TraceRelationResponse {
   /** Alternating entity/document steps, or null when no path exists. */
   path: ImpactPathStep[] | null;
   hops: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — governance & scale: auth/ACLs, audited operator queries,
+// stale detection / reindex scheduling, historical fact queries
+// ---------------------------------------------------------------------------
+
+/** Workspace role hierarchy: viewer < editor < admin. */
+export type WorkspaceRole = 'viewer' | 'editor' | 'admin';
+
+export interface WorkspaceMembership {
+  workspaceId: string;
+  role: WorkspaceRole;
+  /** Gate for POST /v1/graph/query / knowledge.query_graph (plan.md section 9). */
+  trustedOperator: boolean;
+}
+
+// GET /v1/me
+export interface MeResponse {
+  userId: string;
+  email: string;
+  displayName: string;
+  /** 'dev' = AUTH_MODE=none (full access); 'api-key' = authenticated via Bearer key. */
+  mode: 'dev' | 'api-key';
+  /** Empty in dev mode (the dev principal is admin+operator everywhere). */
+  memberships: WorkspaceMembership[];
+}
+
+// POST /v1/graph/query — trusted-operator only, read-only, row-limited, audited
+export interface GraphQueryRequest {
+  workspaceId: string;
+  /** A single read-only SELECT; the server wraps it with the mandatory workspace predicate. */
+  query: string;
+  limit?: number;
+}
+export interface GraphQueryResponse {
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  /** True when the row cap cut the result off. */
+  truncated: boolean;
+  durationMs: number;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  workspaceId: string;
+  /** users.id, or a synthetic actor ("dev", "mcp-operator") outside api-key mode. */
+  actor: string;
+  action: string;
+  params: Record<string, unknown>;
+  rowCount: number | null;
+  durationMs: number | null;
+  ok: boolean;
+  error: string | null;
+  createdAt: string;
+}
+
+// GET /v1/audit-logs?workspaceId=
+export interface ListAuditLogsResponse {
+  workspaceId: string;
+  entries: AuditLogEntry[];
+}
+
+/** A fact as asserted at a point in the revision DAG (Phase 5 historical queries). */
+export interface HistoricalFact {
+  type: string;
+  targetKey: string;
+  entityType: string;
+  name: string;
+  extractor: FactExtractor | string;
+  confidence: number;
+  /** Revision that asserted the fact; null for un-anchored document-level facts. */
+  assertedByRevisionId: string | null;
+}
+
+// GET /v1/documents/:id/facts?at=<revisionId>
+export interface FactsAtResponse {
+  documentId: string;
+  atRevisionId: string;
+  /**
+   * The ancestor revision whose revision-scoped fact set is the effective
+   * snapshot at `at` (null when no ancestor asserted revision-scoped facts).
+   */
+  effectiveRevisionId: string | null;
+  facts: HistoricalFact[];
+}
+
+export interface FactTimelineEntry {
+  type: string;
+  targetKey: string;
+  extractor: FactExtractor | string;
+  status: 'active' | 'removed';
+  introducedInRevisionId: string | null;
+  introducedAt: string | null;
+  /** First later revision that asserted facts without this one (removed-facts audit). */
+  removedInRevisionId: string | null;
+  removedAt: string | null;
+}
+
+// GET /v1/documents/:id/facts/timeline?branch=
+export interface FactTimelineResponse {
+  documentId: string;
+  branch: string;
+  entries: FactTimelineEntry[];
+}
+
+// GET /v1/ingestion/jobs/:id
+export interface IngestionJobInfo {
+  jobId: string;
+  workspaceId: string;
+  revisionId: string;
+  type: string;
+  status: IngestionJobStatus | string;
+  attempts: number;
+  error: unknown;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+// GET /v1/ingestion/stale?workspaceId=
+export interface StaleReportResponse {
+  workspaceId: string;
+  /** Current embedding signature (provider:model:dim); heads indexed under a different one are drifted. */
+  embeddingSignature: string;
+  driftedHeads: Array<{
+    documentId: string;
+    revisionId: string;
+    title: string;
+    embeddingModel: string | null;
+    indexedAt: string | null;
+  }>;
+  stuckIndexing: Array<{ jobId: string; revisionId: string; startedAt: string | null }>;
+  failedJobs: Array<{ jobId: string; revisionId: string; attempts: number; error: unknown }>;
+}
+
+// POST /v1/ingestion/reindex
+export interface ReindexRequest {
+  workspaceId: string;
+  /** Restrict to one document's branch heads. */
+  documentId?: string;
+}
+export interface ReindexResponse {
+  workspaceId: string;
+  enqueued: number;
+  jobIds: string[];
 }

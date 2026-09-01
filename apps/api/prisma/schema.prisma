@@ -54,6 +54,10 @@ model DocumentRevision {
   status         String    @default("draft")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   finalizedAt    DateTime? @map("finalized_at") @db.Timestamptz
+  // Phase 5 stale detection: when + with which embedding signature this
+  // revision was last indexed (provider:model:dim); drift triggers reindex.
+  indexedAt      DateTime? @map("indexed_at") @db.Timestamptz
+  embeddingModel String?   @map("embedding_model")
 
   document Document         @relation(fields: [documentId], references: [id])
   branch   DocumentBranch?  @relation(fields: [branchId], references: [id])
@@ -140,4 +144,68 @@ model MergeRequest {
 
   @@index([documentId, status])
   @@map("merge_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 (plan.md §11): governance — workspaces, users, ACLs, audit logging.
+// documents.workspace_id intentionally has no FK: workspaces arrived after
+// documents and pre-Phase-5 rows must stay valid; bootstrap creates the row.
+// ---------------------------------------------------------------------------
+
+model Workspace {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  members WorkspaceMember[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  email       String   @unique
+  displayName String   @map("display_name")
+  // SHA-256 hex of the API key; the plaintext key is printed once at creation.
+  apiKeyHash  String?  @unique @map("api_key_hash")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  memberships WorkspaceMember[]
+
+  @@map("users")
+}
+
+model WorkspaceMember {
+  workspaceId String @map("workspace_id") @db.Uuid
+  userId      String @map("user_id") @db.Uuid
+  // viewer < editor < admin (Phase 5 ACL hierarchy).
+  role        String @default("viewer")
+  // Gate for knowledge.query_graph / POST /v1/graph/query (plan.md §9:
+  // trusted-operator only). Orthogonal to role on purpose.
+  trustedOperator Boolean  @default(false) @map("trusted_operator")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@id([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+// Phase 5 audit trail: every trusted-operator graph query is recorded here.
+model AuditLog {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  // users.id in api-key mode; synthetic actor ("dev", "mcp-operator") otherwise.
+  actor       String
+  action      String
+  params      Json
+  rowCount    Int?    @map("row_count")
+  durationMs  Int?    @map("duration_ms")
+  ok          Boolean @default(true)
+  error       String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@map("audit_logs")
 }

@@ -9,6 +9,7 @@ import { AuthFlowController } from './auth-flow.controller.js';
 import { AuthFlowService } from './auth-flow.service.js';
 import { AuthGuard } from './auth.guard.js';
 import { SessionsService } from './sessions.service.js';
+import { TokenAuthService } from './token-auth.service.js';
 
 /**
  * Phase 5 governance (plan.md §11). Global: AuthGuard resolves the caller on
@@ -24,10 +25,11 @@ import { SessionsService } from './sessions.service.js';
     AccessService,
     AuditService,
     SessionsService,
+    TokenAuthService,
     AuthFlowService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: AclGuard },
   ],
-  exports: [AccessService, AuditService, SessionsService],
+  exports: [AccessService, AuditService, SessionsService, TokenAuthService],
 })
 export class AuthModule {}

@@ -41,6 +41,11 @@ export class EventsSubscriber implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Unfiltered firehose for in-process consumers (LiveGateway does its own ACL + tracking filtering). */
+  all(): Observable<KnowledgeEvent> {
+    return this.subject.asObservable();
+  }
+
   stream(workspaceId: string): Observable<SseMessage> {
     const events = this.subject.pipe(
       filter((e) => e.workspaceId === workspaceId),

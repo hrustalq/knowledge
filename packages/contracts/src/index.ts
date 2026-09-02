@@ -1,5 +1,5 @@
 // Shared API contract types for the Dynamic Knowledge Platform.
-// Plain types only — no runtime deps, no server imports.
+// Plain types + dependency-free error-contract helpers — no runtime deps, no server imports.
 
 export type RevisionStatus = 'draft' | 'finalized' | 'indexing' | 'indexed' | 'failed';
 export type IngestionJobStatus = 'queued' | 'running' | 'completed' | 'failed';
@@ -336,12 +336,13 @@ export interface MergeMergeRequestResponse {
   mergedRevision: RevisionInfo | null;
 }
 
-/** 409 body for If-Match / merge conflicts (plan.md §7): always carries a comparison link. */
-export interface RevisionConflictResponse {
-  statusCode: 409;
-  message: string;
-  currentHeadRevisionId: string | null;
-  comparisonUrl: string | null;
+/** 409 error envelope for If-Match / merge conflicts (plan.md §7): details always carries a comparison link. */
+export interface RevisionConflictResponse extends ApiErrorPayload {
+  code: 'CONFLICT';
+  details: {
+    currentHeadRevisionId: string | null;
+    comparisonUrl: string | null;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -679,10 +680,61 @@ export interface KnowledgeEvent {
   workspaceId: string;
   documentId?: string;
   revisionId?: string;
+  /** Secondary subject (branch name, merge request id, entity key, ...). */
+  subjectId?: string;
   title?: string;
   actor?: string;
+  /** Live data patching: changed fields of the tracked entity, mergeable into cached copies (present on document.updated & co). */
+  patch?: Record<string, unknown>;
   at: string;
 }
+
+/** Event types the platform emits today — the tracking-config vocabulary (event.type stays an open string for forward compat). */
+export const KNOWN_EVENT_TYPES = [
+  'document.created',
+  'document.updated',
+  'branch.created',
+  'revision.finalized',
+  'revision.indexed',
+  'revision.failed',
+  'revision.dependent-reindex',
+  'relations.curated',
+  'relations.deleted',
+  'merge-request.created',
+  'merge-request.approved',
+  'merge-request.merged',
+  'merge-request.closed',
+] as const;
+export type KnownEventType = (typeof KNOWN_EVENT_TYPES)[number];
+
+// ---------------------------------------------------------------------------
+// Live tracked-entity updates over WebSocket (/v1/events/ws)
+// ---------------------------------------------------------------------------
+// A socket authenticates via ?token= (same rules as HTTP), then subscribes to
+// one or more workspaces. Each subscription is ACL-checked (viewer role) and
+// carries a client-side tracking configuration; the server additionally
+// enforces its own LIVE_TRACKED_EVENTS allowlist. Errors reuse the strict
+// ApiErrorPayload envelope.
+
+/** Per-subscription tracking configuration — omitted/empty lists mean "everything I may see". */
+export interface LiveTrackingConfig {
+  /** Only events whose type matches one of these (exact, or 'prefix.*' glob). */
+  events?: string[];
+  /** Only events about these document ids. */
+  documents?: string[];
+}
+
+export type LiveClientMessage =
+  | { type: 'subscribe'; workspaceId: string; tracking?: LiveTrackingConfig }
+  | { type: 'unsubscribe'; workspaceId: string }
+  | { type: 'ping' };
+
+export type LiveServerMessage =
+  | { type: 'subscribed'; workspaceId: string; tracking: LiveTrackingConfig }
+  | { type: 'unsubscribed'; workspaceId: string }
+  | { type: 'event'; event: KnowledgeEvent }
+  | { type: 'error'; error: ApiErrorPayload }
+  | { type: 'pong' };
 
 // POST /v1/assistant/review (feature 09)
 export interface AssistantReviewRequest {
@@ -877,4 +929,86 @@ export interface AddWorkspaceMemberRequest {
 export interface UpdateWorkspaceMemberRequest {
   role?: WorkspaceRole;
   trustedOperator?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Strict error contract
+// ---------------------------------------------------------------------------
+// Every non-2xx API response serializes to the ApiErrorPayload envelope
+// (apps/api ApiExceptionFilter). The web client normalizes ALL failures —
+// HTTP errors, malformed bodies, network failures, timeouts, aborts — into
+// the same shape, so consumers branch on `code`, never on message strings.
+
+/**
+ * Stable machine-readable error codes. The first block is emitted by the API;
+ * the codes after the marker are synthesized client-side only (statusCode 0)
+ * and never appear on the wire.
+ */
+export const API_ERROR_CODES = [
+  'BAD_REQUEST',
+  'VALIDATION_FAILED',
+  'UNAUTHENTICATED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'CONFLICT',
+  'PAYLOAD_TOO_LARGE',
+  'RATE_LIMITED',
+  'UPSTREAM_UNAVAILABLE',
+  'INTERNAL',
+  // client-side synthesized — never sent by the API:
+  'NETWORK_ERROR',
+  'TIMEOUT',
+  'ABORTED',
+  'UNKNOWN',
+] as const;
+export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
+
+/** The one true error envelope. */
+export interface ApiErrorPayload {
+  /** HTTP status; 0 for client-synthesized errors (network/timeout/abort). */
+  statusCode: number;
+  code: ApiErrorCode;
+  /** Human-readable summary — never parse it; branch on `code`/`details`. */
+  message: string;
+  /** Machine-readable extras: validation `errors[]`, conflict `comparisonUrl`, ... */
+  details?: Record<string, unknown>;
+  /** Request path (best-effort client-side). */
+  path: string;
+  /** ISO-8601 moment the error was produced. */
+  timestamp: string;
+  /** Correlation id — echoed from/into the x-request-id header ('' when unknown). */
+  requestId: string;
+}
+
+/** Default code for an HTTP status (shared by the API filter and the web client). */
+export function errorCodeForStatus(status: number): ApiErrorCode {
+  switch (status) {
+    case 400: return 'BAD_REQUEST';
+    case 401: return 'UNAUTHENTICATED';
+    case 403: return 'FORBIDDEN';
+    case 404: return 'NOT_FOUND';
+    case 409: return 'CONFLICT';
+    case 413: return 'PAYLOAD_TOO_LARGE';
+    case 429: return 'RATE_LIMITED';
+    case 502:
+    case 503:
+    case 504: return 'UPSTREAM_UNAVAILABLE';
+    default: return status >= 500 ? 'INTERNAL' : status >= 400 ? 'BAD_REQUEST' : 'UNKNOWN';
+  }
+}
+
+/** Runtime guard: does an unknown response body conform to the envelope? */
+export function isApiErrorPayload(value: unknown): value is ApiErrorPayload {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.statusCode === 'number' &&
+    typeof v.message === 'string' &&
+    typeof v.code === 'string' &&
+    (API_ERROR_CODES as readonly string[]).includes(v.code) &&
+    typeof v.path === 'string' &&
+    typeof v.timestamp === 'string' &&
+    typeof v.requestId === 'string' &&
+    (v.details === undefined || (typeof v.details === 'object' && v.details !== null))
+  );
 }

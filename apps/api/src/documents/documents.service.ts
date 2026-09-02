@@ -567,6 +567,11 @@ export class DocumentsService {
       action: 'document.updated',
       documentId,
       metadata: { title: updated.title, changes: Object.keys(data) },
+      // Live data patching: subscribed clients merge the changed fields into
+      // their cached copies without a refetch (docs/features/04 + live WS).
+      patch: Object.fromEntries(
+        Object.keys(data).map((k) => [k, (updated as unknown as Record<string, unknown>)[k]]),
+      ),
     });
     return this.toSummary(updated);
   }

@@ -89,6 +89,19 @@ clean: ## Remove build artifacts and turbo cache
 clean-all: clean ## Also remove node_modules everywhere
 	rm -rf node_modules apps/*/node_modules packages/*/node_modules
 
+# ---------------------------------------------------------------- api client generation
+
+.PHONY: api-schema
+api-schema: ## Generate the OpenAPI schema from the NestJS app -> apps/api/openapi.json (no server needed)
+	$(API) run build
+	node --env-file=apps/api/.env apps/api/dist/scripts/generate-openapi.main.js --out apps/api/openapi.json
+
+.PHONY: api-client
+api-client: api-schema ## Regenerate the typed web client: schema -> openapi-typescript -> apps/web/src/api/schema.d.ts
+	$(WEB) run generate:api
+	$(WEB) run typecheck
+	@echo "✔ typed client regenerated — commit apps/api/openapi.json + apps/web/src/api/schema.d.ts"
+
 # ---------------------------------------------------------------- infra (docker)
 
 .PHONY: infra-up

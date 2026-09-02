@@ -68,6 +68,13 @@ export const envSchema = z.object({
 
   /** Phase 5 trusted-operator graph queries: hard row cap per call. */
   GRAPH_QUERY_MAX_ROWS: z.coerce.number().int().positive().max(1000).default(200),
+
+  /** Live tracked-entity updates over WebSocket (/v1/events/ws). */
+  LIVE_WS_ENABLED: z.coerce.boolean().default(true),
+  /** Server-side tracking configuration: comma-separated event types (exact or 'prefix.*'); '*' broadcasts everything. */
+  LIVE_TRACKED_EVENTS: z.string().default('*'),
+  /** Max concurrent workspace subscriptions per socket. */
+  LIVE_WS_MAX_SUBSCRIPTIONS: z.coerce.number().int().positive().max(64).default(8),
 });
 
 export type Env = z.infer<typeof envSchema>;

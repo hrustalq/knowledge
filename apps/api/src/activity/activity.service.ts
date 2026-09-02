@@ -12,6 +12,8 @@ export interface ActivityRecordInput {
   documentId?: string;
   subjectId?: string;
   metadata?: Record<string, unknown>;
+  /** Live data patching: changed entity fields, forwarded verbatim on the event bus (never persisted to the feed). */
+  patch?: Record<string, unknown>;
 }
 
 /**
@@ -45,8 +47,10 @@ export class ActivityService {
         type: input.action,
         workspaceId: input.workspaceId,
         documentId: input.documentId,
+        subjectId: input.subjectId,
         actor: input.actor ?? 'dev',
         title: typeof input.metadata?.title === 'string' ? input.metadata.title : undefined,
+        ...(input.patch ? { patch: input.patch } : {}),
       });
     } catch (e) {
       this.logger.warn(`Activity record failed (non-fatal): ${(e as Error).message}`);

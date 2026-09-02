@@ -1,14 +1,18 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
+  AssistantAskResponse,
+  AssistantAskSource,
   AssistantIssue,
   AssistantRelatedResponse,
   AssistantReviewResponse,
   AssistantSuggestResponse,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { DocumentsService } from '../documents/documents.service.js';
 import { SearchService } from '../search/search.service.js';
-import type { AssistantRelatedDto, AssistantReviewDto, AssistantSuggestDto } from './assistant.dto.js';
+import type { AssistantAskDto, AssistantRelatedDto, AssistantReviewDto, AssistantSuggestDto } from './assistant.dto.js';
 
 const SEVERITIES = ['error', 'warning', 'suggestion'] as const;
 
@@ -29,6 +33,8 @@ export class AssistantService {
   constructor(
     config: ConfigService<Env, true>,
     private readonly search: SearchService,
+    private readonly prisma: PrismaService,
+    private readonly documents: DocumentsService,
   ) {
     this.enabled = config.get('ASSISTANT_PROVIDER', { infer: true }) === 'openai-compatible';
     this.baseUrl = config.get('ASSISTANT_BASE_URL', { infer: true }).replace(/\/$/, '');
@@ -76,6 +82,73 @@ export class AssistantService {
     return { enabled: true, suggestion: suggestion.trim() };
   }
 
+
+  /**
+   * Chat about one document: the answer is grounded in the page's head-revision
+   * content plus related excerpts from hybrid search (+1 graph hop).
+   */
+  async ask(dto: AssistantAskDto): Promise<AssistantAskResponse> {
+    // AclGuard checked dto.workspaceId — make sure the page actually belongs to it
+    // (before any other branch, so disabled mode behaves identically).
+    const document = await this.prisma.document.findUnique({ where: { id: dto.documentId } });
+    if (!document || document.workspaceId !== dto.workspaceId) {
+      throw new NotFoundException(`Document ${dto.documentId} not found in workspace`);
+    }
+    if (!this.enabled) {
+      return { enabled: false, answer: 'Assistant is disabled (ASSISTANT_PROVIDER=none).', sources: [] };
+    }
+
+    let markdown = '';
+    try {
+      markdown = (await this.documents.getContent(dto.documentId)).markdown;
+    } catch {
+      // Draft-only / unreadable revision — answer from related context alone.
+    }
+
+    const searchRes = await this.search.search({
+      workspaceId: dto.workspaceId,
+      query: dto.question.slice(0, 2_000),
+      mode: 'hybrid',
+      limit: 6,
+      expandGraph: { depth: 1 },
+    });
+    const seen = new Set<string>([dto.documentId]);
+    const relatedChunks = searchRes.results.filter((r) => {
+      if (seen.has(r.documentId)) return false;
+      seen.add(r.documentId);
+      return true;
+    }).slice(0, 4);
+
+    const context = [
+      `# Current page: ${document.title}\n\n${markdown.slice(0, 40_000) || '(no readable content yet)'}`,
+      ...relatedChunks.map((r) => `# Related page: ${r.title}\n\n…${r.snippet}…`),
+    ].join('\n\n---\n\n');
+
+    const history = (dto.history ?? []).slice(-8).map((t) => ({
+      role: t.role,
+      content: t.content.slice(0, 4_000),
+    }));
+
+    const answer = await this.chatMessages([
+      {
+        role: 'system',
+        content:
+          'You answer questions about a documentation page in a team knowledge base. ' +
+          'Ground every answer in the provided page content and related excerpts; when the context does not ' +
+          'cover the question, say so plainly instead of guessing. Answer in concise markdown.\n\n' +
+          `Context:\n\n${context}`,
+      },
+      ...history,
+      { role: 'user', content: dto.question },
+    ]);
+
+    const sources: AssistantAskSource[] = [
+      { documentId: document.id, title: document.title },
+      ...relatedChunks.map((r) => ({ documentId: r.documentId, title: r.title, snippet: r.snippet })),
+    ];
+    return { enabled: true, answer: answer.trim(), sources };
+  }
+
   /** Relevant-document lookup — plain hybrid search over a draft excerpt; always available. */
   async related(dto: AssistantRelatedDto): Promise<AssistantRelatedResponse> {
     const res = await this.search.search({
@@ -88,21 +161,21 @@ export class AssistantService {
     return { results: res.results, related: res.related };
   }
 
-  private async chat(system: string, user: string): Promise<string> {
+  private chat(system: string, user: string): Promise<string> {
+    return this.chatMessages([
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ]);
+  }
+
+  private async chatMessages(messages: Array<{ role: string; content: string }>): Promise<string> {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
       },
-      body: JSON.stringify({
-        model: this.model,
-        temperature: 0.2,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-      }),
+      body: JSON.stringify({ model: this.model, temperature: 0.2, messages }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');

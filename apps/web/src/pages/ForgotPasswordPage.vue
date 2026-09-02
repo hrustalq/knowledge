@@ -32,7 +32,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto mt-16 max-w-sm">
+  <div class="mx-auto my-auto mt-16 max-w-sm">
     <Card>
       <CardHeader>
         <CardTitle>Reset your password</CardTitle>

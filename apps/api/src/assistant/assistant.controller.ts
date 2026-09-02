@@ -2,7 +2,7 @@ import { Body, Controller, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Access } from '../auth/access.decorator.js';
 import { AssistantService } from './assistant.service.js';
-import { AssistantRelatedDto, AssistantReviewDto, AssistantSuggestDto } from './assistant.dto.js';
+import { AssistantAskDto, AssistantRelatedDto, AssistantReviewDto, AssistantSuggestDto } from './assistant.dto.js';
 
 @ApiTags('assistant')
 @Controller('v1/assistant')
@@ -21,6 +21,13 @@ export class AssistantController {
   @ApiOperation({ summary: 'LLM writing suggestion for a draft (outline / continuation / rewrite)' })
   suggest(@Body() dto: AssistantSuggestDto) {
     return this.assistant.suggest(dto);
+  }
+
+  @Post('ask')
+  @Access('viewer', 'body')
+  @ApiOperation({ summary: 'Chat about a document — grounded in its content and related pages' })
+  ask(@Body() dto: AssistantAskDto) {
+    return this.assistant.ask(dto);
   }
 
   @Post('related')

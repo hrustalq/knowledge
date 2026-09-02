@@ -2899,6 +2899,51 @@
         ]
       }
     },
+    "/v1/assistant/ask": {
+      "post": {
+        "operationId": "AssistantController_ask",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantAskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Chat about a document — grounded in its content and related pages",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/v1/assistant/related": {
       "post": {
         "operationId": "AssistantController_related",
@@ -3588,6 +3633,54 @@
           "title",
           "markdown",
           "instruction"
+        ]
+      },
+      "AssistantAskTurnDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ]
+      },
+      "AssistantAskDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "question": {
+            "type": "string",
+            "example": "Why do sessions get revoked on password reset?"
+          },
+          "history": {
+            "description": "Prior turns, most recent last",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssistantAskTurnDto"
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "documentId",
+          "question"
         ]
       },
       "AssistantRelatedDto": {

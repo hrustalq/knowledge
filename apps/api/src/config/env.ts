@@ -57,11 +57,19 @@ export const envSchema = z.object({
   STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
   STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 
-  /** Feature 09 AI assistant (docs/features/09) — 'none' disables the LLM endpoints. */
-  ASSISTANT_PROVIDER: z.enum(['none', 'openai-compatible']).default('none'),
+  /**
+   * Feature 09 AI assistant (docs/features/09) — 'none' disables the LLM endpoints.
+   * All non-none providers use the official `openai` SDK; `deepseek` defaults
+   * BASE_URL/MODEL to https://api.deepseek.com + deepseek-chat.
+   */
+  ASSISTANT_PROVIDER: z.enum(['none', 'openai-compatible', 'deepseek']).default('none'),
   ASSISTANT_BASE_URL: z.string().optional().default(''),
   ASSISTANT_MODEL: z.string().optional().default(''),
   ASSISTANT_API_KEY: z.string().optional().default(''),
+  /** Tool harness: max tool executions per /v1/assistant/ask request (0 = plain chat). */
+  ASSISTANT_MAX_TOOL_CALLS: z.coerce.number().int().min(0).max(16).default(6),
+  /** Upstream request timeout for the assistant provider. */
+  ASSISTANT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
   /** Feature 04: max dependent documents re-indexed per indexed revision (0 disables). */
   DEPENDENT_REINDEX_MAX: z.coerce.number().int().min(0).default(20),

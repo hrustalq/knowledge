@@ -822,7 +822,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Chat about a document — grounded in its content and related pages */
+        /** Chat about a document — tool-calling harness (search/read/graph), every tool call authorized against the caller session */
         post: operations["AssistantController_ask"];
         delete?: never;
         options?: never;

@@ -797,11 +797,24 @@ export interface AssistantAskSource {
   title: string;
   snippet?: string;
 }
+/** One tool execution the model performed while answering (transparency + debugging). */
+export interface AssistantToolCall {
+  /** search_knowledge | read_document | explore_document_graph */
+  tool: string;
+  /** Raw JSON arguments the model supplied (truncated). */
+  arguments: string;
+  /** False when the call was rejected (access control) or failed. */
+  ok: boolean;
+}
 export interface AssistantAskResponse {
   /** False when ASSISTANT_PROVIDER=none — UI degrades instead of erroring. */
   enabled: boolean;
   answer: string;
   sources: AssistantAskSource[];
+  /** Tool calls made by the harness, in order. */
+  toolCalls?: AssistantToolCall[];
+  /** Provider model that produced the answer. */
+  model?: string;
 }
 
 // ---------------------------------------------------------------------------

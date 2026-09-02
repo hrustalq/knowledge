@@ -2938,7 +2938,7 @@
             }
           }
         },
-        "summary": "Chat about a document — grounded in its content and related pages",
+        "summary": "Chat about a document — tool-calling harness (search/read/graph), every tool call authorized against the caller session",
         "tags": [
           "assistant"
         ]

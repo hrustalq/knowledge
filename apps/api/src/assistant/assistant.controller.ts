@@ -1,6 +1,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Access } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import type { Principal } from '../auth/principal.js';
 import { AssistantService } from './assistant.service.js';
 import { AssistantAskDto, AssistantRelatedDto, AssistantReviewDto, AssistantSuggestDto } from './assistant.dto.js';
 
@@ -25,9 +26,12 @@ export class AssistantController {
 
   @Post('ask')
   @Access('viewer', 'body')
-  @ApiOperation({ summary: 'Chat about a document — grounded in its content and related pages' })
-  ask(@Body() dto: AssistantAskDto) {
-    return this.assistant.ask(dto);
+  @ApiOperation({
+    summary:
+      'Chat about a document — tool-calling harness (search/read/graph), every tool call authorized against the caller session',
+  })
+  ask(@Body() dto: AssistantAskDto, @CurrentPrincipal() principal: Principal) {
+    return this.assistant.ask(dto, principal);
   }
 
   @Post('related')

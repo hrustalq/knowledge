@@ -129,7 +129,7 @@ function useWorkspace() {
 
 <template>
   <div class="space-y-6">
-    <h1 class="text-2xl font-semibold">Access control</h1>
+    <h1 class="font-display text-2xl font-bold tracking-tight">Access control</h1>
 
     <div class="flex flex-wrap items-end gap-3">
       <div class="space-y-1">

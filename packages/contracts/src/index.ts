@@ -779,6 +779,31 @@ export interface AssistantRelatedResponse {
   related?: RelatedDocumentResult[];
 }
 
+// POST /v1/assistant/ask — chat about a document, grounded in its content
+// and related pages found via hybrid search + graph expansion.
+export interface AssistantAskTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+export interface AssistantAskRequest {
+  workspaceId: string;
+  documentId: string;
+  question: string;
+  /** Prior turns of this conversation (most recent last). */
+  history?: AssistantAskTurn[];
+}
+export interface AssistantAskSource {
+  documentId: string;
+  title: string;
+  snippet?: string;
+}
+export interface AssistantAskResponse {
+  /** False when ASSISTANT_PROVIDER=none — UI degrades instead of erroring. */
+  enabled: boolean;
+  answer: string;
+  sources: AssistantAskSource[];
+}
+
 // ---------------------------------------------------------------------------
 // Auth flow — login / signup / password restoration (session tokens on top of
 // Phase 5 api-key auth) + users & access-control management.

@@ -112,3 +112,13 @@ export function statusVariant(status: string | null): 'default' | 'secondary' | 
     default: return 'outline'
   }
 }
+
+/** Tailwind classes for the small indexing-lifecycle dot shown next to page names. */
+export function statusDot(status: string | null): string {
+  switch (status) {
+    case 'indexed': return 'bg-emerald-500'
+    case 'failed': return 'bg-red-500'
+    case 'indexing': case 'finalized': return 'bg-amber-500 animate-pulse'
+    default: return 'bg-muted-foreground/40'
+  }
+}

@@ -24,6 +24,19 @@ export const useDocumentsStore = defineStore('documents', {
       this.tree = res.roots
       this.treeLoaded = true
     },
+    /** Breadcrumb chain (root → … → document) from the loaded tree, or []. */
+    pathTo(documentId: string): DocumentTreeNode[] {
+      const walk = (nodes: DocumentTreeNode[], trail: DocumentTreeNode[]): DocumentTreeNode[] | null => {
+        for (const node of nodes) {
+          const next = [...trail, node]
+          if (node.documentId === documentId) return next
+          const hit = walk(node.children, next)
+          if (hit) return hit
+        }
+        return null
+      }
+      return walk(this.tree, []) ?? []
+    },
     /** Feature 04: called by the events store when the workspace changed remotely. */
     async invalidate() {
       const jobs: Promise<void>[] = []

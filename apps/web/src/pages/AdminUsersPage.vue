@@ -78,7 +78,7 @@ function setPassword(user: UserSummary) {
 
 <template>
   <div class="space-y-6">
-    <h1 class="text-2xl font-semibold">Users</h1>
+    <h1 class="font-display text-2xl font-bold tracking-tight">Users</h1>
 
     <Card>
       <CardHeader><CardTitle class="text-base">Create user</CardTitle></CardHeader>

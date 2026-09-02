@@ -813,6 +813,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/assistant/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Chat about a document — grounded in its content and related pages */
+        post: operations["AssistantController_ask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assistant/related": {
         parameters: {
             query?: never;
@@ -1062,6 +1079,21 @@ export interface components {
             markdown: string;
             /** @example Draft an outline for the missing sections */
             instruction: string;
+        };
+        AssistantAskTurnDto: {
+            /** @enum {string} */
+            role: "user" | "assistant";
+            content: string;
+        };
+        AssistantAskDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** Format: uuid */
+            documentId: string;
+            /** @example Why do sessions get revoked on password reset? */
+            question: string;
+            /** @description Prior turns, most recent last */
+            history?: components["schemas"]["AssistantAskTurnDto"][];
         };
         AssistantRelatedDto: {
             /** Format: uuid */
@@ -3337,6 +3369,45 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AssistantSuggestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantController_ask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantAskDto"];
             };
         };
         responses: {

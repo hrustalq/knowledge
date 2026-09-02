@@ -211,7 +211,7 @@ function appendSuggestion(text: string) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold">{{ isEdit ? 'Edit document' : 'New document' }}</h1>
+      <h1 class="font-display text-2xl font-bold tracking-tight">{{ isEdit ? 'Edit document' : 'New document' }}</h1>
       <Button :disabled="busy || loading" @click="save">
         {{ busy ? 'Saving…' : isEdit ? 'Publish revision' : 'Create & index' }}
       </Button>

@@ -14,7 +14,7 @@ import {
   type FinalizeRevisionResponse,
   type RevisionInfo,
 } from '@knowledge/contracts'
-import { apiFetch, DEMO_WORKSPACE_ID } from '@/lib/api'
+import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useDocumentsStore } from '@/stores/documents'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -149,7 +149,7 @@ async function save() {
       const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
         method: 'POST',
         body: JSON.stringify({
-          workspaceId: DEMO_WORKSPACE_ID,
+          workspaceId: getWorkspaceId(),
           title: title.value,
           category: category.value,
           ...(parentId.value ? { parentId: parentId.value } : {}),

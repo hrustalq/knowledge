@@ -32,6 +32,8 @@ const workspaceId = arg('workspace-id') ?? DEMO_WORKSPACE_ID;
 const workspaceName = arg('workspace-name') ?? 'Demo Workspace';
 const role = arg('role') ?? 'admin';
 const trustedOperator = (arg('operator') ?? 'true') === 'true';
+// Auth flow: the bootstrapped user is the initial platform admin by default.
+const isAdmin = (arg('platform-admin') ?? 'true') === 'true';
 if (!ROLES.includes(role)) {
   console.error(`--role must be one of ${ROLES.join('|')}`);
   process.exit(1);
@@ -49,8 +51,8 @@ try {
   });
   const user = await prisma.user.upsert({
     where: { email },
-    update: { displayName, apiKeyHash },
-    create: { email, displayName, apiKeyHash },
+    update: { displayName, apiKeyHash, isAdmin },
+    create: { email, displayName, apiKeyHash, isAdmin },
   });
   await prisma.workspaceMember.upsert({
     where: { workspaceId_userId: { workspaceId, userId: user.id } },

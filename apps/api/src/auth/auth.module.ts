@@ -5,7 +5,10 @@ import { AccessService } from './access.service.js';
 import { AclGuard } from './acl.guard.js';
 import { AuditService } from './audit.service.js';
 import { AuthController } from './auth.controller.js';
+import { AuthFlowController } from './auth-flow.controller.js';
+import { AuthFlowService } from './auth-flow.service.js';
 import { AuthGuard } from './auth.guard.js';
+import { SessionsService } from './sessions.service.js';
 
 /**
  * Phase 5 governance (plan.md §11). Global: AuthGuard resolves the caller on
@@ -16,13 +19,15 @@ import { AuthGuard } from './auth.guard.js';
 @Global()
 @Module({
   imports: [PrismaModule],
-  controllers: [AuthController],
+  controllers: [AuthController, AuthFlowController],
   providers: [
     AccessService,
     AuditService,
+    SessionsService,
+    AuthFlowService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: AclGuard },
   ],
-  exports: [AccessService, AuditService],
+  exports: [AccessService, AuditService, SessionsService],
 })
 export class AuthModule {}

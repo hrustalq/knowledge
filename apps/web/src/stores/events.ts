@@ -3,7 +3,7 @@
 import { defineStore } from 'pinia'
 import { toast } from 'vue-sonner'
 import type { KnowledgeEvent } from '@knowledge/contracts'
-import { DEMO_WORKSPACE_ID } from '@/lib/api'
+import { getToken, getWorkspaceId } from '@/lib/api'
 import { useDocumentsStore } from '@/stores/documents'
 
 export const useEventsStore = defineStore('events', {
@@ -16,7 +16,11 @@ export const useEventsStore = defineStore('events', {
   actions: {
     connect() {
       if (this.connected || import.meta.env.SSR) return
-      const source = new EventSource(`/api/v1/events?workspaceId=${DEMO_WORKSPACE_ID}`)
+      // AUTH_MODE=api-key: EventSource cannot set headers — the API accepts ?token=.
+      const token = getToken()
+      const source = new EventSource(
+        `/api/v1/events?workspaceId=${getWorkspaceId()}${token ? `&token=${token}` : ''}`,
+      )
       source.onmessage = (msg) => {
         let event: KnowledgeEvent
         try {

@@ -1,7 +1,7 @@
 import { createSSRApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
-import { createRouter } from './router'
+import { createRouter, installAuthGuard } from './router'
 import './style.css'
 
 // Fresh app/router/pinia per request (SSR) or per page load (client).
@@ -11,5 +11,6 @@ export function createApp() {
   const router = createRouter()
   app.use(pinia)
   app.use(router)
+  installAuthGuard(router, pinia)
   return { app, router, pinia }
 }

@@ -1,11 +1,12 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   type CanActivate,
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ACCESS_META, PUBLIC_META, type AccessSpec } from './access.decorator.js';
+import { ACCESS_META, PLATFORM_ADMIN_META, PUBLIC_META, type AccessSpec } from './access.decorator.js';
 import { AccessService } from './access.service.js';
 import type { Principal } from './principal.js';
 
@@ -15,7 +16,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * Phase 5 workspace ACL guard. Routes declare `@Access(role, source)`; the
  * guard resolves the target workspace in PostgreSQL and enforces membership
  * before the handler — and therefore before any graph/vector query — runs.
- * Routes without @Access require authentication only (no workspace resource).
+ * `@PlatformAdmin()` routes additionally require users.is_admin (403).
+ * Routes without either require authentication only (no workspace resource).
  */
 @Injectable()
 export class AclGuard implements CanActivate {
@@ -28,11 +30,17 @@ export class AclGuard implements CanActivate {
     if (this.reflector.getAllAndOverride<boolean>(PUBLIC_META, [ctx.getHandler(), ctx.getClass()])) {
       return true;
     }
-    const spec = this.reflector.get<AccessSpec | undefined>(ACCESS_META, ctx.getHandler());
-    if (!spec) return true;
-
     const req = ctx.switchToHttp().getRequest();
     const principal: Principal = req.principal;
+
+    if (this.reflector.getAllAndOverride<boolean>(PLATFORM_ADMIN_META, [ctx.getHandler(), ctx.getClass()])) {
+      if (principal.mode !== 'dev' && !principal.isAdmin) {
+        throw new ForbiddenException('Requires platform admin');
+      }
+    }
+
+    const spec = this.reflector.get<AccessSpec | undefined>(ACCESS_META, ctx.getHandler());
+    if (!spec) return true;
     if (principal.mode === 'dev') return true; // AUTH_MODE=none
 
     const workspaceId = await this.resolveWorkspace(spec, req);
@@ -61,6 +69,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfMergeRequest(uuid(req.params?.id, 'merge request id'));
       case 'job':
         return this.access.workspaceOfJob(uuid(req.params?.id, 'job id'));
+      case 'workspace':
+        return this.access.workspaceExists(uuid(req.params?.id, 'workspace id'));
     }
   }
 }

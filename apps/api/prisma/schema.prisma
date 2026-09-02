@@ -175,11 +175,49 @@ model User {
   displayName String   @map("display_name")
   // SHA-256 hex of the API key; the plaintext key is printed once at creation.
   apiKeyHash  String?  @unique @map("api_key_hash")
+  // Auth flow: scrypt hash ("scrypt$N$r$p$salt$hash"); null until the user sets one.
+  passwordHash String? @map("password_hash")
+  // Platform admin: user management + implicit admin in every workspace.
+  isAdmin     Boolean  @default(false) @map("is_admin")
+  // Soft disable: authentication (sessions AND api keys) is refused while set.
+  disabledAt  DateTime? @map("disabled_at") @db.Timestamptz
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   memberships WorkspaceMember[]
+  sessions    Session[]
+  passwordResets PasswordResetToken[]
 
   @@map("users")
+}
+
+// Auth flow: opaque `ks_` login session tokens (only the SHA-256 is stored).
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Auth flow: single-use password-reset tokens (`kr_`; only the SHA-256 is stored).
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 model WorkspaceMember {

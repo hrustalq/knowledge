@@ -455,8 +455,10 @@ export interface MeResponse {
   userId: string;
   email: string;
   displayName: string;
-  /** 'dev' = AUTH_MODE=none (full access); 'api-key' = authenticated via Bearer key. */
-  mode: 'dev' | 'api-key';
+  /** 'dev' = AUTH_MODE=none (full access); 'api-key' = Bearer API key; 'session' = login session token. */
+  mode: 'dev' | 'api-key' | 'session';
+  /** Platform admin (users.is_admin): full access to every workspace + user management. */
+  isAdmin: boolean;
   /** Empty in dev mode (the dev principal is admin+operator everywhere). */
   memberships: WorkspaceMembership[];
 }
@@ -723,4 +725,156 @@ export interface AssistantRelatedRequest {
 export interface AssistantRelatedResponse {
   results: SearchResult[];
   related?: RelatedDocumentResult[];
+}
+
+// ---------------------------------------------------------------------------
+// Auth flow — login / signup / password restoration (session tokens on top of
+// Phase 5 api-key auth) + users & access-control management.
+// ---------------------------------------------------------------------------
+
+// POST /v1/auth/signup
+export interface SignupRequest {
+  email: string;
+  displayName: string;
+  password: string;
+}
+
+// POST /v1/auth/login
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+/** Returned by signup and login: a `ks_` session token (send as Bearer). */
+export interface AuthSessionResponse {
+  token: string;
+  expiresAt: string;
+  me: MeResponse;
+}
+
+// POST /v1/auth/logout
+export interface LogoutResponse {
+  ok: boolean;
+}
+
+// POST /v1/auth/forgot-password
+export interface ForgotPasswordRequest {
+  email: string;
+}
+export interface ForgotPasswordResponse {
+  /** Always true — the endpoint never reveals whether the email exists. */
+  ok: boolean;
+  /** Reset token echoed back in development only (no mail provider configured). */
+  debugToken?: string;
+}
+
+// POST /v1/auth/reset-password
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+}
+export interface ResetPasswordResponse {
+  ok: boolean;
+}
+
+// POST /v1/auth/change-password (authenticated)
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+// ---------------------------------------------------------------------------
+// Users management (platform admin)
+// ---------------------------------------------------------------------------
+
+export interface UserSummary {
+  userId: string;
+  email: string;
+  displayName: string;
+  isAdmin: boolean;
+  /** Disabled users cannot authenticate (sessions and API keys stop working). */
+  disabled: boolean;
+  hasPassword: boolean;
+  hasApiKey: boolean;
+  createdAt: string;
+  memberships: WorkspaceMembership[];
+}
+
+// GET /v1/users
+export interface ListUsersResponse {
+  users: UserSummary[];
+}
+
+// POST /v1/users
+export interface CreateUserRequest {
+  email: string;
+  displayName: string;
+  /** Optional initial password; without one the user goes through password reset. */
+  password?: string;
+  isAdmin?: boolean;
+}
+
+// PATCH /v1/users/:id
+export interface UpdateUserRequest {
+  displayName?: string;
+  isAdmin?: boolean;
+  disabled?: boolean;
+  /** Admin password override; revokes the user's sessions. */
+  password?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Access control management (workspace members)
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceSummary {
+  workspaceId: string;
+  name: string;
+  createdAt: string;
+  memberCount: number;
+  /** Caller's role in this workspace (null for platform admins listing foreign workspaces). */
+  myRole: WorkspaceRole | null;
+}
+
+// GET /v1/workspaces
+export interface ListWorkspacesResponse {
+  workspaces: WorkspaceSummary[];
+}
+
+// POST /v1/workspaces
+export interface CreateWorkspaceRequest {
+  name: string;
+}
+export interface CreateWorkspaceResponse {
+  workspaceId: string;
+  name: string;
+}
+
+export interface WorkspaceMemberEntry {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: WorkspaceRole;
+  trustedOperator: boolean;
+  disabled: boolean;
+  createdAt: string;
+}
+
+// GET /v1/workspaces/:id/members
+export interface ListWorkspaceMembersResponse {
+  workspaceId: string;
+  members: WorkspaceMemberEntry[];
+}
+
+// POST /v1/workspaces/:id/members — add (or update) a member by email
+export interface AddWorkspaceMemberRequest {
+  email: string;
+  role: WorkspaceRole;
+  trustedOperator?: boolean;
+}
+
+// PATCH /v1/workspaces/:id/members/:userId
+export interface UpdateWorkspaceMemberRequest {
+  role?: WorkspaceRole;
+  trustedOperator?: boolean;
 }

@@ -1,17 +1,31 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { renderToString } from 'vue/server-renderer'
 import { createApp } from './main'
 
-export async function render(url: string) {
-  const { app, router, pinia } = createApp()
+interface SsrRequestContext {
+  token: string | null
+  workspaceId: string | null
+}
 
-  await router.push(url)
-  await router.isReady()
+// Per-request auth context for lib/api (async-context scoped, so concurrent
+// SSR renders can never observe each other's tokens). lib/api reads it via
+// globalThis to stay free of node imports in the client bundle.
+const ssrCtx = new AsyncLocalStorage<SsrRequestContext>()
+;(globalThis as Record<string, unknown>).__KN_SSR_CTX__ = ssrCtx
 
-  const html = await renderToString(app)
+export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) {
+  return ssrCtx.run({ token: ctx.token ?? null, workspaceId: ctx.workspaceId ?? null }, async () => {
+    const { app, router, pinia } = createApp()
 
-  // Transfer Pinia state for hydration; escape < to prevent script breakout.
-  const state = JSON.stringify(pinia.state.value).replace(/</g, '\\u003c')
-  const head = `<script>window.__PINIA__ = ${state}</script>`
+    await router.push(url)
+    await router.isReady()
 
-  return { html, head }
+    const html = await renderToString(app)
+
+    // Transfer Pinia state for hydration; escape < to prevent script breakout.
+    const state = JSON.stringify(pinia.state.value).replace(/</g, '\\u003c')
+    const head = `<script>window.__PINIA__ = ${state}</script>`
+
+    return { html, head }
+  })
 }

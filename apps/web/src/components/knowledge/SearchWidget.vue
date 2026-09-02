@@ -3,7 +3,7 @@
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { DOCUMENT_CATEGORIES, type DocumentCategory, type SearchRequest, type SearchResponse } from '@knowledge/contracts'
-import { apiFetch, DEMO_WORKSPACE_ID } from '@/lib/api'
+import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -33,7 +33,7 @@ async function run() {
   error.value = null
   try {
     const body: SearchRequest = {
-      workspaceId: DEMO_WORKSPACE_ID,
+      workspaceId: getWorkspaceId(),
       query: query.value,
       mode: mode.value,
       limit: limit.value,

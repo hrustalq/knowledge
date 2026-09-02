@@ -7,7 +7,7 @@ import type {
   AssistantReviewResponse,
   AssistantSuggestResponse,
 } from '@knowledge/contracts'
-import { apiFetch, DEMO_WORKSPACE_ID } from '@/lib/api'
+import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -41,7 +41,7 @@ async function call<T>(kind: string, path: string, body: Record<string, unknown>
 
 async function runReview() {
   review.value = await call<AssistantReviewResponse>('review', '/v1/assistant/review', {
-    workspaceId: DEMO_WORKSPACE_ID,
+    workspaceId: getWorkspaceId(),
     title: props.title,
     markdown: props.markdown,
   })
@@ -49,7 +49,7 @@ async function runReview() {
 
 async function runRelated() {
   related.value = await call<AssistantRelatedResponse>('related', '/v1/assistant/related', {
-    workspaceId: DEMO_WORKSPACE_ID,
+    workspaceId: getWorkspaceId(),
     text: props.markdown || props.title,
     limit: 5,
   })
@@ -58,7 +58,7 @@ async function runRelated() {
 async function runSuggest() {
   if (!instruction.value.trim()) return
   suggestion.value = await call<AssistantSuggestResponse>('suggest', '/v1/assistant/suggest', {
-    workspaceId: DEMO_WORKSPACE_ID,
+    workspaceId: getWorkspaceId(),
     title: props.title,
     markdown: props.markdown,
     instruction: instruction.value,

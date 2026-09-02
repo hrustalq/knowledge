@@ -23,6 +23,7 @@ export class AuthController {
       email: principal.email,
       displayName: principal.displayName,
       mode: principal.mode,
+      isAdmin: principal.isAdmin,
       memberships: memberships.map((m) => ({
         workspaceId: m.workspaceId,
         role: m.role as WorkspaceRole,

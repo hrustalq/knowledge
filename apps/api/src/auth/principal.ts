@@ -6,12 +6,16 @@ import type { WorkspaceRole } from '@knowledge/contracts';
  * AccessService (membership lives in PostgreSQL — the ACL source of truth).
  */
 export interface Principal {
-  /** users.id in api-key mode; the synthetic dev id in AUTH_MODE=none. */
+  /** users.id in api-key/session mode; synthetic dev id in AUTH_MODE=none. */
   userId: string;
   email: string;
   displayName: string;
   /** 'dev' = AUTH_MODE=none — admin + trusted operator everywhere, keeps Phase 0-4 flows working. */
-  mode: 'dev' | 'api-key';
+  mode: 'dev' | 'api-key' | 'session';
+  /** Platform admin (users.is_admin): user management + implicit admin in every workspace. */
+  isAdmin: boolean;
+  /** Set when authenticated via a ks_ session token — lets logout revoke exactly this session. */
+  sessionId?: string;
 }
 
 /** AUTH_MODE=none principal. Matches the Phase 1 author stub id on purpose. */
@@ -20,6 +24,7 @@ export const DEV_PRINCIPAL: Principal = {
   email: 'dev@localhost',
   displayName: 'Dev (AUTH_MODE=none)',
   mode: 'dev',
+  isAdmin: true,
 };
 
 /** Role hierarchy: higher number ⇒ more rights. */

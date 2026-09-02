@@ -33,8 +33,19 @@ export const envSchema = z.object({
   EXTRACTOR_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.5),
   EXTRACTOR_MAX_CHUNKS: z.coerce.number().int().positive().default(20),
 
-  /** Phase 5 auth: 'none' = dev principal with full access (Phase 0-4 flows keep working); 'api-key' = Bearer key lookup against users.api_key_hash. */
+  /** Phase 5 auth: 'none' = dev principal with full access (Phase 0-4 flows keep working); 'api-key' = Bearer auth (kn_ API keys AND ks_ login session tokens). */
   AUTH_MODE: z.enum(['none', 'api-key']).default('none'),
+  /** Auth flow: login session lifetime. */
+  AUTH_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(720),
+  /** Auth flow: password-reset token lifetime. */
+  AUTH_RESET_TTL_MIN: z.coerce.number().int().positive().default(30),
+  /** Auth flow: allow self-service POST /v1/auth/signup. */
+  AUTH_SIGNUP_ENABLED: z.coerce.boolean().default(true),
+  /** Workspace new signups auto-join (empty disables). Defaults to the demo workspace. */
+  AUTH_DEFAULT_WORKSPACE_ID: z.string().default('11111111-1111-4111-8111-111111111111'),
+  AUTH_DEFAULT_ROLE: z.enum(['viewer', 'editor', 'admin']).default('viewer'),
+  /** Public base URL of the web app — used in password-reset links (logged; no mailer yet). */
+  WEB_BASE_URL: z.string().default('http://localhost:5173'),
 
   /** Phase 5 optional BM25 layer (plan.md §11) — 'none' keeps search vector-only. */
   FULLTEXT_PROVIDER: z.enum(['none', 'opensearch']).default('none'),

@@ -8,7 +8,7 @@ import type {
   FinalizeRevisionResponse,
 } from '@knowledge/contracts'
 import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts'
-import { apiFetch, DEMO_WORKSPACE_ID } from '@/lib/api'
+import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -30,7 +30,7 @@ async function submit() {
     // 1. Create document (draft revision)
     const doc = await apiFetch<CreateDocumentResponse>('/v1/documents', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId: DEMO_WORKSPACE_ID, title: title.value, category: category.value }),
+      body: JSON.stringify({ workspaceId: getWorkspaceId(), title: title.value, category: category.value }),
     })
 
     // 2. Presigned upload straight to MinIO

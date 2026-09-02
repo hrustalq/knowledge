@@ -3,7 +3,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { ActivityEntry, ListActivityResponse } from '@knowledge/contracts'
-import { apiFetch, DEMO_WORKSPACE_ID } from '@/lib/api'
+import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useEventsStore } from '@/stores/events'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -43,7 +43,7 @@ function relativeTime(iso: string): string {
 async function load(append = false) {
   busy.value = true
   try {
-    const params = new URLSearchParams({ workspaceId: DEMO_WORKSPACE_ID, limit: '30' })
+    const params = new URLSearchParams({ workspaceId: getWorkspaceId(), limit: '30' })
     if (props.documentId) params.set('documentId', props.documentId)
     if (append && nextCursor.value) params.set('cursor', nextCursor.value)
     const res = await apiFetch<ListActivityResponse>(`/v1/activity?${params}`)

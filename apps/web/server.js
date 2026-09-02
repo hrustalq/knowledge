@@ -32,6 +32,18 @@ if (!isProduction) {
   app.use(base, sirv('./dist/client', { extensions: [] }))
 }
 
+/** Minimal cookie read — auth token + active workspace for the SSR pass. */
+function readCookie(header, name) {
+  if (!header) return null
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=')
+    if (eq > 0 && part.slice(0, eq).trim() === name) {
+      return decodeURIComponent(part.slice(eq + 1).trim())
+    }
+  }
+  return null
+}
+
 // Serve HTML
 app.use('*all', async (req, res) => {
   try {
@@ -51,7 +63,10 @@ app.use('*all', async (req, res) => {
       render = (await import('./dist/server/entry-server.js')).render
     }
 
-    const rendered = await render(url)
+    const rendered = await render(url, {
+      token: readCookie(req.headers.cookie, 'kn_token'),
+      workspaceId: readCookie(req.headers.cookie, 'kn_ws'),
+    })
 
     const html = template
       .replace(`<!--app-head-->`, rendered.head ?? '')

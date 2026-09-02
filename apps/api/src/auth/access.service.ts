@@ -20,6 +20,7 @@ export class AccessService {
     operator = false,
   ): Promise<void> {
     if (principal.mode === 'dev') return; // AUTH_MODE=none — full access
+    if (principal.isAdmin) return; // platform admin — implicit admin + operator everywhere
     const member = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId: principal.userId } },
     });
@@ -32,6 +33,13 @@ export class AccessService {
     if (operator && !member.trustedOperator) {
       throw new ForbiddenException('Requires trusted-operator membership (plan.md §9 query_graph gate)');
     }
+  }
+
+  /** For @Access(..., 'workspace') routes: 404 for unknown workspaces before the membership check. */
+  async workspaceExists(workspaceId: string): Promise<string> {
+    const ws = await this.prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } });
+    if (!ws) throw new NotFoundException(`Workspace ${workspaceId} not found`);
+    return ws.id;
   }
 
   async workspaceOfDocument(documentId: string): Promise<string> {

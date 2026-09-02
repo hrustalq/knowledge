@@ -7,6 +7,7 @@ import type {
   CreateUploadResponse,
   FinalizeRevisionResponse,
 } from '@knowledge/contracts'
+import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts'
 import { apiFetch, DEMO_WORKSPACE_ID } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 const router = useRouter()
 const title = ref('')
 const text = ref('')
+const category = ref<DocumentCategory>('other')
 const busy = ref(false)
 
 async function submit() {
@@ -28,7 +30,7 @@ async function submit() {
     // 1. Create document (draft revision)
     const doc = await apiFetch<CreateDocumentResponse>('/v1/documents', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId: DEMO_WORKSPACE_ID, title: title.value }),
+      body: JSON.stringify({ workspaceId: DEMO_WORKSPACE_ID, title: title.value, category: category.value }),
     })
 
     // 2. Presigned upload straight to MinIO
@@ -68,6 +70,12 @@ async function submit() {
     <CardHeader><CardTitle>Upload a document</CardTitle></CardHeader>
     <CardContent class="space-y-4">
       <Input v-model="title" placeholder="Title, e.g. Authentication Architecture" />
+      <label class="flex items-center gap-2 text-sm">
+        <span class="text-muted-foreground">Category</span>
+        <select v-model="category" class="rounded-md border bg-background px-2 py-1.5">
+          <option v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ c }}</option>
+        </select>
+      </label>
       <Textarea v-model="text" rows="14" placeholder="# Markdown content…" class="font-mono" />
       <Button :disabled="busy" @click="submit">
         {{ busy ? 'Uploading…' : 'Upload & index' }}

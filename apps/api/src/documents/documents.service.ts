@@ -1,13 +1,21 @@
 import { createHash } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import matter from 'gray-matter';
 import type {
   BranchInfo,
   FactExtractor,
   CreateBranchResponse,
   CreateDocumentResponse,
   CreateUploadResponse,
+  DocumentCategory,
+  DocumentContentResponse,
   DocumentDetailResponse,
+  DocumentGraphEdge,
+  DocumentGraphNode,
+  DocumentGraphResponse,
   DocumentSummary,
+  DocumentTreeNode,
+  DocumentTreeResponse,
   FinalizeRevisionResponse,
   ListBranchesResponse,
   ListDocumentRelationsResponse,
@@ -20,14 +28,17 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { IngestionProducer } from '../ingestion/ingestion.producer.js';
+import { ActivityService } from '../activity/activity.service.js';
+import { bfs, buildAdjacency, docIdOf, docNode, isDocNode } from '../graph/graph-walk.js';
 import type {
   CreateBranchDto,
   CreateDocumentDto,
   CreateRevisionDto,
   CreateUploadDto,
   RelationInputDto,
+  UpdateDocumentDto,
 } from './dto/documents.dto.js';
-import type { DocumentBranch, DocumentRevision } from '@prisma/client';
+import type { Document, DocumentBranch, DocumentRevision } from '@prisma/client';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -39,14 +50,28 @@ export class DocumentsService {
     private readonly storage: StorageService,
     private readonly graph: GraphService,
     private readonly ingestion: IngestionProducer,
+    private readonly activity: ActivityService,
   ) {}
 
   async createDocument(dto: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
     const contentType = dto.content ? `text/${dto.content.format}` : 'text/markdown';
 
+    // Feature 08: nested creation — the parent must exist in the same workspace.
+    if (dto.parentId) {
+      const parent = await this.prisma.document.findUnique({ where: { id: dto.parentId } });
+      if (!parent || parent.workspaceId !== dto.workspaceId) {
+        throw new BadRequestException(`Parent document ${dto.parentId} not found in this workspace`);
+      }
+    }
+
     const { document, revision } = await this.prisma.$transaction(async (tx) => {
       const document = await tx.document.create({
-        data: { workspaceId: dto.workspaceId, title: dto.title },
+        data: {
+          workspaceId: dto.workspaceId,
+          title: dto.title,
+          category: dto.category ?? 'other',
+          parentId: dto.parentId ?? null,
+        },
       });
       const branch = await tx.documentBranch.create({
         data: { documentId: document.id, name: 'main', headRevisionId: null },
@@ -84,6 +109,14 @@ export class DocumentsService {
       const finalized = await this.finalizeRevision(document.id, revision.id);
       status = finalized.status;
     }
+
+    await this.activity.record({
+      workspaceId: dto.workspaceId,
+      actor: authorId,
+      action: 'document.created',
+      documentId: document.id,
+      metadata: { title: dto.title, category: dto.category ?? 'other' },
+    });
 
     return { documentId: document.id, revisionId: revision.id, branch: 'main', status };
   }
@@ -224,12 +257,26 @@ export class DocumentsService {
       /* swallowed: outbox sweeper re-enqueues */
     });
 
+    await this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: revision.authorId,
+      action: 'revision.finalized',
+      documentId,
+      subjectId: revision.id,
+      metadata: { title: document.title, revisionNumber: revision.revisionNumber },
+    });
+
     return { revisionId: revision.id, status: 'finalized', ingestionJobId: job.id, deduplicated: false };
   }
 
-  async listDocuments(workspaceId: string, limit = 20, cursor?: string): Promise<ListDocumentsResponse> {
+  async listDocuments(
+    workspaceId: string,
+    limit = 20,
+    cursor?: string,
+    category?: string,
+  ): Promise<ListDocumentsResponse> {
     const docs = await this.prisma.document.findMany({
-      where: { workspaceId },
+      where: { workspaceId, ...(category ? { category } : {}) },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -253,6 +300,8 @@ export class DocumentsService {
         workspaceId: d.workspaceId,
         title: d.title,
         defaultBranch: d.defaultBranch,
+        category: d.category as DocumentCategory,
+        parentId: d.parentId,
         headRevisionId: headId,
         headRevisionStatus: (head?.status as RevisionStatus) ?? null,
         createdAt: d.createdAt.toISOString(),
@@ -295,6 +344,8 @@ export class DocumentsService {
         workspaceId: document.workspaceId,
         title: document.title,
         defaultBranch: document.defaultBranch,
+        category: document.category as DocumentCategory,
+        parentId: document.parentId,
         headRevisionId: headId,
         headRevisionStatus: (revision.status as RevisionStatus) ?? null,
         createdAt: document.createdAt.toISOString(),
@@ -331,6 +382,13 @@ export class DocumentsService {
 
     const branch = await this.prisma.documentBranch.create({
       data: { documentId, name: dto.name, headRevisionId: head },
+    });
+    await this.activity.record({
+      workspaceId: document.workspaceId,
+      action: 'branch.created',
+      documentId,
+      subjectId: branch.id,
+      metadata: { title: document.title, branch: dto.name },
     });
     return { branch: this.toBranchInfo(branch) };
   }
@@ -424,6 +482,12 @@ export class DocumentsService {
       title: document.title,
       fact: { ...fact, extractor: 'curated', confidence: 1 },
     });
+    await this.activity.record({
+      workspaceId: document.workspaceId,
+      action: 'relations.curated',
+      documentId,
+      metadata: { title: document.title, type: fact.type, targetKey: fact.target.key },
+    });
     return this.listRelations(documentId);
   }
 
@@ -436,7 +500,216 @@ export class DocumentsService {
   ): Promise<ListDocumentRelationsResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     await this.graph.deleteRelations(document.workspaceId, documentId, type, targetKey, extractor);
+    await this.activity.record({
+      workspaceId: document.workspaceId,
+      action: 'relations.deleted',
+      documentId,
+      metadata: { title: document.title, type, targetKey, ...(extractor ? { extractor } : {}) },
+    });
     return this.listRelations(documentId);
+  }
+
+  /** Feature 01 (docs/features/01): full raw content of a revision. */
+  async getContent(documentId: string, revisionId?: string): Promise<DocumentContentResponse> {
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      include: { branches: true },
+    });
+    if (!document) throw new NotFoundException(`Document ${documentId} not found`);
+
+    let revision: DocumentRevision | null = null;
+    if (revisionId) {
+      revision = await this.getRevisionOrThrow(documentId, revisionId);
+    } else {
+      const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId;
+      revision = headId ? await this.prisma.documentRevision.findUnique({ where: { id: headId } }) : null;
+    }
+    if (!revision) throw new NotFoundException(`Document ${documentId} has no readable revision`);
+    if (revision.status === 'draft') {
+      throw new BadRequestException(`Revision ${revision.id} is a draft — finalize it before reading content`);
+    }
+
+    const raw = await this.storage.getObjectText(revision.s3Key);
+    const parsed = matter(raw);
+    return {
+      documentId,
+      revisionId: revision.id,
+      contentType: revision.contentType,
+      frontmatter: Object.keys(parsed.data ?? {}).length > 0 ? (parsed.data as Record<string, unknown>) : null,
+      markdown: parsed.content,
+    };
+  }
+
+  /** Features 07 + 08 (docs/features): rename, recategorize, move in the tree. */
+  async updateDocument(documentId: string, dto: UpdateDocumentDto, actorId?: string): Promise<DocumentSummary> {
+    const document = await this.getDocumentOrThrow(documentId);
+
+    const data: { title?: string; category?: string; parentId?: string | null } = {};
+    if (dto.title !== undefined) data.title = dto.title;
+    if (dto.category !== undefined) data.category = dto.category;
+    if (dto.parentId !== undefined) {
+      if (dto.parentId === documentId) throw new BadRequestException('A document cannot be its own parent');
+      if (dto.parentId !== null) await this.assertValidParent(documentId, dto.parentId, document.workspaceId);
+      data.parentId = dto.parentId;
+    }
+    if (Object.keys(data).length === 0) throw new BadRequestException('Nothing to update');
+
+    const updated = await this.prisma.document.update({ where: { id: documentId }, data });
+    if (data.title && data.title !== document.title) {
+      // Keep the graph vertex label in sync (PG stays authoritative).
+      await this.graph.upsertDocumentVertex(document.workspaceId, documentId, data.title).catch(() => {
+        /* vertex may not exist yet — created on first index */
+      });
+    }
+    await this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: actorId,
+      action: 'document.updated',
+      documentId,
+      metadata: { title: updated.title, changes: Object.keys(data) },
+    });
+    return this.toSummary(updated);
+  }
+
+  /** Feature 08 (docs/features/08): the workspace document tree. */
+  async getTree(workspaceId: string): Promise<DocumentTreeResponse> {
+    const docs = await this.prisma.document.findMany({
+      where: { workspaceId },
+      include: { branches: true },
+      orderBy: { title: 'asc' },
+    });
+    const headIds = docs
+      .map((d) => d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId)
+      .filter((id): id is string => !!id);
+    const heads = await this.prisma.documentRevision.findMany({ where: { id: { in: headIds } } });
+    const headById = new Map(heads.map((r) => [r.id, r]));
+
+    const nodes = new Map<string, DocumentTreeNode>();
+    for (const d of docs) {
+      const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
+      nodes.set(d.id, {
+        documentId: d.id,
+        workspaceId: d.workspaceId,
+        title: d.title,
+        defaultBranch: d.defaultBranch,
+        category: d.category as DocumentCategory,
+        parentId: d.parentId,
+        headRevisionId: headId,
+        headRevisionStatus: headId ? ((headById.get(headId)?.status as RevisionStatus) ?? null) : null,
+        createdAt: d.createdAt.toISOString(),
+        children: [],
+      });
+    }
+    const roots: DocumentTreeNode[] = [];
+    for (const node of nodes.values()) {
+      const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+      // Missing/legacy parents surface the child as a root — nothing is hidden.
+      if (parent) parent.children.push(node);
+      else roots.push(node);
+    }
+    return { workspaceId, roots };
+  }
+
+  /**
+   * Feature 06 (docs/features/06): the document neighbourhood in the
+   * knowledge graph. depth = entity hops (one entity hop = two BFS hops over
+   * the bipartite doc→entity graph, same convention as Phase 4 traversal).
+   */
+  async getDocumentGraph(documentId: string, depth = 1): Promise<DocumentGraphResponse> {
+    const document = await this.getDocumentOrThrow(documentId);
+    const d = Math.min(Math.max(Math.floor(depth) || 1, 1), 3);
+
+    const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId);
+    const adj = buildAdjacency(g.edges);
+    const hits = bfs(adj, docNode(documentId), d * 2);
+
+    const docIds = new Set<string>([documentId]);
+    const entityKeys = new Set<string>();
+    const distance = new Map<string, number>([[documentId, 0]]);
+    for (const hit of hits) {
+      if (isDocNode(hit.node)) {
+        const id = docIdOf(hit.node);
+        docIds.add(id);
+        distance.set(id, hit.hops / 2);
+      } else {
+        entityKeys.add(hit.node);
+        distance.set(hit.node, Math.ceil(hit.hops / 2));
+      }
+    }
+
+    const docs = await this.prisma.document.findMany({
+      where: { id: { in: [...docIds] } },
+      select: { id: true, title: true, category: true },
+    });
+    const docById = new Map(docs.map((x) => [x.id, x]));
+
+    const nodes: DocumentGraphNode[] = [];
+    for (const id of docIds) {
+      nodes.push({
+        id,
+        kind: 'document',
+        label: docById.get(id)?.title ?? g.documents[id]?.title ?? id,
+        category: docById.get(id)?.category,
+        distance: distance.get(id) ?? 0,
+      });
+    }
+    for (const key of entityKeys) {
+      nodes.push({
+        id: key,
+        kind: 'entity',
+        label: g.entities[key]?.name ?? key,
+        entityType: g.entities[key]?.type ?? 'entity',
+        distance: distance.get(key) ?? 0,
+      });
+    }
+
+    const edges: DocumentGraphEdge[] = g.edges
+      .filter((e) => docIds.has(e.documentId) && entityKeys.has(e.targetKey))
+      .map((e) => ({ from: e.documentId, to: e.targetKey, type: e.type, extractor: e.extractor, confidence: e.confidence }));
+
+    return { documentId, depth: d, nodes, edges };
+  }
+
+  /** Cycle protection for feature 08 moves: walking up from the new parent must not reach the document. */
+  private async assertValidParent(documentId: string, parentId: string, workspaceId: string): Promise<void> {
+    const parent = await this.prisma.document.findUnique({ where: { id: parentId } });
+    if (!parent || parent.workspaceId !== workspaceId) {
+      throw new BadRequestException(`Parent document ${parentId} not found in this workspace`);
+    }
+    let cursor: string | null = parent.id;
+    const seen = new Set<string>();
+    while (cursor) {
+      if (cursor === documentId) {
+        throw new BadRequestException('Move would create a cycle in the document tree');
+      }
+      if (seen.has(cursor)) break;
+      seen.add(cursor);
+      const next: { parentId: string | null } | null = await this.prisma.document.findUnique({
+        where: { id: cursor },
+        select: { parentId: true },
+      });
+      cursor = next?.parentId ?? null;
+    }
+  }
+
+  private async toSummary(d: Document): Promise<DocumentSummary> {
+    const branch = await this.prisma.documentBranch.findUnique({
+      where: { documentId_name: { documentId: d.id, name: d.defaultBranch } },
+    });
+    const head = branch?.headRevisionId
+      ? await this.prisma.documentRevision.findUnique({ where: { id: branch.headRevisionId } })
+      : null;
+    return {
+      documentId: d.id,
+      workspaceId: d.workspaceId,
+      title: d.title,
+      defaultBranch: d.defaultBranch,
+      category: d.category as DocumentCategory,
+      parentId: d.parentId,
+      headRevisionId: branch?.headRevisionId ?? null,
+      headRevisionStatus: (head?.status as RevisionStatus) ?? null,
+      createdAt: d.createdAt.toISOString(),
+    };
   }
 
   private toFacts(relations: RelationInputDto[]) {

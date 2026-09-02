@@ -37,7 +37,10 @@ export class AuthGuard implements CanActivate {
     }
 
     const header: string | undefined = req.headers['authorization'];
-    const key = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : undefined;
+    const bearer = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : undefined;
+    // SSE: EventSource cannot set headers — accept the key via ?token= (docs/features/04).
+    const queryToken = typeof req.query?.token === 'string' && req.query.token ? req.query.token : undefined;
+    const key = bearer ?? queryToken;
     if (!key) throw new UnauthorizedException('Missing Authorization: Bearer <api key>');
 
     const user = await this.prisma.user.findUnique({

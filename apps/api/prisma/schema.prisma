@@ -12,6 +12,11 @@ model Document {
   workspaceId   String   @map("workspace_id") @db.Uuid
   title         String
   defaultBranch String   @default("main") @map("default_branch")
+  // Feature 07 categorization: constrained in the API layer (DOCUMENT_CATEGORIES).
+  category      String   @default("other")
+  // Feature 08 nesting: Confluence-style hierarchy; no FK so children of a
+  // deleted/legacy parent surface as roots instead of breaking.
+  parentId      String?  @map("parent_id") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   branches      DocumentBranch[]
@@ -19,6 +24,8 @@ model Document {
   mergeRequests MergeRequest[]
 
   @@index([workspaceId, createdAt])
+  @@index([workspaceId, category])
+  @@index([parentId])
   @@map("documents")
 }
 
@@ -208,4 +215,23 @@ model AuditLog {
 
   @@index([workspaceId, createdAt])
   @@map("audit_logs")
+}
+
+// Feature 10 (docs/features/10-activity-feed.md): user-facing activity stream.
+// Distinct from audit_logs (security audit of operator graph queries).
+model ActivityLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  // users.id in api-key mode; synthetic actor ("dev") otherwise.
+  actor       String
+  action      String
+  documentId  String?  @map("document_id") @db.Uuid
+  // Revision / merge-request / branch id the action touched, when applicable.
+  subjectId   String?  @map("subject_id") @db.Uuid
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([documentId, createdAt])
+  @@map("activity_log")
 }

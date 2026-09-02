@@ -8,9 +8,10 @@ import { CompareService } from './compare.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
 import { MergeRequestsService } from './merge-requests.service.js';
 import { HistoryService } from './history.service.js';
+import { ActivityModule } from '../activity/activity.module.js';
 
 @Module({
-  imports: [StorageModule, GraphModule, IngestionModule],
+  imports: [ActivityModule, StorageModule, GraphModule, IngestionModule],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [DocumentsService, CompareService, MergeRequestsService, HistoryService],
   exports: [DocumentsService, CompareService, MergeRequestsService, HistoryService],

@@ -1,0 +1,130 @@
+<script setup lang="ts">
+// Feature 09 (docs/features/09): editor sidebar — review, related docs, suggestions.
+import { ref } from 'vue'
+import { RouterLink } from 'vue-router'
+import type {
+  AssistantRelatedResponse,
+  AssistantReviewResponse,
+  AssistantSuggestResponse,
+} from '@knowledge/contracts'
+import { apiFetch, DEMO_WORKSPACE_ID } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+
+const props = defineProps<{ title: string; markdown: string }>()
+const emit = defineEmits<{ append: [text: string] }>()
+
+const review = ref<AssistantReviewResponse | null>(null)
+const related = ref<AssistantRelatedResponse | null>(null)
+const suggestion = ref<AssistantSuggestResponse | null>(null)
+const instruction = ref('')
+const busy = ref<string | null>(null)
+const error = ref<string | null>(null)
+
+function severityVariant(s: string): 'destructive' | 'secondary' | 'outline' {
+  return s === 'error' ? 'destructive' : s === 'warning' ? 'secondary' : 'outline'
+}
+
+async function call<T>(kind: string, path: string, body: Record<string, unknown>): Promise<T | null> {
+  busy.value = kind
+  error.value = null
+  try {
+    return await apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) })
+  } catch (e) {
+    error.value = (e as Error).message
+    return null
+  } finally {
+    busy.value = null
+  }
+}
+
+async function runReview() {
+  review.value = await call<AssistantReviewResponse>('review', '/v1/assistant/review', {
+    workspaceId: DEMO_WORKSPACE_ID,
+    title: props.title,
+    markdown: props.markdown,
+  })
+}
+
+async function runRelated() {
+  related.value = await call<AssistantRelatedResponse>('related', '/v1/assistant/related', {
+    workspaceId: DEMO_WORKSPACE_ID,
+    text: props.markdown || props.title,
+    limit: 5,
+  })
+}
+
+async function runSuggest() {
+  if (!instruction.value.trim()) return
+  suggestion.value = await call<AssistantSuggestResponse>('suggest', '/v1/assistant/suggest', {
+    workspaceId: DEMO_WORKSPACE_ID,
+    title: props.title,
+    markdown: props.markdown,
+    instruction: instruction.value,
+  })
+}
+</script>
+
+<template>
+  <div class="space-y-4 rounded-lg border p-4">
+    <h2 class="text-sm font-semibold">AI assistant</h2>
+
+    <div class="flex flex-wrap gap-2">
+      <Button size="sm" variant="outline" :disabled="busy !== null || !markdown.trim()" @click="runReview">
+        {{ busy === 'review' ? 'Reviewing…' : 'Review draft' }}
+      </Button>
+      <Button size="sm" variant="outline" :disabled="busy !== null || !(markdown.trim() || title.trim())" @click="runRelated">
+        {{ busy === 'related' ? 'Searching…' : 'Find related docs' }}
+      </Button>
+    </div>
+
+    <p v-if="error" class="text-xs text-destructive">{{ error }}</p>
+
+    <div v-if="review" class="space-y-2">
+      <p v-if="!review.enabled" class="text-xs text-muted-foreground">
+        LLM review is disabled — set <code>ASSISTANT_PROVIDER=openai-compatible</code> to enable it.
+      </p>
+      <template v-else>
+        <p class="text-xs text-muted-foreground">{{ review.summary }}</p>
+        <div v-for="(issue, i) in review.issues" :key="i" class="flex items-start gap-2 text-xs">
+          <Badge :variant="severityVariant(issue.severity)" class="shrink-0 text-[10px]">{{ issue.severity }}</Badge>
+          <span>
+            <span v-if="issue.section" class="font-medium">{{ issue.section }}: </span>{{ issue.message }}
+          </span>
+        </div>
+        <p v-if="review.issues.length === 0" class="text-xs text-muted-foreground">No issues found.</p>
+      </template>
+    </div>
+
+    <div v-if="related" class="space-y-1.5">
+      <p class="text-xs font-medium text-muted-foreground">Related documents</p>
+      <p v-if="related.results.length === 0" class="text-xs text-muted-foreground">Nothing similar yet.</p>
+      <div v-for="r in related.results" :key="r.chunkId" class="text-xs">
+        <RouterLink :to="`/documents/${r.documentId}`" class="font-medium hover:underline" target="_blank">
+          {{ r.title }}
+        </RouterLink>
+        <span class="text-muted-foreground"> — {{ r.snippet.slice(0, 80) }}…</span>
+      </div>
+    </div>
+
+    <div class="space-y-2 border-t pt-3">
+      <p class="text-xs font-medium text-muted-foreground">Suggest</p>
+      <form class="flex gap-2" @submit.prevent="runSuggest">
+        <Input v-model="instruction" placeholder="e.g. Draft an outline for the missing sections" class="h-8 text-xs" />
+        <Button size="sm" type="submit" :disabled="busy !== null || !instruction.trim()">
+          {{ busy === 'suggest' ? '…' : 'Go' }}
+        </Button>
+      </form>
+      <div v-if="suggestion" class="space-y-2">
+        <p v-if="!suggestion.enabled" class="text-xs text-muted-foreground">
+          Suggestions are disabled — set <code>ASSISTANT_PROVIDER=openai-compatible</code>.
+        </p>
+        <template v-else>
+          <pre class="max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-xs">{{ suggestion.suggestion }}</pre>
+          <Button size="sm" variant="outline" @click="emit('append', suggestion.suggestion)">Append to draft</Button>
+        </template>
+      </div>
+    </div>
+  </div>
+</template>

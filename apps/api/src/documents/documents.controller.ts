@@ -7,6 +7,7 @@ import {
   Headers,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -24,6 +25,7 @@ import {
   CreateRevisionDto,
   CreateUploadDto,
   CurateRelationDto,
+  UpdateDocumentDto,
 } from './dto/documents.dto.js';
 
 @ApiTags('documents')
@@ -49,8 +51,16 @@ export class DocumentsController {
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
+    @Query('category') category?: string,
   ) {
-    return this.documents.listDocuments(workspaceId, limit ? Number(limit) : 20, cursor);
+    return this.documents.listDocuments(workspaceId, limit ? Number(limit) : 20, cursor, category || undefined);
+  }
+
+  @Get('tree')
+  @Access('viewer', 'query')
+  @ApiOperation({ summary: 'Workspace document tree (feature 08 nesting, docs/features/08)' })
+  tree(@Query('workspaceId', ParseUUIDPipe) workspaceId: string) {
+    return this.documents.getTree(workspaceId);
   }
 
   @Get(':id')
@@ -58,6 +68,33 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Get document + its head (or given) revision + chunk summaries' })
   get(@Param('id', ParseUUIDPipe) id: string, @Query('revision') revision?: string) {
     return this.documents.getDocument(id, revision);
+  }
+
+  @Patch(':id')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: 'Update title / category / parent (features 07 + 08); parentId: null re-roots' })
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateDocumentDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.documents.updateDocument(id, dto, principal?.userId);
+  }
+
+  @Get(':id/content')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'Full raw content of a revision (feature 01; head of the default branch by default)' })
+  @ApiQuery({ name: 'revision', required: false })
+  content(@Param('id', ParseUUIDPipe) id: string, @Query('revision') revision?: string) {
+    return this.documents.getContent(id, revision);
+  }
+
+  @Get(':id/graph')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'Document neighbourhood in the knowledge graph (feature 06); depth = entity hops (1-3)' })
+  @ApiQuery({ name: 'depth', required: false })
+  graph(@Param('id', ParseUUIDPipe) id: string, @Query('depth') depth?: string) {
+    return this.documents.getDocumentGraph(id, depth ? Number(depth) : 1);
   }
 
   @Get(':id/revisions')

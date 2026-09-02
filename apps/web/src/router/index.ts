@@ -7,8 +7,11 @@ export function createRouter() {
       { path: '/', redirect: '/documents' },
       { path: '/documents', component: () => import('@/pages/DocumentsListPage.vue') },
       { path: '/documents/:id', component: () => import('@/pages/DocumentDetailPage.vue') },
+      { path: '/documents/:id/edit', component: () => import('@/pages/EditorPage.vue') },
+      { path: '/create', component: () => import('@/pages/EditorPage.vue') },
       { path: '/upload', component: () => import('@/pages/UploadPage.vue') },
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
+      { path: '/activity', component: () => import('@/pages/ActivityPage.vue') },
     ],
   })
 }

@@ -21,6 +21,10 @@ export class SearchService {
   async search(dto: SearchDto): Promise<SearchResponse> {
     const mode = dto.mode ?? 'hybrid';
     const k = dto.limit ?? 20;
+    // Feature 02: with a category filter, over-fetch candidates so the filter
+    // does not shrink the requested limit.
+    const categories = dto.filters?.categories?.length ? new Set(dto.filters.categories) : null;
+    const fetchK = categories ? k * 5 : k;
 
     // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
     // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
@@ -30,29 +34,32 @@ export class SearchService {
 
     const [vectorHits, textHits] = await Promise.all([
       useVector
-        ? this.embeddings.embed(dto.query).then((e) => this.graph.searchChunks(dto.workspaceId, e, k))
+        ? this.embeddings.embed(dto.query).then((e) => this.graph.searchChunks(dto.workspaceId, e, fetchK))
         : Promise.resolve([] as ChunkHit[]),
-      useText ? this.fulltext.search(dto.workspaceId, dto.query, k) : Promise.resolve([]),
+      useText ? this.fulltext.search(dto.workspaceId, dto.query, fetchK) : Promise.resolve([]),
     ]);
 
-    const hits = this.fuse(vectorHits, textHits, k);
+    const hits = this.fuse(vectorHits, textHits, fetchK);
     if (hits.length === 0) return { results: [] };
 
     // Join PG for authoritative titles (three-store separation: PG owns metadata).
     const docs = await this.prisma.document.findMany({
       where: { id: { in: [...new Set(hits.map((h) => h.documentId))] } },
-      select: { id: true, title: true },
+      select: { id: true, title: true, category: true },
     });
-    const titleById = new Map(docs.map((d) => [d.id, d.title]));
+    const docById = new Map(docs.map((d) => [d.id, d]));
 
-    const results: SearchResult[] = hits.map((h) => ({
-      documentId: h.documentId,
-      revisionId: h.revisionId,
-      chunkId: h.chunkId,
-      title: titleById.get(h.documentId) ?? '(unknown)',
-      snippet: h.text.slice(0, 300),
-      score: Number(h.score.toFixed(4)),
-    }));
+    const results: SearchResult[] = hits
+      .filter((h) => !categories || categories.has((docById.get(h.documentId)?.category ?? 'other') as never))
+      .slice(0, k)
+      .map((h) => ({
+        documentId: h.documentId,
+        revisionId: h.revisionId,
+        chunkId: h.chunkId,
+        title: docById.get(h.documentId)?.title ?? '(unknown)',
+        snippet: h.text.slice(0, 300),
+        score: Number(h.score.toFixed(4)),
+      }));
 
     // Phase 4 hybrid mode: vectors find evidence, the graph expands it
     // (plan.md §12.7). Walk relation edges out from the hit documents.

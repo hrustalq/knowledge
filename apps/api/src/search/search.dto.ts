@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -30,6 +31,15 @@ export class ExpandGraphDto {
   relationTypes?: string[];
 }
 
+export class SearchFiltersDto {
+  @ApiPropertyOptional({ enum: DOCUMENT_CATEGORIES, isArray: true, description: 'Only return documents in these categories (feature 02)' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8)
+  @IsIn(DOCUMENT_CATEGORIES as unknown as string[], { each: true })
+  categories?: DocumentCategory[];
+}
+
 export class SearchDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
@@ -58,4 +68,11 @@ export class SearchDto {
   @ValidateNested()
   @Type(() => ExpandGraphDto)
   expandGraph?: ExpandGraphDto;
+
+  /** Feature 02 metadata filters, applied post-ranking against PG. */
+  @ApiPropertyOptional({ type: SearchFiltersDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SearchFiltersDto)
+  filters?: SearchFiltersDto;
 }

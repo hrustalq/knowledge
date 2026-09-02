@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -9,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -91,6 +93,35 @@ export class CreateDocumentDto {
   @ValidateNested({ each: true })
   @Type(() => RelationInputDto)
   relations?: RelationInputDto[];
+
+  @ApiPropertyOptional({ enum: DOCUMENT_CATEGORIES, default: 'other', description: 'Feature 07 categorization' })
+  @IsOptional()
+  @IsIn(DOCUMENT_CATEGORIES as unknown as string[])
+  category?: DocumentCategory;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Feature 08 nesting: create under this document' })
+  @IsOptional()
+  @IsUUID()
+  parentId?: string;
+}
+
+export class UpdateDocumentDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  title?: string;
+
+  @ApiPropertyOptional({ enum: DOCUMENT_CATEGORIES })
+  @IsOptional()
+  @IsIn(DOCUMENT_CATEGORIES as unknown as string[])
+  category?: DocumentCategory;
+
+  /** Explicit null re-roots the document (feature 08). */
+  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  @ValidateIf((o: UpdateDocumentDto) => o.parentId !== undefined && o.parentId !== null)
+  @IsUUID()
+  parentId?: string | null;
 }
 
 export class CreateUploadDto {

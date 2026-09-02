@@ -9,6 +9,10 @@ export interface DocumentSummary {
   workspaceId: string;
   title: string;
   defaultBranch: string;
+  /** Feature 07 categorization. */
+  category: DocumentCategory;
+  /** Feature 08 nesting: parent document id, null for roots. */
+  parentId: string | null;
   headRevisionId: string | null;
   headRevisionStatus: RevisionStatus | null;
   createdAt: string;
@@ -39,6 +43,10 @@ export interface CreateDocumentRequest {
   content?: { mode: 'inline'; format: string; text: string };
   /** Explicit relations (plan.md §5 "explicit" fact class) written as graph edges with provenance. */
   relations?: RelationInput[];
+  /** Feature 07: defaults to 'other'. */
+  category?: DocumentCategory;
+  /** Feature 08: create nested under this document. */
+  parentId?: string;
 }
 export interface CreateDocumentResponse {
   documentId: string;
@@ -92,6 +100,8 @@ export interface SearchRequest {
    * depth = entity hops (default 1, max 3); relationTypes filters edge types.
    */
   expandGraph?: { depth?: number; relationTypes?: string[] };
+  /** Feature 02 metadata filters, applied post-ranking against PG. */
+  filters?: { categories?: DocumentCategory[] };
 }
 export interface SearchResult {
   documentId: string;
@@ -569,4 +579,148 @@ export interface ReindexResponse {
   workspaceId: string;
   enqueued: number;
   jobIds: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Product features (docs/features): categorization, nesting, full content,
+// document graph view, activity feed, live events, AI assistant.
+// ---------------------------------------------------------------------------
+
+/** Feature 07: allowed document categories (kept as a const so DTOs and UI share one list). */
+export const DOCUMENT_CATEGORIES = [
+  'process',
+  'use-case',
+  'contract',
+  'erd',
+  'architecture',
+  'guide',
+  'reference',
+  'other',
+] as const;
+export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+
+// GET /v1/documents/:id/content (feature 01)
+export interface DocumentContentResponse {
+  documentId: string;
+  revisionId: string;
+  contentType: string;
+  frontmatter: Record<string, unknown> | null;
+  markdown: string;
+}
+
+// PATCH /v1/documents/:id (features 07 + 08)
+export interface UpdateDocumentRequest {
+  title?: string;
+  category?: DocumentCategory;
+  /** null re-roots the document (moves it to the top level). */
+  parentId?: string | null;
+}
+
+// GET /v1/documents/tree?workspaceId= (feature 08)
+export interface DocumentTreeNode extends DocumentSummary {
+  children: DocumentTreeNode[];
+}
+export interface DocumentTreeResponse {
+  workspaceId: string;
+  roots: DocumentTreeNode[];
+}
+
+// GET /v1/documents/:id/graph?depth= (feature 06)
+export interface DocumentGraphNode {
+  /** documentId for documents, entity key for entities. */
+  id: string;
+  kind: 'document' | 'entity';
+  label: string;
+  category?: DocumentCategory | string;
+  entityType?: string;
+  /** Entity hops from the root document (root = 0). */
+  distance: number;
+}
+export interface DocumentGraphEdge {
+  /** Document node id (edges always point Document → Entity). */
+  from: string;
+  to: string;
+  type: string;
+  extractor: FactExtractor | string;
+  confidence: number;
+}
+export interface DocumentGraphResponse {
+  documentId: string;
+  depth: number;
+  nodes: DocumentGraphNode[];
+  edges: DocumentGraphEdge[];
+}
+
+// GET /v1/activity?workspaceId=&documentId=&limit=&cursor= (feature 10)
+export interface ActivityEntry {
+  id: string;
+  workspaceId: string;
+  actor: string;
+  /** e.g. 'document.created', 'revision.finalized', 'merge-request.merged'. */
+  action: string;
+  documentId: string | null;
+  documentTitle: string | null;
+  subjectId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+export interface ListActivityResponse {
+  workspaceId: string;
+  entries: ActivityEntry[];
+  nextCursor: string | null;
+}
+
+// GET /v1/events?workspaceId= — SSE `data:` payload (feature 04)
+export interface KnowledgeEvent {
+  /** 'revision.indexed' | 'revision.failed' | 'revision.dependent-reindex' | activity actions. */
+  type: string;
+  workspaceId: string;
+  documentId?: string;
+  revisionId?: string;
+  title?: string;
+  actor?: string;
+  at: string;
+}
+
+// POST /v1/assistant/review (feature 09)
+export interface AssistantReviewRequest {
+  workspaceId: string;
+  title: string;
+  markdown: string;
+}
+export interface AssistantIssue {
+  severity: 'error' | 'warning' | 'suggestion';
+  message: string;
+  /** Heading the issue belongs to, when the model can anchor it. */
+  section?: string;
+}
+export interface AssistantReviewResponse {
+  /** False when ASSISTANT_PROVIDER=none — UI degrades instead of erroring. */
+  enabled: boolean;
+  issues: AssistantIssue[];
+  summary: string;
+}
+
+// POST /v1/assistant/suggest (feature 09)
+export interface AssistantSuggestRequest {
+  workspaceId: string;
+  title: string;
+  markdown: string;
+  /** What to produce: outline, continuation, rewrite of a section, … */
+  instruction: string;
+}
+export interface AssistantSuggestResponse {
+  enabled: boolean;
+  suggestion: string;
+}
+
+// POST /v1/assistant/related (feature 09 — no LLM needed, reuses search)
+export interface AssistantRelatedRequest {
+  workspaceId: string;
+  text: string;
+  limit?: number;
+}
+export interface AssistantRelatedResponse {
+  results: SearchResult[];
+  related?: RelatedDocumentResult[];
 }

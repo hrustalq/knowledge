@@ -743,3 +743,26 @@ Embedding provider       -> local or hosted
 5. **MCP as a narrow, task-level interface**: expose `search`, `get_*`, `compare_*`, `impact_analysis`, etc.; reserve raw graph queries for trusted, read-only, logged use.
 6. **Diff at three levels**: raw text/line diff, structural (path-level) diff, and semantic (graph) diff.
 7. **Vectors find evidence, the graph constrains and expands it** — always return source-backed citations, never bare LLM answers.
+
+---
+
+## 13. Product Roadmap — Candidate Features (from features.md, 2026-09-01)
+
+Triage of the proposed feature list against the implemented Phase 0–5 platform.
+Effort: S (≤1 day), M (days), L (weeks). "Backend ready" = the API surface largely exists.
+
+| # | Feature (features.md) | Fit with current architecture | Effort | Notes |
+|---|----------------------|-------------------------------|--------|-------|
+| 1 | Auto-reindex of dependent documents on update/merge (+ frontend cache invalidation, notifications) | Best backend fit: on index completion, walk the relation graph (docs referencing entities the changed doc DESCRIBES) and enqueue their reindex — extends the existing outbox/StaleSweeper machinery; SSE endpoint for cache invalidation | M | Recommended first: pure backend, high leverage |
+| 2 | Categorization (processes, use-cases, contracts, ERD, …) | `documents.kind` column + filter params on list/search; frontmatter `kind:` maps naturally onto the deterministic extractor | S | Schema migration + 2 endpoints |
+| 3 | Activity feed (Jira/Confluence-style) | Generalize Phase 5 `audit_logs` into workspace events (document/revision/MR lifecycle already flows through few choke points) + `GET /v1/workspaces/:id/activity` | S–M | Backend S; feed UI separate |
+| 4 | Full document view | `GET /:id` + chunks exist; add raw-content endpoint (presigned GET) + web page rendering markdown | S | Mostly frontend |
+| 5 | Revision viewer | `GET /:id/revisions` (DAG) + compare endpoints are done | S | Frontend only |
+| 6 | Document graph view (dependencies + related entities) | `/v1/entities`, `/neighbors`, `/trace`, hybrid-search expansion all exist; optionally add one doc-centric subgraph endpoint | S–M | Frontend viz (e.g. force graph) |
+| 7 | Search widget with filters | `POST /v1/search` exists; add filters (kind, tags, branch, date) to the request contract | S–M | Pairs with #2 |
+| 8 | Nested documents / directories (Confluence-like) | New `document_folders` tree (or `parent_id`) in PG + list/move endpoints; no impact on graph/object stores | M | Touches web navigation broadly |
+| 9 | AI assistant (create/review/autogenerate/hints/relevant docs) | Builds on the MCP tools + pluggable extractor pattern; retrieval = existing hybrid search; needs LLM provider config like EXTRACTOR_* | M–L | Design which surfaces first (review vs. autocomplete) |
+| 10 | Confluence-like editor (links, references, diagrams, PDF, widgets) | Largest item: TipTap/ProseMirror over markdown, saving via `POST /:id/revisions` + If-Match (optimistic concurrency already implemented) | L | Phase it: plain markdown editor → links/references → widgets |
+
+Suggested order: **1 → 2 → 3** (backend, extends Phase 5 machinery) → **4/5/6/7** (read-only
+frontend over existing APIs) → **8** (structure) → **9/10** (editor + AI, phased).

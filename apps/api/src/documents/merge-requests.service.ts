@@ -13,6 +13,7 @@ import type {
 import type { DocumentBranch, DocumentRevision, MergeRequest } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { ActivityService } from '../activity/activity.service.js';
 import { DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
 import type { CreateMergeRequestDto } from './dto/merge-requests.dto.js';
@@ -41,6 +42,7 @@ export class MergeRequestsService {
     private readonly storage: StorageService,
     private readonly documents: DocumentsService,
     private readonly compare: CompareService,
+    private readonly activity: ActivityService,
   ) {}
 
   async create(
@@ -83,6 +85,11 @@ export class MergeRequestsService {
         authorId,
       },
       include: { sourceBranch: true, targetBranch: true },
+    });
+    await this.recordActivity(mr.documentId, 'merge-request.created', mr.id, authorId, {
+      title: dto.title,
+      sourceBranch: source.name,
+      targetBranch: target.name,
     });
     return { mergeRequest: await this.toInfo(mr) };
   }
@@ -134,6 +141,7 @@ export class MergeRequestsService {
       data: { approvedBy: approved },
       include: { sourceBranch: true, targetBranch: true },
     });
+    await this.recordActivity(mr.documentId, 'merge-request.approved', mr.id, approverId, { title: mr.title });
     return { mergeRequest: await this.toInfo(updated) };
   }
 
@@ -147,6 +155,7 @@ export class MergeRequestsService {
       data: { status: 'closed', closedAt: new Date() },
       include: { sourceBranch: true, targetBranch: true },
     });
+    await this.recordActivity(mr.documentId, 'merge-request.closed', mr.id, undefined, { title: mr.title });
     return { mergeRequest: await this.toInfo(updated) };
   }
 
@@ -214,6 +223,11 @@ export class MergeRequestsService {
       include: { sourceBranch: true, targetBranch: true },
     });
     const mergedRevision = await this.prisma.documentRevision.findUnique({ where: { id: finalized.revisionId } });
+    await this.recordActivity(mr.documentId, 'merge-request.merged', mr.id, undefined, {
+      title: mr.title,
+      strategy,
+      mergedRevisionId: finalized.revisionId,
+    });
     return {
       mergeRequest: await this.toInfo(updated),
       mergedRevision: mergedRevision ? this.toRevisionInfo(mergedRevision) : null,
@@ -260,6 +274,28 @@ export class MergeRequestsService {
       createdAt: r.createdAt.toISOString(),
       finalizedAt: r.finalizedAt?.toISOString() ?? null,
     };
+  }
+
+  private async recordActivity(
+    documentId: string,
+    action: string,
+    subjectId: string,
+    actor?: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
+    const doc = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { workspaceId: true, title: true },
+    });
+    if (!doc) return;
+    await this.activity.record({
+      workspaceId: doc.workspaceId,
+      actor,
+      action,
+      documentId,
+      subjectId,
+      metadata: { documentTitle: doc.title, ...metadata },
+    });
   }
 
   private async getMrOrThrow(mergeRequestId: string): Promise<MrWithBranches> {

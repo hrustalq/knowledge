@@ -13,6 +13,8 @@ import { INGESTION_QUEUE } from './ingestion.constants.js';
 import { chunkSections, splitMarkdown } from './markdown.js';
 import { extractFrontmatterFacts } from './relations.js';
 import { RELATION_EXTRACTOR, type RelationExtractor } from '../extraction/relation-extractor.provider.js';
+import { EventsPublisher } from '../events/events.publisher.js';
+import { IngestionProducer } from './ingestion.producer.js';
 
 interface IngestionJobData {
   ingestionJobId: string;
@@ -30,6 +32,8 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     @Inject(RELATION_EXTRACTOR) private readonly extractor: RelationExtractor,
     @Inject(FULLTEXT_PROVIDER) private readonly fulltext: FulltextProvider,
     private readonly config: ConfigService<Env, true>,
+    private readonly events: EventsPublisher,
+    private readonly producer: IngestionProducer,
   ) {
     super();
   }
@@ -186,6 +190,23 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         }),
       ]);
       this.logger.log(`Indexed revision ${revision.id} (${drafts.length} chunks)`);
+
+      // Feature 04 (docs/features/04): live event + one level of dependent
+      // fan-out. Cascade jobs are marked with payload.reason and never
+      // re-cascade — no transitive reindex storms.
+      await this.events.publish({
+        type: 'revision.indexed',
+        workspaceId: revision.document.workspaceId,
+        documentId: revision.documentId,
+        revisionId: revision.id,
+        title: revision.document.title,
+      });
+      const reason = (jobRow.payload as { reason?: string } | null)?.reason;
+      if (reason !== 'dependent-reindex') {
+        await this.reindexDependents(revision.document.workspaceId, revision.documentId).catch((e) =>
+          this.logger.warn(`Dependent reindex failed (non-fatal): ${(e as Error).message}`),
+        );
+      }
     } catch (e) {
       const error = { message: (e as Error).message, stack: (e as Error).stack };
       await this.prisma.$transaction([
@@ -198,7 +219,79 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           data: { status: 'failed' },
         }),
       ]);
+      await this.events.publish({
+        type: 'revision.failed',
+        workspaceId: revision.document.workspaceId,
+        documentId: revision.documentId,
+        revisionId: revision.id,
+        title: revision.document.title,
+      });
       throw e; // let BullMQ retry with backoff
+    }
+  }
+
+  /**
+   * Feature 04 (docs/features/04): re-index documents that depend on entities
+   * this document DESCRIBES. One level only (see caller), capped by
+   * DEPENDENT_REINDEX_MAX, skipping heads that already have a pending job.
+   */
+  private async reindexDependents(workspaceId: string, documentId: string): Promise<void> {
+    const max = this.config.get('DEPENDENT_REINDEX_MAX', { infer: true });
+    if (max <= 0) return;
+
+    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+    const described = new Set(
+      g.edges.filter((e) => e.documentId === documentId && e.type === 'DESCRIBES').map((e) => e.targetKey),
+    );
+    if (described.size === 0) return;
+
+    const dependents = [
+      ...new Set(
+        g.edges
+          .filter((e) => e.documentId !== documentId && described.has(e.targetKey))
+          .map((e) => e.documentId),
+      ),
+    ].slice(0, max);
+
+    for (const depId of dependents) {
+      const doc = await this.prisma.document.findUnique({ where: { id: depId }, include: { branches: true } });
+      if (!doc || doc.workspaceId !== workspaceId) continue;
+      const headId = doc.branches.find((b) => b.name === doc.defaultBranch)?.headRevisionId;
+      if (!headId) continue;
+      const head = await this.prisma.documentRevision.findUnique({ where: { id: headId } });
+      if (!head || head.status !== 'indexed') continue;
+      const pending = await this.prisma.ingestionJob.findFirst({
+        where: { revisionId: headId, status: { in: ['queued', 'running'] } },
+      });
+      if (pending) continue;
+
+      const job = await this.prisma.ingestionJob.create({
+        data: {
+          workspaceId,
+          revisionId: headId,
+          type: 'reindex',
+          status: 'queued',
+          payload: {
+            documentId: depId,
+            revisionId: headId,
+            s3Key: head.s3Key,
+            title: doc.title,
+            reason: 'dependent-reindex',
+            triggeredBy: documentId,
+          },
+        },
+      });
+      await this.producer.enqueue(job.id).catch(() => {
+        /* outbox sweeper re-enqueues */
+      });
+      await this.events.publish({
+        type: 'revision.dependent-reindex',
+        workspaceId,
+        documentId: depId,
+        revisionId: headId,
+        title: doc.title,
+      });
+      this.logger.log(`Dependent reindex queued for "${doc.title}" (${depId}) after ${documentId}`);
     }
   }
 }

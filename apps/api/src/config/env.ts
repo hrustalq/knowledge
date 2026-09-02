@@ -46,6 +46,15 @@ export const envSchema = z.object({
   STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
   STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 
+  /** Feature 09 AI assistant (docs/features/09) — 'none' disables the LLM endpoints. */
+  ASSISTANT_PROVIDER: z.enum(['none', 'openai-compatible']).default('none'),
+  ASSISTANT_BASE_URL: z.string().optional().default(''),
+  ASSISTANT_MODEL: z.string().optional().default(''),
+  ASSISTANT_API_KEY: z.string().optional().default(''),
+
+  /** Feature 04: max dependent documents re-indexed per indexed revision (0 disables). */
+  DEPENDENT_REINDEX_MAX: z.coerce.number().int().min(0).default(20),
+
   /** Phase 5 trusted-operator graph queries: hard row cap per call. */
   GRAPH_QUERY_MAX_ROWS: z.coerce.number().int().positive().max(1000).default(200),
 });

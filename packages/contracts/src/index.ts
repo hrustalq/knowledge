@@ -818,6 +818,133 @@ export interface AssistantAskResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Assistant pane: persisted multi-turn chat threads with a documents sidebar
+// (docs/features/09 follow-up). The chat is an append-only intent log; the
+// sidebar materializes from each assistant message's toolCalls trace rather
+// than parsed chat text. AI-authored writes never touch a document directly:
+// create_document makes a brand-new page (nothing existing to protect,
+// mirrors the plain POST /v1/documents flow); propose_update always drafts a
+// revision on a fresh branch and opens a merge request for a human to merge.
+// ---------------------------------------------------------------------------
+
+export type AssistantMessageRole = 'user' | 'assistant';
+
+export interface AssistantThreadSummary {
+  id: string;
+  workspaceId: string;
+  documentId: string | null;
+  title: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Truncated content of the most recent message — history-list preview. */
+  lastMessagePreview?: string;
+}
+
+/** 'ask' = read-only tools only (default, safe); 'agent' = also allows create_document/propose_update. */
+export type AssistantChatMode = 'ask' | 'agent';
+
+/** Ad hoc file content attached to one turn (e.g. from the composer's upload/drop widget) — used as extra
+ * context for that turn only, never persisted verbatim into thread history. */
+export interface AssistantChatAttachment {
+  filename: string;
+  content: string;
+}
+
+/** Generative UI: instead of only prose, the assistant can ask the chat pane to render one of a small,
+ * fixed whitelist of EXISTING product components inline — the same GraphView/ActivityFeed/SearchWidget
+ * already used on document pages, not bespoke chat-only widgets. `props` is forwarded verbatim to that
+ * Vue component; the backend tool that produces a block validates/resolves everything in it (workspace
+ * ownership of any documentId) before it ever reaches the client, so the client can render blindly. */
+export type AssistantUiComponent = 'graph' | 'activity' | 'search';
+export interface AssistantUiBlock {
+  component: AssistantUiComponent;
+  props: Record<string, unknown>;
+}
+
+export interface AssistantMessageInfo {
+  id: string;
+  threadId: string;
+  role: AssistantMessageRole;
+  content: string;
+  toolCalls: AssistantToolCall[];
+  sources: AssistantAskSource[];
+  uiBlocks: AssistantUiBlock[];
+  createdAt: string;
+}
+
+// POST /v1/assistant/threads
+export interface CreateAssistantThreadRequest {
+  workspaceId: string;
+  /** Page the pane was opened from, if any — used as default chat grounding. */
+  documentId?: string;
+  title?: string;
+}
+export interface CreateAssistantThreadResponse {
+  thread: AssistantThreadSummary;
+}
+
+// GET /v1/assistant/threads?workspaceId=
+export interface ListAssistantThreadsResponse {
+  threads: AssistantThreadSummary[];
+}
+
+// GET /v1/assistant/threads/:id
+export interface GetAssistantThreadResponse {
+  thread: AssistantThreadSummary;
+  messages: AssistantMessageInfo[];
+}
+
+// POST /v1/assistant/threads/:id/messages
+export interface PostAssistantMessageRequest {
+  content: string;
+  /** Overrides the thread's default grounding document for this turn. */
+  documentId?: string;
+  /** Defaults to 'ask' server-side when omitted. */
+  mode?: AssistantChatMode;
+  attachments?: AssistantChatAttachment[];
+  /** Existing workspace documents manually picked ("Apply documents" widget) to ground this turn in,
+   * in addition to (or instead of) the thread's default grounding document. Full content is fetched
+   * server-side from the documentId — the model never receives raw pasted text for these. */
+  documentRefs?: string[];
+}
+export interface PostAssistantMessageResponse {
+  /** False when ASSISTANT_PROVIDER=none — UI degrades instead of erroring. */
+  enabled: boolean;
+  userMessage: AssistantMessageInfo;
+  assistantMessage: AssistantMessageInfo;
+}
+
+/** create_document tool result surfaced to the sidebar (new page, live immediately). */
+export interface AssistantCreatedDocument {
+  documentId: string;
+  title: string;
+  status: RevisionStatus;
+}
+/** propose_update tool result surfaced to the sidebar (open merge request awaiting review). */
+export interface AssistantProposedUpdate {
+  documentId: string;
+  documentTitle: string;
+  mergeRequestId: string;
+  branch: string;
+  title: string;
+}
+
+/**
+ * Live pane events over the existing SSE bus (GET /v1/events, same
+ * KnowledgeEvent envelope, subjectId = threadId): coarse-grained turn
+ * lifecycle so the chat can show "thinking" / tool-call chips while waiting
+ * on the (non-streaming) provider response, without a second transport.
+ */
+export const ASSISTANT_EVENT_TYPES = [
+  'assistant.turn.started',
+  'assistant.tool-call.started',
+  'assistant.tool-call.finished',
+  'assistant.turn.finished',
+] as const;
+export type AssistantEventType = (typeof ASSISTANT_EVENT_TYPES)[number];
+
+// ---------------------------------------------------------------------------
 // Auth flow — login / signup / password restoration (session tokens on top of
 // Phase 5 api-key auth) + users & access-control management.
 // ---------------------------------------------------------------------------
@@ -1049,4 +1176,91 @@ export function isApiErrorPayload(value: unknown): value is ApiErrorPayload {
     typeof v.requestId === 'string' &&
     (v.details === undefined || (typeof v.details === 'object' && v.details !== null))
   );
+}
+
+// ---------------------------------------------------------------------------
+// API reference (live OpenAPI) + self-service API keys + API assistant.
+// GET /v1/api-docs serves the RUNNING server's swagger schema (grouped by
+// tag), so the in-app reference can never drift from the deployed routes.
+// ---------------------------------------------------------------------------
+
+export type ApiHttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
+
+export interface ApiEndpointSummary {
+  method: ApiHttpMethod;
+  path: string;
+  summary?: string;
+  operationId?: string;
+  deprecated?: boolean;
+}
+
+/** One sidebar/page section — a swagger tag with its endpoints. */
+export interface ApiDocsSection {
+  tag: string;
+  endpoints: ApiEndpointSummary[];
+}
+
+// GET /v1/api-docs
+export interface GetApiDocsResponse {
+  title: string;
+  description: string;
+  version: string;
+  sections: ApiDocsSection[];
+}
+
+export interface ApiEndpointParameter {
+  name: string;
+  in: 'path' | 'query' | 'header';
+  required: boolean;
+  description?: string;
+  /** Resolved JSON schema ($refs inlined, cycle-guarded). */
+  schema?: unknown;
+}
+
+export interface ApiEndpointResponseInfo {
+  status: string;
+  description?: string;
+  schema?: unknown;
+}
+
+export interface ApiEndpointDetail extends ApiEndpointSummary {
+  description?: string;
+  tags: string[];
+  parameters: ApiEndpointParameter[];
+  requestBodyRequired?: boolean;
+  /** Resolved JSON schema of the request body (application/json). */
+  requestBody?: unknown;
+  responses: ApiEndpointResponseInfo[];
+}
+
+// GET /v1/api-docs/endpoint?method=&path=
+export interface GetApiEndpointDetailResponse {
+  endpoint: ApiEndpointDetail;
+}
+
+// GET /v1/auth/api-key — does the caller have an API key on file?
+export interface ApiKeyStatusResponse {
+  hasKey: boolean;
+}
+// POST /v1/auth/api-key — (re)issue own key; the plaintext is returned exactly
+// once (only its SHA-256 is stored). Replaces any previous key.
+export interface CreateApiKeyResponse {
+  apiKey: string;
+}
+// DELETE /v1/auth/api-key
+export interface RevokeApiKeyResponse {
+  ok: boolean;
+}
+
+// POST /v1/assistant/api — chat about the REST API itself. Grounded in the
+// live OpenAPI schema via tools (list/describe endpoints); no workspace data.
+export interface AssistantApiAskRequest {
+  question: string;
+  history?: AssistantAskTurn[];
+}
+export interface AssistantApiAskResponse {
+  enabled: boolean;
+  answer: string;
+  toolCalls?: AssistantToolCall[];
+  model?: string;
 }

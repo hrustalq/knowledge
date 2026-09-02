@@ -21,6 +21,7 @@ export function createRouter() {
       { path: '/upload', component: () => import('@/pages/UploadPage.vue') },
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
       { path: '/activity', component: () => import('@/pages/ActivityPage.vue') },
+      { path: '/assistant', component: () => import('@/pages/AssistantPage.vue') },
       // Access control (page gates mutations by workspace role)
       { path: '/access', component: () => import('@/pages/AccessControlPage.vue') },
       // Users management (platform admin only → /403 otherwise)

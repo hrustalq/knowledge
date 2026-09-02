@@ -218,7 +218,7 @@ watch(
 
     <!-- Content (feature 01) with "On this page" rail -->
     <div v-else-if="tab === 'content'" class="flex items-start gap-8">
-      <div class="min-w-0 max-w-3xl flex-1 space-y-4">
+      <div class="min-w-0 flex-1 space-y-4">
         <p v-if="contentError" class="text-sm text-destructive">{{ contentError }}</p>
         <Skeleton v-else-if="!content" class="h-64 w-full" />
         <template v-else>

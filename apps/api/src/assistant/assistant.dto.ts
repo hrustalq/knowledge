@@ -60,6 +60,80 @@ export class AssistantAskTurnDto {
   content!: string;
 }
 
+export class CreateAssistantThreadDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Page the pane was opened from — default chat grounding' })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  title?: string;
+}
+
+export class ChatAttachmentDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  filename!: string;
+
+  @ApiProperty()
+  @IsString()
+  @MaxLength(20_000)
+  content!: string;
+}
+
+export class PostAssistantMessageDto {
+  @ApiProperty({ example: 'Draft a short onboarding page for new hires' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4_000)
+  content!: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: "Overrides the thread's default grounding document for this turn" })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
+
+  @ApiPropertyOptional({
+    enum: ['ask', 'agent'],
+    default: 'ask',
+    description: "'ask' (default) excludes write tools this turn regardless of role; 'agent' allows them (still gated by editor role)",
+  })
+  @IsOptional()
+  @IsIn(['ask', 'agent'])
+  mode?: 'ask' | 'agent';
+
+  @ApiPropertyOptional({
+    type: [ChatAttachmentDto],
+    description: 'Ephemeral file content for this turn only — not persisted verbatim into thread history',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(3)
+  @ValidateNested({ each: true })
+  @Type(() => ChatAttachmentDto)
+  attachments?: ChatAttachmentDto[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    format: 'uuid',
+    description: 'Existing workspace documents manually picked to ground this turn in ("Apply documents" widget)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsUUID(undefined, { each: true })
+  documentRefs?: string[];
+}
+
 export class AssistantAskDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()

@@ -171,6 +171,9 @@ importers:
       compression:
         specifier: ^1.8.1
         version: 1.8.1
+      cytoscape:
+        specifier: ^3.34.0
+        version: 3.34.2
       dompurify:
         specifier: ^3.4.14
         version: 3.4.14

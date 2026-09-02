@@ -273,3 +273,51 @@ model ActivityLog {
   @@index([documentId, createdAt])
   @@map("activity_log")
 }
+
+// ---------------------------------------------------------------------------
+// Assistant pane: persisted multi-turn chat threads (Computer-style chat +
+// documents sidebar). A thread is scoped to one workspace and optionally
+// pinned to one document (the page the pane was opened from); documents
+// touched by tool calls are derived from AssistantMessage.toolCalls JSON at
+// read time rather than a join table, mirroring AssistantAskResponse's
+// existing tool-call trace (no dedicated persistence table exists for it).
+// ---------------------------------------------------------------------------
+
+model AssistantThread {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  // Document the pane was opened from, if any — the default chat grounding.
+  documentId  String?   @map("document_id") @db.Uuid
+  title       String?
+  // users.id in api-key mode; synthetic actor ("dev") otherwise.
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  messages AssistantMessage[]
+
+  @@index([workspaceId, updatedAt])
+  @@index([documentId])
+  @@map("assistant_threads")
+}
+
+model AssistantMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  threadId  String   @map("thread_id") @db.Uuid
+  role      String
+  content   String
+  // AssistantToolCall[] trace (tool, arguments, ok) — JSON, same shape as the
+  // one-shot /ask response; also how the sidebar derives "documents touched".
+  toolCalls Json     @default("[]") @map("tool_calls")
+  // AssistantAskSource[] the reply grounded on, for citation chips.
+  sources   Json     @default("[]")
+  // AssistantUiBlock[] — generative UI: existing components (GraphView/ActivityFeed/SearchWidget)
+  // the assistant asked the chat pane to render inline for this turn.
+  uiBlocks  Json     @default("[]") @map("ui_blocks")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  thread AssistantThread @relation(fields: [threadId], references: [id])
+
+  @@index([threadId, createdAt])
+  @@map("assistant_messages")
+}

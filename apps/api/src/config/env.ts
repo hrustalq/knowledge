@@ -74,6 +74,9 @@ export const envSchema = z.object({
   /** Feature 04: max dependent documents re-indexed per indexed revision (0 disables). */
   DEPENDENT_REINDEX_MAX: z.coerce.number().int().min(0).default(20),
 
+  /** Merge gating: approvals required to merge (the author's own approval never counts; 0 disables the gate). */
+  MR_REQUIRED_APPROVALS: z.coerce.number().int().min(0).default(1),
+
   /** Phase 5 trusted-operator graph queries: hard row cap per call. */
   GRAPH_QUERY_MAX_ROWS: z.coerce.number().int().positive().max(1000).default(200),
 

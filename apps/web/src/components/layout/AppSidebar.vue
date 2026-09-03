@@ -3,7 +3,7 @@
 // live page tree (Confluence-style space sidebar).
 import { computed, onMounted, ref, type Component } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Activity, House, Library, Plus, Search, ShieldCheck, Sparkles, Upload, Users } from 'lucide-vue-next'
+import { Activity, GitPullRequestArrow, House, Library, Plus, Search, ShieldCheck, Sparkles, Upload, Users } from 'lucide-vue-next'
 import type { ListWorkspacesResponse, WorkspaceSummary } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
@@ -45,6 +45,7 @@ const links = computed<NavLink[]>(() => [
   { to: '/documents', label: 'Home', icon: House },
   { to: '/search', label: 'Search', icon: Search },
   { to: '/activity', label: 'Activity', icon: Activity },
+  { to: '/merge-requests', label: 'Merge requests', icon: GitPullRequestArrow },
   { to: '/assistant', label: 'Assistant', icon: Sparkles },
   { to: '/access', label: 'Access', icon: ShieldCheck },
   ...(auth.isAdmin || auth.isDev ? [{ to: '/admin/users', label: 'Users', icon: Users }] : []),

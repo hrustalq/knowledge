@@ -507,6 +507,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/merge-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List merge requests across a workspace (filterable, cursor-paginated) */
+        get: operations["MergeRequestsController_listWorkspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/merge-requests/{id}": {
         parameters: {
             query?: never;
@@ -514,9 +531,44 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get merge request state (heads, merge base, approvals) */
+        /** Get merge request state (heads, merge base, approvals, reviewers) */
         get: operations["MergeRequestsController_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit title/description/draft flag (open merge requests only) */
+        patch: operations["MergeRequestsController_update"];
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen a closed merge request (merged ones are terminal) */
+        post: operations["MergeRequestsController_reopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/reviewers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the reviewer set (workspace members only; advisory, not a merge gate) */
+        put: operations["MergeRequestsController_setReviewers"];
         post?: never;
         delete?: never;
         options?: never;
@@ -550,7 +602,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve the merge request as the calling principal (recorded; not yet required to merge) */
+        /** Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge) */
         post: operations["MergeRequestsController_approve"];
         delete?: never;
         options?: never;
@@ -567,7 +619,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Merge (merge-commit or squash); 409 + comparison link when the target diverged */
+        /** Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged when gated, + comparison link when the target diverged */
         post: operations["MergeRequestsController_merge"];
         delete?: never;
         options?: never;
@@ -590,6 +642,58 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List review threads with comments (unresolved first) */
+        get: operations["MergeRequestsController_listThreads"];
+        put?: never;
+        /** Start a review thread (optionally anchored to a line/section/entity) */
+        post: operations["MergeRequestsController_createThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/threads/{threadId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reply to a review thread */
+        post: operations["MergeRequestsController_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/threads/{threadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Resolve or unresolve a review thread */
+        patch: operations["MergeRequestsController_resolveThread"];
         trace?: never;
     };
     "/v1/activity": {
@@ -847,6 +951,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/assistant/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List chat pane threads for a workspace, most recently active first */
+        get: operations["AssistantController_listThreads"];
+        put?: never;
+        /** Start a new chat pane thread, optionally pinned to a document */
+        post: operations["AssistantController_createThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assistant/threads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A thread with its full message history */
+        get: operations["AssistantController_getThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assistant/threads/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post a chat message — runs the tool harness (read + write tools) and returns the assistant reply; writes always go through create_document (new page) or propose_update (merge request), never directly */
+        post: operations["AssistantController_postMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1004,12 +1160,46 @@ export interface components {
             title: string;
             description?: string;
         };
+        UpdateMergeRequestDto: {
+            title?: string;
+            description?: string;
+            /** @description Draft merge requests cannot be merged */
+            isDraft?: boolean;
+        };
+        SetReviewersDto: {
+            /** @description Replace-set of reviewer user ids (workspace members) */
+            reviewerIds: string[];
+        };
         MergeMergeRequestDto: {
             /**
              * @default merge-commit
              * @enum {string}
              */
             strategy: "merge-commit" | "squash";
+        };
+        ThreadAnchorDto: {
+            /** @enum {string} */
+            type: "line" | "section" | "entity";
+            /** @description line: revision the line number refers to (source head at comment time) */
+            revisionId?: string;
+            /** @description line: 1-based new-side line number in the diff */
+            line?: number;
+            /** @description line: text excerpt for best-effort re-matching once the branch advances */
+            excerpt?: string;
+            /** @description section: markdown heading text */
+            heading?: string;
+            /** @description entity: graph entity key, e.g. service:identity */
+            entityKey?: string;
+        };
+        CreateThreadDto: {
+            body: string;
+            anchor?: components["schemas"]["ThreadAnchorDto"];
+        };
+        CreateCommentDto: {
+            body: string;
+        };
+        ResolveThreadDto: {
+            resolved: boolean;
         };
         ExpandGraphDto: {
             /**
@@ -1102,6 +1292,39 @@ export interface components {
             text: string;
             /** @default 5 */
             limit: number;
+        };
+        CreateAssistantThreadDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Page the pane was opened from — default chat grounding
+             */
+            documentId?: string;
+            title?: string;
+        };
+        ChatAttachmentDto: {
+            filename: string;
+            content: string;
+        };
+        PostAssistantMessageDto: {
+            /** @example Draft a short onboarding page for new hires */
+            content: string;
+            /**
+             * Format: uuid
+             * @description Overrides the thread's default grounding document for this turn
+             */
+            documentId?: string;
+            /**
+             * @description 'ask' (default) excludes write tools this turn regardless of role; 'agent' allows them (still gated by editor role)
+             * @default ask
+             * @enum {string}
+             */
+            mode: "ask" | "agent";
+            /** @description Ephemeral file content for this turn only — not persisted verbatim into thread history */
+            attachments?: components["schemas"]["ChatAttachmentDto"][];
+            /** @description Existing workspace documents manually picked to ground this turn in ("Apply documents" widget) */
+            documentRefs?: string[];
         };
         ApiErrorResponse: {
             /**
@@ -2700,6 +2923,51 @@ export interface operations {
             };
         };
     };
+    MergeRequestsController_listWorkspace: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                status?: "open" | "merged" | "closed";
+                authorId?: string;
+                /** @description Only merge requests with this user assigned as reviewer */
+                reviewerId?: string;
+                documentId?: string;
+                /** @description Opaque cursor from a previous page */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     MergeRequestsController_get: {
         parameters: {
             query?: never;
@@ -2710,6 +2978,125 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMergeRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_reopen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_setReviewers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetReviewersDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -2867,6 +3254,168 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_listThreads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_createThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateThreadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCommentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_resolveThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveThreadDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3447,6 +3996,166 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AssistantRelatedDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantController_listThreads: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantController_createThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAssistantThreadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantController_getThread: {
+        parameters: {
+            query: {
+                /** @description Unused by the lookup; required for the ACL check */
+                workspaceId: unknown;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantController_postMessage: {
+        parameters: {
+            query: {
+                /** @description Unused by the lookup; required for the ACL check */
+                workspaceId: unknown;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostAssistantMessageDto"];
             };
         };
         responses: {

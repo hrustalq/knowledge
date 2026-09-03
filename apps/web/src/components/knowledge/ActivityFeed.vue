@@ -3,7 +3,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { ActivityEntry, ListActivityResponse } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { apiFetch, getWorkspaceId, relativeTime } from '@/lib/api'
 import { useEventsStore } from '@/stores/events'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,18 +26,15 @@ const ACTION_LABELS: Record<string, string> = {
   'merge-request.approved': 'approved a merge request on',
   'merge-request.merged': 'merged a merge request on',
   'merge-request.closed': 'closed a merge request on',
+  'merge-request.updated': 'updated a merge request on',
+  'merge-request.reopened': 'reopened a merge request on',
+  'merge-request.review-requested': 'requested review on',
+  'merge-request.comment.created': 'commented on a merge request on',
+  'merge-request.comment.resolved': 'resolved a review thread on',
 }
 
 function label(e: ActivityEntry): string {
   return ACTION_LABELS[e.action] ?? e.action
-}
-
-function relativeTime(iso: string): string {
-  const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000)
-  if (s < 60) return 'just now'
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
-  return new Date(iso).toLocaleString()
 }
 
 async function load(append = false) {

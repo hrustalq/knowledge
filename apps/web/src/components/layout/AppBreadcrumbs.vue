@@ -19,6 +19,7 @@ interface Crumb { label: string; to?: string }
 const STATIC: Record<string, string> = {
   '/search': 'Search',
   '/activity': 'Activity',
+  '/merge-requests': 'Merge requests',
   '/access': 'Access',
   '/admin/users': 'Users',
 }
@@ -33,6 +34,12 @@ const crumbs = computed<Crumb[]>(() => {
     for (const node of trail) list.push({ label: node.title, to: `/documents/${node.documentId}` })
     if (path.endsWith('/edit')) list.push({ label: 'Edit' })
     return list
+  }
+  if (path.startsWith('/merge-requests/')) {
+    return [
+      { label: 'Merge requests', to: '/merge-requests' },
+      { label: (route.params.id as string).slice(0, 8) },
+    ]
   }
   if (path === '/create') return [{ label: 'Pages', to: '/documents' }, { label: 'New page' }]
   if (path === '/upload') return [{ label: 'Pages', to: '/documents' }, { label: 'Upload' }]

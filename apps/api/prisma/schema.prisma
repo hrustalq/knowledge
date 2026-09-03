@@ -134,6 +134,8 @@ model MergeRequest {
   description String?
   // open | merged | closed
   status      String  @default("open")
+  // Draft merge requests cannot be merged until the flag is cleared.
+  isDraft     Boolean @default(false) @map("is_draft")
   authorId    String  @map("author_id") @db.Uuid
   // Author ids that approved (auth stub until Phase 5).
   approvedBy  Json    @default("[]") @map("approved_by")
@@ -145,12 +147,69 @@ model MergeRequest {
   mergedAt         DateTime? @map("merged_at") @db.Timestamptz
   closedAt         DateTime? @map("closed_at") @db.Timestamptz
 
-  document     Document       @relation(fields: [documentId], references: [id])
-  sourceBranch DocumentBranch @relation("mrSource", fields: [sourceBranchId], references: [id])
-  targetBranch DocumentBranch @relation("mrTarget", fields: [targetBranchId], references: [id])
+  document     Document               @relation(fields: [documentId], references: [id])
+  sourceBranch DocumentBranch         @relation("mrSource", fields: [sourceBranchId], references: [id])
+  targetBranch DocumentBranch         @relation("mrTarget", fields: [targetBranchId], references: [id])
+  reviewers    MergeRequestReviewer[]
+  threads      MergeRequestThread[]
 
   @@index([documentId, status])
+  @@index([authorId])
   @@map("merge_requests")
+}
+
+// Assigned reviewers (advisory — merge is gated by approval count, not by
+// reviewer state). userId intentionally has no FK to users: it mirrors the
+// authorId pattern above (the zeros AUTHOR_ID_STUB is not a real user row);
+// membership is validated in the service against workspace_members.
+model MergeRequestReviewer {
+  id             String   @id @default(uuid()) @db.Uuid
+  mergeRequestId String   @map("merge_request_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  addedBy        String?  @map("added_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  mergeRequest MergeRequest @relation(fields: [mergeRequestId], references: [id])
+
+  // reviewerId list filter
+  @@unique([mergeRequestId, userId])
+  @@index([userId])
+  @@map("merge_request_reviewers")
+}
+
+// Review discussion thread (plan.md §8): anchor + resolved state live on the
+// thread; comments inside are a flat createdAt-ordered list (GitLab-style
+// discussions, no reply nesting).
+model MergeRequestThread {
+  id             String    @id @default(uuid()) @db.Uuid
+  mergeRequestId String    @map("merge_request_id") @db.Uuid
+  resolved       Boolean   @default(false)
+  resolvedBy     String?   @map("resolved_by") @db.Uuid
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz
+  // line | section | entity — null = unanchored discussion thread.
+  anchorType     String?   @map("anchor_type")
+  // line: {revisionId, line, excerpt?} · section: {heading} · entity: {entityKey}
+  anchor         Json?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  mergeRequest MergeRequest          @relation(fields: [mergeRequestId], references: [id])
+  comments     MergeRequestComment[]
+
+  @@index([mergeRequestId])
+  @@map("merge_request_threads")
+}
+
+model MergeRequestComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  threadId  String   @map("thread_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  thread MergeRequestThread @relation(fields: [threadId], references: [id])
+
+  @@index([threadId, createdAt])
+  @@map("merge_request_comments")
 }
 
 // ---------------------------------------------------------------------------

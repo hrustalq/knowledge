@@ -74,7 +74,21 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
         : []),
     ],
   },
-  { on: 'merge-request.*', invalidate: () => [['/v1/merge-requests'], ['/v1/documents']] },
+  {
+    // subjectId carries the merge-request id on every merge-request.* event.
+    on: 'merge-request.*',
+    invalidate: (e) => [
+      ['/v1/merge-requests'],
+      ...(e.subjectId
+        ? [
+            ['/v1/merge-requests/{id}', { id: e.subjectId }],
+            ['/v1/merge-requests/{id}/diff', { id: e.subjectId }],
+            ['/v1/merge-requests/{id}/threads', { id: e.subjectId }],
+          ]
+        : []),
+      ...(e.documentId ? [['/v1/documents/{id}/merge-requests', { id: e.documentId }]] : []),
+    ],
+  },
   { on: 'relations.*', invalidate: (e) => [['/v1/entities'], ...(e.documentId ? [['/v1/documents/{id}/graph', { id: e.documentId }]] : [])] },
   { on: 'branch.created', invalidate: (e) => (e.documentId ? [['/v1/documents/{id}', { id: e.documentId }]] : []) },
   { on: '*', invalidate: () => [['/v1/activity']] },

@@ -7,13 +7,14 @@ import { DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
 import { MergeRequestsService } from './merge-requests.service.js';
+import { MergeRequestThreadsService } from './merge-request-threads.service.js';
 import { HistoryService } from './history.service.js';
 import { ActivityModule } from '../activity/activity.module.js';
 
 @Module({
   imports: [ActivityModule, StorageModule, GraphModule, IngestionModule],
   controllers: [DocumentsController, MergeRequestsController],
-  providers: [DocumentsService, CompareService, MergeRequestsService, HistoryService],
-  exports: [DocumentsService, CompareService, MergeRequestsService, HistoryService],
+  providers: [DocumentsService, CompareService, MergeRequestsService, MergeRequestThreadsService, HistoryService],
+  exports: [DocumentsService, CompareService, MergeRequestsService, MergeRequestThreadsService, HistoryService],
 })
 export class DocumentsModule {}

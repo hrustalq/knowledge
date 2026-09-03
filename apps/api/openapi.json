@@ -2000,6 +2000,108 @@
         ]
       }
     },
+    "/v1/merge-requests": {
+      "get": {
+        "operationId": "MergeRequestsController_listWorkspace",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "merged",
+                "closed"
+              ]
+            }
+          },
+          {
+            "name": "authorId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reviewerId",
+            "required": false,
+            "in": "query",
+            "description": "Only merge requests with this user assigned as reviewer",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor from a previous page",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List merge requests across a workspace (filterable, cursor-paginated)",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
     "/v1/merge-requests/{id}": {
       "get": {
         "operationId": "MergeRequestsController_get",
@@ -2038,7 +2140,157 @@
             }
           }
         },
-        "summary": "Get merge request state (heads, merge base, approvals)",
+        "summary": "Get merge request state (heads, merge base, approvals, reviewers)",
+        "tags": [
+          "merge-requests"
+        ]
+      },
+      "patch": {
+        "operationId": "MergeRequestsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMergeRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit title/description/draft flag (open merge requests only)",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/merge-requests/{id}/reopen": {
+      "post": {
+        "operationId": "MergeRequestsController_reopen",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reopen a closed merge request (merged ones are terminal)",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/merge-requests/{id}/reviewers": {
+      "put": {
+        "operationId": "MergeRequestsController_setReviewers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReviewersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Replace the reviewer set (workspace members only; advisory, not a merge gate)",
         "tags": [
           "merge-requests"
         ]
@@ -2135,7 +2387,7 @@
             }
           }
         },
-        "summary": "Approve the merge request as the calling principal (recorded; not yet required to merge)",
+        "summary": "Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge)",
         "tags": [
           "merge-requests"
         ]
@@ -2189,7 +2441,7 @@
             }
           }
         },
-        "summary": "Merge (merge-commit or squash); 409 + comparison link when the target diverged",
+        "summary": "Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged when gated, + comparison link when the target diverged",
         "tags": [
           "merge-requests"
         ]
@@ -2234,6 +2486,226 @@
           }
         },
         "summary": "Close the merge request without merging",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/merge-requests/{id}/threads": {
+      "get": {
+        "operationId": "MergeRequestsController_listThreads",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List review threads with comments (unresolved first)",
+        "tags": [
+          "merge-requests"
+        ]
+      },
+      "post": {
+        "operationId": "MergeRequestsController_createThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThreadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start a review thread (optionally anchored to a line/section/entity)",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/merge-requests/{id}/threads/{threadId}/comments": {
+      "post": {
+        "operationId": "MergeRequestsController_reply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reply to a review thread",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/merge-requests/{id}/threads/{threadId}": {
+      "patch": {
+        "operationId": "MergeRequestsController_resolveThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveThreadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Resolve or unresolve a review thread",
         "tags": [
           "merge-requests"
         ]
@@ -2988,6 +3460,205 @@
           "assistant"
         ]
       }
+    },
+    "/v1/assistant/threads": {
+      "post": {
+        "operationId": "AssistantController_createThread",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssistantThreadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start a new chat pane thread, optionally pinned to a document",
+        "tags": [
+          "assistant"
+        ]
+      },
+      "get": {
+        "operationId": "AssistantController_listThreads",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List chat pane threads for a workspace, most recently active first",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/v1/assistant/threads/{id}": {
+      "get": {
+        "operationId": "AssistantController_getThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "description": "Unused by the lookup; required for the ACL check",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A thread with its full message history",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/v1/assistant/threads/{id}/messages": {
+      "post": {
+        "operationId": "AssistantController_postMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "description": "Unused by the lookup; required for the ACL check",
+            "schema": {}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostAssistantMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Post a chat message — runs the tool harness (read + write tools) and returns the assistant reply; writes always go through create_document (new page) or propose_update (merge request), never directly",
+        "tags": [
+          "assistant"
+        ]
+      }
     }
   },
   "info": {
@@ -3435,6 +4106,36 @@
           "title"
         ]
       },
+      "UpdateMergeRequestDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "isDraft": {
+            "type": "boolean",
+            "description": "Draft merge requests cannot be merged"
+          }
+        }
+      },
+      "SetReviewersDto": {
+        "type": "object",
+        "properties": {
+          "reviewerIds": {
+            "description": "Replace-set of reviewer user ids (workspace members)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "reviewerIds"
+        ]
+      },
       "MergeMergeRequestDto": {
         "type": "object",
         "properties": {
@@ -3447,6 +4148,78 @@
             "default": "merge-commit"
           }
         }
+      },
+      "ThreadAnchorDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "line",
+              "section",
+              "entity"
+            ]
+          },
+          "revisionId": {
+            "type": "string",
+            "description": "line: revision the line number refers to (source head at comment time)"
+          },
+          "line": {
+            "type": "number",
+            "description": "line: 1-based new-side line number in the diff"
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "line: text excerpt for best-effort re-matching once the branch advances"
+          },
+          "heading": {
+            "type": "string",
+            "description": "section: markdown heading text"
+          },
+          "entityKey": {
+            "type": "string",
+            "description": "entity: graph entity key, e.g. service:identity"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "CreateThreadDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/components/schemas/ThreadAnchorDto"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "CreateCommentDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "ResolveThreadDto": {
+        "type": "object",
+        "properties": {
+          "resolved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "resolved"
+        ]
       },
       "ExpandGraphDto": {
         "type": "object",
@@ -3704,6 +4477,82 @@
         "required": [
           "workspaceId",
           "text"
+        ]
+      },
+      "CreateAssistantThreadDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Page the pane was opened from — default chat grounding"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "ChatAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "content"
+        ]
+      },
+      "PostAssistantMessageDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "example": "Draft a short onboarding page for new hires"
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Overrides the thread's default grounding document for this turn"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "agent"
+            ],
+            "default": "ask",
+            "description": "'ask' (default) excludes write tools this turn regardless of role; 'agent' allows them (still gated by editor role)"
+          },
+          "attachments": {
+            "description": "Ephemeral file content for this turn only — not persisted verbatim into thread history",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatAttachmentDto"
+            }
+          },
+          "documentRefs": {
+            "description": "Existing workspace documents manually picked to ground this turn in (\"Apply documents\" widget)",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "content"
         ]
       },
       "ApiErrorResponse": {

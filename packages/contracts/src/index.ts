@@ -291,10 +291,20 @@ export interface MergeRequestInfo {
   targetBranch: string;
   sourceHeadRevisionId: string | null;
   targetHeadRevisionId: string | null;
-  /** Nearest common ancestor of the two heads at read time; null when unrelated or target is empty. */
+  /**
+   * Nearest common ancestor of the two heads. Computed only on detail reads
+   * and mutation responses; always null in list responses (avoids a graph
+   * BFS per row).
+   */
   mergeBaseRevisionId: string | null;
   status: MergeRequestStatus;
+  /** Draft merge requests cannot be merged until the flag is cleared. */
+  isDraft: boolean;
+  /** Zeros-UUID stub when created without a principal (AUTH_MODE=none / MCP). */
+  authorId: string;
   approvedBy: string[];
+  /** Assigned reviewer user ids (advisory — merging is gated by approval count, not reviewers). */
+  reviewers: string[];
   strategy: MergeStrategy | null;
   mergedRevisionId: string | null;
   createdAt: string;
@@ -343,6 +353,100 @@ export interface RevisionConflictResponse extends ApiErrorPayload {
     currentHeadRevisionId: string | null;
     comparisonUrl: string | null;
   };
+}
+
+// GET /v1/merge-requests?workspaceId=…  (maps onto MCP knowledge_list_merge_requests)
+export interface ListWorkspaceMergeRequestsRequest {
+  workspaceId: string;
+  status?: MergeRequestStatus;
+  authorId?: string;
+  /** Only merge requests with this user assigned as reviewer. */
+  reviewerId?: string;
+  documentId?: string;
+  cursor?: string;
+  limit?: number;
+}
+export interface ListWorkspaceMergeRequestsResponse {
+  workspaceId: string;
+  mergeRequests: MergeRequestInfo[];
+  nextCursor: string | null;
+}
+
+// PATCH /v1/merge-requests/:id (open MRs only)
+export interface UpdateMergeRequestRequest {
+  title?: string;
+  description?: string;
+  isDraft?: boolean;
+}
+
+// PUT /v1/merge-requests/:id/reviewers (replace-set semantics)
+export interface SetMergeRequestReviewersRequest {
+  reviewerIds: string[];
+}
+
+/**
+ * 409 `details` vocabulary for merge gating (see RevisionConflictResponse for
+ * the diverged case): `draft` — MR is flagged draft; `approvals` — fewer
+ * non-author approvals than MR_REQUIRED_APPROVALS; `diverged` — target branch
+ * advanced past the merge base (fast-forward precondition).
+ */
+export interface MergeGateConflictDetails {
+  reason: 'draft' | 'approvals' | 'diverged';
+  requiredApprovals?: number;
+  approvals?: number;
+  currentHeadRevisionId?: string | null;
+  comparisonUrl?: string | null;
+}
+
+/**
+ * Review threads (plan.md §8): anchors are optional and best-effort — a line
+ * anchor pins the source-head revision at comment time and is shown as
+ * "outdated" (not re-anchored) once that branch advances.
+ */
+export type MergeRequestThreadAnchor =
+  | { type: 'line'; revisionId: string; line: number; excerpt?: string }
+  | { type: 'section'; heading: string }
+  | { type: 'entity'; entityKey: string };
+
+export interface MergeRequestComment {
+  commentId: string;
+  threadId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface MergeRequestThread {
+  threadId: string;
+  mergeRequestId: string;
+  resolved: boolean;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  anchor: MergeRequestThreadAnchor | null;
+  comments: MergeRequestComment[];
+  createdAt: string;
+}
+
+// GET /v1/merge-requests/:id/threads
+export interface ListMergeRequestThreadsResponse {
+  mergeRequestId: string;
+  threads: MergeRequestThread[];
+}
+
+// POST /v1/merge-requests/:id/threads (maps onto MCP knowledge_comment_merge_request)
+export interface CreateMergeRequestThreadRequest {
+  body: string;
+  anchor?: MergeRequestThreadAnchor;
+}
+
+// POST /v1/merge-requests/:id/threads/:threadId/comments
+export interface CreateMergeRequestCommentRequest {
+  body: string;
+}
+
+// PATCH /v1/merge-requests/:id/threads/:threadId
+export interface ResolveMergeRequestThreadRequest {
+  resolved: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -704,6 +808,11 @@ export const KNOWN_EVENT_TYPES = [
   'merge-request.approved',
   'merge-request.merged',
   'merge-request.closed',
+  'merge-request.updated',
+  'merge-request.reopened',
+  'merge-request.review-requested',
+  'merge-request.comment.created',
+  'merge-request.comment.resolved',
 ] as const;
 export type KnownEventType = (typeof KNOWN_EVENT_TYPES)[number];
 

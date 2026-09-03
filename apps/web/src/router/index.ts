@@ -21,6 +21,8 @@ export function createRouter() {
       { path: '/upload', component: () => import('@/pages/UploadPage.vue') },
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
       { path: '/activity', component: () => import('@/pages/ActivityPage.vue') },
+      { path: '/merge-requests', component: () => import('@/pages/MergeRequestsPage.vue') },
+      { path: '/merge-requests/:id', component: () => import('@/pages/MergeRequestDetailPage.vue') },
       { path: '/assistant', component: () => import('@/pages/AssistantPage.vue') },
       // Access control (page gates mutations by workspace role)
       { path: '/access', component: () => import('@/pages/AccessControlPage.vue') },

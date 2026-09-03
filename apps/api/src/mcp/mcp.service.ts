@@ -7,6 +7,7 @@ import { StorageService } from '../storage/storage.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { CompareService } from '../documents/compare.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
+import { MergeRequestThreadsService } from '../documents/merge-request-threads.service.js';
 import { SearchService } from '../search/search.service.js';
 import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
@@ -31,6 +32,10 @@ import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
  *   knowledge_query_graph       → knowledge.query_graph       (Phase 5, audited)
  *   knowledge_get_historical_context → knowledge.get_historical_context (Phase 5)
  *   knowledge_ingest            → knowledge.ingest            (Phase 5)
+ *
+ * Merge-request tools (create/list/get/approve/close/comment/merge) act as
+ * the zeros AUTHOR_ID_STUB — stdio has no principal, so authorship/approvals
+ * from MCP are attributed to the stub identity.
  */
 @Injectable()
 export class McpService {
@@ -41,6 +46,7 @@ export class McpService {
     private readonly compare: CompareService,
     private readonly search: SearchService,
     private readonly mergeRequests: MergeRequestsService,
+    private readonly mergeRequestThreads: MergeRequestThreadsService,
     private readonly entities: EntitiesService,
     private readonly graph: GraphService,
     private readonly audit: AuditService,
@@ -212,11 +218,91 @@ export class McpService {
     );
 
     server.registerTool(
+      'knowledge_list_merge_requests',
+      {
+        description:
+          'List merge requests across a workspace, filterable by document, status, author, or assigned reviewer. ' +
+          'Cursor-paginated; mergeBaseRevisionId is null in list rows (fetch one MR for it).',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          documentId: z.string().uuid().optional(),
+          status: z.enum(['open', 'merged', 'closed']).optional(),
+          authorId: z.string().uuid().optional(),
+          reviewerId: z.string().uuid().optional(),
+          cursor: z.string().optional(),
+          limit: z.number().int().min(1).max(100).optional(),
+        },
+      },
+      async (query) => this.json(await this.mergeRequests.listWorkspace(query)),
+    );
+
+    server.registerTool(
+      'knowledge_get_merge_request',
+      {
+        description:
+          'Get one merge request (heads, merge base, approvals, reviewers, draft flag). ' +
+          'Set includeDiff for the merge-base text+structural diff, semantic for the graph-projection diff too.',
+        inputSchema: {
+          mergeRequestId: z.string().uuid(),
+          includeDiff: z.boolean().optional(),
+          semantic: z.boolean().optional(),
+        },
+      },
+      async ({ mergeRequestId, includeDiff, semantic }) =>
+        this.json(
+          includeDiff
+            ? await this.mergeRequests.diff(mergeRequestId, { semantic })
+            : await this.mergeRequests.get(mergeRequestId),
+        ),
+    );
+
+    server.registerTool(
+      'knowledge_approve_merge_request',
+      {
+        description:
+          'Approve an open merge request. NOTE: approval is recorded for the MCP stub identity — it counts toward ' +
+          'the MR_REQUIRED_APPROVALS merge gate unless the merge request was also authored via MCP (self-approvals never count).',
+        inputSchema: { mergeRequestId: z.string().uuid() },
+      },
+      async ({ mergeRequestId }) => this.json(await this.mergeRequests.approve(mergeRequestId)),
+    );
+
+    server.registerTool(
+      'knowledge_close_merge_request',
+      {
+        description: 'Close an open merge request without merging (reopenable via the REST API).',
+        inputSchema: { mergeRequestId: z.string().uuid() },
+      },
+      async ({ mergeRequestId }) => this.json(await this.mergeRequests.close(mergeRequestId)),
+    );
+
+    server.registerTool(
+      'knowledge_comment_merge_request',
+      {
+        description:
+          'Comment on an open merge request: replies into the given thread, or starts a new (unanchored) ' +
+          'discussion thread when threadId is omitted.',
+        inputSchema: {
+          mergeRequestId: z.string().uuid(),
+          body: z.string().min(1),
+          threadId: z.string().uuid().optional(),
+        },
+      },
+      async ({ mergeRequestId, body, threadId }) =>
+        this.json(
+          threadId
+            ? await this.mergeRequestThreads.reply(mergeRequestId, threadId, body)
+            : await this.mergeRequestThreads.createThread(mergeRequestId, { body }),
+        ),
+    );
+
+    server.registerTool(
       'knowledge_merge_revision',
       {
         description:
           'Merge an open merge request ("merge-commit" creates a two-parent DAG node, "squash" a single-parent one). ' +
-          'Fails with a comparison link when the target branch diverged — rebase the source branch first.',
+          'Fails with a comparison link when the target branch diverged — rebase the source branch first. ' +
+          'Gated: draft MRs and MRs below MR_REQUIRED_APPROVALS non-author approvals are rejected with 409 details.',
         inputSchema: {
           mergeRequestId: z.string().uuid(),
           strategy: z.enum(['merge-commit', 'squash']).optional(),

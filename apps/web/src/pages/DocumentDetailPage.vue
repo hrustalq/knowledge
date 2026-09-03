@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import TocRail from '@/components/knowledge/TocRail.vue'
 import RevisionsView from '@/components/knowledge/RevisionsView.vue'
+import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
 import GraphView from '@/components/knowledge/GraphView.vue'
 import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
@@ -28,7 +29,7 @@ const auth = useAuthStore()
 const store = useDocumentsStore()
 const events = useEventsStore()
 
-const TABS = ['overview', 'content', 'revisions', 'graph', 'activity'] as const
+const TABS = ['overview', 'content', 'revisions', 'merge-requests', 'graph', 'activity'] as const
 type Tab = (typeof TABS)[number]
 
 const documentId = computed(() => route.params.id as string)
@@ -165,7 +166,7 @@ watch(
           : 'border-transparent text-muted-foreground hover:text-foreground'"
         @click="setTab(t)"
       >
-        {{ t }}
+        {{ t.replace('-', ' ') }}
       </button>
     </div>
 
@@ -242,6 +243,9 @@ watch(
 
     <!-- Revisions (feature 05) -->
     <RevisionsView v-else-if="tab === 'revisions'" :document-id="documentId" />
+
+    <!-- Merge requests -->
+    <MergeRequestList v-else-if="tab === 'merge-requests'" :document-id="documentId" />
 
     <!-- Graph (feature 06) -->
     <GraphView v-else-if="tab === 'graph'" :document-id="documentId" />

@@ -104,11 +104,19 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return res.json() as Promise<T>
 }
 
+export function relativeTime(iso: string): string {
+  const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000)
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return new Date(iso).toLocaleString()
+}
+
 export function statusVariant(status: string | null): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
-    case 'indexed': return 'default'
+    case 'indexed': case 'open': return 'default'
     case 'failed': return 'destructive'
-    case 'indexing': case 'finalized': return 'secondary'
+    case 'indexing': case 'finalized': case 'merged': return 'secondary'
     default: return 'outline'
   }
 }

@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import DiffView from '@/components/knowledge/DiffView.vue'
 
 const props = defineProps<{ documentId: string }>()
 
@@ -127,26 +128,8 @@ watch(branchFilter, () => void load())
           </span>
         </CardTitle>
       </CardHeader>
-      <CardContent class="space-y-4">
-        <div v-if="compare.structural && compare.structural.changes.length" class="rounded-md border p-3 text-sm">
-          <p class="mb-1 text-xs font-medium text-muted-foreground">Structural ({{ compare.structural.source }})</p>
-          <p v-for="(c, i) in compare.structural.changes" :key="i" class="font-mono text-xs">
-            <span :class="c.kind === 'added' ? 'text-green-600' : c.kind === 'removed' ? 'text-red-600' : 'text-amber-600'">{{ c.kind }}</span>
-            {{ c.path || '(root)' }}
-          </p>
-        </div>
-        <p v-if="compare.hunks.length === 0" class="text-sm text-muted-foreground">No line changes.</p>
-        <div v-for="(hunk, hi) in compare.hunks" :key="hi" class="overflow-x-auto rounded-md border font-mono text-xs">
-          <p class="bg-muted px-3 py-1 text-muted-foreground">
-            @@ -{{ hunk.oldStart }},{{ hunk.oldLines }} +{{ hunk.newStart }},{{ hunk.newLines }} @@
-          </p>
-          <pre
-            v-for="(line, li) in hunk.lines"
-            :key="li"
-            class="whitespace-pre-wrap px-3"
-            :class="line.kind === 'added' ? 'bg-green-500/10 text-green-700 dark:text-green-400' : line.kind === 'deleted' ? 'bg-red-500/10 text-red-700 dark:text-red-400' : ''"
-          >{{ line.kind === 'added' ? '+' : line.kind === 'deleted' ? '-' : ' ' }}{{ line.text }}</pre>
-        </div>
+      <CardContent>
+        <DiffView :compare="compare" />
       </CardContent>
     </Card>
   </div>

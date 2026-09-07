@@ -6,6 +6,12 @@ const isProduction = process.env.NODE_ENV === 'production'
 const port = process.env.PORT || 5173
 const base = process.env.BASE || '/'
 
+// In dev, Vite injects CSS through the JS module graph, so the SSR'd HTML would
+// paint unstyled until entry-client loads (FOUC + layout shift). Link the global
+// stylesheet directly — the dev server serves /src/style.css as real CSS. In prod
+// `vite build` already stamps a <link> for the entry CSS into index.html.
+const devStyles = isProduction ? '' : '<link rel="stylesheet" href="/src/style.css">'
+
 // Cached production assets
 const templateHtml = isProduction
   ? await fs.readFile('./dist/client/index.html', 'utf-8')
@@ -69,6 +75,7 @@ app.use('*all', async (req, res) => {
     })
 
     const html = template
+      .replace(`<!--app-css-->`, devStyles)
       .replace(`<!--app-head-->`, rendered.head ?? '')
       .replace(`<!--app-html-->`, rendered.html ?? '')
 

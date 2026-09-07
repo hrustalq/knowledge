@@ -2051,6 +2051,15 @@
             }
           },
           {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive title substring match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cursor",
             "required": false,
             "in": "query",
@@ -4118,6 +4127,11 @@
           "isDraft": {
             "type": "boolean",
             "description": "Draft merge requests cannot be merged"
+          },
+          "assigneeId": {
+            "type": "string",
+            "description": "Workspace member to assign; null clears the assignee",
+            "nullable": true
           }
         }
       },

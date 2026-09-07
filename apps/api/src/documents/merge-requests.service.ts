@@ -101,7 +101,7 @@ export class MergeRequestsService {
       sourceBranch: source.name,
       targetBranch: target.name,
     });
-    return { mergeRequest: this.toInfo(mr, await this.mergeBaseOf(mr)) };
+    return { mergeRequest: await this.toDetail(mr) };
   }
 
   async list(documentId: string): Promise<ListMergeRequestsResponse> {
@@ -114,36 +114,49 @@ export class MergeRequestsService {
       orderBy: { createdAt: 'desc' },
     });
     // No merge base on list rows — it costs a graph BFS per MR (contracts doc it as null).
-    return { documentId, mergeRequests: rows.map((mr) => this.toInfo(mr, null)) };
+    const stats = await this.statsFor(rows.map((r) => r.id));
+    return { documentId, mergeRequests: rows.map((mr) => this.toInfo(mr, null, stats.get(mr.id))) };
   }
 
   async listWorkspace(query: ListWorkspaceMergeRequestsRequest): Promise<ListWorkspaceMergeRequestsResponse> {
     const limit = Math.min(Math.max(query.limit ?? 50, 1), 100);
-    const rows = await this.prisma.mergeRequest.findMany({
-      where: {
-        document: { workspaceId: query.workspaceId },
-        ...(query.status ? { status: query.status } : {}),
-        ...(query.authorId ? { authorId: query.authorId } : {}),
-        ...(query.documentId ? { documentId: query.documentId } : {}),
-        ...(query.reviewerId ? { reviewers: { some: { userId: query.reviewerId } } } : {}),
-      },
-      include: MR_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-      take: limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-    });
+    // Everything except the status filter — the per-status counts (tab badges)
+    // apply the same search/author/reviewer/document scope.
+    const baseWhere = {
+      document: { workspaceId: query.workspaceId },
+      ...(query.authorId ? { authorId: query.authorId } : {}),
+      ...(query.documentId ? { documentId: query.documentId } : {}),
+      ...(query.reviewerId ? { reviewers: { some: { userId: query.reviewerId } } } : {}),
+      ...(query.search ? { title: { contains: query.search, mode: 'insensitive' as const } } : {}),
+    };
+    const [rows, statusCounts] = await Promise.all([
+      this.prisma.mergeRequest.findMany({
+        where: { ...baseWhere, ...(query.status ? { status: query.status } : {}) },
+        include: MR_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        take: limit + 1,
+        ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+      }),
+      this.prisma.mergeRequest.groupBy({ by: ['status'], where: baseWhere, _count: { _all: true } }),
+    ]);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
+    const stats = await this.statsFor(page.map((r) => r.id));
+    const counts = { open: 0, merged: 0, closed: 0 };
+    for (const row of statusCounts) {
+      if (row.status in counts) counts[row.status as keyof typeof counts] = row._count._all;
+    }
     return {
       workspaceId: query.workspaceId,
-      mergeRequests: page.map((mr) => this.toInfo(mr, null)),
+      mergeRequests: page.map((mr) => this.toInfo(mr, null, stats.get(mr.id))),
       nextCursor: hasMore ? page[page.length - 1]!.id : null,
+      counts,
     };
   }
 
   async get(mergeRequestId: string): Promise<{ mergeRequest: MergeRequestInfo }> {
     const mr = await this.getMrOrThrow(mergeRequestId);
-    return { mergeRequest: this.toInfo(mr, await this.mergeBaseOf(mr)) };
+    return { mergeRequest: await this.toDetail(mr) };
   }
 
   /** Title/description/draft-flag edits — open merge requests only. */
@@ -156,17 +169,21 @@ export class MergeRequestsService {
     if (mr.status !== 'open') {
       throw new BadRequestException(`Merge request ${mr.id} is ${mr.status} — only open merge requests can be edited`);
     }
-    const changed = (['title', 'description', 'isDraft'] as const).filter(
+    const changed = (['title', 'description', 'isDraft', 'assigneeId'] as const).filter(
       (k) => dto[k] !== undefined && dto[k] !== mr[k],
     );
-    if (changed.length === 0) return { mergeRequest: this.toInfo(mr, await this.mergeBaseOf(mr)) };
+    if (changed.length === 0) return { mergeRequest: await this.toDetail(mr) };
 
+    if (dto.assigneeId != null && dto.assigneeId !== mr.assigneeId) {
+      await this.assertWorkspaceMembers(mr.documentId, [dto.assigneeId]);
+    }
     const updated = await this.prisma.mergeRequest.update({
       where: { id: mr.id },
       data: {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
         ...(dto.isDraft !== undefined ? { isDraft: dto.isDraft } : {}),
+        ...(dto.assigneeId !== undefined ? { assigneeId: dto.assigneeId } : {}),
       },
       include: MR_INCLUDE,
     });
@@ -174,7 +191,7 @@ export class MergeRequestsService {
       title: updated.title,
       changed,
     });
-    return { mergeRequest: this.toInfo(updated, await this.mergeBaseOf(updated)) };
+    return { mergeRequest: await this.toDetail(updated) };
   }
 
   /** closed → open. Merged MRs are terminal. */
@@ -195,7 +212,7 @@ export class MergeRequestsService {
     }
     const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
     await this.recordActivity(mr.documentId, 'merge-request.reopened', mr.id, actorId, { title: mr.title });
-    return { mergeRequest: this.toInfo(updated, await this.mergeBaseOf(updated)) };
+    return { mergeRequest: await this.toDetail(updated) };
   }
 
   /** Replace-set reviewer assignment. Reviewers must be members of the document's workspace. */
@@ -209,20 +226,7 @@ export class MergeRequestsService {
       throw new BadRequestException(`Merge request ${mr.id} is ${mr.status} — reviewers can only be set while open`);
     }
     const wanted = [...new Set(reviewerIds)];
-
-    const doc = await this.prisma.document.findUniqueOrThrow({
-      where: { id: mr.documentId },
-      select: { workspaceId: true },
-    });
-    const members = await this.prisma.workspaceMember.findMany({
-      where: { workspaceId: doc.workspaceId, userId: { in: wanted } },
-      select: { userId: true },
-    });
-    const memberIds = new Set(members.map((m) => m.userId));
-    const unknown = wanted.filter((id) => !memberIds.has(id));
-    if (unknown.length > 0) {
-      throw new BadRequestException(`Not members of this workspace: ${unknown.join(', ')}`);
-    }
+    await this.assertWorkspaceMembers(mr.documentId, wanted);
 
     const current = new Set(mr.reviewers.map((r) => r.userId));
     const added = wanted.filter((id) => !current.has(id));
@@ -244,7 +248,7 @@ export class MergeRequestsService {
       });
     }
     const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
-    return { mergeRequest: this.toInfo(updated, await this.mergeBaseOf(updated)) };
+    return { mergeRequest: await this.toDetail(updated) };
   }
 
   /** Merge-base comparison targetHead...sourceHead with structural + (optional) semantic sections. */
@@ -259,7 +263,7 @@ export class MergeRequestsService {
       structural: true,
       semantic: opts.semantic ?? false,
     });
-    return { mergeRequest: this.toInfo(mr, await this.mergeBaseOf(mr)), compare };
+    return { mergeRequest: await this.toDetail(mr), compare };
   }
 
   /** Records approval by the calling principal; merge requires MR_REQUIRED_APPROVALS of these (author's own excluded). */
@@ -278,7 +282,7 @@ export class MergeRequestsService {
       include: MR_INCLUDE,
     });
     await this.recordActivity(mr.documentId, 'merge-request.approved', mr.id, approverId, { title: mr.title });
-    return { mergeRequest: this.toInfo(updated, await this.mergeBaseOf(updated)) };
+    return { mergeRequest: await this.toDetail(updated) };
   }
 
   async close(mergeRequestId: string, actorId?: string): Promise<{ mergeRequest: MergeRequestInfo }> {
@@ -292,7 +296,7 @@ export class MergeRequestsService {
       include: MR_INCLUDE,
     });
     await this.recordActivity(mr.documentId, 'merge-request.closed', mr.id, actorId, { title: mr.title });
-    return { mergeRequest: this.toInfo(updated, await this.mergeBaseOf(updated)) };
+    return { mergeRequest: await this.toDetail(updated) };
   }
 
   async merge(
@@ -434,7 +438,7 @@ export class MergeRequestsService {
       mergedRevisionId: finalized.revisionId,
     });
     return {
-      mergeRequest: this.toInfo(updated, await this.mergeBaseOf(updated)),
+      mergeRequest: await this.toDetail(updated),
       mergedRevision: mergedRevision ? this.toRevisionInfo(mergedRevision) : null,
     };
   }
@@ -465,7 +469,54 @@ export class MergeRequestsService {
     return src && tgt ? await this.compare.findMergeBase(mr.documentId, tgt, src) : null;
   }
 
-  private toInfo(mr: MrWithBranches, mergeBase: string | null): MergeRequestInfo {
+  /** Batched review-thread counts (one groupBy per response, list rows included). */
+  private async statsFor(ids: string[]): Promise<Map<string, { total: number; unresolved: number }>> {
+    const map = new Map<string, { total: number; unresolved: number }>(
+      ids.map((id) => [id, { total: 0, unresolved: 0 }]),
+    );
+    if (ids.length === 0) return map;
+    const rows = await this.prisma.mergeRequestThread.groupBy({
+      by: ['mergeRequestId', 'resolved'],
+      where: { mergeRequestId: { in: ids } },
+      _count: { _all: true },
+    });
+    for (const row of rows) {
+      const entry = map.get(row.mergeRequestId)!;
+      entry.total += row._count._all;
+      if (!row.resolved) entry.unresolved += row._count._all;
+    }
+    return map;
+  }
+
+  /** Detail/mutation response body: info with merge base + thread stats. */
+  private async toDetail(mr: MrWithBranches): Promise<MergeRequestInfo> {
+    const [mergeBase, stats] = await Promise.all([this.mergeBaseOf(mr), this.statsFor([mr.id])]);
+    return this.toInfo(mr, mergeBase, stats.get(mr.id));
+  }
+
+  /** 400 unless every id is a member of the document's workspace. */
+  private async assertWorkspaceMembers(documentId: string, userIds: string[]): Promise<void> {
+    if (userIds.length === 0) return;
+    const doc = await this.prisma.document.findUniqueOrThrow({
+      where: { id: documentId },
+      select: { workspaceId: true },
+    });
+    const members = await this.prisma.workspaceMember.findMany({
+      where: { workspaceId: doc.workspaceId, userId: { in: userIds } },
+      select: { userId: true },
+    });
+    const memberIds = new Set(members.map((m) => m.userId));
+    const unknown = userIds.filter((id) => !memberIds.has(id));
+    if (unknown.length > 0) {
+      throw new BadRequestException(`Not members of this workspace: ${unknown.join(', ')}`);
+    }
+  }
+
+  private toInfo(
+    mr: MrWithBranches,
+    mergeBase: string | null,
+    threadStats: { total: number; unresolved: number } = { total: 0, unresolved: 0 },
+  ): MergeRequestInfo {
     return {
       mergeRequestId: mr.id,
       documentId: mr.documentId,
@@ -479,8 +530,10 @@ export class MergeRequestsService {
       status: mr.status as MergeRequestStatus,
       isDraft: mr.isDraft,
       authorId: mr.authorId,
+      assigneeId: mr.assigneeId,
       approvedBy: this.approvers(mr),
       reviewers: mr.reviewers.map((r) => r.userId),
+      threadStats,
       strategy: (mr.strategy as MergeStrategy | null) ?? null,
       mergedRevisionId: mr.mergedRevisionId,
       createdAt: mr.createdAt.toISOString(),

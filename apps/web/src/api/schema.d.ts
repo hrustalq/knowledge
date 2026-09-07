@@ -1165,6 +1165,8 @@ export interface components {
             description?: string;
             /** @description Draft merge requests cannot be merged */
             isDraft?: boolean;
+            /** @description Workspace member to assign; null clears the assignee */
+            assigneeId?: string | null;
         };
         SetReviewersDto: {
             /** @description Replace-set of reviewer user ids (workspace members) */
@@ -2932,6 +2934,8 @@ export interface operations {
                 /** @description Only merge requests with this user assigned as reviewer */
                 reviewerId?: string;
                 documentId?: string;
+                /** @description Case-insensitive title substring match */
+                search?: string;
                 /** @description Opaque cursor from a previous page */
                 cursor?: string;
                 limit?: number;

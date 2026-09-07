@@ -302,9 +302,13 @@ export interface MergeRequestInfo {
   isDraft: boolean;
   /** Zeros-UUID stub when created without a principal (AUTH_MODE=none / MCP). */
   authorId: string;
+  /** Single assignee (GitLab-style; advisory like reviewers). */
+  assigneeId: string | null;
   approvedBy: string[];
   /** Assigned reviewer user ids (advisory — merging is gated by approval count, not reviewers). */
   reviewers: string[];
+  /** Review-thread counts (computed on every read). */
+  threadStats: { total: number; unresolved: number };
   strategy: MergeStrategy | null;
   mergedRevisionId: string | null;
   createdAt: string;
@@ -363,6 +367,8 @@ export interface ListWorkspaceMergeRequestsRequest {
   /** Only merge requests with this user assigned as reviewer. */
   reviewerId?: string;
   documentId?: string;
+  /** Case-insensitive title substring match. */
+  search?: string;
   cursor?: string;
   limit?: number;
 }
@@ -370,6 +376,8 @@ export interface ListWorkspaceMergeRequestsResponse {
   workspaceId: string;
   mergeRequests: MergeRequestInfo[];
   nextCursor: string | null;
+  /** Per-status totals for the same filters (status filter itself excluded) — drives the tab badges. */
+  counts: { open: number; merged: number; closed: number };
 }
 
 // PATCH /v1/merge-requests/:id (open MRs only)
@@ -377,6 +385,8 @@ export interface UpdateMergeRequestRequest {
   title?: string;
   description?: string;
   isDraft?: boolean;
+  /** Workspace member to assign; null clears the assignee. */
+  assigneeId?: string | null;
 }
 
 // PUT /v1/merge-requests/:id/reviewers (replace-set semantics)

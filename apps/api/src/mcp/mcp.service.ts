@@ -229,6 +229,7 @@ export class McpService {
           status: z.enum(['open', 'merged', 'closed']).optional(),
           authorId: z.string().uuid().optional(),
           reviewerId: z.string().uuid().optional(),
+          search: z.string().optional().describe('Case-insensitive title substring match'),
           cursor: z.string().optional(),
           limit: z.number().int().min(1).max(100).optional(),
         },

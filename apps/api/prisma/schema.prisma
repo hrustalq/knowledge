@@ -137,6 +137,8 @@ model MergeRequest {
   // Draft merge requests cannot be merged until the flag is cleared.
   isDraft     Boolean @default(false) @map("is_draft")
   authorId    String  @map("author_id") @db.Uuid
+  // Single assignee (GitLab-style; advisory like reviewers). No FK — see MergeRequestReviewer.
+  assigneeId  String? @map("assignee_id") @db.Uuid
   // Author ids that approved (auth stub until Phase 5).
   approvedBy  Json    @default("[]") @map("approved_by")
 

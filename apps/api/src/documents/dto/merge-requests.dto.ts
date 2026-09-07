@@ -10,6 +10,7 @@ import {
   Matches,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -66,6 +67,12 @@ export class UpdateMergeRequestDto {
   @IsOptional()
   @IsBoolean()
   isDraft?: boolean;
+
+  @ApiPropertyOptional({ description: 'Workspace member to assign; null clears the assignee', type: String, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: UpdateMergeRequestDto) => o.assigneeId !== null)
+  @Matches(UUID_RE)
+  assigneeId?: string | null;
 }
 
 export class SetReviewersDto {
@@ -101,6 +108,11 @@ export class ListMergeRequestsQueryDto {
   @IsOptional()
   @Matches(UUID_RE)
   documentId?: string;
+
+  @ApiPropertyOptional({ description: 'Case-insensitive title substring match' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 
   @ApiPropertyOptional({ description: 'Opaque cursor from a previous page' })
   @IsOptional()

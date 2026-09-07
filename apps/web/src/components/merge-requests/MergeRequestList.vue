@@ -1,14 +1,13 @@
 <script setup lang="ts">
-// Merge-request table, reused by the workspace page (pass rows) and the
-// document tab (pass documentId — it fetches the document-scoped list itself).
+// Merge-request card stack. Used by the workspace page (pass rows) and the
+// document tab (pass documentId — fetches the document-scoped list itself).
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
+import { GitPullRequestArrow } from 'lucide-vue-next'
 import type { ListMergeRequestsResponse, MergeRequestInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/api/queries'
-import { relativeTime, statusVariant } from '@/lib/api'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import MergeRequestCard from './MergeRequestCard.vue'
 
 const props = defineProps<{ documentId?: string; rows?: MergeRequestInfo[]; loading?: boolean }>()
 
@@ -25,38 +24,22 @@ const isLoading = computed(() => props.loading ?? (!!props.documentId && documen
 </script>
 
 <template>
-  <div>
-    <Skeleton v-if="isLoading" class="h-24 w-full" />
-    <p v-else-if="mergeRequests.length === 0" class="py-6 text-center text-sm text-muted-foreground">
-      No merge requests.
+  <div v-if="isLoading" class="space-y-2">
+    <Skeleton v-for="i in 3" :key="i" class="h-16 w-full" />
+  </div>
+
+  <div
+    v-else-if="mergeRequests.length === 0"
+    class="grid place-items-center rounded-lg border border-dashed bg-card py-16 text-center"
+  >
+    <GitPullRequestArrow class="size-8 text-muted-foreground/50" />
+    <p class="mt-3 font-medium">No merge requests</p>
+    <p class="mt-1 text-sm text-muted-foreground">
+      Branch a document and open a merge request to propose changes.
     </p>
-    <Table v-else>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Title</TableHead>
-          <TableHead>Branches</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Author</TableHead>
-          <TableHead class="text-right">Created</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        <TableRow v-for="mr in mergeRequests" :key="mr.mergeRequestId">
-          <TableCell>
-            <RouterLink
-              :to="`/merge-requests/${mr.mergeRequestId}`"
-              class="font-medium text-primary hover:underline"
-            >{{ mr.title }}</RouterLink>
-            <Badge v-if="mr.isDraft" variant="outline" class="ml-2">Draft</Badge>
-          </TableCell>
-          <TableCell class="font-mono text-xs text-muted-foreground">
-            {{ mr.sourceBranch }} → {{ mr.targetBranch }}
-          </TableCell>
-          <TableCell><Badge :variant="statusVariant(mr.status)">{{ mr.status }}</Badge></TableCell>
-          <TableCell class="font-mono text-xs text-muted-foreground">{{ mr.authorId.slice(0, 8) }}</TableCell>
-          <TableCell class="text-right text-xs text-muted-foreground">{{ relativeTime(mr.createdAt) }}</TableCell>
-        </TableRow>
-      </TableBody>
-    </Table>
+  </div>
+
+  <div v-else class="space-y-2">
+    <MergeRequestCard v-for="mr in mergeRequests" :key="mr.mergeRequestId" :merge-request="mr" />
   </div>
 </template>

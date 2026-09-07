@@ -1,0 +1,1133 @@
+/*
+ * Rich document surface — read view and editor share one stylesheet.
+ *
+ * That sharing is the point: a panel, a table, a diagram and a code block must
+ * be pixel-identical whether you are reading the page or writing it. Two
+ * stylesheets is how "it looked different once I saved" happens.
+ *
+ * Everything is expressed in the app's existing tokens (--primary, --border,
+ * --muted) plus the few block-specific ramps defined here, so the whole surface
+ * re-themes with the rest of the product instead of pinning its own colors.
+ */
+
+:root {
+  /* Panel accents. Distinct hues at equal weight so no callout out-shouts
+     another; the semantics come from the icon, not from loudness. */
+  --kn-panel-note: oklch(0.55 0.13 250);
+  --kn-panel-tip: oklch(0.55 0.13 155);
+  --kn-panel-important: oklch(0.52 0.14 300);
+  --kn-panel-warning: oklch(0.62 0.13 75);
+  --kn-panel-caution: oklch(0.56 0.17 25);
+
+  /* Diagram palette. Scenes store the *key*, never the value, so a diagram
+     drawn in light mode stays legible in dark mode. */
+  --kn-draw-ink: oklch(0.32 0.02 265);
+  --kn-draw-blue: oklch(0.52 0.15 255);
+  --kn-draw-green: oklch(0.52 0.13 155);
+  --kn-draw-amber: oklch(0.63 0.14 70);
+  --kn-draw-red: oklch(0.55 0.18 25);
+  --kn-draw-violet: oklch(0.5 0.16 295);
+  --kn-draw-font: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+
+  --kn-measure: 46rem;
+  /*
+   * One gap for every block that draws a border. Adjacent heavy boxes collapse
+   * to exactly this, so two rules are never closer than the rhythm of the page
+   * — the thing that makes a document look assembled rather than laid out.
+   */
+  --kn-block-gap: 1.5rem;
+  --kn-block-gap-nested: 0.85rem;
+}
+
+.dark {
+  --kn-panel-note: oklch(0.72 0.11 250);
+  --kn-panel-tip: oklch(0.72 0.11 155);
+  --kn-panel-important: oklch(0.72 0.12 300);
+  --kn-panel-warning: oklch(0.78 0.11 75);
+  --kn-panel-caution: oklch(0.7 0.14 25);
+
+  --kn-draw-ink: oklch(0.88 0.01 265);
+  --kn-draw-blue: oklch(0.72 0.12 255);
+  --kn-draw-green: oklch(0.73 0.11 155);
+  --kn-draw-amber: oklch(0.8 0.11 70);
+  --kn-draw-red: oklch(0.72 0.14 25);
+  --kn-draw-violet: oklch(0.72 0.13 295);
+}
+
+/* ------------------------------------------------------------------ prose */
+
+.markdown-body,
+.kn-prose {
+  line-height: 1.7;
+  font-size: 0.95rem;
+  color: var(--foreground);
+}
+
+.markdown-body :is(h1, h2, h3, h4),
+.kn-prose :is(h1, h2, h3, h4) {
+  scroll-margin-top: 6.5rem;
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.015em;
+}
+.markdown-body h1, .kn-prose h1 { font-size: 1.75rem; font-weight: 700; margin: 1.5em 0 0.5em; }
+.markdown-body h2, .kn-prose h2 { font-size: 1.35rem; font-weight: 650; margin: 1.5em 0 0.45em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border); }
+.markdown-body h3, .kn-prose h3 { font-size: 1.12rem; font-weight: 620; margin: 1.25em 0 0.35em; }
+.markdown-body h4, .kn-prose h4 { font-size: 1rem; font-weight: 620; margin: 1.1em 0 0.3em; color: var(--muted-foreground); }
+.markdown-body :is(h1, h2, h3, h4):first-child,
+.kn-prose :is(h1, h2, h3, h4):first-child { margin-top: 0; }
+
+.markdown-body p, .kn-prose p { margin: 0.65em 0; }
+.markdown-body ul, .kn-prose ul { list-style: disc; padding-left: 1.5em; margin: 0.6em 0; }
+.markdown-body ol, .kn-prose ol { list-style: decimal; padding-left: 1.5em; margin: 0.6em 0; }
+.markdown-body li, .kn-prose li { margin: 0.25em 0; }
+.markdown-body li > ul, .kn-prose li > ul { list-style: circle; }
+
+.markdown-body code, .kn-prose code {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border-radius: 4px;
+  padding: 0.12em 0.35em;
+  font-size: 0.85em;
+  font-variant-ligatures: none;
+}
+.markdown-body pre, .kn-prose pre {
+  background: color-mix(in oklch, var(--foreground) 5%, var(--card));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9em 1.05em;
+  overflow-x: auto;
+  margin-block: var(--kn-block-gap);
+  font-size: 0.86em;
+  line-height: 1.6;
+}
+.markdown-body pre code, .kn-prose pre code { background: none; padding: 0; font-size: inherit; }
+
+.markdown-body blockquote, .kn-prose blockquote {
+  border-left: 3px solid color-mix(in oklch, var(--primary) 45%, transparent);
+  padding-left: 1em;
+  margin: 0.85em 0;
+  color: var(--muted-foreground);
+}
+
+.markdown-body a, .kn-prose a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.markdown-body hr, .kn-prose hr { border: none; border-top: 1px solid var(--border); margin: 1.75em 0; }
+.markdown-body img, .kn-prose img { max-width: 100%; border-radius: 8px; }
+.markdown-body mark, .kn-prose mark {
+  background: color-mix(in oklch, var(--kn-panel-warning) 30%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0.05em 0.2em;
+}
+
+/* Tables ------------------------------------------------------------------ */
+
+.markdown-body table, .kn-prose table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9em;
+  margin-block: var(--kn-block-gap);
+}
+/*
+ * Scrolling lives on a wrapper, never on the table: `display:block` on the
+ * table itself makes it shrink to its content instead of filling the column,
+ * which is why a three-column table used to sit in the left third of the page.
+ * The read view gets this wrapper from MarkdownView; Tiptap supplies its own.
+ */
+.kn-table-scroll,
+.kn-prose .tableWrapper {
+  overflow-x: auto;
+  margin-block: var(--kn-block-gap);
+}
+.kn-table-scroll > table,
+.kn-prose .tableWrapper > table { margin-block: 0; }
+.markdown-body :is(th, td), .kn-prose :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 0.5em 0.75em;
+  text-align: left;
+  vertical-align: top;
+  min-width: 4rem;
+}
+.markdown-body th, .kn-prose th {
+  background: color-mix(in oklch, var(--foreground) 4%, var(--card));
+  font-weight: 620;
+}
+.kn-prose .selectedCell { background: color-mix(in oklch, var(--primary) 12%, transparent); }
+.kn-prose .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--primary);
+  pointer-events: none;
+}
+.kn-prose table { position: relative; }
+.kn-prose td, .kn-prose th { position: relative; }
+
+/* Task lists -------------------------------------------------------------- */
+
+.markdown-body ul[data-type='taskList'],
+.kn-prose ul[data-type='taskList'] { list-style: none; padding-left: 0.15em; }
+.markdown-body ul[data-type='taskList'] li,
+.kn-prose ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6em;
+}
+.markdown-body ul[data-type='taskList'] li > div,
+.kn-prose ul[data-type='taskList'] li > div { flex: 1; min-width: 0; }
+.markdown-body ul[data-type='taskList'] li > label,
+.kn-prose ul[data-type='taskList'] li > label { margin-top: 0.28em; }
+.markdown-body ul[data-type='taskList'] li p,
+.kn-prose ul[data-type='taskList'] li p { margin: 0; }
+.markdown-body ul[data-type='taskList'] li[data-checked='true'],
+.kn-prose ul[data-type='taskList'] li[data-checked='true'] {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklch, var(--muted-foreground) 50%, transparent);
+}
+/* Read view has no checkbox element, so draw one from the data attribute. */
+.markdown-body ul[data-type='taskList'] li::before {
+  content: '';
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin-top: 0.35em;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+}
+.markdown-body ul[data-type='taskList'] li[data-checked='true']::before {
+  background: var(--primary);
+  border-color: var(--primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.5 3.5L13 5'/%3E%3C/svg%3E");
+  background-size: 78%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.kn-prose ul[data-type='taskList'] input[type='checkbox'] {
+  appearance: none;
+  width: 1em;
+  height: 1em;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  cursor: pointer;
+  flex: none;
+}
+.kn-prose ul[data-type='taskList'] input[type='checkbox']:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.5 3.5L13 5'/%3E%3C/svg%3E");
+  background-size: 78%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Panels ------------------------------------------------------------------ */
+
+[data-kn-panel] {
+  --kn-accent: var(--kn-panel-note);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.7rem;
+  margin-block: var(--kn-block-gap);
+  padding: 0.85rem 1rem 0.85rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklch, var(--kn-accent) 28%, transparent);
+  background: color-mix(in oklch, var(--kn-accent) 8%, var(--card));
+  box-shadow: inset 3px 0 0 0 var(--kn-accent);
+}
+[data-kn-panel='tip'] { --kn-accent: var(--kn-panel-tip); }
+[data-kn-panel='important'] { --kn-accent: var(--kn-panel-important); }
+[data-kn-panel='warning'] { --kn-accent: var(--kn-panel-warning); }
+[data-kn-panel='caution'] { --kn-accent: var(--kn-panel-caution); }
+
+.kn-panel-icon { color: var(--kn-accent); padding-top: 0.2rem; }
+.kn-panel-body > :first-child { margin-top: 0; }
+.kn-panel-body > :last-child { margin-bottom: 0; }
+
+/*
+ * The read view has no icon element, so it draws one. Masked SVG rather than a
+ * background image: the glyph then inherits the panel's accent colour and needs
+ * no second asset per theme.
+ */
+.markdown-body [data-kn-panel] { padding-left: 0.9rem; }
+.markdown-body [data-kn-panel]::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.25rem;
+  background-color: var(--kn-accent);
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
+  mask-image: var(--kn-panel-glyph);
+}
+:root {
+  --kn-glyph-note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
+  --kn-glyph-tip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E");
+  --kn-glyph-important: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");
+  --kn-glyph-warning: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3'/%3E%3Cpath d='M12 9v4M12 17h.01'/%3E%3C/svg%3E");
+  --kn-glyph-caution: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m15 9-6 6M9 9l6 6'/%3E%3C/svg%3E");
+}
+[data-kn-panel] { --kn-panel-glyph: var(--kn-glyph-note); }
+[data-kn-panel='tip'] { --kn-panel-glyph: var(--kn-glyph-tip); }
+[data-kn-panel='important'] { --kn-panel-glyph: var(--kn-glyph-important); }
+[data-kn-panel='warning'] { --kn-panel-glyph: var(--kn-glyph-warning); }
+[data-kn-panel='caution'] { --kn-panel-glyph: var(--kn-glyph-caution); }
+
+.kn-panel-switch {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.45rem;
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 7px;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px -6px oklch(0 0 0 / 0.35);
+}
+.kn-panel-swatch,
+.kn-panel-dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  background: var(--kn-panel-note);
+}
+.kn-panel-swatch[data-kn-panel-swatch='tip'], .kn-panel-dot[data-kn-panel='tip'] { background: var(--kn-panel-tip); }
+.kn-panel-swatch[data-kn-panel-swatch='important'], .kn-panel-dot[data-kn-panel='important'] { background: var(--kn-panel-important); }
+.kn-panel-swatch[data-kn-panel-swatch='warning'], .kn-panel-dot[data-kn-panel='warning'] { background: var(--kn-panel-warning); }
+.kn-panel-swatch[data-kn-panel-swatch='caution'], .kn-panel-dot[data-kn-panel='caution'] { background: var(--kn-panel-caution); }
+.kn-panel-swatch[aria-pressed='true'] { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+/* Inside a panel, a column or an expand, the container already supplies the
+   outer breathing room — reuse the full gap there and blocks drift apart. */
+:is([data-kn-panel], [data-kn-col], .kn-expand-body, .kn-layout-col)
+  :is(.kn-block, .kn-table-scroll, pre, table, [data-kn-panel], .kn-expand, details) {
+  margin-block: var(--kn-block-gap-nested);
+}
+
+/* First/last child never pushes against the container's own border. */
+:is([data-kn-panel], [data-kn-col], .kn-layout-col, .kn-panel-body) > :first-child,
+:is([data-kn-col], .kn-layout-col) > :first-child > :first-child {
+  margin-top: 0;
+}
+:is([data-kn-panel], [data-kn-col], .kn-layout-col, .kn-panel-body) > :last-child,
+:is([data-kn-col], .kn-layout-col) > :last-child > :last-child {
+  margin-bottom: 0;
+}
+
+/* Expand ------------------------------------------------------------------ */
+
+.kn-expand,
+.markdown-body details {
+  margin-block: var(--kn-block-gap);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+}
+.kn-expand-head,
+.markdown-body summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  font-weight: 560;
+  font-size: 0.92em;
+  cursor: pointer;
+  background: color-mix(in oklch, var(--foreground) 3%, transparent);
+  list-style: none;
+}
+.markdown-body summary::-webkit-details-marker { display: none; }
+.markdown-body summary::before {
+  content: '';
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 180ms cubic-bezier(0.32, 0.72, 0, 1);
+  opacity: 0.6;
+}
+.markdown-body details[open] summary::before { transform: rotate(45deg); }
+.kn-expand-toggle { display: inline-flex; color: var(--muted-foreground); }
+.kn-expand-summary { flex: 1; outline: none; border-radius: 4px; }
+.kn-expand-summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.kn-expand-body,
+.markdown-body details > :not(summary) { padding: 0.15rem 0.95rem 0.75rem; }
+.kn-expand-body > :first-child { margin-top: 0.5rem; }
+
+/* Layout sections --------------------------------------------------------- */
+
+.kn-layout,
+.markdown-body [data-kn-layout] { position: relative; margin-block: var(--kn-block-gap); }
+.kn-layout-grid,
+.markdown-body [data-kn-layout] {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(var(--kn-cols, 2), minmax(0, 1fr));
+}
+[data-columns='3'] .kn-layout-grid,
+.markdown-body [data-kn-layout='3'] { --kn-cols: 3; }
+.kn-layout-col > :first-child,
+.markdown-body [data-kn-col] > :first-child { margin-top: 0; }
+.kn-layout-col { min-width: 0; }
+@media (max-width: 48rem) {
+  .kn-layout-grid,
+  .markdown-body [data-kn-layout] { grid-template-columns: minmax(0, 1fr); }
+}
+.kn-layout-switch {
+  position: absolute;
+  top: -0.6rem;
+  right: 0;
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  border-radius: 7px;
+  background: var(--popover);
+  border: 1px solid var(--border);
+}
+.kn-layout-switch button { padding: 0.25rem; border-radius: 5px; color: var(--muted-foreground); }
+.kn-layout-switch button[aria-pressed='true'] { background: var(--accent); color: var(--accent-foreground); }
+
+/* Inline chips ------------------------------------------------------------ */
+
+[data-kn-status] {
+  display: inline-block;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 620;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: baseline;
+  background: color-mix(in oklch, var(--muted-foreground) 18%, transparent);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+[data-kn-status='blue'] { background: color-mix(in oklch, var(--kn-panel-note) 18%, transparent); color: var(--kn-panel-note); }
+[data-kn-status='green'] { background: color-mix(in oklch, var(--kn-panel-tip) 18%, transparent); color: var(--kn-panel-tip); }
+[data-kn-status='amber'] { background: color-mix(in oklch, var(--kn-panel-warning) 22%, transparent); color: var(--kn-panel-warning); }
+[data-kn-status='red'] { background: color-mix(in oklch, var(--kn-panel-caution) 18%, transparent); color: var(--kn-panel-caution); }
+[data-kn-status='violet'] { background: color-mix(in oklch, var(--kn-panel-important) 18%, transparent); color: var(--kn-panel-important); }
+
+.kn-mention,
+.markdown-body a[data-kn-mention] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.05em 0.45em 0.05em 0.35em;
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--primary) 10%, transparent);
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 520;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.markdown-body a[data-kn-mention]::before {
+  content: '';
+  width: 0.85em;
+  height: 0.85em;
+  flex: none;
+  background-color: currentColor;
+  opacity: 0.7;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E");
+}
+.kn-mention[data-selected='true'] { outline: 2px solid var(--ring); outline-offset: 1px; }
+.markdown-body a[data-kn-mention]:hover { background: color-mix(in oklch, var(--primary) 18%, transparent); }
+
+/* Block chrome (mermaid, drawing, file, toc) ------------------------------- */
+
+.kn-block {
+  position: relative;
+  margin-block: var(--kn-block-gap);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  overflow: hidden;
+}
+.kn-block[data-selected='true'] { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 22%, transparent); }
+
+.kn-block-actions {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.kn-block:hover .kn-block-actions,
+.kn-block:focus-within .kn-block-actions { opacity: 1; }
+.kn-block-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  color: var(--muted-foreground);
+  box-shadow: 0 4px 12px -8px oklch(0 0 0 / 0.5);
+}
+.kn-block-actions button:hover { color: var(--foreground); background: var(--accent); }
+
+.kn-mermaid-grid { display: grid; }
+.kn-mermaid-grid[data-editing='true'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 56rem) { .kn-mermaid-grid[data-editing='true'] { grid-template-columns: minmax(0, 1fr); } }
+.kn-mermaid-source { border-right: 1px solid var(--border); background: color-mix(in oklch, var(--foreground) 3%, transparent); }
+.kn-mermaid-textarea {
+  width: 100%;
+  min-height: 12rem;
+  resize: vertical;
+  padding: 0.85rem;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  outline: none;
+  border: none;
+}
+.kn-mermaid-error {
+  padding: 0.4rem 0.85rem 0.7rem;
+  font-size: 0.75rem;
+  color: var(--destructive);
+  border-top: 1px solid var(--border);
+}
+.kn-mermaid-preview,
+.kn-mermaid-figure { display: flex; justify-content: center; padding: 1.1rem; overflow-x: auto; }
+.kn-mermaid-preview svg,
+.kn-mermaid-figure svg { max-width: 100%; height: auto; }
+.kn-mermaid-broken { border: 1px solid var(--destructive); border-radius: 8px; }
+.kn-mermaid-broken::before {
+  content: 'Diagram could not be parsed — source shown';
+  display: block;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.72rem;
+  color: var(--destructive);
+  border-bottom: 1px solid var(--border);
+}
+
+.kn-drawing-view { cursor: default; }
+.kn-drawing-canvas { padding: 0.75rem; }
+.kn-drawing-canvas svg { display: block; width: 100%; height: auto; }
+.kn-drawing-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 8rem;
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+}
+
+.kn-file[data-kind='pdf'] { background: color-mix(in oklch, var(--foreground) 2%, var(--card)); }
+.kn-file-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid transparent;
+}
+.kn-file[data-kind='pdf'] .kn-file-head { border-bottom-color: var(--border); }
+.kn-file-glyph {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+.kn-file-name { font-weight: 540; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kn-file-size { font-size: 0.75rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.kn-file-links { margin-left: auto; display: flex; gap: 0.6rem; font-size: 0.78rem; }
+.kn-file-head button, .kn-file-head a {
+  display: inline-flex;
+  padding: 0.25rem;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+.kn-file-head button:hover, .kn-file-head a:hover { background: var(--accent); color: var(--foreground); }
+.kn-file-pdf { display: block; width: 100%; height: min(70vh, 40rem); border: none; background: var(--muted); }
+.kn-file-fallback { padding: 2rem; text-align: center; font-size: 0.85rem; color: var(--muted-foreground); }
+
+.kn-toc { padding: 0.75rem 0.95rem; background: color-mix(in oklch, var(--foreground) 2.5%, var(--card)); }
+.kn-toc-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin-bottom: 0.4rem;
+}
+/* Both surfaces: the prose list styles are more specific than a bare class,
+   and the outline already encodes depth through indentation. */
+.markdown-body .kn-toc-list,
+.kn-prose .kn-toc-list,
+.kn-toc-list { list-style: none; padding: 0; margin: 0; font-size: 0.87rem; }
+.kn-toc-list li { margin: 0.12em 0; }
+.kn-toc-list li[data-level='2'] { padding-left: 1rem; }
+.kn-toc-list li[data-level='3'] { padding-left: 2rem; color: var(--muted-foreground); }
+.kn-toc-list a { text-decoration: none; color: inherit; }
+.kn-toc-list a:hover { color: var(--primary); text-decoration: underline; }
+.kn-toc-empty { font-size: 0.83rem; color: var(--muted-foreground); margin: 0; }
+
+/* Images ------------------------------------------------------------------ */
+
+.kn-image { position: relative; display: block; margin-block: var(--kn-block-gap); width: fit-content; max-width: 100%; }
+.kn-image img { display: block; width: var(--kn-image-width, auto); max-width: 100%; border-radius: 8px; }
+.kn-image[data-selected='true'] img { outline: 2px solid var(--ring); outline-offset: 2px; }
+.kn-image-grip {
+  position: absolute;
+  top: 50%;
+  width: 0.4rem;
+  height: 2.5rem;
+  margin-top: -1.25rem;
+  border-radius: 999px;
+  background: var(--primary);
+  opacity: 0;
+  cursor: ew-resize;
+  transition: opacity 140ms ease;
+}
+.kn-image:hover .kn-image-grip { opacity: 0.85; }
+.kn-image-grip[data-side='left'] { left: -0.2rem; }
+.kn-image-grip[data-side='right'] { right: -0.2rem; }
+
+/* ---------------------------------------------------------------- editor */
+
+.kn-editor { display: flex; flex-direction: column; min-height: 0; }
+
+/*
+ * One row, always. Wrapping stranded the insert "+" alone on a second line the
+ * moment the assistant rail opened, which reads as a broken toolbar rather than
+ * a narrow one — a horizontal overflow is the honest failure mode here.
+ */
+.kn-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--background) 88%, transparent);
+  backdrop-filter: blur(12px);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--foreground) 20%, transparent) transparent;
+}
+.kn-toolbar > * { flex: none; }
+.kn-tb-group { display: flex; align-items: center; gap: 0.1rem; flex: none; }
+.kn-tb-group + .kn-tb-group::before,
+.kn-tb-group + .kn-tb-select::before {
+  content: '';
+  width: 1px;
+  height: 1.1rem;
+  margin: 0 0.35rem;
+  background: var(--border);
+}
+.kn-tb-group + .kn-tb-group { display: flex; }
+.kn-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  height: 1.85rem;
+  min-width: 1.85rem;
+  padding: 0 0.35rem;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  transition: background 120ms ease, color 120ms ease;
+}
+.kn-tb-btn:hover:not(:disabled) { background: var(--accent); color: var(--accent-foreground); }
+.kn-tb-btn[aria-pressed='true'] { background: color-mix(in oklch, var(--primary) 14%, transparent); color: var(--primary); }
+.kn-tb-btn:disabled { opacity: 0.35; cursor: default; }
+.kn-tb-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 1.85rem;
+  padding: 0 0.5rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: var(--foreground);
+  min-width: 8.5rem;
+  justify-content: space-between;
+}
+.kn-tb-select:hover { background: var(--accent); }
+.kn-tb-insert { color: var(--primary); }
+.kn-tb-status-dot { width: 0.7rem; height: 0.7rem; border-radius: 999px; background: var(--kn-panel-tip); }
+.kn-style-preview.kn-style-h1 { font-size: 1.1rem; font-weight: 700; }
+.kn-style-preview.kn-style-h2 { font-size: 1rem; font-weight: 640; }
+.kn-style-preview.kn-style-h3 { font-size: 0.92rem; font-weight: 620; }
+.kn-style-preview.kn-style-h4 { font-size: 0.85rem; font-weight: 620; color: var(--muted-foreground); }
+.kn-status-sample { font-size: 0.72rem; }
+
+.kn-editor-surface { position: relative; flex: 1; min-height: 0; }
+.kn-editor-content { padding: 2rem 1rem 6rem; }
+.kn-prose {
+  max-width: var(--kn-measure);
+  margin: 0 auto;
+  outline: none;
+  min-height: 24rem;
+}
+.kn-prose > * + * { margin-top: 0; }
+.kn-prose p.is-editor-empty:first-child::before,
+.kn-prose h1.is-empty::before,
+.kn-prose h2.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+  opacity: 0.65;
+}
+.kn-prose .ProseMirror-selectednode { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
+
+/* Gutter handle -----------------------------------------------------------
+ *
+ * The padding is the hit area, not decoration: it bridges the gap between the
+ * buttons and the text so the pointer never crosses dead space on its way over
+ * — travelling through a gap is what made these unclickable.
+ */
+.kn-gutter {
+  position: fixed;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  transform: translateX(-100%);
+  padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+  margin: -0.25rem 0;
+}
+.kn-gutter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  opacity: 0.6;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.kn-gutter-btn:hover { opacity: 1; background: var(--accent); color: var(--accent-foreground); }
+.kn-gutter:hover .kn-gutter-btn { opacity: 0.9; }
+.kn-gutter-grip { cursor: grab; }
+.kn-gutter-grip:active { cursor: grabbing; }
+
+/* Bubble + table bars ------------------------------------------------------ */
+
+.kn-bubble,
+.kn-table-bar {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.2rem;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: 0 12px 32px -12px oklch(0 0 0 / 0.45), 0 2px 6px -2px oklch(0 0 0 / 0.2);
+}
+.kn-bubble { transform: translate(-50%, -100%); }
+.kn-bubble button,
+.kn-table-bar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.7rem;
+  min-width: 1.7rem;
+  padding: 0 0.35rem;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.kn-bubble button:hover,
+.kn-table-bar button:hover { background: var(--accent); color: var(--accent-foreground); }
+.kn-bubble button[aria-pressed='true'] { background: color-mix(in oklch, var(--primary) 16%, transparent); color: var(--primary); }
+.kn-bubble-sep { width: 1px; height: 1.1rem; margin: 0 0.2rem; background: var(--border); }
+.kn-bubble-status { width: 1.1rem; min-width: 1.1rem; height: 1.1rem; border-radius: 999px; padding: 0; }
+.kn-table-bar .kn-danger:hover { background: color-mix(in oklch, var(--destructive) 15%, transparent); color: var(--destructive); }
+
+/* Command menu ------------------------------------------------------------ */
+
+.kn-cmd {
+  position: fixed;
+  z-index: 50;
+  width: 19rem;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: 0 18px 40px -16px oklch(0 0 0 / 0.5), 0 2px 8px -3px oklch(0 0 0 / 0.2);
+  overflow: hidden;
+}
+.kn-cmd-scroll { max-height: 20rem; overflow-y: auto; padding: 0.3rem; }
+.kn-cmd-group {
+  padding: 0.4rem 0.5rem 0.2rem;
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.kn-cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border-radius: 7px;
+  font-size: 0.85rem;
+  text-align: left;
+}
+.kn-cmd-item[data-active='true'] { background: var(--accent); color: var(--accent-foreground); }
+.kn-cmd-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  flex: none;
+}
+.kn-cmd-item[data-active='true'] .kn-cmd-icon { color: var(--primary); border-color: color-mix(in oklch, var(--primary) 35%, transparent); }
+.kn-cmd-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kn-cmd-hint { font-size: 0.7rem; color: var(--muted-foreground); }
+.kn-cmd-empty { padding: 0.9rem 0.6rem; font-size: 0.82rem; color: var(--muted-foreground); text-align: center; }
+
+/* Uploads ----------------------------------------------------------------- */
+
+.kn-uploads {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+}
+.kn-upload { display: flex; align-items: center; gap: 0.6rem; font-size: 0.78rem; }
+.kn-upload-name { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kn-upload-track { flex: 1; height: 0.3rem; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.kn-upload-fill { display: block; height: 100%; background: var(--primary); transition: width 180ms ease; }
+
+/* ------------------------------------------------------------- whiteboard */
+
+.kn-wb { display: flex; flex-direction: column; background: var(--card); outline: none; }
+.kn-wb-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.35rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--foreground) 3%, transparent);
+}
+.kn-wb-group { display: flex; align-items: center; gap: 0.1rem; }
+.kn-wb-group + .kn-wb-group::before {
+  content: '';
+  width: 1px;
+  height: 1.05rem;
+  margin: 0 0.3rem;
+  background: var(--border);
+}
+.kn-wb-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+.kn-wb-tool:hover:not(:disabled) { background: var(--accent); color: var(--accent-foreground); }
+.kn-wb-tool[aria-pressed='true'] { background: color-mix(in oklch, var(--primary) 16%, transparent); color: var(--primary); }
+.kn-wb-tool:disabled { opacity: 0.3; }
+.kn-wb-weight span { display: block; width: 1rem; border-radius: 999px; background: currentColor; }
+.kn-wb-dash { color: var(--muted-foreground); }
+.kn-wb-swatch {
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in oklch, var(--foreground) 18%, transparent);
+}
+.kn-wb-swatch[aria-pressed='true'] { outline: 2px solid var(--ring); outline-offset: 1.5px; }
+.kn-wb-swatch-fill { position: relative; }
+.kn-wb-none {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: linear-gradient(to bottom right, transparent 44%, var(--destructive) 44%, var(--destructive) 56%, transparent 56%);
+}
+.kn-wb-stage { position: relative; padding: 0.5rem; }
+.kn-wb-canvas {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in oklch, var(--foreground) 12%, transparent) 1px, transparent 0)
+    0 0 / 16px 16px;
+  touch-action: none;
+  user-select: none;
+}
+.kn-wb-handle { fill: var(--card); stroke: var(--primary); stroke-width: 1.5; cursor: pointer; }
+.kn-wb-text-input {
+  position: absolute;
+  margin: 0.5rem 0 0 0.5rem;
+  padding: 0;
+  border: 1px dashed var(--primary);
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--card) 90%, transparent);
+  font-family: var(--kn-draw-font);
+  line-height: 1.3;
+  text-align: center;
+  resize: none;
+  outline: none;
+  color: var(--foreground);
+}
+.kn-wb-empty {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 1.5rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.kn-wb-empty kbd {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-family: inherit;
+}
+.kn-wb-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+/* --------------------------------------------------------- code highlight */
+
+.hljs-comment, .hljs-quote { color: var(--muted-foreground); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type { color: var(--kn-panel-important); }
+.hljs-string, .hljs-regexp, .hljs-addition { color: var(--kn-panel-tip); }
+.hljs-number, .hljs-built_in, .hljs-symbol { color: var(--kn-panel-warning); }
+.hljs-title, .hljs-title.function_, .hljs-section { color: var(--kn-panel-note); }
+.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable { color: var(--kn-draw-violet); }
+.hljs-deletion { color: var(--destructive); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-block-actions,
+  .kn-panel-switch,
+  .kn-layout-switch,
+  .kn-image-grip,
+  .markdown-body summary::before { transition: none; }
+}
+
+/* Streaming caret (assistant output) -------------------------------------- */
+
+.markdown-body.is-streaming > :last-child::after {
+  content: '';
+  display: inline-block;
+  width: 0.45em;
+  height: 1em;
+  margin-left: 0.12em;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  background: var(--primary);
+  animation: md-caret 1s steps(2, jump-none) infinite;
+}
+@keyframes md-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+@media (prefers-reduced-motion: reduce) {
+  .markdown-body.is-streaming > :last-child::after { animation: none; opacity: 0.6; }
+}
+
+/* Page lede (title) — same measure as the prose so they read as one column. */
+.kn-lede { max-width: var(--kn-measure); margin: 0 auto 0.5rem; }
+.kn-title-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(1.75rem, 1.2rem + 1.8vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--foreground);
+  field-sizing: content;
+}
+.kn-title-input::placeholder { color: var(--muted-foreground); opacity: 0.45; }
+
+/* Editor page shell -------------------------------------------------------
+ *
+ * The route is `meta.fill`, so this owns the viewport and the prose column is
+ * what scrolls. The header carries *no* bottom border on purpose: the toolbar
+ * directly beneath it already draws one, and two parallel rules 40px apart
+ * read as a mistake rather than as structure. One line, one meaning.
+ */
+.kn-page-editor { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.kn-page-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1rem 0.5rem;
+  background: var(--background);
+}
+.kn-page-crumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+.kn-page-crumb strong { color: var(--foreground); font-weight: 600; }
+.kn-page-state {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.kn-page-body { display: flex; flex: 1; min-height: 0; }
+.kn-page-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.kn-page-main .kn-editor { flex: 1; min-height: 0; }
+.kn-page-main .kn-editor-surface { overflow-y: auto; }
+.kn-page-rail {
+  width: 28rem;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--background);
+}
+.kn-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.5rem 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+/* The chat pane is a full column in its own right; let it own the remainder. */
+.kn-rail-chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.kn-rail-chat > * { min-width: 0; }
+@media (max-width: 72rem) { .kn-page-rail { display: none; } }
+
+.kn-dirty-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--kn-panel-warning);
+}
+
+/* Page settings: one label style across the sheet, matching the Autocomplete's
+   own caption so the fields read as one form rather than two conventions. */
+.kn-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+
+/* Block menu — what the grip opens. Clicking a grip used to delete the block
+   outright, which is why the gutter felt hostile rather than useful. */
+.kn-block-menu {
+  position: absolute;
+  top: 1.9rem;
+  left: 0.5rem;
+  z-index: 40;
+  min-width: 11rem;
+  padding: 0.25rem;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: 0 14px 34px -14px oklch(0 0 0 / 0.45), 0 2px 6px -2px oklch(0 0 0 / 0.2);
+}
+.kn-block-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  text-align: left;
+  color: var(--popover-foreground);
+}
+.kn-block-menu button:hover { background: var(--accent); color: var(--accent-foreground); }
+.kn-block-menu .kn-danger { color: var(--destructive); }
+.kn-block-menu .kn-danger:hover { background: color-mix(in oklch, var(--destructive) 14%, transparent); color: var(--destructive); }
+.kn-block-menu-label {
+  padding: 0.4rem 0.5rem 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* ------------------------------------------------- compact (comment boxes) */
+/*
+ * The same surface at comment scale. The page editor's generous measure and
+ * 24rem canvas exist so a document has room to breathe; a review comment sits
+ * inside a 300px rail or a threaded card, and inherits an empty box taller
+ * than the thread it belongs to unless both are unwound here.
+ */
+.kn-editor[data-compact='true'] .kn-editor-content { padding: 0; }
+.kn-editor[data-compact='true'] .kn-prose {
+  max-width: none;
+  margin: 0;
+  min-height: 4.25rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+/* Block rhythm tuned for a page is too loose between two lines of a reply. */
+.kn-editor[data-compact='true'] .kn-prose > * + * { margin-top: 0.5rem; }
+.kn-editor[data-compact='true'] .kn-prose :is(h1, h2, h3) {
+  font-size: 1rem;
+  margin-top: 0.75rem;
+}

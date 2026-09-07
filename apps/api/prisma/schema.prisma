@@ -28,6 +28,7 @@ model Document {
   branches      DocumentBranch[]
   revisions     DocumentRevision[]
   mergeRequests MergeRequest[]
+  attachments   Attachment[]
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -84,6 +85,31 @@ model DocumentRevision {
   // content on the target branch (plan.md §8); dedupe stays per-branch.
   @@unique([documentId, branchId, contentHash])
   @@map("document_revisions")
+}
+
+/// Confluence-style page attachments (images, PDFs, files embedded in the
+/// editor). Bytes live in MinIO under the document's prefix, never in PG; the
+/// row is the addressable handle the markdown links to, so an attachment
+/// survives revisions the way the S3 object does. Rows are created `pending`
+/// (presigned PUT issued) and flip to `ready` once the object is confirmed —
+/// an abandoned upload therefore never renders as a broken embed.
+model Attachment {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  filename    String
+  contentType String   @map("content_type")
+  sizeBytes   Int      @default(0) @map("size_bytes")
+  s3Key       String   @map("s3_key")
+  status      String   @default("pending")
+  uploadedBy  String   @map("uploaded_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id])
+
+  @@index([documentId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("attachments")
 }
 
 model RevisionParent {

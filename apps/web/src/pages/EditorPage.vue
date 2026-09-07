@@ -1,9 +1,18 @@
 <script setup lang="ts">
-// Feature 03 (docs/features/03): markdown editor with live preview,
-// frontmatter relations, document references and the AI panel (feature 09).
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+// Feature 03 (docs/features/03): the page editor.
+//
+// WYSIWYG on Tiptap, but the *stored* format is still markdown — RichEditor
+// converts both ways. That keeps every backend behaviour intact (heading-aware
+// chunking, frontmatter relations, structural diff, merge requests, the graph)
+// while the authoring experience changes completely.
+//
+// Metadata that is not the page itself — project, parent, category, relations,
+// tags — lives in a settings sheet rather than a form above the content, so
+// what is on screen while you write is the page and nothing else.
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
+import { Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
   DOCUMENT_CATEGORIES,
   type CreateDocumentResponse,
@@ -15,24 +24,32 @@ import {
   type RevisionInfo,
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
-import { nativeEl } from '@/lib/utils'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import MarkdownView from '@/components/knowledge/MarkdownView.vue'
-import AssistantPanel from '@/components/knowledge/AssistantPanel.vue'
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import RichEditor from '@/components/editor/RichEditor.vue'
+import ChatPane from '@/components/assistant/ChatPane.vue'
 
 const RELATION_TYPES = ['DESCRIBES', 'DEPENDS_ON', 'IMPLEMENTS', 'RELATED_TO', 'OWNED_BY', 'SUPERSEDES', 'CONTRADICTS'] as const
 
@@ -47,7 +64,7 @@ const router = useRouter()
 const store = useDocumentsStore()
 const projects = useProjectsStore()
 
-const editId = computed(() => (route.params.id as string | undefined) ?? null)
+const editId = ref<string | null>((route.params.id as string | undefined) ?? null)
 const isEdit = computed(() => editId.value !== null)
 
 const title = ref('')
@@ -63,27 +80,61 @@ const tags = ref('')
 const headRevisionId = ref<string | null>(null)
 const busy = ref(false)
 const loading = ref(false)
-const showPreview = ref(true)
-const editorEl = ref<HTMLTextAreaElement | null>(null)
-const setEditorEl = (c: unknown) => {
-  editorEl.value = nativeEl<HTMLTextAreaElement>(c)
+const dirty = ref(false)
+const settingsOpen = ref(false)
+const assistantOpen = ref(false)
+const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
+
+// The settings fields are the same Autocomplete the search filters use, so a
+// long project or page roster is typed-into rather than scrolled — and the
+// two places you pick a project in this app behave identically. It speaks
+// string[]; these adapters bridge that to the single values held here.
+const TOP_LEVEL = '__root__'
+
+function single(get: () => string, set: (v: string) => void) {
+  return computed<string[]>({
+    get: () => (get() ? [get()] : []),
+    set: (v) => set(v[0] ?? ''),
+  })
 }
 
-// reka-ui reserves '' as the Select's "cleared" value and rejects it on an
-// item, so the top-level choice rides a sentinel.
-const TOP_LEVEL = '__root__'
-const parentModel = computed({
-  get: () => parentId.value || TOP_LEVEL,
-  set: (v: string) => {
-    parentId.value = v === TOP_LEVEL ? '' : v
+const projectSelection = single(() => projectId.value, (v) => (projectId.value = v))
+const categorySelection = single(() => category.value, (v) => (category.value = (v || 'other') as DocumentCategory))
+const parentSelection = computed<string[]>({
+  get: () => [parentId.value || TOP_LEVEL],
+  set: (v) => {
+    parentId.value = v[0] === TOP_LEVEL ? '' : (v[0] ?? '')
   },
 })
 
-// The doc-reference picker is an action, not a field — picking a page inserts
-// a link and the control must go back to reading "Doc reference…". reka-ui's
-// model is passive (it keeps its own copy even when the parent never writes
-// one back), so the reset is a remount rather than a value assignment.
-const docRefKey = ref(0)
+const relationTypeOptions: AutocompleteOption[] = RELATION_TYPES.map((t) => ({ value: t, label: t }))
+
+const projectOptions = computed<AutocompleteOption[]>(() =>
+  projects.items.map((p) => ({ value: p.projectId, label: p.name, meta: p.documentCount })),
+)
+const categoryOptions = computed<AutocompleteOption[]>(() =>
+  DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c })),
+)
+const parentOptions = computed<AutocompleteOption[]>(() => [
+  { value: TOP_LEVEL, label: 'Top level' },
+  ...store.items
+    .filter((d) => d.documentId !== editId.value)
+    .map((d) => ({ value: d.documentId, label: d.title, meta: d.category })),
+])
+
+const mentionablePages = computed(() =>
+  store.items
+    .filter((d) => d.documentId !== editId.value)
+    .map((d) => ({ documentId: d.documentId, title: d.title, category: d.category })),
+)
+
+const projectName = computed(
+  () => projects.items.find((p) => p.projectId === projectId.value)?.name ?? 'Project',
+)
+
+watch([body, title], () => {
+  if (!loading.value) dirty.value = true
+})
 
 onMounted(async () => {
   if (!store.loaded) void store.fetchList()
@@ -124,14 +175,15 @@ onMounted(async () => {
     toast.error((e as Error).message)
   } finally {
     loading.value = false
+    dirty.value = false
   }
 })
 
 /** Frontmatter `relations:`/`tags:` become graph edges via the deterministic extractor (worker step 7). */
-function buildSource(): string {
+function buildSource(markdown: string): string {
   const rows = relationRows.value.filter((r) => r.type && r.key.trim())
   const tagList = tags.value.split(',').map((t) => t.trim()).filter(Boolean)
-  if (rows.length === 0 && tagList.length === 0) return body.value
+  if (rows.length === 0 && tagList.length === 0) return markdown
   const lines: string[] = ['---']
   if (rows.length > 0) {
     lines.push('relations:')
@@ -147,51 +199,62 @@ function buildSource(): string {
     lines.push(`tags: [${tagList.map((t) => JSON.stringify(t)).join(', ')}]`)
   }
   lines.push('---', '')
-  return `${lines.join('\n')}${body.value}`
+  return `${lines.join('\n')}${markdown}`
 }
 
-function insert(before: string, after = '', placeholder = '') {
-  const el = editorEl.value
-  if (!el) {
-    body.value += before + placeholder + after
-    return
+/**
+ * Attachments belong to a document, so an unsaved page has nowhere to put one.
+ * Rather than refusing the drop, create the page as a draft first — which is
+ * what Confluence does, and what anyone pasting a screenshot into a new page
+ * expects to just work.
+ */
+async function ensureDocumentId(): Promise<string | null> {
+  if (editId.value) return editId.value
+  if (!projectId.value) {
+    toast.error('Pick a project in page settings before attaching files')
+    settingsOpen.value = true
+    return null
   }
-  const start = el.selectionStart
-  const end = el.selectionEnd
-  const selected = body.value.slice(start, end) || placeholder
-  body.value = body.value.slice(0, start) + before + selected + after + body.value.slice(end)
-  void Promise.resolve().then(() => {
-    el.focus()
-    el.selectionStart = start + before.length
-    el.selectionEnd = start + before.length + selected.length
-  })
+  try {
+    const markdown = editorRef.value?.flush() ?? body.value
+    const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        workspaceId: getWorkspaceId(),
+        projectId: projectId.value,
+        title: title.value.trim() || 'Untitled page',
+        category: category.value,
+        ...(parentId.value ? { parentId: parentId.value } : {}),
+        content: { mode: 'inline', format: 'markdown', text: buildSource(markdown) },
+      }),
+    })
+    editId.value = res.documentId
+    headRevisionId.value = res.revisionId
+    void store.fetchList()
+    // Keep the URL honest without unmounting the editor mid-upload.
+    await router.replace(`/documents/${res.documentId}/edit`)
+    toast.success('Draft page created so files can be attached')
+    return res.documentId
+  } catch (e) {
+    toast.error((e as Error).message)
+    return null
+  }
 }
-
-// Untyped param: without a bound model the Select falls back to its widest
-// value type, so narrow here instead of casting at the call site.
-function insertDocRef(value: unknown) {
-  const id = typeof value === 'string' ? value : ''
-  if (!id) return
-  const doc = store.items.find((d) => d.documentId === id)
-  if (doc) insert(`[${doc.title}](/documents/${doc.documentId})`)
-  docRefKey.value += 1
-}
-
-const MERMAID_SNIPPET = '\n```mermaid\ngraph TD\n  A[Start] --> B[End]\n```\n'
-const TABLE_SNIPPET = '\n| Column | Column |\n| --- | --- |\n| cell | cell |\n'
 
 async function save() {
-  if (!title.value.trim() || !body.value.trim()) {
+  const markdown = editorRef.value?.flush() ?? body.value
+  if (!title.value.trim() || !markdown.trim()) {
     toast.error('Title and content are required')
     return
   }
   if (!projectId.value) {
     toast.error('Pick a project for this page')
+    settingsOpen.value = true
     return
   }
   busy.value = true
   try {
-    const text = buildSource()
+    const text = buildSource(markdown)
     if (!isEdit.value) {
       const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
         method: 'POST',
@@ -204,6 +267,7 @@ async function save() {
           content: { mode: 'inline', format: 'markdown', text },
         }),
       })
+      dirty.value = false
       toast.success('Document created — indexing started')
       await router.push(`/documents/${res.documentId}`)
       return
@@ -238,6 +302,7 @@ async function save() {
       `/v1/documents/${editId.value}/revisions/${revision.revisionId}/finalize`,
       { method: 'POST' },
     )
+    dirty.value = false
     toast.success(fin.deduplicated ? 'No content changes — metadata updated' : 'Revision published — indexing started')
     await router.push(`/documents/${editId.value}`)
   } catch (e) {
@@ -252,143 +317,233 @@ async function save() {
   }
 }
 
-function appendSuggestion(text: string) {
-  body.value = `${body.value.replace(/\s+$/, '')}\n\n${text}\n`
+/* ------------------------------------------------- unsaved-changes guard */
+
+const confirmOpen = ref(false)
+/** Where the interrupted navigation was heading, replayed once confirmed. */
+let pendingLeave: (() => void) | null = null
+
+function destination(): string {
+  return editId.value ? `/documents/${editId.value}` : '/documents'
 }
+
+function cancel() {
+  if (!dirty.value) {
+    void router.push(destination())
+    return
+  }
+  pendingLeave = () => void router.push(destination())
+  confirmOpen.value = true
+}
+
+function discardAndLeave() {
+  dirty.value = false
+  confirmOpen.value = false
+  const go = pendingLeave
+  pendingLeave = null
+  go?.()
+}
+
+// In-app navigation: the router asks first. Publishing clears `dirty`, so a
+// successful save never triggers this.
+onBeforeRouteLeave((to) => {
+  if (!dirty.value || busy.value) return true
+  pendingLeave = () => void router.push(to.fullPath)
+  confirmOpen.value = true
+  return false
+})
+
+// Closing the tab or hitting reload is the browser's own dialog — a custom one
+// cannot be shown there, and suppressing the native prompt would mean losing
+// the draft silently.
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!dirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+if (!import.meta.env.SSR) window.addEventListener('beforeunload', beforeUnload)
+onBeforeUnmount(() => {
+  if (!import.meta.env.SSR) window.removeEventListener('beforeunload', beforeUnload)
+})
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h1 class="font-display text-2xl font-bold tracking-tight">{{ isEdit ? 'Edit document' : 'New document' }}</h1>
-      <Button :disabled="busy || loading" @click="save">
-        {{ busy ? 'Saving…' : isEdit ? 'Publish revision' : 'Create & index' }}
-      </Button>
+  <div class="kn-page-editor">
+    <header class="kn-page-head">
+      <div class="kn-page-crumb">
+        <strong>{{ projectName }}</strong>
+        <span class="kn-page-state">{{ isEdit ? 'Editing' : 'New page' }}</span>
+        <span v-if="dirty" class="kn-dirty-dot" title="Unsaved changes" />
+      </div>
+
+      <div class="ml-auto flex items-center gap-1.5">
+        <Button variant="ghost" size="sm" @click="assistantOpen = !assistantOpen">
+          <Sparkles class="size-4" /> <span class="hidden sm:inline">AI</span>
+        </Button>
+        <Button variant="ghost" size="sm" @click="settingsOpen = true">
+          <Settings2 class="size-4" /> <span class="hidden sm:inline">Settings</span>
+        </Button>
+        <Button variant="ghost" size="sm" @click="cancel">Cancel</Button>
+        <Button size="sm" :disabled="busy || loading" @click="save">
+          {{ busy ? 'Saving…' : isEdit ? 'Publish' : 'Create & index' }}
+        </Button>
+      </div>
+    </header>
+
+    <div class="kn-page-body">
+      <div class="kn-page-main">
+        <div v-if="loading" class="space-y-3 p-8">
+          <Skeleton class="h-10 w-2/3" />
+          <Skeleton class="h-4 w-full" />
+          <Skeleton class="h-4 w-5/6" />
+          <Skeleton class="h-64 w-full" />
+        </div>
+
+        <RichEditor
+          v-else
+          ref="editorRef"
+          v-model="body"
+          :pages="mentionablePages"
+          :resolve-document-id="ensureDocumentId"
+        >
+          <template #lede>
+            <textarea
+              v-model="title"
+              class="kn-title-input"
+              rows="1"
+              placeholder="Page title"
+              aria-label="Page title"
+              spellcheck="false"
+              @keydown.enter.prevent="editorRef?.focus()"
+            />
+          </template>
+        </RichEditor>
+      </div>
+
+      <!-- The assistant page's own chat, pinned to this page: same composer,
+           same modes, same thread history — an editor-only variant would drift
+           from it within a release. -->
+      <aside v-if="assistantOpen" class="kn-page-rail">
+        <div class="kn-rail-head">
+          <h2 class="text-sm font-semibold">Assistant</h2>
+          <Button variant="ghost" size="icon-sm" aria-label="Close assistant" @click="assistantOpen = false">
+            <X class="size-4" />
+          </Button>
+        </div>
+        <ChatPane v-if="editId" :document-id="editId" class="kn-rail-chat" />
+        <p v-else class="p-4 text-sm text-muted-foreground">
+          Save the page once and the assistant can read it, edit it, and answer questions about it.
+        </p>
+      </aside>
     </div>
 
-    <div class="grid gap-4 lg:grid-cols-[1fr_320px]">
-      <div class="space-y-4">
-        <!-- Metadata -->
-        <div class="grid gap-3 sm:grid-cols-3">
-          <Input v-model="title" placeholder="Title" class="sm:col-span-3" />
-          <div class="flex items-center gap-2 text-sm sm:col-span-3">
-            <Label for="editor-project" class="font-normal text-muted-foreground">Project</Label>
-            <Select v-model="projectId">
-              <SelectTrigger id="editor-project" class="flex-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">
-                  {{ p.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="flex items-center gap-2 text-sm">
-            <Label for="editor-category" class="font-normal text-muted-foreground">Category</Label>
-            <Select v-model="category">
-              <SelectTrigger id="editor-category" class="flex-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ c }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="flex items-center gap-2 text-sm sm:col-span-2">
-            <Label for="editor-parent" class="font-normal text-muted-foreground">Parent</Label>
-            <Select v-model="parentModel">
-              <SelectTrigger id="editor-parent" class="flex-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem :value="TOP_LEVEL">(top level)</SelectItem>
-                <SelectItem
-                  v-for="d in store.items.filter((d) => d.documentId !== editId)"
-                  :key="d.documentId"
-                  :value="d.documentId"
-                >
-                  {{ d.title }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Input v-if="isEdit" v-model="message" placeholder="Revision message" class="sm:col-span-3" />
-        </div>
+    <AlertDialog v-model:open="confirmOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Discard unpublished changes?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This page has edits that were never published, so they exist only in this tab.
+            Leaving now throws them away.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel @click="pendingLeave = null">Keep editing</AlertDialogCancel>
+          <AlertDialogAction
+            class="bg-destructive text-white hover:bg-destructive/90"
+            @click="discardAndLeave"
+          >
+            Discard changes
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
-        <!-- Toolbar -->
-        <div class="flex flex-wrap items-center gap-1 rounded-md border p-1.5 text-sm">
-          <Button size="sm" variant="ghost" title="Heading" @click="insert('\n## ', '', 'Heading')">H2</Button>
-          <Button size="sm" variant="ghost" class="font-bold" title="Bold" @click="insert('**', '**', 'bold')">B</Button>
-          <Button size="sm" variant="ghost" class="italic" title="Italic" @click="insert('*', '*', 'italic')">I</Button>
-          <Button size="sm" variant="ghost" class="font-mono" title="Inline code" @click="insert('`', '`', 'code')">&lt;/&gt;</Button>
-          <Button size="sm" variant="ghost" title="Link" @click="insert('[', '](https://)', 'text')">Link</Button>
-          <Button size="sm" variant="ghost" title="Table" @click="insert(TABLE_SNIPPET)">Table</Button>
-          <Button size="sm" variant="ghost" title="Mermaid diagram" @click="insert(MERMAID_SNIPPET)">Diagram</Button>
-          <Select :key="docRefKey" @update:model-value="insertDocRef">
-            <SelectTrigger size="sm" class="text-xs" title="Insert a link to another document">
-              <SelectValue placeholder="Doc reference…" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="d in store.items" :key="d.documentId" :value="d.documentId">
-                {{ d.title }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Label for="editor-preview" class="ml-auto gap-1.5 text-xs font-normal text-muted-foreground">
-            <Checkbox id="editor-preview" v-model="showPreview" /> preview
-          </Label>
-        </div>
+    <!-- Page settings: everything that is metadata rather than the page. -->
+    <Sheet v-model:open="settingsOpen">
+      <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Page settings</SheetTitle>
+          <SheetDescription>
+            Placement and the deterministic facts this page asserts into the graph.
+          </SheetDescription>
+        </SheetHeader>
 
-        <!-- Editor + preview -->
-        <div class="grid gap-4" :class="showPreview ? 'xl:grid-cols-2' : ''">
-          <!-- Textarea auto-sizes to content (field-sizing), so `rows` alone
-               would collapse the editor — pin the height the way `rows="24"`
-               used to, and let it grow with the preview pane's cap. -->
-          <Textarea
-            :ref="setEditorEl"
-            v-model="body"
-            class="min-h-[36rem] w-full p-3 font-mono text-sm"
-            placeholder="# Markdown content…"
+        <div class="space-y-5 px-4 pb-8">
+          <Autocomplete
+            v-model="projectSelection"
+            label="Project"
+            placeholder="Search projects…"
+            :options="projectOptions"
+            :multiple="false"
+            empty-hint="No projects in this workspace yet."
           />
-          <div v-if="showPreview" class="max-h-[36rem] overflow-y-auto rounded-md border p-4">
-            <MarkdownView :markdown="body" />
+
+          <Autocomplete
+            v-model="parentSelection"
+            label="Parent page"
+            placeholder="Search pages…"
+            :options="parentOptions"
+            :multiple="false"
+          />
+
+          <Autocomplete
+            v-model="categorySelection"
+            label="Category"
+            placeholder="Search categories…"
+            :options="categoryOptions"
+            :multiple="false"
+          />
+
+          <div v-if="isEdit" class="space-y-1.5">
+            <Label for="editor-message" class="kn-field-label">Revision message</Label>
+            <Input id="editor-message" v-model="message" placeholder="What changed?" class="h-8 text-xs" />
+          </div>
+
+          <div class="space-y-2 border-t pt-5">
+            <div class="space-y-1">
+              <h3 class="kn-field-label">Relations</h3>
+              <p class="text-xs leading-snug text-muted-foreground">
+                Written to frontmatter and indexed as graph facts with full confidence.
+              </p>
+            </div>
+            <div v-for="(row, i) in relationRows" :key="i" class="grid grid-cols-[1fr_auto] gap-2">
+              <div class="space-y-2">
+                <Autocomplete
+                  :model-value="[row.type]"
+                  :label="`Relation ${i + 1} type`"
+                  hide-label
+                  placeholder="Relation type…"
+                  :options="relationTypeOptions"
+                  :multiple="false"
+                  @update:model-value="row.type = $event[0] ?? row.type"
+                />
+                <Input v-model="row.key" placeholder="service:identity" class="h-8 font-mono text-xs" />
+                <Input v-model="row.name" placeholder="Display name (optional)" class="h-8 text-xs" />
+              </div>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                :aria-label="`Remove relation ${i + 1}`"
+                @click="relationRows.splice(i, 1)"
+              >
+                <X class="size-4" />
+              </Button>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              @click="relationRows.push({ type: 'DEPENDS_ON', key: '', name: '' })"
+            >
+              Add relation
+            </Button>
+          </div>
+
+          <div class="space-y-1.5">
+            <Label for="editor-tags" class="kn-field-label">Tags</Label>
+            <Input id="editor-tags" v-model="tags" placeholder="tags, comma, separated" class="h-8 text-xs" />
           </div>
         </div>
-
-        <!-- Relations → frontmatter (deterministic facts) -->
-        <Card>
-          <CardHeader class="pb-2">
-            <CardTitle class="text-sm">Relations & tags (indexed as graph facts)</CardTitle>
-          </CardHeader>
-          <CardContent class="space-y-2">
-            <div v-for="(row, i) in relationRows" :key="i" class="flex gap-2">
-              <Select v-model="row.type">
-                <SelectTrigger class="text-sm" :aria-label="`Relation ${i + 1} type`">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="t in RELATION_TYPES" :key="t" :value="t">{{ t }}</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input v-model="row.key" placeholder="service:identity" class="font-mono text-sm" />
-              <Input v-model="row.name" placeholder="Display name (optional)" class="text-sm" />
-              <Button size="sm" variant="ghost" @click="relationRows.splice(i, 1)">✕</Button>
-            </div>
-            <div class="flex items-center gap-3">
-              <Button size="sm" variant="outline" @click="relationRows.push({ type: 'DEPENDS_ON', key: '', name: '' })">
-                + relation
-              </Button>
-              <Input v-model="tags" placeholder="tags, comma, separated" class="text-sm" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <!-- Feature 09: AI assistant sidebar -->
-      <div>
-        <AssistantPanel :title="title" :markdown="body" @append="appendSuggestion" />
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   </div>
 </template>

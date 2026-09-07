@@ -99,6 +99,11 @@ export class ListMergeRequestsQueryDto {
   @Matches(UUID_RE)
   authorId?: string;
 
+  @ApiPropertyOptional({ description: 'Only merge requests with this user as the single assignee' })
+  @IsOptional()
+  @Matches(UUID_RE)
+  assigneeId?: string;
+
   @ApiPropertyOptional({ description: 'Only merge requests with this user assigned as reviewer' })
   @IsOptional()
   @Matches(UUID_RE)
@@ -108,6 +113,16 @@ export class ListMergeRequestsQueryDto {
   @IsOptional()
   @Matches(UUID_RE)
   documentId?: string;
+
+  @ApiPropertyOptional({ description: 'Case-insensitive substring match on the source branch name' })
+  @IsOptional()
+  @IsString()
+  sourceBranch?: string;
+
+  @ApiPropertyOptional({ description: 'Case-insensitive substring match on the target branch name' })
+  @IsOptional()
+  @IsString()
+  targetBranch?: string;
 
   @ApiPropertyOptional({ description: 'Case-insensitive title substring match' })
   @IsOptional()

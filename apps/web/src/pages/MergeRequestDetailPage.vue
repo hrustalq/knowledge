@@ -1,7 +1,15 @@
 <script setup lang="ts">
 // Merge-request detail — GitLab-inspired: header with inline title/description
 // editing, merge widget, tabs with counts (Overview / Changes / Structure /
-// Knowledge impact per plan.md §8), discussion timeline + right rail.
+// Knowledge impact per plan.md §8), and a sticky rail.
+//
+// The rail sits beside every tab, not just Overview. Who is assigned, who is
+// reviewing and what the AI check said are facts about the merge request, and
+// they are most wanted exactly where they used to disappear: halfway down a
+// diff.
+//
+// Overview is one timeline. State changes come from the activity log, threads
+// from the review API, and they are sorted together — see MrActivityFeed.
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -26,6 +34,7 @@ import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import DiffView from '@/components/knowledge/DiffView.vue'
 import MergeWidget from '@/components/merge-requests/MergeWidget.vue'
 import MrSidebar from '@/components/merge-requests/MrSidebar.vue'
+import MrActivityFeed from '@/components/merge-requests/MrActivityFeed.vue'
 import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { matchAnchoredThreads } from '@/components/merge-requests/thread-anchors'
@@ -92,11 +101,17 @@ const threads = computed(
 )
 const unresolvedCount = computed(() => threads.value.filter((t) => !t.resolved).length)
 
-/** Threads that don't render inline in the diff — shown on the Overview tab. */
-const discussion = computed(() => matchAnchoredThreads(diff.value, threads.value))
+/**
+ * Which threads render inline in the diff. The timeline lists all of them
+ * regardless — a comment that only exists on the Changes tab is a comment
+ * nobody reading the overview knows about — but outdated anchors are still
+ * only knowable once the diff has loaded.
+ */
+const matched = computed(() => matchAnchoredThreads(diff.value, threads.value))
 
 const isOpen = computed(() => mr.value?.status === 'open')
 const canEdit = computed(() => auth.canEdit)
+const canComment = computed(() => isOpen.value && canEdit.value)
 
 const tabCounts = computed<Partial<Record<Tab, number>>>(() => ({
   overview: threads.value.length || undefined,
@@ -109,7 +124,11 @@ const editTitle = ref('')
 const editDescription = ref('')
 
 const updateMr = useApiMutation('patch', '/v1/merge-requests/{id}', {
-  invalidates: () => [['/v1/merge-requests/{id}', { id: id.value }, null], ['/v1/merge-requests']],
+  invalidates: () => [
+    ['/v1/merge-requests/{id}', { id: id.value }, null],
+    ['/v1/merge-requests'],
+    ['/v1/activity'],
+  ],
 })
 
 function startEdit() {
@@ -137,7 +156,9 @@ function saveEdit() {
 
 // --- discussion mutations ----------------------------------------------------
 const threadsKey = computed(() => ['/v1/merge-requests/{id}/threads', { id: id.value }, null])
-const threadInvalidates = () => [threadsKey.value]
+// Every thread write also lands in the activity log, and the timeline reads
+// both — so both keys refresh together or the feed shows half the event.
+const threadInvalidates = () => [threadsKey.value, ['/v1/activity']]
 
 const createThread = useApiMutation('post', '/v1/merge-requests/{id}/threads', {
   invalidates: threadInvalidates,
@@ -152,6 +173,9 @@ const threadsBusy = computed(
   () => createThread.isPending.value || replyThread.isPending.value || resolveThread.isPending.value,
 )
 
+/** Comment attachments are stored against the document this MR targets. */
+const resolveDocumentId = async () => mr.value?.documentId ?? null
+
 /** Pending anchor from a diff-gutter click; rendered as a composer above the diff. */
 const pendingAnchor = ref<MergeRequestThreadAnchor | null>(null)
 
@@ -163,6 +187,12 @@ function onCreateThread(body: string, anchor?: MergeRequestThreadAnchor) {
       onError: (e) => toast.error(e.message),
     },
   )
+}
+/** AI findings posted from the rail land on Overview, where the thread will be. */
+function onAiComment(body: string) {
+  onCreateThread(body)
+  if (tab.value !== 'overview') setTab('overview')
+  toast.success('Findings posted to the discussion')
 }
 function onReply(threadId: string, body: string) {
   replyThread.mutate(
@@ -179,6 +209,7 @@ function onResolve(threadId: string, resolved: boolean) {
 function refresh() {
   void queryClient.invalidateQueries({ queryKey: ['/v1/merge-requests/{id}', { id: id.value }, null] })
   void queryClient.invalidateQueries({ queryKey: ['/v1/merge-requests/{id}/diff'] })
+  void queryClient.invalidateQueries({ queryKey: ['/v1/activity'] })
 }
 </script>
 
@@ -243,162 +274,164 @@ function refresh() {
 
     <MergeWidget :merge-request="mr" :unresolved-threads="unresolvedCount" @changed="refresh" />
 
-    <!-- tabs -->
-    <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
-      <button
-        v-for="t in TABS"
-        :key="t"
-        role="tab"
-        :aria-selected="tab === t"
-        class="flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors"
-        :class="tab === t
-          ? 'border-primary font-medium text-primary'
-          : 'border-transparent text-muted-foreground hover:text-foreground'"
-        @click="setTab(t)"
-      >
-        {{ TAB_LABELS[t] }}
-        <span
-          v-if="tabCounts[t]"
-          class="rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground"
-        >{{ tabCounts[t] }}</span>
-      </button>
-    </div>
+    <!-- Content column + rail. `items-start` keeps the aside from stretching,
+         which is what lets it stick. -->
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
+      <div class="min-w-0 space-y-4">
+        <!-- tabs -->
+        <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
+          <button
+            v-for="t in TABS"
+            :key="t"
+            role="tab"
+            :aria-selected="tab === t"
+            class="flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors"
+            :class="tab === t
+              ? 'border-primary font-medium text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'"
+            @click="setTab(t)"
+          >
+            {{ TAB_LABELS[t] }}
+            <span
+              v-if="tabCounts[t]"
+              class="rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground"
+            >{{ tabCounts[t] }}</span>
+          </button>
+        </div>
 
-    <!-- overview -->
-    <div v-if="tab === 'overview'" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
-      <div class="space-y-4">
-        <Card v-if="mr.description">
-          <CardContent class="pt-4"><MarkdownView :markdown="mr.description" /></CardContent>
-        </Card>
+        <!-- overview: description, then one timeline -->
+        <template v-if="tab === 'overview'">
+          <Card v-if="mr.description">
+            <CardContent class="pt-4"><MarkdownView :markdown="mr.description" /></CardContent>
+          </Card>
 
-        <div class="space-y-3">
-          <h2 class="flex items-center gap-2 text-sm font-medium">
-            Discussion
-            <span v-if="unresolvedCount > 0" class="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600">
-              {{ unresolvedCount }} unresolved
-            </span>
-          </h2>
-          <p v-if="discussion.discussion.length === 0" class="text-sm text-muted-foreground">
-            No discussion yet.{{ isOpen && canEdit ? ' Start a thread below, or comment on a line in the Changes tab.' : '' }}
-          </p>
-          <ThreadCard
-            v-for="thread in discussion.discussion"
-            :key="thread.threadId"
-            :thread="thread"
-            :outdated="discussion.outdatedIds.has(thread.threadId)"
-            :readonly="!isOpen || !canEdit"
+          <MrActivityFeed
+            :merge-request-id="mr.mergeRequestId"
+            :document-id="mr.documentId"
+            :threads="threads"
+            :outdated-ids="matched.outdatedIds"
+            :readonly="!canComment"
             :busy="threadsBusy"
-            @reply="(b) => onReply(thread.threadId, b)"
-            @resolve="(r) => onResolve(thread.threadId, r)"
+            @reply="onReply"
+            @resolve="onResolve"
+            @create-thread="(b) => onCreateThread(b)"
           />
-          <div v-if="isOpen && canEdit" class="rounded-lg border bg-card p-3">
-            <CommentComposer submit-label="Start thread" :busy="threadsBusy" @submit="(b) => onCreateThread(b)" />
-          </div>
+        </template>
+
+        <!-- changes -->
+        <div v-else-if="tab === 'changes'" class="space-y-3">
+          <Skeleton v-if="diffQuery.isPending.value" class="h-40 w-full" />
+          <template v-else-if="diff">
+            <p class="text-xs text-muted-foreground">
+              Comparing merge base against <span class="font-mono">{{ mr.sourceBranch }}</span>
+              — <span class="text-emerald-600">+{{ diff.summary.additions }}</span>
+              <span class="text-red-600">−{{ diff.summary.deletions }}</span>
+            </p>
+            <div v-if="pendingAnchor" class="rounded-lg border bg-card p-3">
+              <p class="mb-2 text-xs font-medium">
+                New thread<template v-if="pendingAnchor.type === 'line'"> on line {{ pendingAnchor.line }}</template>
+                <button class="ml-2 text-muted-foreground hover:text-foreground" @click="pendingAnchor = null">cancel</button>
+              </p>
+              <CommentComposer
+                auto-expand
+                placeholder="Write a comment…"
+                submit-label="Start thread"
+                :busy="threadsBusy"
+                :resolve-document-id="resolveDocumentId"
+                @submit="(b) => onCreateThread(b, pendingAnchor ?? undefined)"
+              />
+            </div>
+            <DiffView
+              :compare="diff"
+              :threads="threads"
+              :can-comment="canComment"
+              @create-thread="(a) => (pendingAnchor = a)"
+            >
+              <template #thread="{ thread }">
+                <ThreadCard
+                  :thread="thread"
+                  :readonly="!canComment"
+                  :busy="threadsBusy"
+                  :resolve-document-id="resolveDocumentId"
+                  @reply="(b) => onReply(thread.threadId, b)"
+                  @resolve="(r) => onResolve(thread.threadId, r)"
+                />
+              </template>
+            </DiffView>
+          </template>
+        </div>
+
+        <!-- structure -->
+        <div v-else-if="tab === 'structure'">
+          <Skeleton v-if="diffQuery.isPending.value" class="h-24 w-full" />
+          <Card v-else>
+            <CardHeader><CardTitle class="text-sm">Structural changes</CardTitle></CardHeader>
+            <CardContent>
+              <p v-if="!diff?.structural || diff.structural.changes.length === 0" class="text-sm text-muted-foreground">
+                No structural (frontmatter / JSON / YAML) changes.
+              </p>
+              <div v-else class="space-y-1">
+                <p class="mb-1 text-xs text-muted-foreground">source: {{ diff.structural.source }}</p>
+                <p v-for="(c, i) in diff.structural.changes" :key="i" class="font-mono text-xs">
+                  <span :class="c.kind === 'added' ? 'text-green-600' : c.kind === 'removed' ? 'text-red-600' : 'text-amber-600'">{{ c.kind }}</span>
+                  {{ c.path || '(root)' }}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <!-- knowledge impact -->
+        <div v-else-if="tab === 'impact'" class="space-y-4">
+          <Skeleton v-if="impactQuery.isPending.value" class="h-24 w-full" />
+          <p v-else-if="!semantic" class="text-sm text-muted-foreground">
+            No graph projection to compare — both sides must be indexed.
+          </p>
+          <template v-else>
+            <div class="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader><CardTitle class="text-sm">Entities</CardTitle></CardHeader>
+                <CardContent class="space-y-1 text-sm">
+                  <p v-if="semantic.entities.added.length === 0 && semantic.entities.removed.length === 0" class="text-muted-foreground">No entity changes.</p>
+                  <p v-for="e in semantic.entities.added" :key="`a-${e}`" class="font-mono text-xs text-green-600">+ {{ e }}</p>
+                  <p v-for="e in semantic.entities.removed" :key="`r-${e}`" class="font-mono text-xs text-red-600">− {{ e }}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle class="text-sm">Relations</CardTitle></CardHeader>
+                <CardContent class="space-y-1 text-sm">
+                  <p v-if="semantic.relations.added.length === 0 && semantic.relations.removed.length === 0" class="text-muted-foreground">No relation changes.</p>
+                  <p v-for="(r, i) in semantic.relations.added" :key="`a-${i}`" class="font-mono text-xs text-green-600">
+                    + {{ r.type }} → {{ r.targetKey }} <span class="text-muted-foreground">({{ r.extractor }}, {{ r.confidence }})</span>
+                  </p>
+                  <p v-for="(r, i) in semantic.relations.removed" :key="`r-${i}`" class="font-mono text-xs text-red-600">
+                    − {{ r.type }} → {{ r.targetKey }} <span class="text-muted-foreground">({{ r.extractor }}, {{ r.confidence }})</span>
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+            <Card v-if="semantic.embeddingShift">
+              <CardContent class="pt-4 text-sm">
+                Embedding shift
+                <span class="font-mono">{{ semantic.embeddingShift.score.toFixed(3) }}</span>
+                <Badge :variant="semantic.embeddingShift.meaningful ? 'default' : 'secondary'" class="ml-2">
+                  {{ semantic.embeddingShift.meaningful ? 'meaningful' : 'minor' }}
+                </Badge>
+              </CardContent>
+            </Card>
+          </template>
         </div>
       </div>
 
-      <!-- right rail -->
-      <MrSidebar :merge-request="mr" :readonly="!isOpen || !canEdit" @changed="refresh" />
-    </div>
-
-    <!-- changes -->
-    <div v-else-if="tab === 'changes'" class="space-y-3">
-      <Skeleton v-if="diffQuery.isPending.value" class="h-40 w-full" />
-      <template v-else-if="diff">
-        <p class="text-xs text-muted-foreground">
-          Comparing merge base against <span class="font-mono">{{ mr.sourceBranch }}</span>
-          — <span class="text-emerald-600">+{{ diff.summary.additions }}</span>
-          <span class="text-red-600">−{{ diff.summary.deletions }}</span>
-        </p>
-        <div v-if="pendingAnchor" class="rounded-lg border bg-card p-3">
-          <p class="mb-2 text-xs font-medium">
-            New thread<template v-if="pendingAnchor.type === 'line'"> on line {{ pendingAnchor.line }}</template>
-            <button class="ml-2 text-muted-foreground hover:text-foreground" @click="pendingAnchor = null">cancel</button>
-          </p>
-          <CommentComposer
-            submit-label="Start thread"
-            :busy="threadsBusy"
-            @submit="(b) => onCreateThread(b, pendingAnchor ?? undefined)"
-          />
-        </div>
-        <DiffView
-          :compare="diff"
-          :threads="threads"
-          :can-comment="isOpen && canEdit"
-          @create-thread="(a) => (pendingAnchor = a)"
-        >
-          <template #thread="{ thread }">
-            <ThreadCard
-              :thread="thread"
-              :readonly="!isOpen || !canEdit"
-              :busy="threadsBusy"
-              @reply="(b) => onReply(thread.threadId, b)"
-              @resolve="(r) => onResolve(thread.threadId, r)"
-            />
-          </template>
-        </DiffView>
-      </template>
-    </div>
-
-    <!-- structure -->
-    <div v-else-if="tab === 'structure'">
-      <Skeleton v-if="diffQuery.isPending.value" class="h-24 w-full" />
-      <Card v-else>
-        <CardHeader><CardTitle class="text-sm">Structural changes</CardTitle></CardHeader>
-        <CardContent>
-          <p v-if="!diff?.structural || diff.structural.changes.length === 0" class="text-sm text-muted-foreground">
-            No structural (frontmatter / JSON / YAML) changes.
-          </p>
-          <div v-else class="space-y-1">
-            <p class="mb-1 text-xs text-muted-foreground">source: {{ diff.structural.source }}</p>
-            <p v-for="(c, i) in diff.structural.changes" :key="i" class="font-mono text-xs">
-              <span :class="c.kind === 'added' ? 'text-green-600' : c.kind === 'removed' ? 'text-red-600' : 'text-amber-600'">{{ c.kind }}</span>
-              {{ c.path || '(root)' }}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-
-    <!-- knowledge impact -->
-    <div v-else-if="tab === 'impact'" class="space-y-4">
-      <Skeleton v-if="impactQuery.isPending.value" class="h-24 w-full" />
-      <p v-else-if="!semantic" class="text-sm text-muted-foreground">
-        No graph projection to compare — both sides must be indexed.
-      </p>
-      <template v-else>
-        <div class="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader><CardTitle class="text-sm">Entities</CardTitle></CardHeader>
-            <CardContent class="space-y-1 text-sm">
-              <p v-if="semantic.entities.added.length === 0 && semantic.entities.removed.length === 0" class="text-muted-foreground">No entity changes.</p>
-              <p v-for="e in semantic.entities.added" :key="`a-${e}`" class="font-mono text-xs text-green-600">+ {{ e }}</p>
-              <p v-for="e in semantic.entities.removed" :key="`r-${e}`" class="font-mono text-xs text-red-600">− {{ e }}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle class="text-sm">Relations</CardTitle></CardHeader>
-            <CardContent class="space-y-1 text-sm">
-              <p v-if="semantic.relations.added.length === 0 && semantic.relations.removed.length === 0" class="text-muted-foreground">No relation changes.</p>
-              <p v-for="(r, i) in semantic.relations.added" :key="`a-${i}`" class="font-mono text-xs text-green-600">
-                + {{ r.type }} → {{ r.targetKey }} <span class="text-muted-foreground">({{ r.extractor }}, {{ r.confidence }})</span>
-              </p>
-              <p v-for="(r, i) in semantic.relations.removed" :key="`r-${i}`" class="font-mono text-xs text-red-600">
-                − {{ r.type }} → {{ r.targetKey }} <span class="text-muted-foreground">({{ r.extractor }}, {{ r.confidence }})</span>
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-        <Card v-if="semantic.embeddingShift">
-          <CardContent class="pt-4 text-sm">
-            Embedding shift
-            <span class="font-mono">{{ semantic.embeddingShift.score.toFixed(3) }}</span>
-            <Badge :variant="semantic.embeddingShift.meaningful ? 'default' : 'secondary'" class="ml-2">
-              {{ semantic.embeddingShift.meaningful ? 'meaningful' : 'minor' }}
-            </Badge>
-          </CardContent>
-        </Card>
-      </template>
+      <!-- rail: present on every tab -->
+      <MrSidebar
+        :merge-request="mr"
+        :readonly="!canComment"
+        :can-comment="canComment"
+        :busy="threadsBusy"
+        @changed="refresh"
+        @comment="onAiComment"
+      />
     </div>
   </div>
 </template>

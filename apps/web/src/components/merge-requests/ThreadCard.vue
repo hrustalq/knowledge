@@ -4,16 +4,23 @@
 import { computed, ref, watch } from 'vue'
 import { CheckCircle2, ChevronDown, ChevronRight, History, MapPin } from 'lucide-vue-next'
 import type { MergeRequestThread } from '@knowledge/contracts'
-import { relativeTime } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import CommentComposer from './CommentComposer.vue'
 import UserAvatar from './UserAvatar.vue'
 import { useMembers } from './use-members'
+import { fullTime, timelineTime } from './mr-ui'
 
 const props = withDefaults(
-  defineProps<{ thread: MergeRequestThread; outdated?: boolean; readonly?: boolean; busy?: boolean }>(),
-  { outdated: false, readonly: false, busy: false },
+  defineProps<{
+    thread: MergeRequestThread
+    outdated?: boolean
+    readonly?: boolean
+    busy?: boolean
+    /** Document that reply attachments belong to; without it the control hides. */
+    resolveDocumentId?: () => Promise<string | null>
+  }>(),
+  { outdated: false, readonly: false, busy: false, resolveDocumentId: undefined },
 )
 const emit = defineEmits<{ reply: [body: string]; resolve: [resolved: boolean] }>()
 
@@ -44,22 +51,26 @@ const starter = computed(() => props.thread.comments[0]?.authorId)
       @click="expanded = !expanded"
     >
       <component :is="expanded ? ChevronDown : ChevronRight" class="size-3.5 shrink-0 text-muted-foreground" />
-      <span v-if="thread.resolved" class="flex items-center gap-1 text-emerald-600">
+      <span v-if="thread.resolved" class="flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-600">
         <CheckCircle2 class="size-3.5" /> Resolved
       </span>
-      <span v-if="outdated" class="flex items-center gap-1 text-amber-600" title="The branch advanced past this anchor">
+      <span
+        v-if="outdated"
+        class="flex shrink-0 items-center gap-1 whitespace-nowrap text-amber-600"
+        title="The branch advanced past this anchor"
+      >
         <History class="size-3.5" /> Outdated
       </span>
-      <span v-if="anchorLabel" class="flex items-center gap-1 font-mono text-muted-foreground">
+      <span v-if="anchorLabel" class="flex shrink-0 items-center gap-1 font-mono whitespace-nowrap text-muted-foreground">
         <MapPin class="size-3" />{{ anchorLabel }}
       </span>
-      <span v-if="!expanded && starter" class="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+      <span v-if="!expanded && starter" class="hidden min-w-0 items-center gap-1.5 text-muted-foreground sm:flex">
         <UserAvatar :user-id="starter" :name="nameOf(starter)" size="sm" />
         <span class="truncate">{{ thread.comments[0]?.body }}</span>
       </span>
-      <span class="ml-auto shrink-0 text-muted-foreground">
+      <span class="ml-auto shrink-0 text-muted-foreground" :title="fullTime(thread.createdAt)">
         {{ thread.comments.length }} comment{{ thread.comments.length === 1 ? '' : 's' }}
-        · {{ relativeTime(thread.createdAt) }}
+        · {{ timelineTime(thread.createdAt) }}
       </span>
       <Button
         v-if="!readonly"
@@ -78,13 +89,19 @@ const starter = computed(() => props.thread.comments[0]?.authorId)
           <p class="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <UserAvatar :user-id="comment.authorId" :name="nameOf(comment.authorId)" size="sm" />
             <span class="font-medium text-foreground">{{ nameOf(comment.authorId) }}</span>
-            · {{ relativeTime(comment.createdAt) }}
+            <span :title="fullTime(comment.createdAt)">· {{ timelineTime(comment.createdAt) }}</span>
           </p>
           <MarkdownView :markdown="comment.body" />
         </div>
       </div>
       <div v-if="!readonly && !thread.resolved" class="border-t bg-muted/20 px-3 py-2">
-        <CommentComposer placeholder="Reply…" submit-label="Reply" :busy="busy" @submit="(b) => emit('reply', b)" />
+        <CommentComposer
+          placeholder="Reply…"
+          submit-label="Reply"
+          :busy="busy"
+          :resolve-document-id="resolveDocumentId"
+          @submit="(b: string) => emit('reply', b)"
+        />
       </div>
     </template>
   </div>

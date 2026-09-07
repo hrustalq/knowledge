@@ -1140,6 +1140,15 @@
             }
           },
           {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "description": "Secondary subject id — e.g. a merge request id, for its own timeline",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "required": false,
             "in": "query",
@@ -2439,6 +2448,15 @@
             }
           },
           {
+            "name": "assigneeId",
+            "required": false,
+            "in": "query",
+            "description": "Only merge requests with this user as the single assignee",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "reviewerId",
             "required": false,
             "in": "query",
@@ -2451,6 +2469,24 @@
             "name": "documentId",
             "required": false,
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sourceBranch",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive substring match on the source branch name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetBranch",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive substring match on the target branch name",
             "schema": {
               "type": "string"
             }
@@ -3122,6 +3158,206 @@
         "summary": "Resolve or unresolve a review thread",
         "tags": [
           "merge-requests"
+        ]
+      }
+    },
+    "/v1/documents/{id}/attachments": {
+      "get": {
+        "operationId": "AttachmentsController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a page’s attachments",
+        "tags": [
+          "attachments"
+        ]
+      },
+      "post": {
+        "operationId": "AttachmentsController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAttachmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reserve an attachment and get a presigned upload URL",
+        "tags": [
+          "attachments"
+        ]
+      }
+    },
+    "/v1/documents/{id}/attachments/{attachmentId}/complete": {
+      "post": {
+        "operationId": "AttachmentsController_complete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Confirm the upload landed; marks the attachment ready",
+        "tags": [
+          "attachments"
+        ]
+      }
+    },
+    "/v1/documents/{id}/attachments/{attachmentId}": {
+      "delete": {
+        "operationId": "AttachmentsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete an attachment and its object",
+        "tags": [
+          "attachments"
         ]
       }
     },
@@ -4803,6 +5039,48 @@
         },
         "required": [
           "resolved"
+        ]
+      },
+      "CreateAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "example": "architecture.png",
+            "maxLength": 255
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/gif",
+              "image/webp",
+              "image/avif",
+              "application/pdf",
+              "text/plain",
+              "text/csv",
+              "text/markdown",
+              "application/json",
+              "application/zip",
+              "application/msword",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "application/vnd.ms-excel",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              "application/vnd.ms-powerpoint",
+              "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            ],
+            "example": "image/png"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "example": 148231,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "filename",
+          "contentType"
         ]
       },
       "ExpandGraphDto": {

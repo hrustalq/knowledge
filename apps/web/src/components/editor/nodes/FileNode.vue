@@ -1,0 +1,63 @@
+<script setup lang="ts">
+// Attachment embed. PDFs get a real paged viewer via the browser's own PDF
+// plugin — no 2 MB of pdf.js for something every target browser already does,
+// and the native viewer brings search, zoom and print with it.
+import { computed, ref } from 'vue'
+import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
+import { Download, ExternalLink, File, FileText, Maximize2, Minimize2, Trash2 } from 'lucide-vue-next'
+import { resolveAssetUrl } from '@/lib/api'
+import { attachmentKind, formatBytes } from '@/lib/markdown/nodes'
+
+const props = defineProps(nodeViewProps)
+const expanded = ref(true)
+
+const mime = computed(() => (props.node.attrs.mime as string) ?? '')
+const kind = computed(() => attachmentKind(mime.value))
+const href = computed(() => resolveAssetUrl((props.node.attrs.href as string) ?? ''))
+const downloadHref = computed(() => {
+  const url = href.value
+  return `${url}${url.includes('?') ? '&' : '?'}download=1`
+})
+</script>
+
+<template>
+  <NodeViewWrapper class="kn-block kn-file" :data-selected="selected" :data-kind="kind">
+    <div class="kn-file-head" contenteditable="false">
+      <component :is="kind === 'pdf' ? FileText : File" class="size-4 shrink-0 opacity-70" />
+      <span class="kn-file-name">{{ node.attrs.filename }}</span>
+      <span v-if="node.attrs.size" class="kn-file-size">{{ formatBytes(Number(node.attrs.size)) }}</span>
+      <div class="ml-auto flex items-center gap-0.5">
+        <button
+          v-if="kind === 'pdf'"
+          type="button"
+          :aria-label="expanded ? 'Collapse preview' : 'Expand preview'"
+          @click="expanded = !expanded"
+        >
+          <component :is="expanded ? Minimize2 : Maximize2" class="size-3.5" />
+        </button>
+        <a :href="href" target="_blank" rel="noopener noreferrer" aria-label="Open in a new tab">
+          <ExternalLink class="size-3.5" />
+        </a>
+        <a :href="downloadHref" :download="node.attrs.filename" aria-label="Download">
+          <Download class="size-3.5" />
+        </a>
+        <button v-if="editor.isEditable" type="button" aria-label="Remove attachment" @click="deleteNode()">
+          <Trash2 class="size-3.5" />
+        </button>
+      </div>
+    </div>
+
+    <object
+      v-if="kind === 'pdf' && expanded"
+      class="kn-file-pdf"
+      :data="href"
+      type="application/pdf"
+      :aria-label="`Preview of ${node.attrs.filename}`"
+    >
+      <div class="kn-file-fallback">
+        This browser cannot display PDFs inline.
+        <a :href="downloadHref" :download="node.attrs.filename">Download {{ node.attrs.filename }}</a>
+      </div>
+    </object>
+  </NodeViewWrapper>
+</template>

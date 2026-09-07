@@ -59,11 +59,15 @@ export class ActivityService {
 
   async list(
     workspaceId: string,
-    opts: { documentId?: string; limit?: number; cursor?: string } = {},
+    opts: { documentId?: string; subjectId?: string; limit?: number; cursor?: string } = {},
   ): Promise<ListActivityResponse> {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
     const rows = await this.prisma.activityLog.findMany({
-      where: { workspaceId, ...(opts.documentId ? { documentId: opts.documentId } : {}) },
+      where: {
+        workspaceId,
+        ...(opts.documentId ? { documentId: opts.documentId } : {}),
+        ...(opts.subjectId ? { subjectId: opts.subjectId } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
       ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),

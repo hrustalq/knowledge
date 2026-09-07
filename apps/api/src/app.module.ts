@@ -9,6 +9,7 @@ import { ProjectsModule } from './projects/projects.module.js';
 import { GraphQueryModule } from './graph/graph-query.module.js';
 import { IngestionAdminModule } from './ingestion/ingestion-admin.module.js';
 import { DocumentsModule } from './documents/documents.module.js';
+import { AttachmentsModule } from './attachments/attachments.module.js';
 import { SearchModule } from './search/search.module.js';
 import { EntitiesModule } from './entities/entities.module.js';
 import { ActivityModule } from './activity/activity.module.js';
@@ -34,6 +35,7 @@ import { AppService } from './app.service.js';
     WorkspacesModule,
     ProjectsModule,
     DocumentsModule,
+    AttachmentsModule,
     SearchModule,
     EntitiesModule,
     GraphQueryModule,

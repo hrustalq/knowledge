@@ -80,6 +80,9 @@ export const envSchema = z.object({
   /** Phase 5 trusted-operator graph queries: hard row cap per call. */
   GRAPH_QUERY_MAX_ROWS: z.coerce.number().int().positive().max(1000).default(200),
 
+  /** Rich-editor page attachments: hard per-file ceiling (bytes), enforced at presign and again on confirm. */
+  ATTACHMENT_MAX_BYTES: z.coerce.number().int().positive().default(26_214_400),
+
   /** Live tracked-entity updates over WebSocket (/v1/events/ws). */
   LIVE_WS_ENABLED: z.coerce.boolean().default(true),
   /** Server-side tracking configuration: comma-separated event types (exact or 'prefix.*'); '*' broadcasts everything. */

@@ -82,7 +82,9 @@ watch(
 
     <div class="flex min-w-0 flex-1 flex-col">
       <AppTopbar @toggle-sidebar="toggleSidebar" />
-      <AppBreadcrumbs />
+      <!-- `meta.bare`: writing surfaces supply their own header, so the app
+           trail would just be a second, competing one. -->
+      <AppBreadcrumbs v-if="!route.meta.bare" />
       <!--
         Two content modes.
 

@@ -31,7 +31,16 @@ function onKeydown(e: KeyboardEvent) {
       target.tagName === 'TEXTAREA' ||
       target.tagName === 'SELECT' ||
       target.isContentEditable)
-  if (((e.metaKey || e.ctrlKey) && e.key === 'k') || (!typing && e.key === '/')) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    // Inside a rich editor ⌘K means "link this selection" — the convention in
+    // every editor people arrive from. Firing search there too opened both at
+    // once. Plain inputs keep the global shortcut.
+    if (target?.isContentEditable || e.defaultPrevented) return
+    e.preventDefault()
+    searchUi.openSearch()
+    return
+  }
+  if (!typing && e.key === '/') {
     e.preventDefault()
     searchUi.openSearch()
   }

@@ -121,12 +121,23 @@ export class MergeRequestsService {
   async listWorkspace(query: ListWorkspaceMergeRequestsRequest): Promise<ListWorkspaceMergeRequestsResponse> {
     const limit = Math.min(Math.max(query.limit ?? 50, 1), 100);
     // Everything except the status filter — the per-status counts (tab badges)
-    // apply the same search/author/reviewer/document scope.
+    // apply the same search/people/branch/document scope.
+    //
+    // Branches are a relation, not a column: the name lives on DocumentBranch,
+    // and it is matched as a case-insensitive substring so "auth" finds
+    // "feature/auth" (typing a branch name in full, exactly, is not a filter).
     const baseWhere = {
       document: { workspaceId: query.workspaceId },
       ...(query.authorId ? { authorId: query.authorId } : {}),
+      ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
       ...(query.documentId ? { documentId: query.documentId } : {}),
       ...(query.reviewerId ? { reviewers: { some: { userId: query.reviewerId } } } : {}),
+      ...(query.sourceBranch
+        ? { sourceBranch: { name: { contains: query.sourceBranch, mode: 'insensitive' as const } } }
+        : {}),
+      ...(query.targetBranch
+        ? { targetBranch: { name: { contains: query.targetBranch, mode: 'insensitive' as const } } }
+        : {}),
       ...(query.search ? { title: { contains: query.search, mode: 'insensitive' as const } } : {}),
     };
     const [rows, statusCounts] = await Promise.all([
@@ -190,6 +201,11 @@ export class MergeRequestsService {
     await this.recordActivity(mr.documentId, 'merge-request.updated', mr.id, actorId, {
       title: updated.title,
       changed,
+      // The activity timeline renders draft and assignee edits as their own
+      // system notes ("marked as ready", "assigned to X"), which needs the
+      // value that was set and not just the name of the field.
+      ...(changed.includes('isDraft') ? { isDraft: updated.isDraft } : {}),
+      ...(changed.includes('assigneeId') ? { assigneeId: updated.assigneeId } : {}),
     });
     return { mergeRequest: await this.toDetail(updated) };
   }

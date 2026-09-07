@@ -1,11 +1,23 @@
 <script setup lang="ts">
-// Feature 01 (docs/features/01): client-side markdown rendering with
-// sanitization and lazy mermaid diagrams. SSR renders nothing (DOMPurify
-// needs a DOM); the client fills in on mount. Headings get stable slug ids
-// and are emitted so pages can render an "On this page" rail.
+/**
+ * Read-side renderer (docs/features/01). Parses with the *same* pipeline the
+ * editor uses (lib/markdown/render), so a page cannot look one way when read
+ * and another way when opened for editing.
+ *
+ * Everything the editor can produce renders here, and none of it needs a
+ * component: panels, expands, layouts and status chips are pure CSS, <details>
+ * is natively interactive, and the only JS upgrades are the three things that
+ * genuinely cannot be static — mermaid, whiteboard scenes, and PDF frames.
+ *
+ * SSR renders nothing (DOMPurify needs a DOM); the client fills in on mount.
+ */
 import { nextTick, onMounted, ref, watch } from 'vue'
-import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { markdownToHtml, SANITIZE_CONFIG } from '@/lib/markdown/render'
+import { parseScene, renderSceneToSvg } from '@/lib/markdown/drawing'
+import { KN, attachmentKind, escapeHtml, formatBytes } from '@/lib/markdown/nodes'
+import { resolveAssetUrl } from '@/lib/api'
+import { useTheme } from '@/lib/theme'
 
 interface MarkdownHeading { id: string; text: string; level: number }
 
@@ -23,6 +35,7 @@ const emit = defineEmits<{ headings: [MarkdownHeading[]] }>()
 
 const host = ref<HTMLElement | null>(null)
 const html = ref('')
+const theme = useTheme()
 
 let mermaidSeq = 0
 
@@ -36,17 +49,21 @@ function slugify(text: string): string {
 }
 
 async function render() {
-  const raw = await marked.parse(props.markdown ?? '', { gfm: true, async: true })
-  html.value = DOMPurify.sanitize(raw)
+  html.value = DOMPurify.sanitize(markdownToHtml(props.markdown ?? ''), { ...SANITIZE_CONFIG })
   await nextTick()
   if (props.streaming) return
-  collectHeadings()
+  const headings = collectHeadings()
+  wrapTables()
+  resolveAssets()
+  renderDrawings()
+  renderFiles()
+  renderToc(headings)
   await renderMermaid()
 }
 
-function collectHeadings() {
+function collectHeadings(): MarkdownHeading[] {
   const root = host.value
-  if (!root) return
+  if (!root) return []
   const headings: MarkdownHeading[] = []
   const seen = new Map<string, number>()
   for (const el of root.querySelectorAll<HTMLElement>('h1, h2, h3')) {
@@ -59,79 +76,145 @@ function collectHeadings() {
     headings.push({ id, text, level: Number(el.tagName[1]) })
   }
   emit('headings', headings)
+  return headings
+}
+
+/**
+ * A wide table has to scroll inside its own box, but the box cannot be the
+ * table: `display:block` on a table makes it shrink to its content instead of
+ * filling the column. Tiptap wraps tables for the same reason; this is the
+ * read view's equivalent.
+ */
+function wrapTables() {
+  const root = host.value
+  if (!root) return
+  for (const table of root.querySelectorAll('table')) {
+    if (table.parentElement?.classList.contains('kn-table-scroll')) continue
+    const wrap = document.createElement('div')
+    wrap.className = 'kn-table-scroll'
+    table.replaceWith(wrap)
+    wrap.append(table)
+  }
+}
+
+/**
+ * Attachment links are stored as bare `/v1/...` paths so the markdown stays
+ * portable. The environment prefix and the credential are added here, at
+ * render time — `<img>` cannot send an Authorization header.
+ */
+function resolveAssets() {
+  const root = host.value
+  if (!root) return
+  for (const img of root.querySelectorAll<HTMLImageElement>('img[src^="/v1/"]')) {
+    img.src = resolveAssetUrl(img.getAttribute('src') ?? '')
+    img.loading = 'lazy'
+    img.decoding = 'async'
+  }
+}
+
+function renderDrawings() {
+  const root = host.value
+  if (!root) return
+  for (const node of root.querySelectorAll<HTMLElement>(`[${KN.drawing}]`)) {
+    const scene = parseScene(node.textContent ?? '')
+    const wrap = document.createElement('div')
+    wrap.className = 'kn-drawing-canvas'
+    // Built from our own scene model, not from page content, so this is not
+    // an injection surface — but it is sanitized anyway, as SVG.
+    wrap.innerHTML = DOMPurify.sanitize(renderSceneToSvg(scene), {
+      USE_PROFILES: { svg: true, svgFilters: true },
+    })
+    node.replaceWith(wrap)
+  }
+}
+
+function renderFiles() {
+  const root = host.value
+  if (!root) return
+  for (const node of root.querySelectorAll<HTMLElement>(`[${KN.file}]`)) {
+    const name = node.getAttribute('data-kn-name') ?? 'attachment'
+    const mime = node.getAttribute('data-kn-mime') ?? ''
+    const size = Number(node.getAttribute('data-kn-size')) || 0
+    const rawHref = node.querySelector('a')?.getAttribute('href') ?? ''
+    const href = resolveAssetUrl(rawHref)
+    const download = `${href}${href.includes('?') ? '&' : '?'}download=1`
+    const kind = attachmentKind(mime)
+
+    const card = document.createElement('div')
+    card.className = 'kn-block kn-file'
+    card.dataset.kind = kind
+    card.innerHTML = `
+      <div class="kn-file-head">
+        <span class="kn-file-glyph" aria-hidden="true">${kind === 'pdf' ? 'PDF' : 'FILE'}</span>
+        <span class="kn-file-name">${escapeHtml(name)}</span>
+        ${size ? `<span class="kn-file-size">${formatBytes(size)}</span>` : ''}
+        <span class="kn-file-links">
+          <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Open</a>
+          <a href="${escapeHtml(download)}" download="${escapeHtml(name)}">Download</a>
+        </span>
+      </div>
+      ${
+        kind === 'pdf'
+          ? `<object class="kn-file-pdf" data="${escapeHtml(href)}" type="application/pdf" aria-label="Preview of ${escapeHtml(name)}"><div class="kn-file-fallback">This browser cannot display PDFs inline. <a href="${escapeHtml(download)}" download="${escapeHtml(name)}">Download ${escapeHtml(name)}</a></div></object>`
+          : ''
+      }`
+    node.replaceWith(card)
+  }
+}
+
+function renderToc(headings: MarkdownHeading[]) {
+  const root = host.value
+  if (!root) return
+  for (const node of root.querySelectorAll<HTMLElement>(`[${KN.toc}]`)) {
+    const list = document.createElement('nav')
+    list.className = 'kn-block kn-toc'
+    list.setAttribute('aria-label', 'On this page')
+    list.innerHTML = `<div class="kn-toc-head">On this page</div>${
+      headings.length
+        ? `<ol class="kn-toc-list">${headings
+            .map((h) => `<li data-level="${h.level}"><a href="#${h.id}">${escapeHtml(h.text)}</a></li>`)
+            .join('')}</ol>`
+        : '<p class="kn-toc-empty">This page has no headings yet.</p>'
+    }`
+    node.replaceWith(list)
+  }
 }
 
 async function renderMermaid() {
   const root = host.value
   if (!root) return
-  const blocks = [...root.querySelectorAll<HTMLElement>('pre > code.language-mermaid')]
+  const blocks = [...root.querySelectorAll<HTMLElement>(`[${KN.mermaid}]`)]
   if (blocks.length === 0) return
   const { default: mermaid } = await import('mermaid')
-  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' })
-  for (const code of blocks) {
-    const pre = code.parentElement
-    if (!pre) continue
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: theme.isDark.value ? 'dark' : 'default',
+    fontFamily: 'inherit',
+  })
+  for (const block of blocks) {
+    const source = block.textContent ?? ''
     try {
-      const { svg } = await mermaid.render(`mmd-${Date.now()}-${mermaidSeq++}`, code.textContent ?? '')
+      const { svg } = await mermaid.render(`mmd-${Date.now()}-${mermaidSeq++}`, source)
       const wrap = document.createElement('div')
-      wrap.className = 'my-4 flex justify-center overflow-x-auto'
+      wrap.className = 'kn-mermaid-figure'
       wrap.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
-      pre.replaceWith(wrap)
+      block.replaceWith(wrap)
     } catch {
-      pre.classList.add('border', 'border-destructive') // leave source visible on bad diagrams
+      // Leave the source visible and flagged rather than swallowing the block:
+      // a diagram that fails to parse is still content the author wrote.
+      block.classList.add('kn-mermaid-broken')
     }
   }
 }
 
 onMounted(render)
 // `streaming` is watched too: when a turn finishes the same text needs one
-// more pass to pick up headings and diagrams that were deferred.
-watch([() => props.markdown, () => props.streaming], () => void render())
+// more pass to pick up headings and diagrams that were deferred. Theme is
+// watched because mermaid bakes its colors into the SVG it emits.
+watch([() => props.markdown, () => props.streaming, theme.isDark], () => void render())
 </script>
 
 <template>
   <div ref="host" class="markdown-body max-w-none" :class="streaming ? 'is-streaming' : ''" v-html="html" />
 </template>
-
-<style>
-.markdown-body { line-height: 1.7; font-size: 0.95rem; }
-/*
- * Streaming caret: a block that sits on the text baseline at the end of
- * whatever block is currently last, so it travels with the writing instead of
- * parking in a fixed corner. Kept out of the flow width (margin-left on an
- * inline-block) so it cannot push a line to wrap and then unwrap.
- */
-.markdown-body.is-streaming > :last-child::after {
-  content: "";
-  display: inline-block;
-  width: 0.45em;
-  height: 1em;
-  margin-left: 0.12em;
-  vertical-align: text-bottom;
-  border-radius: 1px;
-  background: var(--primary);
-  animation: md-caret 1s steps(2, jump-none) infinite;
-}
-@keyframes md-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
-@media (prefers-reduced-motion: reduce) {
-  .markdown-body.is-streaming > :last-child::after { animation: none; opacity: 0.6; }
-}
-.markdown-body :is(h1, h2, h3, h4) { scroll-margin-top: 6.5rem; }
-.markdown-body h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; margin: 1.4em 0 0.6em; }
-.markdown-body h2 { font-size: 1.3rem; font-weight: 600; margin: 1.4em 0 0.5em; border-bottom: 1px solid var(--border); padding-bottom: 0.25em; }
-.markdown-body h3 { font-size: 1.1rem; font-weight: 600; margin: 1.1em 0 0.4em; }
-.markdown-body p { margin: 0.6em 0; }
-.markdown-body ul { list-style: disc; padding-left: 1.5em; margin: 0.6em 0; }
-.markdown-body ol { list-style: decimal; padding-left: 1.5em; margin: 0.6em 0; }
-.markdown-body li { margin: 0.25em 0; }
-.markdown-body code { background: color-mix(in srgb, currentColor 8%, transparent); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.85em; }
-.markdown-body pre { background: color-mix(in srgb, currentColor 6%, transparent); border-radius: 8px; padding: 0.9em 1em; overflow-x: auto; margin: 0.8em 0; }
-.markdown-body pre code { background: none; padding: 0; }
-.markdown-body blockquote { border-left: 3px solid color-mix(in srgb, var(--primary) 50%, transparent); padding-left: 1em; margin: 0.8em 0; opacity: 0.85; }
-.markdown-body table { border-collapse: collapse; margin: 0.8em 0; width: 100%; }
-.markdown-body th, .markdown-body td { border: 1px solid color-mix(in srgb, currentColor 18%, transparent); padding: 0.4em 0.7em; text-align: left; }
-.markdown-body th { background: color-mix(in srgb, currentColor 6%, transparent); font-weight: 600; }
-.markdown-body a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
-.markdown-body img { max-width: 100%; border-radius: 8px; }
-.markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
-</style>

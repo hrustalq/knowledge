@@ -41,13 +41,47 @@ const props = withDefaults(
      */
     fallbackLabel?: (value: string) => string
     disabled?: boolean
+    /**
+     * Keep the label for screen readers but drop it visually — for toolbar
+     * rows, where a stacked caption would break the line the field sits on.
+     */
+    hideLabel?: boolean
+    /**
+     * Render as a naked input — no border, background, ring or search glyph —
+     * for use inside a container that already looks like a field (the merge
+     * request filtered-search bar, where chips and this input share one box).
+     */
+    bare?: boolean
+    /**
+     * The typed text, when the caller wants to drive it too (`v-model:query`).
+     * Needed so an external reset — a "clear filters" button elsewhere on the
+     * page — actually empties the field instead of leaving stale text behind
+     * while the results it no longer describes come back.
+     */
+    query?: string
   }>(),
   { multiple: true, placeholder: 'Search…' },
 )
 
-const emit = defineEmits<{ 'update:modelValue': [string[]] }>()
+const emit = defineEmits<{
+  'update:modelValue': [string[]]
+  /**
+   * The typed text, as it changes. Lets a caller use the field as a search box
+   * *and* a picker: the query narrows a list while the options offer something
+   * else entirely. Picking clears the query, which reads correctly — the text
+   * was how you found the option, not a filter in its own right.
+   */
+  'update:query': [string]
+}>()
 
-const query = ref('')
+const query = ref(props.query ?? '')
+watch(query, (q) => emit('update:query', q))
+watch(
+  () => props.query,
+  (q) => {
+    if (q !== undefined && q !== query.value) query.value = q
+  },
+)
 const debouncedQuery = refDebounced(query, 200)
 const open = ref(false)
 const loading = ref(false)
@@ -298,16 +332,19 @@ const listId = useId()
 </script>
 
 <template>
-  <div ref="rootEl" class="space-y-1.5">
+  <div ref="rootEl" :class="hideLabel ? '' : 'space-y-1.5'">
     <label
       :for="listId + '-input'"
-      class="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+      :class="hideLabel
+        ? 'sr-only'
+        : 'block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'"
     >
       {{ label }}
     </label>
 
     <div ref="fieldEl" class="relative">
       <Search
+        v-if="!bare"
         class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
       />
       <input
@@ -321,7 +358,9 @@ const listId = useId()
         :aria-controls="listId"
         :placeholder="placeholder"
         :disabled="disabled || isEmptyRoster"
-        class="h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/50 disabled:opacity-50"
+        :class="bare
+          ? 'h-6 w-full bg-transparent pr-6 text-xs outline-none placeholder:text-muted-foreground disabled:opacity-50'
+          : 'h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/50 disabled:opacity-50'"
         @input="query = ($event.target as HTMLInputElement).value"
         @focus="onFocus"
         @blur="onBlur"
@@ -329,7 +368,8 @@ const listId = useId()
       />
       <Loader2
         v-if="loading"
-        class="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground"
+        class="absolute top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground"
+        :class="bare ? 'right-0' : 'right-2.5'"
       />
     </div>
 

@@ -48,25 +48,33 @@ function setValues(values: string[]) {
 }
 
 // The bar opens a freshly added chip's roster, so adding a filter and choosing
-// its value stays one gesture.
-defineExpose({ openValues: () => valueMenu.value?.openMenu() })
+// its value stays one gesture. A text field has no roster to open, so the
+// equivalent is putting the caret in its input — without this, adding a text
+// filter left a chip that looked ready but ignored the keyboard.
+const textEl = ref<HTMLElement | null>(null)
+defineExpose({
+  openValues: () => {
+    if (isText.value) textEl.value?.querySelector('input')?.focus()
+    else valueMenu.value?.openMenu()
+  },
+})
 </script>
 
 <template>
-  <div class="bg-card flex h-7 items-center overflow-hidden rounded-md border text-xs">
-    <span class="text-foreground flex items-center gap-1.5 px-2">
+  <div class="bg-card flex h-7 shrink-0 items-center overflow-hidden rounded-md border text-xs">
+    <span class="text-foreground flex items-center gap-1.5 px-2 whitespace-nowrap">
       <component :is="field.icon" v-if="field.icon" class="text-muted-foreground size-3.5" />
       {{ field.label }}
     </span>
 
     <span
       v-if="operatorIsFixed"
-      class="text-muted-foreground flex h-full items-center border-l px-2"
+      class="text-muted-foreground flex h-full items-center border-l px-2 whitespace-nowrap"
     >{{ OPERATOR_LABELS[filter.operator] }}</span>
     <button
       v-else
       type="button"
-      class="text-muted-foreground hover:bg-accent hover:text-foreground h-full border-l px-2 transition-colors"
+      class="text-muted-foreground hover:bg-accent hover:text-foreground h-full border-l px-2 whitespace-nowrap transition-colors"
       :title="`Change operator (${operators.map((o) => OPERATOR_LABELS[o]).join(' / ')})`"
       @click="cycleOperator"
     >
@@ -74,7 +82,7 @@ defineExpose({ openValues: () => valueMenu.value?.openMenu() })
     </button>
 
     <!-- Text fields type in place; select fields open the value roster. -->
-    <div v-if="isText" class="h-full border-l">
+    <div v-if="isText" ref="textEl" class="h-full border-l">
       <Input
         :model-value="filter.values[0] ?? ''"
         :placeholder="field.placeholder ?? 'type a value…'"

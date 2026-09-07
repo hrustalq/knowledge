@@ -1,46 +1,41 @@
 <script setup lang="ts">
 // Workspace-wide merge-request list (/merge-requests), GitLab-style: status
-// tabs with count badges + a search bar, cards below.
+// tabs with count badges, a filtered search bar, cards below.
+//
+// Every narrowing goes to the server. The list is cursor-paginated, so
+// filtering the loaded page in the browser would disagree with both the tab
+// counts and "Load more" — see mr-filters.ts.
 import { computed, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { Search } from 'lucide-vue-next'
 import type { ListWorkspaceMergeRequestsResponse, MergeRequestInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
-import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import type { ActiveFilter } from '@/components/ui/filter-bar'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
+import MergeRequestSearchBar from '@/components/merge-requests/MergeRequestSearchBar.vue'
+import { mergeRequestFilterParams } from '@/components/merge-requests/mr-filters'
 
 const STATES = ['open', 'merged', 'closed', 'all'] as const
 type State = (typeof STATES)[number]
 
-const auth = useAuthStore()
 const state = ref<State>('open')
-/** "Review requested" — MRs where the current user is an assigned reviewer. */
-const mine = ref(false)
-const searchInput = ref('')
+const filters = ref<ActiveFilter[]>([])
 const search = ref('')
 const cursor = ref<string | undefined>(undefined)
 /** Accumulated previous pages (reset when filters change). */
 const older = ref<MergeRequestInfo[]>([])
 
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch(searchInput, (next) => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    search.value = next.trim()
-    resetPaging()
-  }, 300)
-})
-
 const queryParams = computed(() => ({
   workspaceId: getWorkspaceId(),
   ...(state.value !== 'all' ? { status: state.value } : {}),
-  ...(mine.value && auth.me ? { reviewerId: auth.me.userId } : {}),
+  ...mergeRequestFilterParams(filters.value),
   ...(search.value ? { search: search.value } : {}),
   ...(cursor.value ? { cursor: cursor.value } : {}),
 }))
+
+// Narrowing the list invalidates the pages already stacked up behind it.
+watch([filters, search], () => resetPaging())
 
 const listQuery = useQuery(
   computed(() => apiQueryOptions('/v1/merge-requests', { query: queryParams.value })),
@@ -57,6 +52,9 @@ const counts = computed(() => lastCounts.value ?? { open: 0, merged: 0, closed: 
 const countFor = (s: State) =>
   s === 'all' ? counts.value.open + counts.value.merged + counts.value.closed : counts.value[s]
 
+/** Drives the empty state's copy: "none yet" and "none match" are not the same. */
+const narrowed = computed(() => search.value !== '' || filters.value.some((f) => f.values[0]))
+
 function setState(next: State) {
   state.value = next
   resetPaging()
@@ -69,6 +67,10 @@ function loadMore() {
   if (!page.value?.nextCursor) return
   older.value = rows.value
   cursor.value = page.value.nextCursor
+}
+function clearNarrowing() {
+  filters.value = []
+  search.value = ''
 }
 </script>
 
@@ -101,25 +103,14 @@ function loadMore() {
       </button>
     </div>
 
-    <!-- search + quick filters -->
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="relative min-w-52 flex-1">
-        <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input v-model="searchInput" placeholder="Search merge requests by title…" class="pl-8" />
-      </div>
-      <button
-        v-if="auth.me"
-        class="rounded-full border px-3 py-1 text-xs transition-colors"
-        :class="mine
-          ? 'border-primary bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
-        @click="mine = !mine; resetPaging()"
-      >
-        review requested
-      </button>
-    </div>
+    <MergeRequestSearchBar v-model:filters="filters" v-model:search="search" />
 
-    <MergeRequestList :rows="rows" :loading="listQuery.isPending.value && rows.length === 0" />
+    <MergeRequestList
+      :rows="rows"
+      :loading="listQuery.isPending.value && rows.length === 0"
+      :narrowed="narrowed"
+      @clear="clearNarrowing"
+    />
 
     <div v-if="page?.nextCursor" class="flex justify-center">
       <Button variant="outline" size="sm" :disabled="listQuery.isFetching.value" @click="loadMore">

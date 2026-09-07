@@ -16,8 +16,14 @@ export function createRouter() {
       // App (authenticated — guard redirects to /login when AUTH_MODE=api-key)
       { path: '/documents', component: () => import('@/pages/DocumentsListPage.vue') },
       { path: '/documents/:id', component: () => import('@/pages/DocumentDetailPage.vue') },
-      { path: '/documents/:id/edit', component: () => import('@/pages/EditorPage.vue') },
-      { path: '/create', component: () => import('@/pages/EditorPage.vue') },
+      // `fill`: the editor owns the viewport and scrolls its own prose column.
+      // `bare`: no breadcrumbs — while writing, the only chrome is the page's own.
+      {
+        path: '/documents/:id/edit',
+        component: () => import('@/pages/EditorPage.vue'),
+        meta: { fill: true, bare: true },
+      },
+      { path: '/create', component: () => import('@/pages/EditorPage.vue'), meta: { fill: true, bare: true } },
       { path: '/upload', component: () => import('@/pages/UploadPage.vue') },
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
       { path: '/merge-requests', component: () => import('@/pages/MergeRequestsPage.vue') },

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -33,6 +34,17 @@ export class StorageService {
     });
   }
 
+  /**
+   * Attachment key layout: same document prefix as revisions, a sibling
+   * namespace. The id is part of the path so two uploads of `diagram.png`
+   * cannot collide, and the original filename is kept as the last segment so
+   * anything browsing the bucket still sees readable names.
+   */
+  attachmentObjectKey(workspaceId: string, documentId: string, attachmentId: string, filename: string): string {
+    const safe = filename.replace(/[^\w.\-]+/g, '_').slice(-120) || 'file';
+    return `workspaces/${workspaceId}/documents/${documentId}/attachments/${attachmentId}/${safe}`;
+  }
+
   /** Object key layout per plan.md §4. */
   revisionObjectKey(workspaceId: string, documentId: string, revisionId: string, filename: string): string {
     return `workspaces/${workspaceId}/documents/${documentId}/revisions/${revisionId}/${filename}`;
@@ -41,6 +53,31 @@ export class StorageService {
   async presignPut(objectKey: string, contentType: string, expiresInSeconds = 900): Promise<string> {
     const cmd = new PutObjectCommand({ Bucket: this.bucket, Key: objectKey, ContentType: contentType });
     return getSignedUrl(this.s3, cmd, { expiresIn: expiresInSeconds });
+  }
+
+  /**
+   * Read URL handed to the browser. `<img>` and `<object>` cannot send an
+   * Authorization header, so the API authorizes the request and then redirects
+   * here rather than proxying the bytes through Node.
+   *
+   * Disposition is forced rather than inherited: an uploaded file must never be
+   * able to decide it renders inline in the app's context.
+   */
+  async presignGet(
+    objectKey: string,
+    opts: { filename: string; contentType: string; disposition: 'inline' | 'attachment'; expiresInSeconds?: number },
+  ): Promise<string> {
+    const cmd = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: objectKey,
+      ResponseContentType: opts.contentType,
+      ResponseContentDisposition: `${opts.disposition}; filename="${opts.filename.replace(/["\\]/g, '')}"`,
+    });
+    return getSignedUrl(this.s3, cmd, { expiresIn: opts.expiresInSeconds ?? 900 });
+  }
+
+  async deleteObject(objectKey: string): Promise<void> {
+    await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: objectKey }));
   }
 
   async headObject(objectKey: string): Promise<HeadResult | null> {

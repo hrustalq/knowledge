@@ -59,6 +59,71 @@ export interface CreateDocumentResponse {
   status: RevisionStatus;
 }
 
+// ---------------------------------------------------------------- attachments
+// Confluence-style page attachments: images, PDFs and files embedded in the
+// rich editor. Two-step by design (presign → confirm), mirroring the revision
+// upload flow: the API never streams file bodies, and a row only becomes
+// `ready` once the object is confirmed in object storage.
+
+/** File types the editor accepts. SVG is deliberately absent — an uploaded
+ *  SVG is executable markup, and the whiteboard/mermaid nodes cover vector art. */
+export const ATTACHMENT_CONTENT_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'text/markdown',
+  'application/json',
+  'application/zip',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+] as const;
+export type AttachmentContentType = (typeof ATTACHMENT_CONTENT_TYPES)[number];
+
+export type AttachmentStatus = 'pending' | 'ready';
+
+export interface AttachmentSummary {
+  attachmentId: string;
+  documentId: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  status: AttachmentStatus;
+  uploadedBy: string;
+  createdAt: string;
+  /** Stable API path the stored markdown links to (no token; the client adds one when needed). */
+  url: string;
+}
+
+// POST /v1/documents/:id/attachments
+export interface CreateAttachmentRequest {
+  filename: string;
+  contentType: string;
+  sizeBytes?: number;
+}
+export interface CreateAttachmentResponse {
+  attachment: AttachmentSummary;
+  upload: { url: string; method: 'PUT'; headers: Record<string, string>; expiresAt: string };
+}
+
+// POST /v1/documents/:id/attachments/:attachmentId/complete
+export interface CompleteAttachmentResponse {
+  attachment: AttachmentSummary;
+}
+
+// GET /v1/documents/:id/attachments
+export interface ListAttachmentsResponse {
+  attachments: AttachmentSummary[];
+}
+
 // POST /v1/documents/:id/uploads
 export interface CreateUploadRequest {
   revisionId?: string;
@@ -373,9 +438,15 @@ export interface ListWorkspaceMergeRequestsRequest {
   workspaceId: string;
   status?: MergeRequestStatus;
   authorId?: string;
+  /** Only merge requests with this user as the single assignee. */
+  assigneeId?: string;
   /** Only merge requests with this user assigned as reviewer. */
   reviewerId?: string;
   documentId?: string;
+  /** Case-insensitive substring match on the source branch name. */
+  sourceBranch?: string;
+  /** Case-insensitive substring match on the target branch name. */
+  targetBranch?: string;
   /** Case-insensitive title substring match. */
   search?: string;
   cursor?: string;

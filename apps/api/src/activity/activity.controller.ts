@@ -13,16 +13,19 @@ export class ActivityController {
   @ApiOperation({ summary: 'Workspace activity feed, newest first (docs/features/10)' })
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'documentId', required: false })
+  @ApiQuery({ name: 'subjectId', required: false, description: 'Secondary subject id — e.g. a merge request id, for its own timeline' })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'cursor', required: false })
   list(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('documentId') documentId?: string,
+    @Query('subjectId') subjectId?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ) {
     return this.activity.list(workspaceId, {
       documentId: documentId || undefined,
+      subjectId: subjectId || undefined,
       limit: limit ? Number(limit) : undefined,
       cursor: cursor || undefined,
     });

@@ -3,13 +3,25 @@
 // document tab (pass documentId — fetches the document-scoped list itself).
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { GitPullRequestArrow } from 'lucide-vue-next'
+import { GitPullRequestArrow, SearchX } from 'lucide-vue-next'
 import type { ListMergeRequestsResponse, MergeRequestInfo } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/api/queries'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import MergeRequestCard from './MergeRequestCard.vue'
 
-const props = defineProps<{ documentId?: string; rows?: MergeRequestInfo[]; loading?: boolean }>()
+const props = defineProps<{
+  documentId?: string
+  rows?: MergeRequestInfo[]
+  loading?: boolean
+  /**
+   * A search or filter is active, so an empty result means "nothing matched",
+   * not "nothing exists" — telling someone to open their first merge request
+   * while they are filtering by author reads as a bug.
+   */
+  narrowed?: boolean
+}>()
+defineEmits<{ clear: [] }>()
 
 const documentQuery = useQuery({
   ...apiQueryOptions('/v1/documents/{id}/merge-requests', { path: { id: props.documentId ?? '' } }),
@@ -32,11 +44,23 @@ const isLoading = computed(() => props.loading ?? (!!props.documentId && documen
     v-else-if="mergeRequests.length === 0"
     class="grid place-items-center rounded-lg border border-dashed bg-card py-16 text-center"
   >
-    <GitPullRequestArrow class="size-8 text-muted-foreground/50" />
-    <p class="mt-3 font-medium">No merge requests</p>
-    <p class="mt-1 text-sm text-muted-foreground">
-      Branch a document and open a merge request to propose changes.
-    </p>
+    <template v-if="narrowed">
+      <SearchX class="size-8 text-muted-foreground/50" />
+      <p class="mt-3 font-medium">No matches</p>
+      <p class="mt-1 text-sm text-muted-foreground">
+        No merge request here matches the current search and filters.
+      </p>
+      <Button variant="outline" size="sm" class="mt-4" @click="$emit('clear')">
+        Clear search and filters
+      </Button>
+    </template>
+    <template v-else>
+      <GitPullRequestArrow class="size-8 text-muted-foreground/50" />
+      <p class="mt-3 font-medium">No merge requests</p>
+      <p class="mt-1 text-sm text-muted-foreground">
+        Branch a document and open a merge request to propose changes.
+      </p>
+    </template>
   </div>
 
   <div v-else class="space-y-2">

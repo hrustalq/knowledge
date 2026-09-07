@@ -166,6 +166,27 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return res.json() as Promise<T>
 }
 
+/**
+ * Turn a stored API path into a URL the browser can put in `src`/`data`.
+ *
+ * Attachment links are stored in the markdown as bare `/v1/...` paths — no
+ * host, no token — so the same document renders correctly through the dev
+ * proxy, in production, and in anything else that reads the markdown. The
+ * environment prefix and the credential are added here, at render time.
+ *
+ * `<img>` and `<object>` cannot send an Authorization header, so the token
+ * rides in the query string; the API's AuthGuard already accepts `?token=` for
+ * exactly this reason (it is how SSE authenticates too), and the request is
+ * same-origin through the proxy.
+ */
+export function resolveAssetUrl(path: string): string {
+  if (!path.startsWith('/v1/')) return path
+  const token = getToken()
+  const url = `${base}${path}`
+  if (!token) return url
+  return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+}
+
 export function relativeTime(iso: string): string {
   const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000)
   if (s < 60) return 'just now'

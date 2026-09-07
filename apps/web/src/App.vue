@@ -83,10 +83,23 @@ watch(
     <div class="flex min-w-0 flex-1 flex-col">
       <AppTopbar @toggle-sidebar="toggleSidebar" />
       <AppBreadcrumbs />
-      <main class="flex-1 overflow-y-auto">
-        <!-- flex column at min full height so a route can opt into filling the
-             viewport (flex-1) without affecting content-height pages. -->
-        <div class="flex min-h-full w-full flex-col px-4 py-6 lg:px-8">
+      <!--
+        Two content modes.
+
+        By default the column is a document: `min-h-full` lets it grow with its
+        content, its padding frames the page, and <main> does the scrolling. A
+        route with `meta.fill` is a surface instead — a chat, a canvas — that
+        owns the viewport and scrolls something inside itself. That needs a
+        *definite* height rather than a minimum, because `flex-1` and
+        percentage heights under an auto-height parent resolve from content:
+        a fill page would push this column taller and scroll the whole page
+        instead of its own panel. `h-full` with no padding is what lets every
+        height inside such a page resolve, and it spares those pages both the
+        negative-margin bleed and any guess at how tall the chrome above them
+        happens to be on a given route.
+      -->
+      <main :class="['flex-1', route.meta.fill ? 'overflow-hidden' : 'overflow-y-auto']">
+        <div :class="['flex w-full flex-col', route.meta.fill ? 'h-full' : 'min-h-full px-4 py-6 lg:px-8']">
           <RouterView />
         </div>
       </main>

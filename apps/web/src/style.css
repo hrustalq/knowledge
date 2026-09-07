@@ -111,3 +111,121 @@
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklch, var(--sidebar-foreground) 25%, transparent) transparent;
 }
+
+/*
+ * Sidebar navigation stack (Projects → Pages).
+ *
+ * A push moves one column deeper: the incoming pane rides in from the right
+ * over the outgoing one, which recedes only a short parallax distance instead
+ * of travelling the full width. That difference in travel is the whole effect
+ * — equal travel reads as a carousel, unequal travel reads as depth — and the
+ * pop is its exact inverse.
+ *
+ * Both directions share one duration and one curve. They are the same two
+ * panes either way, so a faster return does not read as intent, it reads as a
+ * mismatch the moment anyone toggles back and forth.
+ *
+ * Direction is an attribute on the container, NOT part of the transition
+ * name, and that is load-bearing: a leaving element keeps the transition
+ * hooks it was rendered with, so a `:name` bound to the direction gives the
+ * departing pane the *previous* direction's classes. Going back then played
+ * push-leave — both panes sliding left over each other — while the arriving
+ * pane correctly played pop-enter. Keyed off an ancestor instead, both
+ * elements resolve the same live direction on every frame.
+ */
+:root {
+  --pane-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --pane-duration: 280ms;
+}
+
+.pane-enter-active,
+.pane-leave-active {
+  transition-property: transform, opacity;
+  transition-duration: var(--pane-duration);
+  transition-timing-function: var(--pane-ease);
+  will-change: transform, opacity;
+}
+
+/* Deeper: the child arrives from the right, the parent recedes behind it. */
+[data-pane-dir='push'] .pane-enter-from {
+  transform: translateX(100%);
+}
+[data-pane-dir='push'] .pane-leave-to {
+  transform: translateX(-14%);
+  opacity: 0.55;
+}
+
+/* Back out: the child leaves the way it came, the parent returns to the front. */
+[data-pane-dir='pop'] .pane-enter-from {
+  transform: translateX(-14%);
+  opacity: 0.55;
+}
+[data-pane-dir='pop'] .pane-leave-to {
+  transform: translateX(100%);
+}
+
+/*
+ * The returning parent relights over the first ~110ms rather than across the
+ * whole pop. It is dimmed on the way in because the child was covering it,
+ * and it is uncovered from its left edge on the very first frame — holding
+ * the dim for the full duration drags a grey band along behind the departing
+ * pane, which is what made going back feel worse than going forward.
+ */
+[data-pane-dir='pop'] .pane-enter-active {
+  transition-duration: var(--pane-duration), 110ms;
+}
+
+/*
+ * Reduced motion: the panes still change, and the change still needs to be
+ * perceptible — so the depth cue is dropped and a short crossfade keeps the
+ * swap from being a jump cut.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .pane-enter-active,
+  [data-pane-dir='pop'] .pane-enter-active,
+  .pane-leave-active {
+    transition-property: opacity;
+    transition-duration: 120ms;
+    transition-timing-function: linear;
+  }
+  [data-pane-dir] .pane-enter-from,
+  [data-pane-dir] .pane-leave-to {
+    transform: none;
+    opacity: 0;
+  }
+}
+
+/*
+ * Create-dialog stages (form → creating → follow-up step).
+ *
+ * Deliberately quieter than the sidebar's push: this is a modal that already
+ * has the user's whole attention, and the panes next to it are the session's
+ * one authored movement. A short lift-and-fade is enough to say the content
+ * was replaced rather than rewritten in place; `mode="out-in"` keeps the two
+ * stages from ever overlapping inside a box that has to reflow around them.
+ */
+.stage-enter-active,
+.stage-leave-active {
+  transition:
+    opacity 140ms ease-out,
+    transform 140ms ease-out;
+}
+.stage-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.stage-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-enter-active,
+  .stage-leave-active {
+    transition-property: opacity;
+  }
+  .stage-enter-from,
+  .stage-leave-to {
+    transform: none;
+  }
+}

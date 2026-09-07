@@ -15,10 +15,21 @@ import {
   type RevisionInfo,
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { nativeEl } from '@/lib/utils'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import AssistantPanel from '@/components/knowledge/AssistantPanel.vue'
@@ -54,6 +65,25 @@ const busy = ref(false)
 const loading = ref(false)
 const showPreview = ref(true)
 const editorEl = ref<HTMLTextAreaElement | null>(null)
+const setEditorEl = (c: unknown) => {
+  editorEl.value = nativeEl<HTMLTextAreaElement>(c)
+}
+
+// reka-ui reserves '' as the Select's "cleared" value and rejects it on an
+// item, so the top-level choice rides a sentinel.
+const TOP_LEVEL = '__root__'
+const parentModel = computed({
+  get: () => parentId.value || TOP_LEVEL,
+  set: (v: string) => {
+    parentId.value = v === TOP_LEVEL ? '' : v
+  },
+})
+
+// The doc-reference picker is an action, not a field — picking a page inserts
+// a link and the control must go back to reading "Doc reference…". reka-ui's
+// model is passive (it keeps its own copy even when the parent never writes
+// one back), so the reset is a remount rather than a value assignment.
+const docRefKey = ref(0)
 
 onMounted(async () => {
   if (!store.loaded) void store.fetchList()
@@ -137,12 +167,14 @@ function insert(before: string, after = '', placeholder = '') {
   })
 }
 
-function insertDocRef(event: Event) {
-  const id = (event.target as HTMLSelectElement).value
+// Untyped param: without a bound model the Select falls back to its widest
+// value type, so narrow here instead of casting at the call site.
+function insertDocRef(value: unknown) {
+  const id = typeof value === 'string' ? value : ''
   if (!id) return
   const doc = store.items.find((d) => d.documentId === id)
   if (doc) insert(`[${doc.title}](/documents/${doc.documentId})`)
-  ;(event.target as HTMLSelectElement).value = ''
+  docRefKey.value += 1
 }
 
 const MERMAID_SNIPPET = '\n```mermaid\ngraph TD\n  A[Start] --> B[End]\n```\n'
@@ -239,31 +271,48 @@ function appendSuggestion(text: string) {
         <!-- Metadata -->
         <div class="grid gap-3 sm:grid-cols-3">
           <Input v-model="title" placeholder="Title" class="sm:col-span-3" />
-          <label class="flex items-center gap-2 text-sm sm:col-span-3">
-            <span class="text-muted-foreground">Project</span>
-            <select v-model="projectId" class="flex-1 rounded-md border bg-background px-2 py-1.5">
-              <option v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</option>
-            </select>
-          </label>
-          <label class="flex items-center gap-2 text-sm">
-            <span class="text-muted-foreground">Category</span>
-            <select v-model="category" class="flex-1 rounded-md border bg-background px-2 py-1.5">
-              <option v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ c }}</option>
-            </select>
-          </label>
-          <label class="flex items-center gap-2 text-sm sm:col-span-2">
-            <span class="text-muted-foreground">Parent</span>
-            <select v-model="parentId" class="flex-1 rounded-md border bg-background px-2 py-1.5">
-              <option value="">(top level)</option>
-              <option
-                v-for="d in store.items.filter((d) => d.documentId !== editId)"
-                :key="d.documentId"
-                :value="d.documentId"
-              >
-                {{ d.title }}
-              </option>
-            </select>
-          </label>
+          <div class="flex items-center gap-2 text-sm sm:col-span-3">
+            <Label for="editor-project" class="font-normal text-muted-foreground">Project</Label>
+            <Select v-model="projectId">
+              <SelectTrigger id="editor-project" class="flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">
+                  {{ p.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="flex items-center gap-2 text-sm">
+            <Label for="editor-category" class="font-normal text-muted-foreground">Category</Label>
+            <Select v-model="category">
+              <SelectTrigger id="editor-category" class="flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ c }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="flex items-center gap-2 text-sm sm:col-span-2">
+            <Label for="editor-parent" class="font-normal text-muted-foreground">Parent</Label>
+            <Select v-model="parentModel">
+              <SelectTrigger id="editor-parent" class="flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="TOP_LEVEL">(top level)</SelectItem>
+                <SelectItem
+                  v-for="d in store.items.filter((d) => d.documentId !== editId)"
+                  :key="d.documentId"
+                  :value="d.documentId"
+                >
+                  {{ d.title }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <Input v-if="isEdit" v-model="message" placeholder="Revision message" class="sm:col-span-3" />
         </div>
 
@@ -276,22 +325,30 @@ function appendSuggestion(text: string) {
           <Button size="sm" variant="ghost" title="Link" @click="insert('[', '](https://)', 'text')">Link</Button>
           <Button size="sm" variant="ghost" title="Table" @click="insert(TABLE_SNIPPET)">Table</Button>
           <Button size="sm" variant="ghost" title="Mermaid diagram" @click="insert(MERMAID_SNIPPET)">Diagram</Button>
-          <select class="rounded-md border bg-background px-2 py-1 text-xs" title="Insert a link to another document" @change="insertDocRef">
-            <option value="">Doc reference…</option>
-            <option v-for="d in store.items" :key="d.documentId" :value="d.documentId">{{ d.title }}</option>
-          </select>
-          <label class="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-            <input v-model="showPreview" type="checkbox" /> preview
-          </label>
+          <Select :key="docRefKey" @update:model-value="insertDocRef">
+            <SelectTrigger size="sm" class="text-xs" title="Insert a link to another document">
+              <SelectValue placeholder="Doc reference…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="d in store.items" :key="d.documentId" :value="d.documentId">
+                {{ d.title }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <Label for="editor-preview" class="ml-auto gap-1.5 text-xs font-normal text-muted-foreground">
+            <Checkbox id="editor-preview" v-model="showPreview" /> preview
+          </Label>
         </div>
 
         <!-- Editor + preview -->
         <div class="grid gap-4" :class="showPreview ? 'xl:grid-cols-2' : ''">
-          <textarea
-            ref="editorEl"
+          <!-- Textarea auto-sizes to content (field-sizing), so `rows` alone
+               would collapse the editor — pin the height the way `rows="24"`
+               used to, and let it grow with the preview pane's cap. -->
+          <Textarea
+            :ref="setEditorEl"
             v-model="body"
-            rows="24"
-            class="w-full rounded-md border bg-background p-3 font-mono text-sm"
+            class="min-h-[36rem] w-full p-3 font-mono text-sm"
             placeholder="# Markdown content…"
           />
           <div v-if="showPreview" class="max-h-[36rem] overflow-y-auto rounded-md border p-4">
@@ -306,9 +363,14 @@ function appendSuggestion(text: string) {
           </CardHeader>
           <CardContent class="space-y-2">
             <div v-for="(row, i) in relationRows" :key="i" class="flex gap-2">
-              <select v-model="row.type" class="rounded-md border bg-background px-2 py-1.5 text-sm">
-                <option v-for="t in RELATION_TYPES" :key="t" :value="t">{{ t }}</option>
-              </select>
+              <Select v-model="row.type">
+                <SelectTrigger class="text-sm" :aria-label="`Relation ${i + 1} type`">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="t in RELATION_TYPES" :key="t" :value="t">{{ t }}</SelectItem>
+                </SelectContent>
+              </Select>
               <Input v-model="row.key" placeholder="service:identity" class="font-mono text-sm" />
               <Input v-model="row.name" placeholder="Display name (optional)" class="text-sm" />
               <Button size="sm" variant="ghost" @click="relationRows.splice(i, 1)">✕</Button>

@@ -227,6 +227,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Users who are not members yet, for the add-member picker (workspace admin) */
+        get: operations["WorkspacesController_listCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{id}/members/{userId}": {
         parameters: {
             query?: never;
@@ -995,7 +1012,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List chat pane threads for a workspace, most recently active first */
+        /** List chat pane threads for a workspace, most recently active first (search + keyset pagination) */
         get: operations["AssistantController_listThreads"];
         put?: never;
         /** Start a new chat pane thread, optionally pinned to a document */
@@ -1017,10 +1034,12 @@ export interface paths {
         get: operations["AssistantController_getThread"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a chat thread and its whole message history */
+        delete: operations["AssistantController_deleteThread"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Rename a chat thread (null title restores the auto-derived one) */
+        patch: operations["AssistantController_updateThread"];
         trace?: never;
     };
     "/v1/assistant/threads/{id}/messages": {
@@ -1034,6 +1053,23 @@ export interface paths {
         put?: never;
         /** Post a chat message — runs the tool harness (read + write tools) and returns the assistant reply; writes always go through create_document (new page) or propose_update (merge request), never directly */
         post: operations["AssistantController_postMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assistant/threads/{id}/messages/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Streamed chat turn (text/event-stream of AssistantStreamFrame) — same turn as POST .../messages */
+        post: operations["AssistantController_streamMessage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1362,6 +1398,10 @@ export interface components {
              */
             documentId?: string;
             title?: string;
+        };
+        UpdateAssistantThreadDto: {
+            /** @description null clears the manual title so the auto-derived one shows again */
+            title?: string | null;
         };
         ChatAttachmentDto: {
             filename: string;
@@ -2000,6 +2040,47 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkspacesController_listCandidates: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive email/display-name substring match */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4298,6 +4379,11 @@ export interface operations {
         parameters: {
             query: {
                 workspaceId: string;
+                /** @description Case-insensitive substring over the title and the messages */
+                search?: string;
+                limit?: number;
+                /** @description updatedAt of the last row of the previous page (keyset cursor) */
+                cursor?: string;
             };
             header?: never;
             path?: never;
@@ -4372,10 +4458,7 @@ export interface operations {
     };
     AssistantController_getThread: {
         parameters: {
-            query: {
-                /** @description Unused by the lookup; required for the ACL check */
-                workspaceId: unknown;
-            };
+            query?: never;
             header?: never;
             path: {
                 id: string;
@@ -4410,12 +4493,128 @@ export interface operations {
             };
         };
     };
+    AssistantController_deleteThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantController_updateThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAssistantThreadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AssistantController_postMessage: {
         parameters: {
-            query: {
-                /** @description Unused by the lookup; required for the ACL check */
-                workspaceId: unknown;
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
             };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostAssistantMessageDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantController_streamMessage: {
+        parameters: {
+            query?: never;
             header?: never;
             path: {
                 id: string;

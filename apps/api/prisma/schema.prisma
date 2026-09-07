@@ -401,6 +401,11 @@ model AssistantMessage {
   // AssistantUiBlock[] — generative UI: existing components (GraphView/ActivityFeed/SearchWidget)
   // the assistant asked the chat pane to render inline for this turn.
   uiBlocks  Json     @default("[]") @map("ui_blocks")
+  // AssistantPrompt | null — the turn ended by asking the user something
+  // (pick one of these / tick the ones that apply / switch to Agent mode).
+  // Nullable rather than a default so "asked nothing" and "asked something"
+  // stay distinguishable, and the column can be added without a backfill.
+  prompt    Json?
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   thread AssistantThread @relation(fields: [threadId], references: [id])

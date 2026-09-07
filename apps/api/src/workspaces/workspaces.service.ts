@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
   CreateWorkspaceResponse,
+  ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
   WorkspaceRole,
@@ -66,6 +67,48 @@ export class WorkspacesService {
         trustedOperator: m.trustedOperator,
         disabled: m.user.disabledAt !== null,
         createdAt: m.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  /**
+   * Users who could still be added to the workspace (existing members filtered
+   * out). This is the only account lookup a workspace admin gets — it is
+   * capped, projects identity fields only, and exists because `addMember`
+   * takes an email of an *existing* account, which the picker has to find.
+   */
+  async listCandidates(
+    workspaceId: string,
+    query: string | undefined,
+    limit: number,
+  ): Promise<ListWorkspaceCandidatesResponse> {
+    const members = await this.prisma.workspaceMember.findMany({
+      where: { workspaceId },
+      select: { userId: true },
+    });
+    const needle = query?.trim();
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { notIn: members.map((m) => m.userId) },
+        ...(needle
+          ? {
+              OR: [
+                { email: { contains: needle, mode: 'insensitive' as const } },
+                { displayName: { contains: needle, mode: 'insensitive' as const } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { displayName: 'asc' },
+      take: limit,
+    });
+    return {
+      workspaceId,
+      candidates: users.map((u) => ({
+        userId: u.id,
+        email: u.email,
+        displayName: u.displayName,
+        disabled: u.disabledAt !== null,
       })),
     };
   }

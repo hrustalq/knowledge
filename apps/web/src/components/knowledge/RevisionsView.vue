@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Feature 05 (docs/features/05): revision DAG + inline compare.
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type {
   CompareResponse,
@@ -12,6 +12,14 @@ import { apiFetch, statusVariant } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DiffView from '@/components/knowledge/DiffView.vue'
 
@@ -20,6 +28,15 @@ const props = defineProps<{ documentId: string }>()
 const revisions = ref<RevisionNode[] | null>(null)
 const branches = ref<ListBranchesResponse['branches']>([])
 const branchFilter = ref<string>('')
+// reka-ui reserves '' as the Select's "cleared" value and rejects it on an
+// item, so the all-branches choice rides a sentinel.
+const ALL_BRANCHES = '__all__'
+const branchModel = computed({
+  get: () => branchFilter.value || ALL_BRANCHES,
+  set: (v: string) => {
+    branchFilter.value = v === ALL_BRANCHES ? '' : v
+  },
+})
 const from = ref<string>('')
 const to = ref<string>('')
 const compare = ref<CompareResponse | null>(null)
@@ -59,10 +76,15 @@ watch(branchFilter, () => void load())
 <template>
   <div class="space-y-4">
     <div class="flex items-center gap-3">
-      <select v-model="branchFilter" class="rounded-md border bg-background px-2 py-1.5 text-sm">
-        <option value="">all branches</option>
-        <option v-for="b in branches" :key="b.branchId" :value="b.name">{{ b.name }}</option>
-      </select>
+      <Select v-model="branchModel">
+        <SelectTrigger size="sm" class="text-sm" aria-label="Filter by branch">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem :value="ALL_BRANCHES">all branches</SelectItem>
+          <SelectItem v-for="b in branches" :key="b.branchId" :value="b.name">{{ b.name }}</SelectItem>
+        </SelectContent>
+      </Select>
       <Button size="sm" :disabled="!from || !to || from === to || busy" @click="runCompare">
         {{ busy ? 'Comparing…' : 'Compare selected' }}
       </Button>
@@ -91,8 +113,22 @@ watch(branchFilter, () => void load())
         </thead>
         <tbody>
           <tr v-for="r in revisions" :key="r.revisionId" class="border-b last:border-0 hover:bg-muted/40">
-            <td class="px-2 py-2"><input v-if="r.contentHash" v-model="from" type="radio" name="from" :value="r.revisionId" /></td>
-            <td class="px-2 py-2"><input v-if="r.contentHash" v-model="to" type="radio" name="to" :value="r.revisionId" /></td>
+            <td class="px-2 py-2">
+              <RadioGroup v-if="r.contentHash" v-model="from">
+                <RadioGroupItem
+                  :value="r.revisionId"
+                  :aria-label="`Compare from revision ${r.revisionNumber}`"
+                />
+              </RadioGroup>
+            </td>
+            <td class="px-2 py-2">
+              <RadioGroup v-if="r.contentHash" v-model="to">
+                <RadioGroupItem
+                  :value="r.revisionId"
+                  :aria-label="`Compare to revision ${r.revisionNumber}`"
+                />
+              </RadioGroup>
+            </td>
             <td class="px-3 py-2">{{ r.revisionNumber }}</td>
             <td class="px-3 py-2 font-mono text-xs">{{ r.revisionId.slice(0, 8) }}</td>
             <td class="px-3 py-2">{{ r.branch ?? '—' }}</td>

@@ -9,16 +9,16 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useInfiniteQuery } from '@tanstack/vue-query'
 import { useInfiniteScroll, useVirtualList } from '@vueuse/core'
-import { toast } from 'vue-sonner'
 import { Plus } from 'lucide-vue-next'
-import type { CreateProjectResponse, ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
+import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
+import type { ScopeCreated } from '@/lib/scopes'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import SwitcherCreateDialog from '@/components/layout/SwitcherCreateDialog.vue'
 
 const auth = useAuthStore()
 const store = useProjectsStore()
@@ -76,27 +76,15 @@ watch(picked, (ids) => {
   void router.push(`/settings/projects/${id}`)
 })
 
-const newName = ref('')
-const creating = ref(false)
+// Creating is the same flow as everywhere else — the shared dialog, with its
+// loader, its inline errors and its skippable follow-up step. This rail only
+// decides where to land afterwards: on the new project's own settings, since
+// that is the page the user is already standing on.
+const creating = ref<'workspace' | 'project' | null>(null)
 
-async function create() {
-  const name = newName.value.trim()
-  if (!name) return
-  creating.value = true
-  try {
-    const res = await apiFetch<CreateProjectResponse>('/v1/projects', {
-      method: 'POST',
-      body: JSON.stringify({ workspaceId: getWorkspaceId(), name, description: null }),
-    })
-    newName.value = ''
-    toast.success(`Project "${res.project.name}" created`)
-    await reload()
-    void router.push(`/settings/projects/${res.project.projectId}`)
-  } catch (e) {
-    toast.error((e as Error).message)
-  } finally {
-    creating.value = false
-  }
+async function onCreated(created: ScopeCreated) {
+  await reload()
+  void router.push(`/settings/projects/${created.id}`)
 }
 </script>
 
@@ -148,11 +136,15 @@ async function create() {
       </div>
 
       <!-- Create sits at the foot of the rail, below its own divider. -->
-      <div v-if="auth.canEdit" class="mt-auto flex shrink-0 gap-1.5 border-t p-2">
-        <Input v-model="newName" placeholder="New project" class="h-8 text-sm" @keyup.enter="create" />
-        <Button size="sm" class="shrink-0 px-2" :disabled="creating || !newName.trim()" @click="create">
+      <div v-if="auth.canEdit" class="mt-auto shrink-0 border-t p-2">
+        <Button
+          variant="outline"
+          size="sm"
+          class="w-full justify-start gap-2"
+          @click="creating = 'project'"
+        >
           <Plus class="size-4" />
-          <span class="sr-only">Create project</span>
+          New project
         </Button>
       </div>
     </div>
@@ -160,5 +152,7 @@ async function create() {
     <div class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
       <RouterView @changed="reload" />
     </div>
+
+    <SwitcherCreateDialog :kind="creating" @update:kind="creating = $event" @created="onCreated" />
   </div>
 </template>

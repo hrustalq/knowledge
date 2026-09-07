@@ -1,13 +1,19 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   CreateWorkspaceResponse,
+  ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
-import { AddMemberDto, CreateWorkspaceDto, UpdateMemberDto } from './workspaces.dto.js';
+import {
+  AddMemberDto,
+  CreateWorkspaceDto,
+  ListCandidatesQueryDto,
+  UpdateMemberDto,
+} from './workspaces.dto.js';
 import { WorkspacesService } from './workspaces.service.js';
 
 /**
@@ -37,6 +43,16 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'Workspace member roster (any member)' })
   listMembers(@Param('id', ParseUUIDPipe) id: string): Promise<ListWorkspaceMembersResponse> {
     return this.workspaces.listMembers(id);
+  }
+
+  @Get(':id/candidates')
+  @Access('admin', 'workspace')
+  @ApiOperation({ summary: 'Users who are not members yet, for the add-member picker (workspace admin)' })
+  listCandidates(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ListCandidatesQueryDto,
+  ): Promise<ListWorkspaceCandidatesResponse> {
+    return this.workspaces.listCandidates(id, query.q, query.limit ?? 20);
   }
 
   @Post(':id/members')

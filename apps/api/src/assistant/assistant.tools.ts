@@ -1,6 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
-import type { AssistantAskSource, AssistantChatMode, AssistantUiBlock, DocumentCategory } from '@knowledge/contracts';
+import type {
+  AssistantAskSource,
+  AssistantChatMode,
+  AssistantPrompt,
+  AssistantPromptField,
+  AssistantPromptOption,
+  AssistantUiBlock,
+  DocumentCategory,
+} from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -12,6 +20,18 @@ import { SearchService } from '../search/search.service.js';
 /** Tools that mutate the workspace — require 'editor', not just 'viewer'. Exported so
  * AssistantService can also filter them out of the tool list when mode = 'ask'. */
 export const WRITE_TOOLS = new Set(['create_document', 'propose_update']);
+
+/**
+ * Tools that do not count against the turn's tool budget.
+ *
+ * The budget bounds *work* — searches, reads, graph walks, writes. Asking the
+ * user something is not work: it touches nothing, and it is how a turn that
+ * has run out of room is supposed to end. Billing it produced exactly the
+ * failure it should have prevented: the model spent its budget finding out
+ * what the options were, then had no tool left to offer them with, and wrote
+ * the question out as prose for the user to answer by hand.
+ */
+export const FREE_TOOLS = new Set(['ask_user', 'request_agent_mode']);
 
 /**
  * Everything a tool run is allowed to see. `workspaceId` is pinned from the
@@ -33,11 +53,27 @@ export interface AssistantToolResult {
   /** Set only by render_component — an existing product component (GraphView/ActivityFeed/
    * SearchWidget) the assistant wants the chat pane to render inline for this turn. */
   uiBlock?: AssistantUiBlock;
+  /** Set by ask_user / request_agent_mode — a question for the user that ends the turn. */
+  prompt?: AssistantPrompt;
 }
 
 const UI_COMPONENTS = new Set(['graph', 'activity', 'search']);
 
 const MAX_DOC_CHARS = 24_000;
+
+// Bounds on a model-authored form. A prompt is a thing the user has to read
+// and act on, so the limits are about what stays answerable in a chat column,
+// not about what the model could technically emit.
+const MAX_PROMPT_FIELDS = 4;
+const MAX_PROMPT_OPTIONS = 8;
+const PROMPT_FIELD_TYPES = new Set(['choice', 'checklist', 'text']);
+
+/**
+ * Tools whose only effect is something the chat pane draws. A caller that
+ * renders plain text — the one-shot /assistant/ask endpoint — must never be
+ * offered them, or the model spends a turn producing a form nobody will see.
+ */
+const PANE_ONLY_TOOLS = new Set(['render_component', 'ask_user', 'request_agent_mode']);
 
 /**
  * The assistant's tool surface (docs/features/09). Three read-only tools, all
@@ -126,6 +162,86 @@ export class AssistantToolsService {
       {
         type: 'function',
         function: {
+          name: 'ask_user',
+          description:
+            'Ask the user a question as a form in the chat instead of guessing, or instead of writing the ' +
+            'options out as prose and hoping they answer in a parseable way. Use it when the request is ' +
+            'genuinely ambiguous, when you need them to pick between real alternatives, or when you are about ' +
+            'to do something wide-reaching and want the scope confirmed. Renders radios for "choice", ' +
+            'checkboxes for "checklist", and a text box for "text". END YOUR TURN right after calling this — ' +
+            'their answer arrives as the next message. Do not use it for questions you can answer yourself ' +
+            'with a tool, and never ask more than one form per turn.',
+          parameters: {
+            type: 'object',
+            properties: {
+              question: { type: 'string', description: 'What you are asking, in one or two sentences' },
+              fields: {
+                type: 'array',
+                maxItems: MAX_PROMPT_FIELDS,
+                description: 'The inputs to show, in order',
+                items: {
+                  type: 'object',
+                  properties: {
+                    type: { type: 'string', enum: ['choice', 'checklist', 'text'] },
+                    name: { type: 'string', description: 'Short machine name, e.g. "scope"' },
+                    label: { type: 'string', description: 'Label shown above the input' },
+                    required: { type: 'boolean' },
+                    placeholder: { type: 'string', description: 'text fields only' },
+                    multiline: { type: 'boolean', description: 'text fields only' },
+                    options: {
+                      type: 'array',
+                      maxItems: MAX_PROMPT_OPTIONS,
+                      description: 'choice/checklist only',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          value: { type: 'string' },
+                          label: { type: 'string' },
+                          description: { type: 'string' },
+                        },
+                        required: ['value', 'label'],
+                      },
+                    },
+                  },
+                  required: ['type', 'name', 'label'],
+                },
+              },
+              submitLabel: { type: 'string', description: 'Button text, e.g. "Draft it"' },
+              allowOther: {
+                type: 'boolean',
+                description: 'Add a free-text box so the user can answer outside the options you listed',
+              },
+            },
+            required: ['question', 'fields'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'request_agent_mode',
+          description:
+            'The user asked for something that would change the workspace (create a page, edit a page) but ' +
+            'this chat is in Ask mode, where you have no write tools. Call this to offer them the switch as a ' +
+            'button instead of telling them in prose to go and find a toggle. Say what you would do in ' +
+            '`intent`; if they accept, that text is re-sent as an Agent turn. END YOUR TURN right after ' +
+            'calling this.',
+          parameters: {
+            type: 'object',
+            properties: {
+              intent: {
+                type: 'string',
+                description: 'The write you would perform, phrased as the instruction to re-send, e.g. ' +
+                  '"Create an onboarding page for new backend hires covering local setup and the deploy runbook"',
+              },
+            },
+            required: ['intent'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'render_component',
           description:
             'Render an existing, already-shipped product UI component inline in the chat instead of describing ' +
@@ -192,8 +308,14 @@ export class AssistantToolsService {
         },
       },
     ];
-    const scoped = mode === 'agent' ? all : all.filter((t) => !WRITE_TOOLS.has(t.function.name));
-    return ui ? scoped : scoped.filter((t) => t.function.name !== 'render_component');
+    // request_agent_mode exists only to offer back what Ask mode withholds, so
+    // in Agent mode — where the write tools are already on the table — it is
+    // not merely useless but actively confusing to offer.
+    const scoped =
+      mode === 'agent'
+        ? all.filter((t) => t.function.name !== 'request_agent_mode')
+        : all.filter((t) => !WRITE_TOOLS.has(t.function.name));
+    return ui ? scoped : scoped.filter((t) => !PANE_ONLY_TOOLS.has(t.function.name));
   }
 
   async execute(name: string, args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
@@ -208,6 +330,10 @@ export class AssistantToolsService {
           return await this.readDocument(args, ctx);
         case 'explore_document_graph':
           return await this.exploreGraph(args, ctx);
+        case 'ask_user':
+          return this.askUser(args);
+        case 'request_agent_mode':
+          return this.requestAgentMode(args);
         case 'render_component':
           return await this.renderComponent(args, ctx);
         case 'create_document':
@@ -386,6 +512,98 @@ export class AssistantToolsService {
     } catch (err) {
       return this.fail(err instanceof Error ? err.message : 'Failed to propose the update');
     }
+  }
+
+  /**
+   * Turns a model-authored form into one the pane can render.
+   *
+   * Everything here comes from the model, so nothing is trusted: field types
+   * are checked against the allowlist, lists are capped, strings are clipped,
+   * and a choice/checklist with no usable options is rejected rather than
+   * rendered as an empty question. The failure path matters as much as the
+   * happy one — a malformed form must come back as an error the model can
+   * read and retry, never as a dead widget in front of the user.
+   */
+  private askUser(args: Record<string, unknown>): AssistantToolResult {
+    const question = String(args.question ?? '').trim().slice(0, 500);
+    if (!question) return this.fail('question is required');
+
+    const raw = Array.isArray(args.fields) ? args.fields.slice(0, MAX_PROMPT_FIELDS) : [];
+    const fields: AssistantPromptField[] = [];
+    for (const entry of raw) {
+      if (typeof entry !== 'object' || entry === null) continue;
+      const f = entry as Record<string, unknown>;
+      const type = String(f.type ?? '');
+      const name = String(f.name ?? '').trim().slice(0, 60);
+      const label = String(f.label ?? '').trim().slice(0, 200);
+      if (!PROMPT_FIELD_TYPES.has(type) || !name || !label) continue;
+      const required = f.required === true;
+
+      if (type === 'text') {
+        fields.push({
+          type: 'text',
+          name,
+          label,
+          required,
+          ...(f.placeholder ? { placeholder: String(f.placeholder).slice(0, 120) } : {}),
+          ...(f.multiline === true ? { multiline: true } : {}),
+        });
+        continue;
+      }
+
+      const options: AssistantPromptOption[] = [];
+      for (const opt of Array.isArray(f.options) ? f.options.slice(0, MAX_PROMPT_OPTIONS) : []) {
+        if (typeof opt !== 'object' || opt === null) continue;
+        const o = opt as Record<string, unknown>;
+        const value = String(o.value ?? '').trim().slice(0, 120);
+        const optLabel = String(o.label ?? '').trim().slice(0, 200);
+        if (!value || !optLabel) continue;
+        options.push({
+          value,
+          label: optLabel,
+          ...(o.description ? { description: String(o.description).slice(0, 240) } : {}),
+        });
+      }
+      // A picker with nothing to pick is worse than no picker: it strands the
+      // user on a form they cannot complete.
+      if (options.length === 0) {
+        return this.fail(`Field "${name}" is a ${type} but has no usable options — give each option a value and a label`);
+      }
+      fields.push({ type: type as 'choice' | 'checklist', name, label, options, required });
+    }
+
+    if (fields.length === 0) return this.fail('fields must contain at least one valid choice, checklist or text field');
+
+    const prompt: AssistantPrompt = {
+      kind: 'form',
+      question,
+      fields,
+      ...(args.submitLabel ? { submitLabel: String(args.submitLabel).slice(0, 40) } : {}),
+      ...(args.allowOther === true ? { allowOther: true } : {}),
+    };
+    return {
+      content: JSON.stringify({
+        shown: true,
+        note: 'The form is now in front of the user. End your turn — their answer arrives as the next message.',
+      }),
+      ok: true,
+      sources: [],
+      prompt,
+    };
+  }
+
+  private requestAgentMode(args: Record<string, unknown>): AssistantToolResult {
+    const intent = String(args.intent ?? '').trim().slice(0, 2_000);
+    if (!intent) return this.fail('intent is required — say what you would do once you can write');
+    return {
+      content: JSON.stringify({
+        shown: true,
+        note: 'The user has been offered the switch to Agent mode. End your turn — if they accept, the intent comes back as a new message.',
+      }),
+      ok: true,
+      sources: [],
+      prompt: { kind: 'mode-switch', intent },
+    };
   }
 
   private async renderComponent(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {

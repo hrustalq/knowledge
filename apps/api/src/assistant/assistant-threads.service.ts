@@ -3,15 +3,24 @@ import type {
   AssistantAskSource,
   AssistantMessageInfo,
   AssistantMessageRole,
+  AssistantPrompt,
   AssistantThreadSummary,
   AssistantToolCall,
   AssistantUiBlock,
   CreateAssistantThreadResponse,
+  DeleteAssistantThreadResponse,
   GetAssistantThreadResponse,
   ListAssistantThreadsResponse,
+  UpdateAssistantThreadResponse,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { Prisma } from '@prisma/client';
 import type { AssistantMessage, AssistantThread } from '@prisma/client';
+
+const DEFAULT_THREAD_PAGE = 50;
+const MAX_THREAD_PAGE = 100;
+/** Long enough to tell two chats apart in a 16rem rail, short enough not to wrap. */
+const AUTO_TITLE_CHARS = 60;
 
 /**
  * Persistence for the chat pane's multi-turn threads (docs/features/09
@@ -39,23 +48,93 @@ export class AssistantThreadsService {
     return { thread: this.toSummary(thread) };
   }
 
-  async listThreads(workspaceId: string): Promise<ListAssistantThreadsResponse> {
-    const threads = await this.prisma.assistantThread.findMany({
-      where: { workspaceId },
+  /**
+   * The rail's roster. Cursor pagination is keyset over `updatedAt` (the sort
+   * key) rather than an offset, so a thread bumped to the top by a reply in
+   * another tab cannot make a later page skip or repeat a row.
+   */
+  async listThreads(
+    workspaceId: string,
+    opts: { search?: string; limit?: number; cursor?: string } = {},
+  ): Promise<ListAssistantThreadsResponse> {
+    const take = Math.min(Math.max(opts.limit ?? DEFAULT_THREAD_PAGE, 1), MAX_THREAD_PAGE);
+    const search = opts.search?.trim();
+    const before = opts.cursor ? new Date(opts.cursor) : null;
+    const rows = await this.prisma.assistantThread.findMany({
+      where: {
+        workspaceId,
+        ...(before && !Number.isNaN(before.getTime()) ? { updatedAt: { lt: before } } : {}),
+        // A chat is findable by what was said in it, not only by its title —
+        // most threads never get renamed, so title-only search finds nothing.
+        ...(search
+          ? {
+              OR: [
+                { title: { contains: search, mode: 'insensitive' as const } },
+                { messages: { some: { content: { contains: search, mode: 'insensitive' as const } } } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { updatedAt: 'desc' },
-      take: 50,
+      take: take + 1,
     });
-    if (threads.length === 0) return { threads: [] };
+    const page = rows.slice(0, take);
+    const nextCursor = rows.length > take ? (page.at(-1)?.updatedAt.toISOString() ?? null) : null;
+    if (page.length === 0) return { threads: [], nextCursor: null };
     // Latest message per thread, for the history-list preview line.
     const latest = await this.prisma.assistantMessage.findMany({
-      where: { threadId: { in: threads.map((t) => t.id) } },
+      where: { threadId: { in: page.map((t) => t.id) } },
       orderBy: [{ threadId: 'asc' }, { createdAt: 'desc' }],
       distinct: ['threadId'],
     });
     const previewByThread = new Map(latest.map((m) => [m.threadId, m.content]));
     return {
-      threads: threads.map((t) => this.toSummary(t, previewByThread.get(t.id))),
+      threads: page.map((t) => this.toSummary(t, previewByThread.get(t.id))),
+      nextCursor,
     };
+  }
+
+  async updateThread(threadId: string, patch: { title?: string | null }): Promise<UpdateAssistantThreadResponse> {
+    await this.getThreadOrThrow(threadId);
+    const thread = await this.prisma.assistantThread.update({
+      where: { id: threadId },
+      data: {
+        ...(patch.title !== undefined ? { title: patch.title?.trim() || null } : {}),
+        // A rename is metadata, not activity: keep the roster ordered by when
+        // the conversation last moved, not by when someone tidied its label.
+        updatedAt: undefined,
+      },
+    });
+    return { thread: this.toSummary(thread) };
+  }
+
+  /** Deletes the thread and its history. No FK cascade on the relation, so messages go first. */
+  async deleteThread(threadId: string): Promise<DeleteAssistantThreadResponse> {
+    await this.getThreadOrThrow(threadId);
+    await this.prisma.$transaction([
+      this.prisma.assistantMessage.deleteMany({ where: { threadId } }),
+      this.prisma.assistantThread.delete({ where: { id: threadId } }),
+    ]);
+    return { ok: true };
+  }
+
+  /**
+   * Names an untitled thread after its opening message. Threads are created
+   * before anything is said, so without this every row in the rail reads "New
+   * chat" — and a list you cannot scan is not a history. A manual rename wins
+   * forever: this only ever fills a null.
+   */
+  async autoTitle(threadId: string, firstMessage: string): Promise<void> {
+    const condensed = firstMessage.replace(/\s+/g, ' ').trim();
+    if (!condensed) return;
+    const title =
+      condensed.length <= AUTO_TITLE_CHARS
+        ? condensed
+        : `${condensed.slice(0, AUTO_TITLE_CHARS).replace(/\s+\S*$/, '')}…`;
+    await this.prisma.assistantThread.updateMany({
+      where: { id: threadId, title: null },
+      data: { title },
+    });
   }
 
   async getThread(threadId: string): Promise<GetAssistantThreadResponse> {
@@ -87,7 +166,12 @@ export class AssistantThreadsService {
     threadId: string,
     role: AssistantMessageRole,
     content: string,
-    opts: { toolCalls?: AssistantToolCall[]; sources?: AssistantAskSource[]; uiBlocks?: AssistantUiBlock[] } = {},
+    opts: {
+      toolCalls?: AssistantToolCall[];
+      sources?: AssistantAskSource[];
+      uiBlocks?: AssistantUiBlock[];
+      prompt?: AssistantPrompt | null;
+    } = {},
   ): Promise<AssistantMessageInfo> {
     const [message] = await this.prisma.$transaction([
       this.prisma.assistantMessage.create({
@@ -98,6 +182,9 @@ export class AssistantThreadsService {
           toolCalls: (opts.toolCalls ?? []) as object,
           sources: (opts.sources ?? []) as object,
           uiBlocks: (opts.uiBlocks ?? []) as object,
+          // Prisma distinguishes a SQL NULL from a JSON `null` literal; a turn
+          // that asked nothing wants the column empty, not the string "null".
+          prompt: opts.prompt ? (opts.prompt as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         },
       }),
       this.prisma.assistantThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } }),
@@ -129,6 +216,7 @@ export class AssistantThreadsService {
       toolCalls: (m.toolCalls ?? []) as unknown as AssistantToolCall[],
       sources: (m.sources ?? []) as unknown as AssistantAskSource[],
       uiBlocks: (m.uiBlocks ?? []) as unknown as AssistantUiBlock[],
+      prompt: (m.prompt ?? null) as unknown as AssistantPrompt | null,
       createdAt: m.createdAt.toISOString(),
     };
   }

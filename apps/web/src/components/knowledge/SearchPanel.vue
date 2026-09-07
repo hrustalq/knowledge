@@ -5,6 +5,8 @@
 import { ref } from 'vue'
 import { Search, SlidersHorizontal } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { nativeEl } from '@/lib/utils'
 import SearchFilters from './SearchFilters.vue'
 import SearchResults from './SearchResults.vue'
 import type { UseSearch } from './use-search'
@@ -22,6 +24,9 @@ withDefaults(
 const emit = defineEmits<{ navigate: []; 'switch-workspace': [workspaceId: string] }>()
 
 const queryEl = ref<HTMLInputElement | null>(null)
+const setQueryEl = (c: unknown) => {
+  queryEl.value = nativeEl<HTMLInputElement>(c)
+}
 const filtersOpen = ref(false)
 
 defineExpose({ focusQuery: () => queryEl.value?.focus() })
@@ -50,12 +55,12 @@ defineExpose({ focusQuery: () => queryEl.value?.focus() })
             <Search
               class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
             />
-            <input
-              ref="queryEl"
+            <Input
+              :ref="setQueryEl"
               v-model="search.query.value"
               :placeholder="placeholder"
               aria-label="Search query"
-              class="h-9 w-full rounded-md border bg-background pl-8 pr-3 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/50"
+              class="pl-8"
             />
           </div>
           <Button type="submit" :disabled="search.busy.value || !search.query.value.trim()">

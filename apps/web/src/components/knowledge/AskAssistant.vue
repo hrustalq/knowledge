@@ -7,6 +7,8 @@ import { Send, Sparkles, X } from 'lucide-vue-next'
 import type { AssistantAskResponse, AssistantAskSource } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { nativeEl } from '@/lib/utils'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 
 interface ChatMessage {
@@ -24,6 +26,9 @@ const busy = ref(false)
 const error = ref<string | null>(null)
 const listEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
+const setInputEl = (c: unknown) => {
+  inputEl.value = nativeEl<HTMLInputElement>(c)
+}
 
 // A different page is a different conversation.
 watch(
@@ -134,12 +139,12 @@ async function send() {
     </div>
 
     <form class="flex items-center gap-2 border-t p-2.5" @submit.prevent="send">
-      <input
-        ref="inputEl"
+      <Input
+        :ref="setInputEl"
         v-model="question"
         :disabled="busy"
         placeholder="Ask about this page…"
-        class="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-ring"
+        class="min-w-0 flex-1"
       />
       <Button type="submit" size="icon-sm" :disabled="busy || !question.trim()" aria-label="Send">
         <Send class="size-4" />

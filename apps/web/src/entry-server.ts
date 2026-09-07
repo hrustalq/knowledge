@@ -6,6 +6,7 @@ interface SsrRequestContext {
   token: string | null
   workspaceId: string | null
   projectId: string | null
+  pane: string | null
 }
 
 // Per-request auth context for lib/api (async-context scoped, so concurrent
@@ -19,6 +20,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     token: ctx.token ?? null,
     workspaceId: ctx.workspaceId ?? null,
     projectId: ctx.projectId ?? null,
+    pane: ctx.pane ?? null,
   }
   return ssrCtx.run(request, async () => {
     const { app, router, pinia } = createApp()

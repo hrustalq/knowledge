@@ -38,7 +38,7 @@ if (!isProduction) {
   app.use(base, sirv('./dist/client', { extensions: [] }))
 }
 
-/** Minimal cookie read — auth token + active workspace for the SSR pass. */
+/** Minimal cookie read — auth token, active scope and sidebar pane for the SSR pass. */
 function readCookie(header, name) {
   if (!header) return null
   for (const part of header.split(';')) {
@@ -72,6 +72,7 @@ app.use('*all', async (req, res) => {
     const rendered = await render(url, {
       token: readCookie(req.headers.cookie, 'kn_token'),
       projectId: readCookie(req.headers.cookie, 'kn_proj'),
+      pane: readCookie(req.headers.cookie, 'kn_pane'),
       workspaceId: readCookie(req.headers.cookie, 'kn_ws'),
     })
 

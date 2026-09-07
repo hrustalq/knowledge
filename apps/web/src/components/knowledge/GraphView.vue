@@ -15,6 +15,14 @@ import { Maximize2, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import type { DocumentGraphResponse } from '@knowledge/contracts'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const props = defineProps<{ documentId: string }>()
@@ -237,12 +245,17 @@ onBeforeUnmount(() => {
 <template>
   <div class="space-y-3">
     <div class="flex items-center gap-3">
-      <label class="text-sm text-muted-foreground">Depth</label>
-      <select v-model.number="depth" class="rounded-md border bg-background px-2 py-1.5 text-sm">
-        <option :value="1">1 hop</option>
-        <option :value="2">2 hops</option>
-        <option :value="3">3 hops</option>
-      </select>
+      <Label for="graph-depth" class="text-sm font-normal text-muted-foreground">Depth</Label>
+      <Select v-model="depth">
+        <SelectTrigger id="graph-depth" size="sm" class="text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem :value="1">1 hop</SelectItem>
+          <SelectItem :value="2">2 hops</SelectItem>
+          <SelectItem :value="3">3 hops</SelectItem>
+        </SelectContent>
+      </Select>
       <span v-if="graph" class="text-xs text-muted-foreground">
         {{ graph.nodes.length }} nodes · {{ graph.edges.length }} edges · dashed = inferred
       </span>

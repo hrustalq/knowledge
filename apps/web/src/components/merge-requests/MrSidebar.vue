@@ -7,6 +7,8 @@ import { Pencil } from 'lucide-vue-next'
 import type { MergeRequestInfo } from '@knowledge/contracts'
 import { useApiMutation } from '@/api/queries'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import UserAvatar from './UserAvatar.vue'
 import AiCheckCard from './AiCheckCard.vue'
 import { useMembers } from './use-members'
@@ -151,20 +153,19 @@ function submitReviewers() {
 
       <div v-else class="mt-2 space-y-1">
         <p v-if="members.length === 0" class="text-xs text-muted-foreground">No workspace members.</p>
-        <label
+        <Label
           v-for="m in members"
           :key="m.userId"
-          class="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted"
+          class="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm font-normal hover:bg-muted"
         >
-          <input
-            type="checkbox"
-            :checked="selected.has(m.userId)"
+          <Checkbox
+            :model-value="selected.has(m.userId)"
             :disabled="saveReviewers.isPending.value"
-            @change="toggleReviewer(m.userId)"
+            @update:model-value="toggleReviewer(m.userId)"
           />
           <UserAvatar :user-id="m.userId" :name="m.displayName" size="sm" />
           <span class="truncate">{{ m.displayName }}</span>
-        </label>
+        </Label>
         <Button
           v-if="reviewersDirty"
           size="xs"

@@ -113,6 +113,20 @@ const isEmptyRoster = computed(
   () => !props.load && (props.options?.length ?? 0) === 0,
 )
 
+/**
+ * Single-select wears its choice in the field: it has no chips (those would
+ * read as "one of several" for a control that holds exactly one), so the field
+ * is the only place the selection can show. While the list is open the query
+ * wins, so typing always starts from a clean field rather than from a label
+ * the user has to delete first.
+ */
+const selectedLabel = computed(() =>
+  props.multiple ? '' : (selectedOptions.value[0]?.label ?? ''),
+)
+const displayValue = computed(() =>
+  open.value ? query.value : selectedLabel.value || query.value,
+)
+
 watch(matches, () => {
   activeIndex.value = 0
 })
@@ -171,6 +185,15 @@ function onKeydown(e: KeyboardEvent) {
     const option = matches.value[activeIndex.value]
     if (option) pick(option)
   }
+}
+
+/**
+ * Opening a single-select drops the displayed label so the whole roster is
+ * offered; leaving the field brings the selection back (see `displayValue`).
+ */
+function onFocus() {
+  if (!props.multiple) query.value = ''
+  open.value = true
 }
 
 /** Blur closes, but not when the click landed inside our own list. */
@@ -290,7 +313,7 @@ const listId = useId()
       <input
         :id="listId + '-input'"
         ref="inputEl"
-        v-model="query"
+        :value="displayValue"
         type="text"
         role="combobox"
         autocomplete="off"
@@ -299,7 +322,8 @@ const listId = useId()
         :placeholder="placeholder"
         :disabled="disabled || isEmptyRoster"
         class="h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/50 disabled:opacity-50"
-        @focus="open = true"
+        @input="query = ($event.target as HTMLInputElement).value"
+        @focus="onFocus"
         @blur="onBlur"
         @keydown="onKeydown"
       />

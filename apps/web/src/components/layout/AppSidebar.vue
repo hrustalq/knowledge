@@ -1,26 +1,35 @@
 <script setup lang="ts">
-// Left navigation rail: brand, workspace + project switchers, primary nav and
-// the live page tree (Confluence-style space sidebar).
-import { computed, onMounted, type Component } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
-import { GitPullRequestArrow, House, Library, Plus, Settings, Sparkles, Upload } from 'lucide-vue-next'
-import { useAuthStore } from '@/stores/auth'
-import { useDocumentsStore } from '@/stores/documents'
-import { Skeleton } from '@/components/ui/skeleton'
+// Left navigation rail: brand, workspace switcher, primary nav, and the
+// Projects → Pages navigation stack (Confluence-style space sidebar).
+import { computed, ref, type Component } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { GitPullRequestArrow, House, Library, Settings, Sparkles } from 'lucide-vue-next'
+import type { ScopeCreated } from '@/lib/scopes'
 import ScopeSwitcher from './ScopeSwitcher.vue'
-import SidebarTreeNode from './SidebarTreeNode.vue'
+import SidebarPanes from './SidebarPanes.vue'
+import SwitcherCreateDialog from './SwitcherCreateDialog.vue'
 
-const auth = useAuthStore()
-const store = useDocumentsStore()
 const route = useRoute()
+const router = useRouter()
 
-onMounted(() => {
-  if (!store.treeLoaded) void store.fetchTree()
-})
+// The create dialog is owned here because both scope levels open it: the
+// workspace row in the switcher above, and the roster's + button below.
+const creating = ref<'workspace' | 'project' | null>(null)
+const seedName = ref('')
 
-const activeDocId = computed(() =>
-  route.path.startsWith('/documents/') ? ((route.params.id as string) ?? null) : null,
-)
+function openCreate(kind: 'workspace' | 'project', query = '') {
+  seedName.value = query
+  creating.value = kind
+}
+
+/**
+ * The dialog applies the scope switch itself; where to land afterwards is the
+ * caller's business. From the rail, a new project means "show me its pages" —
+ * a new workspace reloads the app, so there is nothing to route.
+ */
+function onCreated(created: ScopeCreated) {
+  if (created.kind === 'project') void router.push('/documents')
+}
 
 interface NavLink { to: string; label: string; icon: Component }
 const links = computed<NavLink[]>(() => [
@@ -38,15 +47,15 @@ function isCurrent(to: string): boolean {
 </script>
 
 <template>
-  <aside class="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+  <aside class="border-sidebar-border bg-sidebar text-sidebar-foreground flex h-full w-64 shrink-0 flex-col border-r">
     <div class="pt-4 pb-3">
       <RouterLink to="/documents" class="flex items-center gap-2 px-4">
-        <span class="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
+        <span class="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-md">
           <Library class="size-4" />
         </span>
         <span class="font-display text-[15px] font-bold tracking-tight">Knowledge</span>
       </RouterLink>
-      <ScopeSwitcher />
+      <ScopeSwitcher @create="openCreate" />
     </div>
 
     <nav class="space-y-px px-2" aria-label="Primary">
@@ -64,44 +73,13 @@ function isCurrent(to: string): boolean {
       </RouterLink>
     </nav>
 
-    <div class="mt-4 flex items-center justify-between px-4">
-      <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pages</span>
-      <div v-if="auth.canEdit" class="flex gap-0.5">
-        <RouterLink
-          to="/upload"
-          title="Upload markdown"
-          class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-        >
-          <Upload class="size-3.5" />
-        </RouterLink>
-        <RouterLink
-          to="/create"
-          title="New page"
-          class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-        >
-          <Plus class="size-4" />
-        </RouterLink>
-      </div>
-    </div>
+    <SidebarPanes @create="openCreate('project')" />
 
-    <div class="sidebar-scroll mt-1 min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-      <div v-if="!store.treeLoaded" class="space-y-1.5 px-1 pt-1">
-        <Skeleton v-for="i in 6" :key="i" class="h-7 w-full" />
-      </div>
-      <p v-else-if="store.tree.length === 0" class="px-2.5 pt-1 text-xs text-muted-foreground">
-        No pages yet<template v-if="auth.canEdit">
-          —
-          <RouterLink to="/create" class="text-primary hover:underline">create the first one</RouterLink></template>.
-      </p>
-      <ul v-else class="space-y-px">
-        <SidebarTreeNode
-          v-for="node in store.tree"
-          :key="node.documentId"
-          :node="node"
-          :depth="0"
-          :active-id="activeDocId"
-        />
-      </ul>
-    </div>
+    <SwitcherCreateDialog
+      :kind="creating"
+      :initial-name="seedName"
+      @update:kind="creating = $event"
+      @created="onCreated"
+    />
   </aside>
 </template>

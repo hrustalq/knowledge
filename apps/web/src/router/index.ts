@@ -22,7 +22,8 @@ export function createRouter() {
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
       { path: '/merge-requests', component: () => import('@/pages/MergeRequestsPage.vue') },
       { path: '/merge-requests/:id', component: () => import('@/pages/MergeRequestDetailPage.vue') },
-      { path: '/assistant', component: () => import('@/pages/AssistantPage.vue') },
+      // meta.fill: the chat owns the viewport — see App.vue's two content modes.
+      { path: '/assistant', component: () => import('@/pages/AssistantPage.vue'), meta: { fill: true } },
       // Settings: shell with its own right-hand nav; the sections are nested pages.
       {
         path: '/settings',

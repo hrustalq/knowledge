@@ -2,13 +2,19 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
   AssistantAskResponse,
   AssistantAskSource,
+  AssistantChatMode,
   AssistantIssue,
+  AssistantMessageInfo,
+  AssistantPrompt,
   AssistantRelatedResponse,
   AssistantReviewResponse,
+  AssistantStreamFrame,
   AssistantSuggestResponse,
+  AssistantToolCall,
   AssistantUiBlock,
   PostAssistantMessageResponse,
 } from '@knowledge/contracts';
+import type { AssistantThread } from '@prisma/client';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -27,6 +33,30 @@ import type {
 } from './assistant.dto.js';
 
 const SEVERITIES = ['error', 'warning', 'suggestion'] as const;
+
+/**
+ * Generative UI: at most 4 rendered blocks per turn — the model gets a plain
+ * error back from the render_component tool once the cap is hit, the same
+ * pattern as every other tool-side guard rail.
+ */
+const MAX_UI_BLOCKS = 4;
+
+/**
+ * Everything one chat turn needs, built once and shared by the whole-response
+ * and streamed paths. `collected` and `uiBlocks` are accumulators the tool
+ * executor writes into as the harness runs; `emittedUiBlocks` is how far the
+ * streamed path has already forwarded them to the client.
+ */
+interface PreparedTurn {
+  mode: AssistantChatMode;
+  messages: ChatCompletionMessageParam[];
+  collected: Map<string, AssistantAskSource>;
+  uiBlocks: AssistantUiBlock[];
+  emittedUiBlocks: number;
+  /** At most one question per turn — the first one asked wins, so a model that
+   * calls ask_user twice cannot bury its own form under a second one. */
+  prompt: AssistantPrompt | null;
+}
 
 /**
  * Feature 09 (docs/features/09): AI assistant behind an env switch, mirroring
@@ -75,7 +105,7 @@ export class AssistantService {
     );
     const parsed = this.parseJson(raw);
     const issues: AssistantIssue[] = Array.isArray(parsed?.issues)
-      ? (parsed.issues as Array<Record<string, unknown>>)
+      ? (parsed?.issues as Array<Record<string, unknown>>)
           .filter((i) => typeof i?.message === 'string')
           .slice(0, 15)
           .map((i) => ({
@@ -185,17 +215,132 @@ export class AssistantService {
    * One turn of a persisted chat thread (the pane): appends the user
    * message, runs the same tool harness as `ask` — now including the write
    * tools — publishing coarse-grained lifecycle events on the existing live
-   * bus (subjectId = threadId) so the pane can show "thinking" / tool-call
-   * chips while the (non-streaming) provider call is in flight, then
-   * persists and returns the assistant's reply.
+   * bus (subjectId = threadId) so other clients can show "thinking" /
+   * tool-call chips while the provider call is in flight, then persists and
+   * returns the assistant's reply.
+   *
+   * This is the whole-response path. {@link streamMessage} runs the identical
+   * turn incrementally; both share {@link prepareTurn} and {@link runTool} so
+   * the prompt, the guard rails and the persisted result cannot drift apart.
    */
   async postMessage(
     threadId: string,
     dto: PostAssistantMessageDto,
     principal: Principal,
   ): Promise<PostAssistantMessageResponse> {
+    const opened = await this.openTurn(threadId, dto, principal);
+    if (!opened.enabled) return opened.response;
+    const { thread, userMessage, turn } = opened;
+
+    const { content, trace } = await this.client.runWithTools(
+      turn.messages,
+      this.tools.definitions(turn.mode),
+      (name, args) => this.runTool(name, args, { principal, thread, turn }),
+    );
+
+    const assistantMessage = await this.finishTurn(thread, turn, content, trace);
+    return { enabled: true, userMessage, assistantMessage };
+  }
+
+  /**
+   * The same turn as {@link postMessage}, delivered as it happens. Every
+   * frame is handed to `emit`; the caller owns the transport (the controller
+   * writes them as SSE) and the terminal `done`/`error` framing.
+   *
+   * Prose streams round by round: `roundEnd` marks the prose that preceded a
+   * tool call as reasoning rather than answer, so the client can fold it into
+   * a trail instead of leaving it stuck above the real reply. Only the final
+   * round is persisted, exactly as in the non-streaming path.
+   */
+  async streamMessage(
+    threadId: string,
+    dto: PostAssistantMessageDto,
+    principal: Principal,
+    emit: (frame: AssistantStreamFrame) => void,
+    /** Aborted when the client hangs up (Stop, navigation, a closed tab). */
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const opened = await this.openTurn(threadId, dto, principal);
+    emit({ type: 'user-message', message: opened.userMessage });
+    if (!opened.enabled) {
+      emit({ type: 'done', message: opened.response.assistantMessage });
+      return;
+    }
+    const { thread, turn } = opened;
+
+    emit({ type: 'status', phase: 'thinking' });
+    let announcedSources = 0;
+    let announcedPrompt = false;
+
+    const { content, trace, cancelled } = await this.client.runWithToolsStream(
+      turn.messages,
+      this.tools.definitions(turn.mode),
+      (name, args) => this.runTool(name, args, { principal, thread, turn }),
+      {
+        delta: (text) => emit({ type: 'delta', text }),
+        roundEnd: () => {
+          /* the tool-call frame that follows is the client's cue to close the round */
+        },
+        toolStart: (tool, args) => {
+          emit({ type: 'tool-call', phase: 'started', tool, arguments: args });
+        },
+        toolEnd: (tool, ok) => {
+          emit({ type: 'tool-call', phase: 'finished', tool, ok });
+          for (const block of turn.uiBlocks.slice(turn.emittedUiBlocks)) emit({ type: 'ui-block', block });
+          turn.emittedUiBlocks = turn.uiBlocks.length;
+          // The form appears the moment it is built rather than at the end of
+          // the turn: the model still has a closing sentence to write, and
+          // there is no reason to make the user wait for it to start reading.
+          if (turn.prompt && !announcedPrompt) {
+            announcedPrompt = true;
+            emit({ type: 'prompt', prompt: turn.prompt });
+          }
+          // Citations land as the model gathers them, so the documents pane
+          // fills in during the turn rather than all at once at the end.
+          if (turn.collected.size > announcedSources) {
+            announcedSources = turn.collected.size;
+            emit({ type: 'sources', sources: [...turn.collected.values()] });
+          }
+          emit({ type: 'status', phase: 'responding' });
+        },
+      },
+      signal,
+    );
+
+    // Stopped early. Whatever the model had written is kept — people stop
+    // because they already have what they needed, and an answer that visibly
+    // ends mid-thought is more use than one that vanishes. A turn stopped
+    // before it said anything leaves no reply at all rather than an empty one.
+    if (cancelled && !content.trim()) {
+      await this.events.publish({
+        type: 'assistant.turn.finished',
+        workspaceId: thread.workspaceId,
+        subjectId: thread.id,
+      });
+      return;
+    }
+
+    const assistantMessage = await this.finishTurn(thread, turn, content, trace);
+    emit({ type: 'done', message: assistantMessage });
+  }
+
+  /**
+   * Shared opening move: persist the user's message, name an untitled thread
+   * after it, and either short-circuit on a disabled provider or build the
+   * turn. Returns a discriminated result so both callers handle the disabled
+   * case without duplicating the placeholder reply.
+   */
+  private async openTurn(
+    threadId: string,
+    dto: PostAssistantMessageDto,
+    principal: Principal,
+  ): Promise<
+    | { enabled: false; userMessage: AssistantMessageInfo; response: PostAssistantMessageResponse }
+    | { enabled: true; userMessage: AssistantMessageInfo; thread: AssistantThread; turn: PreparedTurn }
+  > {
     const thread = await this.threads.getThreadOrThrow(threadId);
     const userMessage = await this.threads.appendMessage(threadId, 'user', dto.content);
+    await this.threads.autoTitle(threadId, dto.content);
 
     if (!this.client.enabled) {
       const assistantMessage = await this.threads.appendMessage(
@@ -203,7 +348,7 @@ export class AssistantService {
         'assistant',
         'Assistant disabled (ASSISTANT_PROVIDER=none).',
       );
-      return { enabled: false, userMessage, assistantMessage };
+      return { enabled: false, userMessage, response: { enabled: false, userMessage, assistantMessage } };
     }
 
     await this.events.publish({
@@ -213,6 +358,85 @@ export class AssistantService {
       actor: principal.userId,
     });
 
+    const turn = await this.prepareTurn(thread, dto, userMessage.id);
+    return { enabled: true, userMessage, thread, turn };
+  }
+
+  /** Persist the reply and close the turn on the live bus. */
+  private async finishTurn(
+    thread: AssistantThread,
+    turn: PreparedTurn,
+    content: string,
+    trace: AssistantToolCall[],
+  ): Promise<AssistantMessageInfo> {
+    const assistantMessage = await this.threads.appendMessage(thread.id, 'assistant', content.trim(), {
+      toolCalls: trace,
+      sources: [...turn.collected.values()],
+      uiBlocks: turn.uiBlocks,
+      prompt: turn.prompt,
+    });
+    await this.events.publish({
+      type: 'assistant.turn.finished',
+      workspaceId: thread.workspaceId,
+      subjectId: thread.id,
+    });
+    return assistantMessage;
+  }
+
+  /**
+   * One tool execution with every guard rail that belongs to a chat turn:
+   * the generative-UI cap, source/UI-block collection, and the coarse
+   * lifecycle events other clients watch. Access control lives one level
+   * deeper, in AssistantToolsService.execute, where it re-checks the caller's
+   * own session for every single call.
+   */
+  private async runTool(
+    name: string,
+    args: Record<string, unknown>,
+    ctx: { principal: Principal; thread: AssistantThread; turn: PreparedTurn },
+  ): Promise<{ content: string; ok: boolean }> {
+    const { thread, turn } = ctx;
+    await this.events.publish({
+      type: 'assistant.tool-call.started',
+      workspaceId: thread.workspaceId,
+      subjectId: thread.id,
+      title: name,
+    });
+    if (name === 'render_component' && turn.uiBlocks.length >= MAX_UI_BLOCKS) {
+      return { content: JSON.stringify({ error: `Already rendered ${MAX_UI_BLOCKS} components this turn` }), ok: false };
+    }
+    // One question per turn. Told plainly rather than ignored, so a model that
+    // tries to ask twice stops instead of looping on a call that looks like it
+    // worked and silently did nothing.
+    if (turn.prompt && (name === 'ask_user' || name === 'request_agent_mode')) {
+      return {
+        content: JSON.stringify({ error: 'You already asked the user something this turn. End your turn now.' }),
+        ok: false,
+      };
+    }
+    const result = await this.tools.execute(name, args, { principal: ctx.principal, workspaceId: thread.workspaceId });
+    for (const source of result.sources) {
+      if (!turn.collected.has(source.documentId)) turn.collected.set(source.documentId, source);
+    }
+    if (result.uiBlock) turn.uiBlocks.push(result.uiBlock);
+    if (result.prompt && !turn.prompt) turn.prompt = result.prompt;
+    await this.events.publish({
+      type: 'assistant.tool-call.finished',
+      workspaceId: thread.workspaceId,
+      subjectId: thread.id,
+      title: name,
+      patch: { ok: result.ok },
+    });
+    return { content: result.content, ok: result.ok };
+  }
+
+  /** Builds the prompt, the grounding blocks and the per-turn accumulators. */
+  private async prepareTurn(
+    thread: AssistantThread,
+    dto: PostAssistantMessageDto,
+    userMessageId: string,
+  ): Promise<PreparedTurn> {
+    const threadId = thread.id;
     const mode = dto.mode ?? 'ask';
     const attachmentsBlock = (dto.attachments ?? [])
       .slice(0, 3)
@@ -267,8 +491,15 @@ export class AssistantService {
         ? ' You also have create_document, propose_update (write — only usable when the caller has editor ' +
           'rights) because the user switched this chat to Agent mode.'
         : ' Write tools (create_document, propose_update) are not available this turn because the chat is in ' +
-          'Ask mode — if the user wants a page created or changed, tell them to switch to Agent mode.') +
+          'Ask mode — if the user wants a page created or changed, call request_agent_mode instead of ' +
+          'telling them in prose to go and flip a toggle.') +
+      ' You can also ask the user a question as a form with ask_user.' +
       '\n\nRules:\n' +
+      '- If your reply would end by asking the user something — which option, which of these, do you want me ' +
+      'to — do not write that question as prose. Call ask_user with it and end your turn. A form they answer ' +
+      'in one click beats a paragraph they have to reply to by hand, and this holds even when you have just ' +
+      'used tools to work out what the options are: look things up with tools, then put the decision in a ' +
+      'form. ask_user still works after your tool budget runs out. At most one form per turn.\n' +
       '- Ground every statement in tool results or the grounding page below. Say plainly when the workspace does ' +
       'not cover something instead of guessing.\n' +
       '- Only call create_document when the user clearly wants a brand-new page; it publishes immediately.\n' +
@@ -292,59 +523,23 @@ export class AssistantService {
           `you.\n\n${attachmentsBlock}`
         : '');
 
-    const priorTurns = (await this.threads.recentHistory(threadId, 16)).filter((m) => m.id !== userMessage.id);
+    const priorTurns = (await this.threads.recentHistory(threadId, 16)).filter((m) => m.id !== userMessageId);
     const history: ChatCompletionMessageParam[] = priorTurns.map((m) => ({
       role: m.role,
       content: m.content.slice(0, 4_000),
     }));
 
-    const collected = new Map<string, AssistantAskSource>([
-      ...(groundingDoc ? ([[groundingDoc.id, { documentId: groundingDoc.id, title: groundingDoc.title }]] as const) : []),
-      ...manualDocs.map(
-        (d) => [d.id, { documentId: d.id, title: d.title }] as const,
-      ),
-    ]);
-    // Generative UI: at most 4 rendered blocks per turn — the model gets a plain error back from the
-    // render_component tool once the cap is hit, same pattern as every other tool-side guard rail.
-    const MAX_UI_BLOCKS = 4;
-    const uiBlocks: AssistantUiBlock[] = [];
-    const { content, trace } = await this.client.runWithTools(
-      [{ role: 'system', content: system }, ...history, { role: 'user', content: dto.content }],
-      this.tools.definitions(mode),
-      async (name, args) => {
-        await this.events.publish({
-          type: 'assistant.tool-call.started',
-          workspaceId: thread.workspaceId,
-          subjectId: threadId,
-          title: name,
-        });
-        if (name === 'render_component' && uiBlocks.length >= MAX_UI_BLOCKS) {
-          return { content: JSON.stringify({ error: `Already rendered ${MAX_UI_BLOCKS} components this turn` }), ok: false };
-        }
-        const result = await this.tools.execute(name, args, { principal, workspaceId: thread.workspaceId });
-        for (const source of result.sources) {
-          if (!collected.has(source.documentId)) collected.set(source.documentId, source);
-        }
-        if (result.uiBlock) uiBlocks.push(result.uiBlock);
-        await this.events.publish({
-          type: 'assistant.tool-call.finished',
-          workspaceId: thread.workspaceId,
-          subjectId: threadId,
-          title: name,
-          patch: { ok: result.ok },
-        });
-        return { content: result.content, ok: result.ok };
-      },
-    );
-
-    const assistantMessage = await this.threads.appendMessage(threadId, 'assistant', content.trim(), {
-      toolCalls: trace,
-      sources: [...collected.values()],
-      uiBlocks,
-    });
-    await this.events.publish({ type: 'assistant.turn.finished', workspaceId: thread.workspaceId, subjectId: threadId });
-
-    return { enabled: true, userMessage, assistantMessage };
+    return {
+      mode,
+      messages: [{ role: 'system', content: system }, ...history, { role: 'user', content: dto.content }],
+      collected: new Map<string, AssistantAskSource>([
+        ...(groundingDoc ? ([[groundingDoc.id, { documentId: groundingDoc.id, title: groundingDoc.title }]] as const) : []),
+        ...manualDocs.map((d) => [d.id, { documentId: d.id, title: d.title }] as const),
+      ]),
+      uiBlocks: [],
+      emittedUiBlocks: 0,
+      prompt: null,
+    };
   }
 
   /** Relevant-document lookup — plain hybrid search over a draft excerpt; always available. */

@@ -1001,6 +1001,57 @@ export interface AssistantUiBlock {
   props: Record<string, unknown>;
 }
 
+/**
+ * The assistant asking the user something, instead of guessing.
+ *
+ * Distinct from {@link AssistantUiBlock}, which renders a view: a prompt is
+ * answerable, and its answer becomes the next turn. The assistant raises one
+ * by calling a tool, so the pane never has to infer "it wants me to pick
+ * something" by reading the prose — the same rule that keeps the documents
+ * sidebar off the chat text.
+ *
+ * Only the newest message's prompt is live. Once it has been answered the
+ * answer is in the transcript above it, so an older prompt renders as the
+ * record of a question already settled.
+ */
+export interface AssistantPromptOption {
+  value: string;
+  label: string;
+  /** One line of help under the option. */
+  description?: string;
+}
+
+export type AssistantPromptField =
+  /** Exactly one of the options — radios. */
+  | { type: 'choice'; name: string; label: string; options: AssistantPromptOption[]; required?: boolean }
+  /** Any number of the options — checkboxes. */
+  | { type: 'checklist'; name: string; label: string; options: AssistantPromptOption[]; required?: boolean }
+  /** Free text, for what the options cannot cover. */
+  | { type: 'text'; name: string; label: string; placeholder?: string; multiline?: boolean; required?: boolean };
+
+export interface AssistantFormPrompt {
+  kind: 'form';
+  /** What is being asked, in the assistant's own words. */
+  question: string;
+  fields: AssistantPromptField[];
+  submitLabel?: string;
+  /** Adds a free-text box so the user can answer outside the offered options. */
+  allowOther?: boolean;
+}
+
+/**
+ * The assistant wanted to write something while the chat was in Ask mode.
+ * Rather than telling the user to go and flip a toggle, it hands them the
+ * toggle: switching re-sends `intent` as an Agent turn.
+ */
+export interface AssistantModeSwitchPrompt {
+  kind: 'mode-switch';
+  /** What it will do once it can write — shown before the user agrees to it. */
+  intent: string;
+}
+
+export type AssistantPrompt = AssistantFormPrompt | AssistantModeSwitchPrompt;
+
 export interface AssistantMessageInfo {
   id: string;
   threadId: string;
@@ -1009,6 +1060,8 @@ export interface AssistantMessageInfo {
   toolCalls: AssistantToolCall[];
   sources: AssistantAskSource[];
   uiBlocks: AssistantUiBlock[];
+  /** Set when the turn ended by asking the user something. At most one per turn. */
+  prompt: AssistantPrompt | null;
   createdAt: string;
 }
 
@@ -1023,15 +1076,39 @@ export interface CreateAssistantThreadResponse {
   thread: AssistantThreadSummary;
 }
 
-// GET /v1/assistant/threads?workspaceId=
+// GET /v1/assistant/threads?workspaceId=&search=&limit=&cursor=
+export interface ListAssistantThreadsRequest {
+  workspaceId: string;
+  /** Case-insensitive substring over the thread title and its last message. */
+  search?: string;
+  /** Omit for the default page; with it, the roster is cursor-paginated (rail virtualization). */
+  limit?: number;
+  cursor?: string;
+}
 export interface ListAssistantThreadsResponse {
   threads: AssistantThreadSummary[];
+  /** Null when this page is the last one. */
+  nextCursor: string | null;
 }
 
 // GET /v1/assistant/threads/:id
 export interface GetAssistantThreadResponse {
   thread: AssistantThreadSummary;
   messages: AssistantMessageInfo[];
+}
+
+// PATCH /v1/assistant/threads/:id
+export interface UpdateAssistantThreadRequest {
+  /** null clears the manual title, letting the first message's derived title show again. */
+  title?: string | null;
+}
+export interface UpdateAssistantThreadResponse {
+  thread: AssistantThreadSummary;
+}
+
+// DELETE /v1/assistant/threads/:id — the thread and its whole message history.
+export interface DeleteAssistantThreadResponse {
+  ok: boolean;
 }
 
 // POST /v1/assistant/threads/:id/messages
@@ -1082,6 +1159,49 @@ export const ASSISTANT_EVENT_TYPES = [
   'assistant.turn.finished',
 ] as const;
 export type AssistantEventType = (typeof ASSISTANT_EVENT_TYPES)[number];
+
+// ---------------------------------------------------------------------------
+// Streamed turn: POST /v1/assistant/threads/:id/messages/stream
+// ---------------------------------------------------------------------------
+// Same turn as POST .../messages, delivered as it happens instead of in one
+// response. It is a POST, so EventSource cannot read it — the client posts
+// with fetch and parses the `text/event-stream` body itself (which also means
+// the Authorization header works normally, no ?token= escape hatch).
+//
+// The harness runs in rounds: the model may narrate, call tools, then narrate
+// again. Every round's prose streams as `delta` frames; a `tool-call` frame
+// with phase 'started' closes the current round, so the client folds whatever
+// it has buffered into the visible reasoning trail and starts a fresh buffer.
+// Only the final round survives as the persisted message, which arrives whole
+// in `done` — so a client that ignores every delta still ends up correct.
+
+export interface AssistantStreamStep {
+  /** Prose the model produced before it reached for a tool — its reasoning out loud. */
+  text: string;
+  /** Tool calls that closed this step. */
+  toolCalls: AssistantToolCall[];
+}
+
+export type AssistantStreamFrame =
+  /** The user's turn, persisted, with its real id — replaces the client's optimistic copy. */
+  | { type: 'user-message'; message: AssistantMessageInfo }
+  /** Coarse phase for the status line, ahead of any token. */
+  | { type: 'status'; phase: 'thinking' | 'responding' }
+  /** A chunk of the current round's prose. Append verbatim; never re-order. */
+  | { type: 'delta'; text: string }
+  /** Tool lifecycle. 'started' also means "close the current round". */
+  | { type: 'tool-call'; phase: 'started'; tool: string; arguments?: string }
+  | { type: 'tool-call'; phase: 'finished'; tool: string; ok: boolean }
+  /** A generative-UI block resolved server-side, safe to render as it lands. */
+  | { type: 'ui-block'; block: AssistantUiBlock }
+  /** The turn is ending in a question for the user; `done` carries it too. */
+  | { type: 'prompt'; prompt: AssistantPrompt }
+  /** Grounding documents accumulated so far — the sidebar can fill in mid-turn. */
+  | { type: 'sources'; sources: AssistantAskSource[] }
+  /** Terminal success: the persisted assistant message, authoritative over every delta. */
+  | { type: 'done'; message: AssistantMessageInfo }
+  /** Terminal failure. The user message is already persisted; the turn is not. */
+  | { type: 'error'; error: ApiErrorPayload };
 
 // ---------------------------------------------------------------------------
 // Auth flow — login / signup / password restoration (session tokens on top of
@@ -1264,6 +1384,26 @@ export interface WorkspaceMemberEntry {
 export interface ListWorkspaceMembersResponse {
   workspaceId: string;
   members: WorkspaceMemberEntry[];
+}
+
+/**
+ * A user who is *not* yet a member of the workspace — what the add-member
+ * picker searches. Deliberately thinner than {@link UserSummary}: workspace
+ * admins are not platform admins, so they see identity only, never
+ * credentials, the platform-admin flag or foreign memberships.
+ */
+export interface WorkspaceCandidate {
+  userId: string;
+  email: string;
+  displayName: string;
+  /** Disabled accounts cannot authenticate; adding one is legal but inert. */
+  disabled: boolean;
+}
+
+// GET /v1/workspaces/:id/candidates?q=&limit=
+export interface ListWorkspaceCandidatesResponse {
+  workspaceId: string;
+  candidates: WorkspaceCandidate[];
 }
 
 // POST /v1/workspaces/:id/members — add (or update) a member by email

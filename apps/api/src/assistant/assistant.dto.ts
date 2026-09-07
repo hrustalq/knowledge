@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested,
+  ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
 
 export class AssistantReviewDto {
@@ -75,6 +75,44 @@ export class CreateAssistantThreadDto {
   @IsString()
   @MaxLength(300)
   title?: string;
+}
+
+export class UpdateAssistantThreadDto {
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'null clears the manual title so the auto-derived one shows again',
+  })
+  @IsOptional()
+  @ValidateIf((o: UpdateAssistantThreadDto) => o.title !== null)
+  @IsString()
+  @MaxLength(300)
+  title?: string | null;
+}
+
+export class ListAssistantThreadsQueryDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ description: 'Case-insensitive substring over the title and the messages' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string;
+
+  @ApiPropertyOptional({ default: 50, minimum: 1, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @ApiPropertyOptional({ description: 'updatedAt of the last row of the previous page (keyset cursor)' })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 }
 
 export class ChatAttachmentDto {

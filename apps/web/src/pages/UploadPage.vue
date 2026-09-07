@@ -13,6 +13,14 @@ import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const router = useRouter()
@@ -90,18 +98,30 @@ async function submit() {
     <CardHeader><CardTitle>Upload a document</CardTitle></CardHeader>
     <CardContent class="space-y-4">
       <Input v-model="title" placeholder="Title, e.g. Authentication Architecture" />
-      <label class="flex items-center gap-2 text-sm">
-        <span class="text-muted-foreground">Project</span>
-        <select v-model="projectId" class="flex-1 rounded-md border bg-background px-2 py-1.5">
-          <option v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</option>
-        </select>
-      </label>
-      <label class="flex items-center gap-2 text-sm">
-        <span class="text-muted-foreground">Category</span>
-        <select v-model="category" class="rounded-md border bg-background px-2 py-1.5">
-          <option v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ c }}</option>
-        </select>
-      </label>
+      <div class="flex items-center gap-2 text-sm">
+        <Label for="upload-project" class="font-normal text-muted-foreground">Project</Label>
+        <Select v-model="projectId">
+          <SelectTrigger id="upload-project" class="flex-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="p in projects.items" :key="p.projectId" :value="p.projectId">
+              {{ p.name }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="flex items-center gap-2 text-sm">
+        <Label for="upload-category" class="font-normal text-muted-foreground">Category</Label>
+        <Select v-model="category">
+          <SelectTrigger id="upload-category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ c }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       <Textarea v-model="text" rows="14" placeholder="# Markdown content…" class="font-mono" />
       <Button :disabled="busy" @click="submit">
         {{ busy ? 'Uploading…' : 'Upload & index' }}

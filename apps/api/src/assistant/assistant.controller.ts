@@ -1,5 +1,9 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  Body, Controller, Delete, Get, HttpException, Logger, Param, ParseUUIDPipe, Patch, Post, Query, Res,
+} from '@nestjs/common';
+import { ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { errorCodeForStatus, type ApiErrorPayload, type AssistantStreamFrame } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { AssistantService } from './assistant.service.js';
@@ -10,12 +14,16 @@ import {
   AssistantReviewDto,
   AssistantSuggestDto,
   CreateAssistantThreadDto,
+  ListAssistantThreadsQueryDto,
   PostAssistantMessageDto,
+  UpdateAssistantThreadDto,
 } from './assistant.dto.js';
 
 @ApiTags('assistant')
 @Controller('v1/assistant')
 export class AssistantController {
+  private readonly logger = new Logger(AssistantController.name);
+
   constructor(
     private readonly assistant: AssistantService,
     private readonly threads: AssistantThreadsService,
@@ -66,23 +74,40 @@ export class AssistantController {
 
   @Get('threads')
   @Access('viewer', 'query')
-  @ApiOperation({ summary: 'List chat pane threads for a workspace, most recently active first' })
-  @ApiQuery({ name: 'workspaceId', required: true })
-  listThreads(@Query('workspaceId', ParseUUIDPipe) workspaceId: string) {
-    return this.threads.listThreads(workspaceId);
+  @ApiOperation({
+    summary: 'List chat pane threads for a workspace, most recently active first (search + keyset pagination)',
+  })
+  listThreads(@Query() query: ListAssistantThreadsQueryDto) {
+    return this.threads.listThreads(query.workspaceId, query);
   }
 
+  // The routes below resolve their workspace from the thread id itself, so a
+  // caller cannot pair a thread from one tenant with a workspaceId they happen
+  // to be a member of and have the ACL pass.
+
   @Get('threads/:id')
-  @Access('viewer', 'query')
+  @Access('viewer', 'assistant-thread')
   @ApiOperation({ summary: 'A thread with its full message history' })
-  @ApiQuery({ name: 'workspaceId', required: true, description: 'Unused by the lookup; required for the ACL check' })
   getThread(@Param('id', ParseUUIDPipe) id: string) {
     return this.threads.getThread(id);
   }
 
+  @Patch('threads/:id')
+  @Access('viewer', 'assistant-thread')
+  @ApiOperation({ summary: 'Rename a chat thread (null title restores the auto-derived one)' })
+  updateThread(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAssistantThreadDto) {
+    return this.threads.updateThread(id, dto);
+  }
+
+  @Delete('threads/:id')
+  @Access('viewer', 'assistant-thread')
+  @ApiOperation({ summary: 'Delete a chat thread and its whole message history' })
+  deleteThread(@Param('id', ParseUUIDPipe) id: string) {
+    return this.threads.deleteThread(id);
+  }
+
   @Post('threads/:id/messages')
-  @Access('viewer', 'query')
-  @ApiQuery({ name: 'workspaceId', required: true, description: 'Unused by the lookup; required for the ACL check' })
+  @Access('viewer', 'assistant-thread')
   @ApiOperation({
     summary:
       'Post a chat message — runs the tool harness (read + write tools) and returns the assistant reply; ' +
@@ -95,4 +120,79 @@ export class AssistantController {
   ) {
     return this.assistant.postMessage(id, dto, principal);
   }
+
+  /**
+   * The same turn as POST .../messages, streamed as it happens.
+   *
+   * Hand-written SSE rather than Nest's `@Sse()`, which only decorates GET —
+   * and this has to be a POST, because the turn carries a body (attachments,
+   * applied documents, mode). That also means the client reads it with fetch
+   * instead of EventSource, so the normal Authorization header applies and
+   * there is no `?token=` in a URL.
+   */
+  @Post('threads/:id/messages/stream')
+  @Access('viewer', 'assistant-thread')
+  @ApiOperation({
+    summary: 'Streamed chat turn (text/event-stream of AssistantStreamFrame) — same turn as POST .../messages',
+  })
+  @ApiProduces('text/event-stream')
+  async streamMessage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PostAssistantMessageDto,
+    @CurrentPrincipal() principal: Principal,
+    @Res() res: Response,
+  ): Promise<void> {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      // Nginx and friends buffer unknown streams into uselessness.
+      'X-Accel-Buffering': 'no',
+    });
+
+    // The client hanging up mid-turn — Stop, navigation, a closed tab — is
+    // the cancel signal. It has to reach the harness rather than just stop
+    // the writing: the model's tools can publish pages and open merge
+    // requests, so a "stop" that only muted the output would still let the
+    // turn act on the workspace after the user asked it not to.
+    let open = true;
+    const cancel = new AbortController();
+    res.on('close', () => {
+      open = false;
+      cancel.abort();
+    });
+    const emit = (frame: AssistantStreamFrame): void => {
+      if (open) res.write(`data: ${JSON.stringify(frame)}\n\n`);
+    };
+
+    try {
+      await this.assistant.streamMessage(id, dto, principal, emit, cancel.signal);
+    } catch (err) {
+      this.logger.warn(`Assistant stream failed: ${err instanceof Error ? err.message : String(err)}`);
+      emit({ type: 'error', error: streamErrorPayload(err, `/v1/assistant/threads/${id}/messages/stream`) });
+    } finally {
+      if (open) res.end();
+    }
+  }
+}
+
+/**
+ * The strict error envelope, produced by hand. ApiExceptionFilter cannot help
+ * here: the response is already committed with a 200 and streaming headers by
+ * the time anything can fail, so the failure has to travel inside the stream.
+ */
+function streamErrorPayload(err: unknown, path: string): ApiErrorPayload {
+  const status = err instanceof HttpException ? err.getStatus() : 500;
+  const message =
+    err instanceof HttpException
+      ? err.message
+      : 'The assistant turn failed. Reopen the chat to see whether any of it was saved.';
+  return {
+    statusCode: status,
+    code: errorCodeForStatus(status),
+    message,
+    path,
+    timestamp: new Date().toISOString(),
+    requestId: '',
+  };
 }

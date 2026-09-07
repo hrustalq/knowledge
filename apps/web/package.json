@@ -17,6 +17,7 @@
     "@knowledge/contracts": "workspace:*",
     "@lucide/vue": "^1.38.0",
     "@tanstack/vue-query": "^5.102.8",
+    "@tanstack/vue-virtual": "^3.13.37",
     "@vueuse/core": "^14.4.0",
     "axios": "^1.20.0",
     "class-variance-authority": "^0.7.1",

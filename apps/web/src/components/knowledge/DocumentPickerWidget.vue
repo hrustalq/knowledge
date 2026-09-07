@@ -12,6 +12,8 @@ import { onClickOutside } from '@vueuse/core'
 import { Check, FileText, FolderOpen } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { nativeEl } from '@/lib/utils'
 
 export interface AppliedDocRef {
   documentId: string
@@ -28,6 +30,9 @@ const isOpen = ref(false)
 const query = ref('')
 const rootEl = ref<HTMLElement | null>(null)
 const searchEl = ref<HTMLInputElement | null>(null)
+const setSearchEl = (c: unknown) => {
+  searchEl.value = nativeEl<HTMLInputElement>(c)
+}
 const recent = ref<AppliedDocRef[]>(loadRecent())
 
 function loadRecent(): AppliedDocRef[] {
@@ -114,12 +119,12 @@ const filteredAll = computed(() => {
       v-if="isOpen"
       class="absolute bottom-full left-0 z-20 mb-2 w-72 rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
     >
-      <input
-        ref="searchEl"
+      <Input
+        :ref="setSearchEl"
         v-model="query"
         type="text"
         placeholder="Search pages by title…"
-        class="mb-2 w-full rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-ring"
+        class="mb-2 h-8 text-sm"
       />
 
       <div class="max-h-64 overflow-y-auto">

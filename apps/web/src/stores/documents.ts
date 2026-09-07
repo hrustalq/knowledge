@@ -43,6 +43,24 @@ export const useDocumentsStore = defineStore('documents', {
       }
       return walk(this.tree, []) ?? []
     },
+    /**
+     * The active project changed: drop the scoped data and refetch whatever was
+     * actually in use. Clearing first is deliberate — the sidebar's pages pane
+     * shows its skeletons while the new tree loads instead of holding the old
+     * project's pages under the new project's name for a beat.
+     */
+    async rescope() {
+      const wantList = this.loaded
+      const wantTree = this.treeLoaded
+      this.items = []
+      this.loaded = false
+      this.tree = []
+      this.treeLoaded = false
+      const jobs: Promise<void>[] = []
+      if (wantList) jobs.push(this.fetchList())
+      if (wantTree) jobs.push(this.fetchTree())
+      await Promise.all(jobs)
+    },
     /** Feature 04: called by the events store when the workspace changed remotely. */
     async invalidate() {
       const jobs: Promise<void>[] = []

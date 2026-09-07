@@ -69,6 +69,21 @@ export class AccessService {
     return project.workspaceId;
   }
 
+  /**
+   * Assistant chat threads carry their own workspaceId, so resolving the ACL
+   * from the `:id` param (rather than a caller-supplied `?workspaceId=`) is
+   * what stops a viewer of workspace A from reading — or deleting — a thread
+   * that belongs to workspace B.
+   */
+  async workspaceOfAssistantThread(threadId: string): Promise<string> {
+    const thread = await this.prisma.assistantThread.findUnique({
+      where: { id: threadId },
+      select: { workspaceId: true },
+    });
+    if (!thread) throw new NotFoundException(`Assistant thread ${threadId} not found`);
+    return thread.workspaceId;
+  }
+
   async workspaceOfJob(jobId: string): Promise<string> {
     const job = await this.prisma.ingestionJob.findUnique({
       where: { id: jobId },

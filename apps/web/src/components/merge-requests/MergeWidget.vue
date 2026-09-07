@@ -10,6 +10,13 @@ import type { MergeGateConflictDetails, MergeRequestInfo, MergeStrategy } from '
 import { useApiMutation, isApiRequestError } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { actorLabel, mrIcon } from './mr-ui'
 
 const props = withDefaults(defineProps<{ mergeRequest: MergeRequestInfo; unresolvedThreads?: number }>(), {
@@ -158,14 +165,15 @@ function toggleDraft() {
     <!-- controls -->
     <div v-if="auth.canEdit" class="flex flex-wrap items-center gap-2 px-4 py-3">
       <template v-if="isOpen">
-        <select
-          v-model="strategy"
-          class="h-8 rounded-md border bg-background px-2 text-xs"
-          :disabled="busy"
-        >
-          <option value="merge-commit">Merge commit</option>
-          <option value="squash">Squash</option>
-        </select>
+        <Select v-model="strategy" :disabled="busy">
+          <SelectTrigger size="sm" class="text-xs" aria-label="Merge strategy">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="merge-commit">Merge commit</SelectItem>
+            <SelectItem value="squash">Squash</SelectItem>
+          </SelectContent>
+        </Select>
         <Button size="sm" :disabled="busy || mr.isDraft" @click="onMerge">
           <GitMerge class="size-3.5" /> Merge
         </Button>

@@ -8,6 +8,10 @@ const base = import.meta.env.SSR
 const TOKEN_KEY = 'kn_token'
 const WS_KEY = 'kn_ws'
 const PROJECT_KEY = 'kn_proj'
+const PANE_KEY = 'kn_pane'
+
+/** Which level of the sidebar's navigation stack is showing (see stores/sidebar-nav). */
+export type SidebarPane = 'projects' | 'pages'
 
 /** Typed API error so callers (and the router guard) can branch on 401/403. */
 export class ApiError extends Error {
@@ -28,6 +32,7 @@ interface SsrRequestContext {
   token: string | null
   workspaceId: string | null
   projectId: string | null
+  pane: string | null
 }
 function ssrContext(): SsrRequestContext | undefined {
   return (
@@ -38,11 +43,13 @@ function ssrContext(): SsrRequestContext | undefined {
 let clientToken: string | null = null
 let clientWorkspaceId: string | null = null
 let clientProjectId: string | null = null
+let clientPane: string | null = null
 if (!import.meta.env.SSR) {
   try {
     clientToken = localStorage.getItem(TOKEN_KEY)
     clientWorkspaceId = localStorage.getItem(WS_KEY)
     clientProjectId = localStorage.getItem(PROJECT_KEY)
+    clientPane = localStorage.getItem(PANE_KEY)
   } catch {
     /* storage unavailable (private mode) — stay anonymous */
   }
@@ -79,8 +86,10 @@ export function getWorkspaceId(): string {
 export function setActiveWorkspace(workspaceId: string | null): void {
   if (import.meta.env.SSR) return
   clientWorkspaceId = workspaceId
-  // Projects belong to a workspace, so the remembered one no longer applies.
+  // Projects belong to a workspace, so the remembered one no longer applies —
+  // and with no project to be inside, the rail belongs back at its top level.
   setActiveProject(null)
+  setSidebarPane('projects')
   try {
     if (workspaceId) {
       localStorage.setItem(WS_KEY, workspaceId)
@@ -115,6 +124,27 @@ export function setActiveProject(projectId: string | null): void {
       localStorage.removeItem(PROJECT_KEY)
       document.cookie = `${PROJECT_KEY}=; path=/; max-age=0`
     }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Sidebar navigation stack level. Persisted exactly like the active project —
+ * localStorage for the client plus a cookie so the SSR pass renders the same
+ * pane the client is about to hydrate, instead of flashing the other one.
+ */
+export function getSidebarPane(): SidebarPane {
+  const raw = import.meta.env.SSR ? ssrContext()?.pane : clientPane
+  return raw === 'pages' ? 'pages' : 'projects'
+}
+
+export function setSidebarPane(pane: SidebarPane): void {
+  if (import.meta.env.SSR) return
+  clientPane = pane
+  try {
+    localStorage.setItem(PANE_KEY, pane)
+    document.cookie = `${PANE_KEY}=${pane}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
   } catch {
     /* ignore */
   }

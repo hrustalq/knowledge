@@ -12,6 +12,15 @@ import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useProjectsStore } from '@/stores/projects'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import type { UseSearch } from './use-search'
 
 const props = defineProps<{ search: UseSearch }>()
@@ -121,58 +130,70 @@ function onWorkspace(next: string[]) {
     <div class="border-t" />
 
     <section class="space-y-2.5 text-sm">
-      <label class="flex items-center justify-between gap-2">
-        <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Mode
-        </span>
-        <select
-          v-model="search.mode.value"
-          class="rounded-md border bg-background px-2 py-1 text-xs"
+      <div class="flex items-center justify-between gap-2">
+        <Label
+          for="search-mode"
+          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
-          <option value="hybrid">hybrid</option>
-          <option value="semantic">semantic</option>
-          <option value="keyword">keyword</option>
-        </select>
-      </label>
+          Mode
+        </Label>
+        <Select v-model="search.mode.value">
+          <SelectTrigger id="search-mode" size="sm" class="text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="hybrid">hybrid</SelectItem>
+            <SelectItem value="semantic">semantic</SelectItem>
+            <SelectItem value="keyword">keyword</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-      <label
+      <div
         class="flex items-center justify-between gap-2"
         :class="search.mode.value !== 'hybrid' ? 'opacity-50' : ''"
       >
-        <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <input
+        <Label for="search-expand" class="gap-1.5 text-xs font-normal text-muted-foreground">
+          <Checkbox
+            id="search-expand"
             v-model="search.expand.value"
-            type="checkbox"
             :disabled="search.mode.value !== 'hybrid'"
-            class="accent-primary"
           />
           Graph expansion
-        </span>
-        <select
-          v-model.number="search.depth.value"
-          class="rounded-md border bg-background px-1.5 py-1 text-xs"
+        </Label>
+        <Select
+          v-model="search.depth.value"
           :disabled="!search.expand.value || search.mode.value !== 'hybrid'"
-          aria-label="Expansion depth"
         >
-          <option :value="1">1</option>
-          <option :value="2">2</option>
-          <option :value="3">3</option>
-        </select>
-      </label>
+          <SelectTrigger size="sm" class="text-xs" aria-label="Expansion depth">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="1">1</SelectItem>
+            <SelectItem :value="2">2</SelectItem>
+            <SelectItem :value="3">3</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-      <label class="flex items-center justify-between gap-2">
-        <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Limit
-        </span>
-        <select
-          v-model.number="search.limit.value"
-          class="rounded-md border bg-background px-1.5 py-1 text-xs"
+      <div class="flex items-center justify-between gap-2">
+        <Label
+          for="search-limit"
+          class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
-          <option :value="10">10</option>
-          <option :value="20">20</option>
-          <option :value="50">50</option>
-        </select>
-      </label>
+          Limit
+        </Label>
+        <Select v-model="search.limit.value">
+          <SelectTrigger id="search-limit" size="sm" class="text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="10">10</SelectItem>
+            <SelectItem :value="20">20</SelectItem>
+            <SelectItem :value="50">50</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
     </section>
 
     <button

@@ -9,7 +9,16 @@ import DOMPurify from 'dompurify'
 
 interface MarkdownHeading { id: string; text: string; level: number }
 
-const props = defineProps<{ markdown: string }>()
+const props = defineProps<{
+  markdown: string
+  /**
+   * The text is still arriving. Parsing stays live (that is the whole effect),
+   * but the passes that only make sense on finished text are skipped: heading
+   * ids would churn on every token, and rendering a mermaid block from a fence
+   * that has not closed yet just flashes an error at the reader.
+   */
+  streaming?: boolean
+}>()
 const emit = defineEmits<{ headings: [MarkdownHeading[]] }>()
 
 const host = ref<HTMLElement | null>(null)
@@ -30,6 +39,7 @@ async function render() {
   const raw = await marked.parse(props.markdown ?? '', { gfm: true, async: true })
   html.value = DOMPurify.sanitize(raw)
   await nextTick()
+  if (props.streaming) return
   collectHeadings()
   await renderMermaid()
 }
@@ -74,15 +84,38 @@ async function renderMermaid() {
 }
 
 onMounted(render)
-watch(() => props.markdown, () => void render())
+// `streaming` is watched too: when a turn finishes the same text needs one
+// more pass to pick up headings and diagrams that were deferred.
+watch([() => props.markdown, () => props.streaming], () => void render())
 </script>
 
 <template>
-  <div ref="host" class="markdown-body max-w-none" v-html="html" />
+  <div ref="host" class="markdown-body max-w-none" :class="streaming ? 'is-streaming' : ''" v-html="html" />
 </template>
 
 <style>
 .markdown-body { line-height: 1.7; font-size: 0.95rem; }
+/*
+ * Streaming caret: a block that sits on the text baseline at the end of
+ * whatever block is currently last, so it travels with the writing instead of
+ * parking in a fixed corner. Kept out of the flow width (margin-left on an
+ * inline-block) so it cannot push a line to wrap and then unwrap.
+ */
+.markdown-body.is-streaming > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.45em;
+  height: 1em;
+  margin-left: 0.12em;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  background: var(--primary);
+  animation: md-caret 1s steps(2, jump-none) infinite;
+}
+@keyframes md-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+@media (prefers-reduced-motion: reduce) {
+  .markdown-body.is-streaming > :last-child::after { animation: none; opacity: 0.6; }
+}
 .markdown-body :is(h1, h2, h3, h4) { scroll-margin-top: 6.5rem; }
 .markdown-body h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; margin: 1.4em 0 0.6em; }
 .markdown-body h2 { font-size: 1.3rem; font-weight: 600; margin: 1.4em 0 0.5em; border-bottom: 1px solid var(--border); padding-bottom: 0.25em; }

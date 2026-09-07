@@ -3,19 +3,45 @@
 // mutations here are admin-only and 403 for everyone else).
 import { computed, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
+import { AtSign, Library, ShieldCheck, UserPlus, Wrench } from 'lucide-vue-next'
 import type {
+  ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
   ListWorkspacesResponse,
+  WorkspaceCandidate,
   WorkspaceMemberEntry,
   WorkspaceRole,
   WorkspaceSummary,
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  FilterBar,
+  filterRows,
+  type ActiveFilter,
+  type FilterAccessors,
+  type FilterField,
+} from '@/components/ui/filter-bar'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -29,9 +55,109 @@ const selected = ref<string>(getWorkspaceId())
 const members = ref<WorkspaceMemberEntry[]>([])
 const loadingMembers = ref(false)
 
-const newWorkspaceName = ref('')
-const addEmail = ref('')
 const addRole = ref<WorkspaceRole>('viewer')
+const addOpen = ref(false)
+
+// --- filters ---------------------------------------------------------------
+// The roster for one workspace is small and already loaded, so every field
+// matches client-side against the in-memory members.
+const filters = ref<ActiveFilter[]>([
+  { key: 'workspace', operator: 'is', values: [selected.value] },
+])
+
+const WORKSPACE_KEY = 'workspace'
+
+const filterFields = computed<FilterField[]>(() => [
+  {
+    // A scope, not a predicate: it decides whose roster is fetched, so it is
+    // pinned to the bar and has no accessor — `matchesFilters` ignores keys it
+    // has no accessor for, which is exactly right here.
+    key: WORKSPACE_KEY,
+    label: 'Workspace',
+    icon: Library,
+    pinned: true,
+    multiple: false,
+    operators: ['is'],
+    options: workspaceOptions.value,
+  },
+  {
+    key: 'role',
+    label: 'Role',
+    icon: ShieldCheck,
+    options: ROLES.map((r) => ({ value: r, label: r })),
+  },
+  {
+    key: 'trustedOperator',
+    label: 'Trusted operator',
+    icon: Wrench,
+    options: [
+      { value: 'true', label: 'Yes' },
+      { value: 'false', label: 'No' },
+    ],
+  },
+  {
+    key: 'text',
+    label: 'Name or email',
+    icon: AtSign,
+    group: 'Text',
+    type: 'text',
+    placeholder: 'alice@…',
+  },
+])
+
+const filterAccessors: FilterAccessors<WorkspaceMemberEntry> = {
+  role: (m) => m.role,
+  trustedOperator: (m) => m.trustedOperator,
+  text: (m) => [m.displayName, m.email],
+}
+
+const visibleMembers = computed(() => filterRows(members.value, filters.value, filterAccessors))
+
+// --- pickers ---------------------------------------------------------------
+// Both fields are "find an existing record", so both are autocompletes rather
+// than a <select> and a typed email.
+
+const workspaceOptions = computed(() =>
+  workspaces.value.map((w) => ({
+    value: w.workspaceId,
+    label: w.name,
+    meta: w.myRole ? `${w.memberCount} · ${w.myRole}` : String(w.memberCount),
+  })),
+)
+
+/**
+ * Candidate lookup is server-side and workspace-scoped (existing members are
+ * filtered out there), so the picker never offers someone already on the list.
+ */
+const candidateCache = new Map<string, WorkspaceCandidate>()
+async function loadCandidates(query: string): Promise<AutocompleteOption[]> {
+  if (!selected.value) return []
+  const params = new URLSearchParams({ limit: '20' })
+  if (query.trim()) params.set('q', query.trim())
+  const res = await apiFetch<ListWorkspaceCandidatesResponse>(
+    `/v1/workspaces/${selected.value}/candidates?${params}`,
+  )
+  for (const c of res.candidates) candidateCache.set(c.userId, c)
+  return res.candidates.map((c) => ({
+    value: c.userId,
+    label: `${c.displayName} · ${c.email}`,
+    meta: c.disabled ? 'disabled' : undefined,
+  }))
+}
+
+/** Held between pick and submit — `addMember` posts the email, not the id. */
+const pickedUser = ref<WorkspaceCandidate | null>(null)
+const pickedValue = computed<string[]>({
+  get: () => (pickedUser.value ? [pickedUser.value.userId] : []),
+  set: (v) => {
+    pickedUser.value = v[0] ? (candidateCache.get(v[0]) ?? null) : null
+  },
+})
+// A candidate of the previous workspace is not a candidate of the next one.
+watch(selected, () => {
+  pickedUser.value = null
+  candidateCache.clear()
+})
 
 const selectedWorkspace = computed(() => workspaces.value.find((w) => w.workspaceId === selected.value))
 /** Can the caller manage the selected workspace? (dev + platform admins always can) */
@@ -69,26 +195,36 @@ onMounted(async () => {
 })
 watch(selected, loadMembers)
 
-async function createWorkspace() {
-  try {
-    await apiFetch('/v1/workspaces', { method: 'POST', body: JSON.stringify({ name: newWorkspaceName.value }) })
-    toast.success(`Workspace "${newWorkspaceName.value}" created`)
-    newWorkspaceName.value = ''
-    await loadWorkspaces()
-  } catch (e) {
-    toast.error((e as Error).message)
-  }
-}
+// The scope lives in two places — the chip the user clicks, and `selected`,
+// which `loadWorkspaces` may also rewrite when the stored id is stale. Mirror
+// them in both directions, guarding on equality so neither watcher re-triggers
+// the other.
+watch(
+  filters,
+  (list) => {
+    const next = list.find((f) => f.key === WORKSPACE_KEY)?.values[0]
+    if (next && next !== selected.value) selected.value = next
+  },
+  { deep: true },
+)
+watch(selected, (next) => {
+  const chip = filters.value.find((f) => f.key === WORKSPACE_KEY)
+  if (chip && chip.values[0] !== next) chip.values = [next]
+})
 
 async function addMember() {
+  const user = pickedUser.value
+  if (!user) return
   try {
     const res = await apiFetch<ListWorkspaceMembersResponse>(`/v1/workspaces/${selected.value}/members`, {
       method: 'POST',
-      body: JSON.stringify({ email: addEmail.value, role: addRole.value }),
+      body: JSON.stringify({ email: user.email, role: addRole.value }),
     })
     members.value = res.members
-    toast.success(`${addEmail.value} added as ${addRole.value}`)
-    addEmail.value = ''
+    toast.success(`${user.email} added as ${addRole.value}`)
+    addOpen.value = false
+    pickedUser.value = null
+    candidateCache.delete(user.userId) // now a member — no longer a candidate
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -104,7 +240,7 @@ async function patchMember(member: WorkspaceMemberEntry, patch: Record<string, u
     toast.success(`Updated ${member.email}`)
   } catch (e) {
     toast.error((e as Error).message)
-    await loadMembers() // roll back the optimistic <select> state
+    await loadMembers() // roll back the optimistic role/flag state
   }
 }
 
@@ -121,113 +257,122 @@ async function removeMember(member: WorkspaceMemberEntry) {
   }
 }
 
-function useWorkspace() {
-  auth.setWorkspace(selected.value)
-  toast.success(`Active workspace: ${selectedWorkspace.value?.name ?? selected.value}`)
-}
 </script>
 
 <template>
-  <div class="space-y-6">
-    <h1 class="font-display text-2xl font-bold tracking-tight">Access control</h1>
-
-    <div class="flex flex-wrap items-end gap-3">
-      <div class="space-y-1">
-        <label class="text-sm font-medium" for="ws">Workspace</label>
-        <select
-          id="ws" v-model="selected"
-          class="h-9 w-72 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
-        >
-          <option v-for="w in workspaces" :key="w.workspaceId" :value="w.workspaceId">
-            {{ w.name }} ({{ w.memberCount }} members{{ w.myRole ? `, you: ${w.myRole}` : '' }})
-          </option>
-        </select>
-      </div>
-      <Button variant="outline" :disabled="selected === getWorkspaceId()" @click="useWorkspace">
-        Set as active workspace
+  <div class="space-y-4">
+    <div class="flex items-center justify-between gap-3">
+      <h1 class="font-display text-2xl font-bold tracking-tight">Access control</h1>
+      <Button v-if="canManage" size="sm" @click="addOpen = true">
+        <UserPlus class="size-3.5" /> Add member
       </Button>
-      <form class="ml-auto flex items-end gap-2" @submit.prevent="createWorkspace">
-        <div class="space-y-1">
-          <label class="text-sm font-medium" for="new-ws">New workspace</label>
-          <Input id="new-ws" v-model="newWorkspaceName" required placeholder="Platform Team" class="w-48" />
-        </div>
-        <Button type="submit" variant="outline">Create</Button>
-      </form>
+      <Badge v-else variant="outline">read-only — workspace admin required</Badge>
     </div>
 
-    <Card>
-      <CardHeader>
-        <CardTitle class="text-base">
-          Members
-          <Badge v-if="!canManage" variant="outline" class="ml-2">read-only — workspace admin required</Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <form v-if="canManage" class="flex flex-wrap items-end gap-2" @submit.prevent="addMember">
-          <div class="space-y-1">
-            <label class="text-sm font-medium" for="add-email">Add member by email</label>
-            <Input id="add-email" v-model="addEmail" type="email" required placeholder="teammate@example.com" class="w-64" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-sm font-medium" for="add-role">Role</label>
-            <select id="add-role" v-model="addRole" class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs">
-              <option v-for="r in ROLES" :key="r" :value="r">{{ r }}</option>
-            </select>
-          </div>
-          <Button type="submit">Add</Button>
-        </form>
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+      <FilterBar v-model="filters" :fields="filterFields" />
+      <p class="text-muted-foreground text-xs tabular-nums">
+        {{ visibleMembers.length }} of {{ members.length }} member{{ members.length === 1 ? '' : 's' }}
+      </p>
+    </div>
 
-        <div v-if="loadingMembers" class="space-y-2">
-          <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
-        </div>
-        <p v-else-if="members.length === 0" class="text-sm text-muted-foreground">
-          No members visible — you may not have access to this workspace's roster.
-        </p>
-        <Table v-else>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Member</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Trusted operator</TableHead>
-              <TableHead class="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-for="member in members" :key="member.userId">
-              <TableCell>
-                <div class="font-medium">
-                  {{ member.displayName }}
-                  <Badge v-if="member.disabled" variant="destructive" class="ml-1">disabled</Badge>
-                </div>
-                <div class="text-xs text-muted-foreground">{{ member.email }}</div>
-              </TableCell>
-              <TableCell>
-                <select
-                  v-if="canManage"
-                  class="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
-                  :value="member.role"
-                  @change="patchMember(member, { role: ($event.target as HTMLSelectElement).value })"
-                >
-                  <option v-for="r in ROLES" :key="r" :value="r">{{ r }}</option>
-                </select>
-                <Badge v-else variant="outline">{{ member.role }}</Badge>
-              </TableCell>
-              <TableCell>
-                <input
-                  v-if="canManage"
-                  type="checkbox" class="size-4 accent-primary"
-                  :checked="member.trustedOperator"
-                  @change="patchMember(member, { trustedOperator: ($event.target as HTMLInputElement).checked })"
-                />
-                <span v-else class="text-sm text-muted-foreground">{{ member.trustedOperator ? 'yes' : 'no' }}</span>
-              </TableCell>
-              <TableCell class="text-right">
-                <Button v-if="canManage" size="sm" variant="destructive" @click="removeMember(member)">Remove</Button>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <div v-if="loadingMembers" class="space-y-2">
+      <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
+    </div>
+    <p v-else-if="members.length === 0" class="text-muted-foreground py-10 text-center text-sm">
+      No members visible — you may not have access to this workspace's roster.
+    </p>
+    <p v-else-if="visibleMembers.length === 0" class="text-muted-foreground py-10 text-center text-sm">
+      No members match these filters.
+    </p>
+
+    <Table v-else>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Member</TableHead>
+          <TableHead>Role</TableHead>
+          <TableHead>Trusted operator</TableHead>
+          <TableHead class="text-right">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow v-for="member in visibleMembers" :key="member.userId">
+          <TableCell>
+            <div class="font-medium">
+              {{ member.displayName }}
+              <Badge v-if="member.disabled" variant="destructive" class="ml-1">disabled</Badge>
+            </div>
+            <div class="text-muted-foreground text-xs">{{ member.email }}</div>
+          </TableCell>
+          <TableCell>
+            <Select
+              v-if="canManage"
+              :model-value="member.role"
+              @update:model-value="patchMember(member, { role: $event as string })"
+            >
+              <SelectTrigger size="sm" class="text-sm" :aria-label="`Role for ${member.displayName}`">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="r in ROLES" :key="r" :value="r">{{ r }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Badge v-else variant="outline">{{ member.role }}</Badge>
+          </TableCell>
+          <TableCell>
+            <Checkbox
+              v-if="canManage"
+              :model-value="member.trustedOperator"
+              :aria-label="`Trusted operator for ${member.displayName}`"
+              @update:model-value="patchMember(member, { trustedOperator: $event === true })"
+            />
+            <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? 'yes' : 'no' }}</span>
+          </TableCell>
+          <TableCell class="text-right">
+            <Button v-if="canManage" size="sm" variant="destructive" @click="removeMember(member)">Remove</Button>
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+
+    <Dialog v-model:open="addOpen">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add member</DialogTitle>
+          <DialogDescription>
+            The picker searches accounts that are not members yet — create new ones under Users.
+          </DialogDescription>
+        </DialogHeader>
+        <form id="add-member" class="space-y-3" @submit.prevent="addMember">
+          <Autocomplete
+            v-model="pickedValue"
+            label="User"
+            placeholder="Search users by name or email…"
+            :multiple="false"
+            :load="loadCandidates"
+          />
+          <div class="space-y-1.5">
+            <Label
+              for="add-role"
+              class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
+            >
+              Role
+            </Label>
+            <Select v-model="addRole">
+              <SelectTrigger id="add-role" class="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="r in ROLES" :key="r" :value="r">{{ r }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </form>
+        <DialogFooter>
+          <Button variant="ghost" @click="addOpen = false">Cancel</Button>
+          <Button type="submit" form="add-member" :disabled="!pickedUser">Add</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

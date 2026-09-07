@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
 import { apiFetch, getProjectId, getWorkspaceId, setActiveProject } from '@/lib/api'
+import { useDocumentsStore } from '@/stores/documents'
+import { useSidebarNavStore } from '@/stores/sidebar-nav'
 
 /**
  * Workspace > Project > Document. The active project is remembered the same
@@ -36,13 +38,21 @@ export const useProjectsStore = defineStore('projects', {
       }
     },
     /**
-     * Full reload, for the same reason switching workspace does one: the page
-     * tree, query cache and live subscription are all scoped to the selection.
+     * Switch scope in place. Unlike a workspace switch this does *not* reload
+     * the app: nothing project-scoped is cached outside the documents store
+     * (search sends its filters explicitly, the live subscription is keyed on
+     * the workspace), and a reload would tear down the sidebar mid-animation.
+     *
+     * Callers own navigation, because the right answer depends on where they
+     * are: a document route now points outside the new scope, a settings route
+     * does not care. The rail always ends up inside the project you just chose.
      */
-    switchProject(projectId: string) {
+    async switchProject(projectId: string) {
       if (projectId === this.activeId) return
+      this.activeId = projectId
       setActiveProject(projectId)
-      window.location.assign('/documents')
+      useSidebarNavStore().openPages()
+      await useDocumentsStore().rescope()
     },
   },
 })

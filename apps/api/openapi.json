@@ -688,6 +688,70 @@
         ]
       }
     },
+    "/v1/workspaces/{id}/candidates": {
+      "get": {
+        "operationId": "WorkspacesController_listCandidates",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive email/display-name substring match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Users who are not members yet, for the add-member picker (workspace admin)",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
     "/v1/workspaces/{id}/members/{userId}": {
       "patch": {
         "operationId": "WorkspacesController_updateMember",
@@ -3822,6 +3886,36 @@
             "required": true,
             "in": "query",
             "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive substring over the title and the messages",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "updatedAt of the last row of the previous page (keyset cursor)",
+            "schema": {
               "type": "string"
             }
           }
@@ -3851,7 +3945,7 @@
             }
           }
         },
-        "summary": "List chat pane threads for a workspace, most recently active first",
+        "summary": "List chat pane threads for a workspace, most recently active first (search + keyset pagination)",
         "tags": [
           "assistant"
         ]
@@ -3868,13 +3962,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "workspaceId",
-            "required": true,
-            "in": "query",
-            "description": "Unused by the lookup; required for the ACL check",
-            "schema": {}
           }
         ],
         "responses": {
@@ -3906,6 +3993,100 @@
         "tags": [
           "assistant"
         ]
+      },
+      "patch": {
+        "operationId": "AssistantController_updateThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAssistantThreadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rename a chat thread (null title restores the auto-derived one)",
+        "tags": [
+          "assistant"
+        ]
+      },
+      "delete": {
+        "operationId": "AssistantController_deleteThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a chat thread and its whole message history",
+        "tags": [
+          "assistant"
+        ]
       }
     },
     "/v1/assistant/threads/{id}/messages": {
@@ -3919,13 +4100,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "workspaceId",
-            "required": true,
-            "in": "query",
-            "description": "Unused by the lookup; required for the ACL check",
-            "schema": {}
           }
         ],
         "requestBody": {
@@ -3964,6 +4138,60 @@
           }
         },
         "summary": "Post a chat message — runs the tool harness (read + write tools) and returns the assistant reply; writes always go through create_document (new page) or propose_update (merge request), never directly",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/v1/assistant/threads/{id}/messages/stream": {
+      "post": {
+        "operationId": "AssistantController_streamMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostAssistantMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Streamed chat turn (text/event-stream of AssistantStreamFrame) — same turn as POST .../messages",
         "tags": [
           "assistant"
         ]
@@ -4869,6 +5097,16 @@
         "required": [
           "workspaceId"
         ]
+      },
+      "UpdateAssistantThreadDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "description": "null clears the manual title so the auto-derived one shows again"
+          }
+        }
       },
       "ChatAttachmentDto": {
         "type": "object",

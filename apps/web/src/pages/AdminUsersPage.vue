@@ -1,14 +1,39 @@
 <script setup lang="ts">
 // Users management (platform admin; the /admin/users route is RBAC-guarded).
-import { onMounted, ref } from 'vue'
+//
+// Layout is toolbar + table: the roster is the page, so creating an account
+// lives behind a dialog and narrowing the list lives in the filter bar rather
+// than in stacked cards above the thing you came to read.
+import { computed, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
-import type { ListUsersResponse, UserSummary } from '@knowledge/contracts'
+import { AtSign, CircleDashed, Library, Plus, ShieldCheck } from 'lucide-vue-next'
+import type {
+  ListUsersResponse,
+  ListWorkspacesResponse,
+  UserSummary,
+  WorkspaceSummary,
+} from '@knowledge/contracts'
 import { apiFetch } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  FilterBar,
+  filterRows,
+  type ActiveFilter,
+  type FilterAccessors,
+  type FilterField,
+} from '@/components/ui/filter-bar'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -16,17 +41,82 @@ import {
 
 const auth = useAuthStore()
 const users = ref<UserSummary[]>([])
+const workspaces = ref<WorkspaceSummary[]>([])
 const loading = ref(true)
 
+const createOpen = ref(false)
 const newEmail = ref('')
 const newName = ref('')
 const newPassword = ref('')
 const creating = ref(false)
 
+// --- filters ---------------------------------------------------------------
+// The whole roster is already in memory, so every field matches client-side.
+const filters = ref<ActiveFilter[]>([])
+
+const fields = computed<FilterField[]>(() => [
+  {
+    key: 'status',
+    label: 'Status',
+    icon: CircleDashed,
+    options: [
+      { value: 'active', label: 'Active' },
+      { value: 'disabled', label: 'Disabled' },
+      { value: 'admin', label: 'Platform admin' },
+    ],
+  },
+  {
+    key: 'role',
+    label: 'Role',
+    icon: ShieldCheck,
+    options: [
+      { value: 'viewer', label: 'Viewer' },
+      { value: 'editor', label: 'Editor' },
+      { value: 'admin', label: 'Admin' },
+    ],
+  },
+  {
+    key: 'workspace',
+    label: 'Workspace',
+    icon: Library,
+    options: workspaces.value.map((w) => ({
+      value: w.workspaceId,
+      label: w.name,
+      meta: w.memberCount,
+    })),
+  },
+  {
+    key: 'text',
+    label: 'Name or email',
+    icon: AtSign,
+    group: 'Text',
+    type: 'text',
+    placeholder: 'alice@…',
+  },
+])
+
+const accessors: FilterAccessors<UserSummary> = {
+  // A user is one of active/disabled, and separately may be a platform admin,
+  // so status is multi-valued rather than a single enum.
+  status: (u) => [u.disabled ? 'disabled' : 'active', ...(u.isAdmin ? ['admin'] : [])],
+  role: (u) => u.memberships.map((m) => m.role),
+  workspace: (u) => u.memberships.map((m) => m.workspaceId),
+  text: (u) => [u.displayName, u.email],
+}
+
+const visibleUsers = computed(() => filterRows(users.value, filters.value, accessors))
+
 async function load() {
   loading.value = true
   try {
-    users.value = (await apiFetch<ListUsersResponse>('/v1/users')).users
+    const [userRes, wsRes] = await Promise.all([
+      apiFetch<ListUsersResponse>('/v1/users'),
+      // Platform admins see every workspace, so this is the full roster the
+      // workspace filter needs.
+      apiFetch<ListWorkspacesResponse>('/v1/workspaces'),
+    ])
+    users.value = userRes.users
+    workspaces.value = wsRes.workspaces
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -50,6 +140,7 @@ async function createUser() {
     newEmail.value = ''
     newName.value = ''
     newPassword.value = ''
+    createOpen.value = false
     await load()
   } catch (e) {
     toast.error((e as Error).message)
@@ -77,85 +168,111 @@ function setPassword(user: UserSummary) {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <h1 class="font-display text-2xl font-bold tracking-tight">Users</h1>
+  <div class="space-y-4">
+    <div class="flex items-center justify-between gap-3">
+      <h1 class="font-display text-2xl font-bold tracking-tight">Users</h1>
+      <Button size="sm" @click="createOpen = true">
+        <Plus class="size-3.5" /> New user
+      </Button>
+    </div>
 
-    <Card>
-      <CardHeader><CardTitle class="text-base">Create user</CardTitle></CardHeader>
-      <CardContent>
-        <form class="flex flex-wrap items-end gap-3" @submit.prevent="createUser">
-          <div class="space-y-1">
-            <label class="text-sm font-medium" for="new-email">Email</label>
-            <Input id="new-email" v-model="newEmail" type="email" required placeholder="teammate@example.com" class="w-64" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-sm font-medium" for="new-name">Display name</label>
-            <Input id="new-name" v-model="newName" required placeholder="Teammate" class="w-48" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-sm font-medium" for="new-pass">Initial password <span class="text-muted-foreground">(optional)</span></label>
-            <Input id="new-pass" v-model="newPassword" type="text" minlength="8" placeholder="via reset link if empty" class="w-52" />
-          </div>
-          <Button type="submit" :disabled="creating">Create</Button>
-        </form>
-      </CardContent>
-    </Card>
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+      <FilterBar v-model="filters" :fields="fields" />
+      <p class="text-muted-foreground text-xs tabular-nums">
+        {{ visibleUsers.length }} of {{ users.length }} account{{ users.length === 1 ? '' : 's' }}
+      </p>
+    </div>
 
     <div v-if="loading" class="space-y-2">
       <Skeleton v-for="i in 4" :key="i" class="h-10 w-full" />
     </div>
 
-    <div v-else class="rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>User</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Workspaces</TableHead>
-            <TableHead>Credentials</TableHead>
-            <TableHead class="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow v-for="user in users" :key="user.userId">
-            <TableCell>
-              <div class="font-medium">{{ user.displayName }}</div>
-              <div class="text-xs text-muted-foreground">{{ user.email }}</div>
-            </TableCell>
-            <TableCell>
-              <div class="flex flex-wrap gap-1">
-                <Badge v-if="user.isAdmin" variant="default">platform admin</Badge>
-                <Badge v-if="user.disabled" variant="destructive">disabled</Badge>
-                <Badge v-if="!user.disabled && !user.isAdmin" variant="outline">active</Badge>
-              </div>
-            </TableCell>
-            <TableCell class="text-sm text-muted-foreground">
-              <span v-if="user.memberships.length === 0">—</span>
-              <span v-else>{{ user.memberships.map((m) => m.role).join(', ') }} ({{ user.memberships.length }})</span>
-            </TableCell>
-            <TableCell class="text-xs text-muted-foreground">
-              {{ [user.hasPassword ? 'password' : null, user.hasApiKey ? 'api key' : null].filter(Boolean).join(' + ') || 'none' }}
-            </TableCell>
-            <TableCell class="text-right">
-              <div class="flex justify-end gap-1.5">
-                <Button
-                  size="sm" variant="outline" :disabled="user.userId === auth.me?.userId"
-                  @click="patchUser(user, { isAdmin: !user.isAdmin }, user.isAdmin ? 'Admin removed' : 'Promoted to platform admin')"
-                >
-                  {{ user.isAdmin ? 'Revoke admin' : 'Make admin' }}
-                </Button>
-                <Button size="sm" variant="outline" @click="setPassword(user)">Set password</Button>
-                <Button
-                  size="sm" :variant="user.disabled ? 'outline' : 'destructive'" :disabled="user.userId === auth.me?.userId"
-                  @click="patchUser(user, { disabled: !user.disabled }, user.disabled ? 'Account enabled' : 'Account disabled')"
-                >
-                  {{ user.disabled ? 'Enable' : 'Disable' }}
-                </Button>
-              </div>
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </div>
+    <p v-else-if="visibleUsers.length === 0" class="text-muted-foreground py-10 text-center text-sm">
+      No accounts match these filters.
+    </p>
+
+    <Table v-else>
+      <TableHeader>
+        <TableRow>
+          <TableHead>User</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Workspaces</TableHead>
+          <TableHead>Credentials</TableHead>
+          <TableHead class="text-right">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow v-for="user in visibleUsers" :key="user.userId">
+          <TableCell>
+            <div class="font-medium">{{ user.displayName }}</div>
+            <div class="text-muted-foreground text-xs">{{ user.email }}</div>
+          </TableCell>
+          <TableCell>
+            <div class="flex flex-wrap gap-1">
+              <Badge v-if="user.isAdmin" variant="default">platform admin</Badge>
+              <Badge v-if="user.disabled" variant="destructive">disabled</Badge>
+              <Badge v-if="!user.disabled && !user.isAdmin" variant="outline">active</Badge>
+            </div>
+          </TableCell>
+          <TableCell class="text-muted-foreground text-sm">
+            <span v-if="user.memberships.length === 0">—</span>
+            <span v-else>{{ user.memberships.map((m) => m.role).join(', ') }} ({{ user.memberships.length }})</span>
+          </TableCell>
+          <TableCell class="text-muted-foreground text-xs">
+            {{ [user.hasPassword ? 'password' : null, user.hasApiKey ? 'api key' : null].filter(Boolean).join(' + ') || 'none' }}
+          </TableCell>
+          <TableCell class="text-right">
+            <div class="flex justify-end gap-1.5">
+              <Button
+                size="sm" variant="outline" :disabled="user.userId === auth.me?.userId"
+                @click="patchUser(user, { isAdmin: !user.isAdmin }, user.isAdmin ? 'Admin removed' : 'Promoted to platform admin')"
+              >
+                {{ user.isAdmin ? 'Revoke admin' : 'Make admin' }}
+              </Button>
+              <Button size="sm" variant="outline" @click="setPassword(user)">Set password</Button>
+              <Button
+                size="sm" :variant="user.disabled ? 'outline' : 'destructive'" :disabled="user.userId === auth.me?.userId"
+                @click="patchUser(user, { disabled: !user.disabled }, user.disabled ? 'Account enabled' : 'Account disabled')"
+              >
+                {{ user.disabled ? 'Enable' : 'Disable' }}
+              </Button>
+            </div>
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+
+    <Dialog v-model:open="createOpen">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>New user</DialogTitle>
+          <DialogDescription>
+            Leave the password empty to have the account claimed through a reset link.
+          </DialogDescription>
+        </DialogHeader>
+        <form id="create-user" class="space-y-3" @submit.prevent="createUser">
+          <div class="space-y-1.5">
+            <Label for="new-email">Email</Label>
+            <Input id="new-email" v-model="newEmail" type="email" required placeholder="teammate@example.com" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="new-name">Display name</Label>
+            <Input id="new-name" v-model="newName" required placeholder="Teammate" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="new-pass">
+              Initial password <span class="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input id="new-pass" v-model="newPassword" type="text" minlength="8" placeholder="via reset link if empty" />
+          </div>
+        </form>
+        <DialogFooter>
+          <Button variant="ghost" @click="createOpen = false">Cancel</Button>
+          <Button type="submit" form="create-user" :disabled="creating">
+            {{ creating ? 'Creating…' : 'Create' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

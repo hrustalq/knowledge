@@ -38,6 +38,13 @@ export class SearchFiltersDto {
   @ArrayMaxSize(8)
   @IsIn(DOCUMENT_CATEGORIES as unknown as string[], { each: true })
   categories?: DocumentCategory[];
+
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Only return documents in these projects' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID('4', { each: true })
+  projectIds?: string[];
 }
 
 export class SearchDto {

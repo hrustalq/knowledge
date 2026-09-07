@@ -5,13 +5,16 @@ import { computed, onMounted } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
+import { useProjectsStore } from '@/stores/projects'
 
 const route = useRoute()
 const store = useDocumentsStore()
+const projects = useProjectsStore()
 
 // The sidebar may be collapsed (and unmounted), so make sure the tree loads.
 onMounted(() => {
   if (!store.treeLoaded) void store.fetchTree()
+  if (!projects.loaded) void projects.fetchList().catch(() => undefined)
 })
 
 interface Crumb { label: string; to?: string }
@@ -22,15 +25,22 @@ const STATIC: Record<string, string> = {
   '/merge-requests': 'Merge requests',
   '/access': 'Access',
   '/admin/users': 'Users',
+  '/projects': 'Projects',
+}
+
+/** Pages live inside a project, so page trails lead with the active project. */
+function pageRoot(): Crumb[] {
+  const name = projects.activeName
+  return name ? [{ label: name, to: '/projects' }, { label: 'Pages', to: '/documents' }] : [{ label: 'Pages', to: '/documents' }]
 }
 
 const crumbs = computed<Crumb[]>(() => {
   const path = route.path
-  if (path === '/documents') return [{ label: 'Pages' }]
+  if (path === '/documents') return pageRoot()
   if (path.startsWith('/documents/')) {
     const id = route.params.id as string
     const trail = store.pathTo(id)
-    const list: Crumb[] = [{ label: 'Pages', to: '/documents' }]
+    const list: Crumb[] = pageRoot()
     for (const node of trail) list.push({ label: node.title, to: `/documents/${node.documentId}` })
     if (path.endsWith('/edit')) list.push({ label: 'Edit' })
     return list
@@ -41,8 +51,8 @@ const crumbs = computed<Crumb[]>(() => {
       { label: (route.params.id as string).slice(0, 8) },
     ]
   }
-  if (path === '/create') return [{ label: 'Pages', to: '/documents' }, { label: 'New page' }]
-  if (path === '/upload') return [{ label: 'Pages', to: '/documents' }, { label: 'Upload' }]
+  if (path === '/create') return [...pageRoot(), { label: 'New page' }]
+  if (path === '/upload') return [...pageRoot(), { label: 'Upload' }]
   const label = STATIC[path]
   return label ? [{ label }] : []
 })

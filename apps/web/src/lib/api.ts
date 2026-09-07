@@ -7,6 +7,7 @@ const base = import.meta.env.SSR
 
 const TOKEN_KEY = 'kn_token'
 const WS_KEY = 'kn_ws'
+const PROJECT_KEY = 'kn_proj'
 
 /** Typed API error so callers (and the router guard) can branch on 401/403. */
 export class ApiError extends Error {
@@ -26,6 +27,7 @@ export class ApiError extends Error {
 interface SsrRequestContext {
   token: string | null
   workspaceId: string | null
+  projectId: string | null
 }
 function ssrContext(): SsrRequestContext | undefined {
   return (
@@ -35,10 +37,12 @@ function ssrContext(): SsrRequestContext | undefined {
 
 let clientToken: string | null = null
 let clientWorkspaceId: string | null = null
+let clientProjectId: string | null = null
 if (!import.meta.env.SSR) {
   try {
     clientToken = localStorage.getItem(TOKEN_KEY)
     clientWorkspaceId = localStorage.getItem(WS_KEY)
+    clientProjectId = localStorage.getItem(PROJECT_KEY)
   } catch {
     /* storage unavailable (private mode) — stay anonymous */
   }
@@ -75,6 +79,8 @@ export function getWorkspaceId(): string {
 export function setActiveWorkspace(workspaceId: string | null): void {
   if (import.meta.env.SSR) return
   clientWorkspaceId = workspaceId
+  // Projects belong to a workspace, so the remembered one no longer applies.
+  setActiveProject(null)
   try {
     if (workspaceId) {
       localStorage.setItem(WS_KEY, workspaceId)
@@ -82,6 +88,32 @@ export function setActiveWorkspace(workspaceId: string | null): void {
     } else {
       localStorage.removeItem(WS_KEY)
       document.cookie = `${WS_KEY}=; path=/; max-age=0`
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Active project (Workspace > Project > Document). Unlike getWorkspaceId there
+ * is no fallback constant — project ids are created by the backfill migration,
+ * so until the projects store resolves one this returns null and the API is
+ * called without a projectId, which means "the whole workspace".
+ */
+export function getProjectId(): string | null {
+  return (import.meta.env.SSR ? ssrContext()?.projectId : clientProjectId) ?? null
+}
+
+export function setActiveProject(projectId: string | null): void {
+  if (import.meta.env.SSR) return
+  clientProjectId = projectId
+  try {
+    if (projectId) {
+      localStorage.setItem(PROJECT_KEY, projectId)
+      document.cookie = `${PROJECT_KEY}=${projectId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+    } else {
+      localStorage.removeItem(PROJECT_KEY)
+      document.cookie = `${PROJECT_KEY}=; path=/; max-age=0`
     }
   } catch {
     /* ignore */

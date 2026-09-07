@@ -1,22 +1,25 @@
 <script setup lang="ts">
-// Left navigation rail: brand, workspace switcher, primary nav and the
-// live page tree (Confluence-style space sidebar).
+// Left navigation rail: brand, workspace + project switchers, primary nav and
+// the live page tree (Confluence-style space sidebar).
 import { computed, onMounted, ref, type Component } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Activity, GitPullRequestArrow, House, Library, Plus, Search, ShieldCheck, Sparkles, Upload, Users } from 'lucide-vue-next'
+import { Activity, FolderKanban, GitPullRequestArrow, House, Library, Plus, Search, ShieldCheck, Sparkles, Upload, Users } from 'lucide-vue-next'
 import type { ListWorkspacesResponse, WorkspaceSummary } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
+import { useProjectsStore } from '@/stores/projects'
 import { Skeleton } from '@/components/ui/skeleton'
 import SidebarTreeNode from './SidebarTreeNode.vue'
 
 const auth = useAuthStore()
 const store = useDocumentsStore()
+const projects = useProjectsStore()
 const route = useRoute()
 
 const workspaces = ref<WorkspaceSummary[]>([])
 const activeWs = ref(getWorkspaceId())
+const activeProject = ref(projects.activeId)
 
 onMounted(() => {
   if (!store.treeLoaded) void store.fetchTree()
@@ -27,7 +30,19 @@ onMounted(() => {
     .catch(() => {
       /* no roster access — keep the switcher hidden */
     })
+  void projects
+    .fetchList()
+    .then(() => {
+      activeProject.value = projects.activeId
+    })
+    .catch(() => {
+      /* no project access — keep the switcher hidden */
+    })
 })
+
+function switchProject() {
+  if (activeProject.value) projects.switchProject(activeProject.value)
+}
 
 function switchWorkspace() {
   if (activeWs.value === getWorkspaceId()) return
@@ -46,6 +61,7 @@ const links = computed<NavLink[]>(() => [
   { to: '/search', label: 'Search', icon: Search },
   { to: '/activity', label: 'Activity', icon: Activity },
   { to: '/merge-requests', label: 'Merge requests', icon: GitPullRequestArrow },
+  { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/assistant', label: 'Assistant', icon: Sparkles },
   { to: '/access', label: 'Access', icon: ShieldCheck },
   ...(auth.isAdmin || auth.isDev ? [{ to: '/admin/users', label: 'Users', icon: Users }] : []),
@@ -73,6 +89,16 @@ function isCurrent(to: string): boolean {
           @change="switchWorkspace"
         >
           <option v-for="w in workspaces" :key="w.workspaceId" :value="w.workspaceId">{{ w.name }}</option>
+        </select>
+      </label>
+      <label v-if="projects.items.length > 0" class="mt-1.5 block">
+        <span class="sr-only">Project</span>
+        <select
+          v-model="activeProject"
+          class="w-full truncate rounded-md border border-sidebar-border bg-background px-2 py-1.5 text-xs"
+          @change="switchProject"
+        >
+          <option v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</option>
         </select>
       </label>
     </div>

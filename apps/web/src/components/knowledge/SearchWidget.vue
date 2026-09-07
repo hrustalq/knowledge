@@ -6,6 +6,7 @@ import { RouterLink } from 'vue-router'
 import { Search } from 'lucide-vue-next'
 import { DOCUMENT_CATEGORIES, type DocumentCategory, type SearchRequest, type SearchResponse } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -16,15 +17,19 @@ const props = defineProps<{ initialQuery?: string }>()
 const query = ref(props.initialQuery ?? '')
 const mode = ref<'hybrid' | 'semantic' | 'keyword'>('hybrid')
 const categories = ref<Set<DocumentCategory>>(new Set())
+const projectIds = ref<Set<string>>(new Set())
 const expand = ref(true)
 const depth = ref(1)
 const limit = ref(20)
+
+const projects = useProjectsStore()
 
 const response = ref<SearchResponse | null>(null)
 const busy = ref(false)
 const error = ref<string | null>(null)
 
 onMounted(() => {
+  if (!projects.loaded) void projects.fetchList().catch(() => undefined)
   if (query.value.trim()) void run()
 })
 
@@ -33,6 +38,13 @@ function toggleCategory(c: DocumentCategory) {
   if (next.has(c)) next.delete(c)
   else next.add(c)
   categories.value = next
+}
+
+function toggleProject(projectId: string) {
+  const next = new Set(projectIds.value)
+  if (next.has(projectId)) next.delete(projectId)
+  else next.add(projectId)
+  projectIds.value = next
 }
 
 async function run() {
@@ -46,7 +58,14 @@ async function run() {
       mode: mode.value,
       limit: limit.value,
       ...(expand.value && mode.value === 'hybrid' ? { expandGraph: { depth: depth.value } } : {}),
-      ...(categories.value.size > 0 ? { filters: { categories: [...categories.value] } } : {}),
+      ...(categories.value.size > 0 || projectIds.value.size > 0
+        ? {
+            filters: {
+              ...(categories.value.size > 0 ? { categories: [...categories.value] } : {}),
+              ...(projectIds.value.size > 0 ? { projectIds: [...projectIds.value] } : {}),
+            },
+          }
+        : {}),
     }
     response.value = await apiFetch<SearchResponse>('/v1/search', { method: 'POST', body: JSON.stringify(body) })
   } catch (e) {
@@ -111,6 +130,22 @@ async function run() {
         @click="toggleCategory(c)"
       >
         {{ c }}
+      </button>
+    </div>
+
+    <div v-if="projects.items.length > 1" class="flex flex-wrap items-center gap-1.5">
+      <span class="text-xs text-muted-foreground">Projects</span>
+      <button
+        v-for="p in projects.items"
+        :key="p.projectId"
+        type="button"
+        class="rounded-full border px-3 py-1 text-xs transition-colors"
+        :class="projectIds.has(p.projectId)
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+        @click="toggleProject(p.projectId)"
+      >
+        {{ p.name }}
       </button>
     </div>
 

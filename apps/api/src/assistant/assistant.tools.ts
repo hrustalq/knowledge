@@ -162,6 +162,10 @@ export class AssistantToolsService {
               markdown: { type: 'string', description: 'Full markdown content of the new page' },
               category: { type: 'string', description: 'Optional category; defaults to "other"' },
               parentId: { type: 'string', description: 'Optional UUID of a parent document to nest this under' },
+              projectId: {
+                type: 'string',
+                description: "Optional UUID of the owning project; defaults to the workspace's first project",
+              },
             },
             required: ['title', 'markdown'],
           },
@@ -294,9 +298,19 @@ export class AssistantToolsService {
     if (!markdown.trim()) return this.fail('markdown is required');
     const authorId = ctx.principal.userId; // matches DEV_PRINCIPAL's stub id in AUTH_MODE=none
 
+    // Every document needs a project. A project id from args is validated
+    // against the pinned workspace inside createDocument, so a prompt-injected
+    // id from another tenant is rejected there rather than trusted here.
+    const projectId =
+      typeof args.projectId === 'string' && args.projectId
+        ? args.projectId
+        : await this.defaultProjectId(ctx.workspaceId);
+    if (!projectId) return this.fail('workspace has no project to create the document in');
+
     const created = await this.documents.createDocument(
       {
         workspaceId: ctx.workspaceId, // pinned — never from args
+        projectId,
         title,
         content: { mode: 'inline', format: 'markdown', text: markdown },
         ...(typeof args.category === 'string' && args.category ? { category: args.category as DocumentCategory } : {}),
@@ -314,6 +328,16 @@ export class AssistantToolsService {
       ok: true,
       sources: [{ documentId: created.documentId, title }],
     };
+  }
+
+  /** Oldest project in the workspace — the "General" one after the projects backfill. */
+  private async defaultProjectId(workspaceId: string): Promise<string | null> {
+    const project = await this.prisma.project.findFirst({
+      where: { workspaceId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return project?.id ?? null;
   }
 
   private async proposeUpdate(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {

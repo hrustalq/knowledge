@@ -10,9 +10,10 @@ import { MergeRequestsService } from './merge-requests.service.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
 import { HistoryService } from './history.service.js';
 import { ActivityModule } from '../activity/activity.module.js';
+import { ProjectsModule } from '../projects/projects.module.js';
 
 @Module({
-  imports: [ActivityModule, StorageModule, GraphModule, IngestionModule],
+  imports: [ActivityModule, StorageModule, GraphModule, IngestionModule, ProjectsModule],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [DocumentsService, CompareService, MergeRequestsService, MergeRequestThreadsService, HistoryService],
   exports: [DocumentsService, CompareService, MergeRequestsService, MergeRequestThreadsService, HistoryService],

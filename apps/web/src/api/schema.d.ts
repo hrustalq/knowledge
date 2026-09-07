@@ -245,6 +245,60 @@ export interface paths {
         patch: operations["WorkspacesController_updateMember"];
         trace?: never;
     };
+    "/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List projects in a workspace */
+        get: operations["ProjectsController_list"];
+        put?: never;
+        /** Create a project */
+        post: operations["ProjectsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Project detail */
+        get: operations["ProjectsController_get"];
+        put?: never;
+        post?: never;
+        /** Delete an empty project (409 when it still holds documents) */
+        delete: operations["ProjectsController_remove"];
+        options?: never;
+        head?: never;
+        /** Rename a project / edit its description */
+        patch: operations["ProjectsController_update"];
+        trace?: never;
+    };
+    "/v1/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workspace activity feed, newest first (docs/features/10) */
+        get: operations["ActivityController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents": {
         parameters: {
             query?: never;
@@ -270,7 +324,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Workspace document tree (feature 08 nesting, docs/features/08) */
+        /** Document tree (feature 08 nesting); scoped to one project when projectId is given */
         get: operations["DocumentsController_tree"];
         put?: never;
         post?: never;
@@ -696,23 +750,6 @@ export interface paths {
         patch: operations["MergeRequestsController_resolveThread"];
         trace?: never;
     };
-    "/v1/activity": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Workspace activity feed, newest first (docs/features/10) */
-        get: operations["ActivityController_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/search": {
         parameters: {
             query?: never;
@@ -1073,6 +1110,16 @@ export interface components {
             role?: "viewer" | "editor" | "admin";
             trustedOperator?: boolean;
         };
+        CreateProjectDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            name: string;
+            description?: string | null;
+        };
+        UpdateProjectDto: {
+            name?: string;
+            description?: string | null;
+        };
         InlineContentDto: {
             /** @enum {string} */
             mode: "inline";
@@ -1096,6 +1143,11 @@ export interface components {
         CreateDocumentDto: {
             /** Format: uuid */
             workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Owning project; must belong to workspaceId
+             */
+            projectId: string;
             title: string;
             content?: components["schemas"]["InlineContentDto"];
             relations?: components["schemas"]["RelationInputDto"][];
@@ -1117,6 +1169,8 @@ export interface components {
             category?: "process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other";
             /** Format: uuid */
             parentId?: Record<string, never> | null;
+            /** Format: uuid */
+            projectId?: string;
         };
         CreateBranchDto: {
             /** @example feature/oauth */
@@ -1215,6 +1269,8 @@ export interface components {
         SearchFiltersDto: {
             /** @description Only return documents in these categories (feature 02) */
             categories?: ("process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other")[];
+            /** @description Only return documents in these projects */
+            projectIds?: string[];
         };
         SearchDto: {
             /** Format: uuid */
@@ -2047,6 +2103,237 @@ export interface operations {
             };
         };
     };
+    ProjectsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ActivityController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                documentId?: string;
+                limit?: string;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     DocumentsController_list: {
         parameters: {
             query: {
@@ -2054,6 +2341,8 @@ export interface operations {
                 limit: string;
                 cursor: string;
                 category: string;
+                /** @description Restrict to one project */
+                projectId?: string;
             };
             header?: never;
             path?: never;
@@ -2130,6 +2419,8 @@ export interface operations {
         parameters: {
             query: {
                 workspaceId: string;
+                /** @description Restrict the tree to one project */
+                projectId?: string;
             };
             header?: never;
             path?: never;
@@ -3418,46 +3709,6 @@ export interface operations {
                 "application/json": components["schemas"]["ResolveThreadDto"];
             };
         };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    ActivityController_list: {
-        parameters: {
-            query: {
-                workspaceId: string;
-                documentId?: string;
-                limit?: string;
-                cursor?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             200: {
                 headers: {

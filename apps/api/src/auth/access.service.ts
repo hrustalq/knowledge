@@ -60,6 +60,15 @@ export class AccessService {
     return mr.document.workspaceId;
   }
 
+  async workspaceOfProject(projectId: string): Promise<string> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { workspaceId: true },
+    });
+    if (!project) throw new NotFoundException(`Project ${projectId} not found`);
+    return project.workspaceId;
+  }
+
   async workspaceOfJob(jobId: string): Promise<string> {
     const job = await this.prisma.ingestionJob.findUnique({
       where: { id: jobId },

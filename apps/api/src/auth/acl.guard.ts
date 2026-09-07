@@ -69,6 +69,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfMergeRequest(uuid(req.params?.id, 'merge request id'));
       case 'job':
         return this.access.workspaceOfJob(uuid(req.params?.id, 'job id'));
+      case 'project':
+        return this.access.workspaceOfProject(uuid(req.params?.id, 'project id'));
       case 'workspace':
         return this.access.workspaceExists(uuid(req.params?.id, 'workspace id'));
     }

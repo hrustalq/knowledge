@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import type { DocumentSummary, DocumentTreeNode, DocumentTreeResponse, ListDocumentsResponse } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { apiFetch, getProjectId, getWorkspaceId } from '@/lib/api'
+
+/** `&projectId=` when a project is active; without it the API spans the workspace. */
+function projectParam(): string {
+  const projectId = getProjectId()
+  return projectId ? `&projectId=${projectId}` : ''
+}
 
 export const useDocumentsStore = defineStore('documents', {
   state: () => ({
@@ -12,14 +18,14 @@ export const useDocumentsStore = defineStore('documents', {
   actions: {
     async fetchList() {
       const res = await apiFetch<ListDocumentsResponse>(
-        `/v1/documents?workspaceId=${getWorkspaceId()}&limit=100`,
+        `/v1/documents?workspaceId=${getWorkspaceId()}&limit=100${projectParam()}`,
       )
       this.items = res.items
       this.loaded = true
     },
     async fetchTree() {
       const res = await apiFetch<DocumentTreeResponse>(
-        `/v1/documents/tree?workspaceId=${getWorkspaceId()}`,
+        `/v1/documents/tree?workspaceId=${getWorkspaceId()}${projectParam()}`,
       )
       this.tree = res.roots
       this.treeLoaded = true

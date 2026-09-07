@@ -5,6 +5,7 @@ import { createApp } from './main'
 interface SsrRequestContext {
   token: string | null
   workspaceId: string | null
+  projectId: string | null
 }
 
 // Per-request auth context for lib/api (async-context scoped, so concurrent
@@ -14,7 +15,12 @@ const ssrCtx = new AsyncLocalStorage<SsrRequestContext>()
 ;(globalThis as Record<string, unknown>).__KN_SSR_CTX__ = ssrCtx
 
 export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) {
-  return ssrCtx.run({ token: ctx.token ?? null, workspaceId: ctx.workspaceId ?? null }, async () => {
+  const request: SsrRequestContext = {
+    token: ctx.token ?? null,
+    workspaceId: ctx.workspaceId ?? null,
+    projectId: ctx.projectId ?? null,
+  }
+  return ssrCtx.run(request, async () => {
     const { app, router, pinia } = createApp()
 
     await router.push(url)

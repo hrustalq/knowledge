@@ -19,6 +19,7 @@ export function createRouter() {
       { path: '/documents/:id/edit', component: () => import('@/pages/EditorPage.vue') },
       { path: '/create', component: () => import('@/pages/EditorPage.vue') },
       { path: '/upload', component: () => import('@/pages/UploadPage.vue') },
+      { path: '/projects', component: () => import('@/pages/ProjectsPage.vue') },
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
       { path: '/activity', component: () => import('@/pages/ActivityPage.vue') },
       { path: '/merge-requests', component: () => import('@/pages/MergeRequestsPage.vue') },

@@ -24,7 +24,8 @@ export class SearchService {
     // Feature 02: with a category filter, over-fetch candidates so the filter
     // does not shrink the requested limit.
     const categories = dto.filters?.categories?.length ? new Set(dto.filters.categories) : null;
-    const fetchK = categories ? k * 5 : k;
+    const projectIds = dto.filters?.projectIds?.length ? new Set(dto.filters.projectIds) : null;
+    const fetchK = categories || projectIds ? k * 5 : k;
 
     // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
     // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
@@ -45,12 +46,13 @@ export class SearchService {
     // Join PG for authoritative titles (three-store separation: PG owns metadata).
     const docs = await this.prisma.document.findMany({
       where: { id: { in: [...new Set(hits.map((h) => h.documentId))] } },
-      select: { id: true, title: true, category: true },
+      select: { id: true, title: true, category: true, projectId: true },
     });
     const docById = new Map(docs.map((d) => [d.id, d]));
 
     const results: SearchResult[] = hits
       .filter((h) => !categories || categories.has((docById.get(h.documentId)?.category ?? 'other') as never))
+      .filter((h) => !projectIds || projectIds.has(docById.get(h.documentId)?.projectId ?? ''))
       .slice(0, k)
       .map((h) => ({
         documentId: h.documentId,

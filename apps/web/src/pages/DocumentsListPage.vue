@@ -5,6 +5,7 @@ import { FileText, Plus, Upload } from 'lucide-vue-next'
 import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
+import { useProjectsStore } from '@/stores/projects'
 import { statusDot, statusVariant } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,12 +14,17 @@ import DocumentTreeNode from '@/components/knowledge/DocumentTreeNode.vue'
 
 const auth = useAuthStore()
 const store = useDocumentsStore()
+const projects = useProjectsStore()
 const category = ref<DocumentCategory | null>(null)
+
+/** "in <project>" once the projects store resolves, "in this workspace" before. */
+const scopeLabel = computed(() => (projects.activeName ? `in ${projects.activeName}` : 'in this workspace'))
 
 onServerPrefetch(() => Promise.all([store.fetchTree(), store.fetchList()]))
 onMounted(() => {
   if (!store.treeLoaded) void store.fetchTree()
   if (!store.loaded) void store.fetchList()
+  if (!projects.loaded) void projects.fetchList().catch(() => undefined)
 })
 
 /** With a category filter active, show a flat filtered list; otherwise the tree (feature 08). */
@@ -33,7 +39,7 @@ const filtered = computed(() =>
       <div>
         <h1 class="font-display text-2xl font-bold tracking-tight">Pages</h1>
         <p v-if="store.loaded" class="mt-0.5 text-sm text-muted-foreground">
-          {{ store.items.length }} page{{ store.items.length === 1 ? '' : 's' }} in this workspace
+          {{ store.items.length }} page{{ store.items.length === 1 ? '' : 's' }} {{ scopeLabel }}
         </p>
       </div>
       <div v-if="auth.canEdit" class="flex gap-2">
@@ -82,7 +88,7 @@ const filtered = computed(() =>
       <FileText class="size-8 text-muted-foreground/50" />
       <p class="mt-3 font-medium">No pages yet</p>
       <p class="mt-1 text-sm text-muted-foreground">
-        {{ auth.canEdit ? 'Create the first page for this workspace.' : 'Nothing has been published to this workspace.' }}
+        {{ auth.canEdit ? `Create the first page ${scopeLabel}.` : `Nothing has been published ${scopeLabel}.` }}
       </p>
       <Button v-if="auth.canEdit" class="mt-4" as-child>
         <RouterLink to="/create"><Plus class="size-4" /> New page</RouterLink>

@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
+import { ProjectsModule } from './projects/projects.module.js';
 import { GraphQueryModule } from './graph/graph-query.module.js';
 import { IngestionAdminModule } from './ingestion/ingestion-admin.module.js';
 import { DocumentsModule } from './documents/documents.module.js';
@@ -31,6 +32,7 @@ import { AppService } from './app.service.js';
     AuthModule,
     UsersModule,
     WorkspacesModule,
+    ProjectsModule,
     DocumentsModule,
     SearchModule,
     EntitiesModule,

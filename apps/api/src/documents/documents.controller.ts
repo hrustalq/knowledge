@@ -47,20 +47,32 @@ export class DocumentsController {
   @Get()
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'List documents in workspace' })
+  @ApiQuery({ name: 'projectId', required: false, description: 'Restrict to one project' })
   list(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
     @Query('category') category?: string,
+    @Query('projectId') projectId?: string,
   ) {
-    return this.documents.listDocuments(workspaceId, limit ? Number(limit) : 20, cursor, category || undefined);
+    return this.documents.listDocuments(
+      workspaceId,
+      limit ? Number(limit) : 20,
+      cursor,
+      category || undefined,
+      projectId || undefined,
+    );
   }
 
   @Get('tree')
   @Access('viewer', 'query')
-  @ApiOperation({ summary: 'Workspace document tree (feature 08 nesting, docs/features/08)' })
-  tree(@Query('workspaceId', ParseUUIDPipe) workspaceId: string) {
-    return this.documents.getTree(workspaceId);
+  @ApiOperation({ summary: 'Document tree (feature 08 nesting); scoped to one project when projectId is given' })
+  @ApiQuery({ name: 'projectId', required: false, description: 'Restrict the tree to one project' })
+  tree(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Query('projectId') projectId?: string,
+  ) {
+    return this.documents.getTree(workspaceId, projectId || undefined);
   }
 
   @Get(':id')

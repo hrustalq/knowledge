@@ -7,6 +7,8 @@ export type IngestionJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 export interface DocumentSummary {
   documentId: string;
   workspaceId: string;
+  /** Owning project (Workspace > Project > Document). Always set. */
+  projectId: string;
   title: string;
   defaultBranch: string;
   /** Feature 07 categorization. */
@@ -39,6 +41,8 @@ export interface ChunkSummary {
 // POST /v1/documents
 export interface CreateDocumentRequest {
   workspaceId: string;
+  /** Owning project; must belong to `workspaceId`. */
+  projectId: string;
   title: string;
   content?: { mode: 'inline'; format: string; text: string };
   /** Explicit relations (plan.md §5 "explicit" fact class) written as graph edges with provenance. */
@@ -101,7 +105,7 @@ export interface SearchRequest {
    */
   expandGraph?: { depth?: number; relationTypes?: string[] };
   /** Feature 02 metadata filters, applied post-ranking against PG. */
-  filters?: { categories?: DocumentCategory[] };
+  filters?: { categories?: DocumentCategory[]; projectIds?: string[] };
 }
 export interface SearchResult {
   documentId: string;
@@ -725,20 +729,28 @@ export interface DocumentContentResponse {
   markdown: string;
 }
 
-// PATCH /v1/documents/:id (features 07 + 08)
+// PATCH /v1/documents/:id (features 07 + 08 + projects)
 export interface UpdateDocumentRequest {
   title?: string;
   category?: DocumentCategory;
   /** null re-roots the document (moves it to the top level). */
   parentId?: string | null;
+  /**
+   * Move the document to another project in the same workspace. The whole
+   * subtree moves with it; unless `parentId` is supplied in the same call the
+   * document is re-rooted, because its old parent stays behind.
+   */
+  projectId?: string;
 }
 
-// GET /v1/documents/tree?workspaceId= (feature 08)
+// GET /v1/documents/tree?workspaceId=&projectId= (feature 08 + projects)
 export interface DocumentTreeNode extends DocumentSummary {
   children: DocumentTreeNode[];
 }
 export interface DocumentTreeResponse {
   workspaceId: string;
+  /** null when the tree spans the whole workspace (no projectId filter). */
+  projectId: string | null;
   roots: DocumentTreeNode[];
 }
 
@@ -807,6 +819,9 @@ export interface KnowledgeEvent {
 export const KNOWN_EVENT_TYPES = [
   'document.created',
   'document.updated',
+  'project.created',
+  'project.updated',
+  'project.deleted',
   'branch.created',
   'revision.finalized',
   'revision.indexed',
@@ -1184,6 +1199,41 @@ export interface CreateWorkspaceRequest {
 export interface CreateWorkspaceResponse {
   workspaceId: string;
   name: string;
+}
+
+// ---------------------------------------------------------------------------
+// Projects — the organizational layer between a workspace and its documents.
+// Projects carry no ACLs of their own: access is resolved at the workspace.
+// ---------------------------------------------------------------------------
+
+export interface ProjectSummary {
+  projectId: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  documentCount: number;
+  createdAt: string;
+}
+
+// GET /v1/projects?workspaceId=
+export interface ListProjectsResponse {
+  projects: ProjectSummary[];
+}
+
+// POST /v1/projects
+export interface CreateProjectRequest {
+  workspaceId: string;
+  name: string;
+  description?: string | null;
+}
+export interface CreateProjectResponse {
+  project: ProjectSummary;
+}
+
+// PATCH /v1/projects/:id
+export interface UpdateProjectRequest {
+  name?: string;
+  description?: string | null;
 }
 
 export interface WorkspaceMemberEntry {

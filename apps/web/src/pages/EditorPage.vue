@@ -16,6 +16,7 @@ import {
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useDocumentsStore } from '@/stores/documents'
+import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,6 +34,7 @@ interface RelationRow {
 const route = useRoute()
 const router = useRouter()
 const store = useDocumentsStore()
+const projects = useProjectsStore()
 
 const editId = computed(() => (route.params.id as string | undefined) ?? null)
 const isEdit = computed(() => editId.value !== null)
@@ -40,6 +42,9 @@ const isEdit = computed(() => editId.value !== null)
 const title = ref('')
 const category = ref<DocumentCategory>('other')
 const parentId = ref<string>('')
+// Workspace > Project > Document: on /create this seeds from the active
+// project; when editing it doubles as the move control.
+const projectId = ref<string>(projects.activeId ?? '')
 const body = ref('')
 const message = ref('')
 const relationRows = ref<RelationRow[]>([])
@@ -52,6 +57,11 @@ const editorEl = ref<HTMLTextAreaElement | null>(null)
 
 onMounted(async () => {
   if (!store.loaded) void store.fetchList()
+  if (!projects.loaded) {
+    void projects.fetchList().then(() => {
+      if (!projectId.value) projectId.value = projects.activeId ?? ''
+    })
+  }
   if (!editId.value) return
   loading.value = true
   try {
@@ -62,6 +72,7 @@ onMounted(async () => {
     title.value = detail.document.title
     category.value = detail.document.category
     parentId.value = detail.document.parentId ?? ''
+    projectId.value = detail.document.projectId
     headRevisionId.value = detail.document.headRevisionId
     body.value = content.markdown
     const fm = content.frontmatter ?? {}
@@ -142,6 +153,10 @@ async function save() {
     toast.error('Title and content are required')
     return
   }
+  if (!projectId.value) {
+    toast.error('Pick a project for this page')
+    return
+  }
   busy.value = true
   try {
     const text = buildSource()
@@ -150,6 +165,7 @@ async function save() {
         method: 'POST',
         body: JSON.stringify({
           workspaceId: getWorkspaceId(),
+          projectId: projectId.value,
           title: title.value,
           category: category.value,
           ...(parentId.value ? { parentId: parentId.value } : {}),
@@ -168,6 +184,7 @@ async function save() {
         title: title.value,
         category: category.value,
         parentId: parentId.value || null,
+        ...(projectId.value ? { projectId: projectId.value } : {}),
       }),
     })
     const revision = await apiFetch<RevisionInfo>(`/v1/documents/${editId.value}/revisions`, {
@@ -222,6 +239,12 @@ function appendSuggestion(text: string) {
         <!-- Metadata -->
         <div class="grid gap-3 sm:grid-cols-3">
           <Input v-model="title" placeholder="Title" class="sm:col-span-3" />
+          <label class="flex items-center gap-2 text-sm sm:col-span-3">
+            <span class="text-muted-foreground">Project</span>
+            <select v-model="projectId" class="flex-1 rounded-md border bg-background px-2 py-1.5">
+              <option v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</option>
+            </select>
+          </label>
           <label class="flex items-center gap-2 text-sm">
             <span class="text-muted-foreground">Category</span>
             <select v-model="category" class="flex-1 rounded-md border bg-background px-2 py-1.5">

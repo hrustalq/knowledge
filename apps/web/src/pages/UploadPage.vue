@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import type {
@@ -9,20 +9,35 @@ import type {
 } from '@knowledge/contracts'
 import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const router = useRouter()
+const projects = useProjectsStore()
 const title = ref('')
 const text = ref('')
 const category = ref<DocumentCategory>('other')
+const projectId = ref(projects.activeId ?? '')
 const busy = ref(false)
+
+onMounted(() => {
+  if (!projects.loaded) {
+    void projects.fetchList().then(() => {
+      if (!projectId.value) projectId.value = projects.activeId ?? ''
+    })
+  }
+})
 
 async function submit() {
   if (!title.value.trim() || !text.value.trim()) {
     toast.error('Title and markdown content are required')
+    return
+  }
+  if (!projectId.value) {
+    toast.error('Pick a project for this page')
     return
   }
   busy.value = true
@@ -30,7 +45,12 @@ async function submit() {
     // 1. Create document (draft revision)
     const doc = await apiFetch<CreateDocumentResponse>('/v1/documents', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId: getWorkspaceId(), title: title.value, category: category.value }),
+      body: JSON.stringify({
+        workspaceId: getWorkspaceId(),
+        projectId: projectId.value,
+        title: title.value,
+        category: category.value,
+      }),
     })
 
     // 2. Presigned upload straight to MinIO
@@ -70,6 +90,12 @@ async function submit() {
     <CardHeader><CardTitle>Upload a document</CardTitle></CardHeader>
     <CardContent class="space-y-4">
       <Input v-model="title" placeholder="Title, e.g. Authentication Architecture" />
+      <label class="flex items-center gap-2 text-sm">
+        <span class="text-muted-foreground">Project</span>
+        <select v-model="projectId" class="flex-1 rounded-md border bg-background px-2 py-1.5">
+          <option v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</option>
+        </select>
+      </label>
       <label class="flex items-center gap-2 text-sm">
         <span class="text-muted-foreground">Category</span>
         <select v-model="category" class="rounded-md border bg-background px-2 py-1.5">

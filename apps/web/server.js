@@ -71,6 +71,7 @@ app.use('*all', async (req, res) => {
 
     const rendered = await render(url, {
       token: readCookie(req.headers.cookie, 'kn_token'),
+      projectId: readCookie(req.headers.cookie, 'kn_proj'),
       workspaceId: readCookie(req.headers.cookie, 'kn_ws'),
     })
 

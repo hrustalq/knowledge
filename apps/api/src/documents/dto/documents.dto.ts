@@ -74,6 +74,10 @@ export class CreateDocumentDto {
   @IsUUID()
   workspaceId!: string;
 
+  @ApiProperty({ format: 'uuid', description: 'Owning project; must belong to workspaceId' })
+  @IsUUID()
+  projectId!: string;
+
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
@@ -122,6 +126,16 @@ export class UpdateDocumentDto {
   @ValidateIf((o: UpdateDocumentDto) => o.parentId !== undefined && o.parentId !== null)
   @IsUUID()
   parentId?: string | null;
+
+  /**
+   * Move to another project in the same workspace. The document's whole
+   * subtree moves with it; unless `parentId` is given in the same call the
+   * document is re-rooted, because its old parent stays behind.
+   */
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
 }
 
 export class CreateUploadDto {

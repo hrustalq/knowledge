@@ -9,6 +9,7 @@ import { IngestionAdminModule } from '../ingestion/ingestion-admin.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { SearchModule } from '../search/search.module.js';
 import { EntitiesModule } from '../entities/entities.module.js';
+import { ProjectsModule } from '../projects/projects.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -35,6 +36,7 @@ import { McpService } from './mcp.service.js';
     DocumentsModule,
     SearchModule,
     EntitiesModule,
+    ProjectsModule,
   ],
   providers: [McpService],
 })

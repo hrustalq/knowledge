@@ -17,3 +17,4 @@ architecture document; these docs cover the product-feature layer on top of it.
 | 8   | Document nesting (directories)             | [features/08-nesting.md](features/08-nesting.md)                     | ✅ implemented |
 | 9   | AI assistant                               | [features/09-ai-assistant.md](features/09-ai-assistant.md)           | ✅ MVP         |
 | 10  | Activity feed                              | [features/10-activity-feed.md](features/10-activity-feed.md)         | ✅ implemented |
+| 11  | Projects (Workspace > Project > Document)  | [features/11-projects.md](features/11-projects.md)                   | ✅ implemented |

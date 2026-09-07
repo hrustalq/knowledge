@@ -14,6 +14,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { AuditService } from '../auth/audit.service.js';
 import { HistoryService } from '../documents/history.service.js';
 import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
+import { ProjectsService } from '../projects/projects.service.js';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -32,6 +33,7 @@ import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
  *   knowledge_query_graph       → knowledge.query_graph       (Phase 5, audited)
  *   knowledge_get_historical_context → knowledge.get_historical_context (Phase 5)
  *   knowledge_ingest            → knowledge.ingest            (Phase 5)
+ *   knowledge_list_projects     → knowledge.list_projects     (projects layer)
  *
  * Merge-request tools (create/list/get/approve/close/comment/merge) act as
  * the zeros AUTHOR_ID_STUB — stdio has no principal, so authorship/approvals
@@ -52,6 +54,7 @@ export class McpService {
     private readonly audit: AuditService,
     private readonly history: HistoryService,
     private readonly ingestionAdmin: IngestionAdminService,
+    private readonly projects: ProjectsService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -66,10 +69,32 @@ export class McpService {
           workspaceId: z.string().uuid(),
           query: z.string().min(1),
           limit: z.number().int().min(1).max(100).optional(),
+          projectIds: z
+            .array(z.string().uuid())
+            .max(20)
+            .optional()
+            .describe('Restrict results to these projects (see knowledge_list_projects)'),
         },
       },
-      async ({ workspaceId, query, limit }) =>
-        this.json(await this.search.search({ workspaceId, query, limit: limit ?? 20 })),
+      async ({ workspaceId, query, limit, projectIds }) =>
+        this.json(
+          await this.search.search({
+            workspaceId,
+            query,
+            limit: limit ?? 20,
+            ...(projectIds?.length ? { filters: { projectIds } } : {}),
+          }),
+        ),
+    );
+
+    server.registerTool(
+      'knowledge_list_projects',
+      {
+        description:
+          'List the projects in a workspace. Workspace > Project > Document — every document belongs to exactly one project.',
+        inputSchema: { workspaceId: z.string().uuid() },
+      },
+      async ({ workspaceId }) => this.json(await this.projects.list(workspaceId)),
     );
 
     server.registerTool(

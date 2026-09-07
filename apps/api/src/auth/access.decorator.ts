@@ -12,6 +12,7 @@ export type WorkspaceSource =
   | 'document' // :id path param is a document id
   | 'merge-request' // :id path param is a merge request id
   | 'job' // :id path param is an ingestion job id
+  | 'project' // :id path param is a project id (resolved to its workspace)
   | 'workspace'; // :id path param IS the workspace id (existence-checked)
 
 export interface AccessSpec {

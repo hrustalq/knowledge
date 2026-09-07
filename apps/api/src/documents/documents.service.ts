@@ -29,6 +29,7 @@ import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { IngestionProducer } from '../ingestion/ingestion.producer.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { ProjectsService } from '../projects/projects.service.js';
 import { bfs, buildAdjacency, docIdOf, docNode, isDocNode } from '../graph/graph-walk.js';
 import type {
   CreateBranchDto,
@@ -51,16 +52,21 @@ export class DocumentsService {
     private readonly graph: GraphService,
     private readonly ingestion: IngestionProducer,
     private readonly activity: ActivityService,
+    private readonly projects: ProjectsService,
   ) {}
 
   async createDocument(dto: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
     const contentType = dto.content ? `text/${dto.content.format}` : 'text/markdown';
 
-    // Feature 08: nested creation — the parent must exist in the same workspace.
+    // Workspace > Project > Document: a project id from another tenant must
+    // never silently re-parent the page.
+    await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
+
+    // Feature 08: nested creation — the parent must exist in the same project.
     if (dto.parentId) {
       const parent = await this.prisma.document.findUnique({ where: { id: dto.parentId } });
-      if (!parent || parent.workspaceId !== dto.workspaceId) {
-        throw new BadRequestException(`Parent document ${dto.parentId} not found in this workspace`);
+      if (!parent || parent.projectId !== dto.projectId) {
+        throw new BadRequestException(`Parent document ${dto.parentId} not found in this project`);
       }
     }
 
@@ -68,6 +74,7 @@ export class DocumentsService {
       const document = await tx.document.create({
         data: {
           workspaceId: dto.workspaceId,
+          projectId: dto.projectId,
           title: dto.title,
           category: dto.category ?? 'other',
           parentId: dto.parentId ?? null,
@@ -115,7 +122,7 @@ export class DocumentsService {
       actor: authorId,
       action: 'document.created',
       documentId: document.id,
-      metadata: { title: dto.title, category: dto.category ?? 'other' },
+      metadata: { title: dto.title, category: dto.category ?? 'other', projectId: dto.projectId },
     });
 
     return { documentId: document.id, revisionId: revision.id, branch: 'main', status };
@@ -274,9 +281,10 @@ export class DocumentsService {
     limit = 20,
     cursor?: string,
     category?: string,
+    projectId?: string,
   ): Promise<ListDocumentsResponse> {
     const docs = await this.prisma.document.findMany({
-      where: { workspaceId, ...(category ? { category } : {}) },
+      where: { workspaceId, ...(category ? { category } : {}), ...(projectId ? { projectId } : {}) },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -298,6 +306,7 @@ export class DocumentsService {
       return {
         documentId: d.id,
         workspaceId: d.workspaceId,
+        projectId: d.projectId,
         title: d.title,
         defaultBranch: d.defaultBranch,
         category: d.category as DocumentCategory,
@@ -342,6 +351,7 @@ export class DocumentsService {
       document: {
         documentId: document.id,
         workspaceId: document.workspaceId,
+        projectId: document.projectId,
         title: document.title,
         defaultBranch: document.defaultBranch,
         category: document.category as DocumentCategory,
@@ -544,17 +554,40 @@ export class DocumentsService {
   async updateDocument(documentId: string, dto: UpdateDocumentDto, actorId?: string): Promise<DocumentSummary> {
     const document = await this.getDocumentOrThrow(documentId);
 
-    const data: { title?: string; category?: string; parentId?: string | null } = {};
+    const data: { title?: string; category?: string; parentId?: string | null; projectId?: string } = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.category !== undefined) data.category = dto.category;
+
+    // Project move (Workspace > Project > Document). Cross-workspace moves are
+    // out of scope: the S3 key layout, graph vertices and the fulltext index
+    // are all keyed by workspace, so the target must be a sibling project.
+    let movedSubtree: string[] = [];
+    if (dto.projectId !== undefined && dto.projectId !== document.projectId) {
+      await this.projects.requireProjectInWorkspace(dto.projectId, document.workspaceId);
+      data.projectId = dto.projectId;
+      movedSubtree = await this.descendantIds(documentId, document.workspaceId);
+      // The old parent stays behind, so the moved document is re-rooted unless
+      // the same call supplies a parent inside the target project.
+      if (dto.parentId === undefined) data.parentId = null;
+    }
+
+    const targetProject = data.projectId ?? document.projectId;
     if (dto.parentId !== undefined) {
       if (dto.parentId === documentId) throw new BadRequestException('A document cannot be its own parent');
-      if (dto.parentId !== null) await this.assertValidParent(documentId, dto.parentId, document.workspaceId);
+      if (dto.parentId !== null) await this.assertValidParent(documentId, dto.parentId, targetProject);
       data.parentId = dto.parentId;
     }
     if (Object.keys(data).length === 0) throw new BadRequestException('Nothing to update');
 
     const updated = await this.prisma.document.update({ where: { id: documentId }, data });
+    // Children follow their parent, otherwise they would be orphaned into a
+    // project their ancestor no longer belongs to.
+    if (data.projectId && movedSubtree.length > 0) {
+      await this.prisma.document.updateMany({
+        where: { id: { in: movedSubtree } },
+        data: { projectId: data.projectId },
+      });
+    }
     if (data.title && data.title !== document.title) {
       // Keep the graph vertex label in sync (PG stays authoritative).
       await this.graph.upsertDocumentVertex(document.workspaceId, documentId, data.title).catch(() => {
@@ -576,10 +609,14 @@ export class DocumentsService {
     return this.toSummary(updated);
   }
 
-  /** Feature 08 (docs/features/08): the workspace document tree. */
-  async getTree(workspaceId: string): Promise<DocumentTreeResponse> {
+  /**
+   * Feature 08 (docs/features/08): the document tree. Scoped to one project
+   * when `projectId` is given; without it the tree spans the whole workspace,
+   * which is what the web falls back to before its projects store resolves.
+   */
+  async getTree(workspaceId: string, projectId?: string): Promise<DocumentTreeResponse> {
     const docs = await this.prisma.document.findMany({
-      where: { workspaceId },
+      where: { workspaceId, ...(projectId ? { projectId } : {}) },
       include: { branches: true },
       orderBy: { title: 'asc' },
     });
@@ -595,6 +632,7 @@ export class DocumentsService {
       nodes.set(d.id, {
         documentId: d.id,
         workspaceId: d.workspaceId,
+        projectId: d.projectId,
         title: d.title,
         defaultBranch: d.defaultBranch,
         category: d.category as DocumentCategory,
@@ -612,7 +650,7 @@ export class DocumentsService {
       if (parent) parent.children.push(node);
       else roots.push(node);
     }
-    return { workspaceId, roots };
+    return { workspaceId, projectId: projectId ?? null, roots };
   }
 
   /**
@@ -675,11 +713,15 @@ export class DocumentsService {
     return { documentId, depth: d, nodes, edges };
   }
 
-  /** Cycle protection for feature 08 moves: walking up from the new parent must not reach the document. */
-  private async assertValidParent(documentId: string, parentId: string, workspaceId: string): Promise<void> {
+  /**
+   * Cycle protection for feature 08 moves: walking up from the new parent must
+   * not reach the document. The parent must also sit in the same project — the
+   * tree is rendered per project, so a cross-project parent would be invisible.
+   */
+  private async assertValidParent(documentId: string, parentId: string, projectId: string): Promise<void> {
     const parent = await this.prisma.document.findUnique({ where: { id: parentId } });
-    if (!parent || parent.workspaceId !== workspaceId) {
-      throw new BadRequestException(`Parent document ${parentId} not found in this workspace`);
+    if (!parent || parent.projectId !== projectId) {
+      throw new BadRequestException(`Parent document ${parentId} not found in this project`);
     }
     let cursor: string | null = parent.id;
     const seen = new Set<string>();
@@ -697,6 +739,38 @@ export class DocumentsService {
     }
   }
 
+  /**
+   * Every document below `documentId` in the tree. One flat query plus an
+   * in-Node walk, matching getTree — workspaces are small enough that this
+   * beats a recursive CTE, and it reuses the same "missing parent = root"
+   * tolerance the rest of the tree code has.
+   */
+  private async descendantIds(documentId: string, workspaceId: string): Promise<string[]> {
+    const rows = await this.prisma.document.findMany({
+      where: { workspaceId },
+      select: { id: true, parentId: true },
+    });
+    const childrenByParent = new Map<string, string[]>();
+    for (const r of rows) {
+      if (!r.parentId) continue;
+      const siblings = childrenByParent.get(r.parentId) ?? [];
+      siblings.push(r.id);
+      childrenByParent.set(r.parentId, siblings);
+    }
+    const out: string[] = [];
+    const queue = [documentId];
+    const seen = new Set<string>([documentId]);
+    while (queue.length > 0) {
+      for (const child of childrenByParent.get(queue.shift()!) ?? []) {
+        if (seen.has(child)) continue;
+        seen.add(child);
+        out.push(child);
+        queue.push(child);
+      }
+    }
+    return out;
+  }
+
   private async toSummary(d: Document): Promise<DocumentSummary> {
     const branch = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId: d.id, name: d.defaultBranch } },
@@ -707,6 +781,7 @@ export class DocumentsService {
     return {
       documentId: d.id,
       workspaceId: d.workspaceId,
+      projectId: d.projectId,
       title: d.title,
       defaultBranch: d.defaultBranch,
       category: d.category as DocumentCategory,

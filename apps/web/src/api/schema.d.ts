@@ -252,7 +252,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List projects in a workspace */
+        /** List projects in a workspace (searchable; cursor-paginated when limit is given) */
         get: operations["ProjectsController_list"];
         put?: never;
         /** Create a project */
@@ -1271,6 +1271,8 @@ export interface components {
             categories?: ("process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other")[];
             /** @description Only return documents in these projects */
             projectIds?: string[];
+            /** @description Only return documents carrying any of these tags */
+            tags?: string[];
         };
         SearchDto: {
             /** Format: uuid */
@@ -2107,6 +2109,12 @@ export interface operations {
         parameters: {
             query: {
                 workspaceId: string;
+                /** @description Case-insensitive name/description substring match */
+                search?: string;
+                /** @description Opaque cursor from a previous page */
+                cursor?: string;
+                /** @description Omit for the full roster */
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -3779,6 +3787,12 @@ export interface operations {
         parameters: {
             query: {
                 workspaceId: string;
+                /** @description Entity type, e.g. "tag" */
+                type?: string;
+                /** @description Case-insensitive substring of the name */
+                q?: string;
+                /** @description Max entities to return (1-200) */
+                limit?: string;
             };
             header?: never;
             path?: never;

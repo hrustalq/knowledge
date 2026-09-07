@@ -1,55 +1,22 @@
 <script setup lang="ts">
 // Left navigation rail: brand, workspace + project switchers, primary nav and
 // the live page tree (Confluence-style space sidebar).
-import { computed, onMounted, ref, type Component } from 'vue'
+import { computed, onMounted, type Component } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Activity, FolderKanban, GitPullRequestArrow, House, Library, Plus, Search, ShieldCheck, Sparkles, Upload, Users } from 'lucide-vue-next'
-import type { ListWorkspacesResponse, WorkspaceSummary } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { GitPullRequestArrow, House, Library, Plus, Settings, Sparkles, Upload } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
-import { useProjectsStore } from '@/stores/projects'
 import { Skeleton } from '@/components/ui/skeleton'
+import ScopeSwitcher from './ScopeSwitcher.vue'
 import SidebarTreeNode from './SidebarTreeNode.vue'
 
 const auth = useAuthStore()
 const store = useDocumentsStore()
-const projects = useProjectsStore()
 const route = useRoute()
-
-const workspaces = ref<WorkspaceSummary[]>([])
-const activeWs = ref(getWorkspaceId())
-const activeProject = ref(projects.activeId)
 
 onMounted(() => {
   if (!store.treeLoaded) void store.fetchTree()
-  void apiFetch<ListWorkspacesResponse>('/v1/workspaces')
-    .then((res) => {
-      workspaces.value = res.workspaces
-    })
-    .catch(() => {
-      /* no roster access — keep the switcher hidden */
-    })
-  void projects
-    .fetchList()
-    .then(() => {
-      activeProject.value = projects.activeId
-    })
-    .catch(() => {
-      /* no project access — keep the switcher hidden */
-    })
 })
-
-function switchProject() {
-  if (activeProject.value) projects.switchProject(activeProject.value)
-}
-
-function switchWorkspace() {
-  if (activeWs.value === getWorkspaceId()) return
-  auth.setWorkspace(activeWs.value)
-  // Full reload: the SSE connection, query cache and tree are all workspace-scoped.
-  window.location.assign('/documents')
-}
 
 const activeDocId = computed(() =>
   route.path.startsWith('/documents/') ? ((route.params.id as string) ?? null) : null,
@@ -58,13 +25,11 @@ const activeDocId = computed(() =>
 interface NavLink { to: string; label: string; icon: Component }
 const links = computed<NavLink[]>(() => [
   { to: '/documents', label: 'Home', icon: House },
-  { to: '/search', label: 'Search', icon: Search },
-  { to: '/activity', label: 'Activity', icon: Activity },
+  // Search is not a destination — it is the topbar trigger's sheet ("/" or ⌘K).
   { to: '/merge-requests', label: 'Merge requests', icon: GitPullRequestArrow },
-  { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/assistant', label: 'Assistant', icon: Sparkles },
-  { to: '/access', label: 'Access', icon: ShieldCheck },
-  ...(auth.isAdmin || auth.isDev ? [{ to: '/admin/users', label: 'Users', icon: Users }] : []),
+  // Projects, users, access and activity live under the settings shell.
+  { to: '/settings', label: 'Settings', icon: Settings },
 ])
 
 function isCurrent(to: string): boolean {
@@ -74,33 +39,14 @@ function isCurrent(to: string): boolean {
 
 <template>
   <aside class="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-    <div class="px-4 pb-2 pt-4">
-      <RouterLink to="/documents" class="flex items-center gap-2">
+    <div class="pt-4 pb-3">
+      <RouterLink to="/documents" class="flex items-center gap-2 px-4">
         <span class="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
           <Library class="size-4" />
         </span>
         <span class="font-display text-[15px] font-bold tracking-tight">Knowledge</span>
       </RouterLink>
-      <label v-if="workspaces.length > 0" class="mt-3 block">
-        <span class="sr-only">Workspace</span>
-        <select
-          v-model="activeWs"
-          class="w-full truncate rounded-md border border-sidebar-border bg-background px-2 py-1.5 text-xs"
-          @change="switchWorkspace"
-        >
-          <option v-for="w in workspaces" :key="w.workspaceId" :value="w.workspaceId">{{ w.name }}</option>
-        </select>
-      </label>
-      <label v-if="projects.items.length > 0" class="mt-1.5 block">
-        <span class="sr-only">Project</span>
-        <select
-          v-model="activeProject"
-          class="w-full truncate rounded-md border border-sidebar-border bg-background px-2 py-1.5 text-xs"
-          @change="switchProject"
-        >
-          <option v-for="p in projects.items" :key="p.projectId" :value="p.projectId">{{ p.name }}</option>
-        </select>
-      </label>
+      <ScopeSwitcher />
     </div>
 
     <nav class="space-y-px px-2" aria-label="Primary">

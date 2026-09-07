@@ -105,8 +105,9 @@
   }
 }
 
-/* Thin, quiet scrollbar for the navigation rail */
-.sidebar-scroll {
+/* Thin, quiet scrollbar for the navigation rail and popover lists */
+.sidebar-scroll,
+.quiet-scroll {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklch, var(--sidebar-foreground) 25%, transparent) transparent;
 }

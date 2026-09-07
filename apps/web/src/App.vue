@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, watchEffect } from 'vue'
+import { onMounted, ref, watch, watchEffect } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { Library } from 'lucide-vue-next'
 import { useQueryClient } from '@tanstack/vue-query'
@@ -7,12 +7,19 @@ import { Toaster } from '@/components/ui/sonner'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppTopbar from '@/components/layout/AppTopbar.vue'
 import AppBreadcrumbs from '@/components/layout/AppBreadcrumbs.vue'
+import SearchSheet from '@/components/knowledge/SearchSheet.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useEventsStore } from '@/stores/events'
+import { useSearchUiStore } from '@/stores/search-ui'
 import { startLive } from '@/api'
 
 const auth = useAuthStore()
 const events = useEventsStore()
+const searchUi = useSearchUiStore()
+
+// A workspace switch from inside the search sheet reloads the app; pick the
+// query back up on the other side.
+onMounted(() => searchUi.hydrateFromSession())
 const route = useRoute()
 const queryClient = useQueryClient()
 
@@ -77,11 +84,14 @@ watch(
       <AppTopbar @toggle-sidebar="toggleSidebar" />
       <AppBreadcrumbs />
       <main class="flex-1 overflow-y-auto">
-        <div class="w-full px-4 py-6 lg:px-8">
+        <!-- flex column at min full height so a route can opt into filling the
+             viewport (flex-1) without affecting content-height pages. -->
+        <div class="flex min-h-full w-full flex-col px-4 py-6 lg:px-8">
           <RouterView />
         </div>
       </main>
     </div>
+    <SearchSheet />
     <Toaster />
   </div>
 </template>

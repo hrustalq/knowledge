@@ -424,6 +424,27 @@ export class GraphService {
   }
 
   /**
+   * Document ids carrying ANY of the given tag entity keys (`tag:<name>`), for
+   * the search tag filter. Deliberately narrow: the full relation graph is a
+   * query per edge type, far too much work to answer "which docs have tag X",
+   * and the tag filter must also work in semantic/keyword mode where the
+   * expansion graph is never loaded.
+   */
+  async getDocumentIdsByTags(workspaceId: string, tagKeys: string[]): Promise<Set<string>> {
+    if (tagKeys.length === 0) return new Set();
+    const rows = await this.arcade
+      .query<{ documentId: string }>(
+        'sql',
+        'SELECT documentId FROM TAGGED_WITH WHERE workspaceId = :workspaceId AND targetKey IN :keys LIMIT 20000',
+        { workspaceId, keys: tagKeys },
+      )
+      // ArcadeDB throws when the edge type holds no rows yet; "no tag edges"
+      // must mean "no matches", not a 500.
+      .catch(() => []);
+    return new Set(rows.map((r) => r.documentId));
+  }
+
+  /**
    * The workspace's full relation graph (edges + node labels) for Phase 4
    * traversal. Small-scale by design — BFS happens in Node, mirroring the
    * cosine-in-Node search approach; swap for native traversal later.

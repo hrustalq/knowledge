@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // Top bar: nav toggle, global search ("/" or Cmd/Ctrl+K), theme toggle, user.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { LogOut, Moon, PanelLeft, Search, Sun } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { useSearchUiStore } from '@/stores/search-ui'
 import { toggleTheme } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 
@@ -11,8 +12,7 @@ defineEmits<{ 'toggle-sidebar': [] }>()
 
 const auth = useAuthStore()
 const router = useRouter()
-const q = ref('')
-const searchEl = ref<HTMLInputElement | null>(null)
+const searchUi = useSearchUiStore()
 
 const initials = computed(() =>
   (auth.me?.displayName ?? '?')
@@ -22,13 +22,6 @@ const initials = computed(() =>
     .join('')
     .toUpperCase(),
 )
-
-function submit() {
-  const query = q.value.trim()
-  void router.push(query ? { path: '/search', query: { q: query } } : '/search')
-  q.value = ''
-  searchEl.value?.blur()
-}
 
 function onKeydown(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null
@@ -40,7 +33,7 @@ function onKeydown(e: KeyboardEvent) {
       target.isContentEditable)
   if (((e.metaKey || e.ctrlKey) && e.key === 'k') || (!typing && e.key === '/')) {
     e.preventDefault()
-    searchEl.value?.focus()
+    searchUi.openSearch()
   }
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
@@ -58,19 +51,22 @@ async function logout() {
       <PanelLeft class="size-4" />
     </Button>
 
-    <form class="relative w-full max-w-sm" role="search" @submit.prevent="submit">
-      <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <input
-        ref="searchEl"
-        v-model="q"
-        placeholder="Search pages…"
-        aria-label="Search pages"
-        class="h-8 w-full rounded-md border bg-muted/40 pl-8 pr-10 text-sm outline-none transition-colors focus:border-ring focus:bg-background"
-      />
+    <!-- A trigger, not a field: the sheet owns the only live query input, so
+         focus can't be tugged between two of them by the dialog focus trap. -->
+    <button
+      id="global-search-trigger"
+      type="button"
+      class="relative h-8 w-full max-w-sm rounded-md border bg-muted/40 pl-8 pr-10 text-left text-sm text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+      aria-haspopup="dialog"
+      aria-label="Search pages"
+      @click="searchUi.openSearch()"
+    >
+      <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
+      Search pages…
       <kbd
-        class="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:block"
+        class="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 font-mono text-[10px] sm:block"
       >/</kbd>
-    </form>
+    </button>
 
     <div class="ml-auto flex items-center gap-1.5">
       <Button variant="ghost" size="icon-sm" aria-label="Toggle theme" @click="toggleTheme">

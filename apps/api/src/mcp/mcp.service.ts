@@ -74,17 +74,30 @@ export class McpService {
             .max(20)
             .optional()
             .describe('Restrict results to these projects (see knowledge_list_projects)'),
+          tags: z
+            .array(z.string())
+            .max(20)
+            .optional()
+            .describe(
+              'Restrict results to documents carrying ANY of these frontmatter tags ("security" or "tag:security")',
+            ),
         },
       },
-      async ({ workspaceId, query, limit, projectIds }) =>
-        this.json(
+      async ({ workspaceId, query, limit, projectIds, tags }) => {
+        // One merged object: separate spreads would clobber each other.
+        const filters = {
+          ...(projectIds?.length ? { projectIds } : {}),
+          ...(tags?.length ? { tags } : {}),
+        };
+        return this.json(
           await this.search.search({
             workspaceId,
             query,
             limit: limit ?? 20,
-            ...(projectIds?.length ? { filters: { projectIds } } : {}),
+            ...(Object.keys(filters).length ? { filters } : {}),
           }),
-        ),
+        );
+      },
     );
 
     server.registerTool(
@@ -94,7 +107,7 @@ export class McpService {
           'List the projects in a workspace. Workspace > Project > Document — every document belongs to exactly one project.',
         inputSchema: { workspaceId: z.string().uuid() },
       },
-      async ({ workspaceId }) => this.json(await this.projects.list(workspaceId)),
+      async ({ workspaceId }) => this.json(await this.projects.list({ workspaceId })),
     );
 
     server.registerTool(

@@ -12,8 +12,21 @@ export class EntitiesController {
   @Get()
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'List workspace entities with relation degree' })
-  list(@Query('workspaceId', ParseUUIDPipe) workspaceId: string) {
-    return this.entities.listEntities(workspaceId);
+  @ApiQuery({ name: 'type', required: false, description: 'Entity type, e.g. "tag"' })
+  @ApiQuery({ name: 'q', required: false, description: 'Case-insensitive substring of the name' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Max entities to return (1-200)' })
+  list(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Query('type') type?: string,
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const n = limit ? Number(limit) : Number.NaN;
+    return this.entities.listEntities(workspaceId, {
+      type,
+      q,
+      limit: Number.isFinite(n) ? Math.min(Math.max(n, 1), 200) : undefined,
+    });
   }
 
   // NB: declared before :key routes so "trace" is not captured as a key.

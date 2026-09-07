@@ -7,7 +7,7 @@ import type {
 import type { Project } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { CreateProjectDto, UpdateProjectDto } from './projects.dto.js';
+import type { CreateProjectDto, ListProjectsQueryDto, UpdateProjectDto } from './projects.dto.js';
 
 /**
  * Projects are the organizational layer between a workspace and its documents
@@ -24,13 +24,35 @@ export class ProjectsService {
     private readonly activity: ActivityService,
   ) {}
 
-  async list(workspaceId: string): Promise<ListProjectsResponse> {
-    const projects = await this.prisma.project.findMany({
-      where: { workspaceId },
+  /**
+   * Cursor-paginated only when a `limit` is given: the workspace/project
+   * switchers want the whole roster in one call, the projects rail pages it.
+   */
+  async list(query: ListProjectsQueryDto): Promise<ListProjectsResponse> {
+    const search = query.search?.trim();
+    const rows = await this.prisma.project.findMany({
+      where: {
+        workspaceId: query.workspaceId,
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: 'insensitive' as const } },
+                { description: { contains: search, mode: 'insensitive' as const } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { createdAt: 'asc' },
       include: { _count: { select: { documents: true } } },
+      ...(query.limit ? { take: query.limit + 1 } : {}),
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     });
-    return { projects: projects.map((p) => toSummary(p, p._count.documents)) };
+    const hasMore = query.limit !== undefined && rows.length > query.limit;
+    const page = hasMore ? rows.slice(0, query.limit) : rows;
+    return {
+      projects: page.map((p) => toSummary(p, p._count.documents)),
+      nextCursor: hasMore ? page[page.length - 1]!.id : null,
+    };
   }
 
   async get(projectId: string): Promise<ProjectSummary> {

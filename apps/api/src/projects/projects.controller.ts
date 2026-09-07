@@ -7,7 +7,7 @@ import type {
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
-import { CreateProjectDto, UpdateProjectDto } from './projects.dto.js';
+import { CreateProjectDto, ListProjectsQueryDto, UpdateProjectDto } from './projects.dto.js';
 import { ProjectsService } from './projects.service.js';
 
 /**
@@ -22,9 +22,9 @@ export class ProjectsController {
 
   @Get()
   @Access('viewer', 'query')
-  @ApiOperation({ summary: 'List projects in a workspace' })
-  list(@Query('workspaceId', ParseUUIDPipe) workspaceId: string): Promise<ListProjectsResponse> {
-    return this.projects.list(workspaceId);
+  @ApiOperation({ summary: 'List projects in a workspace (searchable; cursor-paginated when limit is given)' })
+  list(@Query() query: ListProjectsQueryDto): Promise<ListProjectsResponse> {
+    return this.projects.list(query);
   }
 
   @Post()

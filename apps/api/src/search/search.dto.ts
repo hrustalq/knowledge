@@ -11,6 +11,7 @@ import {
   IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -45,6 +46,18 @@ export class SearchFiltersDto {
   @ArrayMaxSize(20)
   @IsUUID('4', { each: true })
   projectIds?: string[];
+
+  /**
+   * Tag entity keys (`tag:<name>`) or bare names — resolved against the graph's
+   * TAGGED_WITH edges, not PG. Matched with OR semantics.
+   */
+  @ApiPropertyOptional({ type: [String], description: 'Only return documents carrying any of these tags' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(200, { each: true })
+  tags?: string[];
 }
 
 export class SearchDto {

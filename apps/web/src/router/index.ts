@@ -19,16 +19,34 @@ export function createRouter() {
       { path: '/documents/:id/edit', component: () => import('@/pages/EditorPage.vue') },
       { path: '/create', component: () => import('@/pages/EditorPage.vue') },
       { path: '/upload', component: () => import('@/pages/UploadPage.vue') },
-      { path: '/projects', component: () => import('@/pages/ProjectsPage.vue') },
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
-      { path: '/activity', component: () => import('@/pages/ActivityPage.vue') },
       { path: '/merge-requests', component: () => import('@/pages/MergeRequestsPage.vue') },
       { path: '/merge-requests/:id', component: () => import('@/pages/MergeRequestDetailPage.vue') },
       { path: '/assistant', component: () => import('@/pages/AssistantPage.vue') },
-      // Access control (page gates mutations by workspace role)
-      { path: '/access', component: () => import('@/pages/AccessControlPage.vue') },
-      // Users management (platform admin only → /403 otherwise)
-      { path: '/admin/users', component: () => import('@/pages/AdminUsersPage.vue'), meta: { platformAdmin: true } },
+      // Settings: shell with its own right-hand nav; the sections are nested pages.
+      {
+        path: '/settings',
+        component: () => import('@/pages/SettingsPage.vue'),
+        children: [
+          { path: '', redirect: '/settings/projects' },
+          {
+            path: 'projects',
+            component: () => import('@/pages/ProjectsPage.vue'),
+            // Third rail: the roster lives in the shell, the selection here.
+            children: [{ path: ':id?', component: () => import('@/pages/ProjectDetailPage.vue') }],
+          },
+          // Access control (page gates mutations by workspace role)
+          { path: 'access', component: () => import('@/pages/AccessControlPage.vue') },
+          { path: 'activity', component: () => import('@/pages/ActivityPage.vue') },
+          // Users management (platform admin only → /403 otherwise)
+          { path: 'users', component: () => import('@/pages/AdminUsersPage.vue'), meta: { platformAdmin: true } },
+        ],
+      },
+      // Legacy top-level paths → their settings home
+      { path: '/projects', redirect: '/settings/projects' },
+      { path: '/activity', redirect: '/settings/activity' },
+      { path: '/access', redirect: '/settings/access' },
+      { path: '/admin/users', redirect: '/settings/users' },
     ],
   })
 }

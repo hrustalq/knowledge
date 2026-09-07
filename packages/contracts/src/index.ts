@@ -104,8 +104,13 @@ export interface SearchRequest {
    * depth = entity hops (default 1, max 3); relationTypes filters edge types.
    */
   expandGraph?: { depth?: number; relationTypes?: string[] };
-  /** Feature 02 metadata filters, applied post-ranking against PG. */
-  filters?: { categories?: DocumentCategory[]; projectIds?: string[] };
+  /**
+   * Feature 02 metadata filters, applied post-ranking. categories/projectIds
+   * resolve against PG; tags resolve against the graph (frontmatter `tags:`
+   * become TAGGED_WITH edges to `tag:<name>` entities). Tags match with OR
+   * semantics: a document passes if it carries any of the listed tags.
+   */
+  filters?: { categories?: DocumentCategory[]; projectIds?: string[]; tags?: string[] };
 }
 export interface SearchResult {
   documentId: string;
@@ -1215,9 +1220,18 @@ export interface ProjectSummary {
   createdAt: string;
 }
 
-// GET /v1/projects?workspaceId=
+// GET /v1/projects?workspaceId=&search=&limit=&cursor=
+export interface ListProjectsRequest {
+  workspaceId: string;
+  search?: string;
+  /** Omit for the whole roster in one response; with it, the page is cursor-paginated. */
+  limit?: number;
+  cursor?: string;
+}
 export interface ListProjectsResponse {
   projects: ProjectSummary[];
+  /** Always null when the request carried no `limit`. */
+  nextCursor: string | null;
 }
 
 // POST /v1/projects

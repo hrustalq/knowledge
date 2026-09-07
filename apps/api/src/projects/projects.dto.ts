@@ -1,5 +1,42 @@
-import { IsOptional, IsString, IsNotEmpty, IsUUID, MaxLength, ValidateIf } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  IsNotEmpty,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  ValidateIf,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class ListProjectsQueryDto {
+  // Field name must stay `workspaceId`: @Access('viewer','query') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ description: 'Case-insensitive name/description substring match' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ description: 'Opaque cursor from a previous page' })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  /** Omitted = the whole roster in one response (what the sidebar switchers want). */
+  @ApiPropertyOptional({ minimum: 1, maximum: 200, description: 'Omit for the full roster' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+}
 
 export class CreateProjectDto {
   // Field name must stay `workspaceId`: @Access('editor', 'body') resolves it.

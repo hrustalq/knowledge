@@ -21,11 +21,17 @@ export class SearchService {
   async search(dto: SearchDto): Promise<SearchResponse> {
     const mode = dto.mode ?? 'hybrid';
     const k = dto.limit ?? 20;
-    // Feature 02: with a category filter, over-fetch candidates so the filter
-    // does not shrink the requested limit.
+    // Feature 02: with any metadata filter (category, project or tag),
+    // over-fetch candidates so the filter does not shrink the requested limit.
     const categories = dto.filters?.categories?.length ? new Set(dto.filters.categories) : null;
     const projectIds = dto.filters?.projectIds?.length ? new Set(dto.filters.projectIds) : null;
-    const fetchK = categories || projectIds ? k * 5 : k;
+    // Tags live in the graph, not PG: frontmatter `tags:` become TAGGED_WITH
+    // edges to `tag:<name>` entities. Accept either form so callers can pass
+    // the entity key straight back from GET /v1/entities.
+    const tagKeys = dto.filters?.tags?.length
+      ? [...new Set(dto.filters.tags.map((t) => (t.startsWith('tag:') ? t : `tag:${t}`)))]
+      : null;
+    const fetchK = categories || projectIds || tagKeys ? k * 5 : k;
 
     // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
     // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
@@ -33,11 +39,13 @@ export class SearchService {
     const useText = this.fulltext.enabled && mode !== 'semantic';
     const useVector = mode !== 'keyword' || !this.fulltext.enabled;
 
-    const [vectorHits, textHits] = await Promise.all([
+    const [vectorHits, textHits, taggedDocs] = await Promise.all([
       useVector
         ? this.embeddings.embed(dto.query).then((e) => this.graph.searchChunks(dto.workspaceId, e, fetchK))
         : Promise.resolve([] as ChunkHit[]),
       useText ? this.fulltext.search(dto.workspaceId, dto.query, fetchK) : Promise.resolve([]),
+      // Overlaps the embedding round-trip rather than serializing after it.
+      tagKeys ? this.graph.getDocumentIdsByTags(dto.workspaceId, tagKeys) : Promise.resolve(null),
     ]);
 
     const hits = this.fuse(vectorHits, textHits, fetchK);
@@ -51,6 +59,7 @@ export class SearchService {
     const docById = new Map(docs.map((d) => [d.id, d]));
 
     const results: SearchResult[] = hits
+      .filter((h) => !taggedDocs || taggedDocs.has(h.documentId))
       .filter((h) => !categories || categories.has((docById.get(h.documentId)?.category ?? 'other') as never))
       .filter((h) => !projectIds || projectIds.has(docById.get(h.documentId)?.projectId ?? ''))
       .slice(0, k)

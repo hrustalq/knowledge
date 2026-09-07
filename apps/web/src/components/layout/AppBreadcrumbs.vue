@@ -21,17 +21,20 @@ interface Crumb { label: string; to?: string }
 
 const STATIC: Record<string, string> = {
   '/search': 'Search',
-  '/activity': 'Activity',
   '/merge-requests': 'Merge requests',
-  '/access': 'Access',
-  '/admin/users': 'Users',
-  '/projects': 'Projects',
+}
+
+const SETTINGS: Record<string, string> = {
+  '/settings/projects': 'Projects',
+  '/settings/users': 'Users',
+  '/settings/access': 'Access',
+  '/settings/activity': 'Activity',
 }
 
 /** Pages live inside a project, so page trails lead with the active project. */
 function pageRoot(): Crumb[] {
   const name = projects.activeName
-  return name ? [{ label: name, to: '/projects' }, { label: 'Pages', to: '/documents' }] : [{ label: 'Pages', to: '/documents' }]
+  return name ? [{ label: name, to: '/settings/projects' }, { label: 'Pages', to: '/documents' }] : [{ label: 'Pages', to: '/documents' }]
 }
 
 const crumbs = computed<Crumb[]>(() => {
@@ -50,6 +53,15 @@ const crumbs = computed<Crumb[]>(() => {
       { label: 'Merge requests', to: '/merge-requests' },
       { label: (route.params.id as string).slice(0, 8) },
     ]
+  }
+  if (path.startsWith('/settings')) {
+    if (path.startsWith('/settings/projects/')) {
+      const id = route.params.id as string
+      const name = projects.items.find((p) => p.projectId === id)?.name ?? id.slice(0, 8)
+      return [{ label: 'Settings', to: '/settings' }, { label: 'Projects', to: '/settings/projects' }, { label: name }]
+    }
+    const label = SETTINGS[path]
+    return label ? [{ label: 'Settings', to: '/settings' }, { label }] : [{ label: 'Settings' }]
   }
   if (path === '/create') return [...pageRoot(), { label: 'New page' }]
   if (path === '/upload') return [...pageRoot(), { label: 'Upload' }]

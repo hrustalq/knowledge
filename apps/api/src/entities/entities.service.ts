@@ -19,15 +19,28 @@ import { bfs, buildAdjacency, docIdOf, docNode, isDocNode, shortestPath } from '
 export class EntitiesService {
   constructor(private readonly graph: GraphService) {}
 
-  async listEntities(workspaceId: string): Promise<ListEntitiesResponse> {
+  /**
+   * Workspace entities ranked by relation degree. `type` and `q` back the
+   * filter autocompletes (e.g. type=tag) so a client picking a tag does not
+   * have to pull — and rank — the whole entity roster itself.
+   */
+  async listEntities(
+    workspaceId: string,
+    opts: { type?: string; q?: string; limit?: number } = {},
+  ): Promise<ListEntitiesResponse> {
     const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
     const degree = new Map<string, number>();
     for (const e of g.edges) degree.set(e.targetKey, (degree.get(e.targetKey) ?? 0) + 1);
-    return {
-      entities: Object.entries(g.entities)
-        .map(([key, e]) => ({ key, type: e.type, name: e.name, degree: degree.get(key) ?? 0 }))
-        .sort((a, b) => b.degree - a.degree || a.key.localeCompare(b.key)),
-    };
+
+    const needle = opts.q?.trim().toLowerCase();
+    let entities = Object.entries(g.entities)
+      .map(([key, e]) => ({ key, type: e.type, name: e.name, degree: degree.get(key) ?? 0 }))
+      .filter((e) => !opts.type || e.type === opts.type)
+      .filter((e) => !needle || e.name.toLowerCase().includes(needle))
+      .sort((a, b) => b.degree - a.degree || a.key.localeCompare(b.key));
+
+    if (opts.limit !== undefined) entities = entities.slice(0, opts.limit);
+    return { entities };
   }
 
   /** Depth-limited neighborhood of an entity (plan.md §9 knowledge.find_relations). */

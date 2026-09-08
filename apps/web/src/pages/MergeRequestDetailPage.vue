@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import DiffView from '@/components/knowledge/DiffView.vue'
-import ReviewCanvas from '@/components/merge-requests/ReviewCanvas.vue'
+import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
 import MergeWidget from '@/components/merge-requests/MergeWidget.vue'
 import MrSidebar from '@/components/merge-requests/MrSidebar.vue'
 import MrActivityFeed from '@/components/merge-requests/MrActivityFeed.vue'
@@ -121,7 +121,9 @@ const threadsQuery = useQuery(
 const threads = computed(
   () => (threadsQuery.data.value as ListMergeRequestThreadsResponse | undefined)?.threads ?? [],
 )
-const unresolvedCount = computed(() => threads.value.filter((t) => !t.resolved).length)
+// A plain comment has nothing to resolve, so it is not an open request — the
+// same rule the API's threadStats applies.
+const unresolvedCount = computed(() => threads.value.filter((t) => t.resolvable && !t.resolved).length)
 
 /**
  * Which threads render inline in the diff. The timeline lists all of them
@@ -205,8 +207,17 @@ const replyThread = useApiMutation('post', '/v1/merge-requests/{id}/threads/{thr
 const resolveThread = useApiMutation('patch', '/v1/merge-requests/{id}/threads/{threadId}', {
   invalidates: threadInvalidates,
 })
+const editComment = useApiMutation(
+  'patch',
+  '/v1/merge-requests/{id}/threads/{threadId}/comments/{commentId}',
+  { invalidates: threadInvalidates },
+)
 const threadsBusy = computed(
-  () => createThread.isPending.value || replyThread.isPending.value || resolveThread.isPending.value,
+  () =>
+    createThread.isPending.value ||
+    replyThread.isPending.value ||
+    resolveThread.isPending.value ||
+    editComment.isPending.value,
 )
 
 /** Comment attachments are stored against the document this MR targets. */
@@ -215,9 +226,14 @@ const resolveDocumentId = async () => mr.value?.documentId ?? null
 /** Pending anchor from a diff-gutter click; rendered as a composer above the diff. */
 const pendingAnchor = ref<MergeRequestThreadAnchor | null>(null)
 
-function onCreateThread(body: string, anchor?: MergeRequestThreadAnchor) {
+/**
+ * `resolvable` is GitLab's Comment vs. Start thread: a remark, or a request
+ * that stays open until someone resolves it. Composers that offer the choice
+ * pass it; the ones that don't (the AI rail) post a plain comment.
+ */
+function onCreateThread(body: string, anchor?: MergeRequestThreadAnchor, resolvable = false) {
   createThread.mutate(
-    { path: { id: id.value }, body: { body, ...(anchor ? { anchor } : {}) } },
+    { path: { id: id.value }, body: { body, resolvable, ...(anchor ? { anchor } : {}) } },
     {
       onSuccess: () => (pendingAnchor.value = null),
       onError: (e) => toast.error(e.message),
@@ -239,6 +255,12 @@ function onReply(threadId: string, body: string) {
 function onResolve(threadId: string, resolved: boolean) {
   resolveThread.mutate(
     { path: { id: id.value, threadId }, body: { resolved } },
+    { onError: (e) => toast.error(e.message) },
+  )
+}
+function onEditComment(threadId: string, commentId: string, body: string) {
+  editComment.mutate(
+    { path: { id: id.value, threadId, commentId }, body: { body } },
     { onError: (e) => toast.error(e.message) },
   )
 }
@@ -350,7 +372,8 @@ function refresh() {
             :busy="threadsBusy"
             @reply="onReply"
             @resolve="onResolve"
-            @create-thread="(b) => onCreateThread(b)"
+            @edit="onEditComment"
+            @create-thread="(b, r) => onCreateThread(b, undefined, r)"
           />
         </template>
 
@@ -363,7 +386,7 @@ function refresh() {
           <p v-else-if="!reviewContent" class="text-sm text-muted-foreground">
             This revision's content could not be loaded.
           </p>
-          <ReviewCanvas
+          <DocumentCanvas
             v-else
             :markdown="reviewContent.markdown"
             :revision-id="reviewContent.revisionId"
@@ -371,9 +394,10 @@ function refresh() {
             :can-comment="canComment"
             :busy="threadsBusy"
             :resolve-document-id="resolveDocumentId"
-            @create-thread="(b, a) => onCreateThread(b, a)"
+            @create-thread="onCreateThread"
             @reply="onReply"
             @resolve="onResolve"
+            @edit="onEditComment"
             @outdated="outdatedInReview = $event"
           />
         </div>
@@ -389,16 +413,17 @@ function refresh() {
             </p>
             <div v-if="pendingAnchor" class="rounded-lg border bg-card p-3">
               <p class="mb-2 text-xs font-medium">
-                New thread<template v-if="pendingAnchor.type === 'line'"> on line {{ pendingAnchor.line }}</template>
+                New comment<template v-if="pendingAnchor.type === 'line'"> on line {{ pendingAnchor.line }}</template>
                 <button class="ml-2 text-muted-foreground hover:text-foreground" @click="pendingAnchor = null">cancel</button>
               </p>
               <CommentComposer
                 auto-expand
+                offer-thread
                 placeholder="Write a comment…"
-                submit-label="Start thread"
+                submit-label="Comment"
                 :busy="threadsBusy"
                 :resolve-document-id="resolveDocumentId"
-                @submit="(b) => onCreateThread(b, pendingAnchor ?? undefined)"
+                @submit="(b, r) => onCreateThread(b, pendingAnchor ?? undefined, r)"
               />
             </div>
             <DiffView
@@ -415,6 +440,7 @@ function refresh() {
                   :resolve-document-id="resolveDocumentId"
                   @reply="(b) => onReply(thread.threadId, b)"
                   @resolve="(r) => onResolve(thread.threadId, r)"
+                  @edit="(c, b) => onEditComment(thread.threadId, c, b)"
                 />
               </template>
             </DiffView>

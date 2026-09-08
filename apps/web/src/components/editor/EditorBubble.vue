@@ -42,7 +42,10 @@ onMounted(() => {
     // Delay: clicking a button in the bar blurs the editor first, and hiding
     // synchronously would swallow the click.
     setTimeout(() => {
-      if (!props.editor.view.hasFocus()) position.value = null
+      // The box can be gone by now — an edit composer collapses on save, which
+      // blurs and unmounts in the same tick — and reading `view` off a
+      // destroyed editor throws.
+      if (props.editor.isDestroyed || !props.editor.view.hasFocus()) position.value = null
     }, 120)
   })
 })

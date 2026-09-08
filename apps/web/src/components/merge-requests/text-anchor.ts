@@ -15,16 +15,18 @@
  * line broke — and the point map is what lets a match become a real Range
  * again, so the highlight lands on the actual words.
  */
-import type { MergeRequestThread, MergeRequestThreadAnchor } from '@knowledge/contracts'
+import type { ReviewThread } from '@knowledge/contracts'
+import {
+  MAX_QUOTE_CHARS,
+  MIN_QUOTE_CHARS,
+  contextAround,
+  findAnchor,
+  normalizeQuote,
+  type TextAnchor,
+} from '@/lib/anchor-match'
 
-export type TextAnchor = Extract<MergeRequestThreadAnchor, { type: 'text' }>
-
-/** Context kept on each side of the quote to tell repeated passages apart. */
-const CONTEXT_CHARS = 48
-
-/** Mirrors MAX_QUOTE_CHARS in the API's ThreadAnchorDto. */
-const MAX_QUOTE_CHARS = 1_000
-const MIN_QUOTE_CHARS = 2
+export type { TextAnchor }
+export { normalizeQuote }
 
 /** Marks this module owns, so a re-render can strip exactly its own work. */
 export const ANNOTATION_ATTR = 'data-kn-thread'
@@ -46,10 +48,6 @@ const BLOCK_TAGS = new Set([
   'TABLE', 'TR', 'TD', 'TH', 'SECTION', 'ARTICLE', 'ASIDE', 'FIGURE', 'FIGCAPTION',
   'DL', 'DT', 'DD', 'DETAILS', 'SUMMARY', 'HR', 'NAV',
 ])
-
-export function normalizeQuote(raw: string): string {
-  return raw.replace(/\s+/g, ' ').trim()
-}
 
 function nearestBlock(node: Text): Element | null {
   let el = node.parentElement
@@ -122,24 +120,6 @@ function indexOfPosition(projection: Projection, node: Node, offset: number): nu
   return -1
 }
 
-/** How many characters of the recorded context still match around a candidate. */
-function contextScore(text: string, at: number, length: number, anchor: TextAnchor): number {
-  let score = 0
-  if (anchor.prefix) {
-    const want = normalizeQuote(anchor.prefix)
-    const have = text.slice(Math.max(0, at - want.length), at)
-    while (score < want.length && have[have.length - 1 - score] === want[want.length - 1 - score]) score++
-  }
-  if (anchor.suffix) {
-    const want = normalizeQuote(anchor.suffix)
-    const have = text.slice(at + length, at + length + want.length)
-    let i = 0
-    while (i < want.length && have[i] === want[i]) i++
-    score += i
-  }
-  return score
-}
-
 /**
  * Turn the reader's current selection into an anchor.
  *
@@ -166,8 +146,7 @@ export function anchorFromSelection(root: HTMLElement, revisionId: string): Text
   const start = at >= 0 ? at : projection.text.indexOf(quote)
   if (start < 0) return null
 
-  const prefix = projection.text.slice(Math.max(0, start - CONTEXT_CHARS), start)
-  const suffix = projection.text.slice(start + quote.length, start + quote.length + CONTEXT_CHARS)
+  const { prefix, suffix } = contextAround(projection.text, start, quote.length)
   return {
     type: 'text',
     revisionId,
@@ -188,16 +167,7 @@ export function resolveTextAnchor(root: HTMLElement, anchor: TextAnchor): Range 
   const quote = normalizeQuote(anchor.quote)
   if (!quote) return null
   const projection = project(root)
-
-  let best = -1
-  let bestScore = -1
-  for (let at = projection.text.indexOf(quote); at !== -1; at = projection.text.indexOf(quote, at + 1)) {
-    const score = contextScore(projection.text, at, quote.length, anchor)
-    if (score > bestScore) {
-      bestScore = score
-      best = at
-    }
-  }
+  const best = findAnchor(projection.text, anchor)
   if (best < 0) return null
   return rangeBetween(projection, best, best + quote.length)
 }
@@ -267,7 +237,7 @@ export interface HighlightResult {
  * comments therefore nest rather than fight, which is what a reader expects
  * when two people highlighted the same sentence.
  */
-export function highlightThreads(root: HTMLElement, threads: MergeRequestThread[]): HighlightResult {
+export function highlightThreads(root: HTMLElement, threads: ReviewThread[]): HighlightResult {
   clearHighlights(root)
   const placed: string[] = []
   const outdated: string[] = []

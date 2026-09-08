@@ -1116,6 +1116,26 @@
  * inside a 300px rail or a threaded card, and inherits an empty box taller
  * than the thread it belongs to unless both are unwound here.
  */
+/* The bar only appears while the box is being written in, so it is sized to
+   sit on top of a two-line reply rather than to head a page. */
+.kn-toolbar[data-compact='true'] {
+  padding: 0.25rem 0.35rem;
+  gap: 0.1rem;
+}
+.kn-toolbar[data-compact='true'] .kn-tb-btn {
+  height: 1.6rem;
+  min-width: 1.6rem;
+  padding: 0 0.25rem;
+}
+.kn-toolbar[data-compact='true'] .kn-tb-select {
+  height: 1.6rem;
+  font-size: 0.75rem;
+}
+.kn-toolbar[data-compact='true'] .kn-tb-group + .kn-tb-group::before,
+.kn-toolbar[data-compact='true'] .kn-tb-group + .kn-tb-select::before {
+  margin: 0 0.2rem;
+}
+
 .kn-editor[data-compact='true'] .kn-editor-content { padding: 0; }
 .kn-editor[data-compact='true'] .kn-prose {
   max-width: none;
@@ -1132,14 +1152,70 @@
   margin-top: 0.75rem;
 }
 
-/* -------------------------------------------- review annotations (feature 13) */
+/* --------------------------------------------- read surface (feature 15) */
 /*
- * A commented passage in review mode. Styled as a highlighter stroke rather
- * than a link so it reads as "someone marked this up", the way an annotated
- * PDF does — and it carries its comment count as a superscript pin, so a
- * reader can see there is a discussion here without opening it.
+ * The page reader is the editor with `editable: false`, so it inherits the
+ * authoring metrics: 2rem of lead-in and 6rem of trailing room for a cursor
+ * that is not there. Reading wants neither. The left inset is the comment
+ * gutter — the hover control parks in it, clear of the words it refers to.
  */
-.markdown-body mark[data-kn-thread] {
+.kn-read-surface .kn-editor-content { padding: 0 0 1rem; }
+.kn-read-surface .kn-editor-surface { overflow: visible; }
+/*
+ * The authoring measure is a centred 736px column, which inside a page column
+ * that the rail has already narrowed reads as two thick margins rather than as
+ * typography. Reading fills the column it was given, flush with the title above
+ * it. `min-height` goes with it — 24rem of reserved space is room for a cursor,
+ * and a short page should simply be short.
+ */
+.kn-read-surface .kn-prose { max-width: none; margin: 0; min-height: 0; }
+
+/*
+ * The hover comment control sits in the page's own outer margin rather than in a
+ * gutter of its own: reserving 2rem inside the column indents every page out of
+ * line with its title, permanently, to make room for a button only ever visible
+ * under the pointer.
+ *
+ * The canvas reaches out to meet it — negative margin plus equal padding widens
+ * the element's hit region leftwards while leaving the text exactly where it
+ * was. Without that the button is outside the canvas box, and travelling to it
+ * means leaving the canvas: `mouseleave` fires and dismisses the button while
+ * the pointer is still on its way. An affordance has to live inside the region
+ * that tracks it.
+ *
+ * Pointer-and-wide-only: below `lg` the outer margin is 1rem and this would
+ * overflow the page; on touch there is no hover at all. Selecting a passage
+ * works everywhere.
+ */
+.kn-comment-affordance { display: none; }
+@media (hover: hover) and (min-width: 64rem) {
+  .kn-read-canvas { margin-left: -2rem; padding-left: 2rem; }
+  .kn-comment-affordance { display: grid; left: 0; }
+}
+
+/* Arriving at a commented passage from elsewhere: say which words, briefly. */
+@keyframes kn-anchor-flash {
+  0%, 100% { background: color-mix(in oklch, var(--kn-panel-warning) 26%, transparent); }
+  35% { background: color-mix(in oklch, var(--kn-panel-warning) 72%, transparent); }
+}
+.kn-prose .kn-anchor-flash { animation: kn-anchor-flash 1.4s ease-in-out; }
+@media (prefers-reduced-motion: reduce) {
+  .kn-prose .kn-anchor-flash { animation: none; outline: 2px solid var(--kn-panel-warning); }
+}
+
+/* ------------------------------- commented passages (features 13 and 15) */
+/*
+ * A passage someone has commented on. Styled as a highlighter stroke rather
+ * than a link so it reads as "someone marked this up", the way an annotated PDF
+ * does — and it carries its comment count as a superscript pin, so a reader can
+ * see there is a discussion here without opening it.
+ *
+ * Two renderers produce these and they must look identical: review mode wraps
+ * `<mark>` elements into rendered HTML, while the page reader draws ProseMirror
+ * decorations (`span.kn-anchor`) because the editor owns its own DOM.
+ */
+.markdown-body mark[data-kn-thread],
+.kn-prose .kn-anchor {
   background: color-mix(in oklch, var(--kn-panel-warning) 26%, transparent);
   color: inherit;
   border-radius: 3px;
@@ -1149,21 +1225,27 @@
   transition: background 120ms ease;
 }
 .markdown-body mark[data-kn-thread]:hover,
-.markdown-body mark[data-kn-thread]:focus-visible {
+.markdown-body mark[data-kn-thread]:focus-visible,
+.kn-prose .kn-anchor:hover,
+.kn-prose .kn-anchor:focus-visible {
   background: color-mix(in oklch, var(--kn-panel-warning) 42%, transparent);
   outline: none;
 }
 /* A resolved thread stays visible — the passage was reviewed — but stops
    competing for attention with the ones still open. */
-.markdown-body mark[data-kn-thread][data-kn-resolved='true'] {
+.markdown-body mark[data-kn-thread][data-kn-resolved='true'],
+.kn-prose .kn-anchor-resolved {
   background: color-mix(in oklch, var(--kn-panel-tip) 16%, transparent);
   box-shadow: inset 0 -0.12em 0 color-mix(in oklch, var(--kn-panel-tip) 40%, transparent);
 }
-/* The pin belongs to the passage, not to each fragment, so only the last
-   `<mark>` of a multi-element range shows it. */
+/* The pin belongs to the passage, not to each fragment. Review mode's marks
+   carry it in CSS; the editor draws it as a widget node (see
+   extensions/comment-anchors) because one inline decoration renders as several
+   spans. Both end up looking the same. */
 .markdown-body mark[data-kn-thread] + mark[data-kn-thread]::before { content: none; }
-.markdown-body mark[data-kn-thread]::after {
-  content: attr(data-kn-count);
+.markdown-body mark[data-kn-thread]::after { content: attr(data-kn-count); }
+.markdown-body mark[data-kn-thread]::after,
+.kn-prose .kn-anchor-pin {
   display: inline-block;
   margin-left: 0.2em;
   padding: 0 0.32em;
@@ -1174,8 +1256,12 @@
   font-weight: 700;
   line-height: 1.5;
   vertical-align: super;
+  cursor: pointer;
+  user-select: none;
 }
-.markdown-body mark[data-kn-thread][data-kn-resolved='true']::after { background: var(--kn-panel-tip); }
+.markdown-body mark[data-kn-thread][data-kn-resolved='true']::after,
+.kn-prose .kn-anchor-pin-resolved { background: var(--kn-panel-tip); }
+
 /* Nested marks are overlapping comments; only the outermost prints a pin, or a
    two-thread overlap would show two badges on the same word. */
 .markdown-body mark[data-kn-thread] mark[data-kn-thread]::after { content: none; }

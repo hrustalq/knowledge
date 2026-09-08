@@ -220,6 +220,17 @@ export class CreateThreadDto {
   @ValidateNested()
   @Type(() => ThreadAnchorDto)
   anchor?: ThreadAnchorDto;
+
+  // No `default:` in the decorator on purpose: openapi-typescript promotes any
+  // property that declares one to required, forcing every caller to send a
+  // value the server already fills in.
+  @ApiPropertyOptional({
+    description:
+      'True (the default) starts a resolvable thread; false posts a plain comment that cannot be resolved.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  resolvable?: boolean;
 }
 
 export class CreateCommentDto {

@@ -75,7 +75,7 @@ watch(branchFilter, () => void load())
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center gap-2">
       <Select v-model="branchModel">
         <SelectTrigger size="sm" class="text-sm" aria-label="Filter by branch">
           <SelectValue />
@@ -141,7 +141,7 @@ watch(branchFilter, () => void load())
             <td class="px-3 py-2">
               <RouterLink
                 v-if="r.contentHash"
-                :to="`/documents/${documentId}?tab=content&revision=${r.revisionId}`"
+                :to="`/documents/${documentId}?tab=revisions&revision=${r.revisionId}`"
                 class="text-xs hover:underline"
               >
                 view

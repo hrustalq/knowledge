@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   ListMergeRequestThreadsResponse,
   MergeRequestComment,
@@ -11,7 +16,8 @@ import type {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AUTHOR_ID_STUB, MergeRequestsService } from './merge-requests.service.js';
-import type { CreateThreadDto, ThreadAnchorDto } from './dto/merge-requests.dto.js';
+import type { CreateThreadDto } from './dto/merge-requests.dto.js';
+import { validateThreadAnchor } from './review-anchor.js';
 
 type ThreadWithComments = ThreadRow & { comments: CommentRow[] };
 
@@ -49,12 +55,13 @@ export class MergeRequestThreadsService {
     authorId: string = AUTHOR_ID_STUB,
   ): Promise<{ thread: MergeRequestThread }> {
     const mr = await this.getOpenMrOrThrow(mergeRequestId);
-    const anchor = dto.anchor ? this.validateAnchor(dto.anchor) : null;
+    const anchor = dto.anchor ? validateThreadAnchor(dto.anchor) : null;
 
     const thread = await this.prisma.$transaction(async (tx) => {
       const created = await tx.mergeRequestThread.create({
         data: {
           mergeRequestId,
+          resolvable: dto.resolvable ?? true,
           anchorType: anchor?.type ?? null,
           anchor: anchor ?? undefined,
         },
@@ -96,6 +103,35 @@ export class MergeRequestThreadsService {
     return { thread: await this.reload(thread.id) };
   }
 
+  /**
+   * Rewrite a comment. Only its own author may — a discussion is a record of
+   * who said what, and letting a reviewer restate someone else's point would
+   * make it a worthless one.
+   */
+  async editComment(
+    mergeRequestId: string,
+    threadId: string,
+    commentId: string,
+    body: string,
+    actorId: string = AUTHOR_ID_STUB,
+  ): Promise<{ thread: MergeRequestThread }> {
+    await this.getOpenMrOrThrow(mergeRequestId);
+    const thread = await this.getThreadOrThrow(mergeRequestId, threadId);
+    const comment = await this.prisma.mergeRequestComment.findUnique({ where: { id: commentId } });
+    if (!comment || comment.threadId !== thread.id) {
+      throw new NotFoundException(`Comment ${commentId} not found on thread ${threadId}`);
+    }
+    if (comment.authorId !== actorId) {
+      throw new ForbiddenException('Only the author of a comment can edit it');
+    }
+
+    await this.prisma.mergeRequestComment.update({
+      where: { id: comment.id },
+      data: { body, updatedAt: new Date() },
+    });
+    return { thread: await this.reload(thread.id) };
+  }
+
   async setResolved(
     mergeRequestId: string,
     threadId: string,
@@ -104,6 +140,11 @@ export class MergeRequestThreadsService {
   ): Promise<{ thread: MergeRequestThread }> {
     const mr = await this.getOpenMrOrThrow(mergeRequestId);
     const thread = await this.getThreadOrThrow(mergeRequestId, threadId);
+    if (!thread.resolvable) {
+      throw new BadRequestException(
+        `Thread ${thread.id} is a plain comment — only a thread can be resolved`,
+      );
+    }
 
     if (thread.resolved !== resolved) {
       await this.prisma.mergeRequestThread.update({
@@ -121,49 +162,11 @@ export class MergeRequestThreadsService {
     return { thread: await this.reload(thread.id) };
   }
 
-  /** DTO stays loose (no polymorphic nested validators) — the per-type shape is enforced here. */
-  private validateAnchor(dto: ThreadAnchorDto): MergeRequestThreadAnchor {
-    switch (dto.type) {
-      case 'line':
-        if (!dto.revisionId || dto.line === undefined) {
-          throw new BadRequestException('Line anchors require revisionId and line');
-        }
-        return {
-          type: 'line',
-          revisionId: dto.revisionId,
-          line: dto.line,
-          ...(dto.excerpt ? { excerpt: dto.excerpt } : {}),
-        };
-      case 'text': {
-        // Feature 13: a comment on the rendered page. The quote is normalized
-        // here — the browser hands over whatever whitespace the layout
-        // produced, and the resolver on the read side normalizes the same way,
-        // so an anchor written by one client resolves in every other.
-        const quote = normalizeQuote(dto.quote);
-        if (!dto.revisionId || !quote) {
-          throw new BadRequestException('Text anchors require revisionId and a non-empty quote');
-        }
-        return {
-          type: 'text',
-          revisionId: dto.revisionId,
-          quote,
-          ...(normalizeQuote(dto.prefix) ? { prefix: normalizeQuote(dto.prefix) } : {}),
-          ...(normalizeQuote(dto.suffix) ? { suffix: normalizeQuote(dto.suffix) } : {}),
-        };
-      }
-      case 'section':
-        if (!dto.heading) throw new BadRequestException('Section anchors require heading');
-        return { type: 'section', heading: dto.heading };
-      case 'entity':
-        if (!dto.entityKey) throw new BadRequestException('Entity anchors require entityKey');
-        return { type: 'entity', entityKey: dto.entityKey };
-    }
-  }
-
   private toThread(t: ThreadWithComments): MergeRequestThread {
     return {
       threadId: t.id,
       mergeRequestId: t.mergeRequestId,
+      resolvable: t.resolvable,
       resolved: t.resolved,
       resolvedBy: t.resolvedBy,
       resolvedAt: t.resolvedAt?.toISOString() ?? null,
@@ -175,6 +178,7 @@ export class MergeRequestThreadsService {
           authorId: c.authorId,
           body: c.body,
           createdAt: c.createdAt.toISOString(),
+          updatedAt: c.updatedAt?.toISOString() ?? null,
         }),
       ),
       createdAt: t.createdAt.toISOString(),
@@ -212,14 +216,4 @@ export class MergeRequestThreadsService {
     }
     return thread;
   }
-}
-
-/**
- * Whitespace as rendered is layout, not content: the same passage yields
- * different runs of spaces and newlines depending on where the line broke.
- * Collapsing it is what lets a quote captured in one viewport resolve in
- * another (and in the plain-text projection the reader's browser builds).
- */
-function normalizeQuote(raw: string | undefined): string {
-  return (raw ?? '').replace(/\s+/g, ' ').trim();
 }

@@ -52,7 +52,19 @@ import {
 import { PANEL_META, PANEL_TYPES, STATUS_COLORS, type PanelType, type StatusColor } from '@/lib/markdown/nodes'
 import { canIndent, canOutdent, indent, outdent } from './extensions/list-indent'
 
-const props = defineProps<{ editor: Editor }>()
+const props = withDefaults(
+  defineProps<{
+    editor: Editor
+    /**
+     * Comment-box variant: the same bar with the page furniture dropped.
+     * Alignment, panels, status lozenges, columns, expands and a table of
+     * contents are page decisions — in a two-sentence reply they are noise in
+     * a row that has to survive a 300px rail.
+     */
+    compact?: boolean
+  }>(),
+  { compact: false },
+)
 const emit = defineEmits<{ pickImage: []; pickFile: []; linkPage: []; link: [] }>()
 
 const TEXT_STYLES = [
@@ -84,7 +96,7 @@ const ALIGNMENTS = [
 </script>
 
 <template>
-  <div class="kn-toolbar" role="toolbar" aria-label="Formatting">
+  <div class="kn-toolbar" :data-compact="compact ? 'true' : undefined" role="toolbar" aria-label="Formatting">
     <div class="kn-tb-group">
       <button
         type="button"
@@ -184,7 +196,7 @@ const ALIGNMENTS = [
       >
         <Highlighter class="size-4" />
       </button>
-      <DropdownMenu>
+      <DropdownMenu v-if="!compact">
         <DropdownMenuTrigger as-child>
           <button type="button" class="kn-tb-btn" title="Status lozenge">
             <span class="kn-tb-status-dot" />
@@ -255,7 +267,7 @@ const ALIGNMENTS = [
     </div>
 
     <div class="kn-tb-group">
-      <DropdownMenu>
+      <DropdownMenu v-if="!compact">
         <DropdownMenuTrigger as-child>
           <button type="button" class="kn-tb-btn" title="Alignment">
             <AlignLeft class="size-4" />
@@ -286,7 +298,7 @@ const ALIGNMENTS = [
       </button>
     </div>
 
-    <DropdownMenu>
+    <DropdownMenu v-if="!compact">
       <DropdownMenuTrigger as-child>
         <button type="button" class="kn-tb-btn" title="Insert a panel">
           <Info class="size-4" />
@@ -323,19 +335,21 @@ const ALIGNMENTS = [
         <DropdownMenuItem @select="editor.chain().focus().setMermaid().run()">
           <Workflow class="size-4" /> Mermaid diagram
         </DropdownMenuItem>
-        <DropdownMenuItem @select="editor.chain().focus().setDrawing().run()">
+        <DropdownMenuItem v-if="!compact" @select="editor.chain().focus().setDrawing().run()">
           <PenLine class="size-4" /> Whiteboard
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem @select="editor.chain().focus().setExpand().run()">
-          <Square class="size-4" /> Expand
-        </DropdownMenuItem>
-        <DropdownMenuItem @select="editor.chain().focus().setLayout(2).run()">
-          <Columns2 class="size-4" /> Two columns
-        </DropdownMenuItem>
-        <DropdownMenuItem @select="editor.chain().focus().setLayout(3).run()">
-          <Columns3 class="size-4" /> Three columns
-        </DropdownMenuItem>
+        <template v-if="!compact">
+          <DropdownMenuSeparator />
+          <DropdownMenuItem @select="editor.chain().focus().setExpand().run()">
+            <Square class="size-4" /> Expand
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="editor.chain().focus().setLayout(2).run()">
+            <Columns2 class="size-4" /> Two columns
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="editor.chain().focus().setLayout(3).run()">
+            <Columns3 class="size-4" /> Three columns
+          </DropdownMenuItem>
+        </template>
         <DropdownMenuSeparator />
         <DropdownMenuItem @select="editor.chain().focus().toggleCodeBlock().run()">
           <Code class="size-4" /> Code block
@@ -343,7 +357,7 @@ const ALIGNMENTS = [
         <DropdownMenuItem @select="editor.chain().focus().toggleBlockquote().run()">
           <Quote class="size-4" /> Quote
         </DropdownMenuItem>
-        <DropdownMenuItem @select="editor.chain().focus().setToc().run()">
+        <DropdownMenuItem v-if="!compact" @select="editor.chain().focus().setToc().run()">
           <Type class="size-4" /> Table of contents
         </DropdownMenuItem>
         <DropdownMenuItem @select="editor.chain().focus().setHorizontalRule().run()">

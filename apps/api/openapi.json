@@ -2318,6 +2318,296 @@
         ]
       }
     },
+    "/v1/documents/{id}/threads": {
+      "get": {
+        "operationId": "DocumentsController_listThreads",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Comment threads on a document (feature 15)",
+        "tags": [
+          "documents"
+        ]
+      },
+      "post": {
+        "operationId": "DocumentsController_createThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThreadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start a comment thread, optionally anchored to a passage",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/threads/{threadId}/comments": {
+      "post": {
+        "operationId": "DocumentsController_replyToThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reply in a comment thread",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/threads/{threadId}/comments/{commentId}": {
+      "patch": {
+        "operationId": "DocumentsController_editThreadComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a page comment (the comment's own author only)",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/threads/{threadId}": {
+      "patch": {
+        "operationId": "DocumentsController_resolveThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveThreadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Resolve or reopen a comment thread",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/v1/documents/{id}/merge-requests": {
       "post": {
         "operationId": "MergeRequestsController_create",
@@ -3094,6 +3384,76 @@
           }
         },
         "summary": "Reply to a review thread",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/merge-requests/{id}/threads/{threadId}/comments/{commentId}": {
+      "patch": {
+        "operationId": "MergeRequestsController_editComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a review comment (the comment's own author only)",
         "tags": [
           "merge-requests"
         ]
@@ -6355,6 +6715,95 @@
           }
         }
       },
+      "ThreadAnchorDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "line",
+              "text",
+              "section",
+              "entity"
+            ]
+          },
+          "revisionId": {
+            "type": "string",
+            "description": "line: revision the line number refers to (source head at comment time)"
+          },
+          "line": {
+            "type": "number",
+            "description": "line: 1-based new-side line number in the diff"
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "line: text excerpt for best-effort re-matching once the branch advances"
+          },
+          "quote": {
+            "type": "string",
+            "description": "text: the selected passage, as rendered (feature 13 review mode)"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "text: rendered text immediately before the quote, for disambiguation"
+          },
+          "suffix": {
+            "type": "string",
+            "description": "text: rendered text immediately after the quote, for disambiguation"
+          },
+          "heading": {
+            "type": "string",
+            "description": "section: markdown heading text"
+          },
+          "entityKey": {
+            "type": "string",
+            "description": "entity: graph entity key, e.g. service:identity"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "CreateThreadDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/components/schemas/ThreadAnchorDto"
+          },
+          "resolvable": {
+            "type": "boolean",
+            "description": "True (the default) starts a resolvable thread; false posts a plain comment that cannot be resolved."
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "CreateCommentDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "ResolveThreadDto": {
+        "type": "object",
+        "properties": {
+          "resolved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "resolved"
+        ]
+      },
       "CreateMergeRequestDto": {
         "type": "object",
         "properties": {
@@ -6427,91 +6876,6 @@
             "default": "merge-commit"
           }
         }
-      },
-      "ThreadAnchorDto": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "line",
-              "text",
-              "section",
-              "entity"
-            ]
-          },
-          "revisionId": {
-            "type": "string",
-            "description": "line: revision the line number refers to (source head at comment time)"
-          },
-          "line": {
-            "type": "number",
-            "description": "line: 1-based new-side line number in the diff"
-          },
-          "excerpt": {
-            "type": "string",
-            "description": "line: text excerpt for best-effort re-matching once the branch advances"
-          },
-          "quote": {
-            "type": "string",
-            "description": "text: the selected passage, as rendered (feature 13 review mode)"
-          },
-          "prefix": {
-            "type": "string",
-            "description": "text: rendered text immediately before the quote, for disambiguation"
-          },
-          "suffix": {
-            "type": "string",
-            "description": "text: rendered text immediately after the quote, for disambiguation"
-          },
-          "heading": {
-            "type": "string",
-            "description": "section: markdown heading text"
-          },
-          "entityKey": {
-            "type": "string",
-            "description": "entity: graph entity key, e.g. service:identity"
-          }
-        },
-        "required": [
-          "type"
-        ]
-      },
-      "CreateThreadDto": {
-        "type": "object",
-        "properties": {
-          "body": {
-            "type": "string"
-          },
-          "anchor": {
-            "$ref": "#/components/schemas/ThreadAnchorDto"
-          }
-        },
-        "required": [
-          "body"
-        ]
-      },
-      "CreateCommentDto": {
-        "type": "object",
-        "properties": {
-          "body": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "body"
-        ]
-      },
-      "ResolveThreadDto": {
-        "type": "object",
-        "properties": {
-          "resolved": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "resolved"
-        ]
       },
       "CreateAttachmentDto": {
         "type": "object",

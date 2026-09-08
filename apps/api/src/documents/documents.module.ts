@@ -8,6 +8,7 @@ import { CompareService } from './compare.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
 import { MergeRequestsService } from './merge-requests.service.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
+import { DocumentThreadsService } from './document-threads.service.js';
 import { HistoryService } from './history.service.js';
 import { ActivityModule } from '../activity/activity.module.js';
 import { ProjectsModule } from '../projects/projects.module.js';
@@ -15,7 +16,21 @@ import { ProjectsModule } from '../projects/projects.module.js';
 @Module({
   imports: [ActivityModule, StorageModule, GraphModule, IngestionModule, ProjectsModule],
   controllers: [DocumentsController, MergeRequestsController],
-  providers: [DocumentsService, CompareService, MergeRequestsService, MergeRequestThreadsService, HistoryService],
-  exports: [DocumentsService, CompareService, MergeRequestsService, MergeRequestThreadsService, HistoryService],
+  providers: [
+    DocumentsService,
+    CompareService,
+    MergeRequestsService,
+    MergeRequestThreadsService,
+    DocumentThreadsService,
+    HistoryService,
+  ],
+  exports: [
+    DocumentsService,
+    CompareService,
+    MergeRequestsService,
+    MergeRequestThreadsService,
+    DocumentThreadsService,
+    HistoryService,
+  ],
 })
 export class DocumentsModule {}

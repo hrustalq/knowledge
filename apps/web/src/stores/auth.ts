@@ -24,6 +24,14 @@ export const useAuthStore = defineStore('auth', {
     canEdit(): boolean {
       return this.role === 'editor' || this.role === 'admin'
     },
+    /**
+     * Commenting is a viewer action (feature 15): whoever may read a page may
+     * annotate it. Mirrors `@Access('viewer', 'document')` on the API's
+     * thread routes.
+     */
+    canComment(): boolean {
+      return this.role !== null
+    },
     canAdminWorkspace(): boolean {
       return this.role === 'admin'
     },

@@ -160,6 +160,19 @@ export class MergeRequestsController {
     return this.threads.reply(id, threadId, dto.body, principal?.userId);
   }
 
+  @Patch('merge-requests/:id/threads/:threadId/comments/:commentId')
+  @Access('editor', 'merge-request')
+  @ApiOperation({ summary: "Edit a review comment (the comment's own author only)" })
+  editComment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
+    @Body() dto: CreateCommentDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.threads.editComment(id, threadId, commentId, dto.body, principal?.userId);
+  }
+
   @Patch('merge-requests/:id/threads/:threadId')
   @Access('editor', 'merge-request')
   @ApiOperation({ summary: 'Resolve or unresolve a review thread' })

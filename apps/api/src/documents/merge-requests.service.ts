@@ -492,14 +492,16 @@ export class MergeRequestsService {
     );
     if (ids.length === 0) return map;
     const rows = await this.prisma.mergeRequestThread.groupBy({
-      by: ['mergeRequestId', 'resolved'],
+      by: ['mergeRequestId', 'resolved', 'resolvable'],
       where: { mergeRequestId: { in: ids } },
       _count: { _all: true },
     });
     for (const row of rows) {
       const entry = map.get(row.mergeRequestId)!;
       entry.total += row._count._all;
-      if (!row.resolved) entry.unresolved += row._count._all;
+      // A plain comment is a remark, not an open request — it can never be
+      // resolved, so counting it as unresolved would block a merge forever.
+      if (!row.resolved && row.resolvable) entry.unresolved += row._count._all;
     }
     return map;
   }

@@ -12,7 +12,7 @@
  * extensions rebuilt in this folder (drag handle, expand, file handling and
  * table of contents).
  */
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import type { Editor as CoreEditor } from '@tiptap/core'
@@ -46,6 +46,7 @@ import {
   Quote,
   Square,
   Table2,
+  Trash2,
   Type,
   Workflow,
 } from 'lucide-vue-next'
@@ -64,6 +65,7 @@ import {
   startBlockDrag,
 } from './extensions/drag-handle'
 import { ListIndentKeymap } from './extensions/list-indent'
+import { CommentAnchors, type CommentAnchor } from './extensions/comment-anchors'
 import { useAttachments } from './use-attachments'
 import CommandMenu, { type CommandItem } from './CommandMenu.vue'
 import PagePickerDialog from './PagePickerDialog.vue'
@@ -95,12 +97,61 @@ const props = withDefaults(
      * having a real editor here rather than a textarea.
      */
     compact?: boolean
+    /**
+     * Commented passages to highlight (feature 15). Drawn as ProseMirror
+     * decorations, so they survive editing and never fight the view's own DOM.
+     * The host owns the discussion UI; this component only marks the text.
+     */
+    commentAnchors?: CommentAnchor[]
   }>(),
-  { pages: () => [], editable: true, compact: false, placeholder: 'Write, or press / for blocks…' },
+  {
+    pages: () => [],
+    editable: true,
+    compact: false,
+    placeholder: 'Write, or press / for blocks…',
+    commentAnchors: () => [],
+  },
 )
-const emit = defineEmits<{ 'update:modelValue': [string] }>()
+const emit = defineEmits<{
+  'update:modelValue': [string]
+  /** Anchors whose passage is no longer in the text, after the last decoration pass. */
+  'outdated-anchors': [ids: string[]]
+}>()
 
 const editor = shallowRef<Editor | null>(null)
+const rootEl = ref<HTMLElement | null>(null)
+/**
+ * Compact boxes earn their toolbar by being written in.
+ *
+ * A comment box is a single line at rest; a formatting bar parked above every
+ * one of them would out-weigh the thread it sits in. So the bar appears once
+ * the box is actually being written in and stays until the writing is done —
+ * "focused" in the useful sense, not the DOM one: clicking Bold, opening the
+ * link dialog or picking a page all move focus off the editor for a moment,
+ * and a bar that vanished mid-gesture would be unusable. Only a press outside
+ * the whole editor (menus and dialogs, which teleport out of it, excepted)
+ * ends it.
+ */
+const active = ref(false)
+/**
+ * "Somewhere else" is the whole composer, not just the editable area.
+ *
+ * A host wraps this in a box with its own controls — Attach, Cancel, the
+ * Comment split button — and pressing one of those is still writing the
+ * comment. `[data-kn-editor-shell]` marks that box; a press inside the shell
+ * that owns *this* editor keeps the bar, while a press inside a sibling
+ * composer's shell correctly ends it. Menus and dialogs teleport out of both,
+ * so they are excused wholesale — only one can be open at a time.
+ */
+function onPointerDownOutside(event: PointerEvent) {
+  const host = rootEl.value
+  const target = event.target instanceof Element ? event.target : null
+  if (!host || !target) return
+  if (target.closest('[role="dialog"], [role="menu"], [data-reka-popper-content-wrapper]')) return
+  const within = target.closest('.kn-editor, [data-kn-editor-shell]')
+  if (within && (within === host || within.contains(host) || host.contains(within))) return
+  active.value = false
+}
 const lowlight = createLowlight(common)
 
 /** Guards the two-way binding: never re-parse markdown this component just produced. */
@@ -365,6 +416,9 @@ function syncOut(instance: CoreEditor) {
   }, 200)
 }
 
+onMounted(() => document.addEventListener('pointerdown', onPointerDownOutside))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDownOutside))
+
 onMounted(() => {
   const instance = new Editor({
     editable: props.editable,
@@ -400,6 +454,7 @@ onMounted(() => {
       MentionCommand,
       DragHandleExtension,
       ListIndentKeymap.configure({ onLink: openLinkDialog }),
+      CommentAnchors,
     ],
     editorProps: {
       attributes: { class: 'kn-prose', spellcheck: 'true' },
@@ -420,13 +475,33 @@ onMounted(() => {
         return true
       },
     },
+    onFocus: () => (active.value = true),
     onUpdate: ({ editor: e }) => {
       blockMenuOpen.value = false
       syncOut(e)
     },
   })
   editor.value = instance
+  syncCommentAnchors()
 })
+
+/**
+ * Redraw the highlights and report what no longer resolves. The outdated set is
+ * only known after a pass, so it is read back from storage rather than computed
+ * twice.
+ */
+function syncCommentAnchors() {
+  const instance = editor.value
+  if (!instance) return
+  instance.commands.setCommentAnchors(props.commentAnchors)
+  // The outdated set is written during the decoration pass, so it is read back
+  // after the redraw has landed rather than in the same tick as the command.
+  void nextTick(() => {
+    if (editor.value === instance) emit('outdated-anchors', [...instance.storage.commentAnchors.outdated])
+  })
+}
+
+watch(() => props.commentAnchors, syncCommentAnchors, { deep: true })
 
 watch(
   () => props.modelValue,
@@ -435,6 +510,7 @@ watch(
     if (!instance || next === lastEmitted) return
     // External change (loaded a document, AI appended a suggestion): re-parse.
     instance.commands.setContent(markdownToHtml(next), { emitUpdate: false })
+    syncCommentAnchors()
   },
 )
 
@@ -449,6 +525,8 @@ onBeforeUnmount(() => {
 })
 
 defineExpose({
+  /** The live editor, for hosts that need to read the document (comment anchoring). */
+  editor,
   /** Flush any pending debounce, so a save never writes stale markdown. */
   flush(): string {
     const instance = editor.value
@@ -474,10 +552,16 @@ defineExpose({
 </script>
 
 <template>
-  <div class="kn-editor" :data-editable="editable" :data-compact="compact ? 'true' : undefined">
+  <div
+    ref="rootEl"
+    class="kn-editor"
+    :data-editable="editable"
+    :data-compact="compact ? 'true' : undefined"
+  >
     <EditorToolbar
-      v-if="editor && editable && !compact"
+      v-if="editor && editable && (!compact || active)"
       :editor="editor"
+      :compact="compact"
       @pick-image="pickFiles(editor, 'image/*')"
       @pick-file="pickFiles(editor, '')"
       @link-page="pagePickerOpen = true"

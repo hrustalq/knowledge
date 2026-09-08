@@ -560,6 +560,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comment threads on a document (feature 15) */
+        get: operations["DocumentsController_listThreads"];
+        put?: never;
+        /** Start a comment thread, optionally anchored to a passage */
+        post: operations["DocumentsController_createThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/threads/{threadId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reply in a comment thread */
+        post: operations["DocumentsController_replyToThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/threads/{threadId}/comments/{commentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a page comment (the comment's own author only) */
+        patch: operations["DocumentsController_editThreadComment"];
+        trace?: never;
+    };
+    "/v1/documents/{id}/threads/{threadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Resolve or reopen a comment thread */
+        patch: operations["DocumentsController_resolveThread"];
+        trace?: never;
+    };
     "/v1/documents/{id}/merge-requests": {
         parameters: {
             query?: never;
@@ -748,6 +817,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/merge-requests/{id}/threads/{threadId}/comments/{commentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a review comment (the comment's own author only) */
+        patch: operations["MergeRequestsController_editComment"];
         trace?: never;
     };
     "/v1/merge-requests/{id}/threads/{threadId}": {
@@ -1608,6 +1694,38 @@ export interface components {
             /** @example text/markdown */
             contentType?: string;
         };
+        ThreadAnchorDto: {
+            /** @enum {string} */
+            type: "line" | "text" | "section" | "entity";
+            /** @description line: revision the line number refers to (source head at comment time) */
+            revisionId?: string;
+            /** @description line: 1-based new-side line number in the diff */
+            line?: number;
+            /** @description line: text excerpt for best-effort re-matching once the branch advances */
+            excerpt?: string;
+            /** @description text: the selected passage, as rendered (feature 13 review mode) */
+            quote?: string;
+            /** @description text: rendered text immediately before the quote, for disambiguation */
+            prefix?: string;
+            /** @description text: rendered text immediately after the quote, for disambiguation */
+            suffix?: string;
+            /** @description section: markdown heading text */
+            heading?: string;
+            /** @description entity: graph entity key, e.g. service:identity */
+            entityKey?: string;
+        };
+        CreateThreadDto: {
+            body: string;
+            anchor?: components["schemas"]["ThreadAnchorDto"];
+            /** @description True (the default) starts a resolvable thread; false posts a plain comment that cannot be resolved. */
+            resolvable?: boolean;
+        };
+        CreateCommentDto: {
+            body: string;
+        };
+        ResolveThreadDto: {
+            resolved: boolean;
+        };
         CreateMergeRequestDto: {
             /** @example feature/oauth */
             sourceBranch: string;
@@ -1638,36 +1756,6 @@ export interface components {
              * @enum {string}
              */
             strategy: "merge-commit" | "squash";
-        };
-        ThreadAnchorDto: {
-            /** @enum {string} */
-            type: "line" | "text" | "section" | "entity";
-            /** @description line: revision the line number refers to (source head at comment time) */
-            revisionId?: string;
-            /** @description line: 1-based new-side line number in the diff */
-            line?: number;
-            /** @description line: text excerpt for best-effort re-matching once the branch advances */
-            excerpt?: string;
-            /** @description text: the selected passage, as rendered (feature 13 review mode) */
-            quote?: string;
-            /** @description text: rendered text immediately before the quote, for disambiguation */
-            prefix?: string;
-            /** @description text: rendered text immediately after the quote, for disambiguation */
-            suffix?: string;
-            /** @description section: markdown heading text */
-            heading?: string;
-            /** @description entity: graph entity key, e.g. service:identity */
-            entityKey?: string;
-        };
-        CreateThreadDto: {
-            body: string;
-            anchor?: components["schemas"]["ThreadAnchorDto"];
-        };
-        CreateCommentDto: {
-            body: string;
-        };
-        ResolveThreadDto: {
-            resolved: boolean;
         };
         CreateAttachmentDto: {
             /** @example architecture.png */
@@ -3810,6 +3898,211 @@ export interface operations {
             };
         };
     };
+    DocumentsController_listThreads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_createThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateThreadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_replyToThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCommentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_editThreadComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                threadId: string;
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCommentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_resolveThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveThreadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     MergeRequestsController_list: {
         parameters: {
             query?: never;
@@ -4347,6 +4640,49 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_editComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                threadId: string;
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCommentDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

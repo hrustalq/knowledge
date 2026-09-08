@@ -505,23 +505,62 @@ export type MergeRequestThreadAnchor =
   | { type: 'section'; heading: string }
   | { type: 'entity'; entityKey: string };
 
-export interface MergeRequestComment {
+/**
+ * Anchors are not a merge-request idea — the same quote-based selector pins a
+ * comment to a passage of a *published* page (feature 15). The MR-prefixed name
+ * is kept because it is the one already on the wire.
+ */
+export type ReviewThreadAnchor = MergeRequestThreadAnchor;
+
+export interface ReviewComment {
   commentId: string;
   threadId: string;
   authorId: string;
   body: string;
   createdAt: string;
+  /**
+   * When the author last rewrote the body, or null while it stands as first
+   * posted. A discussion is a record of what people said, so an edit is shown
+   * as an edit rather than silently replacing the text.
+   */
+  updatedAt: string | null;
 }
 
-export interface MergeRequestThread {
+/**
+ * PATCH .../threads/:threadId/comments/:commentId — only the comment's own
+ * author may rewrite it (403 otherwise); resolving a thread never locks it.
+ */
+export interface UpdateReviewCommentRequest {
+  body: string;
+}
+
+/**
+ * What every discussion has regardless of what it hangs off: a resolvable
+ * thread holding a flat, createdAt-ordered comment list. The subject id is
+ * added by the extending interface, which is what lets one ThreadCard render
+ * both a review thread and a page comment.
+ */
+export interface ReviewThread {
   threadId: string;
-  mergeRequestId: string;
+  /**
+   * GitLab's two shapes of remark: `false` is a plain comment (says
+   * something), `true` a thread (asks for something, and is not done until
+   * someone resolves it). Only a resolvable thread shows Resolve, and only an
+   * unresolved resolvable thread counts against a merge.
+   */
+  resolvable: boolean;
   resolved: boolean;
   resolvedBy: string | null;
   resolvedAt: string | null;
-  anchor: MergeRequestThreadAnchor | null;
-  comments: MergeRequestComment[];
+  anchor: ReviewThreadAnchor | null;
+  comments: ReviewComment[];
   createdAt: string;
+}
+
+export type MergeRequestComment = ReviewComment;
+
+export interface MergeRequestThread extends ReviewThread {
+  mergeRequestId: string;
 }
 
 // GET /v1/merge-requests/:id/threads
@@ -534,6 +573,8 @@ export interface ListMergeRequestThreadsResponse {
 export interface CreateMergeRequestThreadRequest {
   body: string;
   anchor?: MergeRequestThreadAnchor;
+  /** Defaults to true (a thread); false posts a plain comment. */
+  resolvable?: boolean;
 }
 
 // POST /v1/merge-requests/:id/threads/:threadId/comments
@@ -541,9 +582,57 @@ export interface CreateMergeRequestCommentRequest {
   body: string;
 }
 
+// PATCH /v1/merge-requests/:id/threads/:threadId/comments/:commentId
+export type UpdateMergeRequestCommentRequest = UpdateReviewCommentRequest;
+
 // PATCH /v1/merge-requests/:id/threads/:threadId
 export interface ResolveMergeRequestThreadRequest {
   resolved: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Feature 15 — comments on the page
+// ---------------------------------------------------------------------------
+// Same discussion model as merge request review, attached to the document. An
+// unanchored thread is a comment on the page as a whole (the list under the
+// content); a `text` anchor pins it to a passage, the way a PDF annotation
+// pins to a quote rather than to a page coordinate.
+
+export type DocumentComment = ReviewComment;
+
+export interface DocumentThread extends ReviewThread {
+  documentId: string;
+}
+
+// GET /v1/documents/:id/threads
+export interface ListDocumentThreadsResponse {
+  documentId: string;
+  threads: DocumentThread[];
+}
+
+// POST /v1/documents/:id/threads
+export interface CreateDocumentThreadRequest {
+  body: string;
+  anchor?: ReviewThreadAnchor;
+  /** Defaults to true (a thread); false posts a plain comment. */
+  resolvable?: boolean;
+}
+
+// POST /v1/documents/:id/threads/:threadId/comments
+export interface CreateDocumentCommentRequest {
+  body: string;
+}
+
+// PATCH /v1/documents/:id/threads/:threadId/comments/:commentId
+export type UpdateDocumentCommentRequest = UpdateReviewCommentRequest;
+
+// PATCH /v1/documents/:id/threads/:threadId
+export interface ResolveDocumentThreadRequest {
+  resolved: boolean;
+}
+
+export interface DocumentThreadResponse {
+  thread: DocumentThread;
 }
 
 // ---------------------------------------------------------------------------
@@ -921,6 +1010,8 @@ export const KNOWN_EVENT_TYPES = [
   'merge-request.review-requested',
   'merge-request.comment.created',
   'merge-request.comment.resolved',
+  'document.comment.created',
+  'document.comment.resolved',
 ] as const;
 export type KnownEventType = (typeof KNOWN_EVENT_TYPES)[number];
 

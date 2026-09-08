@@ -29,6 +29,7 @@ model Document {
   revisions     DocumentRevision[]
   mergeRequests MergeRequest[]
   attachments   Attachment[]
+  threads       DocumentThread[]
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -220,6 +221,10 @@ model MergeRequestThread {
   id             String    @id @default(uuid()) @db.Uuid
   mergeRequestId String    @map("merge_request_id") @db.Uuid
   resolved       Boolean   @default(false)
+  // GitLab's two shapes of remark. A plain comment says something; a thread
+  // asks for something and is not done until someone resolves it. Only a
+  // resolvable thread can be resolved, and only one counts as unresolved.
+  resolvable     Boolean   @default(true)
   resolvedBy     String?   @map("resolved_by") @db.Uuid
   resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz
   // line | section | entity — null = unanchored discussion thread.
@@ -241,11 +246,59 @@ model MergeRequestComment {
   authorId  String   @map("author_id") @db.Uuid
   body      String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  // Null until the author rewrites the comment — an edit is surfaced as one
+  // rather than quietly replacing what someone read.
+  updatedAt DateTime? @map("updated_at") @db.Timestamptz
 
   thread MergeRequestThread @relation(fields: [threadId], references: [id])
 
   @@index([threadId, createdAt])
   @@map("merge_request_comments")
+}
+
+// ---------------------------------------------------------------------------
+// Feature 15: comments on the page itself. Same discussion model as merge
+// request review (flat comments inside a resolvable thread, quote-based
+// anchors), but attached to the document rather than to a proposed change —
+// a reader annotates what is published, not what someone wants to merge.
+// ---------------------------------------------------------------------------
+
+model DocumentThread {
+  id         String    @id @default(uuid()) @db.Uuid
+  documentId String    @map("document_id") @db.Uuid
+  resolved   Boolean   @default(false)
+  // See MergeRequestThread.resolvable.
+  resolvable Boolean   @default(true)
+  resolvedBy String?   @map("resolved_by") @db.Uuid
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz
+  // text | section | entity — null = an unanchored comment on the page as a
+  // whole (what the comment list under the content shows).
+  anchorType String?   @map("anchor_type")
+  // text: {revisionId, quote, prefix?, suffix?} · section: {heading} · entity: {entityKey}
+  anchor     Json?
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  document Document          @relation(fields: [documentId], references: [id])
+  comments DocumentComment[]
+
+  @@index([documentId, createdAt])
+  @@map("document_threads")
+}
+
+model DocumentComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  threadId  String   @map("thread_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  // Null until the author rewrites the comment — an edit is surfaced as one
+  // rather than quietly replacing what someone read.
+  updatedAt DateTime? @map("updated_at") @db.Timestamptz
+
+  thread DocumentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("document_comments")
 }
 
 // ---------------------------------------------------------------------------

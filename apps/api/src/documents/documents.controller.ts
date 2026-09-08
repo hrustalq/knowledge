@@ -17,6 +17,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
 import { HistoryService } from './history.service.js';
+import { DocumentThreadsService } from './document-threads.service.js';
 import { CompareService } from './compare.service.js';
 import {
   AddRelationsDto,
@@ -27,6 +28,7 @@ import {
   CurateRelationDto,
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
+import { CreateCommentDto, CreateThreadDto, ResolveThreadDto } from './dto/merge-requests.dto.js';
 
 @ApiTags('documents')
 @Controller('v1/documents')
@@ -35,6 +37,7 @@ export class DocumentsController {
     private readonly documents: DocumentsService,
     private readonly compareService: CompareService,
     private readonly history: HistoryService,
+    private readonly threads: DocumentThreadsService,
   ) {}
 
   @Post()
@@ -246,5 +249,66 @@ export class DocumentsController {
   @ApiQuery({ name: 'branch', required: false, description: 'Defaults to the default branch' })
   factTimeline(@Param('id', ParseUUIDPipe) id: string, @Query('branch') branch?: string) {
     return this.history.timeline(id, branch);
+  }
+
+  // -------------------------------------------------------------------------
+  // Feature 15: comments on the page. Writing one is a `viewer` action — a
+  // reader who may read a page may annotate it; changing the page still needs
+  // `editor`.
+  // -------------------------------------------------------------------------
+
+  @Get(':id/threads')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'Comment threads on a document (feature 15)' })
+  listThreads(@Param('id', ParseUUIDPipe) id: string) {
+    return this.threads.list(id);
+  }
+
+  @Post(':id/threads')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'Start a comment thread, optionally anchored to a passage' })
+  createThread(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateThreadDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.threads.createThread(id, dto, principal?.userId);
+  }
+
+  @Post(':id/threads/:threadId/comments')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'Reply in a comment thread' })
+  replyToThread(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Body() dto: CreateCommentDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.threads.reply(id, threadId, dto.body, principal?.userId);
+  }
+
+  @Patch(':id/threads/:threadId/comments/:commentId')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: "Edit a page comment (the comment's own author only)" })
+  editThreadComment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
+    @Body() dto: CreateCommentDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.threads.editComment(id, threadId, commentId, dto.body, principal?.userId);
+  }
+
+  @Patch(':id/threads/:threadId')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'Resolve or reopen a comment thread' })
+  resolveThread(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Body() dto: ResolveThreadDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.threads.setResolved(id, threadId, dto.resolved, principal?.userId);
   }
 }

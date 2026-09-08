@@ -47,7 +47,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   reply: [threadId: string, body: string]
   resolve: [threadId: string, resolved: boolean]
-  createThread: [body: string]
+  edit: [threadId: string, commentId: string, body: string]
+  /** `resolvable`: GitLab's Comment vs. Start thread. */
+  createThread: [body: string, resolvable: boolean]
 }>()
 
 const PAGE_SIZE = 100
@@ -290,6 +292,7 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
                 :resolve-document-id="resolveDocumentId"
                 @reply="(b: string) => emit('reply', threadAt(item.index)!.threadId, b)"
                 @resolve="(r: boolean) => emit('resolve', threadAt(item.index)!.threadId, r)"
+                @edit="(c: string, b: string) => emit('edit', threadAt(item.index)!.threadId, c, b)"
               />
             </div>
           </div>
@@ -316,11 +319,12 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
         class="sticky w-full left-0 bottom-0 z-10 -mb-6 border-t bg-background pt-3 pb-6"
       >
         <CommentComposer
+          offer-thread
           placeholder="Add a comment to this merge request…"
           submit-label="Comment"
           :busy="busy"
           :resolve-document-id="resolveDocumentId"
-          @submit="(b: string) => emit('createThread', b)"
+          @submit="(b: string, r: boolean) => emit('createThread', b, r)"
         />
       </div>
 

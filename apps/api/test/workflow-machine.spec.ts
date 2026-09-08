@@ -50,6 +50,13 @@ describe('node machine', () => {
     expect(nextNodeStatus(noProduce, 'awaiting-review', { type: 'APPROVE' })).toBe('approved');
   });
 
+  it('re-queues on retry rather than jumping to running', () => {
+    // The processor claims `pending` nodes; a RETRY that went straight to
+    // `running` would leave a node nothing ever picks up.
+    expect(nextNodeStatus(gen, 'failed', { type: 'RETRY' })).toBe('pending')
+    expect(nextNodeStatus(gen, 'awaiting-review', { type: 'RETRY' })).toBe('pending')
+  });
+
   it('refuses an illegal transition', () => {
     expect(() => nextNodeStatus(gen, 'materialized', { type: 'APPROVE' })).toThrow(/Cannot APPROVE/);
   });

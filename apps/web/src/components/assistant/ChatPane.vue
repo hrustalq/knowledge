@@ -5,7 +5,12 @@
 import { computed, nextTick, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { MoreHorizontal, PanelLeft, Pencil, Plus, Trash2 } from 'lucide-vue-next'
-import type { AssistantChatAttachment, AssistantChatMode, AssistantThreadSummary } from '@knowledge/contracts'
+import type {
+  AssistantChatAttachment,
+  AssistantChatMode,
+  AssistantMessageInfo,
+  AssistantThreadSummary,
+} from '@knowledge/contracts'
 import { useAssistantStore } from '@/stores/assistant'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -15,6 +20,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import ChatTranscript from './ChatTranscript.vue'
 import ChatComposer from './ChatComposer.vue'
 import { assistantMode } from './use-mode'
@@ -77,6 +90,68 @@ async function handleModeSwitch(intent: string) {
   assistantMode.value = 'agent'
   transcriptEl.value?.scrollToEnd()
   await assistant.sendMessage(intent, props.documentId, { mode: 'agent' })
+  void nextTick(() => composerEl.value?.focus())
+}
+
+/**
+ * Rewinding is confirmed here rather than in the page, so the ChatPane mounted
+ * in the editor's rail gets the same dialog without a second copy of it. It is
+ * confirmed at all because the turns it drops do not come back.
+ */
+const resetting = ref<AssistantMessageInfo | null>(null)
+const rewinding = ref(false)
+
+/** How many turns the pending reset would take with it — the same cut the store makes. */
+const resetCount = computed(() => {
+  const target = resetting.value
+  if (!target) return 0
+  const at = assistant.messages.findIndex((m) => m.id === target.id)
+  if (at < 0) return 1
+  // A reply is re-asked, so the cut starts at the question above it, not at the reply.
+  const from =
+    target.role === 'user'
+      ? at
+      : assistant.messages
+          .slice(0, at)
+          .map((m) => m.role)
+          .lastIndexOf('user')
+  return from < 0 ? 1 : assistant.messages.length - from
+})
+
+async function confirmReset() {
+  const target = resetting.value
+  if (!target || rewinding.value) return
+  rewinding.value = true
+  try {
+    const { restored } = await assistant.resetFrom(target, {
+      documentId: props.documentId,
+      mode: assistantMode.value,
+    })
+    resetting.value = null
+    // A user message comes back to the composer: you rewound to just before
+    // saying it, which is exactly where it was about to be typed.
+    if (restored !== null) {
+      void nextTick(() => composerEl.value?.setDraft(restored))
+    } else {
+      void nextTick(() => composerEl.value?.focus())
+    }
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    rewinding.value = false
+  }
+}
+
+async function handleEdit(payload: { message: AssistantMessageInfo; content: string }) {
+  transcriptEl.value?.scrollToEnd()
+  try {
+    await assistant.editMessage(payload.message.id, payload.content, {
+      documentId: props.documentId,
+      mode: assistantMode.value,
+    })
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
   void nextTick(() => composerEl.value?.focus())
 }
 
@@ -146,6 +221,8 @@ async function startNewThread() {
       :thread-id="assistant.activeThread?.id ?? null"
       @answer="handlePromptAnswer"
       @switch-mode="handleModeSwitch"
+      @reset="resetting = $event"
+      @edit="handleEdit"
     />
 
     <ChatComposer
@@ -158,4 +235,31 @@ async function startNewThread() {
       @stop="assistant.stopStreaming()"
     />
   </section>
+
+  <Dialog :open="resetting !== null" @update:open="(open: boolean) => { if (!open) resetting = null }">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>
+          {{ resetting?.role === 'user' ? 'Reset to before this message?' : 'Ask this question again?' }}
+        </DialogTitle>
+        <DialogDescription>
+          <template v-if="resetting?.role === 'user'">
+            {{ resetCount }} message{{ resetCount === 1 ? '' : 's' }} will be removed from this chat, and the
+            text comes back to the composer. This cannot be undone.
+          </template>
+          <template v-else>
+            {{ resetCount }} message{{ resetCount === 1 ? '' : 's' }} will be removed and the question above
+            asked again. This cannot be undone, and the new turn runs in {{ assistantMode }} mode without any
+            files the original carried.
+          </template>
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button variant="ghost" @click="resetting = null">Cancel</Button>
+        <Button variant="destructive" :disabled="rewinding" @click="confirmReset">
+          {{ rewinding ? 'Rewinding…' : resetting?.role === 'user' ? 'Reset' : 'Ask again' }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>

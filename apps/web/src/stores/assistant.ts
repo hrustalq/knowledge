@@ -22,6 +22,7 @@ import type {
   CreateAssistantThreadResponse,
   GetAssistantThreadResponse,
   ListAssistantThreadsResponse,
+  TruncateAssistantThreadResponse,
   UpdateAssistantThreadResponse,
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
@@ -232,6 +233,71 @@ export const useAssistantStore = defineStore('assistant', {
       const fallback = this.threads[Math.min(index, this.threads.length - 1)]
       if (fallback) await this.openThread(fallback.id)
       else await this.newThread()
+    },
+
+    // ---- Rewinding --------------------------------------------------------
+
+    /**
+     * Drops a message and everything after it. The primitive under both
+     * per-message controls: reset cuts here and stops, an edit cuts here and
+     * sends again.
+     *
+     * Refuses mid-turn. Truncating under a running stream would leave the
+     * reply being written with no message to attach to.
+     */
+    async rewindTo(messageId: string) {
+      const threadId = this.activeThread?.id
+      if (!threadId || this.sending) return
+      const res = await apiFetch<TruncateAssistantThreadResponse>(
+        `/v1/assistant/threads/${threadId}/messages/${messageId}`,
+        { method: 'DELETE' },
+      )
+      this.messages = res.messages
+      this.live = null
+      this.syncSummary(res.thread)
+    },
+
+    /**
+     * Reset — rewind to just before a message.
+     *
+     * On your own message that is literal: it goes, and its text comes back
+     * for the composer. On a reply it means asking again, which cuts from the
+     * *question* above it rather than from the reply — re-sending appends a
+     * fresh user turn, so leaving the old one would show the question twice.
+     *
+     * The re-sent turn carries the chat's current mode and no attachments: a
+     * stored message records neither, so neither can be replayed.
+     */
+    async resetFrom(
+      message: AssistantMessageInfo,
+      opts: { documentId?: string; mode?: AssistantChatMode } = {},
+    ): Promise<{ restored: string | null }> {
+      if (this.sending) return { restored: null }
+      if (message.role === 'user') {
+        await this.rewindTo(message.id)
+        return { restored: message.content }
+      }
+      const at = this.messages.findIndex((m) => m.id === message.id)
+      const question = this.messages.slice(0, at).reverse().find((m) => m.role === 'user')
+      if (!question) {
+        // A reply with nothing above it to re-ask: drop it and stop there.
+        await this.rewindTo(message.id)
+        return { restored: null }
+      }
+      await this.rewindTo(question.id)
+      await this.sendMessage(question.content, opts.documentId, { mode: opts.mode })
+      return { restored: null }
+    },
+
+    /** Edit — rewind past a message and send it again, changed. */
+    async editMessage(
+      messageId: string,
+      content: string,
+      opts: { documentId?: string; mode?: AssistantChatMode } = {},
+    ) {
+      if (this.sending || !content.trim()) return
+      await this.rewindTo(messageId)
+      await this.sendMessage(content, opts.documentId, { mode: opts.mode })
     },
 
     /** Keeps the roster row in step with a thread the server just returned. */

@@ -478,7 +478,9 @@ export class WorkflowsService {
     if (current.status === 'materialized' || current.status === 'approved') {
       await this.runner.spawnChildren(run, current, step);
     }
-    if (type === 'RETRY') await this.producer.enqueue(nodeId);
+    // A fresh jobId: the kept failed job blocks reuse of the original, exactly
+    // as `StaleSweeper.enqueueRetry` handles a re-queued ingestion job.
+    if (type === 'RETRY') await this.producer.enqueueRetry(nodeId, current.attempt);
 
     const runInfo = await this.reconcileRun(runId);
     return { node: this.toNodeInfo(current), run: runInfo };

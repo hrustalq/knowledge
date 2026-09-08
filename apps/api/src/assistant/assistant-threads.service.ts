@@ -11,6 +11,7 @@ import type {
   DeleteAssistantThreadResponse,
   GetAssistantThreadResponse,
   ListAssistantThreadsResponse,
+  TruncateAssistantThreadResponse,
   UpdateAssistantThreadResponse,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -134,6 +135,47 @@ export class AssistantThreadsService {
   }
 
   /**
+   * Rewinds a thread to a message: that message and every message after it are
+   * deleted. One primitive behind both per-message controls in the chat — the
+   * reset button and an edit's save — because both cut inclusively.
+   *
+   * Cuts on an id set read in order rather than on `createdAt >= pivot`:
+   * `assistant_messages.created_at` is not unique, so two rows written in the
+   * same millisecond would make a timestamp comparison ambiguous about which
+   * side of the cut they fall on. A thread holds a conversation's worth of
+   * rows, so reading their ids first costs nothing.
+   */
+  async truncateFrom(threadId: string, messageId: string): Promise<TruncateAssistantThreadResponse> {
+    await this.getThreadOrThrow(threadId);
+    const rows = await this.prisma.assistantMessage.findMany({
+      where: { threadId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    const at = rows.findIndex((r) => r.id === messageId);
+    // Also the answer for a message id belonging to some other thread.
+    if (at < 0) throw new NotFoundException(`Message ${messageId} not found in thread ${threadId}`);
+    const doomed = rows.slice(at).map((r) => r.id);
+
+    const [, thread] = await this.prisma.$transaction([
+      this.prisma.assistantMessage.deleteMany({ where: { id: { in: doomed } } }),
+      // Truncating is not metadata the way a rename is: the conversation
+      // itself changed, so the roster should re-sort around it.
+      this.prisma.assistantThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } }),
+    ]);
+
+    const survivors = await this.prisma.assistantMessage.findMany({
+      where: { threadId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return {
+      removed: doomed.length,
+      thread: this.toSummary(thread, survivors.at(-1)?.content),
+      messages: survivors.map((m) => this.toMessageInfo(m)),
+    };
+  }
+
+  /**
    * Names an untitled thread after its opening message. Threads are created
    * before anything is said, so without this every row in the rail reads "New
    * chat" — and a list you cannot scan is not a history. A manual rename wins
@@ -156,7 +198,7 @@ export class AssistantThreadsService {
     const thread = await this.getThreadOrThrow(threadId);
     const messages = await this.prisma.assistantMessage.findMany({
       where: { threadId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
     return { thread: this.toSummary(thread), messages: messages.map((m) => this.toMessageInfo(m)) };
   }
@@ -171,7 +213,7 @@ export class AssistantThreadsService {
   async recentHistory(threadId: string, limit = 16): Promise<AssistantMessageInfo[]> {
     const rows = await this.prisma.assistantMessage.findMany({
       where: { threadId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
     });
     return rows.reverse().map((m) => this.toMessageInfo(m));

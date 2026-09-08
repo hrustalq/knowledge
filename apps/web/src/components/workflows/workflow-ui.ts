@@ -26,26 +26,42 @@ import type {
  * requests.
  */
 
-export const STEP_KINDS: Array<{ value: WorkflowStepKind; label: string; hint: string; icon: Component }> = [
+export const STEP_KINDS: Array<{
+  value: WorkflowStepKind
+  label: string
+  /** One or two words for the segmented control, where four share a row. */
+  short: string
+  hint: string
+  icon: Component
+}> = [
   {
     value: 'ai.generate',
-    label: 'Generate list',
-    hint: 'The model breaks the source down into items — one child node each. This is the fan-out.',
+    label: 'Break down',
+    short: 'Break down',
+    hint: 'The model breaks the source into a list — one card per item, and the steps below run for each.',
     icon: Sparkles,
   },
   {
     value: 'ai.draft',
-    label: 'Write page',
-    hint: 'The model writes one page body, ready to review and publish.',
+    label: 'Write',
+    short: 'Write',
+    hint: 'The model writes one page, ready to read and publish.',
     icon: FileText,
   },
   {
     value: 'search',
-    label: 'Search knowledge',
-    hint: 'No model: runs a search under this step’s filters and hands the hits to the next step.',
+    label: 'Look up',
+    short: 'Look up',
+    hint: 'No model. Searches the knowledge base and hands what it finds to the next step.',
     icon: Search,
   },
-  { value: 'review', label: 'Review gate', hint: 'Stops and waits for a person. No model call.', icon: UserCheck },
+  {
+    value: 'review',
+    label: 'Wait',
+    short: 'Wait',
+    hint: 'Stops and waits for a person. No model call.',
+    icon: UserCheck,
+  },
 ]
 
 export const stepKind = (kind: WorkflowStepKind) => STEP_KINDS.find((k) => k.value === kind)

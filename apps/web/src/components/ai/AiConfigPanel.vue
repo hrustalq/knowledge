@@ -33,6 +33,10 @@ const settings = computed(() => query.data.value as AiSettingsResponse | undefin
 const PROVIDERS = [
   { value: 'none', label: 'None — assistant disabled' },
   { value: 'deepseek', label: 'DeepSeek' },
+  // gen-api.ru: an OpenAI-compatible aggregator, so one key reaches GPT,
+  // Claude and Gemini models by id. Named rather than left to
+  // "OpenAI-compatible" only so the base URL fills itself in.
+  { value: 'gen-api', label: 'GenAPI (gen-api.ru)' },
   { value: 'openai-compatible', label: 'OpenAI-compatible' },
 ] as const
 

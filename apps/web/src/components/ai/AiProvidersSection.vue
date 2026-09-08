@@ -62,7 +62,7 @@ const editing = ref<AiProviderSummary | null>(null)
 const testingId = ref<string | null>(null)
 const form = ref({
   name: '',
-  provider: 'deepseek' as 'deepseek' | 'openai-compatible',
+  provider: 'deepseek' as 'deepseek' | 'gen-api' | 'openai-compatible',
   baseUrl: '',
   model: '',
   apiKey: '',
@@ -251,6 +251,7 @@ function purposesServedBy(id: string): string[] {
                 <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="deepseek">DeepSeek</SelectItem>
+                  <SelectItem value="gen-api">GenAPI (gen-api.ru)</SelectItem>
                   <SelectItem value="openai-compatible">OpenAI-compatible</SelectItem>
                 </SelectContent>
               </Select>

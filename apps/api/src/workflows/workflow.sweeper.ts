@@ -2,7 +2,9 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WorkflowProducer } from './workflow.producer.js';
 import { WorkflowRunnerService } from './workflow-runner.service.js';
-import { WORKFLOW_MAX_ATTEMPTS, WORKFLOW_NODE_STALE_MS } from './workflow.constants.js';
+import { WORKFLOW_MAX_ATTEMPTS } from './workflow.constants.js';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../config/env.js';
 
 const SWEEP_INTERVAL_MS = 5 * 60_000;
 const BATCH = 20;
@@ -21,17 +23,22 @@ export class WorkflowSweeper implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
 
+  private readonly staleMs: number;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly producer: WorkflowProducer,
     private readonly runner: WorkflowRunnerService,
-  ) {}
+    config: ConfigService<Env, true>,
+  ) {
+    this.staleMs = Number(config.get('WORKFLOW_NODE_STALE_MS', { infer: true }) ?? 15 * 60_000);
+  }
 
   onModuleInit(): void {
     // One sweep shortly after boot, because the most likely reason this process
     // just started is that the last one died holding claimed nodes.
     setTimeout(() => void this.sweep(), 20_000).unref();
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
+    this.timer = setInterval(() => void this.sweep(), Math.min(SWEEP_INTERVAL_MS, this.staleMs));
     this.timer.unref();
   }
 
@@ -43,7 +50,7 @@ export class WorkflowSweeper implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
-      const cutoff = new Date(Date.now() - WORKFLOW_NODE_STALE_MS);
+      const cutoff = new Date(Date.now() - this.staleMs);
 
       // Nodes claimed by a worker that never came back. Returning them to
       // `pending` is safe because a step is only ever *read* before it writes.

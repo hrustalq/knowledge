@@ -43,7 +43,14 @@ const emit = defineEmits<{
   (e: 'stop'): void
 }>()
 
-defineExpose({ focus: () => inputEl.value?.focus() })
+defineExpose({
+  focus: () => inputEl.value?.focus(),
+  /** Reset hands a rewound message back here, ready to send again or rewrite. */
+  setDraft: (text: string) => {
+    draft.value = text
+    void nextTick(() => inputEl.value?.focus())
+  },
+})
 
 const attachments = ref<AssistantChatAttachment[]>([])
 const appliedDocs = ref<AppliedDocRef[]>([])

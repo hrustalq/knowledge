@@ -35,7 +35,12 @@ const props = defineProps<{
   threadId: string | null
 }>()
 
-const emit = defineEmits<{ answer: [string]; switchMode: [string] }>()
+const emit = defineEmits<{
+  answer: [string]
+  switchMode: [string]
+  reset: [AssistantMessageInfo]
+  edit: [{ message: AssistantMessageInfo; content: string }]
+}>()
 
 const scrollEl = ref<HTMLElement | null>(null)
 /** Distance from the bottom still counted as "following along". */
@@ -257,8 +262,11 @@ defineExpose({ scrollToEnd })
                 :message="messageAt(item.index)!"
                 :prompt-active="isNewest(item.index)"
                 :prompt-answer="answerFor(item.index)"
+                :actionable="!live"
                 @answer="emit('answer', $event)"
                 @switch-mode="emit('switchMode', $event)"
+                @reset="emit('reset', $event)"
+                @edit="emit('edit', $event)"
               />
             </template>
             <template v-else-if="live">

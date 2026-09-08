@@ -1182,6 +1182,23 @@ export interface paths {
         patch: operations["AssistantController_updateThread"];
         trace?: never;
     };
+    "/v1/assistant/threads/{id}/messages/{messageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Rewind a chat thread — deletes this message and every message after it, and returns what survives */
+        delete: operations["AssistantController_truncateThread"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assistant/threads/{id}/messages": {
         parameters: {
             query?: never;
@@ -2163,7 +2180,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string|null} */
-            provider?: "none" | "openai-compatible" | "deepseek" | null;
+            provider?: "none" | "openai-compatible" | "deepseek" | "gen-api" | null;
             /** @example https://api.deepseek.com */
             baseUrl?: string | null;
             /** @example deepseek-chat */
@@ -2216,7 +2233,7 @@ export interface components {
             /** @example DeepSeek prod */
             name: string;
             /** @enum {string} */
-            provider: "openai-compatible" | "deepseek";
+            provider: "openai-compatible" | "deepseek" | "gen-api";
             /** @example https://api.deepseek.com */
             baseUrl?: string | null;
             /** @example deepseek-chat */
@@ -2236,7 +2253,7 @@ export interface components {
         UpdateAiProviderDto: {
             name?: string;
             /** @enum {string} */
-            provider?: "openai-compatible" | "deepseek";
+            provider?: "openai-compatible" | "deepseek" | "gen-api";
             baseUrl?: string | null;
             model?: string;
             /** @description Write-only; omit to keep, null to clear */
@@ -6066,6 +6083,44 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateAssistantThreadDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantController_truncateThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

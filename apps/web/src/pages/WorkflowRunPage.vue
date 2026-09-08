@@ -116,6 +116,13 @@ const RUN_ACTION = {
             <ArrowLeft class="size-3" /> All runs
           </RouterLink>
           <h1 class="mt-1 truncate text-lg font-semibold">{{ data.run.definitionName }}</h1>
+          <p
+            v-if="data.run.nodeStats.awaitingReview"
+            class="mt-1 text-sm font-medium text-amber-600 dark:text-amber-500"
+          >
+            {{ data.run.nodeStats.awaitingReview }} card{{ data.run.nodeStats.awaitingReview === 1 ? '' : 's' }}
+            waiting for you
+          </p>
           <p class="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
             <component
               :is="RUN_STATUS_ICON[data.run.status]"
@@ -128,9 +135,7 @@ const RUN_ACTION = {
               {{ data.run.rootDocumentTitle ?? 'source page' }}
             </RouterLink>
             <span>· started {{ relativeTime(data.run.startedAt ?? data.run.createdAt) }}</span>
-            <span v-if="data.run.nodeStats.awaitingReview" class="text-amber-600 dark:text-amber-500">
-              · {{ data.run.nodeStats.awaitingReview }} awaiting review
-            </span>
+            <span>· {{ data.run.nodeStats.materialized }} of {{ data.run.nodeStats.total }} published</span>
           </p>
         </div>
 
@@ -155,24 +160,31 @@ const RUN_ACTION = {
       </p>
 
       <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
-        <aside class="min-h-0 overflow-auto rounded-lg border p-2">
+        <aside class="flex min-h-0 flex-col overflow-hidden rounded-lg border">
+          <p class="text-muted-foreground border-b px-3 py-2 text-xs font-medium">
+            What this run produced
+          </p>
+          <div class="min-h-0 flex-1 overflow-auto p-2">
           <WorkflowRunTree
             :nodes="nodes"
             :graph="data.graph"
             :selected-id="selectedId"
             @select="(id) => (selectedId = id)"
           />
+          </div>
         </aside>
 
-        <section class="min-h-0 rounded-lg border p-4">
+        <section class="flex min-h-0 flex-col overflow-hidden rounded-lg border p-4">
           <WorkflowNodePanel
             v-if="selected"
             :node="selected"
             :graph="data.graph"
+            :nodes="nodes"
             :can-edit="auth.canEdit"
             :busy="busy"
             @event="sendNodeEvent"
             @save="persistDraft"
+            @select="(id) => (selectedId = id)"
           />
           <p v-else class="text-muted-foreground py-16 text-center text-sm">
             This run has produced nothing yet.

@@ -23,6 +23,8 @@ import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } 
 const props = defineProps<{
   node: WorkflowRunNodeInfo
   graph: WorkflowGraph
+  /** The whole run, so a fan-out step can show what it produced. */
+  nodes: WorkflowRunNodeInfo[]
   canEdit: boolean
   busy: boolean
 }>()
@@ -30,7 +32,15 @@ const props = defineProps<{
 const emit = defineEmits<{
   event: [WorkflowNodeEventType, { title: string; markdown: string } | undefined]
   save: [{ title: string; markdown: string }]
+  select: [string]
 }>()
+
+/**
+ * A step that broke the source down has no page of its own — its output *is*
+ * the cards below it. Saying "nothing was produced" there was true of the
+ * draft column and false of the step, which is the worst kind of empty state.
+ */
+const children = computed(() => props.nodes.filter((n) => n.parentId === props.node.id))
 
 const step = computed(() => props.graph.steps.find((s) => s.id === props.node.stepId) ?? null)
 
@@ -95,14 +105,44 @@ function approve() {
       {{ node.error }}
     </p>
 
-    <div v-if="!node.draft" class="text-muted-foreground rounded-md border border-dashed py-10 text-center text-sm">
-      <template v-if="node.status === 'pending' || node.status === 'running'">
-        This step has not produced anything yet.
-      </template>
-      <template v-else>Nothing was produced for this step.</template>
+    <div v-if="children.length" class="space-y-2">
+      <p class="text-muted-foreground text-xs">
+        This step broke the source into {{ children.length }} item{{ children.length === 1 ? '' : 's' }}.
+      </p>
+      <ul class="divide-y overflow-hidden rounded-md border">
+        <li v-for="child in children" :key="child.id">
+          <button
+            type="button"
+            class="hover:bg-muted/40 focus-visible:ring-ring flex w-full items-start gap-2 px-3 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:-outline-offset-2"
+            @click="emit('select', child.id)"
+          >
+            <component
+              :is="NODE_STATUS_ICON[child.status]"
+              class="mt-0.5 size-3.5 shrink-0"
+              :class="[NODE_STATUS_CLASS[child.status], isBusyStatus(child.status) ? 'animate-spin' : '']"
+            />
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-[13px]">{{ child.draft?.title ?? 'Untitled' }}</span>
+              <span class="text-muted-foreground block truncate text-[11px]">
+                {{ child.draft?.summary || NODE_STATUS_LABEL[child.status] }}
+              </span>
+            </span>
+          </button>
+        </li>
+      </ul>
     </div>
 
-    <template v-else>
+    <div
+      v-else-if="!node.draft"
+      class="text-muted-foreground rounded-md border border-dashed py-10 text-center text-sm"
+    >
+      <template v-if="node.status === 'pending' || node.status === 'running'">
+        Working on this step…
+      </template>
+      <template v-else>This step passed its result to the next one.</template>
+    </div>
+
+    <template v-else-if="node.draft">
       <div v-if="editing" class="space-y-3">
         <label class="block space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">Title</span>

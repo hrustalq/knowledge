@@ -59,10 +59,13 @@ export const envSchema = z.object({
 
   /**
    * Feature 09 AI assistant (docs/features/09) — 'none' disables the LLM endpoints.
-   * All non-none providers use the official `openai` SDK; `deepseek` defaults
-   * BASE_URL/MODEL to https://api.deepseek.com + deepseek-chat.
+   * All non-none providers use the official `openai` SDK. `deepseek` and
+   * `gen-api` are named shorthands that only pre-fill BASE_URL/MODEL from
+   * PROVIDER_DEFAULTS — https://api.deepseek.com and
+   * https://proxy.gen-api.ru/v1 respectively. gen-api.ru is an aggregator, so
+   * one credential reaches GPT, Claude and Gemini models by id.
    */
-  ASSISTANT_PROVIDER: z.enum(['none', 'openai-compatible', 'deepseek']).default('none'),
+  ASSISTANT_PROVIDER: z.enum(['none', 'openai-compatible', 'deepseek', 'gen-api']).default('none'),
   ASSISTANT_BASE_URL: z.string().optional().default(''),
   ASSISTANT_MODEL: z.string().optional().default(''),
   ASSISTANT_API_KEY: z.string().optional().default(''),
@@ -90,6 +93,14 @@ export const envSchema = z.object({
    * event trigger is an LLM avalanche, not a slow queue.
    */
   WORKFLOW_AUTOSTART_MAX_ACTIVE: z.coerce.number().int().min(0).default(5),
+
+  /**
+   * How long a workflow node may sit claimed (`running`) before the sweeper
+   * assumes the worker that took it died and returns it to the queue.
+   * Generous by default: a drafting step with tools legitimately takes minutes,
+   * and re-queueing a live step means paying for the model call twice.
+   */
+  WORKFLOW_NODE_STALE_MS: z.coerce.number().int().min(1000).default(15 * 60_000),
 
   /** Merge gating: approvals required to merge (the author's own approval never counts; 0 disables the gate). */
   MR_REQUIRED_APPROVALS: z.coerce.number().int().min(0).default(1),

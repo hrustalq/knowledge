@@ -55,12 +55,13 @@ export class WorkflowProcessor extends WorkerHost {
       const result = await this.executors.run(step, node, run);
 
       if (result.kind === 'items') {
-        // A fan-out step's own node is done; each produced item becomes a child
-        // node holding a reviewable draft.
+        // A fan-out step's own node did its job the moment it produced the
+        // list: each item becomes a child node holding a reviewable draft, and
+        // *those* carry the chain forward when they are approved. The parent
+        // deliberately does NOT open `step.next` — doing so produced a second,
+        // parentless copy of every downstream step hanging off the list itself.
         await this.runner.fanOut(run, node, step, result.items);
-        await this.runner.setStatus(nodeId, step.produces ? 'skipped' : 'approved', {
-          output: { items: result.items },
-        });
+        await this.runner.setStatus(nodeId, 'approved', { output: { items: result.items } });
       } else {
         const draft = result.kind === 'draft' ? result.draft : null;
         if (draft) await this.runner.writeDraft(nodeId, draft, draft);
@@ -78,9 +79,12 @@ export class WorkflowProcessor extends WorkerHost {
       }
 
       // A non-fan-out step that needs no review opens its children right away.
-      const after = await this.runner.loadNode(nodeId);
-      if (after && (after.node.status === 'approved' || after.node.status === 'skipped')) {
-        await this.runner.spawnChildren(run, after.node, step);
+      // Fan-out steps are excluded above: their items are the continuation.
+      if (result.kind !== 'items') {
+        const after = await this.runner.loadNode(nodeId);
+        if (after && after.node.status === 'approved') {
+          await this.runner.spawnChildren(run, after.node, step);
+        }
       }
     } catch (e) {
       const message = (e as Error).message;

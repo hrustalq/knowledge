@@ -62,6 +62,9 @@ export function createRouter() {
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on
           // auth.canAdminWorkspace and the API enforces the admin role.
+          // Deliberately not meta.fill: that drops <main>'s padding, which the
+          // settings shell's negative-margin bleed depends on. The workbench
+          // bounds its own panes instead.
           { path: 'workflows', component: () => import('@/pages/WorkflowSettingsPage.vue') },
           // Access control (page gates mutations by workspace role)
           { path: 'access', component: () => import('@/pages/AccessControlPage.vue') },

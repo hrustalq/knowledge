@@ -163,7 +163,7 @@ watch(starting, (open) => {
 </script>
 
 <template>
-  <div class="flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-4">
+  <div class="flex min-h-0 w-full flex-1 flex-col gap-4">
     <header class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="text-lg font-semibold">Workflow runs</h1>

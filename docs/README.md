@@ -18,3 +18,9 @@ architecture document; these docs cover the product-feature layer on top of it.
 | 9   | AI assistant                               | [features/09-ai-assistant.md](features/09-ai-assistant.md)           | ✅ MVP         |
 | 10  | Activity feed                              | [features/10-activity-feed.md](features/10-activity-feed.md)         | ✅ implemented |
 | 11  | Projects (Workspace > Project > Document)  | [features/11-projects.md](features/11-projects.md)                   | ✅ implemented |
+| 12  | AI settings (per-workspace)                | [features/12-ai-settings.md](features/12-ai-settings.md)             | ✅ implemented |
+| 13  | Review mode (annotate a merge request)     | [features/13-review-mode.md](features/13-review-mode.md)             | ✅ implemented |
+| 14  | Glossary                                   | [features/14-glossary.md](features/14-glossary.md)                   | ✅ implemented |
+| 15  | Page comments                              | [features/15-page-comments.md](features/15-page-comments.md)         | ✅ implemented |
+| 16  | Document import                            | —                                                                    | ✅ implemented, undocumented |
+| 17  | Dynamic document workflows                 | [features/17-workflows.md](features/17-workflows.md)                 | ✅ implemented |

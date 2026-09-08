@@ -16,6 +16,14 @@ import { decryptSecret, parseKey } from './secret-box.js';
  */
 export const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; model: string }> = {
   deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
+  /**
+   * gen-api.ru is an OpenAI-compatible aggregator (the shape OpenRouter has):
+   * one credential, many upstream models addressed by id, on a dedicated
+   * proxy subdomain rather than the marketing domain. `model` is therefore a
+   * default rather than a constraint — `claude-sonnet-4-5`, `gemini-2-5-flash`
+   * and the rest are all valid values for it.
+   */
+  'gen-api': { baseUrl: 'https://proxy.gen-api.ru/v1', model: 'gpt-4-1' },
 };
 
 /**
@@ -30,6 +38,10 @@ const MODEL_PRICES: Record<string, { prompt: number; completion: number }> = {
   'gpt-4o-mini': { prompt: 0.15, completion: 0.6 },
   'gpt-4.1': { prompt: 2, completion: 8 },
   'gpt-4.1-mini': { prompt: 0.4, completion: 1.6 },
+  // gen-api addresses the same models under its own ids.
+  'gpt-4-1': { prompt: 2, completion: 8 },
+  'claude-sonnet-4-5': { prompt: 3, completion: 15 },
+  'claude-opus-4-5': { prompt: 5, completion: 25 },
 };
 
 /** Effective assistant configuration for one workspace: DB overrides ∪ env ∪ provider defaults. */

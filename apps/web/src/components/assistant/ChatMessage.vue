@@ -8,10 +8,11 @@
 // page with a marker in the left gutter instead. Wrapping that in a tinted
 // bubble would fight every block inside it, and a knowledge base's answers
 // deserve to look like the knowledge base.
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Check, Sparkles, X } from 'lucide-vue-next'
+import { Check, Copy, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
 import type { AssistantMessageInfo, AssistantUiBlock } from '@knowledge/contracts'
+import { Button } from '@/components/ui/button'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
 import AssistantPrompt from './AssistantPrompt.vue'
@@ -27,25 +28,124 @@ const props = defineProps<{
   promptActive?: boolean
   /** The user turn that answered this message's prompt, when it has one. */
   promptAnswer?: string
+  /** False while a turn is in flight: rewinding under a running stream is not offered. */
+  actionable?: boolean
 }>()
 
-const emit = defineEmits<{ answer: [string]; switchMode: [string] }>()
+const emit = defineEmits<{
+  answer: [string]
+  switchMode: [string]
+  /** Rewind to just before this message. Confirmed by whoever owns the dialog. */
+  reset: [AssistantMessageInfo]
+  /** Rewind past this message and send it again, changed. */
+  edit: [{ message: AssistantMessageInfo; content: string }]
+}>()
 
 const body = computed(() => props.streamingText ?? props.message.content)
 const blocks = computed(() => props.streamingBlocks ?? props.message.uiBlocks)
 const isUser = computed(() => props.message.role === 'user')
+
+/**
+ * Actions need a message the server knows about. The optimistic bubble carries
+ * a `pending-…` id until the first frame replaces it, and rewinding to an id
+ * the server never issued would 404.
+ */
+const canAct = computed(
+  () => props.actionable !== false && props.streamingText === undefined && !props.message.id.startsWith('pending-'),
+)
+
+const copied = ref(false)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copy() {
+  try {
+    await navigator.clipboard.writeText(props.message.content)
+    copied.value = true
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => (copied.value = false), 1500)
+  } catch {
+    // Denied permission or an insecure origin: the button simply does nothing
+    // rather than throwing a toast at someone who can still select the text.
+  }
+}
+
+// Editing happens in place — the bubble becomes its own textarea. Sending the
+// text back to the composer instead would move it away from the turn it is
+// about, and the transcript is where the mistake is visible.
+const editing = ref(false)
+const draft = ref('')
+const editEl = ref<HTMLTextAreaElement | null>(null)
+
+function startEdit() {
+  draft.value = props.message.content
+  editing.value = true
+  void nextTick(() => {
+    editEl.value?.focus()
+    editEl.value?.setSelectionRange(draft.value.length, draft.value.length)
+  })
+}
+
+function saveEdit() {
+  const content = draft.value.trim()
+  if (!content || content === props.message.content) {
+    editing.value = false
+    return
+  }
+  editing.value = false
+  emit('edit', { message: props.message, content })
+}
 </script>
 
 <template>
-  <article v-if="isUser" class="flex justify-end pl-10">
-    <div
-      class="max-w-[42rem] rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm whitespace-pre-wrap text-primary-foreground shadow-sm shadow-primary/20"
-    >
-      {{ message.content }}
+  <article v-if="isUser" class="kn-msg flex flex-col items-end pl-10">
+    <!-- Editing in place: the bubble is replaced by a box the same width, so
+         the turn does not move while it is being rewritten. -->
+    <div v-if="editing" class="w-full max-w-[42rem] space-y-2">
+      <textarea
+        ref="editEl"
+        v-model="draft"
+        rows="3"
+        class="w-full resize-y rounded-2xl border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/25"
+        @keydown.esc.prevent="editing = false"
+        @keydown.enter.meta.prevent="saveEdit"
+        @keydown.enter.ctrl.prevent="saveEdit"
+      />
+      <div class="flex items-center justify-end gap-2">
+        <p class="mr-auto text-[11px] text-muted-foreground">Saving restarts the conversation from here.</p>
+        <Button variant="ghost" size="sm" @click="editing = false">Cancel</Button>
+        <Button size="sm" :disabled="!draft.trim()" @click="saveEdit">Save</Button>
+      </div>
     </div>
+
+    <template v-else>
+      <div
+        class="max-w-[42rem] rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm whitespace-pre-wrap text-primary-foreground shadow-sm shadow-primary/20"
+      >
+        {{ message.content }}
+      </div>
+
+      <div v-if="canAct" class="kn-msg-actions mt-1 flex items-center gap-0.5">
+        <button type="button" class="kn-msg-action" :aria-label="copied ? 'Copied' : 'Copy message'" @click="copy">
+          <Check v-if="copied" class="size-3.5 text-emerald-500" />
+          <Copy v-else class="size-3.5" />
+        </button>
+        <button type="button" class="kn-msg-action" aria-label="Edit message" title="Edit" @click="startEdit">
+          <Pencil class="size-3.5" />
+        </button>
+        <button
+          type="button"
+          class="kn-msg-action"
+          aria-label="Reset the conversation to before this message"
+          title="Reset to here"
+          @click="emit('reset', message)"
+        >
+          <RotateCcw class="size-3.5" />
+        </button>
+      </div>
+    </template>
   </article>
 
-  <article v-else class="flex gap-3">
+  <article v-else class="kn-msg flex gap-3">
     <span
       class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15"
       aria-hidden="true"
@@ -98,6 +198,66 @@ const isUser = computed(() => props.message.role === 'user')
           </RouterLink>
         </div>
       </footer>
+
+      <!-- No edit here: rewriting a reply would leave the transcript claiming
+           the model said something it did not. Reset asks the question again. -->
+      <div v-if="canAct" class="kn-msg-actions flex items-center gap-0.5">
+        <button type="button" class="kn-msg-action" :aria-label="copied ? 'Copied' : 'Copy reply'" @click="copy">
+          <Check v-if="copied" class="size-3.5 text-emerald-500" />
+          <Copy v-else class="size-3.5" />
+        </button>
+        <button
+          type="button"
+          class="kn-msg-action"
+          aria-label="Discard this reply and ask again"
+          title="Ask again"
+          @click="emit('reset', message)"
+        >
+          <RotateCcw class="size-3.5" />
+        </button>
+      </div>
     </div>
   </article>
 </template>
+
+<style scoped>
+/*
+ * Revealed on hover, but only where hovering is a thing. Tailwind's
+ * `group-hover:` would leave these unreachable on a touch screen — and the
+ * chat is used on one — so this follows `.kn-comment-actions` (styles/
+ * editor.css) and lets them stand permanently visible without a pointer.
+ */
+.kn-msg-actions {
+  transition: opacity 120ms ease-out;
+}
+@media (hover: hover) {
+  .kn-msg-actions {
+    opacity: 0;
+  }
+  .kn-msg:hover .kn-msg-actions,
+  .kn-msg-actions:focus-within {
+    opacity: 1;
+  }
+}
+
+.kn-msg-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.375rem;
+  color: var(--muted-foreground);
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+.kn-msg-action:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.kn-msg-action:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+</style>

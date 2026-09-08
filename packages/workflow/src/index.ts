@@ -106,7 +106,10 @@ export const nodeMachine = setup({
         ],
         REJECT: 'rejected',
         SKIP: 'skipped',
-        RETRY: 'running',
+        // Back to the queue, not straight to work: the processor claims
+        // `pending` nodes, so a RETRY that jumped to `running` would produce a
+        // node nothing ever picks up.
+        RETRY: 'pending',
       },
     },
     // An auto-approved step still lands here, so "approved" and "materialized"
@@ -119,7 +122,7 @@ export const nodeMachine = setup({
     rejected: { type: 'final' },
     skipped: { type: 'final' },
     failed: {
-      on: { RETRY: 'running', SKIP: 'skipped' },
+      on: { RETRY: 'pending', SKIP: 'skipped' },
     },
   },
 });

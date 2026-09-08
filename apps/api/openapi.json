@@ -4801,6 +4801,58 @@
         ]
       }
     },
+    "/v1/assistant/threads/{id}/messages/{messageId}": {
+      "delete": {
+        "operationId": "AssistantController_truncateThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rewind a chat thread — deletes this message and every message after it, and returns what survives",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/v1/assistant/threads/{id}/messages": {
       "post": {
         "operationId": "AssistantController_postMessage",
@@ -8404,7 +8456,8 @@
             "enum": [
               "none",
               "openai-compatible",
-              "deepseek"
+              "deepseek",
+              "gen-api"
             ],
             "nullable": true
           },
@@ -8524,7 +8577,8 @@
             "type": "string",
             "enum": [
               "openai-compatible",
-              "deepseek"
+              "deepseek",
+              "gen-api"
             ]
           },
           "baseUrl": {
@@ -8591,7 +8645,8 @@
             "type": "string",
             "enum": [
               "openai-compatible",
-              "deepseek"
+              "deepseek",
+              "gen-api"
             ]
           },
           "baseUrl": {

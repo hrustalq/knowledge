@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { VueFlow, useVueFlow, type Connection, type Edge, type Node, type NodeChange } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
+// Vue Flow ships unstyled, and its node positioning *is* CSS: without these the
+// canvas renders blank even though the nodes are in the DOM.
+import '@vue-flow/core/dist/style.css'
+import '@vue-flow/core/dist/theme-default.css'
+import '@vue-flow/controls/dist/style.css'
 import { Plus, TriangleAlert } from 'lucide-vue-next'
 import type { WorkflowGraph, WorkflowStep, WorkflowStepKind, WorkflowValidationIssue } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
@@ -35,7 +40,7 @@ const emit = defineEmits<{
 const mounted = ref(false)
 onMounted(() => (mounted.value = true))
 
-const { onConnect, removeEdges } = useVueFlow()
+const { onConnect, removeEdges, fitView } = useVueFlow()
 
 /** Errors are per-step, so a node can show its own problem rather than a banner. */
 const issuesByStep = computed(() => {
@@ -82,6 +87,16 @@ const edges = computed<Edge[]>(() =>
       })),
   ),
 )
+
+/** What a node tells you at a glance: its job, then what comes out of it. */
+function nodeSummary(step: WorkflowStep): string {
+  const kind = stepKind(step.kind)?.label ?? step.kind
+  if (step.fanOut) return `${kind} → a list of ${step.produces?.category ?? 'item'} pages`
+  if (step.produces) {
+    return `${kind} → one ${step.produces.category} page${step.autoApprove ? ', published straight away' : ''}`
+  }
+  return `${kind} → context for the next step`
+}
 
 function commit(steps: WorkflowStep[], layout = props.graph.layout) {
   emit('update:graph', { steps, layout })
@@ -139,6 +154,20 @@ function addStep(kind: WorkflowStepKind) {
   emit('update:selectedId', id)
 }
 
+// `fit-view-on-init` fires before the nodes computed has resolved, so the first
+// paint left the graph parked in a corner. Fit once, when nodes first appear.
+const fitted = ref(false)
+watch(
+  () => nodes.value.length,
+  async (count) => {
+    if (fitted.value || count === 0) return
+    fitted.value = true
+    await nextTick()
+    fitView({ padding: 0.2 })
+  },
+  { immediate: true },
+)
+
 // Deleting the selected step must also clear the selection, or the side panel
 // keeps editing a step that is no longer in the graph.
 watch(
@@ -152,18 +181,19 @@ watch(
 </script>
 
 <template>
-  <div class="bg-muted/20 relative h-[28rem] overflow-hidden rounded-lg border lg:h-[34rem]">
+  <div class="bg-muted/15 relative min-h-0 flex-1 overflow-hidden rounded-lg border">
     <div
       v-if="canManage"
-      class="bg-background/85 absolute top-2 left-2 z-10 flex flex-wrap items-center gap-1 rounded-md border p-1 backdrop-blur"
+      class="bg-background/90 absolute top-3 left-3 z-10 flex max-w-[calc(100%_-_1.5rem)] items-center gap-0.5 overflow-x-auto rounded-lg border p-1 shadow-xs backdrop-blur"
     >
-      <span class="text-muted-foreground px-1.5 text-xs font-medium">Add</span>
+      <span class="text-muted-foreground shrink-0 px-2 text-[11px] font-medium whitespace-nowrap">Add a step</span>
+      <span class="bg-border mx-0.5 h-4 w-px" aria-hidden="true" />
       <Button
         v-for="kind in STEP_KINDS"
         :key="kind.value"
         variant="ghost"
         size="sm"
-        class="h-7 gap-1 px-2 text-xs"
+        class="h-7 shrink-0 gap-1.5 px-2 text-xs whitespace-nowrap"
         :title="kind.hint"
         @click="addStep(kind.value)"
       >
@@ -193,23 +223,20 @@ watch(
       @edge-click="(e: { edge: Edge }) => onEdgeClick(e.edge.id)"
     >
       <template #node-default="slotProps">
-        <div class="min-w-[10rem] max-w-[14rem] px-3 py-2 text-left">
-          <div class="flex items-center gap-1.5">
+        <div class="w-[12rem] px-3 py-2.5 text-left">
+          <div class="flex items-start gap-2">
             <component
               :is="stepKind(slotProps.data.step.kind)?.icon"
-              class="text-muted-foreground size-3.5 shrink-0"
+              class="text-muted-foreground mt-px size-4 shrink-0"
             />
-            <span class="truncate text-xs font-medium">{{ slotProps.data.step.title || slotProps.id }}</span>
-            <TriangleAlert v-if="slotProps.data.invalid" class="text-destructive ml-auto size-3.5 shrink-0" />
-          </div>
-          <div class="text-muted-foreground mt-1 flex flex-wrap items-center gap-1 text-[10px]">
-            <span>{{ stepKind(slotProps.data.step.kind)?.label }}</span>
-            <span v-if="slotProps.data.step.fanOut" class="bg-muted rounded px-1">fan-out</span>
-            <span v-if="slotProps.data.step.autoApprove" class="bg-muted rounded px-1">auto</span>
-            <span v-if="slotProps.data.step.produces" class="bg-muted rounded px-1">
-              → {{ slotProps.data.step.produces.category }}
+            <span class="min-w-0 flex-1 text-[13px] leading-snug font-medium">
+              {{ slotProps.data.step.title || slotProps.id }}
             </span>
+            <TriangleAlert v-if="slotProps.data.invalid" class="text-destructive mt-px size-3.5 shrink-0" />
           </div>
+          <p class="text-muted-foreground mt-1.5 pl-6 text-[11px] leading-snug">
+            {{ nodeSummary(slotProps.data.step) }}
+          </p>
         </div>
       </template>
 
@@ -228,24 +255,42 @@ watch(
 
 <style>
 /* VueFlow renders its own node shell, so these have to be unscoped. */
+/* A card lifts off the canvas by being whiter than it, not by casting a shadow
+   — the inversion this design system uses everywhere instead of depth. */
 .kn-wf-node {
-  border-radius: 0.5rem;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--card-foreground);
-  font-size: 0.75rem;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  transition:
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out;
 }
+.kn-wf-node:hover {
+  border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+}
+/* Indigo marks structure — here, the step you are editing. */
 .kn-wf-node--selected {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 30%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 14%, transparent);
 }
 .kn-wf-node--invalid {
   border-color: var(--destructive);
 }
+.kn-wf-node--invalid.kn-wf-node--selected {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 14%, transparent);
+}
 .vue-flow__edge-path {
-  stroke: var(--muted-foreground);
+  stroke: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
   stroke-width: 1.5;
+  transition: stroke 160ms ease-out;
+}
+.vue-flow__edge:hover .vue-flow__edge-path {
+  stroke: var(--destructive);
+}
+/* An edge is removed by clicking it, so it has to say so on hover. */
+.vue-flow__edge {
+  cursor: pointer;
 }
 .vue-flow__handle {
   background: var(--primary);

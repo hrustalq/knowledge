@@ -1348,6 +1348,18 @@ export interface DeleteAssistantThreadResponse {
   ok: boolean;
 }
 
+// DELETE /v1/assistant/threads/:id/messages/:messageId
+// Rewinds the thread: drops that message and every message after it. What the
+// per-message reset and edit controls cut with — both cut inclusively, which
+// is why there is no mode flag.
+export interface TruncateAssistantThreadResponse {
+  /** How many messages were dropped. */
+  removed: number;
+  thread: AssistantThreadSummary;
+  /** The surviving history, oldest first — the client replaces its state with this. */
+  messages: AssistantMessageInfo[];
+}
+
 // POST /v1/assistant/threads/:id/messages
 export interface PostAssistantMessageRequest {
   content: string;
@@ -1847,7 +1859,7 @@ export interface AiSettingsSourceMap {
   timeoutMs: AiSettingsSource;
 }
 
-export type AiProvider = 'none' | 'openai-compatible' | 'deepseek';
+export type AiProvider = 'none' | 'openai-compatible' | 'deepseek' | 'gen-api';
 
 // GET /v1/ai/settings?workspaceId= — the credential itself is never returned.
 export interface AiSettingsResponse {
@@ -1880,7 +1892,7 @@ export interface AiSettingsResponse {
 
 // ---- Provider profiles & routing -------------------------------------------
 
-export type AiProviderKind = 'openai-compatible' | 'deepseek';
+export type AiProviderKind = 'openai-compatible' | 'deepseek' | 'gen-api';
 export type AiProviderStatus = 'unknown' | 'ok' | 'error';
 
 /**

@@ -35,11 +35,11 @@ export class UpdateAiSettingsDto {
   @IsUUID()
   workspaceId!: string;
 
-  @ApiPropertyOptional({ enum: ['none', 'openai-compatible', 'deepseek'], type: String, nullable: true })
+  @ApiPropertyOptional({ enum: ['none', 'openai-compatible', 'deepseek', 'gen-api'], type: String, nullable: true })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('provider')
-  @IsIn(['none', 'openai-compatible', 'deepseek'])
-  provider?: 'none' | 'openai-compatible' | 'deepseek' | null;
+  @IsIn(['none', 'openai-compatible', 'deepseek', 'gen-api'])
+  provider?: 'none' | 'openai-compatible' | 'deepseek' | 'gen-api' | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, example: 'https://api.deepseek.com' })
   @IsOptional()
@@ -171,9 +171,9 @@ export class CreateAiProviderDto {
   @MaxLength(120)
   name!: string;
 
-  @ApiProperty({ enum: ['openai-compatible', 'deepseek'] })
-  @IsIn(['openai-compatible', 'deepseek'])
-  provider!: 'openai-compatible' | 'deepseek';
+  @ApiProperty({ enum: ['openai-compatible', 'deepseek', 'gen-api'] })
+  @IsIn(['openai-compatible', 'deepseek', 'gen-api'])
+  provider!: 'openai-compatible' | 'deepseek' | 'gen-api';
 
   @ApiPropertyOptional({ type: String, nullable: true, example: 'https://api.deepseek.com' })
   @IsOptional()
@@ -247,10 +247,10 @@ export class UpdateAiProviderDto {
   @MaxLength(120)
   name?: string;
 
-  @ApiPropertyOptional({ enum: ['openai-compatible', 'deepseek'] })
+  @ApiPropertyOptional({ enum: ['openai-compatible', 'deepseek', 'gen-api'] })
   @IsOptional()
-  @IsIn(['openai-compatible', 'deepseek'])
-  provider?: 'openai-compatible' | 'deepseek';
+  @IsIn(['openai-compatible', 'deepseek', 'gen-api'])
+  provider?: 'openai-compatible' | 'deepseek' | 'gen-api';
 
   @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()

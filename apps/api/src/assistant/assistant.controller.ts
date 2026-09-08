@@ -106,6 +106,22 @@ export class AssistantController {
     return this.threads.deleteThread(id);
   }
 
+  /**
+   * Rewind. Reach is deliberately the same as deleting the whole thread above:
+   * truncating one cannot need more than removing all of it.
+   */
+  @Delete('threads/:id/messages/:messageId')
+  @Access('viewer', 'assistant-thread')
+  @ApiOperation({
+    summary: 'Rewind a chat thread — deletes this message and every message after it, and returns what survives',
+  })
+  truncateThread(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+  ) {
+    return this.threads.truncateFrom(id, messageId);
+  }
+
   @Post('threads/:id/messages')
   @Access('viewer', 'assistant-thread')
   @ApiOperation({

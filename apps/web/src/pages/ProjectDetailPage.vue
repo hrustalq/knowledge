@@ -85,7 +85,7 @@ async function remove() {
     {{ store.loaded ? 'Project not found in this workspace.' : 'Loading…' }}
   </p>
 
-  <div v-else class="max-w-2xl space-y-6">
+  <div v-else class="space-y-6">
     <header class="space-y-2">
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ project.name }}</h1>
       <div class="flex flex-wrap items-center gap-2">

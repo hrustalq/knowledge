@@ -1,0 +1,21 @@
+{
+  "name": "@knowledge/workflow",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "echo workflow: no lint",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@knowledge/contracts": "workspace:*",
+    "xstate": "^5.32.6"
+  },
+  "devDependencies": {
+    "@knowledge/tsconfig": "workspace:*",
+    "typescript": "^5.7.0"
+  }
+}

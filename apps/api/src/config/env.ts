@@ -84,6 +84,13 @@ export const envSchema = z.object({
   /** Feature 04: max dependent documents re-indexed per indexed revision (0 disables). */
   DEPENDENT_REINDEX_MAX: z.coerce.number().int().min(0).default(20),
 
+  /**
+   * Dynamic workflows (docs/features/17): how many auto-started runs one
+   * workspace may have in flight. The cap exists because the failure mode of an
+   * event trigger is an LLM avalanche, not a slow queue.
+   */
+  WORKFLOW_AUTOSTART_MAX_ACTIVE: z.coerce.number().int().min(0).default(5),
+
   /** Merge gating: approvals required to merge (the author's own approval never counts; 0 disables the gate). */
   MR_REQUIRED_APPROVALS: z.coerce.number().int().min(0).default(1),
 
@@ -92,6 +99,18 @@ export const envSchema = z.object({
 
   /** Rich-editor page attachments: hard per-file ceiling (bytes), enforced at presign and again on confirm. */
   ATTACHMENT_MAX_BYTES: z.coerce.number().int().positive().default(26_214_400),
+
+  /**
+   * Document import (docs/features/16). The ceiling is larger than an
+   * attachment's because the thing being uploaded is a whole book of a PDF, not
+   * a screenshot; it is enforced at presign and again from the bucket's own
+   * HEAD, so a client that lies about `sizeBytes` still cannot get past it.
+   */
+  IMPORT_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
+  /** Wall-clock ceiling for one parse, so a pathological file fails instead of pinning a worker. */
+  IMPORT_PARSE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  /** Vision-OCR page ceiling — bounds the spend a single scanned PDF can incur. */
+  IMPORT_OCR_MAX_PAGES: z.coerce.number().int().positive().default(20),
 
   /** Live tracked-entity updates over WebSocket (/v1/events/ws). */
   LIVE_WS_ENABLED: z.coerce.boolean().default(true),

@@ -15,6 +15,8 @@ import { AuditService } from '../auth/audit.service.js';
 import { HistoryService } from '../documents/history.service.js';
 import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
+import { WorkflowsService } from '../workflows/workflows.service.js';
+import { AUTHOR_ID_STUB } from '../documents/merge-requests.service.js';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -34,6 +36,9 @@ import { ProjectsService } from '../projects/projects.service.js';
  *   knowledge_get_historical_context → knowledge.get_historical_context (Phase 5)
  *   knowledge_ingest            → knowledge.ingest            (Phase 5)
  *   knowledge_list_projects     → knowledge.list_projects     (projects layer)
+ *   knowledge_list_workflows    → knowledge.list_workflows    (workflows, feature 17)
+ *   knowledge_start_workflow    → knowledge.start_workflow
+ *   knowledge_get_workflow_run  → knowledge.get_workflow_run
  *
  * Merge-request tools (create/list/get/approve/close/comment/merge) act as
  * the zeros AUTHOR_ID_STUB — stdio has no principal, so authorship/approvals
@@ -54,6 +59,7 @@ export class McpService {
     private readonly audit: AuditService,
     private readonly history: HistoryService,
     private readonly ingestionAdmin: IngestionAdminService,
+    private readonly workflows: WorkflowsService,
     private readonly projects: ProjectsService,
   ) {}
 
@@ -108,6 +114,57 @@ export class McpService {
         inputSchema: { workspaceId: z.string().uuid() },
       },
       async ({ workspaceId }) => this.json(await this.projects.list({ workspaceId })),
+    );
+
+    // ------------------------------------------------------------ workflows
+    // Dynamic document workflows (docs/features/17). Starting a run is exposed
+    // but approving one is not: approval writes pages into the knowledge base,
+    // and stdio has no principal to attribute that to. An agent can kick a
+    // chain off and watch it; a person still decides what gets published.
+    server.registerTool(
+      'knowledge_list_workflows',
+      {
+        description:
+          'List workflow definitions in a workspace: configurable step chains (entity → use-cases → API endpoints + pages) that can be run against a page.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          projectId: z.string().uuid().optional().describe('Adds this project\'s definitions to the workspace-wide ones'),
+        },
+      },
+      async ({ workspaceId, projectId }) =>
+        this.json(await this.workflows.list({ workspaceId, ...(projectId ? { projectId } : {}) })),
+    );
+
+    server.registerTool(
+      'knowledge_start_workflow',
+      {
+        description:
+          'Start a workflow run against a source page. Returns immediately — the run executes in the background and parks at its first review gate. 409 when a run of the same workflow is already in flight for that page.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          definitionId: z.string().uuid().describe('From knowledge_list_workflows'),
+          rootDocumentId: z.string().uuid().describe('The page the chain starts from'),
+          note: z.string().max(4000).optional().describe('Extra instructions for this run only'),
+        },
+      },
+      async ({ workspaceId, definitionId, rootDocumentId, note }) =>
+        this.json(
+          await this.workflows.startRun(
+            { workspaceId, definitionId, rootDocumentId, ...(note ? { note } : {}) },
+            AUTHOR_ID_STUB,
+            'mcp',
+          ),
+        ),
+    );
+
+    server.registerTool(
+      'knowledge_get_workflow_run',
+      {
+        description:
+          'A workflow run with its frozen step graph and its node tree — every intermediate result, including drafts still awaiting review.',
+        inputSchema: { runId: z.string().uuid() },
+      },
+      async ({ runId }) => this.json(await this.workflows.getRun(runId)),
     );
 
     server.registerTool(

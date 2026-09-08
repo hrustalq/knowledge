@@ -14,6 +14,7 @@ import type {
 } from '@knowledge/contracts'
 import { ATTACHMENT_CONTENT_TYPES } from '@knowledge/contracts'
 import { apiFetch } from '@/lib/api'
+import { presignedPut } from '@/lib/presigned-put'
 
 export interface UploadTask {
   id: string
@@ -48,21 +49,10 @@ export function useAttachments(resolveDocumentId: () => Promise<string | null>) 
       )
       task.progress = 10
 
-      // Presigned PUT goes direct to storage, so progress comes from XHR
-      // rather than fetch — fetch still cannot report upload progress.
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('PUT', created.upload.url, true)
-        for (const [k, v] of Object.entries(created.upload.headers)) xhr.setRequestHeader(k, v)
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) task.progress = 10 + Math.round((event.loaded / event.total) * 85)
-        }
-        xhr.onload = () =>
-          xhr.status >= 200 && xhr.status < 300
-            ? resolve()
-            : reject(new Error(`Upload failed (${xhr.status})`))
-        xhr.onerror = () => reject(new Error('Upload failed'))
-        xhr.send(file)
+      // Presigned PUT goes direct to storage; the shared helper is the same one
+      // the import wizard uses, so both report progress and failure identically.
+      await presignedPut(created.upload, file, (fraction) => {
+        task.progress = 10 + Math.round(fraction * 85)
       })
 
       const done = await apiFetch<CompleteAttachmentResponse>(

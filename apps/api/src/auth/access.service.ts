@@ -131,6 +131,43 @@ export class AccessService {
     return term.workspaceId;
   }
 
+  /**
+   * An import job carries its own workspaceId and exists before any document
+   * does, so this is the only thing standing between one tenant's import id and
+   * another tenant's staged file.
+   */
+  async workspaceOfImport(importId: string): Promise<string> {
+    const job = await this.prisma.importJob.findUnique({
+      where: { id: importId },
+      select: { workspaceId: true },
+    });
+    if (!job) throw new NotFoundException(`Import ${importId} not found`);
+    return job.workspaceId;
+  }
+
+  /**
+   * A workflow definition shapes what the assistant writes into a workspace,
+   * so — like AI skills and plugins — the ACL resolves from the `:id` param
+   * rather than a caller-supplied `?workspaceId=`.
+   */
+  async workspaceOfWorkflowDefinition(definitionId: string): Promise<string> {
+    const definition = await this.prisma.workflowDefinition.findUnique({
+      where: { id: definitionId },
+      select: { workspaceId: true },
+    });
+    if (!definition) throw new NotFoundException(`Workflow ${definitionId} not found`);
+    return definition.workspaceId;
+  }
+
+  async workspaceOfWorkflowRun(runId: string): Promise<string> {
+    const run = await this.prisma.workflowRun.findUnique({
+      where: { id: runId },
+      select: { workspaceId: true },
+    });
+    if (!run) throw new NotFoundException(`Workflow run ${runId} not found`);
+    return run.workspaceId;
+  }
+
   async workspaceOfJob(jobId: string): Promise<string> {
     const job = await this.prisma.ingestionJob.findUnique({
       where: { id: jobId },

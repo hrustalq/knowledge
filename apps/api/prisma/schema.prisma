@@ -227,6 +227,11 @@ model MergeRequestThread {
   resolvable     Boolean   @default(true)
   resolvedBy     String?   @map("resolved_by") @db.Uuid
   resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz
+  // Who opened it: 'human', or 'ai' for a thread posted from an assistant
+  // review. The assistant posts as the person who ran it, so the author id
+  // cannot carry this and the reader would have no way to tell a machine
+  // finding from a colleague's.
+  source         String    @default("human")
   // line | section | entity — null = unanchored discussion thread.
   anchorType     String?   @map("anchor_type")
   // line: {revisionId, line, excerpt?} · section: {heading} · entity: {entityKey}
@@ -241,16 +246,22 @@ model MergeRequestThread {
 }
 
 model MergeRequestComment {
-  id        String   @id @default(uuid()) @db.Uuid
-  threadId  String   @map("thread_id") @db.Uuid
-  authorId  String   @map("author_id") @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
+  threadId  String    @map("thread_id") @db.Uuid
+  authorId  String    @map("author_id") @db.Uuid
   body      String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  // The comment in this thread that this one answers. Attribution, not
+  // nesting: the list stays flat and createdAt-ordered, and SetNull means
+  // deleting a comment leaves the replies that pointed at it in place.
+  replyToId String?   @map("reply_to_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   // Null until the author rewrites the comment — an edit is surfaced as one
   // rather than quietly replacing what someone read.
   updatedAt DateTime? @map("updated_at") @db.Timestamptz
 
-  thread MergeRequestThread @relation(fields: [threadId], references: [id])
+  thread  MergeRequestThread    @relation(fields: [threadId], references: [id])
+  replyTo MergeRequestComment?  @relation("MergeRequestCommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies MergeRequestComment[] @relation("MergeRequestCommentReplies")
 
   @@index([threadId, createdAt])
   @@map("merge_request_comments")
@@ -271,6 +282,8 @@ model DocumentThread {
   resolvable Boolean   @default(true)
   resolvedBy String?   @map("resolved_by") @db.Uuid
   resolvedAt DateTime? @map("resolved_at") @db.Timestamptz
+  // See MergeRequestThread.source.
+  source     String    @default("human")
   // text | section | entity — null = an unanchored comment on the page as a
   // whole (what the comment list under the content shows).
   anchorType String?   @map("anchor_type")
@@ -286,16 +299,20 @@ model DocumentThread {
 }
 
 model DocumentComment {
-  id        String   @id @default(uuid()) @db.Uuid
-  threadId  String   @map("thread_id") @db.Uuid
-  authorId  String   @map("author_id") @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
+  threadId  String    @map("thread_id") @db.Uuid
+  authorId  String    @map("author_id") @db.Uuid
   body      String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  // See MergeRequestComment.replyToId.
+  replyToId String?   @map("reply_to_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   // Null until the author rewrites the comment — an edit is surfaced as one
   // rather than quietly replacing what someone read.
   updatedAt DateTime? @map("updated_at") @db.Timestamptz
 
-  thread DocumentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  thread  DocumentThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  replyTo DocumentComment?  @relation("DocumentCommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies DocumentComment[] @relation("DocumentCommentReplies")
 
   @@index([threadId, createdAt])
   @@map("document_comments")
@@ -721,4 +738,188 @@ model GlossaryTerm {
   @@index([workspaceId, enabled])
   @@index([projectId, enabled])
   @@map("glossary_terms")
+}
+
+/// Import (docs/features/16): a file on its way to becoming a page. The row
+/// exists before the document does — the whole point is that parsing happens
+/// first and the result is reviewed before anything is created — so this is a
+/// table of its own rather than an `ingestion_jobs` row, whose `revision_id`
+/// is NOT NULL and could not be filled yet.
+///
+/// The parsed markdown is deliberately NOT stored here: it goes to
+/// `workspaces/{ws}/imports/{id}/parsed.md` beside the original, keeping the
+/// three-store split honest (PG = transactional truth, MinIO = bytes) and
+/// keeping the row the wizard polls every second small.
+model ImportJob {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// Destination chosen in step 1. Kept on the row rather than in the client
+  /// so a reload — or a different tab — resumes into the same destination.
+  projectId   String  @map("project_id") @db.Uuid
+  /// No FK, mirroring documents.parent_id: the parent may be deleted while a
+  /// long parse is still running, and that must not cascade into this row.
+  parentId    String? @map("parent_id") @db.Uuid
+  category    String  @default("other")
+
+  /// awaiting-upload → queued → running → parsed → submitted, or failed.
+  status   String  @default("awaiting-upload")
+  /// Free-text act the worker is performing ("Reading 48 pages"), read straight
+  /// into the progress label. Null whenever the client's own phase is showing.
+  stage    String?
+  /// 0..1 when the worker can honestly say; null means indeterminate, which is
+  /// what the ring renders rather than inventing a percentage.
+  progress Float?
+
+  sourceFilename String  @map("source_filename")
+  contentType    String  @map("content_type")
+  sizeBytes      Int     @default(0) @map("size_bytes")
+  s3Key          String  @map("s3_key")
+  /// Which parser ran ('pdf', 'docx', …) — shown in the review provenance strip.
+  parser         String?
+
+  /// Title the parser detected; the review step seeds its field from this.
+  title    String?
+  /// string[] — what the parse could not carry (dropped images, no headings).
+  warnings Json?
+  /// Parser-specific counts the provenance strip reports: pages, slides,
+  /// sections, needsOcr.
+  meta     Json?
+  error    Json?
+
+  /// Set when the import is submitted, so a row is also the audit trail of
+  /// where a page came from.
+  documentId String? @map("document_id") @db.Uuid
+
+  createdBy   String?   @map("created_by") @db.Uuid
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
+  @@map("import_jobs")
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic document workflows (docs/features/17)
+// ---------------------------------------------------------------------------
+
+/// A configurable graph of steps: entity → use-cases → API endpoints + pages.
+model WorkflowDefinition {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// Null = offered in every project of the workspace. A project id scopes the
+  /// definition the way glossary terms are scoped — the same chain means
+  /// different things in two products.
+  projectId   String? @map("project_id") @db.Uuid
+
+  name        String
+  description String?
+  enabled     Boolean @default(true)
+  /// Bumped on every graph write. A run records the version it started from,
+  /// so "which shape of this workflow produced that page" stays answerable.
+  version     Int     @default(1)
+
+  /// WorkflowGraph — { steps: WorkflowStep[], layout }. Validated by
+  /// compileDefinition() before every write, so a stored graph is always one
+  /// the runtime can walk. Only ever *names* steps and transitions: the
+  /// executors live in code, so a dynamic workflow is data, never logic.
+  graph   Json
+  /// WorkflowTrigger — { manual, autoStart, events[], categories[] }.
+  trigger Json?
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  runs WorkflowRun[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, projectId])
+  @@map("workflow_definitions")
+}
+
+/// One execution of a definition against one source page.
+model WorkflowRun {
+  id           String @id @default(uuid()) @db.Uuid
+  workspaceId  String @map("workspace_id") @db.Uuid
+  projectId    String @map("project_id") @db.Uuid
+  definitionId String @map("definition_id") @db.Uuid
+
+  /// The graph frozen at start. Editing a definition must never change what a
+  /// run in flight is doing — the same reasoning that makes revisions
+  /// immutable. Node.step_id resolves against this, not against the live row.
+  definitionSnapshot Json    @map("definition_snapshot")
+  definitionVersion  Int     @default(1) @map("definition_version")
+  /// No FK, mirroring documents.parent_id: deleting the source page must not
+  /// cascade away the audit trail of what it produced.
+  rootDocumentId     String  @map("root_document_id") @db.Uuid
+  /// Extra instructions for this run only, seeded into the first step.
+  note               String?
+
+  /// pending → running ⇄ awaiting-review → completed, or paused/cancelled/failed.
+  status    String  @default("pending")
+  /// The persisted xstate snapshot. This is what lets a run survive a worker
+  /// crash, a deploy, and a week of nobody clicking Approve.
+  snapshot  Json?
+  error     String?
+  /// Set when the run was started by a trigger rather than by a person.
+  startedBy String? @map("started_by")
+
+  createdBy  String?   @map("created_by") @db.Uuid
+  startedAt  DateTime? @map("started_at") @db.Timestamptz
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  definition WorkflowDefinition @relation(fields: [definitionId], references: [id], onDelete: Restrict)
+  nodes      WorkflowRunNode[]
+
+  @@index([workspaceId, status, createdAt])
+  @@index([rootDocumentId])
+  @@index([definitionId, rootDocumentId, status])
+  @@map("workflow_runs")
+}
+
+/// One step's intermediate result. The fan-out tree lives here as rows rather
+/// than inside the run's xstate snapshot: the feature has to answer "every node
+/// awaiting review in this project", and an opaque blob cannot be queried.
+model WorkflowRunNode {
+  id       String  @id @default(uuid()) @db.Uuid
+  runId    String  @map("run_id") @db.Uuid
+  /// Self-FK: this is the entity → use-case → endpoint tree. Cascades with the
+  /// run, so a deleted run leaves no orphan branches.
+  parentId String? @map("parent_id") @db.Uuid
+  /// Which step of `WorkflowRun.definitionSnapshot` produced this node.
+  stepId   String  @map("step_id")
+
+  /// pending → running → awaiting-review → approved → materializing →
+  /// materialized, or rejected/skipped/failed.
+  status String @default("pending")
+
+  /// What was fed in (parent draft, search hits, the run note).
+  input  Json?
+  /// WorkflowNodeDraft — { title, markdown, frontmatter, relations, summary }.
+  /// The reviewable intermediate result; editable until approved.
+  draft  Json?
+  /// Raw model output kept for provenance when the draft has been edited.
+  output Json?
+
+  /// Set once approved and written to the page tree. No FK, mirroring
+  /// documents.parent_id.
+  documentId String? @map("document_id") @db.Uuid
+  error      String?
+  /// Incremented by RETRY; the sweeper uses it to stop re-queueing forever.
+  attempt    Int     @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  run      WorkflowRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  parent   WorkflowRunNode?  @relation("WorkflowNodeTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children WorkflowRunNode[] @relation("WorkflowNodeTree")
+
+  @@index([runId, status])
+  @@index([documentId])
+  @@map("workflow_run_nodes")
 }

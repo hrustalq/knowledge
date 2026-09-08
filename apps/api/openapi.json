@@ -2544,6 +2544,64 @@
         "tags": [
           "documents"
         ]
+      },
+      "delete": {
+        "operationId": "DocumentsController_deleteThreadComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a page comment (the comment's own author only); removes the thread if it was the last one",
+        "tags": [
+          "documents"
+        ]
       }
     },
     "/v1/documents/{id}/threads/{threadId}": {
@@ -3454,6 +3512,64 @@
           }
         },
         "summary": "Edit a review comment (the comment's own author only)",
+        "tags": [
+          "merge-requests"
+        ]
+      },
+      "delete": {
+        "operationId": "MergeRequestsController_deleteComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a review comment (the comment's own author only); removes the thread if it was the last one",
         "tags": [
           "merge-requests"
         ]
@@ -6251,6 +6367,978 @@
           "glossary"
         ]
       }
+    },
+    "/v1/imports": {
+      "post": {
+        "operationId": "ImportController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reserve an import and get a presigned upload URL",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/imports/{id}/start": {
+      "post": {
+        "operationId": "ImportController_start",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Confirm the upload landed and queue the parse",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/imports/{id}": {
+      "get": {
+        "operationId": "ImportController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Import status — polled by the wizard while parsing",
+        "tags": [
+          "imports"
+        ]
+      },
+      "delete": {
+        "operationId": "ImportController_discard",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Discard an import and its staged files",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/imports/{id}/content": {
+      "get": {
+        "operationId": "ImportController_content",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The parsed markdown, for the review step",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/imports/{id}/submit": {
+      "post": {
+        "operationId": "ImportController_submit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create the page from the reviewed result, keeping the original as an attachment",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/v1/workflows/runs": {
+      "get": {
+        "operationId": "WorkflowsController_listRuns",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "definitionId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "running",
+                "awaiting-review",
+                "paused",
+                "completed",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor from the previous page",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Defaults to 25, max 100",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Workflow runs, newest first. `counts` covers every status under the same filters, so status badges do not move as you switch between them.",
+        "tags": [
+          "workflows"
+        ]
+      },
+      "post": {
+        "operationId": "WorkflowsController_startRun",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWorkflowRunDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start a run against a page (409 when one is already in flight for that page)",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/v1/workflows/runs/{id}": {
+      "get": {
+        "operationId": "WorkflowsController_getRun",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A run with its frozen graph and its node tree — the intermediate results",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/v1/workflows/runs/{id}/events": {
+      "post": {
+        "operationId": "WorkflowsController_runEvent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pause, resume or cancel a run (409 when the machine refuses the transition)",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/v1/workflows/runs/{id}/nodes/{nodeId}": {
+      "patch": {
+        "operationId": "WorkflowsController_updateNode",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "nodeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkflowNodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a draft before approving it",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/v1/workflows/runs/{id}/nodes/{nodeId}/events": {
+      "post": {
+        "operationId": "WorkflowsController_nodeEvent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "nodeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowNodeEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The review gate: APPROVE (materialises the draft and opens the next steps), REJECT, SKIP or RETRY. APPROVE may carry a last-moment edit.",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/v1/workflows": {
+      "get": {
+        "operationId": "WorkflowsController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Adds this project’s definitions to the workspace-wide ones",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Workflow definitions available in a workspace or project",
+        "tags": [
+          "workflows"
+        ]
+      },
+      "post": {
+        "operationId": "WorkflowsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkflowDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a workflow (400 with per-step issues when the graph is invalid)",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/v1/workflows/{id}": {
+      "get": {
+        "operationId": "WorkflowsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "workflows"
+        ]
+      },
+      "patch": {
+        "operationId": "WorkflowsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkflowDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update a workflow; a graph change bumps its version",
+        "tags": [
+          "workflows"
+        ]
+      },
+      "delete": {
+        "operationId": "WorkflowsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a workflow (409 while runs of it are still in flight)",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/v1/workflows/{id}/validate": {
+      "post": {
+        "operationId": "WorkflowsController_validate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateWorkflowDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Compile a graph and report its issues without saving — the editor’s live check. Omit `graph` to validate the stored one.",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/v1/documents/{id}/workflow-runs": {
+      "get": {
+        "operationId": "DocumentWorkflowsController_runsForDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Runs rooted at this page, plus the workflows that may be started against it",
+        "tags": [
+          "workflows"
+        ]
+      }
     }
   },
   "info": {
@@ -6776,6 +7864,14 @@
           "resolvable": {
             "type": "boolean",
             "description": "True (the default) starts a resolvable thread; false posts a plain comment that cannot be resolved."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "human",
+              "ai"
+            ],
+            "description": "Who opened it. Defaults to 'human'; 'ai' marks a finding posted from an assistant review."
           }
         },
         "required": [
@@ -6787,6 +7883,10 @@
         "properties": {
           "body": {
             "type": "string"
+          },
+          "replyToId": {
+            "type": "string",
+            "description": "Comment in this thread that the reply answers"
           }
         },
         "required": [
@@ -7800,6 +8900,327 @@
           }
         }
       },
+      "CreateImportDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Project the imported page will belong to"
+          },
+          "filename": {
+            "type": "string",
+            "description": "Original filename — its extension chooses the parser"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "number",
+            "description": "Claimed size; re-checked against the bucket before parsing"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "process",
+              "use-case",
+              "contract",
+              "erd",
+              "architecture",
+              "guide",
+              "reference",
+              "other"
+            ],
+            "description": "Feature 07 categorization; defaults to \"other\""
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Feature 08 nesting: import under this page"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "filename",
+          "contentType",
+          "sizeBytes"
+        ]
+      },
+      "SubmitImportDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title as reviewed — becomes documents.title"
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Markdown as reviewed and edited; this is what the page is created from"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Overrides the destination chosen before parsing"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "process",
+              "use-case",
+              "contract",
+              "erd",
+              "architecture",
+              "guide",
+              "reference",
+              "other"
+            ],
+            "description": "Overrides the category chosen before parsing"
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "title",
+          "markdown"
+        ]
+      },
+      "StartWorkflowRunDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "rootDocumentId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "Extra instructions for this run only"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "definitionId",
+          "rootDocumentId"
+        ]
+      },
+      "WorkflowRunEventDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PAUSE",
+              "RESUME",
+              "CANCEL"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "WorkflowNodeDraftDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "markdown": {
+            "type": "string"
+          },
+          "frontmatter": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "relations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "markdown"
+        ]
+      },
+      "UpdateWorkflowNodeDto": {
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/WorkflowNodeDraftDto"
+          }
+        },
+        "required": [
+          "draft"
+        ]
+      },
+      "WorkflowNodeEventDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT",
+              "SKIP",
+              "RETRY"
+            ]
+          },
+          "draft": {
+            "$ref": "#/components/schemas/WorkflowNodeDraftDto"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "WorkflowGraphDto": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "WorkflowStep[] — validated by the compiler"
+          },
+          "layout": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Editor canvas coordinates, keyed by step id"
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      },
+      "WorkflowTriggerDto": {
+        "type": "object",
+        "properties": {
+          "manual": {
+            "type": "boolean",
+            "description": "Offer a Run button on matching pages"
+          },
+          "autoStart": {
+            "type": "boolean",
+            "description": "Start a run automatically when one of `events` fires on a matching page. Defaults false — an always-on trigger is how a workspace gets an LLM avalanche."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "categories": {
+            "type": "array",
+            "description": "Empty = every category",
+            "items": {
+              "type": "string",
+              "enum": [
+                "process",
+                "use-case",
+                "contract",
+                "erd",
+                "architecture",
+                "guide",
+                "reference",
+                "other"
+              ]
+            }
+          }
+        }
+      },
+      "CreateWorkflowDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null = every project"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "graph": {
+            "$ref": "#/components/schemas/WorkflowGraphDto"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/WorkflowTriggerDto"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Defaults to true"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name",
+          "graph"
+        ]
+      },
+      "UpdateWorkflowDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "graph": {
+            "$ref": "#/components/schemas/WorkflowGraphDto"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/WorkflowTriggerDto"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ValidateWorkflowDto": {
+        "type": "object",
+        "properties": {
+          "graph": {
+            "description": "Defaults to the stored graph",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowGraphDto"
+              }
+            ]
+          }
+        }
+      },
       "ApiErrorResponse": {
         "type": "object",
         "properties": {
@@ -7818,6 +9239,7 @@
               "NOT_FOUND",
               "CONFLICT",
               "PAYLOAD_TOO_LARGE",
+              "UNSUPPORTED_MEDIA_TYPE",
               "RATE_LIMITED",
               "UPSTREAM_UNAVAILABLE",
               "ASSISTANT_BUDGET_EXCEEDED",

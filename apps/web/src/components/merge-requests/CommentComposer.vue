@@ -17,7 +17,7 @@
 // The same box also rewrites an existing comment: `initialBody` seeds it and
 // `cancellable` gives the way back out, since an edit that cannot be
 // abandoned is a trap.
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ChevronDown, MessageSquare, MessagesSquare, Paperclip } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
@@ -27,6 +27,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import RichEditor from '@/components/editor/RichEditor.vue'
+import { useDocumentsStore } from '@/stores/documents'
+import { useMembers } from './use-members'
 
 const props = withDefaults(
   defineProps<{
@@ -69,6 +71,27 @@ const props = withDefaults(
  * box, an edit) keeps its one-argument handler working unchanged.
  */
 const emit = defineEmits<{ submit: [body: string, resolvable: boolean]; cancel: [] }>()
+
+/**
+ * `@` names a teammate or a page, and the box sources both itself rather than
+ * making five call sites pass them. A comment that says "ask @Ada about
+ * @Token rotation" is the whole reason threads get read by the right person,
+ * so the lists have to be there wherever a comment is written — not only in
+ * the two places a host remembered to wire up.
+ */
+const { members } = useMembers()
+const documents = useDocumentsStore()
+onMounted(() => {
+  if (!documents.loaded) void documents.fetchList()
+})
+const people = computed(() =>
+  members.value
+    .filter((m) => !m.disabled)
+    .map((m) => ({ userId: m.userId, name: m.displayName, hint: m.email })),
+)
+const pages = computed(() =>
+  documents.items.map((d) => ({ documentId: d.documentId, title: d.title, category: d.category })),
+)
 
 const body = ref(props.initialBody)
 const open = ref(props.autoExpand)
@@ -128,8 +151,10 @@ function cancel() {
         ref="editorEl"
         v-model="body"
         compact
+        :people="people"
+        :pages="pages"
         :resolve-document-id="resolveDocumentId"
-        :placeholder="`${placeholder} Press / for blocks.`"
+        :placeholder="`${placeholder} Press @ to mention, / for blocks.`"
       />
     </div>
     <div class="flex items-center gap-2">

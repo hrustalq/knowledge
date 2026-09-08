@@ -3,7 +3,9 @@
 // in the content column, with their own nav rail flush against the left edge.
 import { computed, type Component } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { Activity, BookMarked, FolderKanban, ShieldCheck, Sparkles, Users } from 'lucide-vue-next'
+import { Activity, BookMarked, FolderKanban, ShieldCheck, Sparkles, Users,
+  Workflow,
+} from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -19,6 +21,7 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/access', label: 'Access', icon: ShieldCheck, hint: 'Workspace members' },
   { to: '/settings/activity', label: 'Activity', icon: Activity, hint: 'Workspace timeline' },
   { to: '/settings/ai', label: 'AI', icon: Sparkles, hint: 'Assistant, skills, usage' },
+  { to: '/settings/workflows', label: 'Workflows', icon: Workflow, hint: 'Document step chains' },
 ])
 </script>
 

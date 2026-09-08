@@ -25,6 +25,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { createLowlight, common } from 'lowlight'
 import {
+  AtSign,
   Code,
   Columns2,
   CopyPlus,
@@ -55,7 +56,7 @@ import { htmlToMarkdown } from '@/lib/markdown/serialize'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
 import { Layout, LayoutColumn, Expand, Panel, TableOfContents } from './extensions/blocks'
 import { Drawing, FileEmbed, Mermaid, ResizableImage } from './extensions/media'
-import { DocMention, StatusMark } from './extensions/inline'
+import { DocMention, StatusMark, UserMention } from './extensions/inline'
 import { createSuggestionExtension, type SuggestionSession } from './extensions/suggestion'
 import {
   createDragHandle,
@@ -80,10 +81,23 @@ export interface MentionablePage {
   category?: string
 }
 
+/** A workspace member `@` can name. `hint` is shown muted beside the name. */
+export interface MentionablePerson {
+  userId: string
+  name: string
+  hint?: string
+}
+
 const props = withDefaults(
   defineProps<{
     modelValue: string
     pages?: MentionablePage[]
+    /**
+     * People `@` can name. Offered above pages, because that is what the
+     * sigil means everywhere else and the page picker also has `/` and a
+     * toolbar button while a person has only this.
+     */
+    people?: MentionablePerson[]
     editable?: boolean
     /** Resolves (creating if needed) the document attachments belong to. */
     resolveDocumentId?: () => Promise<string | null>
@@ -106,6 +120,7 @@ const props = withDefaults(
   }>(),
   {
     pages: () => [],
+    people: () => [],
     editable: true,
     compact: false,
     placeholder: 'Write, or press / for blocks…',
@@ -246,17 +261,35 @@ const menuItems = computed<CommandItem[]>(() => {
       `${i.label} ${i.keywords ?? ''} ${i.group}`.toLowerCase().includes(query),
     )
   }
-  const pages = query
-    ? props.pages.filter((p) => p.title.toLowerCase().includes(query))
-    : props.pages
-  return pages.slice(0, 12).map((p) => ({
-    id: p.documentId,
-    group: 'Pages',
-    label: p.title,
-    hint: p.category,
-    icon: FileText,
-  }))
+  // One sigil, two vocabularies. People first: `@` means a person everywhere
+  // else, and a page can also be reached by `/` and by the toolbar, while a
+  // person can only be reached here.
+  const people = (query ? props.people.filter((p) => matches(query, p.name, p.hint)) : props.people)
+    .slice(0, 6)
+    .map((p): CommandItem => ({
+      id: p.userId,
+      kind: 'person',
+      group: 'People',
+      label: p.name,
+      hint: p.hint,
+      icon: AtSign,
+    }))
+  const pages = (query ? props.pages.filter((p) => matches(query, p.title, p.category)) : props.pages)
+    .slice(0, 10)
+    .map((p): CommandItem => ({
+      id: p.documentId,
+      kind: 'page',
+      group: 'Pages',
+      label: p.title,
+      hint: p.category,
+      icon: FileText,
+    }))
+  return [...people, ...pages]
 })
+
+function matches(query: string, ...fields: (string | undefined)[]): boolean {
+  return fields.some((f) => f?.toLowerCase().includes(query))
+}
 
 function pick(item: CommandItem) {
   menu.value?.command(item)
@@ -304,11 +337,10 @@ const MentionCommand = createSuggestionExtension(
     apply: ({ editor: e, range, payload }) => {
       const item = payload as CommandItem | undefined
       if (!item) return
-      e.chain()
-        .focus()
-        .deleteRange(range)
-        .insertDocMention({ documentId: item.id, label: item.label })
-        .run()
+      const chain = e.chain().focus().deleteRange(range)
+      if (item.kind === 'person') chain.insertUserMention({ userId: item.id, label: item.label })
+      else chain.insertDocMention({ documentId: item.id, label: item.label })
+      chain.run()
     },
   },
   suggestionHandlers('mention'),
@@ -450,6 +482,7 @@ onMounted(() => {
       ResizableImage.configure({ inline: false, allowBase64: false }),
       StatusMark,
       DocMention,
+      UserMention,
       SlashCommand,
       MentionCommand,
       DragHandleExtension,
@@ -645,7 +678,7 @@ defineExpose({
       ref="menuRef"
       :items="menuItems"
       :rect="menu.rect"
-      :empty-label="menu.kind === 'mention' ? 'No pages match' : 'No blocks match'"
+      :empty-label="menu.kind === 'mention' ? 'No one and no page matches' : 'No blocks match'"
       @pick="pick"
     />
 

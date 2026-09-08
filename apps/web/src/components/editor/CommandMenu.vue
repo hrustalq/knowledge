@@ -13,6 +13,8 @@ export interface CommandItem {
   group: string
   icon?: unknown
   keywords?: string
+  /** What `id` names, for the menus whose entries are not all the same thing. */
+  kind?: 'page' | 'person'
 }
 
 const props = defineProps<{

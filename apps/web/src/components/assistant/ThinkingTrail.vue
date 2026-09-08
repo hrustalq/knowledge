@@ -3,12 +3,16 @@
 //
 // A spinner says "wait"; this says what it is waiting on. The harness runs in
 // legs — the model narrates, reaches for a tool, then narrates again — and
-// each leg is shown as it closes, so the trail grows downward at the pace of
-// the actual work rather than appearing all at once at the end.
+// each leg is shown as it closes.
 //
-// Closed legs collapse to their tool chips. The prose behind them is
-// reasoning, not answer, so it stays available (expandable) without competing
-// with the reply that is streaming in below.
+// Collapsed is the default, and collapsed means *one* chip: whatever the turn
+// is doing right now, or the last thing it finished. A turn that reaches for
+// nine tools would otherwise grow a nine-chip list mid-answer, pushing the
+// reply it belongs to off the screen — and the list is a record, only ever
+// read after the fact. So the trail reads as a status line that changes,
+// swapping the chip with a short animation so an update is noticed without
+// re-reading the whole thing. Expanding restores the full ordered legs, prose
+// and all.
 import { computed, ref } from 'vue'
 import { Check, ChevronRight, Square, X } from 'lucide-vue-next'
 import type { LiveTurn } from '@/stores/assistant'
@@ -24,6 +28,30 @@ const current = computed(() => ({
   finished: props.live.finished,
   text: props.live.phase === 'responding' ? '' : props.live.text,
 }))
+
+/** Every call that has closed, oldest first — across closed legs and this one. */
+const doneCalls = computed(() => [
+  ...props.live.steps.flatMap((step) => step.toolCalls),
+  ...props.live.finished,
+])
+
+const stepCount = computed(() => doneCalls.value.length + props.live.running.length)
+
+/**
+ * The single chip the collapsed trail shows: the call in flight if there is
+ * one, else the most recent call to have closed.
+ */
+const latest = computed(() => {
+  const running = props.live.running.at(-1)
+  if (running) return { tool: running, running: true, ok: true }
+  const done = doneCalls.value.at(-1)
+  return done ? { tool: done.tool, running: false, ok: done.ok } : null
+})
+
+/** Position as well as name: two consecutive reads must still animate as two. */
+const latestKey = computed(() =>
+  latest.value ? `${stepCount.value}:${latest.value.tool}:${latest.value.running}` : 'none',
+)
 
 const headline = computed(() => {
   const running = props.live.running.at(-1)
@@ -56,14 +84,37 @@ const hasTrail = computed(
         @click="expanded = !expanded"
       >
         <ChevronRight class="size-3 transition-transform duration-200" :class="expanded ? 'rotate-90' : ''" />
-        {{ expanded ? 'Hide steps' : 'Show steps' }}
+        {{ expanded ? 'Hide steps' : `Show steps${stepCount ? ` (${stepCount})` : ''}` }}
       </button>
     </div>
 
-    <!-- The trail itself: a rule down the left, one entry per leg. -->
-    <ol v-if="hasTrail" class="ml-[3px] space-y-2 border-l border-border/70 pl-4">
+    <!-- Collapsed: the newest chip only, swapped in place as the turn moves on. -->
+    <div v-if="!expanded && latest" class="ml-[3px] border-l border-border/70 pl-4">
+      <Transition name="tool-swap" mode="out-in">
+        <span
+          :key="latestKey"
+          class="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-[11px]"
+          :class="
+            latest.running
+              ? 'border-primary/40 bg-primary/5 text-primary'
+              : latest.ok
+                ? 'text-muted-foreground'
+                : 'border-destructive/40 text-destructive'
+          "
+        >
+          <component :is="toolVocabulary(latest.tool).icon" class="size-3" />
+          {{ latest.running ? toolVocabulary(latest.tool).running : toolVocabulary(latest.tool).done }}
+          <span v-if="latest.running" class="tool-pulse" aria-hidden="true" />
+          <Check v-else-if="latest.ok" class="size-3 text-emerald-500" />
+          <X v-else class="size-3" />
+        </span>
+      </Transition>
+    </div>
+
+    <!-- Expanded: the trail itself, a rule down the left, one entry per leg. -->
+    <ol v-else-if="expanded && hasTrail" class="ml-[3px] space-y-2 border-l border-border/70 pl-4">
       <li v-for="(step, i) in live.steps" :key="i" class="space-y-1.5">
-        <p v-if="expanded && step.text" class="text-muted-foreground/90 italic">{{ step.text }}</p>
+        <p v-if="step.text" class="text-muted-foreground/90 italic">{{ step.text }}</p>
         <div class="flex flex-wrap gap-1.5">
           <span
             v-for="(tc, j) in step.toolCalls"
@@ -80,7 +131,7 @@ const hasTrail = computed(
       </li>
 
       <li v-if="current.finished.length || current.running.length || current.text" class="space-y-1.5">
-        <p v-if="expanded && current.text" class="text-muted-foreground/90 italic">{{ current.text }}</p>
+        <p v-if="current.text" class="text-muted-foreground/90 italic">{{ current.text }}</p>
         <div class="flex flex-wrap gap-1.5">
           <span
             v-for="(tc, j) in current.finished"
@@ -165,6 +216,26 @@ const hasTrail = computed(
   }
 }
 
+/*
+ * The collapsed chip changing. Out first, in second (`mode="out-in"`), and
+ * both directions travel upward, so a swap reads as the trail advancing by one
+ * rather than as two unrelated things blinking.
+ */
+.tool-swap-enter-active,
+.tool-swap-leave-active {
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+.tool-swap-enter-from {
+  opacity: 0;
+  transform: translateY(5px);
+}
+.tool-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .thinking-dots i,
   .tool-pulse {
@@ -173,6 +244,11 @@ const hasTrail = computed(
   }
   .thinking-dots i {
     animation-name: thinking-fade;
+  }
+  /* Keep the swap legible, drop the travel. */
+  .tool-swap-enter-from,
+  .tool-swap-leave-to {
+    transform: none;
   }
 }
 @keyframes thinking-fade {

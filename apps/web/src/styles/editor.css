@@ -1246,21 +1246,86 @@
 .markdown-body mark[data-kn-thread]::after { content: attr(data-kn-count); }
 .markdown-body mark[data-kn-thread]::after,
 .kn-prose .kn-anchor-pin {
-  display: inline-block;
-  margin-left: 0.2em;
-  padding: 0 0.32em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  /* Round when it is only a number, a stadium once faces are in front of it.
+     Sized in rem, not em: a pin has to stay legible at the size of whatever
+     prose it happens to land in, and a face at 0.66em is a smudge. */
+  min-width: 1.3rem;
+  height: 1.3rem;
+  margin-left: 0.3em;
+  padding-inline: 0.28rem;
   border-radius: 999px;
-  background: var(--kn-panel-warning);
-  color: var(--background);
-  font-size: 0.62em;
+  background: var(--kn-pin-open);
+  color: var(--kn-pin-open-ink);
+  font-size: 0.6875rem;
   font-weight: 700;
-  line-height: 1.5;
+  line-height: 1;
   vertical-align: super;
   cursor: pointer;
   user-select: none;
 }
+.kn-prose .kn-anchor-pin:hover {
+  filter: brightness(1.06);
+}
+.kn-prose .kn-anchor-pin:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 .markdown-body mark[data-kn-thread][data-kn-resolved='true']::after,
-.kn-prose .kn-anchor-pin-resolved { background: var(--kn-panel-tip); }
+.kn-prose .kn-anchor-pin-resolved {
+  background: var(--kn-pin-done);
+  color: var(--kn-pin-done-ink);
+}
+
+/* Who is in the discussion, stacked the way a reviewer list is: overlapping,
+   oldest first, each ringed in the pin's own fill so the overlap reads as
+   depth rather than as two shapes bleeding into one. */
+.kn-anchor-faces {
+  display: inline-flex;
+  align-items: center;
+  margin-left: -0.14rem;
+}
+.kn-anchor-face {
+  display: inline-grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1.5px var(--kn-pin-open);
+  background: var(--muted-foreground);
+  color: #fff;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.kn-anchor-pin-resolved .kn-anchor-face {
+  box-shadow: 0 0 0 1.5px var(--kn-pin-done);
+}
+.kn-anchor-face + .kn-anchor-face {
+  margin-left: -0.3rem;
+}
+.kn-anchor-face-ai {
+  background: var(--kn-panel-important);
+}
+.kn-anchor-face-glyph {
+  width: 0.7rem;
+  height: 0.7rem;
+  background-color: currentColor;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  -webkit-mask-position: center;
+}
+.kn-anchor-pin-count {
+  padding-inline: 0.05rem;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Nested marks are overlapping comments; only the outermost prints a pin, or a
    two-thread overlap would show two badges on the same word. */
@@ -1283,4 +1348,182 @@
   color: var(--primary);
   border-bottom-color: var(--primary);
   background: color-mix(in oklch, var(--primary) 8%, transparent);
+}
+
+/* Person mentions ----------------------------------------------------------
+
+   A page chip and a person chip share one shape and differ by glyph and hue,
+   so two of them in one sentence are told apart before either is read. The
+   person chip is a span rather than a link (see UserMention in
+   extensions/inline.ts) and so carries no underline, no visited state, and no
+   pointer cursor — it does not go anywhere. */
+
+.kn-mention-user,
+.markdown-body span[data-kn-user] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.05em 0.45em 0.05em 0.35em;
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--kn-panel-important) 12%, transparent);
+  color: var(--kn-panel-important);
+  font-weight: 520;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.markdown-body span[data-kn-user]::before {
+  content: '';
+  width: 0.85em;
+  height: 0.85em;
+  flex: none;
+  background-color: currentColor;
+  opacity: 0.7;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8'/%3E%3C/svg%3E");
+}
+
+/* Discussion threads (ThreadCard) -------------------------------------------
+
+   Comments are a flat, time-ordered list on the wire, and the card's job is to
+   stop them reading as a stack of equals. Two devices do it: a rail that runs
+   through every avatar, so a reply is visibly inside the discussion the first
+   comment opened; and, on a reply that answers one comment in particular, a
+   pointer back to it. */
+
+.kn-thread {
+  --kn-thread-gap: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kn-thread-gap);
+}
+
+.kn-thread-item {
+  --kn-avatar: 1.75rem;
+  display: flex;
+  gap: 0.625rem;
+  scroll-margin-block: 1.5rem;
+}
+.kn-thread-item[data-reply='true'] {
+  --kn-avatar: 1.25rem;
+}
+
+.kn-thread-rail {
+  position: relative;
+  display: flex;
+  flex: none;
+  justify-content: center;
+  width: 1.75rem;
+}
+/* One segment per item, from under this avatar to the top of the next, so a
+   run of them draws one unbroken line whatever height the comments are. */
+.kn-thread-item:not(:last-child) .kn-thread-rail::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  top: calc(var(--kn-avatar) + 0.25rem);
+  bottom: calc(0.25rem - var(--kn-thread-gap));
+  width: 1px;
+  /* A shade past --border, which is tuned to disappear between rows. This one
+     has to be seen: it is the thing that says a reply belongs to the comment
+     above it rather than sitting beside it. Still a hairline — the weight is
+     what keeps it a connector instead of an accent stripe. */
+  background: color-mix(in oklch, var(--border) 60%, var(--muted-foreground));
+}
+
+/* Pointer from a reply to the comment it answers. Not a blockquote: the
+   original is a few lines up the same card, so this needs to identify it, not
+   reproduce it. */
+.kn-reply-ref {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  /* Sized to what it says. Stretched to the column, a two-word quote sits in a
+     bar of empty tint that reads as a broken component. */
+  width: fit-content;
+  max-width: 100%;
+  margin-block: 0.25rem 0.375rem;
+  padding: 0.1875rem 0.5rem 0.1875rem 0.375rem;
+  border-radius: 6px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: left;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+.kn-reply-ref:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.kn-reply-ref:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.kn-reply-ref-author {
+  flex: none;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.kn-reply-ref-quote {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+/* Hovering the pointer lifts the comment it names, so the link is understood
+   without having to click it and lose your place. */
+.kn-thread-item[data-linked='true'] .kn-comment-surface {
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.kn-comment-surface {
+  margin: -0.25rem -0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  transition: background-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+/* The one authored moment in the card: jumping to a quoted comment. It has to
+   say "here, this one" from wherever your eye was, then get out of the way. */
+@keyframes kn-comment-flash {
+  0% {
+    background: color-mix(in oklch, var(--ring) 24%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in oklch, var(--ring) 55%, transparent);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 1px transparent;
+  }
+}
+.kn-thread-item[data-flash='true'] .kn-comment-surface {
+  animation: kn-comment-flash 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kn-thread-item[data-flash='true'] .kn-comment-surface {
+    animation-duration: 0.01ms;
+    background: color-mix(in oklch, var(--ring) 24%, transparent);
+  }
+}
+
+/* Per-comment actions. Revealed on hover on a pointer device — a discussion is
+   read far more often than it is corrected — and always present where there is
+   no hover to reveal them with. */
+.kn-comment-actions {
+  transition: opacity 120ms ease-out;
+}
+@media (hover: hover) {
+  .kn-comment-actions {
+    opacity: 0;
+  }
+  .kn-thread-item:hover .kn-comment-actions,
+  .kn-comment-actions:focus-within {
+    opacity: 1;
+  }
 }

@@ -45,9 +45,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  reply: [threadId: string, body: string]
+  reply: [threadId: string, body: string, replyToId: string | null]
   resolve: [threadId: string, resolved: boolean]
   edit: [threadId: string, commentId: string, body: string]
+  delete: [threadId: string, commentId: string]
   /** `resolvable`: GitLab's Comment vs. Start thread. */
   createThread: [body: string, resolvable: boolean]
 }>()
@@ -290,9 +291,10 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
                 :readonly="readonly"
                 :busy="busy"
                 :resolve-document-id="resolveDocumentId"
-                @reply="(b: string) => emit('reply', threadAt(item.index)!.threadId, b)"
+                @reply="(b: string, p: string | null) => emit('reply', threadAt(item.index)!.threadId, b, p)"
                 @resolve="(r: boolean) => emit('resolve', threadAt(item.index)!.threadId, r)"
                 @edit="(c: string, b: string) => emit('edit', threadAt(item.index)!.threadId, c, b)"
+                @delete="(c: string) => emit('delete', threadAt(item.index)!.threadId, c)"
               />
             </div>
           </div>

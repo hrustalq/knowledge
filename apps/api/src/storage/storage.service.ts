@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -41,8 +42,16 @@ export class StorageService {
    * anything browsing the bucket still sees readable names.
    */
   attachmentObjectKey(workspaceId: string, documentId: string, attachmentId: string, filename: string): string {
-    const safe = filename.replace(/[^\w.\-]+/g, '_').slice(-120) || 'file';
-    return `workspaces/${workspaceId}/documents/${documentId}/attachments/${attachmentId}/${safe}`;
+    return `workspaces/${workspaceId}/documents/${documentId}/attachments/${attachmentId}/${safeSegment(filename)}`;
+  }
+
+  /**
+   * Import staging (docs/features/16). Not under a document prefix, because at
+   * upload time there is no document — and there may never be one, since an
+   * import can be abandoned at the review step.
+   */
+  importObjectKey(workspaceId: string, importId: string, filename: string): string {
+    return `workspaces/${workspaceId}/imports/${importId}/${safeSegment(filename)}`;
   }
 
   /** Object key layout per plan.md §4. */
@@ -74,6 +83,33 @@ export class StorageService {
       ResponseContentDisposition: `${opts.disposition}; filename="${opts.filename.replace(/["\\]/g, '')}"`,
     });
     return getSignedUrl(this.s3, cmd, { expiresIn: opts.expiresInSeconds ?? 900 });
+  }
+
+  /**
+   * Server-side copy, so promoting an import's staged original into the new
+   * page's attachments never pulls a 50 MB PDF through Node just to push it
+   * back. Source and destination are both keys in this bucket.
+   */
+  async copyObject(fromKey: string, toKey: string, contentType?: string): Promise<void> {
+    await this.s3.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        CopySource: `${this.bucket}/${fromKey}`,
+        Key: toKey,
+        ...(contentType ? { ContentType: contentType, MetadataDirective: 'REPLACE' as const } : {}),
+      }),
+    );
+  }
+
+  async putObjectBytes(objectKey: string, body: Uint8Array, contentType: string): Promise<void> {
+    await this.s3.send(
+      new PutObjectCommand({ Bucket: this.bucket, Key: objectKey, Body: body, ContentType: contentType }),
+    );
+  }
+
+  async getObjectBytes(objectKey: string): Promise<Uint8Array> {
+    const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }));
+    return (await res.Body?.transformToByteArray()) ?? new Uint8Array();
   }
 
   async deleteObject(objectKey: string): Promise<void> {
@@ -109,4 +145,13 @@ export class StorageService {
   async putObjectJson(objectKey: string, value: unknown): Promise<string | null> {
     return this.putObjectText(objectKey, JSON.stringify(value, null, 2), 'application/json');
   }
+}
+
+/**
+ * A user-supplied filename reduced to one safe path segment. Slashes and every
+ * other separator are folded away, so a name can never climb out of the prefix
+ * it was given, and the tail is kept because that is where the extension is.
+ */
+function safeSegment(filename: string): string {
+  return filename.replace(/[^\w.-]+/g, '_').slice(-120) || 'file';
 }

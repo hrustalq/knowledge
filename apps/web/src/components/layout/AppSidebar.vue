@@ -3,7 +3,9 @@
 // Projects → Pages navigation stack (Confluence-style space sidebar).
 import { computed, ref, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { GitPullRequestArrow, House, Library, Settings, Sparkles } from 'lucide-vue-next'
+import { GitPullRequestArrow, House, Library, Settings, Sparkles,
+  Workflow,
+} from 'lucide-vue-next'
 import type { ScopeCreated } from '@/lib/scopes'
 import ScopeSwitcher from './ScopeSwitcher.vue'
 import SidebarPanes from './SidebarPanes.vue'
@@ -36,6 +38,7 @@ const links = computed<NavLink[]>(() => [
   { to: '/documents', label: 'Home', icon: House },
   // Search is not a destination — it is the topbar trigger's sheet ("/" or ⌘K).
   { to: '/merge-requests', label: 'Merge requests', icon: GitPullRequestArrow },
+  { to: '/workflows', label: 'Workflows', icon: Workflow },
   { to: '/assistant', label: 'Assistant', icon: Sparkles },
   // Projects, users, access and activity live under the settings shell.
   { to: '/settings', label: 'Settings', icon: Settings },

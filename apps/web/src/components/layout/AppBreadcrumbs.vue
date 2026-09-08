@@ -22,6 +22,7 @@ interface Crumb { label: string; to?: string }
 const STATIC: Record<string, string> = {
   '/search': 'Search',
   '/merge-requests': 'Merge requests',
+  '/workflows': 'Workflows',
 }
 
 const SETTINGS: Record<string, string> = {
@@ -30,6 +31,8 @@ const SETTINGS: Record<string, string> = {
   '/settings/access': 'Access',
   '/settings/activity': 'Activity',
   '/settings/ai': 'AI',
+  '/settings/glossary': 'Glossary',
+  '/settings/workflows': 'Workflows',
 }
 
 /** Pages live inside a project, so page trails lead with the active project. */
@@ -64,8 +67,9 @@ const crumbs = computed<Crumb[]>(() => {
     const label = SETTINGS[path]
     return label ? [{ label: 'Settings', to: '/settings' }, { label }] : [{ label: 'Settings' }]
   }
+  if (path.startsWith('/workflows/')) return [{ label: 'Workflows', to: '/workflows' }, { label: 'Run' }]
   if (path === '/create') return [...pageRoot(), { label: 'New page' }]
-  if (path === '/upload') return [...pageRoot(), { label: 'Upload' }]
+  if (path === '/upload' || path === '/import') return [...pageRoot(), { label: 'Import' }]
   const label = STATIC[path]
   return label ? [{ label }] : []
 })

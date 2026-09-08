@@ -29,9 +29,13 @@ const TITLES: Record<AssistantUiBlock['component'], string> = {
     </CardHeader>
     <CardContent>
       <GraphView v-if="props.block.component === 'graph'" :document-id="(props.block.props.documentId as string)" />
+      <!-- Capped and folded: this sits inside the transcript, which owns the
+           scroll. A feed with its own scrollport and infinite paging fights it. -->
       <ActivityFeed
         v-else-if="props.block.component === 'activity'"
         :document-id="(props.block.props.documentId as string | undefined)"
+        :limit="8"
+        collapsible
       />
       <SearchWidget
         v-else-if="props.block.component === 'search'"

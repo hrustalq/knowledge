@@ -231,6 +231,14 @@ export class CreateThreadDto {
   @IsOptional()
   @IsBoolean()
   resolvable?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['human', 'ai'],
+    description: "Who opened it. Defaults to 'human'; 'ai' marks a finding posted from an assistant review.",
+  })
+  @IsOptional()
+  @IsIn(['human', 'ai'])
+  source?: 'human' | 'ai';
 }
 
 export class CreateCommentDto {
@@ -238,6 +246,16 @@ export class CreateCommentDto {
   @IsString()
   @IsNotEmpty()
   body!: string;
+
+  /**
+   * Which comment in this thread the reply answers. Attribution only — the
+   * comment list stays flat — so an id from another thread is rejected rather
+   * than stored as a pointer nothing can render.
+   */
+  @ApiPropertyOptional({ description: 'Comment in this thread that the reply answers' })
+  @IsOptional()
+  @Matches(UUID_RE)
+  replyToId?: string;
 }
 
 export class ResolveThreadDto {

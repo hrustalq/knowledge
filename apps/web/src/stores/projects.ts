@@ -3,6 +3,7 @@ import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
 import { apiFetch, getProjectId, getWorkspaceId, setActiveProject } from '@/lib/api'
 import { useDocumentsStore } from '@/stores/documents'
 import { useGlossaryStore } from '@/stores/glossary'
+import { useWorkflowsStore } from '@/stores/workflows'
 import { useSidebarNavStore } from '@/stores/sidebar-nav'
 
 /**
@@ -53,10 +54,15 @@ export const useProjectsStore = defineStore('projects', {
       this.activeId = projectId
       setActiveProject(projectId)
       useSidebarNavStore().openPages()
-      // The glossary is project-scoped too (docs/features/14), so it rescopes
-      // alongside the page tree rather than decorating the new project's pages
-      // with the previous one's vocabulary.
-      await Promise.all([useDocumentsStore().rescope(), useGlossaryStore().rescope()])
+      // The glossary (14) and the workflow roster (17) are project-scoped too,
+      // so they rescope alongside the page tree rather than decorating the new
+      // project's pages with the previous one's vocabulary, or offering chains
+      // that would write into the project you just left.
+      await Promise.all([
+        useDocumentsStore().rescope(),
+        useGlossaryStore().rescope(),
+        useWorkflowsStore().rescope(),
+      ])
     },
   },
 })

@@ -605,7 +605,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a page comment (the comment's own author only); removes the thread if it was the last one */
+        delete: operations["DocumentsController_deleteThreadComment"];
         options?: never;
         head?: never;
         /** Edit a page comment (the comment's own author only) */
@@ -829,7 +830,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a review comment (the comment's own author only); removes the thread if it was the last one */
+        delete: operations["MergeRequestsController_deleteComment"];
         options?: never;
         head?: never;
         /** Edit a review comment (the comment's own author only) */
@@ -1532,6 +1534,248 @@ export interface paths {
         patch: operations["GlossaryController_update"];
         trace?: never;
     };
+    "/v1/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reserve an import and get a presigned upload URL */
+        post: operations["ImportController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm the upload landed and queue the parse */
+        post: operations["ImportController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Import status — polled by the wizard while parsing */
+        get: operations["ImportController_get"];
+        put?: never;
+        post?: never;
+        /** Discard an import and its staged files */
+        delete: operations["ImportController_discard"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The parsed markdown, for the review step */
+        get: operations["ImportController_content"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create the page from the reviewed result, keeping the original as an attachment */
+        post: operations["ImportController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workflow runs, newest first. `counts` covers every status under the same filters, so status badges do not move as you switch between them. */
+        get: operations["WorkflowsController_listRuns"];
+        put?: never;
+        /** Start a run against a page (409 when one is already in flight for that page) */
+        post: operations["WorkflowsController_startRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A run with its frozen graph and its node tree — the intermediate results */
+        get: operations["WorkflowsController_getRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/runs/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause, resume or cancel a run (409 when the machine refuses the transition) */
+        post: operations["WorkflowsController_runEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/runs/{id}/nodes/{nodeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a draft before approving it */
+        patch: operations["WorkflowsController_updateNode"];
+        trace?: never;
+    };
+    "/v1/workflows/runs/{id}/nodes/{nodeId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The review gate: APPROVE (materialises the draft and opens the next steps), REJECT, SKIP or RETRY. APPROVE may carry a last-moment edit. */
+        post: operations["WorkflowsController_nodeEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workflow definitions available in a workspace or project */
+        get: operations["WorkflowsController_list"];
+        put?: never;
+        /** Create a workflow (400 with per-step issues when the graph is invalid) */
+        post: operations["WorkflowsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkflowsController_get"];
+        put?: never;
+        post?: never;
+        /** Delete a workflow (409 while runs of it are still in flight) */
+        delete: operations["WorkflowsController_remove"];
+        options?: never;
+        head?: never;
+        /** Update a workflow; a graph change bumps its version */
+        patch: operations["WorkflowsController_update"];
+        trace?: never;
+    };
+    "/v1/workflows/{id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compile a graph and report its issues without saving — the editor’s live check. Omit `graph` to validate the stored one. */
+        post: operations["WorkflowsController_validate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/workflow-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Runs rooted at this page, plus the workflows that may be started against it */
+        get: operations["DocumentWorkflowsController_runsForDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1719,9 +1963,16 @@ export interface components {
             anchor?: components["schemas"]["ThreadAnchorDto"];
             /** @description True (the default) starts a resolvable thread; false posts a plain comment that cannot be resolved. */
             resolvable?: boolean;
+            /**
+             * @description Who opened it. Defaults to 'human'; 'ai' marks a finding posted from an assistant review.
+             * @enum {string}
+             */
+            source?: "human" | "ai";
         };
         CreateCommentDto: {
             body: string;
+            /** @description Comment in this thread that the reply answers */
+            replyToId?: string;
         };
         ResolveThreadDto: {
             resolved: boolean;
@@ -2095,6 +2346,120 @@ export interface components {
             documentId?: string | null;
             enabled?: boolean;
         };
+        CreateImportDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Project the imported page will belong to
+             */
+            projectId: string;
+            /** @description Original filename — its extension chooses the parser */
+            filename: string;
+            contentType: string;
+            /** @description Claimed size; re-checked against the bucket before parsing */
+            sizeBytes: number;
+            /**
+             * @description Feature 07 categorization; defaults to "other"
+             * @enum {string}
+             */
+            category?: "process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other";
+            /**
+             * Format: uuid
+             * @description Feature 08 nesting: import under this page
+             */
+            parentId?: string;
+        };
+        SubmitImportDto: {
+            /** @description Title as reviewed — becomes documents.title */
+            title: string;
+            /** @description Markdown as reviewed and edited; this is what the page is created from */
+            markdown: string;
+            /**
+             * Format: uuid
+             * @description Overrides the destination chosen before parsing
+             */
+            projectId?: string;
+            /**
+             * @description Overrides the category chosen before parsing
+             * @enum {string}
+             */
+            category?: "process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other";
+            /** Format: uuid */
+            parentId?: string | null;
+        };
+        StartWorkflowRunDto: {
+            workspaceId: string;
+            definitionId: string;
+            rootDocumentId: string;
+            /** @description Extra instructions for this run only */
+            note?: string;
+        };
+        WorkflowRunEventDto: {
+            /** @enum {string} */
+            type: "PAUSE" | "RESUME" | "CANCEL";
+        };
+        WorkflowNodeDraftDto: {
+            title: string;
+            markdown: string;
+            frontmatter?: {
+                [key: string]: unknown;
+            };
+            relations?: {
+                [key: string]: unknown;
+            }[];
+            summary?: string;
+        };
+        UpdateWorkflowNodeDto: {
+            draft: components["schemas"]["WorkflowNodeDraftDto"];
+        };
+        WorkflowNodeEventDto: {
+            /** @enum {string} */
+            type: "APPROVE" | "REJECT" | "SKIP" | "RETRY";
+            draft?: components["schemas"]["WorkflowNodeDraftDto"];
+        };
+        WorkflowGraphDto: {
+            /** @description WorkflowStep[] — validated by the compiler */
+            steps: {
+                [key: string]: unknown;
+            }[];
+            /** @description Editor canvas coordinates, keyed by step id */
+            layout?: {
+                [key: string]: unknown;
+            };
+        };
+        WorkflowTriggerDto: {
+            /** @description Offer a Run button on matching pages */
+            manual?: boolean;
+            /** @description Start a run automatically when one of `events` fires on a matching page. Defaults false — an always-on trigger is how a workspace gets an LLM avalanche. */
+            autoStart?: boolean;
+            events?: string[];
+            /** @description Empty = every category */
+            categories?: ("process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other")[];
+        };
+        CreateWorkflowDto: {
+            workspaceId: string;
+            /** @description Null = every project */
+            projectId?: string | null;
+            name: string;
+            description?: string | null;
+            graph: components["schemas"]["WorkflowGraphDto"];
+            trigger?: components["schemas"]["WorkflowTriggerDto"];
+            /** @description Defaults to true */
+            enabled?: boolean;
+        };
+        UpdateWorkflowDto: {
+            name?: string;
+            description?: string | null;
+            projectId?: string | null;
+            graph?: components["schemas"]["WorkflowGraphDto"];
+            trigger?: components["schemas"]["WorkflowTriggerDto"];
+            enabled?: boolean;
+        };
+        ValidateWorkflowDto: {
+            /** @description Defaults to the stored graph */
+            graph?: components["schemas"]["WorkflowGraphDto"];
+        };
         ApiErrorResponse: {
             /**
              * @description HTTP status (0 is reserved for client-synthesized errors)
@@ -2106,7 +2471,7 @@ export interface components {
              * @example NOT_FOUND
              * @enum {string}
              */
-            code: "BAD_REQUEST" | "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "ASSISTANT_BUDGET_EXCEEDED" | "INTERNAL" | "NETWORK_ERROR" | "TIMEOUT" | "ABORTED" | "UNKNOWN";
+            code: "BAD_REQUEST" | "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "PAYLOAD_TOO_LARGE" | "UNSUPPORTED_MEDIA_TYPE" | "RATE_LIMITED" | "UPSTREAM_UNAVAILABLE" | "ASSISTANT_BUDGET_EXCEEDED" | "INTERNAL" | "NETWORK_ERROR" | "TIMEOUT" | "ABORTED" | "UNKNOWN";
             /** @example Document 3f2a… not found */
             message: string;
             /** @description Machine-readable extras: validation errors[], conflict currentHeadRevisionId/comparisonUrl, … */
@@ -4018,6 +4383,45 @@ export interface operations {
             };
         };
     };
+    DocumentsController_deleteThreadComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                threadId: string;
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     DocumentsController_editThreadComment: {
         parameters: {
             query?: never;
@@ -4640,6 +5044,45 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MergeRequestsController_deleteComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                threadId: string;
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6866,6 +7309,751 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateGlossaryTermDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ImportController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateImportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ImportController_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ImportController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ImportController_discard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ImportController_content: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ImportController_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitImportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_listRuns: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                projectId?: string;
+                definitionId?: string;
+                documentId?: string;
+                status?: "pending" | "running" | "awaiting-review" | "paused" | "completed" | "failed" | "cancelled";
+                /** @description Opaque cursor from the previous page */
+                cursor?: string;
+                /** @description Defaults to 25, max 100 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_startRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartWorkflowRunDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_getRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_runEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRunEventDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_updateNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                nodeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkflowNodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_nodeEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                nodeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowNodeEventDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Adds this project’s definitions to the workspace-wide ones */
+                projectId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWorkflowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkflowDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_validate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateWorkflowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentWorkflowsController_runsForDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

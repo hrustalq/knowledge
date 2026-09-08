@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  DeleteDocumentCommentResponse,
   DocumentThread,
   ListDocumentThreadsResponse,
   ReviewComment,
@@ -69,6 +70,7 @@ export class DocumentThreadsService {
         data: {
           documentId,
           resolvable: dto.resolvable ?? true,
+          source: dto.source ?? 'human',
           anchorType: anchor?.type ?? null,
           anchor: anchor ?? undefined,
         },
@@ -93,12 +95,14 @@ export class DocumentThreadsService {
     threadId: string,
     body: string,
     authorId: string = AUTHOR_ID_STUB,
+    replyToId?: string,
   ): Promise<{ thread: DocumentThread }> {
     const doc = await this.getDocumentOrThrow(documentId);
     const thread = await this.getThreadOrThrow(documentId, threadId);
+    const replyTo = replyToId ? await this.requireCommentInThread(thread.id, replyToId) : null;
 
     await this.prisma.documentComment.create({
-      data: { threadId: thread.id, authorId, body },
+      data: { threadId: thread.id, authorId, body, replyToId: replyTo?.id ?? null },
     });
     await this.recordActivity(doc, 'document.comment.created', thread.id, authorId, {
       anchored: thread.anchorType !== null,
@@ -116,10 +120,7 @@ export class DocumentThreadsService {
   ): Promise<{ thread: DocumentThread }> {
     await this.getDocumentOrThrow(documentId);
     const thread = await this.getThreadOrThrow(documentId, threadId);
-    const comment = await this.prisma.documentComment.findUnique({ where: { id: commentId } });
-    if (!comment || comment.threadId !== thread.id) {
-      throw new NotFoundException(`Comment ${commentId} not found on thread ${threadId}`);
-    }
+    const comment = await this.requireCommentInThread(thread.id, commentId);
     if (comment.authorId !== actorId) {
       throw new ForbiddenException('Only the author of a comment can edit it');
     }
@@ -129,6 +130,36 @@ export class DocumentThreadsService {
       data: { body, updatedAt: new Date() },
     });
     return { thread: await this.reload(thread.id) };
+  }
+
+  /** Delete a comment — its own author only (see the merge-request twin). */
+  async deleteComment(
+    documentId: string,
+    threadId: string,
+    commentId: string,
+    actorId: string = AUTHOR_ID_STUB,
+  ): Promise<DeleteDocumentCommentResponse> {
+    const doc = await this.getDocumentOrThrow(documentId);
+    const thread = await this.getThreadOrThrow(documentId, threadId);
+    const comment = await this.requireCommentInThread(thread.id, commentId);
+    if (comment.authorId !== actorId) {
+      throw new ForbiddenException('Only the author of a comment can delete it');
+    }
+
+    const remaining = await this.prisma.$transaction(async (tx) => {
+      await tx.documentComment.delete({ where: { id: comment.id } });
+      const left = await tx.documentComment.count({ where: { threadId: thread.id } });
+      if (left === 0) await tx.documentThread.delete({ where: { id: thread.id } });
+      return left;
+    });
+
+    await this.recordActivity(doc, 'document.comment.deleted', thread.id, actorId, {
+      threadRemoved: remaining === 0,
+    });
+    return {
+      threadId: thread.id,
+      thread: remaining === 0 ? null : await this.reload(thread.id),
+    };
   }
 
   async setResolved(
@@ -161,6 +192,7 @@ export class DocumentThreadsService {
     return {
       threadId: t.id,
       documentId: t.documentId,
+      source: t.source === 'ai' ? 'ai' : 'human',
       resolvable: t.resolvable,
       resolved: t.resolved,
       resolvedBy: t.resolvedBy,
@@ -172,6 +204,7 @@ export class DocumentThreadsService {
           threadId: c.threadId,
           authorId: c.authorId,
           body: c.body,
+          replyToId: c.replyToId,
           createdAt: c.createdAt.toISOString(),
           updatedAt: c.updatedAt?.toISOString() ?? null,
         }),
@@ -218,5 +251,13 @@ export class DocumentThreadsService {
       throw new NotFoundException(`Thread ${threadId} not found on document ${documentId}`);
     }
     return thread;
+  }
+
+  private async requireCommentInThread(threadId: string, commentId: string) {
+    const comment = await this.prisma.documentComment.findUnique({ where: { id: commentId } });
+    if (!comment || comment.threadId !== threadId) {
+      throw new NotFoundException(`Comment ${commentId} not found on thread ${threadId}`);
+    }
+    return comment;
   }
 }

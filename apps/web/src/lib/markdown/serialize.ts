@@ -136,6 +136,18 @@ turndown.addRule('knStatus', {
     `<span ${KN.status}="${attr(node, KN.status) || 'neutral'}">${content.trim()}</span>`,
 });
 
+/**
+ * Inline person mention. A `<span>`, not a link, because there is no page to
+ * send a reader to — and a chip that navigates nowhere is worse than one that
+ * never promised to. The name stays inside the element as ordinary text, so
+ * the chunker still embeds "@Ada Lovelace" as words on the page.
+ */
+turndown.addRule('knUser', {
+  filter: (node) => (node as HTMLElement).hasAttribute?.(KN.user),
+  replacement: (content, node) =>
+    `<span ${KN.user}="${attr(node, KN.user)}">${content.trim() || '@?'}</span>`,
+});
+
 /** Table-of-contents macro: a marker, resolved at read time from the real headings. */
 turndown.addRule('knToc', {
   filter: (node) => (node as HTMLElement).hasAttribute?.(KN.toc),

@@ -24,6 +24,7 @@ export const KN = {
   status: 'data-kn-status',
   toc: 'data-kn-toc',
   mention: 'data-kn-mention',
+  user: 'data-kn-user',
 } as const;
 
 /**

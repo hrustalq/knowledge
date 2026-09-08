@@ -17,6 +17,8 @@ import { EventsApiModule } from './events/events-api.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
+import { ImportModule } from './import/import.module.js';
+import { WorkflowsModule } from './workflows/workflows.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
@@ -47,6 +49,8 @@ import { AppService } from './app.service.js';
     AssistantModule,
     AiModule,
     GlossaryModule,
+    ImportModule,
+    WorkflowsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

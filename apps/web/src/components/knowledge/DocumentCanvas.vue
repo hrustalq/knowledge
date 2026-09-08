@@ -34,11 +34,13 @@ import {
   anchorFromDomSelection,
   anchorFromQuote,
   anchorsAtEvent,
+  type AnchorAuthor,
   type CommentAnchor,
 } from '@/components/editor/extensions/comment-anchors'
 import type { TextAnchor } from '@/lib/anchor-match'
 import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
+import { useMembers } from '@/components/merge-requests/use-members'
 
 const props = withDefaults(
   defineProps<{
@@ -56,9 +58,10 @@ const props = withDefaults(
 )
 const emit = defineEmits<{
   'create-thread': [body: string, anchor: ReviewThreadAnchor | undefined, resolvable: boolean]
-  reply: [threadId: string, body: string]
+  reply: [threadId: string, body: string, replyToId: string | null]
   resolve: [threadId: string, resolved: boolean]
   edit: [threadId: string, commentId: string, body: string]
+  delete: [threadId: string, commentId: string]
   /** Anchored threads whose passage no longer exists on the page. */
   outdated: [threadIds: string[]]
   headings: [headings: { id: string; text: string; level: number }[]]
@@ -111,6 +114,8 @@ const openThreads = computed(() =>
 )
 
 /** Only anchored threads are drawn on the text; the rest live in the list below. */
+const { nameOf } = useMembers()
+
 const anchors = computed<CommentAnchor[]>(() =>
   props.threads
     .filter((t) => t.anchor?.type === 'text')
@@ -119,8 +124,27 @@ const anchors = computed<CommentAnchor[]>(() =>
       anchor: t.anchor as TextAnchor,
       resolved: t.resolved,
       count: t.comments.length,
+      authors: authorsOf(t),
     })),
 )
+
+/**
+ * The faces a pin wears: distinct participants, oldest first. An assistant
+ * review posts under the identity of whoever ran it, so a thread marked `ai`
+ * contributes one glyph instead of that person's face — otherwise a machine
+ * finding would look like a colleague's remark.
+ */
+function authorsOf(thread: ReviewThread): AnchorAuthor[] {
+  if (thread.source === 'ai') return [{ userId: 'ai', name: 'Assistant', ai: true }]
+  const seen = new Set<string>()
+  const out: AnchorAuthor[] = []
+  for (const comment of thread.comments) {
+    if (seen.has(comment.authorId)) continue
+    seen.add(comment.authorId)
+    out.push({ userId: comment.authorId, name: nameOf(comment.authorId) })
+  }
+  return out
+}
 
 /** Viewport rect → coordinates inside the (scrolling) canvas. */
 function toCanvas(rect: DOMRect): Floater | null {
@@ -466,9 +490,10 @@ function onOutdated(ids: string[]) {
           :readonly="!canComment"
           :busy="busy"
           :resolve-document-id="resolveDocumentId"
-          @reply="(b: string) => emit('reply', thread.threadId, b)"
+          @reply="(b: string, p: string | null) => emit('reply', thread.threadId, b, p)"
           @resolve="(r: boolean) => emit('resolve', thread.threadId, r)"
           @edit="(c: string, b: string) => emit('edit', thread.threadId, c, b)"
+          @delete="(c: string) => emit('delete', thread.threadId, c)"
         />
       </div>
     </div>

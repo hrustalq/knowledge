@@ -25,6 +25,8 @@ const props = defineProps<{
   streamingBlocks?: AssistantUiBlock[]
   /** True only for the newest message with nothing in flight — an older prompt is a record, not a question. */
   promptActive?: boolean
+  /** The user turn that answered this message's prompt, when it has one. */
+  promptAnswer?: string
 }>()
 
 const emit = defineEmits<{ answer: [string]; switchMode: [string] }>()
@@ -60,6 +62,7 @@ const isUser = computed(() => props.message.role === 'user')
         v-if="message.prompt"
         :prompt="message.prompt"
         :active="promptActive === true"
+        :answer="promptAnswer"
         class="max-w-[42rem]"
         @answer="emit('answer', $event)"
         @switch-mode="emit('switchMode', $event)"

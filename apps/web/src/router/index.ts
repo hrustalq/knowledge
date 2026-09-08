@@ -24,10 +24,24 @@ export function createRouter() {
         meta: { fill: true, bare: true },
       },
       { path: '/create', component: () => import('@/pages/EditorPage.vue'), meta: { fill: true, bare: true } },
-      { path: '/upload', component: () => import('@/pages/UploadPage.vue') },
+      // /upload keeps its path so every existing link, bookmark and sidebar
+      // shortcut still lands; /import is the name the flow now goes by.
+      // meta.fill: the wizard owns the viewport — its three steps share one
+      // frame with a fixed header and action bar, and step 3 holds an editor
+      // that scrolls itself. Breadcrumbs stay: unlike the editor this is not a
+      // writing surface, and the trail is the only orientation it has.
+      {
+        path: '/upload',
+        alias: '/import',
+        component: () => import('@/pages/ImportPage.vue'),
+        meta: { fill: true },
+      },
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
       { path: '/merge-requests', component: () => import('@/pages/MergeRequestsPage.vue') },
       { path: '/merge-requests/:id', component: () => import('@/pages/MergeRequestDetailPage.vue') },
+      // Workflows (docs/features/17): the run list, and one run's node tree.
+      { path: '/workflows', component: () => import('@/pages/WorkflowsPage.vue') },
+      { path: '/workflows/:id', component: () => import('@/pages/WorkflowRunPage.vue') },
       // meta.fill: the chat owns the viewport — see App.vue's two content modes.
       { path: '/assistant', component: () => import('@/pages/AssistantPage.vue'), meta: { fill: true } },
       // Settings: shell with its own right-hand nav; the sections are nested pages.
@@ -45,6 +59,10 @@ export function createRouter() {
           // Glossary: workspace vocabulary; the page gates writes on the
           // editor role, and reading it is open to any member.
           { path: 'glossary', component: () => import('@/pages/GlossaryPage.vue') },
+          // Workflows: like AI settings, deliberately not meta.platformAdmin —
+          // this is workspace administration, so the page gates on
+          // auth.canAdminWorkspace and the API enforces the admin role.
+          { path: 'workflows', component: () => import('@/pages/WorkflowSettingsPage.vue') },
           // Access control (page gates mutations by workspace role)
           { path: 'access', component: () => import('@/pages/AccessControlPage.vue') },
           { path: 'activity', component: () => import('@/pages/ActivityPage.vue') },

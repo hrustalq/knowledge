@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
@@ -157,7 +157,7 @@ export class MergeRequestsController {
     @Body() dto: CreateCommentDto,
     @CurrentPrincipal() principal: Principal,
   ) {
-    return this.threads.reply(id, threadId, dto.body, principal?.userId);
+    return this.threads.reply(id, threadId, dto.body, principal?.userId, dto.replyToId);
   }
 
   @Patch('merge-requests/:id/threads/:threadId/comments/:commentId')
@@ -171,6 +171,20 @@ export class MergeRequestsController {
     @CurrentPrincipal() principal: Principal,
   ) {
     return this.threads.editComment(id, threadId, commentId, dto.body, principal?.userId);
+  }
+
+  @Delete('merge-requests/:id/threads/:threadId/comments/:commentId')
+  @Access('editor', 'merge-request')
+  @ApiOperation({
+    summary: "Delete a review comment (the comment's own author only); removes the thread if it was the last one",
+  })
+  deleteComment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.threads.deleteComment(id, threadId, commentId, principal?.userId);
   }
 
   @Patch('merge-requests/:id/threads/:threadId')

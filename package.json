@@ -15,5 +15,8 @@
   },
   "devDependencies": {
     "turbo": "^2.10.12"
+  },
+  "dependencies": {
+    "xstate": "^5.32.6"
   }
 }

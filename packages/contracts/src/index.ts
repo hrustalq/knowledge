@@ -517,6 +517,17 @@ export interface ReviewComment {
   threadId: string;
   authorId: string;
   body: string;
+  /**
+   * The comment this one answers, when it answers one in particular rather
+   * than the thread as a whole. Null on the opening comment, and on a reply
+   * written to the discussion at large.
+   *
+   * The comment list stays flat and createdAt-ordered — this is attribution,
+   * not nesting. A reader needs to know *which* remark a reply picks up; they
+   * do not need the tree that indenting a conversation would produce, and a
+   * thread that anchors to one passage is short enough not to want one.
+   */
+  replyToId: string | null;
   createdAt: string;
   /**
    * When the author last rewrote the body, or null while it stands as first
@@ -535,13 +546,36 @@ export interface UpdateReviewCommentRequest {
 }
 
 /**
+ * DELETE .../threads/:threadId/comments/:commentId — the comment's own author
+ * only, like editing.
+ *
+ * `thread` comes back null when the deleted comment was the last one in it: a
+ * discussion with nothing said in it is not a discussion, so it goes too, and
+ * the client drops the card rather than rendering an empty one. Replies that
+ * pointed at the deleted comment keep their place and lose their attribution
+ * (`replyToId` becomes null) rather than being deleted along with it.
+ */
+export interface DeleteReviewCommentResponse {
+  threadId: string;
+  thread: ReviewThread | null;
+}
+
+/**
  * What every discussion has regardless of what it hangs off: a resolvable
  * thread holding a flat, createdAt-ordered comment list. The subject id is
  * added by the extending interface, which is what lets one ThreadCard render
  * both a review thread and a page comment.
  */
+/**
+ * Who opened a discussion. The assistant posts under the identity of whoever
+ * ran it, so the author id cannot answer this — and a reader deciding how much
+ * weight to give a remark needs to know whether a person or a model wrote it.
+ */
+export type ReviewThreadSource = 'human' | 'ai';
+
 export interface ReviewThread {
   threadId: string;
+  source: ReviewThreadSource;
   /**
    * GitLab's two shapes of remark: `false` is a plain comment (says
    * something), `true` a thread (asks for something, and is not done until
@@ -575,15 +609,24 @@ export interface CreateMergeRequestThreadRequest {
   anchor?: MergeRequestThreadAnchor;
   /** Defaults to true (a thread); false posts a plain comment. */
   resolvable?: boolean;
+  /** Defaults to 'human'; 'ai' marks a finding posted from an assistant review. */
+  source?: ReviewThreadSource;
 }
 
 // POST /v1/merge-requests/:id/threads/:threadId/comments
 export interface CreateMergeRequestCommentRequest {
   body: string;
+  /** Comment in this thread that the reply answers; omitted replies to the thread. */
+  replyToId?: string;
 }
 
 // PATCH /v1/merge-requests/:id/threads/:threadId/comments/:commentId
 export type UpdateMergeRequestCommentRequest = UpdateReviewCommentRequest;
+
+// DELETE /v1/merge-requests/:id/threads/:threadId/comments/:commentId
+export interface DeleteMergeRequestCommentResponse extends DeleteReviewCommentResponse {
+  thread: MergeRequestThread | null;
+}
 
 // PATCH /v1/merge-requests/:id/threads/:threadId
 export interface ResolveMergeRequestThreadRequest {
@@ -616,15 +659,24 @@ export interface CreateDocumentThreadRequest {
   anchor?: ReviewThreadAnchor;
   /** Defaults to true (a thread); false posts a plain comment. */
   resolvable?: boolean;
+  /** Defaults to 'human'; 'ai' marks a finding posted from an assistant review. */
+  source?: ReviewThreadSource;
 }
 
 // POST /v1/documents/:id/threads/:threadId/comments
 export interface CreateDocumentCommentRequest {
   body: string;
+  /** Comment in this thread that the reply answers; omitted replies to the thread. */
+  replyToId?: string;
 }
 
 // PATCH /v1/documents/:id/threads/:threadId/comments/:commentId
 export type UpdateDocumentCommentRequest = UpdateReviewCommentRequest;
+
+// DELETE /v1/documents/:id/threads/:threadId/comments/:commentId
+export interface DeleteDocumentCommentResponse extends DeleteReviewCommentResponse {
+  thread: DocumentThread | null;
+}
 
 // PATCH /v1/documents/:id/threads/:threadId
 export interface ResolveDocumentThreadRequest {
@@ -1010,8 +1062,22 @@ export const KNOWN_EVENT_TYPES = [
   'merge-request.review-requested',
   'merge-request.comment.created',
   'merge-request.comment.resolved',
+  'merge-request.comment.deleted',
   'document.comment.created',
   'document.comment.resolved',
+  'document.comment.deleted',
+  'import.parsed',
+  'import.failed',
+  'import.submitted',
+  'workflow-run.started',
+  'workflow-run.paused',
+  'workflow-run.resumed',
+  'workflow-run.completed',
+  'workflow-run.failed',
+  'workflow-run.cancelled',
+  'workflow-node.awaiting-review',
+  'workflow-node.materialized',
+  'workflow-node.failed',
 ] as const;
 export type KnownEventType = (typeof KNOWN_EVENT_TYPES)[number];
 
@@ -1611,6 +1677,8 @@ export const API_ERROR_CODES = [
   'NOT_FOUND',
   'CONFLICT',
   'PAYLOAD_TOO_LARGE',
+  // feature 16: the uploaded file is not a format any parser handles
+  'UNSUPPORTED_MEDIA_TYPE',
   'RATE_LIMITED',
   'UPSTREAM_UNAVAILABLE',
   // feature 12: the caller's or the workspace's monthly token budget is spent
@@ -1650,6 +1718,7 @@ export function errorCodeForStatus(status: number): ApiErrorCode {
     case 404: return 'NOT_FOUND';
     case 409: return 'CONFLICT';
     case 413: return 'PAYLOAD_TOO_LARGE';
+    case 415: return 'UNSUPPORTED_MEDIA_TYPE';
     case 429: return 'RATE_LIMITED';
     case 502:
     case 503:
@@ -1947,7 +2016,15 @@ export interface AiPluginTestResponse {
 
 // ---- Usage & budgets -------------------------------------------------------
 
-export type AiUsageOperation = 'ask' | 'chat' | 'chat-stream' | 'review' | 'suggest' | 'glossary';
+export type AiUsageOperation =
+  | 'ask'
+  | 'chat'
+  | 'chat-stream'
+  | 'review'
+  | 'suggest'
+  | 'glossary'
+  | 'import'
+  | 'workflow';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {
@@ -2153,4 +2230,476 @@ export interface SuggestGlossaryTermsResponse {
   /** Project the proposals were checked against, and where accepting one puts it. */
   projectId: string | null;
   suggestions: GlossaryTermSuggestion[];
+}
+
+// ---------------------------------------------------------------------------
+// Document import (docs/features/16) — a file becoming a page.
+//
+// Reserve → PUT → start → poll → review → submit. The bytes go straight to
+// object storage exactly like revisions and attachments do; what is new is that
+// a worker parses them into markdown *before* any document exists, so the
+// result can be read and corrected by a human before it is committed.
+
+/** One accepted source format: what the picker offers and what the server routes on. */
+export interface ImportFormat {
+  /** Parser id the server will use. */
+  parser: ImportParserId;
+  label: string;
+  extensions: string[];
+  contentTypes: string[];
+}
+
+export type ImportParserId =
+  | 'pdf'
+  | 'docx'
+  | 'pptx'
+  | 'html'
+  | 'tabular'
+  | 'structured'
+  | 'plaintext'
+  | 'ocr';
+
+/**
+ * The single source of truth for what can be imported, shared by the drop zone,
+ * the server's reserve guard and the parser registry — so a file the picker
+ * accepts can never be one the worker refuses.
+ *
+ * Order matters: the first entry whose extension or content type matches wins,
+ * which is why `plaintext` (the catch-all for text/*) sits last.
+ */
+export const IMPORT_FORMATS: readonly ImportFormat[] = [
+  {
+    parser: 'pdf',
+    label: 'PDF',
+    extensions: ['.pdf'],
+    contentTypes: ['application/pdf'],
+  },
+  {
+    parser: 'docx',
+    label: 'Word',
+    extensions: ['.docx'],
+    contentTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  },
+  {
+    parser: 'pptx',
+    label: 'PowerPoint',
+    extensions: ['.pptx'],
+    contentTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  },
+  {
+    parser: 'html',
+    label: 'HTML',
+    extensions: ['.html', '.htm'],
+    contentTypes: ['text/html', 'application/xhtml+xml'],
+  },
+  {
+    parser: 'tabular',
+    label: 'Spreadsheet data',
+    extensions: ['.csv', '.tsv'],
+    contentTypes: ['text/csv', 'text/tab-separated-values'],
+  },
+  {
+    parser: 'structured',
+    label: 'JSON / YAML',
+    extensions: ['.json', '.yaml', '.yml'],
+    contentTypes: ['application/json', 'application/yaml', 'text/yaml', 'text/x-yaml'],
+  },
+  {
+    parser: 'ocr',
+    label: 'Image (OCR)',
+    extensions: ['.png', '.jpg', '.jpeg', '.webp', '.gif'],
+    contentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+  },
+  {
+    parser: 'plaintext',
+    label: 'Markdown / text',
+    extensions: ['.md', '.markdown', '.txt', '.text'],
+    contentTypes: ['text/markdown', 'text/plain', 'text/x-markdown'],
+  },
+] as const;
+
+/** Resolve a file to its parser the same way on both sides of the wire. */
+export function importFormatFor(filename: string, contentType?: string): ImportFormat | null {
+  const ext = filename.toLowerCase().replace(/^.*(?=\.)/, '');
+  const type = (contentType ?? '').split(';')[0].trim().toLowerCase();
+  return (
+    IMPORT_FORMATS.find((f) => f.extensions.includes(ext)) ??
+    IMPORT_FORMATS.find((f) => type !== '' && f.contentTypes.includes(type)) ??
+    null
+  );
+}
+
+/**
+ * `awaiting-upload` exists because the row is created before the bytes land:
+ * the presigned PUT is the client's job, and until the bucket confirms the
+ * object there is nothing to parse.
+ */
+export type ImportStatus =
+  | 'awaiting-upload'
+  | 'queued'
+  | 'running'
+  | 'parsed'
+  | 'failed'
+  | 'submitted';
+
+/** Counts the review step reports, filled in by whichever parser ran. */
+export interface ImportMeta {
+  pages?: number;
+  slides?: number;
+  sections?: number;
+  words?: number;
+  images?: number;
+  /** A PDF with no text layer: the review step offers OCR instead of a dead end. */
+  needsOcr?: boolean;
+}
+
+export interface ImportJobInfo {
+  importId: string;
+  workspaceId: string;
+  projectId: string;
+  parentId: string | null;
+  category: DocumentCategory;
+  status: ImportStatus;
+  /** Human phrase for the current act ("Reading 48 pages"); null when idle. */
+  stage: string | null;
+  /** 0..1, or null when the worker cannot honestly say — the ring goes indeterminate. */
+  progress: number | null;
+  sourceFilename: string;
+  contentType: string;
+  sizeBytes: number;
+  parser: ImportParserId | null;
+  title: string | null;
+  /** What the parse could not carry. Never swallowed. */
+  warnings: string[];
+  meta: ImportMeta;
+  error: string | null;
+  documentId: string | null;
+  createdAt: string;
+}
+
+// POST /v1/imports
+export interface CreateImportRequest {
+  workspaceId: string;
+  projectId: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  category?: DocumentCategory;
+  parentId?: string;
+}
+export interface CreateImportResponse {
+  import: ImportJobInfo;
+  upload: { url: string; method: 'PUT'; headers: Record<string, string>; expiresAt: string };
+}
+
+// POST /v1/imports/:id/start  and  GET /v1/imports/:id
+export interface ImportJobResponse {
+  import: ImportJobInfo;
+}
+
+// GET /v1/imports/:id/content
+export interface ImportContentResponse {
+  importId: string;
+  title: string | null;
+  markdown: string;
+  warnings: string[];
+  meta: ImportMeta;
+}
+
+// POST /v1/imports/:id/submit
+export interface SubmitImportRequest {
+  title: string;
+  markdown: string;
+  /** Destination may be corrected on the review step without re-parsing. */
+  projectId?: string;
+  category?: DocumentCategory;
+  parentId?: string | null;
+}
+export interface SubmitImportResponse {
+  documentId: string;
+  revisionId: string;
+  /** The original file, promoted from staging onto the new page. */
+  attachmentId: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic document workflows (docs/features/17)
+// ---------------------------------------------------------------------------
+// A workflow definition is a graph of steps run against a source page: one
+// entity fans out into use-cases, each use-case into API endpoints and frontend
+// pages. Every step parks its result as a *draft* on the run; nothing enters
+// the page tree until a person approves it. The step catalogue is closed and
+// each kind has an executor registered in code, so a "dynamic" workflow is
+// always data — the database never carries executable logic.
+
+/** Step kinds. Closed set: each maps to an executor in the worker. */
+export const WORKFLOW_STEP_KINDS = [
+  /** Fan-out: the model returns a list of items, each becoming a child node. */
+  'ai.generate',
+  /** Writes one node's full markdown body, with tools (search / read / graph). */
+  'ai.draft',
+  /** Deterministic: runs a knowledge search and attaches hits to the node input. */
+  'search',
+  /** A pure human gate — no model call. */
+  'review',
+] as const;
+export type WorkflowStepKind = (typeof WORKFLOW_STEP_KINDS)[number];
+
+/** Run lifecycle. `paused` is operator-initiated; `awaiting-review` is the
+ *  machine parking itself because every live node needs a human. */
+export const WORKFLOW_RUN_STATUSES = [
+  'pending',
+  'running',
+  'awaiting-review',
+  'paused',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
+
+/** Node lifecycle. `materialized` is the only status that implies a Document. */
+export const WORKFLOW_NODE_STATUSES = [
+  'pending',
+  'running',
+  'awaiting-review',
+  'approved',
+  'materializing',
+  'materialized',
+  'rejected',
+  'skipped',
+  'failed',
+] as const;
+export type WorkflowNodeStatus = (typeof WORKFLOW_NODE_STATUSES)[number];
+
+/** Events a client may send at a node. Mirrors `nodeMachine`'s event union —
+ *  the web enables buttons from the compiled machine, so this list and the
+ *  machine cannot drift. */
+export const WORKFLOW_NODE_EVENTS = ['APPROVE', 'REJECT', 'SKIP', 'RETRY'] as const;
+export type WorkflowNodeEventType = (typeof WORKFLOW_NODE_EVENTS)[number];
+
+export const WORKFLOW_RUN_EVENTS = ['PAUSE', 'RESUME', 'CANCEL'] as const;
+export type WorkflowRunEventType = (typeof WORKFLOW_RUN_EVENTS)[number];
+
+/** What a step's approved drafts become when materialised. */
+export interface WorkflowStepProduces {
+  category: DocumentCategory;
+  /** Edge type written from the produced page to the node's parent page. */
+  relationToParent: string;
+  /** Nest the produced page under the parent page (feature 08). */
+  nestUnderParent?: boolean;
+}
+
+/** Scope handed to a step's tools and search — the "filters" of the feature. */
+export interface WorkflowStepFilters {
+  categories?: DocumentCategory[];
+  projectIds?: string[];
+  tags?: string[];
+  limit?: number;
+}
+
+export interface WorkflowStep {
+  /** Stable slug, unique within the definition. Referenced by `next` and by
+   *  `workflow_run_nodes.step_id`, so renaming one orphans a running node. */
+  id: string;
+  kind: WorkflowStepKind;
+  title: string;
+  description?: string;
+  /** Downstream step ids. Several entries = the fan-out of the definition
+   *  graph (one use-case feeds both `api-endpoints` and `frontend-pages`). */
+  next: string[];
+  /** Does this step produce N children (a list) or refine its own node? */
+  fanOut: boolean;
+  /** Skip the human gate — the step's drafts materialise as soon as they land. */
+  autoApprove: boolean;
+  /** Hard cap on fan-out width, so one hallucinated list cannot open 200 nodes. */
+  maxItems?: number;
+  produces?: WorkflowStepProduces;
+  prompt?: { system?: string; user: string };
+  /** Names from the assistant tool registry this step may call. */
+  tools?: string[];
+  skillIds?: string[];
+  /** Pin an `ai_providers` profile for this step (feature 12 routing). */
+  providerId?: string | null;
+  filters?: WorkflowStepFilters;
+}
+
+export interface WorkflowGraph {
+  steps: WorkflowStep[];
+  /** Editor-only canvas coordinates, keyed by step id. Ignored by the runtime. */
+  layout?: Record<string, { x: number; y: number }>;
+}
+
+export interface WorkflowTrigger {
+  /** Offer a Run button on matching pages and in /workflows. */
+  manual: boolean;
+  /** Start a run automatically when `events` fire on a matching page.
+   *  Defaults false: the failure mode of an always-on trigger is an LLM
+   *  avalanche across a whole workspace. */
+  autoStart: boolean;
+  events: string[];
+  /** Only pages in these categories trigger. Empty = every category. */
+  categories: DocumentCategory[];
+}
+
+export interface WorkflowDefinitionInfo {
+  id: string;
+  workspaceId: string;
+  /** null = available to every project in the workspace. */
+  projectId: string | null;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  version: number;
+  graph: WorkflowGraph;
+  trigger: WorkflowTrigger;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One problem found by `compileDefinition` — surfaced live in the editor. */
+export interface WorkflowValidationIssue {
+  /** Absent when the problem is the graph as a whole (a cycle, no entry step). */
+  stepId?: string;
+  message: string;
+  severity: 'error' | 'warning';
+}
+
+export interface WorkflowNodeDraft {
+  title: string;
+  markdown: string;
+  frontmatter?: Record<string, unknown>;
+  relations?: RelationInput[];
+  /** Free-form summary the model produced alongside the body, shown in the tree. */
+  summary?: string;
+}
+
+export interface WorkflowRunNodeInfo {
+  id: string;
+  runId: string;
+  parentId: string | null;
+  stepId: string;
+  status: WorkflowNodeStatus;
+  draft: WorkflowNodeDraft | null;
+  /** Set once approved and materialised. */
+  documentId: string | null;
+  error: string | null;
+  attempt: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowRunInfo {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  definitionId: string;
+  definitionName: string;
+  rootDocumentId: string;
+  rootDocumentTitle: string | null;
+  status: WorkflowRunStatus;
+  error: string | null;
+  /** 'manual' | 'trigger' | 'mcp' — how the run came to exist. */
+  startedBy: string;
+  createdBy: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  /** Counts for list rows, so a card never has to fetch the node tree. */
+  nodeStats: { total: number; awaitingReview: number; materialized: number; failed: number };
+}
+
+// GET /v1/workflows?workspaceId=&projectId=
+export interface ListWorkflowsResponse {
+  workflows: WorkflowDefinitionInfo[];
+}
+
+// POST /v1/workflows
+export interface CreateWorkflowRequest {
+  workspaceId: string;
+  projectId?: string | null;
+  name: string;
+  description?: string | null;
+  graph: WorkflowGraph;
+  trigger?: WorkflowTrigger;
+  /** Described here rather than as a schema default: a `default:` in the
+   *  Swagger decorator would make this required in the generated client. */
+  enabled?: boolean;
+}
+
+// PATCH /v1/workflows/:id
+export interface UpdateWorkflowRequest {
+  name?: string;
+  description?: string | null;
+  projectId?: string | null;
+  graph?: WorkflowGraph;
+  trigger?: WorkflowTrigger;
+  enabled?: boolean;
+}
+
+export interface WorkflowResponse {
+  workflow: WorkflowDefinitionInfo;
+}
+
+// POST /v1/workflows/:id/validate
+export interface ValidateWorkflowRequest {
+  graph?: WorkflowGraph;
+}
+export interface ValidateWorkflowResponse {
+  valid: boolean;
+  issues: WorkflowValidationIssue[];
+}
+
+// GET /v1/workflows/runs?workspaceId=&projectId=&definitionId=&status=&documentId=
+export interface ListWorkflowRunsResponse {
+  runs: WorkflowRunInfo[];
+  nextCursor: string | null;
+  counts: Record<WorkflowRunStatus, number>;
+}
+
+// POST /v1/workflows/runs
+export interface StartWorkflowRunRequest {
+  workspaceId: string;
+  definitionId: string;
+  rootDocumentId: string;
+  /** Seed the first step with extra instructions for this run only. */
+  note?: string;
+}
+
+// GET /v1/workflows/runs/:id
+export interface WorkflowRunResponse {
+  run: WorkflowRunInfo;
+  /** The definition as frozen at start — editing the definition afterwards
+   *  must not change what a run in flight is doing. */
+  graph: WorkflowGraph;
+  nodes: WorkflowRunNodeInfo[];
+}
+
+// POST /v1/workflows/runs/:id/events
+export interface WorkflowRunEventRequest {
+  type: WorkflowRunEventType;
+}
+
+// PATCH /v1/workflows/runs/:id/nodes/:nodeId
+export interface UpdateWorkflowNodeRequest {
+  draft: WorkflowNodeDraft;
+}
+
+// POST /v1/workflows/runs/:id/nodes/:nodeId/events
+export interface WorkflowNodeEventRequest {
+  type: WorkflowNodeEventType;
+  /** APPROVE may carry a last-moment edit, so review and edit are one action. */
+  draft?: WorkflowNodeDraft;
+}
+export interface WorkflowNodeEventResponse {
+  node: WorkflowRunNodeInfo;
+  run: WorkflowRunInfo;
+}
+
+// GET /v1/documents/:id/workflow-runs
+export interface DocumentWorkflowRunsResponse {
+  documentId: string;
+  runs: WorkflowRunInfo[];
+  /** Definitions that may be started against this page right now. */
+  available: Array<{ id: string; name: string }>;
 }

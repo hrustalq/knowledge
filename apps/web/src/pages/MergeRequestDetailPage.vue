@@ -212,12 +212,18 @@ const editComment = useApiMutation(
   '/v1/merge-requests/{id}/threads/{threadId}/comments/{commentId}',
   { invalidates: threadInvalidates },
 )
+const deleteComment = useApiMutation(
+  'delete',
+  '/v1/merge-requests/{id}/threads/{threadId}/comments/{commentId}',
+  { invalidates: threadInvalidates },
+)
 const threadsBusy = computed(
   () =>
     createThread.isPending.value ||
     replyThread.isPending.value ||
     resolveThread.isPending.value ||
-    editComment.isPending.value,
+    editComment.isPending.value ||
+    deleteComment.isPending.value,
 )
 
 /** Comment attachments are stored against the document this MR targets. */
@@ -231,9 +237,14 @@ const pendingAnchor = ref<MergeRequestThreadAnchor | null>(null)
  * that stays open until someone resolves it. Composers that offer the choice
  * pass it; the ones that don't (the AI rail) post a plain comment.
  */
-function onCreateThread(body: string, anchor?: MergeRequestThreadAnchor, resolvable = false) {
+function onCreateThread(
+  body: string,
+  anchor?: MergeRequestThreadAnchor,
+  resolvable = false,
+  source: 'human' | 'ai' = 'human',
+) {
   createThread.mutate(
-    { path: { id: id.value }, body: { body, resolvable, ...(anchor ? { anchor } : {}) } },
+    { path: { id: id.value }, body: { body, resolvable, source, ...(anchor ? { anchor } : {}) } },
     {
       onSuccess: () => (pendingAnchor.value = null),
       onError: (e) => toast.error(e.message),
@@ -242,13 +253,13 @@ function onCreateThread(body: string, anchor?: MergeRequestThreadAnchor, resolva
 }
 /** AI findings posted from the rail land on Overview, where the thread will be. */
 function onAiComment(body: string) {
-  onCreateThread(body)
+  onCreateThread(body, undefined, false, 'ai')
   if (tab.value !== 'overview') setTab('overview')
   toast.success('Findings posted to the discussion')
 }
-function onReply(threadId: string, body: string) {
+function onReply(threadId: string, body: string, replyToId: string | null = null) {
   replyThread.mutate(
-    { path: { id: id.value, threadId }, body: { body } },
+    { path: { id: id.value, threadId }, body: { body, ...(replyToId ? { replyToId } : {}) } },
     { onError: (e) => toast.error(e.message) },
   )
 }
@@ -262,6 +273,15 @@ function onEditComment(threadId: string, commentId: string, body: string) {
   editComment.mutate(
     { path: { id: id.value, threadId, commentId }, body: { body } },
     { onError: (e) => toast.error(e.message) },
+  )
+}
+function onDeleteComment(threadId: string, commentId: string) {
+  deleteComment.mutate(
+    { path: { id: id.value, threadId, commentId } },
+    {
+      onSuccess: () => toast.success('Comment deleted'),
+      onError: (e) => toast.error(e.message),
+    },
   )
 }
 function refresh() {
@@ -350,9 +370,16 @@ function refresh() {
             @click="setTab(t)"
           >
             {{ TAB_LABELS[t] }}
+            <!-- Circle at one digit, stadium at two: a fixed height and a
+                 min-width the padding cannot undercut. The count belongs to
+                 the tab, so it takes the tab's state rather than staying grey
+                 next to an active label. -->
             <span
               v-if="tabCounts[t]"
-              class="rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground"
+              class="inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[0.6875rem] font-semibold tabular-nums"
+              :class="tab === t
+                ? 'bg-primary/15 text-primary'
+                : 'bg-muted text-foreground/85'"
             >{{ tabCounts[t] }}</span>
           </button>
         </div>
@@ -373,6 +400,7 @@ function refresh() {
             @reply="onReply"
             @resolve="onResolve"
             @edit="onEditComment"
+            @delete="onDeleteComment"
             @create-thread="(b, r) => onCreateThread(b, undefined, r)"
           />
         </template>
@@ -398,6 +426,7 @@ function refresh() {
             @reply="onReply"
             @resolve="onResolve"
             @edit="onEditComment"
+            @delete="onDeleteComment"
             @outdated="outdatedInReview = $event"
           />
         </div>
@@ -438,9 +467,10 @@ function refresh() {
                   :readonly="!canComment"
                   :busy="threadsBusy"
                   :resolve-document-id="resolveDocumentId"
-                  @reply="(b) => onReply(thread.threadId, b)"
+                  @reply="(b, p) => onReply(thread.threadId, b, p)"
                   @resolve="(r) => onResolve(thread.threadId, r)"
                   @edit="(c, b) => onEditComment(thread.threadId, c, b)"
+                  @delete="(c) => onDeleteComment(thread.threadId, c)"
                 />
               </template>
             </DiffView>

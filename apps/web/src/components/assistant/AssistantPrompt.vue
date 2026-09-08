@@ -8,10 +8,15 @@
 // telling the user to go and find it.
 //
 // A prompt is live only while it is the newest thing in the thread. Once it
-// has been answered the answer is right above it, so the controls go quiet:
-// still readable as the record of a question, no longer inviting a second
-// answer to a question already settled.
-import { computed, ref } from 'vue'
+// has been answered the controls go quiet: still readable as the record of a
+// question, no longer inviting a second answer to one already settled — and
+// showing what was picked, which is the part anyone scrolling back is looking
+// for. Nothing persists that selection: `compose()` writes it into a user
+// message and the message is all that survives, so the answered state is read
+// back out of that message (see `parseAnswer`). Local state would not do it —
+// the transcript is virtualized, so a prompt scrolled out of view and back is
+// a fresh instance, as is every prompt after a reload.
+import { computed, ref, watch } from 'vue'
 import { ArrowRight, Check, Sparkles, Wand2 } from 'lucide-vue-next'
 import type { AssistantPrompt, AssistantPromptField } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
@@ -21,6 +26,8 @@ const props = defineProps<{
   prompt: AssistantPrompt
   /** False for a prompt further up the thread, or while a turn is in flight. */
   active: boolean
+  /** The user turn this prompt was answered with, when it has been answered. */
+  answer?: string
 }>()
 
 const emit = defineEmits<{
@@ -73,6 +80,99 @@ function labelFor(field: AssistantPromptField, value: string): string {
 }
 
 /**
+ * Finds which of `needles` occur in `body`, in the order they occur there.
+ *
+ * Longest first, blanking each match out in place as it is found — an option
+ * label is model-authored and may well contain a comma, so splitting the line
+ * on one would shred it. Blanking with spaces of equal length keeps every
+ * later position true, which is what lets the result be sorted back into the
+ * order the answer was written in.
+ */
+function occurrences(needles: { match: string; value: string }[], body: string): string[] {
+  let rest = body.toLowerCase()
+  const found: { value: string; at: number }[] = []
+  for (const n of [...needles].sort((a, b) => b.match.length - a.match.length)) {
+    const at = rest.indexOf(n.match.toLowerCase())
+    if (at < 0) continue
+    found.push({ value: n.value, at })
+    rest = rest.slice(0, at) + ' '.repeat(n.match.length) + rest.slice(at + n.match.length)
+  }
+  return found.sort((a, b) => a.at - b.at).map((f) => f.value)
+}
+
+/**
+ * Reads a sent answer back into the form, so an answered prompt shows what was
+ * chosen instead of an empty one.
+ *
+ * `compose()` below is the only thing that writes these messages, so this
+ * reads its exact shape: one `Label: A, B` line per answered field. Labels
+ * are matched first because that is what is written; raw option values are
+ * tried only when no label matched at all, which is how answers sent before
+ * single choices carried their label still resolve. Nothing loose is guessed
+ * at — a line belonging to no field stays free text, which is also the case
+ * when the user ignored the controls and simply typed a reply.
+ */
+function parseAnswer(text: string): { values: Record<string, string | string[]>; other: string } {
+  const fields = form.value?.fields ?? []
+  const values: Record<string, string | string[]> = {}
+  const leftovers: string[] = []
+
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    const field = fields.find((f) => line.toLowerCase().startsWith(`${f.label.toLowerCase()}:`))
+    if (!field) {
+      leftovers.push(line)
+      continue
+    }
+    const body = line.slice(field.label.length + 1).trim()
+    if (field.type === 'text') {
+      values[field.name] = body
+      continue
+    }
+    const byLabel = occurrences(
+      field.options.map((o) => ({ match: o.label, value: o.value })),
+      body,
+    )
+    const picked =
+      byLabel.length > 0
+        ? byLabel
+        : occurrences(
+            field.options.map((o) => ({ match: o.value, value: o.value })),
+            body,
+          )
+    values[field.name] = field.type === 'checklist' ? picked : (picked[0] ?? body)
+  }
+
+  return { values, other: leftovers.join('\n') }
+}
+
+/** Answered here in this session, or answered before it and read back. */
+const answered = computed(() => submitted.value || (props.answer ?? '').trim().length > 0)
+
+/**
+ * A mode-switch is only shown as accepted when the turn that followed it is
+ * the intent it offered — the user is equally free to ignore it and ask
+ * something else, and claiming they switched would be a lie about the record.
+ */
+const switched = computed(
+  () =>
+    props.prompt.kind === 'mode-switch' &&
+    (props.answer ?? '').trim() === props.prompt.intent.trim(),
+)
+
+watch(
+  () => props.answer,
+  (text) => {
+    if (!text) return
+    const parsed = parseAnswer(text)
+    values.value = { ...values.value, ...parsed.values }
+    other.value = parsed.other
+  },
+  { immediate: true },
+)
+
+/**
  * The answer goes back as a readable message, not as JSON.
  *
  * It has to survive twice: the model reads it as the next turn, and the user
@@ -87,7 +187,7 @@ function compose(): string {
     const v = values.value[field.name]
     const text = Array.isArray(v)
       ? v.map((x) => labelFor(field, x)).join(', ')
-      : String(v ?? '').trim()
+      : labelFor(field, String(v ?? '').trim())
     if (text) lines.push(`${field.label}: ${text}`)
   }
   if (other.value.trim()) lines.push(other.value.trim())
@@ -107,7 +207,7 @@ function submit() {
        more of the answer it follows. -->
   <section
     class="rounded-xl border border-primary/25 bg-primary/[0.04] p-3.5"
-    :class="active ? '' : 'pointer-events-none opacity-55'"
+    :class="active ? '' : answered ? 'pointer-events-none opacity-80' : 'pointer-events-none opacity-55'"
     :aria-disabled="!active"
   >
     <!-- Mode switch ------------------------------------------------------- -->
@@ -130,7 +230,11 @@ function submit() {
           <p class="rounded-lg border bg-background px-3 py-2 text-[13px] leading-relaxed">
             {{ prompt.intent }}
           </p>
-          <Button size="sm" :disabled="!active" @click="emit('switchMode', prompt.intent)">
+          <p v-if="switched" class="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
+            <Check class="size-3.5 text-emerald-500" />
+            Switched to Agent mode
+          </p>
+          <Button v-else size="sm" :disabled="!active" @click="emit('switchMode', prompt.intent)">
             <Sparkles class="size-3.5" />
             Switch to Agent and continue
           </Button>
@@ -154,7 +258,11 @@ function submit() {
             v-for="opt in field.options"
             :key="opt.value"
             class="flex cursor-pointer items-start gap-2.5 rounded-lg border bg-background px-3 py-2 transition-colors"
-            :class="isChecked(field, opt.value) ? 'border-primary ring-1 ring-primary/30' : 'hover:bg-accent'"
+            :class="
+              isChecked(field, opt.value)
+                ? 'border-primary bg-primary/[0.07] ring-1 ring-primary/30'
+                : 'hover:bg-accent'
+            "
           >
             <input
               type="radio"
@@ -180,7 +288,11 @@ function submit() {
             v-for="opt in field.options"
             :key="opt.value"
             class="flex cursor-pointer items-start gap-2.5 rounded-lg border bg-background px-3 py-2 transition-colors"
-            :class="isChecked(field, opt.value) ? 'border-primary ring-1 ring-primary/30' : 'hover:bg-accent'"
+            :class="
+              isChecked(field, opt.value)
+                ? 'border-primary bg-primary/[0.07] ring-1 ring-primary/30'
+                : 'hover:bg-accent'
+            "
           >
             <input
               type="checkbox"
@@ -230,15 +342,13 @@ function submit() {
       </div>
 
       <div class="flex items-center gap-2 pt-0.5">
-        <Button type="submit" size="sm" :disabled="!active || !complete">
-          <template v-if="submitted">
-            <Check class="size-3.5" />
-            Sent
-          </template>
-          <template v-else>
-            {{ prompt.submitLabel ?? 'Send answer' }}
-            <ArrowRight class="size-3.5" />
-          </template>
+        <p v-if="answered" class="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
+          <Check class="size-3.5 text-emerald-500" />
+          Answered
+        </p>
+        <Button v-else type="submit" size="sm" :disabled="!active || !complete">
+          {{ prompt.submitLabel ?? 'Send answer' }}
+          <ArrowRight class="size-3.5" />
         </Button>
         <p v-if="active && !complete" class="text-[11px] text-muted-foreground">
           Answer the starred fields to continue.

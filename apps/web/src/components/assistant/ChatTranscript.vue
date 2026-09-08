@@ -81,6 +81,16 @@ function messageAt(index: number): AssistantMessageInfo | null {
   return row?.kind === 'message' ? row.message : null
 }
 
+/**
+ * The user turn that answered a prompt: the message right after it, when that
+ * message is the user's. The selection lives nowhere else — see AssistantPrompt.
+ */
+function answerFor(index: number): string | undefined {
+  const next = rows.value[index + 1]
+  if (next?.kind !== 'message' || next.message.role !== 'user') return undefined
+  return next.message.content
+}
+
 /** A prompt is answerable only on the last message, and only between turns. */
 function isNewest(index: number): boolean {
   return !props.live && index === props.messages.length - 1
@@ -246,6 +256,7 @@ defineExpose({ scrollToEnd })
               <ChatMessage
                 :message="messageAt(item.index)!"
                 :prompt-active="isNewest(item.index)"
+                :prompt-answer="answerFor(item.index)"
                 @answer="emit('answer', $event)"
                 @switch-mode="emit('switchMode', $event)"
               />

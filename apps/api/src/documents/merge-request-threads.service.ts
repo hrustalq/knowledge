@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  DeleteMergeRequestCommentResponse,
   ListMergeRequestThreadsResponse,
   MergeRequestComment,
   MergeRequestThread,
@@ -62,6 +63,7 @@ export class MergeRequestThreadsService {
         data: {
           mergeRequestId,
           resolvable: dto.resolvable ?? true,
+          source: dto.source ?? 'human',
           anchorType: anchor?.type ?? null,
           anchor: anchor ?? undefined,
         },
@@ -88,12 +90,14 @@ export class MergeRequestThreadsService {
     threadId: string,
     body: string,
     authorId: string = AUTHOR_ID_STUB,
+    replyToId?: string,
   ): Promise<{ thread: MergeRequestThread }> {
     const mr = await this.getOpenMrOrThrow(mergeRequestId);
     const thread = await this.getThreadOrThrow(mergeRequestId, threadId);
+    const replyTo = replyToId ? await this.requireCommentInThread(thread.id, replyToId) : null;
 
     await this.prisma.mergeRequestComment.create({
-      data: { threadId: thread.id, authorId, body },
+      data: { threadId: thread.id, authorId, body, replyToId: replyTo?.id ?? null },
     });
     await this.mergeRequests.recordActivity(mr.documentId, 'merge-request.comment.created', mr.id, authorId, {
       title: mr.title,
@@ -117,10 +121,7 @@ export class MergeRequestThreadsService {
   ): Promise<{ thread: MergeRequestThread }> {
     await this.getOpenMrOrThrow(mergeRequestId);
     const thread = await this.getThreadOrThrow(mergeRequestId, threadId);
-    const comment = await this.prisma.mergeRequestComment.findUnique({ where: { id: commentId } });
-    if (!comment || comment.threadId !== thread.id) {
-      throw new NotFoundException(`Comment ${commentId} not found on thread ${threadId}`);
-    }
+    const comment = await this.requireCommentInThread(thread.id, commentId);
     if (comment.authorId !== actorId) {
       throw new ForbiddenException('Only the author of a comment can edit it');
     }
@@ -130,6 +131,46 @@ export class MergeRequestThreadsService {
       data: { body, updatedAt: new Date() },
     });
     return { thread: await this.reload(thread.id) };
+  }
+
+  /**
+   * Delete a comment. Author-only, for the same reason editing is.
+   *
+   * A thread whose last comment goes has nothing left to be a discussion
+   * about, so it goes with it and the client drops the card instead of
+   * rendering an empty one. Replies that pointed at the deleted comment stay
+   * where they are and lose their attribution (the FK is ON DELETE SET NULL) —
+   * removing them would delete other people's words.
+   */
+  async deleteComment(
+    mergeRequestId: string,
+    threadId: string,
+    commentId: string,
+    actorId: string = AUTHOR_ID_STUB,
+  ): Promise<DeleteMergeRequestCommentResponse> {
+    const mr = await this.getOpenMrOrThrow(mergeRequestId);
+    const thread = await this.getThreadOrThrow(mergeRequestId, threadId);
+    const comment = await this.requireCommentInThread(thread.id, commentId);
+    if (comment.authorId !== actorId) {
+      throw new ForbiddenException('Only the author of a comment can delete it');
+    }
+
+    const remaining = await this.prisma.$transaction(async (tx) => {
+      await tx.mergeRequestComment.delete({ where: { id: comment.id } });
+      const left = await tx.mergeRequestComment.count({ where: { threadId: thread.id } });
+      if (left === 0) await tx.mergeRequestThread.delete({ where: { id: thread.id } });
+      return left;
+    });
+
+    await this.mergeRequests.recordActivity(mr.documentId, 'merge-request.comment.deleted', mr.id, actorId, {
+      title: mr.title,
+      threadId: thread.id,
+      threadRemoved: remaining === 0,
+    });
+    return {
+      threadId: thread.id,
+      thread: remaining === 0 ? null : await this.reload(thread.id),
+    };
   }
 
   async setResolved(
@@ -166,6 +207,7 @@ export class MergeRequestThreadsService {
     return {
       threadId: t.id,
       mergeRequestId: t.mergeRequestId,
+      source: t.source === 'ai' ? 'ai' : 'human',
       resolvable: t.resolvable,
       resolved: t.resolved,
       resolvedBy: t.resolvedBy,
@@ -177,6 +219,7 @@ export class MergeRequestThreadsService {
           threadId: c.threadId,
           authorId: c.authorId,
           body: c.body,
+          replyToId: c.replyToId,
           createdAt: c.createdAt.toISOString(),
           updatedAt: c.updatedAt?.toISOString() ?? null,
         }),
@@ -215,5 +258,13 @@ export class MergeRequestThreadsService {
       throw new NotFoundException(`Thread ${threadId} not found on merge request ${mergeRequestId}`);
     }
     return thread;
+  }
+
+  private async requireCommentInThread(threadId: string, commentId: string) {
+    const comment = await this.prisma.mergeRequestComment.findUnique({ where: { id: commentId } });
+    if (!comment || comment.threadId !== threadId) {
+      throw new NotFoundException(`Comment ${commentId} not found on thread ${threadId}`);
+    }
+    return comment;
   }
 }

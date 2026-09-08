@@ -10,6 +10,7 @@ import { DocumentsModule } from '../documents/documents.module.js';
 import { SearchModule } from '../search/search.module.js';
 import { EntitiesModule } from '../entities/entities.module.js';
 import { ProjectsModule } from '../projects/projects.module.js';
+import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -37,6 +38,7 @@ import { McpService } from './mcp.service.js';
     SearchModule,
     EntitiesModule,
     ProjectsModule,
+    WorkflowsModule,
   ],
   providers: [McpService],
 })

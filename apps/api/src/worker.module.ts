@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { IngestionWorkerModule } from './ingestion/ingestion-worker.module.js';
+import { ImportWorkerModule } from './import/import-worker.module.js';
+import { WorkflowWorkerModule } from './workflows/workflow-worker.module.js';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { IngestionWorkerModule } from './ingestion/ingestion-worker.module.js';
     }),
     PrismaModule,
     IngestionWorkerModule,
+    ImportWorkerModule,
+    WorkflowWorkerModule,
   ],
 })
 export class WorkerModule {}

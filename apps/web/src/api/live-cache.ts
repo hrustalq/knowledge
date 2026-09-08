@@ -89,6 +89,26 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
       ...(e.documentId ? [['/v1/documents/{id}/merge-requests', { id: e.documentId }]] : []),
     ],
   },
+  {
+    // subjectId carries the run id on every workflow-run.*/workflow-node.* event.
+    // A run's node tree changes far more often than the run row itself, so the
+    // detail query is invalidated on node events too.
+    on: 'workflow-run.*',
+    invalidate: (e) => [
+      ['/v1/workflows/runs'],
+      ...(e.subjectId ? [['/v1/workflows/runs/{id}', { id: e.subjectId }]] : []),
+      ...(e.documentId ? [['/v1/documents/{id}/workflow-runs', { id: e.documentId }]] : []),
+    ],
+  },
+  {
+    on: 'workflow-node.*',
+    invalidate: (e) => [
+      ['/v1/workflows/runs'],
+      ...(e.subjectId ? [['/v1/workflows/runs/{id}', { id: e.subjectId }]] : []),
+      ...(e.documentId ? [['/v1/documents/{id}/workflow-runs', { id: e.documentId }]] : []),
+    ],
+  },
+  { on: 'workflow.*', invalidate: () => [['/v1/workflows']] },
   // A project rename/delete changes the switcher, and re-scopes the page tree.
   { on: 'project.*', invalidate: () => [['/v1/projects'], ['/v1/documents'], ['/v1/documents/tree']] },
   { on: 'relations.*', invalidate: (e) => [['/v1/entities'], ...(e.documentId ? [['/v1/documents/{id}/graph', { id: e.documentId }]] : [])] },

@@ -284,7 +284,7 @@ export class DocumentsController {
     @Body() dto: CreateCommentDto,
     @CurrentPrincipal() principal: Principal,
   ) {
-    return this.threads.reply(id, threadId, dto.body, principal?.userId);
+    return this.threads.reply(id, threadId, dto.body, principal?.userId, dto.replyToId);
   }
 
   @Patch(':id/threads/:threadId/comments/:commentId')
@@ -298,6 +298,20 @@ export class DocumentsController {
     @CurrentPrincipal() principal: Principal,
   ) {
     return this.threads.editComment(id, threadId, commentId, dto.body, principal?.userId);
+  }
+
+  @Delete(':id/threads/:threadId/comments/:commentId')
+  @Access('viewer', 'document')
+  @ApiOperation({
+    summary: "Delete a page comment (the comment's own author only); removes the thread if it was the last one",
+  })
+  deleteThreadComment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.threads.deleteComment(id, threadId, commentId, principal?.userId);
   }
 
   @Patch(':id/threads/:threadId')

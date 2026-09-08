@@ -16,6 +16,7 @@
  */
 import { Decoration, Extension } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
+import { avatarColorDeep, avatarInitials } from '@/lib/avatar'
 import {
   MAX_QUOTE_CHARS,
   MIN_QUOTE_CHARS,
@@ -25,6 +26,14 @@ import {
   type TextAnchor,
 } from '@/lib/anchor-match'
 
+/** A face on a pin: who is in this discussion. */
+export interface AnchorAuthor {
+  userId: string
+  name: string
+  /** Posted by an assistant review — shown as a glyph, never as a person. */
+  ai?: boolean
+}
+
 /** One commented passage, in the shape the editor needs to draw it. */
 export interface CommentAnchor {
   id: string
@@ -32,6 +41,32 @@ export interface CommentAnchor {
   resolved: boolean
   /** Comment count, surfaced on the highlight as a pin. */
   count: number
+  /** Distinct participants, oldest first. */
+  authors?: AnchorAuthor[]
+}
+
+/** How many faces a pin shows before it stops and lets the count speak. */
+const MAX_FACES = 3
+
+const BOT_MASK =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2M20 14h2M15 13v2M9 13v2'/%3E%3C/svg%3E\")"
+
+function faceEl(author: AnchorAuthor): HTMLElement {
+  const face = document.createElement('span')
+  face.className = 'kn-anchor-face'
+  face.title = author.ai ? 'Assistant' : author.name
+  if (author.ai) {
+    face.classList.add('kn-anchor-face-ai')
+    const glyph = document.createElement('span')
+    glyph.className = 'kn-anchor-face-glyph'
+    glyph.style.setProperty('-webkit-mask-image', BOT_MASK)
+    glyph.style.maskImage = BOT_MASK
+    face.append(glyph)
+  } else {
+    face.style.background = avatarColorDeep(author.userId)
+    face.textContent = avatarInitials(author.name)
+  }
+  return face
 }
 
 export interface CommentAnchorsStorage {
@@ -53,6 +88,8 @@ declare module '@tiptap/core' {
 }
 
 export const ANCHOR_ATTR = 'data-kn-thread'
+/** Every thread a pin stands for, when several share one passage. */
+export const ANCHOR_LIST_ATTR = 'data-kn-threads'
 
 interface Projection {
   /** Visible text, whitespace collapsed to single spaces. */
@@ -182,6 +219,15 @@ export const CommentAnchors = Extension.create<Record<string, never>, CommentAnc
         const decorations: Decoration[] = []
         const outdated: string[] = []
 
+        // Threads that landed on the same passage share one pin. Two people
+        // commenting on one sentence is the normal case, and a row of separate
+        // badges after it reads as a rendering fault rather than as a
+        // conversation — so they stack, the way a reviewer list does.
+        const groups = new Map<
+          string,
+          { from: number; to: number; ids: string[]; count: number; resolved: boolean; authors: AnchorAuthor[] }
+        >()
+
         for (const entry of storage.anchors) {
           const range = resolveAnchorInDoc(state.doc, entry.anchor)
           if (!range) {
@@ -198,6 +244,38 @@ export const CommentAnchors = Extension.create<Record<string, never>, CommentAnc
               'aria-label': label,
             }),
           )
+
+          const key = `${range.from}:${range.to}`
+          const group = groups.get(key)
+          if (!group) {
+            groups.set(key, {
+              from: range.from,
+              to: range.to,
+              ids: [entry.id],
+              count: entry.count,
+              resolved: entry.resolved,
+              authors: [...(entry.authors ?? [])],
+            })
+          } else {
+            group.ids.push(entry.id)
+            group.count += entry.count
+            // A passage is settled only when every discussion on it is; one
+            // open thread still needs someone's attention.
+            group.resolved &&= entry.resolved
+            for (const a of entry.authors ?? []) {
+              if (!group.authors.some((x) => (a.ai ? x.ai : x.userId === a.userId && !x.ai))) {
+                group.authors.push(a)
+              }
+            }
+          }
+        }
+
+        for (const group of groups.values()) {
+          const threads = group.ids.length
+          const label =
+            `${group.count} comment${group.count === 1 ? '' : 's'}` +
+            (threads > 1 ? ` in ${threads} discussions` : '') +
+            ' on this passage'
           // The count is a widget, not `::after` on the highlight: ProseMirror
           // splits one inline decoration into a span per text node, so a pin
           // drawn in CSS appears once per fragment — and no selector can tell
@@ -206,19 +284,37 @@ export const CommentAnchors = Extension.create<Record<string, never>, CommentAnc
           // like. A widget is one node at one position, by construction.
           decorations.push(
             Decoration.Widget(
-              range.to,
+              group.to,
               () => {
                 const pin = document.createElement('span')
-                pin.className = entry.resolved ? 'kn-anchor-pin kn-anchor-pin-resolved' : 'kn-anchor-pin'
+                pin.className = group.resolved ? 'kn-anchor-pin kn-anchor-pin-resolved' : 'kn-anchor-pin'
                 pin.contentEditable = 'false'
-                pin.textContent = String(entry.count)
-                pin.setAttribute(ANCHOR_ATTR, entry.id)
+                // The first id positions the popover (the click handler reads
+                // `closest([data-kn-thread])`); the plural attribute is what
+                // actually opens the passage's whole discussion.
+                pin.setAttribute(ANCHOR_ATTR, group.ids[0] as string)
+                pin.setAttribute(ANCHOR_LIST_ATTR, group.ids.join(','))
                 pin.setAttribute('role', 'button')
                 pin.setAttribute('tabindex', '0')
                 pin.setAttribute('aria-label', label)
+
+                const faces = group.authors.slice(0, MAX_FACES)
+                if (faces.length > 0) {
+                  const stack = document.createElement('span')
+                  stack.className = 'kn-anchor-faces'
+                  for (const author of faces) stack.append(faceEl(author))
+                  pin.append(stack)
+                }
+                const count = document.createElement('span')
+                count.className = 'kn-anchor-pin-count'
+                count.textContent = String(group.count)
+                pin.append(count)
                 return pin
               },
-              { key: `kn-pin-${entry.id}-${entry.count}-${entry.resolved}`, side: 1 },
+              {
+                key: `kn-pin-${group.ids.join('.')}-${group.count}-${group.resolved}-${group.authors.length}`,
+                side: 1,
+              },
             ),
           )
         }
@@ -233,6 +329,13 @@ export const CommentAnchors = Extension.create<Record<string, never>, CommentAnc
 /** Thread ids on the highlight under a click, innermost last (overlaps nest). */
 export function anchorsAtEvent(target: EventTarget | null): string[] {
   const ids: string[] = []
+  // A stacked pin stands for every discussion on the passage, so pressing it
+  // opens all of them rather than only the one that happens to be first.
+  const cluster =
+    target instanceof Element ? target.closest<HTMLElement>(`[${ANCHOR_LIST_ATTR}]`) : null
+  if (cluster) {
+    return (cluster.getAttribute(ANCHOR_LIST_ATTR) ?? '').split(',').filter(Boolean)
+  }
   let el = target instanceof Element ? target.closest<HTMLElement>(`[${ANCHOR_ATTR}]`) : null
   while (el) {
     const id = el.getAttribute(ANCHOR_ATTR)

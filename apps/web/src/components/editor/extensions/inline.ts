@@ -10,6 +10,7 @@ import { Mark, Node, mergeAttributes } from '@tiptap/core'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import { KN, isStatusColor, type StatusColor } from '@/lib/markdown/nodes'
 import MentionNode from '../nodes/MentionNode.vue'
+import UserMentionNode from '../nodes/UserMentionNode.vue'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -18,6 +19,7 @@ declare module '@tiptap/core' {
       toggleStatus: (color: StatusColor) => ReturnType
       unsetStatus: () => ReturnType
       insertDocMention: (attrs: { documentId: string; label: string }) => ReturnType
+      insertUserMention: (attrs: { userId: string; label: string }) => ReturnType
     }
   }
 }
@@ -119,6 +121,70 @@ export const DocMention = Node.create({
   addCommands() {
     return {
       insertDocMention:
+        (attrs) =>
+        ({ commands }) =>
+          commands.insertContent([
+            { type: this.name, attrs },
+            { type: 'text', text: ' ' },
+          ]),
+    }
+  },
+})
+
+/**
+ * A mention of a person.
+ *
+ * Unlike a page mention this is a `<span>`, not an `<a>`: there is no user
+ * profile in the product, and a chip that looks like a link and 404s is a
+ * worse answer than a chip that never claimed to be one. The encoding is the
+ * status lozenge's — an element carrying an id with the visible name inside —
+ * so the name survives into the markdown as prose and the ingestion worker
+ * still indexes it. Losing the name inside an opaque attribute would make
+ * "who was asked about this?" unsearchable.
+ */
+export const UserMention = Node.create({
+  name: 'knUserMention',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      userId: {
+        default: '',
+        parseHTML: (element) => element.getAttribute(KN.user) ?? '',
+        renderHTML: () => ({}),
+      },
+      label: {
+        default: '',
+        // Stored without the sigil so the chip owns how it is presented; the
+        // markup carries "@Ada" because that is what a reader should copy.
+        parseHTML: (element) => (element.textContent ?? '').replace(/^@/, ''),
+        renderHTML: () => ({}),
+      },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: `span[${KN.user}]` }]
+  },
+
+  renderHTML({ node }) {
+    return ['span', { [KN.user]: node.attrs.userId as string }, `@${node.attrs.label as string}`]
+  },
+
+  renderText({ node }) {
+    return `@${node.attrs.label as string}`
+  },
+
+  addNodeView() {
+    return VueNodeViewRenderer(UserMentionNode)
+  },
+
+  addCommands() {
+    return {
+      insertUserMention:
         (attrs) =>
         ({ commands }) =>
           commands.insertContent([

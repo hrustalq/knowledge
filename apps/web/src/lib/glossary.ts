@@ -15,6 +15,7 @@
  * link is a page nobody can read.
  */
 import type { GlossaryTerm } from '@knowledge/contracts'
+import { plainText } from './markdown/plain'
 
 /** Occurrences linked per term, per page — the rest keep the plain word. */
 const MAX_LINKS_PER_TERM = 3
@@ -125,24 +126,6 @@ function buildLink(doc: Document, term: GlossaryTerm, label: string): HTMLElemen
   el.title = `${term.term} — ${plainText(term.definition)}`
   el.textContent = label
   return el
-}
-
-/**
- * Definitions are written in the page editor, so they are markdown. A `title`
- * attribute is plain text and shows the syntax verbatim, so the markers are
- * stripped rather than rendered — enough for a tooltip, and the full entry is
- * one click away.
- */
-function plainText(markdown: string): string {
-  return markdown
-    .replace(/`{1,3}([^`]*)`{1,3}/g, '$1')
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
-    .replace(/^\s{0,3}>\s?/gm, '')
-    .replace(/^\s*[-*+]\s+/gm, '')
-    .replace(/(\*\*|__|\*|_|~~)/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
 }
 
 /** Strip every link this module made (used before re-linking after an edit). */

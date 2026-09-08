@@ -30,6 +30,14 @@
   --border: oklch(0.905 0.008 85);
   --input: oklch(0.905 0.008 85);
   --ring: oklch(0.55 0.12 268);
+  /* Comment-count pins on an annotated passage. One opaque chip that carries
+     its own ink, so it is not redefined per theme: it sits on a tinted
+     highlight rather than on the page, and a pin whose ink follows the theme
+     while its fill does not is unreadable in one of the two. */
+  --kn-pin-open: oklch(0.79 0.14 72);
+  --kn-pin-open-ink: oklch(0.26 0.06 72);
+  --kn-pin-done: oklch(0.77 0.13 155);
+  --kn-pin-done-ink: oklch(0.24 0.05 155);
   --radius: 0.625rem;
   --sidebar: oklch(0.966 0.005 85);
   --sidebar-foreground: oklch(0.28 0.02 265);

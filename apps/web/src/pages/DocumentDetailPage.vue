@@ -23,6 +23,7 @@ import {
   Info,
   Pencil,
   Share2,
+  Workflow as WorkflowIcon,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type {
@@ -34,6 +35,7 @@ import type {
   ListMergeRequestsResponse,
   ListRevisionsResponse,
   ReviewThreadAnchor,
+  DocumentWorkflowRunsResponse,
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
@@ -51,6 +53,7 @@ import RevisionsView from '@/components/knowledge/RevisionsView.vue'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
 import GraphView from '@/components/knowledge/GraphView.vue'
 import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
+import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 
 const route = useRoute()
@@ -64,6 +67,7 @@ const RAIL_WIDGETS = [
   { id: 'revisions', label: 'History', icon: History, expandable: true },
   { id: 'merge-requests', label: 'Changes', icon: GitMerge, expandable: true },
   { id: 'graph', label: 'Graph', icon: Share2, expandable: true },
+  { id: 'workflows', label: 'Workflows', icon: WorkflowIcon, expandable: false },
   { id: 'activity', label: 'Activity', icon: ActivityIcon, expandable: false },
 ] as const
 type RailWidget = (typeof RAIL_WIDGETS)[number]['id']
@@ -185,12 +189,16 @@ const resolveThread = useApiMutation('patch', '/v1/documents/{id}/threads/{threa
 const editComment = useApiMutation('patch', '/v1/documents/{id}/threads/{threadId}/comments/{commentId}', {
   invalidates: threadInvalidates,
 })
+const deleteComment = useApiMutation('delete', '/v1/documents/{id}/threads/{threadId}/comments/{commentId}', {
+  invalidates: threadInvalidates,
+})
 const threadsBusy = computed(
   () =>
     createThread.isPending.value ||
     replyThread.isPending.value ||
     resolveThread.isPending.value ||
-    editComment.isPending.value,
+    editComment.isPending.value ||
+    deleteComment.isPending.value,
 )
 
 /** `resolvable`: a plain comment, or a thread that stays open until resolved. */
@@ -200,9 +208,12 @@ function onCreateThread(body: string, anchor?: ReviewThreadAnchor, resolvable = 
     { onError: (e) => toast.error(e.message) },
   )
 }
-function onReply(threadId: string, body: string) {
+function onReply(threadId: string, body: string, replyToId: string | null = null) {
   replyThread.mutate(
-    { path: { id: documentId.value, threadId }, body: { body } },
+    {
+      path: { id: documentId.value, threadId },
+      body: { body, ...(replyToId ? { replyToId } : {}) },
+    },
     { onError: (e) => toast.error(e.message) },
   )
 }
@@ -216,6 +227,15 @@ function onEditComment(threadId: string, commentId: string, body: string) {
   editComment.mutate(
     { path: { id: documentId.value, threadId, commentId }, body: { body } },
     { onError: (e) => toast.error(e.message) },
+  )
+}
+function onDeleteComment(threadId: string, commentId: string) {
+  deleteComment.mutate(
+    { path: { id: documentId.value, threadId, commentId } },
+    {
+      onSuccess: () => toast.success('Comment deleted'),
+      onError: (e) => toast.error(e.message),
+    },
   )
 }
 
@@ -256,6 +276,11 @@ const mergeRequestsPreview = useQuery(
     apiQueryOptions('/v1/documents/{id}/merge-requests', { path: { id: documentId.value } }),
   ),
 )
+const workflowsPreview = useQuery(
+  computed(() =>
+    apiQueryOptions('/v1/documents/{id}/workflow-runs', { path: { id: documentId.value } }),
+  ),
+)
 const activityPreview = useQuery(
   computed(() =>
     apiQueryOptions('/v1/activity', {
@@ -269,6 +294,9 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
   const mrs = (mergeRequestsPreview.data.value as ListMergeRequestsResponse | undefined)?.mergeRequests
   const latest = (activityPreview.data.value as ListActivityResponse | undefined)?.entries?.[0]
   const openMrs = mrs?.filter((m) => m.status === 'open').length ?? 0
+  const workflowRuns = (workflowsPreview.data.value as DocumentWorkflowRunsResponse | undefined)?.runs
+  const workflowsAwaiting =
+    workflowRuns?.reduce((sum, r) => sum + r.nodeStats.awaitingReview, 0) ?? 0
 
   const frontmatterKeys = content.value?.frontmatter
     ? Object.keys(content.value.frontmatter as Record<string, unknown>).length
@@ -289,6 +317,13 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
       ? relations.value.length
         ? `${relations.value.length} relation${relations.value.length === 1 ? '' : 's'}`
         : 'no relations'
+      : null,
+    workflows: workflowRuns
+      ? workflowsAwaiting
+        ? `${workflowsAwaiting} to review`
+        : workflowRuns.length
+          ? `${workflowRuns.length} run${workflowRuns.length === 1 ? '' : 's'}`
+          : 'none'
       : null,
     activity: latest ? relativeTime(latest.createdAt) : null,
   }
@@ -399,6 +434,7 @@ watch(
               @reply="onReply"
               @resolve="onResolve"
               @edit="onEditComment"
+              @delete="onDeleteComment"
               @outdated="outdatedThreads = $event"
               @headings="headings = $event"
             />
@@ -481,6 +517,7 @@ watch(
           <RevisionsView v-else-if="w.id === 'revisions'" :document-id="documentId" />
           <MergeRequestList v-else-if="w.id === 'merge-requests'" :document-id="documentId" />
           <GraphView v-else-if="w.id === 'graph'" :document-id="documentId" />
+          <WorkflowRail v-else-if="w.id === 'workflows'" :document-id="documentId" />
           <ActivityFeed v-else :document-id="documentId" />
         </RailSection>
 

@@ -13,7 +13,7 @@
  */
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { ChevronLeft, Plus, Upload } from 'lucide-vue-next'
+import { ChevronLeft, FileUp, Plus } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
@@ -68,10 +68,10 @@ const activeDocId = computed(() =>
       <div v-if="auth.canEdit" class="ml-auto flex shrink-0 gap-0.5">
         <RouterLink
           to="/upload"
-          title="Upload markdown"
+          title="Import a document"
           class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-6 place-items-center rounded transition-colors"
         >
-          <Upload class="size-3.5" />
+          <FileUp class="size-3.5" />
         </RouterLink>
         <RouterLink
           to="/create"

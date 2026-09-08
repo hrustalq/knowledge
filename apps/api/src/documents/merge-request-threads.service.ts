@@ -134,6 +134,23 @@ export class MergeRequestThreadsService {
           line: dto.line,
           ...(dto.excerpt ? { excerpt: dto.excerpt } : {}),
         };
+      case 'text': {
+        // Feature 13: a comment on the rendered page. The quote is normalized
+        // here — the browser hands over whatever whitespace the layout
+        // produced, and the resolver on the read side normalizes the same way,
+        // so an anchor written by one client resolves in every other.
+        const quote = normalizeQuote(dto.quote);
+        if (!dto.revisionId || !quote) {
+          throw new BadRequestException('Text anchors require revisionId and a non-empty quote');
+        }
+        return {
+          type: 'text',
+          revisionId: dto.revisionId,
+          quote,
+          ...(normalizeQuote(dto.prefix) ? { prefix: normalizeQuote(dto.prefix) } : {}),
+          ...(normalizeQuote(dto.suffix) ? { suffix: normalizeQuote(dto.suffix) } : {}),
+        };
+      }
       case 'section':
         if (!dto.heading) throw new BadRequestException('Section anchors require heading');
         return { type: 'section', heading: dto.heading };
@@ -195,4 +212,14 @@ export class MergeRequestThreadsService {
     }
     return thread;
   }
+}
+
+/**
+ * Whitespace as rendered is layout, not content: the same passage yields
+ * different runs of spaces and newlines depending on where the line broke.
+ * Collapsing it is what lets a quote captured in one viewport resolve in
+ * another (and in the plain-text projection the reader's browser builds).
+ */
+function normalizeQuote(raw: string | undefined): string {
+  return (raw ?? '').replace(/\s+/g, ' ').trim();
 }

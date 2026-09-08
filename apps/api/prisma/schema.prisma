@@ -8,8 +8,8 @@ datasource db {
 }
 
 model Document {
-  id          String @id @default(uuid()) @db.Uuid
-  workspaceId String @map("workspace_id") @db.Uuid
+  id            String   @id @default(uuid()) @db.Uuid
+  workspaceId   String   @map("workspace_id") @db.Uuid
   // Workspace > Project > Document. Denormalized against projects.workspace_id
   // on purpose: the S3 key layout, the graph predicate, ingestion_jobs and
   // activity_log all key off workspace_id, so it stays. Services enforce
@@ -46,10 +46,10 @@ model DocumentBranch {
   protected      Boolean  @default(false)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  document  Document           @relation(fields: [documentId], references: [id])
-  revisions DocumentRevision[]
-  mrAsSource MergeRequest[] @relation("mrSource")
-  mrAsTarget MergeRequest[] @relation("mrTarget")
+  document   Document           @relation(fields: [documentId], references: [id])
+  revisions  DocumentRevision[]
+  mrAsSource MergeRequest[]     @relation("mrSource")
+  mrAsTarget MergeRequest[]     @relation("mrTarget")
 
   @@unique([documentId, name])
   @@map("document_branches")
@@ -159,10 +159,10 @@ model IngestionJob {
 
 // Phase 3 (plan.md §8): GitLab-style merge requests over the revision DAG.
 model MergeRequest {
-  id             String  @id @default(uuid()) @db.Uuid
-  documentId     String  @map("document_id") @db.Uuid
-  sourceBranchId String  @map("source_branch_id") @db.Uuid
-  targetBranchId String  @map("target_branch_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+  documentId     String @map("document_id") @db.Uuid
+  sourceBranchId String @map("source_branch_id") @db.Uuid
+  targetBranchId String @map("target_branch_id") @db.Uuid
 
   title       String
   description String?
@@ -276,28 +276,29 @@ model Project {
   description String?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  documents Document[]
+  documents     Document[]
+  glossaryTerms GlossaryTerm[]
 
   @@index([workspaceId, createdAt])
   @@map("projects")
 }
 
 model User {
-  id          String   @id @default(uuid()) @db.Uuid
-  email       String   @unique
-  displayName String   @map("display_name")
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  displayName  String    @map("display_name")
   // SHA-256 hex of the API key; the plaintext key is printed once at creation.
-  apiKeyHash  String?  @unique @map("api_key_hash")
+  apiKeyHash   String?   @unique @map("api_key_hash")
   // Auth flow: scrypt hash ("scrypt$N$r$p$salt$hash"); null until the user sets one.
-  passwordHash String? @map("password_hash")
+  passwordHash String?   @map("password_hash")
   // Platform admin: user management + implicit admin in every workspace.
-  isAdmin     Boolean  @default(false) @map("is_admin")
+  isAdmin      Boolean   @default(false) @map("is_admin")
   // Soft disable: authentication (sessions AND api keys) is refused while set.
-  disabledAt  DateTime? @map("disabled_at") @db.Timestamptz
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  disabledAt   DateTime? @map("disabled_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  memberships WorkspaceMember[]
-  sessions    Session[]
+  memberships    WorkspaceMember[]
+  sessions       Session[]
   passwordResets PasswordResetToken[]
 
   @@map("users")
@@ -334,10 +335,10 @@ model PasswordResetToken {
 }
 
 model WorkspaceMember {
-  workspaceId String @map("workspace_id") @db.Uuid
-  userId      String @map("user_id") @db.Uuid
+  workspaceId     String   @map("workspace_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
   // viewer < editor < admin (Phase 5 ACL hierarchy).
-  role        String @default("viewer")
+  role            String   @default("viewer")
   // Gate for knowledge.query_graph / POST /v1/graph/query (plan.md §9:
   // trusted-operator only). Orthogonal to role on purpose.
   trustedOperator Boolean  @default(false) @map("trusted_operator")
@@ -352,15 +353,15 @@ model WorkspaceMember {
 
 // Phase 5 audit trail: every trusted-operator graph query is recorded here.
 model AuditLog {
-  id          String  @id @default(uuid()) @db.Uuid
-  workspaceId String  @map("workspace_id") @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
   // users.id in api-key mode; synthetic actor ("dev", "mcp-operator") otherwise.
   actor       String
   action      String
   params      Json
-  rowCount    Int?    @map("row_count")
-  durationMs  Int?    @map("duration_ms")
-  ok          Boolean @default(true)
+  rowCount    Int?     @map("row_count")
+  durationMs  Int?     @map("duration_ms")
+  ok          Boolean  @default(true)
   error       String?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -397,15 +398,18 @@ model ActivityLog {
 // ---------------------------------------------------------------------------
 
 model AssistantThread {
-  id          String    @id @default(uuid()) @db.Uuid
-  workspaceId String    @map("workspace_id") @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
   // Document the pane was opened from, if any — the default chat grounding.
-  documentId  String?   @map("document_id") @db.Uuid
+  documentId  String?  @map("document_id") @db.Uuid
   title       String?
+  /// Provider profile pinned to this thread by whoever is chatting. Null =
+  /// whatever the workspace routes 'chat' at.
+  providerId  String?  @map("provider_id") @db.Uuid
   // users.id in api-key mode; synthetic actor ("dev") otherwise.
-  createdBy   String    @map("created_by") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy   String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   messages AssistantMessage[]
 
@@ -438,4 +442,230 @@ model AssistantMessage {
 
   @@index([threadId, createdAt])
   @@map("assistant_messages")
+}
+
+// ---------------------------------------------------------------------------
+// AI settings (docs/features/12): the assistant layer made administrable per
+// workspace instead of per boot. Every column here is an OVERRIDE — null means
+// "inherit the env value" — so an empty table reproduces today's behaviour
+// exactly. workspace_id carries no FK, mirroring documents.workspace_id.
+// ---------------------------------------------------------------------------
+
+model AiSettings {
+  workspaceId String @id @map("workspace_id") @db.Uuid
+
+  // Provider config. Null = inherit the ASSISTANT_* env var (AiConfigService).
+  provider     String?
+  baseUrl      String? @map("base_url")
+  model        String?
+  // AES-256-GCM envelope ("gcm$iv$tag$ct"); never leaves the API process.
+  apiKeyCipher String? @map("api_key_cipher")
+  temperature  Float?
+  maxToolCalls Int?    @map("max_tool_calls")
+  timeoutMs    Int?    @map("timeout_ms")
+
+  /// Lets an admin take write tools (create_document / propose_update) away from the chat.
+  agentModeEnabled Boolean @default(true) @map("agent_mode_enabled")
+
+  // Cost estimate inputs (USD per 1M tokens). Null falls back to MODEL_PRICES.
+  pricePromptPerMTok     Decimal? @map("price_prompt_per_mtok") @db.Decimal(12, 6)
+  priceCompletionPerMTok Decimal? @map("price_completion_per_mtok") @db.Decimal(12, 6)
+
+  // Quotas — null = unlimited. Only enforced while enforceBudget is set.
+  workspaceMonthlyTokenBudget   BigInt? @map("workspace_monthly_token_budget")
+  defaultUserMonthlyTokenBudget BigInt? @map("default_user_monthly_token_budget")
+  enforceBudget                 Boolean @default(false) @map("enforce_budget")
+
+  /// Per-purpose routing into ai_providers. Null = fall back to the columns
+  /// above, then to the ASSISTANT_* env vars — so a workspace that never
+  /// creates a provider profile behaves exactly as it did before.
+  chatProviderId       String? @map("chat_provider_id") @db.Uuid
+  reviewProviderId     String? @map("review_provider_id") @db.Uuid
+  extractionProviderId String? @map("extraction_provider_id") @db.Uuid
+
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("ai_settings")
+}
+
+/// A named provider profile. Several can exist per workspace; ai_settings
+/// routes each purpose (chat / review / extraction) at one of them, and a chat
+/// thread may pin its own. The routing columns carry no FK, mirroring how
+/// assignee_id and author_id are handled elsewhere: the service nulls dangling
+/// references on delete rather than the database cascading them.
+model AiProvider {
+  id           String  @id @default(uuid()) @db.Uuid
+  workspaceId  String  @map("workspace_id") @db.Uuid
+  /// Display name, unique per workspace ("DeepSeek prod", "Local Ollama").
+  name         String
+  /// 'openai-compatible' | 'deepseek'
+  provider     String
+  baseUrl      String? @map("base_url")
+  model        String
+  /// AES-256-GCM envelope; never leaves the API process.
+  apiKeyCipher String? @map("api_key_cipher")
+
+  temperature  Float?
+  maxToolCalls Int?   @map("max_tool_calls")
+  timeoutMs    Int?   @map("timeout_ms")
+
+  pricePromptPerMTok     Decimal? @map("price_prompt_per_mtok") @db.Decimal(12, 6)
+  priceCompletionPerMTok Decimal? @map("price_completion_per_mtok") @db.Decimal(12, 6)
+
+  enabled       Boolean   @default(true)
+  lastStatus    String?   @map("last_status")
+  lastError     String?   @map("last_error")
+  lastCheckedAt DateTime? @map("last_checked_at") @db.Timestamptz
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, createdAt])
+  @@map("ai_providers")
+}
+
+/// Per-user override of AiSettings.defaultUserMonthlyTokenBudget.
+model AiUserBudget {
+  workspaceId        String   @map("workspace_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  monthlyTokenBudget BigInt?  @map("monthly_token_budget")
+  updatedBy          String?  @map("updated_by") @db.Uuid
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@id([workspaceId, userId])
+  @@map("ai_user_budgets")
+}
+
+/// A skill is an operator-authored instruction pack merged into the assistant's
+/// system prompt — trusted text, unlike document content. Selected explicitly
+/// from the composer or by keyword match against the user's message.
+model AiSkill {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  name         String
+  description  String
+  instructions String
+  /// string[] — keywords that pull this skill into a turn. Json, not text[]:
+  /// the schema uses no Postgres arrays (AssistantMessage.toolCalls precedent).
+  triggers     Json     @default("[]")
+  enabled      Boolean  @default(true)
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, createdAt])
+  @@map("ai_skills")
+}
+
+/// A plugin is an external MCP server whose tools join the assistant's bounded
+/// tool harness. HTTP transports only — stdio would mean spawning processes on
+/// the API host. Its output is UNTRUSTED, handled like document content.
+model AiPlugin {
+  id              String  @id @default(uuid()) @db.Uuid
+  workspaceId     String  @map("workspace_id") @db.Uuid
+  name            String
+  /// 'streamable-http' | 'sse'
+  transport       String  @default("streamable-http")
+  url             String
+  /// Header name the credential is sent in (e.g. "Authorization").
+  authHeader      String? @map("auth_header")
+  /// AES-256-GCM envelope of the header value.
+  authValueCipher String? @map("auth_value_cipher")
+  enabled         Boolean @default(true)
+  /// string[] — tools offered to the model. Empty = every discovered tool.
+  enabledTools    Json    @default("[]") @map("enabled_tools")
+  /// AiPluginTool[] — cache of the last successful listTools().
+  discoveredTools Json    @default("[]") @map("discovered_tools")
+
+  lastStatus    String?   @map("last_status")
+  lastError     String?   @map("last_error")
+  lastCheckedAt DateTime? @map("last_checked_at") @db.Timestamptz
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, createdAt])
+  @@map("ai_plugins")
+}
+
+/// One row per upstream LLM call — the source for BOTH the usage aggregates
+/// and the call log. Deliberately holds no prompt or completion text: that
+/// content already lives in assistant_messages, and a second copy would bloat
+/// the table and duplicate user data.
+model AiUsage {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  userId      String  @map("user_id") @db.Uuid
+  /// 'ask' | 'chat' | 'chat-stream' | 'review' | 'suggest'
+  operation   String
+  provider    String
+  model       String
+  /// ai_providers.id when a named profile served the call; null on the legacy
+  /// single-config path.
+  providerId  String? @map("provider_id") @db.Uuid
+
+  promptTokens     Int     @default(0) @map("prompt_tokens")
+  completionTokens Int     @default(0) @map("completion_tokens")
+  totalTokens      Int     @default(0) @map("total_tokens")
+  /// The provider returned no usage block, so the counts are a local estimate.
+  estimated        Boolean @default(false)
+  costUsdMicros    Int?    @map("cost_usd_micros")
+
+  durationMs    Int     @default(0) @map("duration_ms")
+  ok            Boolean @default(true)
+  errorCode     String? @map("error_code")
+  error         String?
+  threadId      String? @map("thread_id") @db.Uuid
+  toolCallCount Int     @default(0) @map("tool_call_count")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, userId, createdAt])
+  @@map("ai_usage")
+}
+
+/// Glossary (docs/features/14): the workspace's shared vocabulary. Terms are
+/// linked into rendered documents deterministically at read time, so nothing
+/// here ever rewrites a page — an entry can be renamed or retired and every
+/// document follows on the next render.
+model GlossaryTerm {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  // Workspace > Project > Document, and vocabulary belongs to the project:
+  // the same word means different things in two bodies of work. Denormalized
+  // against projects.workspace_id exactly like documents.workspace_id, because
+  // the ACL and the activity feed key off the workspace.
+  projectId   String  @map("project_id") @db.Uuid
+  term        String
+  /// string[] — abbreviations and inflections that link to this entry. Json,
+  /// not text[]: the schema uses no Postgres arrays (AiSkill.triggers precedent).
+  aliases     Json    @default("[]")
+  definition  String
+  /// Page that defines the term in full. No FK, mirroring documents.parent_id:
+  /// deleting the page must not delete the vocabulary that referenced it.
+  documentId  String? @map("document_id") @db.Uuid
+  /// 'manual' | 'ai' — provenance, same idea as the relation extractor classes.
+  source      String  @default("manual")
+  /// Retired terms stay readable in the glossary but stop being auto-linked.
+  enabled     Boolean @default(true)
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  // Per project, not per workspace: two projects may legitimately define the
+  // same word, and neither should block the other.
+  @@unique([projectId, term])
+  @@index([workspaceId, enabled])
+  @@index([projectId, enabled])
+  @@map("glossary_terms")
 }

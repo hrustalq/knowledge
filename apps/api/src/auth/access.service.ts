@@ -84,6 +84,53 @@ export class AccessService {
     return thread.workspaceId;
   }
 
+  /**
+   * Skills and plugins shape what the assistant does for a whole workspace, so
+   * resolving the ACL from the `:id` param — not a caller-supplied
+   * `?workspaceId=` — is what stops an admin of workspace A from editing the
+   * instructions or MCP credentials of workspace B.
+   */
+  async workspaceOfAiSkill(skillId: string): Promise<string> {
+    const skill = await this.prisma.aiSkill.findUnique({
+      where: { id: skillId },
+      select: { workspaceId: true },
+    });
+    if (!skill) throw new NotFoundException(`Skill ${skillId} not found`);
+    return skill.workspaceId;
+  }
+
+  async workspaceOfAiProvider(providerId: string): Promise<string> {
+    const provider = await this.prisma.aiProvider.findUnique({
+      where: { id: providerId },
+      select: { workspaceId: true },
+    });
+    if (!provider) throw new NotFoundException(`Provider ${providerId} not found`);
+    return provider.workspaceId;
+  }
+
+  async workspaceOfAiPlugin(pluginId: string): Promise<string> {
+    const plugin = await this.prisma.aiPlugin.findUnique({
+      where: { id: pluginId },
+      select: { workspaceId: true },
+    });
+    if (!plugin) throw new NotFoundException(`Plugin ${pluginId} not found`);
+    return plugin.workspaceId;
+  }
+
+  /**
+   * The glossary is workspace vocabulary, so the ACL comes from the term's own
+   * row rather than a caller-supplied `?workspaceId=` — otherwise an editor of
+   * workspace A could rewrite the definitions workspace B's pages render.
+   */
+  async workspaceOfGlossaryTerm(termId: string): Promise<string> {
+    const term = await this.prisma.glossaryTerm.findUnique({
+      where: { id: termId },
+      select: { workspaceId: true },
+    });
+    if (!term) throw new NotFoundException(`Glossary term ${termId} not found`);
+    return term.workspaceId;
+  }
+
   async workspaceOfJob(jobId: string): Promise<string> {
     const job = await this.prisma.ingestionJob.findUnique({
       where: { id: jobId },

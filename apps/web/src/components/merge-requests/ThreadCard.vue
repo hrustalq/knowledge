@@ -37,6 +37,8 @@ const anchorLabel = computed(() => {
   const a = props.thread.anchor
   if (!a) return null
   if (a.type === 'line') return `line ${a.line}`
+  // A review-mode anchor has no position to name, so it names the passage.
+  if (a.type === 'text') return `“${a.quote.slice(0, 40)}${a.quote.length > 40 ? '…' : ''}”`
   if (a.type === 'section') return `§ ${a.heading}`
   return a.entityKey
 })

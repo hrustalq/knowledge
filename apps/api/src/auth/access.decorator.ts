@@ -14,6 +14,10 @@ export type WorkspaceSource =
   | 'job' // :id path param is an ingestion job id
   | 'project' // :id path param is a project id (resolved to its workspace)
   | 'assistant-thread' // :id path param is an assistant chat thread id
+  | 'ai-skill' // :id path param is an AI skill id
+  | 'ai-plugin' // :id path param is an AI plugin (MCP server) id
+  | 'ai-provider' // :id path param is an AI provider profile id
+  | 'glossary-term' // :id path param is a glossary term id
   | 'workspace'; // :id path param IS the workspace id (existence-checked)
 
 export interface AccessSpec {

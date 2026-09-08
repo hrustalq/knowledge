@@ -88,6 +88,17 @@ export class UpdateAssistantThreadDto {
   @IsString()
   @MaxLength(300)
   title?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: 'Provider profile to run this thread on; null returns it to the workspace default',
+  })
+  @IsOptional()
+  @ValidateIf((o: UpdateAssistantThreadDto) => o.providerId !== null)
+  @IsUUID()
+  providerId?: string | null;
 }
 
 export class ListAssistantThreadsQueryDto {
@@ -170,6 +181,17 @@ export class PostAssistantMessageDto {
   @ArrayMaxSize(5)
   @IsUUID(undefined, { each: true })
   documentRefs?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    format: 'uuid',
+    description: 'Skills (docs/features/12) explicitly applied to this turn; enabled skills also join on trigger match',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsUUID(undefined, { each: true })
+  skillIds?: string[];
 }
 
 export class AssistantAskDto {

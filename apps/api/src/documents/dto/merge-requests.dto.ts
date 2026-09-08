@@ -9,6 +9,7 @@ import {
   IsString,
   Matches,
   Max,
+  MaxLength,
   Min,
   ValidateIf,
   ValidateNested,
@@ -20,6 +21,14 @@ import {
  * Mirrors UUID_RE in acl.guard.ts.
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A text anchor stores the passage it was left on, so it stays bounded: a
+ * whole-page selection is a comment on the page, not on a passage, and the
+ * review canvas offers an unanchored thread for that.
+ */
+const MAX_QUOTE_CHARS = 1_000;
+const MAX_CONTEXT_CHARS = 100;
 
 export class CreateMergeRequestDto {
   @ApiProperty({ example: 'feature/oauth' })
@@ -145,13 +154,14 @@ export class ListMergeRequestsQueryDto {
 
 /**
  * Kept deliberately loose: the per-type shape (line needs revisionId+line,
- * section needs heading, entity needs entityKey) is validated in
- * MergeRequestThreadsService to avoid polymorphic nested-validator setups.
+ * text needs revisionId+quote, section needs heading, entity needs entityKey)
+ * is validated in MergeRequestThreadsService to avoid polymorphic
+ * nested-validator setups.
  */
 export class ThreadAnchorDto {
-  @ApiProperty({ enum: ['line', 'section', 'entity'] })
-  @IsIn(['line', 'section', 'entity'])
-  type!: 'line' | 'section' | 'entity';
+  @ApiProperty({ enum: ['line', 'text', 'section', 'entity'] })
+  @IsIn(['line', 'text', 'section', 'entity'])
+  type!: 'line' | 'text' | 'section' | 'entity';
 
   @ApiPropertyOptional({ description: 'line: revision the line number refers to (source head at comment time)' })
   @IsOptional()
@@ -169,6 +179,24 @@ export class ThreadAnchorDto {
   @IsOptional()
   @IsString()
   excerpt?: string;
+
+  @ApiPropertyOptional({ description: 'text: the selected passage, as rendered (feature 13 review mode)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_QUOTE_CHARS)
+  quote?: string;
+
+  @ApiPropertyOptional({ description: 'text: rendered text immediately before the quote, for disambiguation' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_CONTEXT_CHARS)
+  prefix?: string;
+
+  @ApiPropertyOptional({ description: 'text: rendered text immediately after the quote, for disambiguation' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_CONTEXT_CHARS)
+  suffix?: string;
 
   @ApiPropertyOptional({ description: 'section: markdown heading text' })
   @IsOptional()

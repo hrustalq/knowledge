@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { ListProjectsResponse, ProjectSummary } from '@knowledge/contracts'
 import { apiFetch, getProjectId, getWorkspaceId, setActiveProject } from '@/lib/api'
 import { useDocumentsStore } from '@/stores/documents'
+import { useGlossaryStore } from '@/stores/glossary'
 import { useSidebarNavStore } from '@/stores/sidebar-nav'
 
 /**
@@ -52,7 +53,10 @@ export const useProjectsStore = defineStore('projects', {
       this.activeId = projectId
       setActiveProject(projectId)
       useSidebarNavStore().openPages()
-      await useDocumentsStore().rescope()
+      // The glossary is project-scoped too (docs/features/14), so it rescopes
+      // alongside the page tree rather than decorating the new project's pages
+      // with the previous one's vocabulary.
+      await Promise.all([useDocumentsStore().rescope(), useGlossaryStore().rescope()])
     },
   },
 })

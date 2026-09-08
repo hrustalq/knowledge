@@ -15,6 +15,8 @@ import { EntitiesModule } from './entities/entities.module.js';
 import { ActivityModule } from './activity/activity.module.js';
 import { EventsApiModule } from './events/events-api.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
+import { AiModule } from './ai/ai.module.js';
+import { GlossaryModule } from './glossary/glossary.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
@@ -43,6 +45,8 @@ import { AppService } from './app.service.js';
     ActivityModule,
     EventsApiModule,
     AssistantModule,
+    AiModule,
+    GlossaryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

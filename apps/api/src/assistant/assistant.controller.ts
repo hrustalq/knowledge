@@ -31,16 +31,16 @@ export class AssistantController {
 
   @Post('review')
   @Access('viewer', 'body')
-  @ApiOperation({ summary: 'LLM review of a draft (docs/features/09); enabled=false when ASSISTANT_PROVIDER=none' })
-  review(@Body() dto: AssistantReviewDto) {
-    return this.assistant.review(dto);
+  @ApiOperation({ summary: 'LLM review of a draft (docs/features/09); enabled=false when the provider is none' })
+  review(@Body() dto: AssistantReviewDto, @CurrentPrincipal() principal: Principal) {
+    return this.assistant.review(dto, principal);
   }
 
   @Post('suggest')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'LLM writing suggestion for a draft (outline / continuation / rewrite)' })
-  suggest(@Body() dto: AssistantSuggestDto) {
-    return this.assistant.suggest(dto);
+  suggest(@Body() dto: AssistantSuggestDto, @CurrentPrincipal() principal: Principal) {
+    return this.assistant.suggest(dto, principal);
   }
 
   @Post('ask')

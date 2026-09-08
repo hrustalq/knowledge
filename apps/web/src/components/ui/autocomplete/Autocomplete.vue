@@ -163,6 +163,9 @@ const displayValue = computed(() =>
 
 watch(matches, () => {
   activeIndex.value = 0
+  // New results start at the top. The activeIndex watcher cannot do this: it
+  // only fires when the index actually changes, and it usually was 0 already.
+  scrollTo(0)
 })
 
 function isSelected(value: string) {
@@ -211,9 +214,11 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     activeIndex.value = Math.min(activeIndex.value + 1, matches.value.length - 1)
+    ensureVisible(activeIndex.value)
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
     activeIndex.value = Math.max(activeIndex.value - 1, 0)
+    ensureVisible(activeIndex.value)
   } else if (e.key === 'Enter') {
     e.preventDefault()
     const option = matches.value[activeIndex.value]
@@ -323,10 +328,29 @@ const {
   scrollTo,
 } = useVirtualList(matches, { itemHeight: ITEM_HEIGHT, overscan: 8 })
 
-/** Keep the keyboard cursor on screen — the active row may not be rendered. */
-watch(activeIndex, (i) => {
-  if (open.value && matches.value.length > 0) scrollTo(i)
-})
+/**
+ * Keep the *keyboard* cursor on screen — and only the keyboard one.
+ *
+ * This deliberately is not a watcher on `activeIndex`. The pointer sets that
+ * index too, and scrolling in response to the pointer is a feedback loop:
+ * scrolling moves a different row under a stationary cursor, which sets the
+ * index again, which scrolls again — the list runs away downwards and cannot
+ * be scrolled back up.
+ *
+ * It also scrolls by the minimum needed rather than pinning the row to the top,
+ * so arrowing onto a row that is already visible does not jerk the list.
+ */
+function ensureVisible(index: number) {
+  const el = containerProps.ref.value
+  if (!el) {
+    scrollTo(index)
+    return
+  }
+  const top = index * ITEM_HEIGHT
+  const bottom = top + ITEM_HEIGHT
+  if (top < el.scrollTop) el.scrollTop = top
+  else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight
+}
 
 const listId = useId()
 </script>
@@ -401,6 +425,10 @@ const listId = useId()
           class="px-1"
         >
           <ul :id="listId" role="listbox" v-bind="wrapperProps">
+            <!-- Hover uses mousemove, not mouseenter: mouseenter also fires
+                 when the list scrolls under a stationary cursor, which would
+                 hand the keyboard cursor back to whichever row slid under the
+                 pointer (and, with a scroll-on-activate watcher, ran away). -->
             <li
               v-for="row in virtualRows"
               :key="row.data.value"
@@ -410,7 +438,7 @@ const listId = useId()
               :class="
                 row.index === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
               "
-              @mouseenter="activeIndex = row.index"
+              @mousemove="activeIndex = row.index"
               @mousedown.prevent="pick(row.data)"
             >
               <span class="flex min-w-0 items-center gap-1.5">

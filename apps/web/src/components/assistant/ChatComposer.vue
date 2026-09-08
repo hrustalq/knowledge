@@ -16,6 +16,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { nativeEl } from '@/lib/utils'
 import DocumentPickerWidget, { type AppliedDocRef } from '@/components/knowledge/DocumentPickerWidget.vue'
+import SkillPicker from './SkillPicker.vue'
+import ModelPicker from './ModelPicker.vue'
 import { assistantMode } from './use-mode'
 
 const props = defineProps<{
@@ -30,7 +32,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   (
     e: 'send',
-    payload: { content: string; mode: AssistantChatMode; attachments: AssistantChatAttachment[]; documentRefs: string[] },
+    payload: {
+      content: string
+      mode: AssistantChatMode
+      attachments: AssistantChatAttachment[]
+      documentRefs: string[]
+      skillIds: string[]
+    },
   ): void
   (e: 'stop'): void
 }>()
@@ -39,6 +47,8 @@ defineExpose({ focus: () => inputEl.value?.focus() })
 
 const attachments = ref<AssistantChatAttachment[]>([])
 const appliedDocs = ref<AppliedDocRef[]>([])
+// Skills explicitly applied to the next turn; trigger matches apply on their own.
+const skillIds = ref<string[]>([])
 const dropZoneEl = ref<HTMLElement | null>(null)
 
 // Autosize: `rows=1` with a max height only ever produced a one-line box that
@@ -197,10 +207,12 @@ function send() {
     mode: mode.value,
     attachments: attachments.value,
     documentRefs: appliedDocs.value.map((d) => d.documentId),
+    skillIds: skillIds.value,
   })
   draft.value = ''
   attachments.value = []
   appliedDocs.value = []
+  skillIds.value = []
   recallIndex.value = null
   void nextTick(() => inputEl.value?.focus())
 }
@@ -299,6 +311,10 @@ function send() {
               </Tooltip>
 
               <DocumentPickerWidget v-model="appliedDocs" />
+
+              <SkillPicker v-model="skillIds" />
+
+              <ModelPicker />
 
               <Tooltip v-if="voiceSupported">
                 <TooltipTrigger as-child>

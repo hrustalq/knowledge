@@ -204,6 +204,22 @@ export const useAssistantStore = defineStore('assistant', {
       if (this.activeThread?.id === threadId) this.activeThread = res.thread
     },
 
+    /**
+     * Pins this thread to a provider profile (docs/features/12), or clears the
+     * pin so it follows whatever the workspace routes chat at. Thread-level
+     * rather than per-message: switching model mid-conversation is a decision
+     * about the conversation, and the next turn should honour it without the
+     * sender having to re-pick.
+     */
+    async setThreadProvider(threadId: string, providerId: string | null) {
+      const res = await apiFetch<UpdateAssistantThreadResponse>(`/v1/assistant/threads/${threadId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ providerId }),
+      })
+      this.syncSummary(res.thread)
+      if (this.activeThread?.id === threadId) this.activeThread = res.thread
+    },
+
     /** Deletes the thread; if it was open, falls back to the next one in the roster. */
     async deleteThread(threadId: string) {
       await apiFetch(`/v1/assistant/threads/${threadId}`, { method: 'DELETE' })
@@ -235,7 +251,12 @@ export const useAssistantStore = defineStore('assistant', {
     async sendMessage(
       content: string,
       documentId?: string,
-      opts: { mode?: AssistantChatMode; attachments?: AssistantChatAttachment[]; documentRefs?: string[] } = {},
+      opts: {
+        mode?: AssistantChatMode
+        attachments?: AssistantChatAttachment[]
+        documentRefs?: string[]
+        skillIds?: string[]
+      } = {},
     ) {
       if (!this.activeThread) await this.newThread(documentId)
       const thread = this.activeThread!
@@ -261,6 +282,7 @@ export const useAssistantStore = defineStore('assistant', {
         ...(opts.mode ? { mode: opts.mode } : {}),
         ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
         ...(opts.documentRefs?.length ? { documentRefs: opts.documentRefs } : {}),
+        ...(opts.skillIds?.length ? { skillIds: opts.skillIds } : {}),
       }
 
       const abort = markRaw(new AbortController())

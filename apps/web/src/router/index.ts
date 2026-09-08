@@ -42,15 +42,23 @@ export function createRouter() {
             // Third rail: the roster lives in the shell, the selection here.
             children: [{ path: ':id?', component: () => import('@/pages/ProjectDetailPage.vue') }],
           },
+          // Glossary: workspace vocabulary; the page gates writes on the
+          // editor role, and reading it is open to any member.
+          { path: 'glossary', component: () => import('@/pages/GlossaryPage.vue') },
           // Access control (page gates mutations by workspace role)
           { path: 'access', component: () => import('@/pages/AccessControlPage.vue') },
           { path: 'activity', component: () => import('@/pages/ActivityPage.vue') },
+          // AI: provider config, skills, MCP plugins, token usage and call log.
+          // Gated in the page on workspace admin rather than meta.platformAdmin —
+          // these are workspace settings, not platform ones.
+          { path: 'ai', component: () => import('@/pages/AiSettingsPage.vue') },
           // Users management (platform admin only → /403 otherwise)
           { path: 'users', component: () => import('@/pages/AdminUsersPage.vue'), meta: { platformAdmin: true } },
         ],
       },
       // Legacy top-level paths → their settings home
       { path: '/projects', redirect: '/settings/projects' },
+      { path: '/glossary', redirect: '/settings/glossary' },
       { path: '/activity', redirect: '/settings/activity' },
       { path: '/access', redirect: '/settings/access' },
       { path: '/admin/users', redirect: '/settings/users' },

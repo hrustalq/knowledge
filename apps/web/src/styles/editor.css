@@ -1131,3 +1131,70 @@
   font-size: 1rem;
   margin-top: 0.75rem;
 }
+
+/* -------------------------------------------- review annotations (feature 13) */
+/*
+ * A commented passage in review mode. Styled as a highlighter stroke rather
+ * than a link so it reads as "someone marked this up", the way an annotated
+ * PDF does — and it carries its comment count as a superscript pin, so a
+ * reader can see there is a discussion here without opening it.
+ */
+.markdown-body mark[data-kn-thread] {
+  background: color-mix(in oklch, var(--kn-panel-warning) 26%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0.05em 0.1em;
+  cursor: pointer;
+  box-shadow: inset 0 -0.12em 0 color-mix(in oklch, var(--kn-panel-warning) 55%, transparent);
+  transition: background 120ms ease;
+}
+.markdown-body mark[data-kn-thread]:hover,
+.markdown-body mark[data-kn-thread]:focus-visible {
+  background: color-mix(in oklch, var(--kn-panel-warning) 42%, transparent);
+  outline: none;
+}
+/* A resolved thread stays visible — the passage was reviewed — but stops
+   competing for attention with the ones still open. */
+.markdown-body mark[data-kn-thread][data-kn-resolved='true'] {
+  background: color-mix(in oklch, var(--kn-panel-tip) 16%, transparent);
+  box-shadow: inset 0 -0.12em 0 color-mix(in oklch, var(--kn-panel-tip) 40%, transparent);
+}
+/* The pin belongs to the passage, not to each fragment, so only the last
+   `<mark>` of a multi-element range shows it. */
+.markdown-body mark[data-kn-thread] + mark[data-kn-thread]::before { content: none; }
+.markdown-body mark[data-kn-thread]::after {
+  content: attr(data-kn-count);
+  display: inline-block;
+  margin-left: 0.2em;
+  padding: 0 0.32em;
+  border-radius: 999px;
+  background: var(--kn-panel-warning);
+  color: var(--background);
+  font-size: 0.62em;
+  font-weight: 700;
+  line-height: 1.5;
+  vertical-align: super;
+}
+.markdown-body mark[data-kn-thread][data-kn-resolved='true']::after { background: var(--kn-panel-tip); }
+/* Nested marks are overlapping comments; only the outermost prints a pin, or a
+   two-thread overlap would show two badges on the same word. */
+.markdown-body mark[data-kn-thread] mark[data-kn-thread]::after { content: none; }
+
+/* ------------------------------------------------- glossary links (feature 14) */
+/*
+ * A term the workspace glossary defines. Deliberately quieter than a document
+ * mention: it is an aside, and a page whose every third word shouted would be
+ * unreadable. The dotted underline is the long-standing convention for "there
+ * is a definition here", and the browser's own tooltip carries it.
+ */
+.markdown-body a[data-kn-glossary] {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in oklch, var(--primary) 55%, transparent);
+  cursor: help;
+}
+.markdown-body a[data-kn-glossary]:hover {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 8%, transparent);
+}

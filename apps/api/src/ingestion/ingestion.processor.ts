@@ -12,7 +12,7 @@ import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.p
 import { INGESTION_QUEUE } from './ingestion.constants.js';
 import { chunkSections, splitMarkdown } from './markdown.js';
 import { extractFrontmatterFacts } from './relations.js';
-import { RELATION_EXTRACTOR, type RelationExtractor } from '../extraction/relation-extractor.provider.js';
+import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
 
@@ -29,7 +29,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     private readonly storage: StorageService,
     private readonly graph: GraphService,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
-    @Inject(RELATION_EXTRACTOR) private readonly extractor: RelationExtractor,
+    private readonly extractors: ExtractorFactory,
     @Inject(FULLTEXT_PROVIDER) private readonly fulltext: FulltextProvider,
     private readonly config: ConfigService<Env, true>,
     private readonly events: EventsPublisher,
@@ -150,8 +150,11 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       //    the revision is already indexed; a flaky LLM must not fail the job.
       //    Runs even when disabled so stale inferred edges are cleared.
       try {
-        const inferred = this.extractor.enabled
-          ? await this.extractor.extract({
+        // Resolved per job: the workspace may route extraction at its own
+        // provider profile (docs/features/12), falling back to EXTRACTOR_*.
+        const extractor = await this.extractors.forWorkspace(revision.document.workspaceId);
+        const inferred = extractor.enabled
+          ? await extractor.extract({
               documentTitle: revision.document.title,
               chunks: drafts.map((c) => ({
                 chunkId: `${revision.id}:${c.index}`,

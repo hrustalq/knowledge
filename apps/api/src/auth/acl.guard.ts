@@ -73,6 +73,14 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfProject(uuid(req.params?.id, 'project id'));
       case 'assistant-thread':
         return this.access.workspaceOfAssistantThread(uuid(req.params?.id, 'assistant thread id'));
+      case 'ai-skill':
+        return this.access.workspaceOfAiSkill(uuid(req.params?.id, 'skill id'));
+      case 'ai-plugin':
+        return this.access.workspaceOfAiPlugin(uuid(req.params?.id, 'plugin id'));
+      case 'ai-provider':
+        return this.access.workspaceOfAiProvider(uuid(req.params?.id, 'provider id'));
+      case 'glossary-term':
+        return this.access.workspaceOfGlossaryTerm(uuid(req.params?.id, 'glossary term id'));
       case 'workspace':
         return this.access.workspaceExists(uuid(req.params?.id, 'workspace id'));
     }

@@ -29,6 +29,7 @@ const SETTINGS: Record<string, string> = {
   '/settings/users': 'Users',
   '/settings/access': 'Access',
   '/settings/activity': 'Activity',
+  '/settings/ai': 'AI',
 }
 
 /** Pages live inside a project, so page trails lead with the active project. */

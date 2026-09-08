@@ -48,12 +48,14 @@ async function handleSend(payload: {
   mode: AssistantChatMode
   attachments: AssistantChatAttachment[]
   documentRefs: string[]
+  skillIds: string[]
 }) {
   transcriptEl.value?.scrollToEnd()
   await assistant.sendMessage(payload.content, props.documentId, {
     mode: payload.mode,
     attachments: payload.attachments,
     documentRefs: payload.documentRefs,
+    skillIds: payload.skillIds,
   })
   void nextTick(() => composerEl.value?.focus())
 }

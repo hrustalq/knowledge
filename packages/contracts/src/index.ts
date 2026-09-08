@@ -495,6 +495,13 @@ export interface MergeGateConflictDetails {
  */
 export type MergeRequestThreadAnchor =
   | { type: 'line'; revisionId: string; line: number; excerpt?: string }
+  /**
+   * Feature 13 review mode: a comment left on the *rendered* page rather than
+   * on a diff line. Positions are quote-based (W3C TextQuoteSelector shape) —
+   * line numbers do not survive rendering, and a quote plus its surrounding
+   * context re-finds itself after edits that shift every line number.
+   */
+  | { type: 'text'; revisionId: string; quote: string; prefix?: string; suffix?: string }
   | { type: 'section'; heading: string }
   | { type: 'entity'; entityKey: string };
 
@@ -1044,6 +1051,8 @@ export interface AssistantThreadSummary {
   workspaceId: string;
   documentId: string | null;
   title: string | null;
+  /** Provider profile pinned to this thread, when the member picked one. */
+  providerId: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -1513,6 +1522,8 @@ export const API_ERROR_CODES = [
   'PAYLOAD_TOO_LARGE',
   'RATE_LIMITED',
   'UPSTREAM_UNAVAILABLE',
+  // feature 12: the caller's or the workspace's monthly token budget is spent
+  'ASSISTANT_BUDGET_EXCEEDED',
   'INTERNAL',
   // client-side synthesized — never sent by the API:
   'NETWORK_ERROR',
@@ -1657,4 +1668,398 @@ export interface AssistantApiAskResponse {
   answer: string;
   toolCalls?: AssistantToolCall[];
   model?: string;
+}
+
+// ---------------------------------------------------------------------------
+// AI settings (docs/features/12) — the assistant layer made administrable per
+// workspace: provider config, skills, MCP plugins, token accounting, call log.
+// ---------------------------------------------------------------------------
+
+/** Which layer an effective config field came from. */
+export type AiSettingsSource = 'db' | 'env';
+export interface AiSettingsSourceMap {
+  provider: AiSettingsSource;
+  baseUrl: AiSettingsSource;
+  model: AiSettingsSource;
+  apiKey: AiSettingsSource;
+  temperature: AiSettingsSource;
+  maxToolCalls: AiSettingsSource;
+  timeoutMs: AiSettingsSource;
+}
+
+export type AiProvider = 'none' | 'openai-compatible' | 'deepseek';
+
+// GET /v1/ai/settings?workspaceId= — the credential itself is never returned.
+export interface AiSettingsResponse {
+  workspaceId: string;
+  provider: AiProvider;
+  baseUrl: string;
+  model: string;
+  /** A key is configured (from the DB or from env). */
+  hasApiKey: boolean;
+  /** Last-4 hint of the stored key, when one is stored in the DB. */
+  apiKeyHint: string | null;
+  temperature: number;
+  maxToolCalls: number;
+  timeoutMs: number;
+  agentModeEnabled: boolean;
+  pricePromptPerMTok: number | null;
+  priceCompletionPerMTok: number | null;
+  /** Quotas. null = unlimited; only enforced while enforceBudget is true. */
+  workspaceMonthlyTokenBudget: number | null;
+  defaultUserMonthlyTokenBudget: number | null;
+  enforceBudget: boolean;
+  sources: AiSettingsSourceMap;
+  /** Per-purpose routing into the workspace's provider profiles. */
+  routing: AiRouting;
+  /** False when SETTINGS_ENCRYPTION_KEY is unset — the UI must disable key entry. */
+  canStoreSecrets: boolean;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+// ---- Provider profiles & routing -------------------------------------------
+
+export type AiProviderKind = 'openai-compatible' | 'deepseek';
+export type AiProviderStatus = 'unknown' | 'ok' | 'error';
+
+/**
+ * A named provider profile. Several can exist per workspace; each purpose is
+ * routed at one of them, and a chat thread may pin its own.
+ */
+export interface AiProviderSummary {
+  id: string;
+  workspaceId: string;
+  name: string;
+  provider: AiProviderKind;
+  baseUrl: string | null;
+  model: string;
+  hasApiKey: boolean;
+  apiKeyHint: string | null;
+  temperature: number | null;
+  maxToolCalls: number | null;
+  timeoutMs: number | null;
+  pricePromptPerMTok: number | null;
+  priceCompletionPerMTok: number | null;
+  enabled: boolean;
+  status: AiProviderStatus;
+  lastError: string | null;
+  lastCheckedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+// GET /v1/ai/providers?workspaceId=
+export interface ListAiProvidersResponse {
+  providers: AiProviderSummary[];
+}
+
+/**
+ * What a provider is being used for. Chat and agent turns, background draft
+ * review/suggestion, and the worker's relation extraction are the three jobs
+ * a workspace may want on different models.
+ */
+export type AiPurpose = 'chat' | 'review' | 'extraction';
+
+/** Which profile serves each purpose. null = fall back to the inline config, then env. */
+export interface AiRouting {
+  chat: string | null;
+  review: string | null;
+  extraction: string | null;
+}
+
+/**
+ * The provider choices a member may make for a thread — name and model only,
+ * never endpoints or credentials, since this is readable by any viewer.
+ */
+export interface AiProviderChoice {
+  id: string;
+  name: string;
+  model: string;
+}
+// GET /v1/ai/providers/choices?workspaceId=
+export interface ListAiProviderChoicesResponse {
+  /** Empty when the workspace defines no profiles — the picker stays hidden. */
+  providers: AiProviderChoice[];
+  /** The profile the workspace routes chat at, when there is one. */
+  defaultProviderId: string | null;
+}
+
+// POST /v1/ai/settings/test
+export interface AiConnectionTestResponse {
+  ok: boolean;
+  model: string;
+  latencyMs: number;
+  error?: string;
+}
+
+// ---- Skills ----------------------------------------------------------------
+
+export interface AiSkillSummary {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  instructions: string;
+  triggers: string[];
+  enabled: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+// GET /v1/ai/skills?workspaceId=
+export interface ListAiSkillsResponse {
+  skills: AiSkillSummary[];
+}
+
+// ---- Plugins (MCP servers) -------------------------------------------------
+
+export type AiPluginTransport = 'streamable-http' | 'sse';
+export type AiPluginStatus = 'unknown' | 'connected' | 'error';
+
+/** One tool discovered from an MCP server's listTools(). */
+export interface AiPluginTool {
+  name: string;
+  description: string;
+  /** The server's own JSON Schema for the tool's arguments, passed to the model verbatim. */
+  inputSchema?: Record<string, unknown>;
+}
+
+export interface AiPluginSummary {
+  id: string;
+  workspaceId: string;
+  name: string;
+  transport: AiPluginTransport;
+  url: string;
+  authHeader: string | null;
+  /** A credential is stored for this plugin (the value itself is never returned). */
+  hasAuthValue: boolean;
+  enabled: boolean;
+  /** Tools offered to the model. Empty = every discovered tool. */
+  enabledTools: string[];
+  discoveredTools: AiPluginTool[];
+  status: AiPluginStatus;
+  lastError: string | null;
+  lastCheckedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+// GET /v1/ai/plugins?workspaceId=
+export interface ListAiPluginsResponse {
+  plugins: AiPluginSummary[];
+}
+// POST /v1/ai/plugins/:id/test
+export interface AiPluginTestResponse {
+  ok: boolean;
+  tools: AiPluginTool[];
+  error?: string;
+}
+
+// ---- Usage & budgets -------------------------------------------------------
+
+export type AiUsageOperation = 'ask' | 'chat' | 'chat-stream' | 'review' | 'suggest' | 'glossary';
+
+/** One row of the per-user (or per-model) usage breakdown. */
+export interface AiUsageBucket {
+  /** userId, model name, or ISO date — depending on `groupBy`. */
+  key: string;
+  /** Display label resolved server-side (an email for a user bucket). */
+  label: string;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsdMicros: number | null;
+  errors: number;
+}
+
+/** A day on the usage sparkline. */
+export interface AiUsageSeriesPoint {
+  date: string;
+  totalTokens: number;
+  calls: number;
+  costUsdMicros: number | null;
+}
+
+// GET /v1/ai/usage?workspaceId=&from=&to=&groupBy=user|model|day
+export interface AiUsageResponse {
+  from: string;
+  to: string;
+  groupBy: 'user' | 'model' | 'day';
+  totals: {
+    calls: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    costUsdMicros: number | null;
+    /** Calls with no known price — the cost total excludes them, so the UI can say so. */
+    unpricedCalls: number;
+    errors: number;
+  };
+  buckets: AiUsageBucket[];
+  series: AiUsageSeriesPoint[];
+}
+
+/** One upstream LLM call, as shown in the Logs tab. */
+export interface AiUsageLogEntry {
+  id: string;
+  userId: string;
+  userLabel: string;
+  operation: AiUsageOperation;
+  provider: string;
+  model: string;
+  /** The named profile that served the call, when one did. */
+  providerId: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimated: boolean;
+  costUsdMicros: number | null;
+  durationMs: number;
+  ok: boolean;
+  errorCode: string | null;
+  error: string | null;
+  threadId: string | null;
+  toolCallCount: number;
+  createdAt: string;
+}
+// GET /v1/ai/usage/logs?workspaceId=&cursor=&userId=&operation=&ok=
+export interface ListAiUsageLogsResponse {
+  entries: AiUsageLogEntry[];
+  nextCursor: string | null;
+}
+
+/** Budget state for one principal — drives both the admin table and the chat chip. */
+export interface AiBudgetInfo {
+  userId: string;
+  /** null = unlimited. */
+  monthlyTokenBudget: number | null;
+  /** True when this user has an explicit ai_user_budgets row. */
+  overridden: boolean;
+  usedTokens: number;
+  remainingTokens: number | null;
+  enforced: boolean;
+  /** Start of the current accounting month (UTC), ISO. */
+  periodStart: string;
+}
+// GET /v1/ai/usage/me?workspaceId=
+export interface AiMyUsageResponse {
+  budget: AiBudgetInfo;
+  calls: number;
+  totalTokens: number;
+  costUsdMicros: number | null;
+}
+// GET /v1/ai/budgets?workspaceId=
+export interface ListAiBudgetsResponse {
+  workspace: {
+    monthlyTokenBudget: number | null;
+    usedTokens: number;
+    remainingTokens: number | null;
+    enforced: boolean;
+    periodStart: string;
+  };
+  users: AiBudgetInfo[];
+}
+
+/** Flat extras on the 429 raised when a budget is spent (hoisted into `details`). */
+export interface AiBudgetExceededDetails {
+  scope: 'user' | 'workspace';
+  usedTokens: number;
+  monthlyTokenBudget: number;
+  periodStart: string;
+}
+
+// ---------------------------------------------------------------------------
+// Glossary (docs/features/14): workspace vocabulary + automatic term linking
+// ---------------------------------------------------------------------------
+
+/** Where a term came from: hand-written, or accepted from an AI suggestion. */
+export type GlossaryTermSource = 'manual' | 'ai';
+
+export interface GlossaryTerm {
+  termId: string;
+  workspaceId: string;
+  /** Workspace > Project > Document: vocabulary belongs to a project. */
+  projectId: string;
+  term: string;
+  /** Alternative spellings, abbreviations and inflections that link to this entry. */
+  aliases: string[];
+  /** Short definition shown in the hover card wherever the term appears. */
+  definition: string;
+  /** Page that defines the term in full; the hover card links to it. */
+  documentId: string | null;
+  /** Resolved on read (no FK — a deleted page leaves the entry intact). */
+  documentTitle: string | null;
+  source: GlossaryTermSource;
+  /** Disabled terms stay in the glossary but stop being linked in documents. */
+  enabled: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /v1/glossary?workspaceId=&projectId=
+export interface ListGlossaryRequest {
+  workspaceId: string;
+  /** Absent = every project in the workspace (what the roster page shows). */
+  projectId?: string;
+  search?: string;
+}
+export interface ListGlossaryResponse {
+  workspaceId: string;
+  projectId: string | null;
+  terms: GlossaryTerm[];
+}
+
+// POST /v1/glossary
+export interface CreateGlossaryTermRequest {
+  workspaceId: string;
+  projectId: string;
+  term: string;
+  definition: string;
+  aliases?: string[];
+  documentId?: string | null;
+  source?: GlossaryTermSource;
+  enabled?: boolean;
+}
+
+// PATCH /v1/glossary/:id
+export interface UpdateGlossaryTermRequest {
+  term?: string;
+  definition?: string;
+  aliases?: string[];
+  documentId?: string | null;
+  enabled?: boolean;
+}
+
+// POST /v1/glossary/suggest — LLM term extraction over a page or a draft
+export interface SuggestGlossaryTermsRequest {
+  workspaceId: string;
+  /** Read the head revision of this page. Mutually exclusive with `markdown`. */
+  documentId?: string;
+  /**
+   * Project whose glossary the proposals are checked against. Defaults to the
+   * source document's own project; required when suggesting from raw markdown.
+   */
+  projectId?: string;
+  /** Raw draft text (the editor suggests against unsaved content). */
+  markdown?: string;
+  title?: string;
+}
+
+export interface GlossaryTermSuggestion {
+  term: string;
+  aliases: string[];
+  definition: string;
+  /** Occurrences counted deterministically in the source text, not by the model. */
+  occurrences: number;
+  /** Already in the glossary — the UI offers "update" instead of "add". */
+  existingTermId: string | null;
+}
+
+export interface SuggestGlossaryTermsResponse {
+  /** false when the assistant provider is `none` — the UI hints instead of erroring. */
+  enabled: boolean;
+  /** Project the proposals were checked against, and where accepting one puts it. */
+  projectId: string | null;
+  suggestions: GlossaryTermSuggestion[];
 }

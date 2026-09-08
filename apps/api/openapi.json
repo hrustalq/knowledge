@@ -3929,7 +3929,7 @@
             }
           }
         },
-        "summary": "LLM review of a draft (docs/features/09); enabled=false when ASSISTANT_PROVIDER=none",
+        "summary": "LLM review of a draft (docs/features/09); enabled=false when the provider is none",
         "tags": [
           "assistant"
         ]
@@ -4430,6 +4430,1465 @@
         "summary": "Streamed chat turn (text/event-stream of AssistantStreamFrame) — same turn as POST .../messages",
         "tags": [
           "assistant"
+        ]
+      }
+    },
+    "/v1/ai/settings": {
+      "get": {
+        "operationId": "AiController_getSettings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Effective assistant configuration (DB overrides ∪ env). Never returns the API key.",
+        "tags": [
+          "ai"
+        ]
+      },
+      "patch": {
+        "operationId": "AiController_updateSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAiSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update the workspace assistant config. Omitted fields keep, null clears (inherit env).",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/settings/test": {
+      "post": {
+        "operationId": "AiController_testConnection",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestAiConnectionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One tiny completion against the effective config — reports the upstream error verbatim",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/providers": {
+      "get": {
+        "operationId": "AiController_listProviders",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Provider profiles (admin — rows carry endpoints and credential metadata)",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "operationId": "AiController_createProvider",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAiProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Add a provider profile",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/providers/choices": {
+      "get": {
+        "operationId": "AiController_listProviderChoices",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Names and models a member may pick for their chat thread — no endpoints or credentials",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/providers/{id}": {
+      "patch": {
+        "operationId": "AiController_updateProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAiProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update a profile. Omit apiKey to keep the stored credential; null clears it.",
+        "tags": [
+          "ai"
+        ]
+      },
+      "delete": {
+        "operationId": "AiController_deleteProvider",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a profile, clearing every route and thread pinned to it",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/skills": {
+      "get": {
+        "operationId": "AiController_listSkills",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Skills in the workspace (viewer — the chat composer offers them)",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "operationId": "AiController_createSkill",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAiSkillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a skill",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/skills/{id}": {
+      "get": {
+        "operationId": "AiController_getSkill",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One skill",
+        "tags": [
+          "ai"
+        ]
+      },
+      "patch": {
+        "operationId": "AiController_updateSkill",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAiSkillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update a skill",
+        "tags": [
+          "ai"
+        ]
+      },
+      "delete": {
+        "operationId": "AiController_deleteSkill",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a skill",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/plugins": {
+      "get": {
+        "operationId": "AiController_listPlugins",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "MCP plugins in the workspace (admin — rows carry endpoints and credential metadata)",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "operationId": "AiController_createPlugin",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAiPluginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Register an MCP server and discover its tools",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/plugins/{id}": {
+      "patch": {
+        "operationId": "AiController_updatePlugin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAiPluginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update a plugin. Omit authValue to keep the stored credential; null clears it.",
+        "tags": [
+          "ai"
+        ]
+      },
+      "delete": {
+        "operationId": "AiController_deletePlugin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a plugin",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/plugins/{id}/test": {
+      "post": {
+        "operationId": "AiController_testPlugin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reconnect and re-discover the plugin tool list",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/usage": {
+      "get": {
+        "operationId": "AiUsageController_summarize",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "ISO timestamp; defaults to 30 days ago",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "ISO timestamp; defaults to now",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "user",
+                "model",
+                "day"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Token usage totals, per-bucket breakdown and a daily series",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/usage/logs": {
+      "get": {
+        "operationId": "AiUsageController_listLogs",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operation",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "ask",
+                "chat",
+                "chat-stream",
+                "review",
+                "suggest",
+                "glossary"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "ok",
+            "required": false,
+            "in": "query",
+            "description": "\"true\" / \"false\" to filter by outcome",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One row per upstream LLM call, newest first (cursor-paginated)",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/usage/me": {
+      "get": {
+        "operationId": "AiUsageController_myUsage",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own usage this month and remaining budget",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/budgets": {
+      "get": {
+        "operationId": "AiUsageController_listBudgets",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Workspace budget envelope plus every user with an override or spend this month",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/budgets/{userId}": {
+      "put": {
+        "operationId": "AiUsageController_setBudget",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAiBudgetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set one user’s monthly token budget (null = unlimited)",
+        "tags": [
+          "ai"
+        ]
+      },
+      "delete": {
+        "operationId": "AiUsageController_clearBudget",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Drop a per-user override — the workspace default applies again",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/glossary": {
+      "get": {
+        "operationId": "GlossaryController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to one project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive substring match on term, aliases or definition",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The glossary — the roster the read-side term linker matches against. Scoped to one project with projectId; without it, the whole workspace.",
+        "tags": [
+          "glossary"
+        ]
+      },
+      "post": {
+        "operationId": "GlossaryController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGlossaryTermDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Add a term to a project (409 when that project already defines it)",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/v1/glossary/suggest": {
+      "post": {
+        "operationId": "GlossaryController_suggest",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestGlossaryTermsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "LLM term extraction over a page or a draft — proposals only, nothing is saved; enabled=false when the assistant provider is none",
+        "tags": [
+          "glossary"
+        ]
+      }
+    },
+    "/v1/glossary/{id}": {
+      "get": {
+        "operationId": "GlossaryController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One glossary entry",
+        "tags": [
+          "glossary"
+        ]
+      },
+      "patch": {
+        "operationId": "GlossaryController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGlossaryTermDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a term, its aliases, its definition or its defining page",
+        "tags": [
+          "glossary"
+        ]
+      },
+      "delete": {
+        "operationId": "GlossaryController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a term; pages that mention it simply stop linking it",
+        "tags": [
+          "glossary"
         ]
       }
     }
@@ -4976,6 +6435,7 @@
             "type": "string",
             "enum": [
               "line",
+              "text",
               "section",
               "entity"
             ]
@@ -4991,6 +6451,18 @@
           "excerpt": {
             "type": "string",
             "description": "line: text excerpt for best-effort re-matching once the branch advances"
+          },
+          "quote": {
+            "type": "string",
+            "description": "text: the selected passage, as rendered (feature 13 review mode)"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "text: rendered text immediately before the quote, for disambiguation"
+          },
+          "suffix": {
+            "type": "string",
+            "description": "text: rendered text immediately after the quote, for disambiguation"
           },
           "heading": {
             "type": "string",
@@ -5383,6 +6855,12 @@
             "type": "string",
             "nullable": true,
             "description": "null clears the manual title so the auto-derived one shows again"
+          },
+          "providerId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Provider profile to run this thread on; null returns it to the workspace default"
           }
         }
       },
@@ -5436,11 +6914,527 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "skillIds": {
+            "description": "Skills (docs/features/12) explicitly applied to this turn; enabled skills also join on trigger match",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         },
         "required": [
           "content"
         ]
+      },
+      "UpdateAiSettingsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "none",
+              "openai-compatible",
+              "deepseek"
+            ],
+            "nullable": true
+          },
+          "baseUrl": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://api.deepseek.com"
+          },
+          "model": {
+            "type": "string",
+            "nullable": true,
+            "example": "deepseek-chat"
+          },
+          "apiKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "Write-only. Omit to keep the stored key; null or \"\" clears it and falls back to ASSISTANT_API_KEY."
+          },
+          "temperature": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 2
+          },
+          "maxToolCalls": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 16
+          },
+          "timeoutMs": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1000,
+            "maximum": 600000
+          },
+          "agentModeEnabled": {
+            "type": "boolean",
+            "description": "Allow Agent mode (write tools) in the chat for this workspace"
+          },
+          "pricePromptPerMTok": {
+            "type": "number",
+            "nullable": true,
+            "description": "USD per 1M prompt tokens (cost estimate)"
+          },
+          "priceCompletionPerMTok": {
+            "type": "number",
+            "nullable": true,
+            "description": "USD per 1M completion tokens (cost estimate)"
+          },
+          "workspaceMonthlyTokenBudget": {
+            "type": "number",
+            "nullable": true,
+            "description": "Monthly workspace token budget; null = unlimited"
+          },
+          "defaultUserMonthlyTokenBudget": {
+            "type": "number",
+            "nullable": true,
+            "description": "Default per-user monthly budget; null = unlimited"
+          },
+          "enforceBudget": {
+            "type": "boolean",
+            "description": "Refuse assistant requests once a budget is spent (429)"
+          },
+          "chatProviderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Provider profile serving chat and agent turns"
+          },
+          "reviewProviderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Provider profile serving draft review and suggestions"
+          },
+          "extractionProviderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Provider profile serving the worker's relation extraction"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "TestAiConnectionDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "providerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Test one profile instead of whatever chat is routed at"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "CreateAiProviderDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "DeepSeek prod"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai-compatible",
+              "deepseek"
+            ]
+          },
+          "baseUrl": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://api.deepseek.com"
+          },
+          "model": {
+            "type": "string",
+            "example": "deepseek-chat"
+          },
+          "apiKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "Write-only credential; null clears it"
+          },
+          "temperature": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 2
+          },
+          "maxToolCalls": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 16
+          },
+          "timeoutMs": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1000,
+            "maximum": 600000
+          },
+          "pricePromptPerMTok": {
+            "type": "number",
+            "nullable": true,
+            "description": "USD per 1M prompt tokens"
+          },
+          "priceCompletionPerMTok": {
+            "type": "number",
+            "nullable": true,
+            "description": "USD per 1M completion tokens"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name",
+          "provider",
+          "model"
+        ]
+      },
+      "UpdateAiProviderDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai-compatible",
+              "deepseek"
+            ]
+          },
+          "baseUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "model": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "Write-only; omit to keep, null to clear"
+          },
+          "temperature": {
+            "type": "number",
+            "nullable": true
+          },
+          "maxToolCalls": {
+            "type": "number",
+            "nullable": true
+          },
+          "timeoutMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "pricePromptPerMTok": {
+            "type": "number",
+            "nullable": true
+          },
+          "priceCompletionPerMTok": {
+            "type": "number",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateAiSkillDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Release notes writer"
+          },
+          "description": {
+            "type": "string",
+            "example": "Draft release notes from merged merge requests"
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Markdown instructions merged into the system prompt",
+            "maxLength": 8000
+          },
+          "triggers": {
+            "description": "Keywords that pull this skill into a turn",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name",
+          "description",
+          "instructions"
+        ]
+      },
+      "UpdateAiSkillDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Release notes writer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 8000
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateAiPluginDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Jira"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "streamable-http",
+              "sse"
+            ],
+            "default": "streamable-http"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://mcp.example.com/jira"
+          },
+          "authHeader": {
+            "type": "string",
+            "nullable": true,
+            "example": "Authorization"
+          },
+          "authValue": {
+            "type": "string",
+            "nullable": true,
+            "description": "Write-only credential; null clears it"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "enabledTools": {
+            "description": "Tools offered to the model; empty = every discovered tool",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name",
+          "url"
+        ]
+      },
+      "UpdateAiPluginDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "streamable-http",
+              "sse"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "authHeader": {
+            "type": "string",
+            "nullable": true
+          },
+          "authValue": {
+            "type": "string",
+            "nullable": true,
+            "description": "Write-only; omit to keep, null to clear"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "enabledTools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SetAiBudgetDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "monthlyTokenBudget": {
+            "type": "number",
+            "nullable": true,
+            "description": "Monthly token budget; null = unlimited"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "CreateGlossaryTermDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "Project the term belongs to (must be in the same workspace)"
+          },
+          "term": {
+            "type": "string",
+            "example": "Merge base"
+          },
+          "definition": {
+            "type": "string",
+            "example": "The nearest common ancestor of two revisions in the DAG."
+          },
+          "aliases": {
+            "description": "Abbreviations and inflections that link to this entry",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "documentId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Page that defines the term in full"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "ai"
+            ],
+            "description": "Defaults to \"manual\""
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Defaults to true"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "projectId",
+          "term",
+          "definition"
+        ]
+      },
+      "SuggestGlossaryTermsDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "Read the head revision of this page (mutually exclusive with markdown)"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "Project whose glossary to check against; defaults to the source document's own project"
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Raw draft text — lets the editor suggest against unsaved content"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "UpdateGlossaryTermDto": {
+        "type": "object",
+        "properties": {
+          "term": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "documentId": {
+            "type": "string",
+            "nullable": true,
+            "description": "null unlinks the defining page"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
       },
       "ApiErrorResponse": {
         "type": "object",
@@ -5462,6 +7456,7 @@
               "PAYLOAD_TOO_LARGE",
               "RATE_LIMITED",
               "UPSTREAM_UNAVAILABLE",
+              "ASSISTANT_BUDGET_EXCEEDED",
               "INTERNAL",
               "NETWORK_ERROR",
               "TIMEOUT",

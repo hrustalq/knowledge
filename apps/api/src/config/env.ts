@@ -71,6 +71,16 @@ export const envSchema = z.object({
   /** Upstream request timeout for the assistant provider. */
   ASSISTANT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
+  /**
+   * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider
+   * credentials stored in ai_settings/ai_plugins. Empty disables secret WRITES
+   * (everything else keeps working) rather than failing boot — same fail-soft
+   * spirit as ASSISTANT_PROVIDER=none. Generate: openssl rand -base64 32
+   */
+  SETTINGS_ENCRYPTION_KEY: z.string().optional().default(''),
+  /** Feature 12 plugins: allow MCP server URLs on private/loopback ranges (self-hosted). */
+  AI_PLUGINS_ALLOW_PRIVATE_URLS: z.coerce.boolean().default(false),
+
   /** Feature 04: max dependent documents re-indexed per indexed revision (0 disables). */
   DEPENDENT_REINDEX_MAX: z.coerce.number().int().min(0).default(20),
 

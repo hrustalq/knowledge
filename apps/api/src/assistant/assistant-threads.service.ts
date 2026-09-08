@@ -94,12 +94,27 @@ export class AssistantThreadsService {
     };
   }
 
-  async updateThread(threadId: string, patch: { title?: string | null }): Promise<UpdateAssistantThreadResponse> {
-    await this.getThreadOrThrow(threadId);
+  async updateThread(
+    threadId: string,
+    patch: { title?: string | null; providerId?: string | null },
+  ): Promise<UpdateAssistantThreadResponse> {
+    const current = await this.getThreadOrThrow(threadId);
+    // A pin from another tenant would route this workspace's turns — and its
+    // tokens — through a provider its admins never configured.
+    if (patch.providerId) {
+      const provider = await this.prisma.aiProvider.findUnique({
+        where: { id: patch.providerId },
+        select: { workspaceId: true, enabled: true },
+      });
+      if (!provider || provider.workspaceId !== current.workspaceId || !provider.enabled) {
+        throw new NotFoundException(`Provider ${patch.providerId} is not available in this workspace`);
+      }
+    }
     const thread = await this.prisma.assistantThread.update({
       where: { id: threadId },
       data: {
         ...(patch.title !== undefined ? { title: patch.title?.trim() || null } : {}),
+        ...(patch.providerId !== undefined ? { providerId: patch.providerId } : {}),
         // A rename is metadata, not activity: keep the roster ordered by when
         // the conversation last moved, not by when someone tidied its label.
         updatedAt: undefined,
@@ -198,6 +213,7 @@ export class AssistantThreadsService {
       workspaceId: t.workspaceId,
       documentId: t.documentId,
       title: t.title,
+      providerId: t.providerId,
       createdBy: t.createdBy,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),

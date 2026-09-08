@@ -16,6 +16,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { Pencil } from 'lucide-vue-next'
 import type {
+  DocumentContentResponse,
   ListMergeRequestThreadsResponse,
   MergeRequestDiffResponse,
   MergeRequestInfo,
@@ -32,6 +33,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import DiffView from '@/components/knowledge/DiffView.vue'
+import ReviewCanvas from '@/components/merge-requests/ReviewCanvas.vue'
 import MergeWidget from '@/components/merge-requests/MergeWidget.vue'
 import MrSidebar from '@/components/merge-requests/MrSidebar.vue'
 import MrActivityFeed from '@/components/merge-requests/MrActivityFeed.vue'
@@ -40,10 +42,11 @@ import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { matchAnchoredThreads } from '@/components/merge-requests/thread-anchors'
 import { actorLabel, mrIcon } from '@/components/merge-requests/mr-ui'
 
-const TABS = ['overview', 'changes', 'structure', 'impact'] as const
+const TABS = ['overview', 'review', 'changes', 'structure', 'impact'] as const
 type Tab = (typeof TABS)[number]
 const TAB_LABELS: Record<Tab, string> = {
   overview: 'Overview',
+  review: 'Review',
   changes: 'Changes',
   structure: 'Structure',
   impact: 'Knowledge impact',
@@ -93,6 +96,25 @@ const semantic = computed(
   () => (impactQuery.data.value as MergeRequestDiffResponse | undefined)?.compare.semantic ?? null,
 )
 
+/**
+ * Review mode reads the page itself, at the revision being proposed — not the
+ * diff. Only fetched on that tab: it is a second document body, and every
+ * other tab already has everything it needs.
+ */
+const sourceHead = computed(() => mr.value?.sourceHeadRevisionId ?? null)
+const contentQuery = useQuery(
+  computed(() => ({
+    ...apiQueryOptions('/v1/documents/{id}/content', {
+      path: { id: mr.value?.documentId ?? '' },
+      query: { revision: sourceHead.value ?? undefined },
+    }),
+    enabled: tab.value === 'review' && !!mr.value?.documentId && !!sourceHead.value,
+  })),
+)
+const reviewContent = computed(
+  () => (contentQuery.data.value as DocumentContentResponse | undefined) ?? null,
+)
+
 const threadsQuery = useQuery(
   computed(() => apiQueryOptions('/v1/merge-requests/{id}/threads', { path: { id: id.value } })),
 )
@@ -109,12 +131,26 @@ const unresolvedCount = computed(() => threads.value.filter((t) => !t.resolved).
  */
 const matched = computed(() => matchAnchoredThreads(diff.value, threads.value))
 
+/** Both review surfaces report staleness; the timeline shows the union. */
+const allOutdatedIds = computed(
+  () => new Set([...matched.value.outdatedIds, ...reviewOutdated.value]),
+)
+
 const isOpen = computed(() => mr.value?.status === 'open')
 const canEdit = computed(() => auth.canEdit)
 const canComment = computed(() => isOpen.value && canEdit.value)
 
+/**
+ * Anchors that no longer resolve on the rendered page. Reported by the canvas
+ * rather than computed here: whether a quote still exists is a fact about the
+ * DOM the reader is looking at, not about the thread row.
+ */
+const outdatedInReview = ref<string[]>([])
+const reviewOutdated = computed(() => new Set(outdatedInReview.value))
+
 const tabCounts = computed<Partial<Record<Tab, number>>>(() => ({
   overview: threads.value.length || undefined,
+  review: threads.value.filter((t) => t.anchor?.type === 'text').length || undefined,
   changes: diff.value?.hunks.length || undefined,
 }))
 
@@ -309,7 +345,7 @@ function refresh() {
             :merge-request-id="mr.mergeRequestId"
             :document-id="mr.documentId"
             :threads="threads"
-            :outdated-ids="matched.outdatedIds"
+            :outdated-ids="allOutdatedIds"
             :readonly="!canComment"
             :busy="threadsBusy"
             @reply="onReply"
@@ -317,6 +353,30 @@ function refresh() {
             @create-thread="(b) => onCreateThread(b)"
           />
         </template>
+
+        <!-- review: the page as a reader sees it, annotated in place -->
+        <div v-else-if="tab === 'review'" class="space-y-3">
+          <Skeleton v-if="contentQuery.isPending.value" class="h-64 w-full" />
+          <p v-else-if="!sourceHead" class="text-sm text-muted-foreground">
+            The source branch has no finalized revision yet — there is nothing to read.
+          </p>
+          <p v-else-if="!reviewContent" class="text-sm text-muted-foreground">
+            This revision's content could not be loaded.
+          </p>
+          <ReviewCanvas
+            v-else
+            :markdown="reviewContent.markdown"
+            :revision-id="reviewContent.revisionId"
+            :threads="threads"
+            :can-comment="canComment"
+            :busy="threadsBusy"
+            :resolve-document-id="resolveDocumentId"
+            @create-thread="(b, a) => onCreateThread(b, a)"
+            @reply="onReply"
+            @resolve="onResolve"
+            @outdated="outdatedInReview = $event"
+          />
+        </div>
 
         <!-- changes -->
         <div v-else-if="tab === 'changes'" class="space-y-3">

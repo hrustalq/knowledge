@@ -233,7 +233,7 @@ watch(
             </summary>
             <pre class="overflow-x-auto border-t bg-muted/40 p-3 text-xs">{{ JSON.stringify(content.frontmatter, null, 2) }}</pre>
           </details>
-          <MarkdownView :markdown="content.markdown" @headings="headings = $event" />
+          <MarkdownView glossary :markdown="content.markdown" @headings="headings = $event" />
         </template>
       </div>
       <aside v-if="headings.length > 1" class="sticky top-6 ml-auto hidden w-52 shrink-0 xl:block">

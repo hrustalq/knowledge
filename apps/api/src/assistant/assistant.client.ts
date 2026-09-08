@@ -1,23 +1,29 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import type {
   ChatCompletionFunctionTool,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
-import type { AssistantToolCall } from '@knowledge/contracts';
-import type { Env } from '../config/env.js';
+import type { AssistantToolCall, AiUsageOperation } from '@knowledge/contracts';
+import type { ResolvedAiConfig } from '../ai/ai-config.service.js';
+import { AiUsageService, estimateTokens, type AiUsageTokens } from '../ai/ai-usage.service.js';
 import { FREE_TOOLS } from './assistant.tools.js';
 
 /**
- * Per-provider defaults so `ASSISTANT_PROVIDER=deepseek` works with nothing
- * but an API key. DeepSeek speaks the OpenAI wire protocol, so the official
- * `openai` SDK is the client for every provider (docs/features/09).
+ * Everything one upstream call needs to know beyond its messages: which
+ * provider config to use (feature 12 resolves it per workspace, so it is no
+ * longer a boot-time constant) and who to bill the tokens to.
  */
-const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; model: string }> = {
-  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
-};
+export interface AiCallContext {
+  config: ResolvedAiConfig;
+  userId: string;
+  operation: AiUsageOperation;
+  threadId?: string;
+}
+
+/** How many distinct provider configurations keep a live SDK instance. */
+const CLIENT_CACHE_MAX = 32;
 
 /** Hard ceiling for a single tool result injected back into the conversation. */
 const MAX_TOOL_RESULT_CHARS = 28_000;
@@ -64,6 +70,31 @@ function stripToolMarkup(content: string): string {
     .trim();
 }
 
+/** Provider-reported usage → our shape. */
+function fromUsage(usage: OpenAI.Completions.CompletionUsage): AiUsageTokens {
+  return {
+    promptTokens: usage.prompt_tokens ?? 0,
+    completionTokens: usage.completion_tokens ?? 0,
+    totalTokens: usage.total_tokens ?? (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
+    estimated: false,
+  };
+}
+
+/**
+ * Fallback when the provider reports nothing — several OpenAI-compatible
+ * servers ignore `stream_options`, and an errored call never reports at all.
+ * Flagged `estimated` so the UI can say so rather than implying billing truth.
+ */
+function estimateFor(messages: ChatCompletionMessageParam[], completion: string): AiUsageTokens {
+  const promptChars = messages.reduce(
+    (n, m) => n + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content ?? '').length),
+    0,
+  );
+  const promptTokens = estimateTokens('x'.repeat(promptChars));
+  const completionTokens = estimateTokens(completion);
+  return { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens, estimated: true };
+}
+
 export interface ToolExecutionResult {
   content: string;
   ok?: boolean;
@@ -72,39 +103,54 @@ export interface ToolExecutionResult {
 export type ToolExecutor = (name: string, args: Record<string, unknown>) => Promise<ToolExecutionResult>;
 
 /**
- * Thin wrapper around the official OpenAI SDK: one place that knows the
- * provider config, temperature, error mapping, and the bounded tool-calling
- * loop (harness). Services never touch the SDK directly.
+ * Thin wrapper around the official OpenAI SDK: one place that knows how a
+ * resolved config becomes a client, the error mapping, the bounded
+ * tool-calling loop (harness), and where token usage is recorded. Services
+ * never touch the SDK directly.
+ *
+ * Since feature 12 the configuration arrives per call (`AiCallContext`) rather
+ * than being read once in the constructor, so an admin can change model or
+ * provider from the settings UI without restarting the API. SDK instances are
+ * cached by the fields that actually shape a connection.
  */
 @Injectable()
 export class AssistantClient {
   private readonly logger = new Logger(AssistantClient.name);
-  readonly enabled: boolean;
-  readonly model: string;
-  private readonly maxToolCalls: number;
-  private readonly client: OpenAI | null;
+  private readonly clients = new Map<string, OpenAI>();
 
-  constructor(config: ConfigService<Env, true>) {
-    const provider = config.get('ASSISTANT_PROVIDER', { infer: true });
-    const defaults = PROVIDER_DEFAULTS[provider];
-    this.enabled = provider !== 'none';
-    this.model = config.get('ASSISTANT_MODEL', { infer: true }) || defaults?.model || '';
-    this.maxToolCalls = config.get('ASSISTANT_MAX_TOOL_CALLS', { infer: true });
-    const baseURL = (config.get('ASSISTANT_BASE_URL', { infer: true }) || defaults?.baseUrl || '').replace(/\/$/, '');
-    this.client = this.enabled
-      ? new OpenAI({
-          baseURL: baseURL || undefined,
-          // Local OpenAI-compatible servers (Ollama, LM Studio) need no key.
-          apiKey: config.get('ASSISTANT_API_KEY', { infer: true }) || 'unused',
-          timeout: config.get('ASSISTANT_TIMEOUT_MS', { infer: true }),
-          maxRetries: 1,
-        })
-      : null;
+  constructor(private readonly usage: AiUsageService) {}
+
+  /**
+   * One SDK instance per distinct (endpoint, credential, timeout). Bounded so
+   * a workspace churning its settings cannot grow the map without limit; the
+   * eviction is plain insertion-order (oldest first), which is enough for
+   * something this small.
+   */
+  private clientFor(config: ResolvedAiConfig): OpenAI {
+    if (!config.enabled) {
+      throw new ServiceUnavailableException('Assistant provider is disabled for this workspace');
+    }
+    const key = `${config.baseUrl}|${config.apiKey}|${config.timeoutMs}`;
+    const hit = this.clients.get(key);
+    if (hit) return hit;
+    const client = new OpenAI({
+      baseURL: config.baseUrl || undefined,
+      // Local OpenAI-compatible servers (Ollama, LM Studio) need no key.
+      apiKey: config.apiKey || 'unused',
+      timeout: config.timeoutMs,
+      maxRetries: 1,
+    });
+    if (this.clients.size >= CLIENT_CACHE_MAX) {
+      const oldest = this.clients.keys().next().value;
+      if (oldest !== undefined) this.clients.delete(oldest);
+    }
+    this.clients.set(key, client);
+    return client;
   }
 
   /** Single-shot completion (review / suggest). `json` asks for a JSON object response. */
-  async chat(messages: ChatCompletionMessageParam[], opts?: { json?: boolean }): Promise<string> {
-    const completion = await this.create({
+  async chat(ctx: AiCallContext, messages: ChatCompletionMessageParam[], opts?: { json?: boolean }): Promise<string> {
+    const completion = await this.create(ctx, {
       messages,
       ...(opts?.json ? { response_format: { type: 'json_object' as const } } : {}),
     });
@@ -118,6 +164,7 @@ export class AssistantClient {
    * round runs WITHOUT tools so the model must answer with what it has.
    */
   async runWithTools(
+    ctx: AiCallContext,
     messages: ChatCompletionMessageParam[],
     tools: ChatCompletionFunctionTool[],
     execute: ToolExecutor,
@@ -129,9 +176,9 @@ export class AssistantClient {
 
     for (let round$ = 0; ; round$++) {
       if (round$ >= MAX_ROUNDS) return { content: '', trace };
-      const budgetLeft = this.budgetLeft(trace);
+      const budgetLeft = this.budgetLeft(ctx, trace);
       const offered = budgetLeft > 0 ? tools : free;
-      const completion = await this.create({
+      const completion = await this.create(ctx, {
         messages: budgetLeft > 0 ? convo : [...convo, LAST_ROUND_NUDGE],
         ...(offered.length > 0 ? { tools: offered } : {}),
       });
@@ -202,6 +249,7 @@ export class AssistantClient {
    * the non-streaming path.
    */
   async runWithToolsStream(
+    ctx: AiCallContext,
     messages: ChatCompletionMessageParam[],
     tools: ChatCompletionFunctionTool[],
     execute: ToolExecutor,
@@ -224,9 +272,10 @@ export class AssistantClient {
       // A hard stop independent of the budget: free tools do not consume it,
       // so without this a model that kept calling one could loop forever.
       if (round$ >= MAX_ROUNDS) return { content: stripToolMarkup(''), trace, cancelled: false };
-      const budgetLeft = this.budgetLeft(trace);
+      const budgetLeft = this.budgetLeft(ctx, trace);
       const offered = budgetLeft > 0 ? tools : free;
       const round = await this.createStream(
+        ctx,
         {
           messages: budgetLeft > 0 ? convo : [...convo, LAST_ROUND_NUDGE],
           ...(offered.length > 0 ? { tools: offered } : {}),
@@ -301,6 +350,7 @@ export class AssistantClient {
    * reassembled here rather than by every caller.
    */
   private async createStream(
+    ctx: AiCallContext,
     params: Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming, 'model' | 'temperature' | 'stream'>,
     onDelta: (text: string) => void,
     signal?: AbortSignal,
@@ -309,15 +359,27 @@ export class AssistantClient {
     toolCalls: Array<{ id: string; name: string; arguments: string }>;
     cancelled: boolean;
   }> {
-    if (!this.client) throw new ServiceUnavailableException('Assistant provider is disabled (ASSISTANT_PROVIDER=none)');
+    const client = this.clientFor(ctx.config);
+    const startedAt = Date.now();
     let content = '';
+    let reported: AiUsageTokens | null = null;
     const partial = new Map<number, { id: string; name: string; arguments: string }>();
     try {
-      const stream = await this.client.chat.completions.create(
-        { model: this.model, temperature: 0.2, stream: true, ...params },
+      const stream = await client.chat.completions.create(
+        {
+          model: ctx.config.model,
+          temperature: ctx.config.temperature,
+          stream: true,
+          // Feature 12: without this the stream carries no usage block at all
+          // and every streamed turn would be invisible to token accounting.
+          stream_options: { include_usage: true },
+          ...params,
+        },
         signal ? { signal } : undefined,
       );
       for await (const chunk of stream) {
+        // The usage-bearing chunk arrives last and has no choices.
+        if (chunk.usage) reported = fromUsage(chunk.usage);
         const delta = chunk.choices[0]?.delta;
         if (!delta) continue;
         if (delta.content) {
@@ -334,31 +396,82 @@ export class AssistantClient {
       }
     } catch (err) {
       // A cancelled request rejects like any other; the text produced up to
-      // that point is still real, and the caller decides what to keep.
-      if (signal?.aborted) return { content, toolCalls: [], cancelled: true };
+      // that point is still real, and the caller decides what to keep. Either
+      // way the tokens were spent upstream, so the call is still recorded.
+      const cancelled = signal?.aborted === true;
+      this.bill(ctx, reported ?? estimateFor(params.messages, content), startedAt, {
+        ok: cancelled,
+        error: cancelled ? 'cancelled by client' : err instanceof Error ? err.message : String(err),
+        toolCallCount: partial.size,
+      });
+      if (cancelled) return { content, toolCalls: [], cancelled: true };
       throw this.upstreamError(err);
     }
-    return {
-      content,
-      toolCalls: [...partial.values()].filter((c) => c.name),
-      cancelled: false,
-    };
+    const toolCalls = [...partial.values()].filter((c) => c.name);
+    this.bill(ctx, reported ?? estimateFor(params.messages, content), startedAt, {
+      ok: true,
+      toolCallCount: toolCalls.length,
+    });
+    return { content, toolCalls, cancelled: false };
   }
 
   private async create(
+    ctx: AiCallContext,
     params: Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, 'model' | 'temperature'>,
   ) {
-    if (!this.client) throw new ServiceUnavailableException('Assistant provider is disabled (ASSISTANT_PROVIDER=none)');
+    const client = this.clientFor(ctx.config);
+    const startedAt = Date.now();
     try {
-      return await this.client.chat.completions.create({ model: this.model, temperature: 0.2, ...params });
+      const completion = await client.chat.completions.create({
+        model: ctx.config.model,
+        temperature: ctx.config.temperature,
+        ...params,
+      });
+      this.bill(
+        ctx,
+        completion.usage
+          ? fromUsage(completion.usage)
+          : estimateFor(params.messages, completion.choices[0]?.message?.content ?? ''),
+        startedAt,
+        { ok: true, toolCallCount: completion.choices[0]?.message?.tool_calls?.length ?? 0 },
+      );
+      return completion;
     } catch (err) {
+      this.bill(ctx, estimateFor(params.messages, ''), startedAt, {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
       throw this.upstreamError(err);
     }
   }
 
+  /**
+   * Records one upstream call. Deliberately not awaited: token accounting is
+   * observability, and a failed insert must never turn a good answer into an
+   * error (AiUsageService.record swallows and warns, same as ActivityService).
+   */
+  private bill(
+    ctx: AiCallContext,
+    tokens: AiUsageTokens,
+    startedAt: number,
+    outcome: { ok: boolean; error?: string; toolCallCount?: number },
+  ): void {
+    void this.usage.record({
+      config: ctx.config,
+      userId: ctx.userId,
+      operation: ctx.operation,
+      threadId: ctx.threadId,
+      tokens,
+      durationMs: Date.now() - startedAt,
+      ok: outcome.ok,
+      error: outcome.error,
+      toolCallCount: outcome.toolCallCount ?? 0,
+    });
+  }
+
   /** Billable calls only — asking the user something is free, see FREE_TOOLS. */
-  private budgetLeft(trace: AssistantToolCall[]): number {
-    return this.maxToolCalls - trace.filter((c) => !FREE_TOOLS.has(c.tool)).length;
+  private budgetLeft(ctx: AiCallContext, trace: AssistantToolCall[]): number {
+    return ctx.config.maxToolCalls - trace.filter((c) => !FREE_TOOLS.has(c.tool)).length;
   }
 
   private upstreamError(err: unknown): ServiceUnavailableException {

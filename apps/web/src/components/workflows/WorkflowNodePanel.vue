@@ -92,7 +92,7 @@ function approve() {
           />
           {{ t(NODE_STATUS_LABEL[node.status]) }}
           <template v-if="step"> · {{ step.title }}</template>
-          <template v-if="node.attempt > 0"> · attempt {{ node.attempt + 1 }}</template>
+          <template v-if="node.attempt > 0"> · {{ t('workflow.node.attempt', { n: node.attempt + 1 }) }}</template>
         </p>
       </div>
       <a
@@ -100,7 +100,7 @@ function approve() {
         :href="`/documents/${node.documentId}`"
         class="text-primary inline-flex shrink-0 items-center gap-1 text-xs hover:underline"
       >
-        Open page <ExternalLink class="size-3" />
+        {{ t('workflow.node.openPage') }} <ExternalLink class="size-3" />
       </a>
     </header>
 
@@ -125,7 +125,7 @@ function approve() {
               :class="[NODE_STATUS_CLASS[child.status], isBusyStatus(child.status) ? 'animate-spin' : '']"
             />
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-[13px]">{{ child.draft?.title ?? 'Untitled' }}</span>
+              <span class="block truncate text-[13px]">{{ child.draft?.title ?? t('workflow.node.untitled') }}</span>
               <span class="text-muted-foreground block truncate text-[11px]">
                 {{ child.draft?.summary || t(NODE_STATUS_LABEL[child.status]) }}
               </span>
@@ -140,26 +140,26 @@ function approve() {
       class="text-muted-foreground rounded-md border border-dashed py-10 text-center text-sm"
     >
       <template v-if="node.status === 'pending' || node.status === 'running'">
-        Working on this step…
+        {{ t('workflow.node.working') }}
       </template>
-      <template v-else>This step passed its result to the next one.</template>
+      <template v-else>{{ t('workflow.node.passedAlong') }}</template>
     </div>
 
     <template v-else-if="node.draft">
       <div v-if="editing" class="space-y-3">
         <label class="block space-y-1.5">
-          <span class="text-muted-foreground text-xs font-medium">Title</span>
+          <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.node.title') }}</span>
           <Input v-model="title" />
         </label>
         <label class="block space-y-1.5">
-          <span class="text-muted-foreground text-xs font-medium">Body</span>
+          <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.node.body') }}</span>
           <Textarea v-model="markdown" rows="16" class="font-mono text-xs" />
         </label>
         <div class="flex gap-2">
           <Button size="sm" variant="outline" :disabled="!edited" @click="emit('save', { title, markdown })">
-            Save draft
+            {{ t('workflow.node.saveDraft') }}
           </Button>
-          <Button size="sm" variant="ghost" @click="editing = false">Done editing</Button>
+          <Button size="sm" variant="ghost" @click="editing = false">{{ t('workflow.node.doneEditing') }}</Button>
         </div>
       </div>
 
@@ -167,7 +167,7 @@ function approve() {
         <p v-if="node.draft.summary" class="text-muted-foreground mb-3 text-sm">{{ node.draft.summary }}</p>
         <MarkdownView v-if="node.draft.markdown" :markdown="node.draft.markdown" />
         <p v-else class="text-muted-foreground text-sm italic">
-          No page body — this item is a heading for the steps below it.
+          {{ t('workflow.node.noBody') }}
         </p>
       </div>
     </template>
@@ -175,7 +175,7 @@ function approve() {
     <footer v-if="allowed.length || node.draft" class="flex flex-wrap items-center gap-2 border-t pt-3">
       <Button v-if="can('APPROVE')" size="sm" :disabled="busy" @click="approve">
         <Check class="mr-1.5 size-4" />
-        {{ step?.produces ? 'Approve and publish' : 'Approve' }}
+        {{ step?.produces ? t('workflow.node.approveAndPublish') : t('workflow.node.approve') }}
       </Button>
       <Button
         v-if="node.draft && canEdit && !editing && can('APPROVE')"
@@ -183,10 +183,10 @@ function approve() {
         variant="outline"
         @click="editing = true"
       >
-        Edit first
+        {{ t('workflow.node.editFirst') }}
       </Button>
       <Button v-if="can('RETRY')" size="sm" variant="outline" :disabled="busy" @click="emit('event', 'RETRY', undefined)">
-        <RotateCcw class="mr-1.5 size-4" /> Try again
+        <RotateCcw class="mr-1.5 size-4" /> {{ t('workflow.node.tryAgain') }}
       </Button>
       <Button
         v-if="can('SKIP')"
@@ -195,7 +195,7 @@ function approve() {
         :disabled="busy"
         @click="emit('event', 'SKIP', undefined)"
       >
-        <SkipForward class="mr-1.5 size-4" /> Skip
+        <SkipForward class="mr-1.5 size-4" /> {{ t('workflow.node.skip') }}
       </Button>
       <Button
         v-if="can('REJECT')"
@@ -205,7 +205,7 @@ function approve() {
         :disabled="busy"
         @click="emit('event', 'REJECT', undefined)"
       >
-        <X class="mr-1.5 size-4" /> Reject
+        <X class="mr-1.5 size-4" /> {{ t('workflow.node.reject') }}
       </Button>
     </footer>
   </div>

@@ -1,23 +1,36 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import type { AgentRun } from '@prisma/client';
 import type { AgentFinding, AgentFindingKind, Locale } from '@knowledge/contracts';
 import { AGENT_FINDING_KINDS } from '@knowledge/contracts';
+import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
+import { AiSkillsService } from '../ai/ai-skills.service.js';
+import { DocumentsService } from '../documents/documents.service.js';
+import { GlossaryService } from '../glossary/glossary.service.js';
+import type { Principal } from '../auth/principal.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
  * the point somebody asks for it, rather than accepting it and failing in the
  * worker a second later with nothing to show for the round trip.
  */
-export const RUNNABLE_AGENTS = new Set(['curator']);
+export const RUNNABLE_AGENTS = new Set(['curator', 'reviewer', 'glossarist']);
 
 /** How many pages the curator will look at in one pass. */
 const MAX_PAGES = 60;
 /** How many it will describe to the model — the rest are summarised as counts. */
 const MAX_DESCRIBED = 30;
+/** Pages the reviewer reads in one pass — one model call each, so this is the cost. */
+const MAX_REVIEWED = 8;
+/** How much of a page the reviewer is shown. */
+const MAX_REVIEW_CHARS = 40_000;
+/** Issues taken from one page, so a single bad page cannot fill the run. */
+const MAX_ISSUES_PER_PAGE = 5;
+/** Pages the glossarist scans in one pass — also one model call each. */
+const MAX_GLOSSARY_PAGES = 15;
 /** Findings kept from one run. A wall of findings is not a review, it is noise. */
 const MAX_FINDINGS = 20;
 
@@ -46,15 +59,31 @@ export class AgentExecutor {
     private readonly graph: GraphService,
     private readonly registry: AgentRegistryService,
     private readonly client: AssistantClient,
+    private readonly skills: AiSkillsService,
+    private readonly documents: DocumentsService,
+    private readonly glossary: GlossaryService,
   ) {}
 
-  async run(run: AgentRun, agent: ResolvedAgent): Promise<AgentRunResult> {
-    if (agent.key !== 'curator') {
-      // Only the curator has a background executor so far. Failing loudly beats
-      // running an agent as if it did something.
-      throw new Error(`Agent "${agent.key}" has no background executor.`);
+  /**
+   * `principal` is the run's rehydrated owner, already authorised by the
+   * processor. It is passed down rather than re-derived so an executor that
+   * calls an API-shaped service (the glossarist calls the same `suggest` the
+   * settings page calls) bills and authorises as that same person.
+   */
+  async run(run: AgentRun, agent: ResolvedAgent, principal: Principal): Promise<AgentRunResult> {
+    switch (agent.key) {
+      case 'curator':
+        return this.curate(run, agent);
+      case 'reviewer':
+        return this.review(run, agent, principal);
+      case 'glossarist':
+        return this.buildGlossary(run, principal);
+      default:
+        // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
+        // here got past that check, so failing loudly beats running an agent as
+        // if it had done something.
+        throw new Error(t('error.ai.agentNoExecutor', { key: agent.key }));
     }
-    return this.curate(run, agent);
   }
 
   private async curate(run: AgentRun, agent: ResolvedAgent): Promise<AgentRunResult> {
@@ -65,7 +94,7 @@ export class AgentExecutor {
       take: MAX_PAGES,
     });
     if (documents.length === 0) {
-      return { summary: 'This workspace has no pages yet.', findings: [] };
+      return { summary: t('agent.curation.noPages'), findings: [] };
     }
 
     // `documents` has no updatedAt — a page's age is the age of its newest
@@ -99,10 +128,8 @@ export class AgentExecutor {
       findings.push({
         kind: 'orphan',
         severity: 'info',
-        title: `"${doc.title}" is not connected to anything`,
-        detail:
-          'This page declares no relations and nothing references it, so it will not surface through the ' +
-          'graph — only through search. Adding a relation in its frontmatter puts it back on the map.',
+        title: t('agent.curation.orphanTitle', { title: doc.title }),
+        detail: t('agent.curation.orphanDetail'),
         documentIds: [doc.id],
         documentTitles: [doc.title],
       });
@@ -111,7 +138,7 @@ export class AgentExecutor {
     // The judgement half: duplicates, contradictions and gaps across the recent
     // set. Skipped entirely when no model is configured — the orphan findings
     // above are still worth returning.
-    let summary = `Looked at ${documents.length} pages. ${orphans.length} are unconnected.`;
+    let summary = t('agent.curation.summary', { pages: documents.length, orphans: orphans.length });
     if (agent.config.enabled && agent.missing.length === 0) {
       const described = documents.slice(0, MAX_DESCRIBED);
       const listing = described
@@ -131,7 +158,16 @@ export class AgentExecutor {
             locale: run.locale as Locale,
           },
           [
-            { role: 'system', content: `${agent.instructions}\n\n${OUTPUT_CONTRACT}` },
+            {
+              role: 'system',
+              // The agent's own skillIds, rendered through the same service the
+              // chat turn uses. A background agent references skills exactly as
+              // a conversational one does; there is no trigger message here, so
+              // only what the agent explicitly names applies.
+              content:
+                `${agent.instructions}\n\n${OUTPUT_CONTRACT}` +
+                this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
+            },
             {
               role: 'user',
               content:
@@ -163,6 +199,194 @@ export class AgentExecutor {
     }
 
     return { summary, findings: findings.slice(0, MAX_FINDINGS) };
+  }
+
+  // ------------------------------------------------------------------ reviewer
+
+  /**
+   * Reviews the pages that changed most recently, one model call each.
+   *
+   * The same division of labour as the curator: *which* pages changed is a
+   * query, so the worker answers it, and the model is spent only on reading
+   * them. Naturally bounded by `take` — a review pass is per page, so the cost
+   * is linear and the cap is the budget.
+   */
+  private async review(run: AgentRun, agent: ResolvedAgent, principal: Principal): Promise<AgentRunResult> {
+    if (!agent.config.enabled || agent.missing.length > 0) {
+      throw new Error('The model routed at the reviewer cannot run it.');
+    }
+
+    // Newest revision first, then back to the page — "recently changed" is a
+    // fact about revisions, and `documents` carries no updatedAt.
+    const recent = await this.prisma.documentRevision.findMany({
+      where: { document: { workspaceId: run.workspaceId }, status: 'indexed' },
+      distinct: ['documentId'],
+      orderBy: { createdAt: 'desc' },
+      select: { documentId: true, createdAt: true },
+      take: MAX_REVIEWED,
+    });
+    if (recent.length === 0) return { summary: 'No indexed pages to review yet.', findings: [] };
+
+    const documents = await this.prisma.document.findMany({
+      where: { id: { in: recent.map((r) => r.documentId) } },
+      select: { id: true, title: true },
+    });
+    const byId = new Map(documents.map((d) => [d.id, d]));
+    const skillText = this.skills.renderPrompt(
+      await this.skills.forTurn(run.workspaceId, '', agent.skillIds),
+    );
+
+    const findings: AgentFinding[] = [];
+    let reviewed = 0;
+    for (const row of recent) {
+      if (findings.length >= MAX_FINDINGS) break;
+      const doc = byId.get(row.documentId);
+      if (!doc) continue;
+      const content = await this.documents.getContent(doc.id).catch(() => null);
+      if (!content || !content.markdown.trim()) continue;
+
+      try {
+        const raw = await this.client.chat(
+          {
+            config: agent.config,
+            userId: principal.userId,
+            operation: 'agent',
+            locale: run.locale as Locale,
+          },
+          [
+            { role: 'system', content: agent.instructions + skillText },
+            {
+              role: 'user',
+              content: `Title: ${doc.title}\n\nPage:\n\n${content.markdown.slice(0, MAX_REVIEW_CHARS)}`,
+            },
+          ],
+          { json: true },
+        );
+        reviewed++;
+        for (const finding of this.readIssues(raw, doc)) {
+          findings.push(finding);
+          if (findings.length >= MAX_FINDINGS) break;
+        }
+      } catch (error) {
+        // One unreadable page must not lose the pages already reviewed.
+        this.logger.warn(`Reviewer could not review "${doc.title}": ${String(error)}`);
+      }
+    }
+
+    return {
+      summary:
+        reviewed === 0
+          ? 'No page could be reviewed in this pass.'
+          : `Reviewed ${reviewed} recently changed page(s) and found ${findings.length} issue(s).`,
+      findings,
+    };
+  }
+
+  /**
+   * The reviewer speaks in `issues`, not findings — it is the same prompt the
+   * editor's review panel uses, and rewriting it for the background would give
+   * one agent two voices. Translated here instead; severity maps across, and
+   * the citation is the page under review, so a finding is never uncited.
+   */
+  private readIssues(raw: string, doc: { id: string; title: string }): AgentFinding[] {
+    const parsed = safeJson(raw);
+    const issues = Array.isArray(parsed?.issues) ? (parsed.issues as unknown[]) : [];
+    const out: AgentFinding[] = [];
+    for (const entry of issues) {
+      if (!entry || typeof entry !== 'object') continue;
+      const issue = entry as Record<string, unknown>;
+      const message = typeof issue.message === 'string' ? issue.message.trim() : '';
+      if (!message) continue;
+      const section = typeof issue.section === 'string' && issue.section.trim() ? issue.section.trim() : null;
+      out.push({
+        kind: 'other',
+        severity: issue.severity === 'error' ? 'error' : issue.severity === 'warning' ? 'warning' : 'info',
+        title: `${doc.title}${section ? ` — ${section}` : ''}`,
+        detail: message.slice(0, 2_000),
+        documentIds: [doc.id],
+        documentTitles: [doc.title],
+      });
+      if (out.length >= MAX_ISSUES_PER_PAGE) break;
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- glossarist
+
+  /**
+   * Proposes glossary terms across the workspace's pages.
+   *
+   * This calls the very `GlossaryService.suggest` the settings page calls,
+   * which is why GlossaryCoreModule exists: the prompt, the occurrence check
+   * that drops ungrounded terms, and the "already defined in this project"
+   * lookup are one implementation, not two. Terms are proposed as findings —
+   * nothing is written to the glossary, exactly as a background agent never
+   * writes.
+   */
+  private async buildGlossary(run: AgentRun, principal: Principal): Promise<AgentRunResult> {
+    const documents = await this.prisma.document.findMany({
+      where: { workspaceId: run.workspaceId },
+      select: { id: true, title: true },
+      orderBy: { createdAt: 'desc' },
+      take: MAX_GLOSSARY_PAGES,
+    });
+    if (documents.length === 0) return { summary: t('agent.curation.noPages'), findings: [] };
+
+    const findings: AgentFinding[] = [];
+    // Proposed once per run: the same term found on four pages is one entry to
+    // add, and four findings saying so is a wall, not a review.
+    const seen = new Set<string>();
+    let scanned = 0;
+
+    for (const doc of documents) {
+      if (findings.length >= MAX_FINDINGS) break;
+      try {
+        const res = await this.glossary.suggest(
+          { workspaceId: run.workspaceId, documentId: doc.id, title: doc.title },
+          principal,
+        );
+        // The provider is off for this workspace — every later page would say
+        // the same, so stop rather than making the same failed call per page.
+        if (!res.enabled) {
+          return { summary: 'The AI assistant is disabled for this workspace.', findings };
+        }
+        scanned++;
+        for (const s of res.suggestions) {
+          // Already in the glossary: proposing it again is noise.
+          if (s.existingTermId) continue;
+          const key = s.term.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          findings.push({
+            kind: 'gap',
+            severity: 'info',
+            title: s.term,
+            detail: `${s.definition}\n\nSeen ${s.occurrences}× on "${doc.title}".${
+              s.aliases.length ? ` Aliases: ${s.aliases.join(', ')}.` : ''
+            }`,
+            documentIds: [doc.id],
+            documentTitles: [doc.title],
+          });
+          if (findings.length >= MAX_FINDINGS) break;
+        }
+      } catch (error) {
+        // A budget refusal is terminal — every later page would hit it too.
+        // Matched on the status, not the message: the message is localized
+        // (docs/features/18), so a text match would only work in English.
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          return { summary: `Stopped after ${scanned} page(s): the workspace AI budget is spent.`, findings };
+        }
+        this.logger.warn(`Glossarist could not scan "${doc.title}": ${String(error)}`);
+      }
+    }
+
+    return {
+      summary:
+        findings.length === 0
+          ? `Scanned ${scanned} page(s); every term they use is already defined.`
+          : `Scanned ${scanned} page(s) and proposes ${findings.length} new term(s).`,
+      findings,
+    };
   }
 
   /**

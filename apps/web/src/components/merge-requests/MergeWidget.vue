@@ -63,19 +63,19 @@ function onMerge() {
     { ...id.value, body: { strategy: strategy.value } },
     {
       onSuccess: () => {
-        toast.success('Merge request merged')
+        toast.success(t('mr.merged'))
         emit('changed')
       },
       onError: (e) => {
         if (isApiRequestError(e) && e.status === 409) {
           const details = (e.payload.details ?? {}) as unknown as Partial<MergeGateConflictDetails>
           if (details.reason === 'approvals') {
-            toast.error(`Needs ${details.requiredApprovals} approval(s) — has ${details.approvals} (author excluded)`)
+            toast.error(t('mr.needsApprovals', { required: details.requiredApprovals, have: details.approvals }))
           } else if (details.reason === 'draft') {
-            toast.error('Draft merge requests cannot be merged — mark it ready first')
+            toast.error(t('mr.draftCannotMerge'))
           } else if (details.comparisonUrl) {
-            toast.error('Target branch diverged — rebase the source branch', {
-              action: { label: 'Compare', onClick: () => void router.push(comparePagePath(details.comparisonUrl!)) },
+            toast.error(t('mr.targetDiverged'), {
+              action: { label: t('mr.compare'), onClick: () => void router.push(comparePagePath(details.comparisonUrl!)) },
             })
           } else {
             toast.error(e.message)
@@ -125,7 +125,7 @@ function toggleDraft() {
       <p class="flex items-center gap-2">
         <ThumbsUp class="size-4" :class="mr.approvedBy.length > 0 ? 'text-emerald-500' : 'text-muted-foreground/60'" />
         <span v-if="mr.approvedBy.length > 0">
-          Approved by {{ mr.approvedBy.map((a) => actorLabel(a)).join(', ') }}
+          {{ t('mr.approvedBy', { names: mr.approvedBy.map((a) => actorLabel(a)).join(', ') }) }}
         </span>
         <span v-else class="text-muted-foreground">{{ t('mr.noApprovals') }}</span>
         <Button
@@ -134,9 +134,9 @@ function toggleDraft() {
           size="xs"
           class="ml-auto"
           :disabled="busy || alreadyApproved"
-          @click="act(approve, 'Approved')"
+          @click="act(approve, t('mr.approved'))"
         >
-          {{ alreadyApproved ? 'Approved ✓' : 'Approve' }}
+          {{ alreadyApproved ? t('mr.approvedTick') : t('mr.approve') }}
         </Button>
       </p>
       <p class="flex items-center gap-2">
@@ -179,13 +179,13 @@ function toggleDraft() {
           </SelectContent>
         </Select>
         <Button size="sm" :disabled="busy || mr.isDraft" @click="onMerge">
-          <GitMerge class="size-3.5" /> Merge
+          <GitMerge class="size-3.5" /> {{ t('mr.merge') }}
         </Button>
         <Button size="sm" variant="ghost" :disabled="busy" @click="toggleDraft">
-          {{ mr.isDraft ? 'Mark as ready' : 'Mark as draft' }}
+          {{ mr.isDraft ? t('mr.markAsReady') : t('mr.markAsDraft') }}
         </Button>
-        <Button size="sm" variant="ghost" class="text-destructive" :disabled="busy" @click="act(close, 'Closed')">
-          Close
+        <Button size="sm" variant="ghost" class="text-destructive" :disabled="busy" @click="act(close, t('mr.closed'))">
+          {{ t('mr.close') }}
         </Button>
       </template>
       <Button
@@ -193,12 +193,12 @@ function toggleDraft() {
         size="sm"
         variant="outline"
         :disabled="busy"
-        @click="act(reopen, 'Reopened')"
+        @click="act(reopen, t('mr.reopened'))"
       >
-        Reopen
+        {{ t('mr.reopen') }}
       </Button>
       <p v-else class="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <AlertTriangle class="size-3.5" /> Merged merge requests are final.
+        <AlertTriangle class="size-3.5" /> {{ t('mr.mergedFinal') }}
       </p>
     </div>
   </div>

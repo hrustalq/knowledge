@@ -201,9 +201,14 @@ export class WorkflowsService {
 
   // -------------------------------------------------------------------- runs
 
+  /**
+   * `userId` is required, not optional: it is the identity every node of this
+   * run executes and bills as (docs/features/20). MCP passes the stub id the
+   * rest of its tools act as; a trigger passes the definition's author.
+   */
   async startRun(
     input: { workspaceId: string; definitionId: string; rootDocumentId: string; note?: string },
-    userId?: string,
+    userId: string,
     startedBy = 'manual',
   ): Promise<WorkflowRunInfo> {
     const definition = await this.requireDefinition(input.definitionId);
@@ -263,7 +268,7 @@ export class WorkflowsService {
           status: started.status,
           snapshot: started.snapshot as unknown as Prisma.InputJsonValue,
           startedBy,
-          createdBy: userId ?? null,
+          createdBy: userId,
           // Frozen for the same reason definitionSnapshot is: the nodes run
           // later, in a worker, and they write whole pages of prose.
           locale: currentLocale(),
@@ -659,7 +664,7 @@ export class WorkflowsService {
       status: row.status as WorkflowRunStatus,
       error: row.error,
       startedBy: row.startedBy ?? 'manual',
-      createdBy: row.createdBy ?? 'dev',
+      createdBy: row.createdBy,
       startedAt: row.startedAt?.toISOString() ?? null,
       finishedAt: row.finishedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),

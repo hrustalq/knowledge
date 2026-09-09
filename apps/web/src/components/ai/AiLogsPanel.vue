@@ -72,7 +72,7 @@ function fmtDuration(ms: number): string {
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <div class="flex flex-wrap gap-1">
-        <Button :variant="operation === '' ? 'secondary' : 'ghost'" size="sm" @click="operation = ''">All</Button>
+        <Button :variant="operation === '' ? 'secondary' : 'ghost'" size="sm" @click="operation = ''">{{ t('common.all') }}</Button>
         <Button
           v-for="op in OPERATIONS"
           :key="op"
@@ -80,13 +80,13 @@ function fmtDuration(ms: number): string {
           size="sm"
           @click="operation = op"
         >
-          {{ op }}
+          {{ t(`ai.operationName.${op}`) }}
         </Button>
       </div>
       <div class="flex gap-1">
-        <Button :variant="outcome === '' ? 'secondary' : 'ghost'" size="sm" @click="outcome = ''">Any</Button>
+        <Button :variant="outcome === '' ? 'secondary' : 'ghost'" size="sm" @click="outcome = ''">{{ t('ai.anyOutcome') }}</Button>
         <Button :variant="outcome === 'false' ? 'secondary' : 'ghost'" size="sm" @click="outcome = 'false'">
-          Failed only
+          {{ t('ai.failedOnly') }}
         </Button>
       </div>
     </div>
@@ -96,7 +96,7 @@ function fmtDuration(ms: number): string {
     </div>
 
     <p v-else-if="entries.length === 0" class="text-muted-foreground py-10 text-center text-sm">
-      No assistant calls recorded yet.
+      {{ t('ai.noCalls') }}
     </p>
 
     <template v-else>
@@ -105,8 +105,8 @@ function fmtDuration(ms: number): string {
           <TableHeader>
             <TableRow>
               <TableHead class="w-8"><span class="sr-only">{{ t('ai.outcome') }}</span></TableHead>
-              <TableHead>When</TableHead>
-              <TableHead>User</TableHead>
+              <TableHead>{{ t('ai.when') }}</TableHead>
+              <TableHead>{{ t('ai.user') }}</TableHead>
               <TableHead>{{ t('ai.operation') }}</TableHead>
               <TableHead>{{ t('ai.model') }}</TableHead>
               <TableHead class="text-right">{{ t('ai.tokens') }}</TableHead>

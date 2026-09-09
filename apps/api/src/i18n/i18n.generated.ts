@@ -5,6 +5,47 @@
 import type { Path } from "nestjs-i18n";
 /* prettier-ignore */
 export type I18nTranslations = {
+    "agent": {
+        "router": string;
+        "routerDesc": string;
+        "researcher": string;
+        "researcherDesc": string;
+        "author": string;
+        "authorDesc": string;
+        "reviewer": string;
+        "reviewerDesc": string;
+        "drafter": string;
+        "drafterDesc": string;
+        "planner": string;
+        "plannerDesc": string;
+        "extractor": string;
+        "extractorDesc": string;
+        "glossarist": string;
+        "glossaristDesc": string;
+        "transcriber": string;
+        "transcriberDesc": string;
+        "curator": string;
+        "curatorDesc": string;
+        "route": {
+            "explicit": string;
+            "disabled": string;
+            "wrongSurface": string;
+            "noProvider": string;
+            "modelLacks": string;
+            "noCandidate": string;
+            "onlyCandidate": string;
+            "noRequestText": string;
+            "noClassifier": string;
+            "fellBackTo": string;
+            "noUsableAnswer": string;
+        };
+        "curation": {
+            "noPages": string;
+            "orphanTitle": string;
+            "orphanDetail": string;
+            "summary": string;
+        };
+    };
     "assistant": {
         "disabled": string;
         "note": {
@@ -36,6 +77,9 @@ export type I18nTranslations = {
             "documentMissing": string;
             "conflict": string;
         };
+        "pushVersionMessage": string;
+        "syncRevisionMessage": string;
+        "stoppedAtMax": string;
     };
     "error": {
         "internal": string;
@@ -54,6 +98,7 @@ export type I18nTranslations = {
             "platformAdminRequired": string;
             "notMember": string;
             "roleRequired": string;
+            "runOwnerUnavailable": string;
             "trustedOperatorRequired": string;
         };
         "workspace": {
@@ -196,6 +241,33 @@ export type I18nTranslations = {
             "pluginHostUnresolved": string;
             "pluginUrlPrivate": string;
             "providerNone": string;
+            "agentNotFound": string;
+            "agentScheduleNeedsOwner": string;
+            "agentScheduleNeedsInterval": string;
+            "agentNotBuiltIn": string;
+            "agentKeyInvalid": string;
+            "agentIsBuiltInCreate": string;
+            "agentNameTaken": string;
+            "agentIsBuiltInDelete": string;
+            "agentUnknownTools": string;
+            "agentUnknownSkill": string;
+            "agentUnknownProvider": string;
+            "agentDisabled": string;
+            "agentNotBackground": string;
+            "agentRunNotFound": string;
+            "agentNoExecutor": string;
+            "findingNotFound": string;
+            "findingAlreadyProposed": string;
+            "findingInFlight": string;
+            "findingNoDocument": string;
+            "findingOrphan": string;
+            "findingDocumentGone": string;
+            "assistantDisabled": string;
+            "drafterCannot": string;
+            "draftRevisionGone": string;
+            "noReadableContent": string;
+            "emptyPage": string;
+            "agentRunInFlight": string;
         };
         "assistant": {
             "providerDisabled": string;

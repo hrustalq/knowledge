@@ -50,13 +50,13 @@ const saveSettings = useApiMutation('patch', '/v1/ai/settings', { invalidates })
 
 // The three jobs a workspace might want on three different models.
 const PURPOSES = [
-  { key: 'chat', field: 'chatProviderId', label: 'Chat & agent', hint: 'Every turn in the assistant pane' },
-  { key: 'review', field: 'reviewProviderId', label: 'Review & suggest', hint: 'Draft review and writing suggestions' },
+  { key: 'chat', field: 'chatProviderId', label: t('ai.purpose.chat'), hint: t('ai.purpose.chatHint') },
+  { key: 'review', field: 'reviewProviderId', label: t('ai.purpose.review'), hint: t('ai.purpose.reviewHint') },
   {
     key: 'extraction',
     field: 'extractionProviderId',
-    label: 'Relation extraction',
-    hint: 'Inferred graph edges, in the indexing worker',
+    label: t('ai.purpose.extraction'),
+    hint: t('ai.purpose.extractionHint'),
   },
 ] as const
 
@@ -105,10 +105,10 @@ async function submit() {
   try {
     if (editing.value) {
       await updateProvider.mutateAsync({ path: { id: editing.value.id }, body })
-      toast.success('Provider updated')
+      toast.success(t('ai.providerUpdated'))
     } else {
       await createProvider.mutateAsync({ body: { workspaceId, ...body } })
-      toast.success('Provider added')
+      toast.success(t('ai.providerAdded'))
     }
     open.value = false
   } catch (e) {
@@ -122,8 +122,8 @@ async function test(p: AiProviderSummary) {
     const result = (await api.post('/v1/ai/settings/test', {
       body: { workspaceId, providerId: p.id },
     })) as AiConnectionTestResponse
-    if (result.ok) toast.success(`${p.name}: reached ${result.model} in ${result.latencyMs} ms`)
-    else toast.error(`${p.name}: ${result.error}`)
+    if (result.ok) toast.success(t('ai.providerReached', { name: p.name, model: result.model, ms: result.latencyMs }))
+    else toast.error(t('ai.nameAndError', { name: p.name, error: result.error }))
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -135,7 +135,7 @@ async function test(p: AiProviderSummary) {
 async function remove(p: AiProviderSummary) {
   try {
     await deleteProvider.mutateAsync({ path: { id: p.id } })
-    toast.success(`Removed "${p.name}"`)
+    toast.success(t('ai.removedNamed', { name: p.name }))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -185,15 +185,15 @@ function purposesServedBy(id: string): string[] {
           <Badge v-for="label in purposesServedBy(p.id)" :key="label" variant="secondary" class="font-normal">
             {{ label }}
           </Badge>
-          <Badge v-if="!p.enabled" variant="outline" class="text-muted-foreground font-normal">disabled</Badge>
+          <Badge v-if="!p.enabled" variant="outline" class="text-muted-foreground font-normal">{{ t('ai.disabled') }}</Badge>
         </div>
 
         <div class="flex items-center gap-1">
           <Button variant="ghost" size="sm" :disabled="!canManage || testingId === p.id" @click="test(p)">
             <RefreshCw class="size-3.5" :class="testingId === p.id && 'animate-spin'" />
-            Test
+            {{ t('ai.test') }}
           </Button>
-          <Button v-if="canManage" variant="ghost" size="sm" :aria-label="`Remove ${p.name}`" @click="remove(p)">
+          <Button v-if="canManage" variant="ghost" size="sm" :aria-label="t('ai.removeNamed', { name: p.name })" @click="remove(p)">
             <Trash2 class="size-3.5" />
           </Button>
         </div>
@@ -237,14 +237,13 @@ function purposesServedBy(id: string): string[] {
         <DialogHeader>
           <DialogTitle>{{ editing ? t('ai.editProvider') : t('ai.addProvider') }}</DialogTitle>
           <DialogDescription>
-            A named endpoint and model. Give it a name you will recognise in the routing list and the usage
-            breakdown.
+            {{ t('ai.providerDialogDesc') }}
           </DialogDescription>
         </DialogHeader>
 
         <form id="provider-form" class="space-y-4" @submit.prevent="submit">
           <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">Name</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.name') }}</span>
             <Input v-model="form.name" required placeholder="DeepSeek prod" />
           </label>
           <div class="grid gap-4 sm:grid-cols-2">
@@ -266,7 +265,7 @@ function purposesServedBy(id: string): string[] {
           </div>
           <label class="block space-y-1.5">
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.baseUrl') }}</span>
-            <Input v-model="form.baseUrl" placeholder="provider default" />
+            <Input v-model="form.baseUrl" :placeholder="t('ai.providerDefault')" />
           </label>
           <label class="block space-y-1.5">
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.apiKey') }}</span>
@@ -278,26 +277,26 @@ function purposesServedBy(id: string): string[] {
               :placeholder="
                 canStoreSecrets
                   ? (editing?.apiKeyHint ?? 'sk-…')
-                  : 'SETTINGS_ENCRYPTION_KEY is not set on the server'
+                  : t('ai.noEncryptionKey')
               "
             />
-            <span v-if="editing?.hasApiKey" class="text-muted-foreground text-xs">Leave empty to keep it.</span>
+            <span v-if="editing?.hasApiKey" class="text-muted-foreground text-xs">{{ t('ai.leaveEmptyToKeep') }}</span>
           </label>
           <label class="flex items-center gap-2">
             <Checkbox :model-value="form.enabled" @update:model-value="form.enabled = $event === true" />
-            <span class="text-sm">Enabled</span>
+            <span class="text-sm">{{ t('ai.enabled') }}</span>
           </label>
         </form>
 
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" @click="open = false">Cancel</Button>
+          <Button type="button" variant="outline" size="sm" @click="open = false">{{ t('common.cancel') }}</Button>
           <Button
             type="submit"
             form="provider-form"
             size="sm"
             :disabled="createProvider.isPending.value || updateProvider.isPending.value"
           >
-            {{ editing ? 'Save' : 'Add' }}
+            {{ editing ? t('common.save') : t('common.add') }}
           </Button>
         </DialogFooter>
       </DialogContent>

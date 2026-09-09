@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { AiAgent } from '@prisma/client';
 import type { AgentCapability, AgentSurface, AiPurpose } from '@knowledge/contracts';
+import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiConfigService, type ResolvedAiConfig } from '../ai/ai-config.service.js';
 import { AiProvidersService } from '../ai/ai-providers.service.js';
@@ -88,7 +89,7 @@ export class AgentRegistryService {
     const rows = await this.rowsFor(workspaceId);
     const row = rows.get(key) ?? null;
     const base = BUILT_IN_AGENT_DEFAULTS[key as keyof typeof BUILT_IN_AGENT_DEFAULTS] ?? null;
-    if (!base && !row) throw new Error(`Unknown agent "${key}"`);
+    if (!base && !row) throw new Error(t('error.ai.agentNotFound', { key }));
     return this.merge(workspaceId, key, base, row, pinnedProviderId);
   }
 
@@ -141,8 +142,10 @@ export class AgentRegistryService {
     return {
       key,
       builtIn: base !== null,
-      name: row?.name ?? base?.name ?? key,
-      description: row?.description ?? base?.description ?? '',
+      // A row's own text is what an admin typed, so it is used verbatim; the
+      // built-in default is a message key and answers in the request's language.
+      name: row?.name ?? (base ? t(base.name) : key),
+      description: row?.description ?? (base ? t(base.description) : ''),
       instructions: row?.instructions ?? base?.instructions ?? '',
       tools: readStrings(row?.tools) ?? base?.tools ?? [],
       skillIds: readStrings(row?.skillIds) ?? base?.skillIds ?? [],

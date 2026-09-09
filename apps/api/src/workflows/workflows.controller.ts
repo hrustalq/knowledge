@@ -88,7 +88,7 @@ export class WorkflowsController {
     @Body() dto: StartWorkflowRunDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<WorkflowRunInfo> {
-    return this.workflows.startRun(dto, principal?.userId);
+    return this.workflows.startRun(dto, principal.userId);
   }
 
   @Get('runs/:id')

@@ -102,7 +102,7 @@ const filterFields = computed<FilterField[]>(() => [
     key: 'text',
     label: t('filter.nameOrEmail'),
     icon: AtSign,
-    group: 'Text',
+    group: t('filter.groupText'),
     type: 'text',
     placeholder: 'alice@…',
   },
@@ -224,7 +224,7 @@ async function addMember() {
       body: JSON.stringify({ email: user.email, role: addRole.value }),
     })
     members.value = res.members
-    toast.success(`${user.email} added as ${addRole.value}`)
+    toast.success(t('access.memberAdded', { email: user.email, role: t(`role.${addRole.value}`) }))
     addOpen.value = false
     pickedUser.value = null
     candidateCache.delete(user.userId) // now a member — no longer a candidate
@@ -240,7 +240,7 @@ async function patchMember(member: WorkspaceMemberEntry, patch: Record<string, u
       { method: 'PATCH', body: JSON.stringify(patch) },
     )
     members.value = res.members
-    toast.success(`Updated ${member.email}`)
+    toast.success(t('access.memberUpdated', { email: member.email }))
   } catch (e) {
     toast.error((e as Error).message)
     await loadMembers() // roll back the optimistic role/flag state
@@ -254,7 +254,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
       { method: 'DELETE' },
     )
     members.value = res.members
-    toast.success(`Removed ${member.email}`)
+    toast.success(t('access.memberRemoved', { email: member.email }))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -286,7 +286,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
       {{ t('access.noMembersVisible') }}
     </p>
     <p v-else-if="visibleMembers.length === 0" class="text-muted-foreground py-10 text-center text-sm">
-      No members match these filters.
+      {{ t('access.noMembersMatch') }}
     </p>
 
     <Table v-else>
@@ -343,7 +343,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
         <DialogHeader>
           <DialogTitle>{{ t('access.addMember') }}</DialogTitle>
           <DialogDescription>
-            The picker searches accounts that are not members yet — create new ones under Users.
+            {{ t('access.pickerSearchesNonMembers') }}
           </DialogDescription>
         </DialogHeader>
         <form id="add-member" class="space-y-3" @submit.prevent="addMember">
@@ -359,7 +359,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
               for="add-role"
               class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
             >
-              Role
+              {{ t('access.role') }}
             </Label>
             <Select v-model="addRole">
               <SelectTrigger id="add-role" class="w-full">

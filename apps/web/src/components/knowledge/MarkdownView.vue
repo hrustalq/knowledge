@@ -13,7 +13,7 @@
  */
 import { nextTick, onMounted, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
-import { markdownToHtml, SANITIZE_CONFIG } from '@/lib/markdown/render'
+import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/lib/markdown/render'
 import { parseScene, renderSceneToSvg } from '@/lib/markdown/drawing'
 import { KN, attachmentKind, escapeHtml, formatBytes } from '@/lib/markdown/nodes'
 import { linkGlossaryTerms } from '@/lib/glossary'
@@ -56,15 +56,6 @@ const theme = useTheme()
 
 let mermaidSeq = 0
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .slice(0, 80)
-}
-
 async function render() {
   html.value = DOMPurify.sanitize(markdownToHtml(props.markdown ?? ''), { ...SANITIZE_CONFIG })
   await nextTick()
@@ -100,7 +91,7 @@ function collectHeadings(): MarkdownHeading[] {
   const seen = new Map<string, number>()
   for (const el of root.querySelectorAll<HTMLElement>('h1, h2, h3')) {
     const text = el.textContent ?? ''
-    let id = slugify(text) || 'section'
+    let id = slugifyHeading(text) || 'section'
     const count = seen.get(id) ?? 0
     seen.set(id, count + 1)
     if (count > 0) id = `${id}-${count}`

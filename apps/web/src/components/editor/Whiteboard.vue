@@ -55,14 +55,14 @@ const props = defineProps<{ modelValue: string }>()
 const emit = defineEmits<{ 'update:modelValue': [string]; close: [] }>()
 
 const TOOLS: { id: DrawTool; icon: unknown; label: string; key: string }[] = [
-  { id: 'select', icon: MousePointer2, label: 'Select', key: 'V' },
-  { id: 'rect', icon: Square, label: 'Rectangle', key: 'R' },
-  { id: 'ellipse', icon: Circle, label: 'Ellipse', key: 'O' },
-  { id: 'diamond', icon: Diamond, label: 'Diamond', key: 'D' },
-  { id: 'arrow', icon: ArrowRight, label: 'Arrow', key: 'A' },
-  { id: 'line', icon: Minus, label: 'Line', key: 'L' },
-  { id: 'draw', icon: Pencil, label: 'Draw', key: 'P' },
-  { id: 'text', icon: Type, label: 'Text', key: 'T' },
+  { id: 'select', icon: MousePointer2, label: 'whiteboard.select', key: 'V' },
+  { id: 'rect', icon: Square, label: 'whiteboard.rectangle', key: 'R' },
+  { id: 'ellipse', icon: Circle, label: 'whiteboard.ellipse', key: 'O' },
+  { id: 'diamond', icon: Diamond, label: 'whiteboard.diamond', key: 'D' },
+  { id: 'arrow', icon: ArrowRight, label: 'whiteboard.arrow', key: 'A' },
+  { id: 'line', icon: Minus, label: 'whiteboard.line', key: 'L' },
+  { id: 'draw', icon: Pencil, label: 'whiteboard.draw', key: 'P' },
+  { id: 'text', icon: Type, label: 'whiteboard.text', key: 'T' },
 ]
 
 const GRID = 8
@@ -446,22 +446,22 @@ function resize(delta: number) {
 <template>
   <div class="kn-wb" @keydown="onKeydown" tabindex="-1">
     <!-- Tools -->
-    <div class="kn-wb-bar" role="toolbar" aria-label="Drawing tools">
+    <div class="kn-wb-bar" role="toolbar" :aria-label="t('whiteboard.tools')">
       <div class="kn-wb-group">
         <button
-          v-for="t in TOOLS"
-          :key="t.id"
+          v-for="item in TOOLS"
+          :key="item.id"
           type="button"
           class="kn-wb-tool"
-          :aria-pressed="tool === t.id"
-          :title="`${t.label} (${t.key})`"
-          @click="tool = t.id"
+          :aria-pressed="tool === item.id"
+          :title="t('whiteboard.toolWithKey', { label: t(item.label), key: item.key })"
+          @click="tool = item.id"
         >
-          <component :is="t.icon" class="size-4" />
+          <component :is="item.icon" class="size-4" />
         </button>
       </div>
 
-      <div class="kn-wb-group" aria-label="Stroke color">
+      <div class="kn-wb-group" :aria-label="t('whiteboard.strokeColor')">
         <button
           v-for="c in DRAW_COLORS"
           :key="c"
@@ -469,12 +469,12 @@ function resize(delta: number) {
           class="kn-wb-swatch"
           :style="{ background: colorVar(c as DrawColor) }"
           :aria-pressed="style.stroke === c"
-          :title="`Stroke ${c}`"
+          :title="t('whiteboard.strokeValue', { value: c })"
           @click="applyStyle({ stroke: c as DrawColor })"
         />
       </div>
 
-      <div class="kn-wb-group" aria-label="Fill">
+      <div class="kn-wb-group" :aria-label="t('whiteboard.fill')">
         <button
           v-for="f in DRAW_FILLS"
           :key="f"
@@ -482,35 +482,35 @@ function resize(delta: number) {
           class="kn-wb-swatch kn-wb-swatch-fill"
           :style="{ background: fillValue(f as DrawFill), borderColor: f === 'none' ? undefined : colorVar(f as DrawColor) }"
           :aria-pressed="style.fill === f"
-          :title="`Fill ${f}`"
+          :title="t('whiteboard.fillValue', { value: f })"
           @click="applyStyle({ fill: f as DrawFill })"
         >
           <span v-if="f === 'none'" class="kn-wb-none" />
         </button>
       </div>
 
-      <div class="kn-wb-group" aria-label="Stroke width">
+      <div class="kn-wb-group" :aria-label="t('whiteboard.strokeWidth')">
         <button
           v-for="w in [1, 2, 4]"
           :key="w"
           type="button"
           class="kn-wb-tool kn-wb-weight"
           :aria-pressed="style.sw === w"
-          :title="`Stroke width ${w}`"
+          :title="t('whiteboard.strokeWidthValue', { value: w })"
           @click="applyStyle({ sw: w })"
         >
           <span :style="{ height: `${w}px` }" />
         </button>
       </div>
 
-      <div class="kn-wb-group" aria-label="Stroke style">
+      <div class="kn-wb-group" :aria-label="t('whiteboard.strokeStyle')">
         <button
           v-for="d in ([0, 1, 2] as const)"
           :key="d"
           type="button"
           class="kn-wb-tool kn-wb-dash"
           :aria-pressed="style.dash === d"
-          :title="['Solid', 'Dashed', 'Dotted'][d]"
+          :title="[t('whiteboard.solid'), t('whiteboard.dashed'), t('whiteboard.dotted')][d]"
           @click="applyStyle({ dash: d })"
         >
           <svg viewBox="0 0 16 2" class="w-4"><line x1="0" y1="1" x2="16" y2="1" stroke="currentColor" stroke-width="2" :stroke-dasharray="dashArray(d, 2)" /></svg>
@@ -518,16 +518,16 @@ function resize(delta: number) {
       </div>
 
       <div class="kn-wb-group ml-auto">
-        <button type="button" class="kn-wb-tool" title="Undo (⌘Z)" :disabled="past.length === 0" @click="undo">
+        <button type="button" class="kn-wb-tool" :title="t('toolbar.undo')" :disabled="past.length === 0" @click="undo">
           <Undo2 class="size-4" />
         </button>
-        <button type="button" class="kn-wb-tool" title="Redo (⇧⌘Z)" :disabled="future.length === 0" @click="redo">
+        <button type="button" class="kn-wb-tool" :title="t('toolbar.redo')" :disabled="future.length === 0" @click="redo">
           <Redo2 class="size-4" />
         </button>
         <button
           type="button"
           class="kn-wb-tool"
-          title="Delete selection (⌫)"
+          :title="t('whiteboard.deleteSelection')"
           :disabled="!selectedId"
           @click="removeSelected"
         >
@@ -606,16 +606,19 @@ function resize(delta: number) {
       />
 
       <div v-if="scene.els.length === 0" class="kn-wb-empty" aria-hidden="true">
-        Pick a shape and drag to draw · <kbd>V</kbd> select · <kbd>P</kbd> pencil · double-click a shape to label it
+        <i18n-t keypath="whiteboard.emptyHint" tag="span" scope="global">
+          <template #select><kbd>V</kbd></template>
+          <template #pencil><kbd>P</kbd></template>
+        </i18n-t>
       </div>
     </div>
 
     <div class="kn-wb-foot">
       <span class="text-xs text-muted-foreground">{{ t('count.objects', { n: scene.els.length }, scene.els.length) }}</span>
       <div class="ml-auto flex items-center gap-1">
-        <button type="button" class="kn-wb-tool" title="Shorter canvas" @click="resize(-120)">−</button>
+        <button type="button" class="kn-wb-tool" :title="t('whiteboard.shorter')" @click="resize(-120)">−</button>
         <span class="text-xs tabular-nums text-muted-foreground">{{ scene.w }}×{{ scene.h }}</span>
-        <button type="button" class="kn-wb-tool" title="Taller canvas" @click="resize(120)">+</button>
+        <button type="button" class="kn-wb-tool" :title="t('whiteboard.taller')" @click="resize(120)">+</button>
       </div>
     </div>
   </div>

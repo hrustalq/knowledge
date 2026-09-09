@@ -19,5 +19,8 @@
     "pushUnsupported": "{kind} cannot publish back, so this page was left alone.",
     "documentMissing": "The linked page no longer exists; the link was removed.",
     "conflict": "Both sides changed — a merge request was opened instead of overwriting."
-  }
+  },
+  "pushVersionMessage": "Updated from the knowledge base",
+  "syncRevisionMessage": "Synced from a connector",
+  "stoppedAtMax": "Stopped after {max} items (CONNECTOR_SYNC_MAX_ITEMS)."
 }

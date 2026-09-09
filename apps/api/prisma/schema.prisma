@@ -716,7 +716,8 @@ model AgentRun {
   /// The override row, when one exists. Null for an untouched built-in.
   agentId     String? @map("agent_id") @db.Uuid
 
-  /// 'manual' | 'schedule' | 'event'
+  /// 'manual' | 'schedule' — see AGENT_RUN_TRIGGERS. There is no 'event'
+  /// trigger until something emits one (docs/features/20-agents-todo.md).
   trigger String @default("manual")
   /// pending → running → succeeded | failed | cancelled
   status  String @default("pending")
@@ -992,7 +993,14 @@ model WorkflowRun {
   /// Set when the run was started by a trigger rather than by a person.
   startedBy String? @map("started_by")
 
-  createdBy  String?   @map("created_by") @db.Uuid
+  /// The person this run belongs to, and the identity its nodes execute as.
+  /// NOT NULL deliberately, matching agent_runs.created_by: a node's model call
+  /// bills this id into ai_usage.user_id (@db.Uuid), so a null here used to be
+  /// billed as the literal string 'workflow' — an insert that fails and is
+  /// swallowed, which made auto-triggered spend invisible. A triggered run now
+  /// runs as the definition's author, and a definition without one cannot
+  /// auto-start at all (the AiAgent.scheduleOwner rule).
+  createdBy  String    @map("created_by") @db.Uuid
   startedAt  DateTime? @map("started_at") @db.Timestamptz
   finishedAt DateTime? @map("finished_at") @db.Timestamptz
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz

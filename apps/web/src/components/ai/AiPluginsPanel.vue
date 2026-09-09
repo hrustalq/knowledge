@@ -99,10 +99,10 @@ async function submit() {
   try {
     if (editing.value) {
       await updatePlugin.mutateAsync({ path: { id: editing.value.id }, body })
-      toast.success('Plugin updated')
+      toast.success(t('ai.pluginUpdated'))
     } else {
       await createPlugin.mutateAsync({ body: { workspaceId, ...body } })
-      toast.success('Plugin registered')
+      toast.success(t('ai.pluginRegistered'))
     }
     open.value = false
   } catch (e) {
@@ -116,8 +116,8 @@ async function test(plugin: AiPluginSummary) {
     const result = (await api.post('/v1/ai/plugins/{id}/test', {
       path: { id: plugin.id },
     })) as AiPluginTestResponse
-    if (result.ok) toast.success(`${plugin.name}: ${result.tools.length} tool(s) discovered`)
-    else toast.error(`${plugin.name}: ${result.error}`)
+    if (result.ok) toast.success(t('ai.pluginToolsFound', { name: plugin.name, count: result.tools.length }))
+    else toast.error(t('ai.nameAndError', { name: plugin.name, error: result.error }))
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -129,7 +129,7 @@ async function test(plugin: AiPluginSummary) {
 async function remove(plugin: AiPluginSummary) {
   try {
     await deletePlugin.mutateAsync({ path: { id: plugin.id } })
-    toast.success(`Removed "${plugin.name}"`)
+    toast.success(t('ai.removedNamed', { name: plugin.name }))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -170,12 +170,12 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <p class="text-muted-foreground text-sm">
         <template v-if="plugins.length">
-          {{ plugins.filter((p) => p.enabled).length }} of {{ plugins.length }} enabled
+          {{ t('ai.enabledOfTotal', { enabled: plugins.filter((p) => p.enabled).length, total: plugins.length }) }}
         </template>
         <template v-else>{{ t('ai.externalTools') }}</template>
       </p>
       <Button v-if="canManage && plugins.length > 0" size="sm" @click="openNew">
-        <Plus class="size-3.5" /> Add plugin
+        <Plus class="size-3.5" /> {{ t('ai.plugins.add') }}
       </Button>
     </div>
 
@@ -187,19 +187,15 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
       v-else-if="plugins.length === 0"
       :icon="Plug"
       :title="t('ai.noPlugins')"
-      body="Connect an MCP server and its tools join the assistant's own — so it can reach your issue tracker or CI the same way it searches this workspace. Anything a plugin returns is treated as untrusted data."
+      :body="t('ai.plugins.body')"
       :example="{
-        label: 'What you need',
-        lines: [
-          'url        https://mcp.example.com/jira',
-          'transport  streamable HTTP',
-          'auth       Authorization: Bearer …',
-        ],
+        label: t('ai.plugins.whatYouNeed'),
+        lines: [t('ai.plugins.exampleUrl'), t('ai.plugins.exampleTransport'), t('ai.plugins.exampleAuth')],
       }"
     >
       <template #action>
-        <Button v-if="canManage" size="sm" @click="openNew"><Plus class="size-3.5" /> Add plugin</Button>
-        <p v-else class="text-muted-foreground text-xs">A workspace admin can connect one.</p>
+        <Button v-if="canManage" size="sm" @click="openNew"><Plus class="size-3.5" /> {{ t('ai.plugins.add') }}</Button>
+        <p v-else class="text-muted-foreground text-xs">{{ t('ai.adminCanConnect') }}</p>
       </template>
     </AiEmptyState>
 
@@ -237,9 +233,9 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
               @click="test(plugin)"
             >
               <RefreshCw class="size-3.5" :class="testingId === plugin.id && 'animate-spin'" />
-              Test
+              {{ t('ai.test') }}
             </Button>
-            <Button v-if="canManage" variant="ghost" size="sm" :aria-label="`Remove ${plugin.name}`" @click="remove(plugin)">
+            <Button v-if="canManage" variant="ghost" size="sm" :aria-label="t('ai.removeNamed', { name: plugin.name })" @click="remove(plugin)">
               <Trash2 class="size-3.5" />
             </Button>
           </div>
@@ -247,8 +243,12 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
 
         <div v-if="plugin.discoveredTools.length" class="mt-3 border-t pt-3">
           <p class="text-muted-foreground mb-2 text-xs font-medium">
-            Tools offered to the assistant ({{ plugin.discoveredTools.filter((t) => isToolOn(plugin, t.name)).length }}
-            of {{ plugin.discoveredTools.length }})
+            {{
+              t('ai.plugins.toolsOffered', {
+                on: plugin.discoveredTools.filter((tool) => isToolOn(plugin, tool.name)).length,
+                total: plugin.discoveredTools.length,
+              })
+            }}
           </p>
           <div class="grid gap-1.5 sm:grid-cols-2">
             <label v-for="tool in plugin.discoveredTools" :key="tool.name" class="flex items-start gap-2 text-xs">
@@ -270,16 +270,15 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
     <Dialog v-model:open="open">
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{{ editing ? 'Edit plugin' : 'Add plugin' }}</DialogTitle>
+          <DialogTitle>{{ editing ? t('ai.plugins.edit') : t('ai.plugins.add') }}</DialogTitle>
           <DialogDescription>
-            The server must speak MCP over HTTP. Streamable HTTP is the current transport; SSE is for older servers
-            that have not migrated yet.
+            {{ t('ai.plugins.dialogDesc') }}
           </DialogDescription>
         </DialogHeader>
 
         <form id="plugin-form" class="space-y-4" @submit.prevent="submit">
           <label class="block space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">Name</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.name') }}</span>
             <Input v-model="form.name" required placeholder="Jira" />
           </label>
           <label class="block space-y-1">
@@ -307,25 +306,25 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
                 v-model="form.authValue"
                 type="password"
                 autocomplete="off"
-                :placeholder="editing?.hasAuthValue ? 'configured — leave empty to keep' : 'Bearer …'"
+                :placeholder="editing?.hasAuthValue ? t('ai.plugins.authConfigured') : 'Bearer …'"
               />
             </label>
           </div>
           <label class="flex items-center gap-2">
             <Checkbox :model-value="form.enabled" @update:model-value="form.enabled = $event === true" />
-            <span class="text-sm">Enabled</span>
+            <span class="text-sm">{{ t('ai.enabled') }}</span>
           </label>
         </form>
 
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" @click="open = false">Cancel</Button>
+          <Button type="button" variant="outline" size="sm" @click="open = false">{{ t('common.cancel') }}</Button>
           <Button
             type="submit"
             form="plugin-form"
             size="sm"
             :disabled="createPlugin.isPending.value || updatePlugin.isPending.value"
           >
-            {{ editing ? 'Save' : 'Add' }}
+            {{ editing ? t('common.save') : t('common.add') }}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -2,7 +2,9 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { nextNodeStatus } from '@knowledge/workflow';
-import type { WorkflowNodeDraft, WorkflowNodeStatus } from '@knowledge/contracts';
+import type { Locale, WorkflowNodeDraft, WorkflowNodeStatus } from '@knowledge/contracts';
+import { AccessService } from '../auth/access.service.js';
+import { AiUsageService } from '../ai/ai-usage.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { WORKFLOW_QUEUE } from './workflow.constants.js';
 import { WorkflowExecutors } from './workflow.executors.js';
@@ -21,6 +23,15 @@ import { withLocale } from '../i18n/t.js';
  * The state machine, not this class, decides what a finished step means: the
  * processor reports DONE and takes whichever status comes back, so an
  * auto-approved step and a reviewed one differ only in the machine's guard.
+ *
+ * Identity is checked per node, not per run, and that is the point: a run can
+ * sit `awaiting-review` for a week, so the owner who was an editor when it
+ * started may be disabled or demoted by the time the next node fires. Each node
+ * rehydrates the run's owner from `users` and asks the *same*
+ * `AccessService.requireRole` an HTTP request asks — the rule feature 20
+ * established for unattended work, applied here to the feature that needed it
+ * first (docs/features/20, "the identity defect this feature was written
+ * against").
  */
 @Processor(WORKFLOW_QUEUE)
 export class WorkflowProcessor extends WorkerHost {
@@ -29,6 +40,8 @@ export class WorkflowProcessor extends WorkerHost {
   constructor(
     private readonly runner: WorkflowRunnerService,
     private readonly executors: WorkflowExecutors,
+    private readonly access: AccessService,
+    private readonly usage: AiUsageService,
     private readonly events: EventsPublisher,
   ) {
     super();
@@ -57,6 +70,21 @@ export class WorkflowProcessor extends WorkerHost {
     // throws on the way — comes out in the language it was started in.
     return withLocale(asLocale(run.locale), async () => {
       try {
+        // The run's owner as a real principal — including the dev/MCP stub
+        // accommodation, which lives in AccessService so this and the agent
+        // processor cannot drift apart on it.
+        const principal = await this.access.principalFor(
+          run.createdBy,
+          asLocale(run.locale) as Locale,
+        );
+
+        // Exactly the check an HTTP request makes, with the owner's own role.
+        await this.access.requireRole(principal, run.workspaceId, 'viewer');
+
+        // Checked here rather than only at start: a run parked awaiting review
+        // can outlive the month whose budget it was admitted under.
+        await this.usage.assertWithinBudget(run.workspaceId, run.createdBy);
+
         const result = await this.executors.run(step, node, run);
 
         if (result.kind === 'items') {

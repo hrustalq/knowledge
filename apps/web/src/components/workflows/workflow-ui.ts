@@ -26,6 +26,7 @@ import type {
  * requests.
  */
 
+/** `label`, `short` and `hint` are i18n message keys — resolve with `t()` at the render site. */
 export const STEP_KINDS: Array<{
   value: WorkflowStepKind
   label: string
@@ -36,30 +37,30 @@ export const STEP_KINDS: Array<{
 }> = [
   {
     value: 'ai.generate',
-    label: 'Break down',
-    short: 'Break down',
-    hint: 'The model breaks the source into a list — one card per item, and the steps below run for each.',
+    label: 'workflow.stepKind.generate',
+    short: 'workflow.stepKind.generate',
+    hint: 'workflow.stepKind.generateHint',
     icon: Sparkles,
   },
   {
     value: 'ai.draft',
-    label: 'Write',
-    short: 'Write',
-    hint: 'The model writes one page, ready to read and publish.',
+    label: 'workflow.stepKind.draft',
+    short: 'workflow.stepKind.draft',
+    hint: 'workflow.stepKind.draftHint',
     icon: FileText,
   },
   {
     value: 'search',
-    label: 'Look up',
-    short: 'Look up',
-    hint: 'No model. Searches the knowledge base and hands what it finds to the next step.',
+    label: 'workflow.stepKind.search',
+    short: 'workflow.stepKind.search',
+    hint: 'workflow.stepKind.searchHint',
     icon: Search,
   },
   {
     value: 'review',
-    label: 'Wait',
-    short: 'Wait',
-    hint: 'Stops and waits for a person. No model call.',
+    label: 'workflow.stepKind.review',
+    short: 'workflow.stepKind.review',
+    hint: 'workflow.stepKind.reviewHint',
     icon: UserCheck,
   },
 ]
@@ -143,12 +144,15 @@ export const RUN_STATUS_CLASS: Record<WorkflowRunStatus, string> = {
 export const isBusyStatus = (status: WorkflowNodeStatus | WorkflowRunStatus): boolean =>
   status === 'running' || status === 'materializing'
 
-/** A fresh step, used by the editor's "add step" affordance. */
-export function blankStep(kind: WorkflowStepKind, index: number): WorkflowStep {
+/**
+ * A fresh step, used by the editor's "add step" affordance. `title` is persisted
+ * definition data, so the caller resolves the default label in its own locale.
+ */
+export function blankStep(kind: WorkflowStepKind, index: number, title: string): WorkflowStep {
   return {
     id: `${kind.replace('.', '-')}-${index}`,
     kind,
-    title: stepKind(kind)?.label ?? 'Step',
+    title,
     next: [],
     fanOut: kind === 'ai.generate',
     autoApprove: false,

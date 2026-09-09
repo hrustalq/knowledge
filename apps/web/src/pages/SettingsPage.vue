@@ -4,8 +4,15 @@
 import { useI18n } from 'vue-i18n'
 import { computed, type Component } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { Activity, BookMarked, FolderKanban, ShieldCheck, Sparkles, Users,
+import {
+  Activity,
+  BookMarked,
+  BookOpen,
+  FolderKanban,
   Plug,
+  ShieldCheck,
+  Sparkles,
+  Users,
   Workflow,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -27,6 +34,9 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/ai', label: t('nav.ai'), icon: Sparkles, hint: t('settings.aiHint') },
   { to: '/settings/workflows', label: t('nav.workflows'), icon: Workflow, hint: t('settings.workflowsHint') },
   { to: '/settings/connectors', label: t('nav.connectors'), icon: Plug, hint: t('settings.connectorsHint') },
+  // Last, and open to every role: it is the section you go to when one of the
+  // others did not explain itself.
+  { to: '/settings/docs', label: t('nav.docs'), icon: BookOpen, hint: t('settings.docsHint') },
 ])
 </script>
 
@@ -36,7 +46,7 @@ const links = computed<SettingsLink[]>(() => [
     <!-- Sticky rail: the content column scrolls (inside <main>), the nav doesn't.
          100vh minus the topbar (h-14) and breadcrumb strip (h-9) = the scrollport. -->
     <nav
-      aria-label="Settings"
+      :aria-label="t('nav.settings')"
       class="sticky top-0 z-10 shrink-0 border-b bg-background p-0 lg:h-[calc(100vh-5.75rem)] lg:w-56 lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r"
     >
       <ul class="flex gap-1 overflow-x-auto px-2 py-2 lg:block lg:space-y-px lg:overflow-visible lg:p-0">

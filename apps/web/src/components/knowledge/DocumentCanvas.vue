@@ -39,6 +39,7 @@ import {
   type CommentAnchor,
 } from '@/components/editor/extensions/comment-anchors'
 import type { TextAnchor } from '@/lib/anchor-match'
+import { slugifyHeading } from '@/lib/markdown/render'
 import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { useMembers } from '@/components/merge-requests/use-members'
@@ -379,15 +380,6 @@ onBeforeUnmount(() => {
  * renderer slugifies them. That keeps deep links to a section working across
  * both surfaces.
  */
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .slice(0, 80)
-}
-
 function collectHeadings() {
   const root = page.value
   if (!root) return
@@ -395,7 +387,7 @@ function collectHeadings() {
   const headings = [...root.querySelectorAll<HTMLElement>('.kn-prose h1, .kn-prose h2, .kn-prose h3')].map(
     (el) => {
       const text = el.textContent?.trim() ?? ''
-      const base = slugify(text) || 'section'
+      const base = slugifyHeading(text) || 'section'
       const n = (seen.get(base) ?? 0) + 1
       seen.set(base, n)
       const id = n === 1 ? base : `${base}-${n}`
@@ -465,7 +457,7 @@ function onOutdated(ids: string[]) {
     >
       <Button size="xs" class="shadow-md" @mousedown.prevent @click="startThread">
         <MessageSquarePlus class="size-3.5" />
-        Comment
+        {{ t('review.comment') }}
       </Button>
     </div>
 
@@ -483,11 +475,15 @@ function onOutdated(ids: string[]) {
     >
       <div class="flex items-start gap-2">
         <p v-if="composing && pendingAnchor" class="min-w-0 flex-1 text-xs text-muted-foreground">
-          New comment on “<span class="italic">{{ pendingAnchor.quote.slice(0, 90) }}</span
-          >{{ pendingAnchor.quote.length > 90 ? '…' : '' }}”
+          <i18n-t keypath="review.newCommentOnQuote" tag="span" scope="global">
+            <template #quote>
+              <span class="italic">{{ pendingAnchor.quote.slice(0, 90) }}</span
+              >{{ pendingAnchor.quote.length > 90 ? '…' : '' }}
+            </template>
+          </i18n-t>
         </p>
         <p v-else-if="composing" class="min-w-0 flex-1 text-xs text-muted-foreground">
-          New comment on this page — this selection can't be pinned to a passage.
+          {{ t('review.newCommentOnPage') }}
         </p>
         <p v-else class="min-w-0 flex-1 text-xs text-muted-foreground">
           {{ t('count.threads', { n: openThreads.length }, openThreads.length) }}{{ ' ' }}{{ t('review.onThisPassage') }}

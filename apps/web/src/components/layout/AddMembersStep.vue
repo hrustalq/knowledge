@@ -99,7 +99,7 @@ async function add() {
       :placeholder="t('nav.searchPeoplePlaceholder')"
       :multiple="false"
       :load="loadCandidates"
-      empty-hint="{{ t('nav.noOneToAdd') }}"
+      :empty-hint="t('nav.noOneToAdd')"
     />
 
     <div class="flex items-end gap-2">
@@ -108,7 +108,7 @@ async function add() {
           for="add-members-step-role"
           class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
         >
-          Role
+          {{ t('access.role') }}
         </Label>
         <Select v-model="role">
           <SelectTrigger id="add-members-step-role" size="sm" class="text-xs">
@@ -144,7 +144,7 @@ async function add() {
       </li>
     </ul>
     <p v-else class="text-muted-foreground text-xs">
-      Members can see everything in {{ workspaceName ?? 'this workspace' }}.
+      Members can see everything in {{ workspaceName ?? t('nav.thisWorkspace') }}.
     </p>
 
     <DialogFooter class="pt-2">

@@ -26,7 +26,7 @@ const projects = useProjectsStore()
   <div class="absolute inset-0 z-0 flex flex-col">
     <div class="flex h-7 shrink-0 items-center justify-between px-4">
       <h2 class="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-        Projects
+        {{ t('nav.projects') }}
       </h2>
       <button
         v-if="auth.canEdit"
@@ -46,7 +46,7 @@ const projects = useProjectsStore()
       </div>
 
       <p v-else-if="projects.items.length === 0" class="text-muted-foreground px-2.5 pt-1 text-xs">
-        No projects yet<template v-if="auth.canEdit">
+        {{ t('nav.noProjects') }}<template v-if="auth.canEdit">
           —
           <button type="button" class="text-primary hover:underline" @click="$emit('create')">
             {{ t('nav.createFirstPage') }}

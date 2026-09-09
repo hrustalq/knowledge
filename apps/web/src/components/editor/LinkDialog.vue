@@ -5,6 +5,7 @@
  * tab while it is open.
  */
 import { nextTick, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
+const { t } = useI18n()
 const props = defineProps<{ open: boolean; initialUrl: string; hasLink: boolean }>()
 const emit = defineEmits<{
   'update:open': [boolean]
@@ -53,9 +55,11 @@ function apply() {
   <Dialog :open="open" @update:open="emit('update:open', $event)">
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
-        <DialogTitle>{{ hasLink ? 'Edit link' : 'Add link' }}</DialogTitle>
+        <DialogTitle>{{ hasLink ? t('editor.linkEdit') : t('editor.linkAdd') }}</DialogTitle>
         <DialogDescription>
-          Paste a URL, or use <strong>@</strong> in the page to link another page in this workspace.
+          <i18n-t keypath="editor.linkDescription" tag="span" scope="global">
+            <template #at><strong>@</strong></template>
+          </i18n-t>
         </DialogDescription>
       </DialogHeader>
 
@@ -74,13 +78,13 @@ function apply() {
 
       <DialogFooter class="gap-2 sm:justify-between">
         <Button v-if="hasLink" variant="ghost" class="text-destructive" @click="emit('remove'); emit('update:open', false)">
-          Remove link
+          {{ t('editor.linkRemove') }}
         </Button>
         <span v-else />
         <div class="flex gap-2">
-          <Button variant="outline" @click="emit('update:open', false)">Cancel</Button>
+          <Button variant="outline" @click="emit('update:open', false)">{{ t('common.cancel') }}</Button>
           <Button :disabled="!url.trim() || url.trim() === 'https://'" @click="apply">
-            {{ hasLink ? 'Update' : 'Add link' }}
+            {{ hasLink ? t('editor.linkUpdate') : t('editor.linkAdd') }}
           </Button>
         </div>
       </DialogFooter>

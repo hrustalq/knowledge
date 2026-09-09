@@ -74,6 +74,35 @@ person started the run. The sweeper doubles as the recovery path for the
 interactive route, so a request that dies between the status write and the
 document write leaves a node to be finished rather than a stranded run.
 
+## Who a run executes as
+
+`workflow_runs.created_by` is NOT NULL, and every node rehydrates that user into
+a real `Principal` before it does anything — then asks the same
+`AccessService.requireRole` an HTTP request asks, and the same
+`assertWithinBudget`. A disabled or demoted owner fails the node. There is no
+service principal for it to become.
+
+That is a correction, not an original decision. The column was nullable, so a
+trigger-started run had no owner, and its model calls billed `userId:
+run.createdBy ?? 'workflow'` — a non-UUID into `ai_usage.user_id @db.Uuid`,
+whose insert failed and was swallowed. **Auto-triggered spend was invisible**,
+and no background path checked a quota at all. Feature 20 found this while
+deciding how its own runs should work, wrote down the opposite rule, and this
+is that rule brought back here.
+
+The identity a trigger runs as is the **definition's author** — the person who
+wrote the chain and turned auto-start on, which is the same act as an admin
+enabling an agent schedule and naming its owner. A definition without an author
+does not auto-start; it is skipped and logged, exactly as
+`AgentScheduleSweeper` skips an agent with no `scheduleOwner`. Nothing here
+invents an identity to keep a trigger alive.
+
+The check is per node rather than per run because a run can sit
+`awaiting-review` for a week: the owner who was an editor when it started may
+be neither by the time the next node fires. `AccessService.principalFor` holds
+the rule — including the dev/MCP stub accommodation — so this processor and the
+agent one cannot drift apart on it.
+
 ## Why a run is one job per node
 
 The processor runs a single node per BullMQ job, not a run per job. A run is

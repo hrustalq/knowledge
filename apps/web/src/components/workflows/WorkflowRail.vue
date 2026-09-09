@@ -48,7 +48,7 @@ async function start(definitionId: string) {
       body: { workspaceId: getWorkspaceId(), definitionId, rootDocumentId: props.documentId },
     })
     await query.refetch()
-    toast.success('Run started')
+    toast.success(t('workflow.runStarted'))
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -89,11 +89,11 @@ async function start(definitionId: string) {
       </ul>
 
       <p v-else class="text-muted-foreground text-sm">
-        No workflow has been run against this page.
+        {{ t('workflow.rail.noRun') }}
       </p>
 
       <div v-if="auth.canEdit && available.length" class="space-y-1 border-t pt-2">
-        <p class="text-muted-foreground text-xs font-medium">Start</p>
+        <p class="text-muted-foreground text-xs font-medium">{{ t('workflow.rail.start') }}</p>
         <Button
           v-for="workflow in available"
           :key="workflow.id"

@@ -107,7 +107,7 @@ const rows = computed<Row[]>(() => {
     // Rendered rows only: systemNote() returns null for actions the timeline
     // shows as a thread instead, and filtering here keeps the virtualizer's
     // indices aligned with what is actually on screen.
-    .filter((e) => systemNote(e, nameOf) !== null)
+    .filter((e) => systemNote(e, nameOf, t) !== null)
     .map((entry) => ({
       kind: 'note' as const,
       id: entry.id,
@@ -127,7 +127,7 @@ const rows = computed<Row[]>(() => {
 
 function noteAt(index: number) {
   const row = rows.value[index]
-  return row?.kind === 'note' ? { ...systemNote(row.entry, nameOf)!, entry: row.entry } : null
+  return row?.kind === 'note' ? { ...systemNote(row.entry, nameOf, t)!, entry: row.entry } : null
 }
 function threadAt(index: number): MergeRequestThread | null {
   const row = rows.value[index]
@@ -334,7 +334,7 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
       </div>
 
       <p v-else-if="rows.length === 0" class="py-2 text-sm text-muted-foreground">
-        No activity on this merge request yet.
+        {{ t('mr.noActivity') }}
       </p>
     </div>
   </section>

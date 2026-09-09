@@ -11,7 +11,7 @@ const { t } = useI18n()
     <p class="text-6xl font-bold text-muted-foreground">403</p>
     <h1 class="mt-3 text-xl font-semibold">{{ t('auth.forbiddenTitle') }}</h1>
     <p class="mt-2 text-sm text-muted-foreground">
-      Ask a workspace admin to grant you the required role, or switch to an account that has it.
+      {{ t('auth.forbiddenBody') }}
     </p>
     <Button class="mt-6" as-child>
       <RouterLink to="/documents">{{ t('auth.backToDocuments') }}</RouterLink>

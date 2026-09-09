@@ -11,7 +11,8 @@
     "preview": "cross-env NODE_ENV=production node server",
     "lint": "echo web: lint via typecheck",
     "typecheck": "vue-tsc -b",
-    "generate:api": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts"
+    "generate:api": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts",
+    "generate:docs": "node scripts/generate-docs-reference.mjs"
   },
   "dependencies": {
     "@floating-ui/vue": "^1.1.11",

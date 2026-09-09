@@ -58,10 +58,11 @@ const passed = computed(() => state.value === 'done' && review.value?.enabled !=
 
 type Severity = AssistantIssue['severity']
 
+// `label` is a message key, resolved with t() at the render site (docs/features/18).
 const SEVERITY: Record<Severity, { icon: Component; tone: string; label: string }> = {
-  error: { icon: AlertCircle, tone: 'text-red-500', label: 'Error' },
-  warning: { icon: AlertTriangle, tone: 'text-amber-500', label: 'Warning' },
-  suggestion: { icon: Lightbulb, tone: 'text-sky-500', label: 'Suggestion' },
+  error: { icon: AlertCircle, tone: 'text-red-500', label: 'mr.severityError' },
+  warning: { icon: AlertTriangle, tone: 'text-amber-500', label: 'mr.severityWarning' },
+  suggestion: { icon: Lightbulb, tone: 'text-sky-500', label: 'mr.severitySuggestion' },
 }
 
 async function run() {
@@ -95,7 +96,7 @@ function asMarkdown(): string {
     t('mr.aiReviewHeading', { findings: t('count.findings', { n: issues.value.length }, issues.value.length), branch: props.mergeRequest.sourceBranch }),
     '',
     ...issues.value.map((i: AssistantIssue) =>
-      `- **${SEVERITY[i.severity].label}** — ${i.message}${i.section ? ` _(${i.section})_` : ''}`,
+      `- **${t(SEVERITY[i.severity].label)}** — ${i.message}${i.section ? ` _(${i.section})_` : ''}`,
     ),
   ]
   if (review.value?.summary) lines.push('', review.value.summary)
@@ -116,14 +117,13 @@ function postFindings() {
       <p v-if="state === 'idle'" class="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
         <Sparkles class="mt-0.5 size-3.5 shrink-0" />
         <span>
-          Reads the source branch as a reviewer would — structure, gaps, contradictions — and lists what it would
-          raise. Nothing is changed.
+          {{ t('mr.aiCheckIdle') }}
         </span>
       </p>
 
       <p v-else-if="state === 'running'" class="flex items-center gap-2 text-xs text-muted-foreground">
         <span class="size-1.5 animate-pulse rounded-full bg-amber-500" />
-        Reviewing&nbsp;<span class="font-mono">{{ mergeRequest.sourceBranch }}</span>…
+        {{ t('mr.reviewing') }}&nbsp;<span class="font-mono">{{ mergeRequest.sourceBranch }}</span>…
       </p>
 
       <p v-else-if="state === 'error'" class="flex items-start gap-2 text-xs leading-5 text-destructive">
@@ -134,11 +134,13 @@ function postFindings() {
       <template v-else-if="review">
         <p v-if="!review.enabled" class="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
           <AlertTriangle class="mt-0.5 size-3.5 shrink-0 text-amber-500" />
-          AI review is not configured on this server (<span class="font-mono">ASSISTANT_PROVIDER=none</span>).
+          <i18n-t keypath="mr.aiNotConfigured" tag="span" scope="global">
+            <template #setting><span class="font-mono">ASSISTANT_PROVIDER=none</span></template>
+          </i18n-t>
         </p>
 
         <p v-else-if="passed" class="flex items-center gap-2 text-xs font-medium text-emerald-600">
-          <CheckCircle2 class="size-4" /> Passed — nothing to raise
+          <CheckCircle2 class="size-4" /> {{ t('mr.aiPassed') }}
         </p>
 
         <template v-else>
@@ -146,8 +148,7 @@ function postFindings() {
             class="text-xs font-medium"
             :class="errorCount > 0 ? 'text-red-600' : 'text-amber-600'"
           >
-            {{ t('count.findings', { n: issues.length }, issues.length) }}<template v-if="errorCount > 0">,
-            {{ errorCount }} to fix</template>
+            {{ t('count.findings', { n: issues.length }, issues.length) }}<template v-if="errorCount > 0">, {{ t('mr.toFix', { n: errorCount }) }}</template>
           </p>
 
           <ul class="mt-2.5 space-y-2.5">
@@ -156,7 +157,7 @@ function postFindings() {
                 :is="SEVERITY[issue.severity].icon"
                 class="mt-0.5 size-3.5 shrink-0"
                 :class="SEVERITY[issue.severity].tone"
-                :aria-label="SEVERITY[issue.severity].label"
+                :aria-label="t(SEVERITY[issue.severity].label)"
               />
               <p class="min-w-0 text-xs leading-5">
                 {{ issue.message }}
@@ -192,11 +193,11 @@ function postFindings() {
           variant="outline"
           size="sm"
           :disabled="busy || posted"
-          :title="posted ? 'Already posted to the discussion' : 'Post these findings as a review thread'"
+          :title="posted ? t('mr.alreadyPosted') : t('mr.postFindings')"
           @click="postFindings"
         >
           <MessageSquarePlus class="size-3.5" />
-          {{ posted ? 'Posted' : 'Post' }}
+          {{ posted ? t('mr.posted') : t('mr.post') }}
         </Button>
       </div>
     </div>

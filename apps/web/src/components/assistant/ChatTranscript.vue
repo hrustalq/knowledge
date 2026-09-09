@@ -325,7 +325,7 @@ defineExpose({ scrollToEnd })
         @click="scrollToEnd()"
       >
         <ArrowDown class="size-3.5" />
-        Jump to latest
+        {{ t('chat.jumpToLatest') }}
       </Button>
     </Transition>
   </div>

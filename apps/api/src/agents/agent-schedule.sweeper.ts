@@ -4,6 +4,7 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentProducer } from './agent.producer.js';
 import { AGENT_MAX_ATTEMPTS } from './agent.constants.js';
+import { RUNNABLE_AGENTS } from './agent.executor.js';
 
 /** One tick; a schedule's own interval is checked inside it. */
 const SWEEP_INTERVAL_MS = 5 * 60_000;
@@ -92,6 +93,11 @@ export class AgentScheduleSweeper implements OnModuleInit {
     let started = 0;
     for (const agent of candidates) {
       if (started >= BATCH) break;
+      // An agent whose `background` surface has no executor behind it would
+      // fail every interval, on the interval. The API refuses such a run at the
+      // point somebody asks for it; a schedule must be refused for the same
+      // reason, rather than turning into a recurring failed job.
+      if (!RUNNABLE_AGENTS.has(agent.key)) continue;
       const due =
         !agent.lastRunAt || agent.lastRunAt.getTime() + (agent.scheduleMinutes ?? 0) * 60_000 <= Date.now();
       if (!due) continue;

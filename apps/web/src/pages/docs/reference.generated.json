@@ -1,0 +1,2238 @@
+{
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/v1/activity",
+      "tag": "activity",
+      "summary": "Workspace activity feed, newest first (docs/features/10)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/agents",
+      "tag": "ai",
+      "summary": "Effective agent roster: built-in defaults ∪ this workspace overrides",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/agents",
+      "tag": "ai",
+      "summary": "Create an agent of the workspace's own, alongside the built-in roster",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/agents/{key}",
+      "tag": "ai",
+      "summary": "Delete one of the workspace's own agents. Built-ins are reset or disabled, never deleted.",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/agents/{key}",
+      "tag": "ai",
+      "summary": "Override an agent. Sending null for a field restores its shipped default.",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/agents/{key}/override",
+      "tag": "ai",
+      "summary": "Reset a built-in agent: drop the override row so every field inherits again",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/agents/{key}/run",
+      "tag": "ai",
+      "summary": "Start a background run. It executes as the caller and is capped by the caller's role.",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/agents/choices",
+      "tag": "ai",
+      "summary": "Agents offerable in the composer (viewer — names only, no prompts)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/agents/route",
+      "tag": "ai",
+      "summary": "Ask the router which agent and model would handle a request, without running it",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/agents/runs",
+      "tag": "ai",
+      "summary": "Background agent runs, newest first",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/agents/runs/{id}",
+      "tag": "ai",
+      "summary": "One run, with its findings",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/agents/runs/{id}/findings/{index}/propose",
+      "tag": "ai",
+      "summary": "Open a merge request that addresses one finding",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/budgets",
+      "tag": "ai",
+      "summary": "Workspace budget envelope plus every user with an override or spend this month",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/budgets/{userId}",
+      "tag": "ai",
+      "summary": "Drop a per-user override — the workspace default applies again",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/ai/budgets/{userId}",
+      "tag": "ai",
+      "summary": "Set one user’s monthly token budget (null = unlimited)",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/plugins",
+      "tag": "ai",
+      "summary": "MCP plugins in the workspace (admin — rows carry endpoints and credential metadata)",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/plugins",
+      "tag": "ai",
+      "summary": "Register an MCP server and discover its tools",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/plugins/{id}",
+      "tag": "ai",
+      "summary": "Delete a plugin",
+      "role": "admin",
+      "source": "ai-plugin",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/plugins/{id}",
+      "tag": "ai",
+      "summary": "Update a plugin. Omit authValue to keep the stored credential; null clears it.",
+      "role": "admin",
+      "source": "ai-plugin",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/plugins/{id}/test",
+      "tag": "ai",
+      "summary": "Reconnect and re-discover the plugin tool list",
+      "role": "admin",
+      "source": "ai-plugin",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/providers",
+      "tag": "ai",
+      "summary": "Provider profiles (admin — rows carry endpoints and credential metadata)",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/providers",
+      "tag": "ai",
+      "summary": "Add a provider profile",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/providers/{id}",
+      "tag": "ai",
+      "summary": "Delete a profile, clearing every route and thread pinned to it",
+      "role": "admin",
+      "source": "ai-provider",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/providers/{id}",
+      "tag": "ai",
+      "summary": "Update a profile. Omit apiKey to keep the stored credential; null clears it.",
+      "role": "admin",
+      "source": "ai-provider",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/providers/choices",
+      "tag": "ai",
+      "summary": "Names and models a member may pick for their chat thread — no endpoints or credentials",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/settings",
+      "tag": "ai",
+      "summary": "Effective assistant configuration (DB overrides ∪ env). Never returns the API key.",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/settings",
+      "tag": "ai",
+      "summary": "Update the workspace assistant config. Omitted fields keep, null clears (inherit env).",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/settings/test",
+      "tag": "ai",
+      "summary": "One tiny completion against the effective config — reports the upstream error verbatim",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/skills",
+      "tag": "ai",
+      "summary": "Skills in the workspace (viewer — the chat composer offers them)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/skills",
+      "tag": "ai",
+      "summary": "Create a skill",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/skills/{id}",
+      "tag": "ai",
+      "summary": "Delete a skill",
+      "role": "admin",
+      "source": "ai-skill",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/skills/{id}",
+      "tag": "ai",
+      "summary": "One skill",
+      "role": "viewer",
+      "source": "ai-skill",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/skills/{id}",
+      "tag": "ai",
+      "summary": "Update a skill",
+      "role": "admin",
+      "source": "ai-skill",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/usage",
+      "tag": "ai",
+      "summary": "Token usage totals, per-bucket breakdown and a daily series",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/usage/logs",
+      "tag": "ai",
+      "summary": "One row per upstream LLM call, newest first (cursor-paginated)",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/usage/me",
+      "tag": "ai",
+      "summary": "The caller's own usage this month and remaining budget",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "tag": "App",
+      "summary": "",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assistant/ask",
+      "tag": "assistant",
+      "summary": "Chat about a document — tool-calling harness (search/read/graph), every tool call authorized against the caller session",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assistant/related",
+      "tag": "assistant",
+      "summary": "Relevant documents for a draft — hybrid search, no LLM required",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assistant/review",
+      "tag": "assistant",
+      "summary": "LLM review of a draft (docs/features/09); enabled=false when the provider is none",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assistant/suggest",
+      "tag": "assistant",
+      "summary": "LLM writing suggestion for a draft (outline / continuation / rewrite)",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assistant/threads",
+      "tag": "assistant",
+      "summary": "List chat pane threads for a workspace, most recently active first (search + keyset pagination)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assistant/threads",
+      "tag": "assistant",
+      "summary": "Start a new chat pane thread, optionally pinned to a document",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/assistant/threads/{id}",
+      "tag": "assistant",
+      "summary": "Delete a chat thread and its whole message history",
+      "role": "viewer",
+      "source": "assistant-thread",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/assistant/threads/{id}",
+      "tag": "assistant",
+      "summary": "A thread with its full message history",
+      "role": "viewer",
+      "source": "assistant-thread",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/assistant/threads/{id}",
+      "tag": "assistant",
+      "summary": "Rename a chat thread (null title restores the auto-derived one)",
+      "role": "viewer",
+      "source": "assistant-thread",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assistant/threads/{id}/messages",
+      "tag": "assistant",
+      "summary": "Post a chat message — runs the tool harness (read + write tools) and returns the assistant reply; writes always go through create_document (new page) or propose_update (merge request), never directly",
+      "role": "viewer",
+      "source": "assistant-thread",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/assistant/threads/{id}/messages/{messageId}",
+      "tag": "assistant",
+      "summary": "Rewind a chat thread — deletes this message and every message after it, and returns what survives",
+      "role": "viewer",
+      "source": "assistant-thread",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assistant/threads/{id}/messages/stream",
+      "tag": "assistant",
+      "summary": "Streamed chat turn (text/event-stream of AssistantStreamFrame) — same turn as POST .../messages",
+      "role": "viewer",
+      "source": "assistant-thread",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/attachments",
+      "tag": "attachments",
+      "summary": "List a page’s attachments",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/attachments",
+      "tag": "attachments",
+      "summary": "Reserve an attachment and get a presigned upload URL",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/documents/{id}/attachments/{attachmentId}",
+      "tag": "attachments",
+      "summary": "Delete an attachment and its object",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/attachments/{attachmentId}/complete",
+      "tag": "attachments",
+      "summary": "Confirm the upload landed; marks the attachment ready",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/audit-logs",
+      "tag": "auth",
+      "summary": "Workspace audit trail — operator graph queries (admin only, Phase 5)",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/change-password",
+      "tag": "auth",
+      "summary": "Change own password (requires the current one); revokes other sessions",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/forgot-password",
+      "tag": "auth",
+      "summary": "Request a password-reset token (never reveals whether the email exists)",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "tag": "auth",
+      "summary": "Email + password login; returns a ks_ session token",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/logout",
+      "tag": "auth",
+      "summary": "Revoke the current session token (no-op for API keys / dev mode)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/reset-password",
+      "tag": "auth",
+      "summary": "Set a new password with a kr_ reset token; revokes all sessions",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/signup",
+      "tag": "auth",
+      "summary": "Create an account with email + password; returns a ks_ session token",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me",
+      "tag": "auth",
+      "summary": "Resolved caller identity + workspace memberships (Phase 5)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors",
+      "tag": "connectors",
+      "summary": "List the connectors configured in a workspace",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors",
+      "tag": "connectors",
+      "summary": "Register a connection to an external system",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/connectors/{id}",
+      "tag": "connectors",
+      "summary": "Delete a connector; the pages it created are kept",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/{id}",
+      "tag": "connectors",
+      "summary": "Read one connector",
+      "role": "viewer",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/connectors/{id}",
+      "tag": "connectors",
+      "summary": "Update a connector; null clears a credential, absent keeps it",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/{id}/links",
+      "tag": "connectors",
+      "summary": "The external item <-> page identity map",
+      "role": "viewer",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/connectors/{id}/links/{linkId}",
+      "tag": "connectors",
+      "summary": "Stop syncing one page; the page itself is kept",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/{id}/runs",
+      "tag": "connectors",
+      "summary": "Recent sync runs, newest first",
+      "role": "viewer",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/sync",
+      "tag": "connectors",
+      "summary": "Start a sync run",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/test",
+      "tag": "connectors",
+      "summary": "Prove the credential and configuration reach the external system",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/runs/{runId}",
+      "tag": "connectors",
+      "summary": "One sync run — the poll target",
+      "role": "viewer",
+      "source": "connector-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents",
+      "tag": "documents",
+      "summary": "List documents in workspace, filtered by the search facets",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents",
+      "tag": "documents",
+      "summary": "Create document (optionally inline content, auto-finalizes)",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}",
+      "tag": "documents",
+      "summary": "Get document + its head (or given) revision + chunk summaries",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/documents/{id}",
+      "tag": "documents",
+      "summary": "Update title / category / parent (features 07 + 08); parentId: null re-roots",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/ancestors",
+      "tag": "documents",
+      "summary": "Ancestor chain (root first) — for breadcrumbs and lazy tree expansion",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/branches",
+      "tag": "documents",
+      "summary": "List branches with head revisions",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/branches",
+      "tag": "documents",
+      "summary": "Create a branch from a revision (defaults to default-branch head)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/compare",
+      "tag": "documents",
+      "summary": "Compare two revisions (direct or merge-base mode, plan.md §8)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/connectors",
+      "tag": "documents",
+      "summary": "External systems this page is linked to (docs/features/19)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/content",
+      "tag": "documents",
+      "summary": "Full raw content of a revision (feature 01; head of the default branch by default)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/facts",
+      "tag": "documents",
+      "summary": "Facts asserted as of a revision (Phase 5 historical queries, plan.md §11)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/facts/timeline",
+      "tag": "documents",
+      "summary": "Fact lifecycle along a branch: introduced/removed revisions (removed-facts audit)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/graph",
+      "tag": "documents",
+      "summary": "Document neighbourhood in the knowledge graph (feature 06); depth = entity hops (1-3)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/push",
+      "tag": "documents",
+      "summary": "Publish this page back to its connector (docs/features/19)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/documents/{id}/relations",
+      "tag": "documents",
+      "summary": "Delete relation edges by type + targetKey (optionally one extractor class)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/relations",
+      "tag": "documents",
+      "summary": "List the document’s relation edges with provenance",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/relations",
+      "tag": "documents",
+      "summary": "Attach explicit relations (graph edges with provenance)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/relations/curate",
+      "tag": "documents",
+      "summary": "Curate a relation: user-confirmed, confidence 1, protected from re-extraction (plan.md §5)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/revisions",
+      "tag": "documents",
+      "summary": "List revisions with DAG parentage (optionally filtered by branch)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/revisions",
+      "tag": "documents",
+      "summary": "Create new draft revision on branch head (If-Match: expected head revision id)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/revisions/{revisionId}/finalize",
+      "tag": "documents",
+      "summary": "Finalize an uploaded revision: hash, dedupe, enqueue indexing",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/threads",
+      "tag": "documents",
+      "summary": "Comment threads on a document (feature 15)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/threads",
+      "tag": "documents",
+      "summary": "Start a comment thread, optionally anchored to a passage",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/documents/{id}/threads/{threadId}",
+      "tag": "documents",
+      "summary": "Resolve or reopen a comment thread",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/threads/{threadId}/comments",
+      "tag": "documents",
+      "summary": "Reply in a comment thread",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/documents/{id}/threads/{threadId}/comments/{commentId}",
+      "tag": "documents",
+      "summary": "Delete a page comment (the comment's own author only); removes the thread if it was the last one",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/documents/{id}/threads/{threadId}/comments/{commentId}",
+      "tag": "documents",
+      "summary": "Edit a page comment (the comment's own author only)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/uploads",
+      "tag": "documents",
+      "summary": "Create (or reuse) draft revision + get presigned PUT URL",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/graph",
+      "tag": "documents",
+      "summary": "Whole-workspace relation graph for the pages landing; scoped to one project when projectId is given",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/tree",
+      "tag": "documents",
+      "summary": "Document hierarchy (feature 08). Omit depth for the whole tree; pass depth=1 to walk it a level at a time",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/entities",
+      "tag": "entities",
+      "summary": "List workspace entities with relation degree",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/entities/{key}/impact-analysis",
+      "tag": "entities",
+      "summary": "Transitive impact of changing an entity (knowledge.impact_analysis)",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/entities/{key}/neighbors",
+      "tag": "entities",
+      "summary": "Entity neighborhood: edges + entities within N hops (knowledge.find_relations)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/entities/trace",
+      "tag": "entities",
+      "summary": "Shortest relation path between two entities (knowledge.trace_relation)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/events",
+      "tag": "events",
+      "summary": "Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<key>.",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/glossary",
+      "tag": "glossary",
+      "summary": "The glossary — the roster the read-side term linker matches against. Scoped to one project with projectId; without it, the whole workspace.",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/glossary",
+      "tag": "glossary",
+      "summary": "Add a term to a project (409 when that project already defines it)",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/glossary/{id}",
+      "tag": "glossary",
+      "summary": "Remove a term; pages that mention it simply stop linking it",
+      "role": "editor",
+      "source": "glossary-term",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/glossary/{id}",
+      "tag": "glossary",
+      "summary": "One glossary entry",
+      "role": "viewer",
+      "source": "glossary-term",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/glossary/{id}",
+      "tag": "glossary",
+      "summary": "Edit a term, its aliases, its definition or its defining page",
+      "role": "editor",
+      "source": "glossary-term",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/glossary/suggest",
+      "tag": "glossary",
+      "summary": "LLM term extraction over a page or a draft — proposals only, nothing is saved; enabled=false when the assistant provider is none",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/graph/query",
+      "tag": "graph",
+      "summary": "Read-only graph query (trusted operator only; row-limited; every call is audited)",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/imports",
+      "tag": "imports",
+      "summary": "Reserve an import and get a presigned upload URL",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/imports/{id}",
+      "tag": "imports",
+      "summary": "Discard an import and its staged files",
+      "role": "editor",
+      "source": "import",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/imports/{id}",
+      "tag": "imports",
+      "summary": "Import status — polled by the wizard while parsing",
+      "role": "viewer",
+      "source": "import",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/imports/{id}/content",
+      "tag": "imports",
+      "summary": "The parsed markdown, for the review step",
+      "role": "viewer",
+      "source": "import",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/imports/{id}/start",
+      "tag": "imports",
+      "summary": "Confirm the upload landed and queue the parse",
+      "role": "editor",
+      "source": "import",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/imports/{id}/submit",
+      "tag": "imports",
+      "summary": "Create the page from the reviewed result, keeping the original as an attachment",
+      "role": "editor",
+      "source": "import",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ingestion/jobs/{id}",
+      "tag": "ingestion",
+      "summary": "Ingestion job status (poll after finalize)",
+      "role": "viewer",
+      "source": "job",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ingestion/reindex",
+      "tag": "ingestion",
+      "summary": "Force reindex of branch-head revisions (workspace or single document)",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ingestion/stale",
+      "tag": "ingestion",
+      "summary": "Staleness report: embedding drift, stuck and failed jobs (Phase 5)",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/merge-requests",
+      "tag": "merge-requests",
+      "summary": "List merge requests of a document (newest first)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/merge-requests",
+      "tag": "merge-requests",
+      "summary": "Open a merge request between two branches of a document",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/merge-requests",
+      "tag": "merge-requests",
+      "summary": "List merge requests across a workspace (filterable, cursor-paginated)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/merge-requests/{id}",
+      "tag": "merge-requests",
+      "summary": "Get merge request state (heads, merge base, approvals, reviewers)",
+      "role": "viewer",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/merge-requests/{id}",
+      "tag": "merge-requests",
+      "summary": "Edit title/description/draft flag (open merge requests only)",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/{id}/approve",
+      "tag": "merge-requests",
+      "summary": "Approve as the calling principal (MR_REQUIRED_APPROVALS non-author approvals gate the merge)",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/{id}/close",
+      "tag": "merge-requests",
+      "summary": "Close the merge request without merging",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/merge-requests/{id}/diff",
+      "tag": "merge-requests",
+      "summary": "Merge-base diff of the MR: text + structural (+ semantic on request)",
+      "role": "viewer",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/{id}/merge",
+      "tag": "merge-requests",
+      "summary": "Merge (merge-commit or squash); 409 with details.reason draft|approvals|diverged when gated, + comparison link when the target diverged",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/{id}/reopen",
+      "tag": "merge-requests",
+      "summary": "Reopen a closed merge request (merged ones are terminal)",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/merge-requests/{id}/reviewers",
+      "tag": "merge-requests",
+      "summary": "Replace the reviewer set (workspace members only; advisory, not a merge gate)",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/merge-requests/{id}/threads",
+      "tag": "merge-requests",
+      "summary": "List review threads with comments (unresolved first)",
+      "role": "viewer",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/{id}/threads",
+      "tag": "merge-requests",
+      "summary": "Start a review thread (optionally anchored to a line/section/entity)",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/merge-requests/{id}/threads/{threadId}",
+      "tag": "merge-requests",
+      "summary": "Resolve or unresolve a review thread",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/{id}/threads/{threadId}/comments",
+      "tag": "merge-requests",
+      "summary": "Reply to a review thread",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/merge-requests/{id}/threads/{threadId}/comments/{commentId}",
+      "tag": "merge-requests",
+      "summary": "Delete a review comment (the comment's own author only); removes the thread if it was the last one",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/merge-requests/{id}/threads/{threadId}/comments/{commentId}",
+      "tag": "merge-requests",
+      "summary": "Edit a review comment (the comment's own author only)",
+      "role": "editor",
+      "source": "merge-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/merge-requests/filters",
+      "tag": "merge-requests",
+      "summary": "List your saved merge-request filters in a workspace",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/merge-requests/filters",
+      "tag": "merge-requests",
+      "summary": "Save the current narrowing under a name",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/merge-requests/filters/{filterId}",
+      "tag": "merge-requests",
+      "summary": "Delete a saved filter",
+      "role": "viewer",
+      "source": "saved-filter",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/merge-requests/filters/{filterId}",
+      "tag": "merge-requests",
+      "summary": "Restore one saved filter by its number (the `?view=` link target)",
+      "role": "viewer",
+      "source": "saved-filter",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/merge-requests/filters/{filterId}",
+      "tag": "merge-requests",
+      "summary": "Rename a saved filter, or overwrite it with the current narrowing",
+      "role": "viewer",
+      "source": "saved-filter",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects",
+      "tag": "projects",
+      "summary": "List projects in a workspace (searchable; cursor-paginated when limit is given)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects",
+      "tag": "projects",
+      "summary": "Create a project",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/projects/{id}",
+      "tag": "projects",
+      "summary": "Delete an empty project (409 when it still holds documents)",
+      "role": "admin",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}",
+      "tag": "projects",
+      "summary": "Project detail",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/projects/{id}",
+      "tag": "projects",
+      "summary": "Rename a project / edit its description",
+      "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/search",
+      "tag": "search",
+      "summary": "Search indexed chunks: semantic, keyword (BM25) or hybrid (RRF fusion + graph expansion)",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/users",
+      "tag": "users",
+      "summary": "List all users with their workspace memberships (platform admin)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/users",
+      "tag": "users",
+      "summary": "Create a user (optional initial password; platform admin)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/users/{id}",
+      "tag": "users",
+      "summary": "Update a user: rename, (de)admin, disable/enable, password override",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/workflow-runs",
+      "tag": "workflows",
+      "summary": "Runs rooted at this page, plus the workflows that may be started against it",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflows",
+      "tag": "workflows",
+      "summary": "Workflow definitions available in a workspace or project",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflows",
+      "tag": "workflows",
+      "summary": "Create a workflow (400 with per-step issues when the graph is invalid)",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/workflows/{id}",
+      "tag": "workflows",
+      "summary": "Delete a workflow (409 while runs of it are still in flight)",
+      "role": "admin",
+      "source": "workflow-definition",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflows/{id}",
+      "tag": "workflows",
+      "summary": "",
+      "role": "viewer",
+      "source": "workflow-definition",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/workflows/{id}",
+      "tag": "workflows",
+      "summary": "Update a workflow; a graph change bumps its version",
+      "role": "admin",
+      "source": "workflow-definition",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflows/{id}/validate",
+      "tag": "workflows",
+      "summary": "Compile a graph and report its issues without saving — the editor’s live check. Omit `graph` to validate the stored one.",
+      "role": "viewer",
+      "source": "workflow-definition",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflows/runs",
+      "tag": "workflows",
+      "summary": "Workflow runs, newest first. `counts` covers every status under the same filters, so status badges do not move as you switch between them.",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflows/runs",
+      "tag": "workflows",
+      "summary": "Start a run against a page (409 when one is already in flight for that page)",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workflows/runs/{id}",
+      "tag": "workflows",
+      "summary": "A run with its frozen graph and its node tree — the intermediate results",
+      "role": "viewer",
+      "source": "workflow-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflows/runs/{id}/events",
+      "tag": "workflows",
+      "summary": "Pause, resume or cancel a run (409 when the machine refuses the transition)",
+      "role": "editor",
+      "source": "workflow-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/workflows/runs/{id}/nodes/{nodeId}",
+      "tag": "workflows",
+      "summary": "Edit a draft before approving it",
+      "role": "editor",
+      "source": "workflow-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflows/runs/{id}/nodes/{nodeId}/events",
+      "tag": "workflows",
+      "summary": "The review gate: APPROVE (materialises the draft and opens the next steps), REJECT, SKIP or RETRY. APPROVE may carry a last-moment edit.",
+      "role": "editor",
+      "source": "workflow-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces",
+      "tag": "workspaces",
+      "summary": "Caller's workspaces (platform admins see all)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workspaces",
+      "tag": "workspaces",
+      "summary": "Create a workspace — the creator becomes its admin + trusted operator",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/candidates",
+      "tag": "workspaces",
+      "summary": "Users who are not members yet, for the add-member picker (workspace admin)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/members",
+      "tag": "workspaces",
+      "summary": "Workspace member roster (any member)",
+      "role": "viewer",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workspaces/{id}/members",
+      "tag": "workspaces",
+      "summary": "Add (or re-role) a member by email (workspace admin)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/workspaces/{id}/members/{userId}",
+      "tag": "workspaces",
+      "summary": "Remove a member (workspace admin; last admin is protected)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/workspaces/{id}/members/{userId}",
+      "tag": "workspaces",
+      "summary": "Change a member role / trusted-operator flag (workspace admin)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    }
+  ],
+  "mcpTools": [
+    {
+      "name": "knowledge_approve_merge_request",
+      "description": "Approve an open merge request. NOTE: approval is recorded for the MCP stub identity — it counts toward the MR_REQUIRED_APPROVALS merge gate unless the merge request was also authored via MCP (self-approvals never count).",
+      "inputs": [
+        {
+          "name": "mergeRequestId",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_close_merge_request",
+      "description": "Close an open merge request without merging (reopenable via the REST API).",
+      "inputs": [
+        {
+          "name": "mergeRequestId",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_comment_merge_request",
+      "description": "Comment on an open merge request: replies into the given thread, or starts a new (unanchored) discussion thread when threadId is omitted.",
+      "inputs": [
+        {
+          "name": "mergeRequestId",
+          "optional": false
+        },
+        {
+          "name": "body",
+          "optional": false
+        },
+        {
+          "name": "threadId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_compare_revisions",
+      "description": "GitLab-style comparison of two revisions: \"direct\" (diff from..to) or \"merge-base\" (diff from...to against the nearest common ancestor).",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "fromRevisionId",
+          "optional": false
+        },
+        {
+          "name": "toRevisionId",
+          "optional": false
+        },
+        {
+          "name": "mode",
+          "optional": true
+        },
+        {
+          "name": "includeSemanticDiff",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_create_branch",
+      "description": "Create a branch on a document, from a given revision or the default-branch head.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "name",
+          "optional": false
+        },
+        {
+          "name": "fromRevisionId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_create_merge_request",
+      "description": "Open a GitLab-style merge request between two branches of a document. Target defaults to the default branch.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "sourceBranch",
+          "optional": false
+        },
+        {
+          "name": "targetBranch",
+          "optional": true
+        },
+        {
+          "name": "title",
+          "optional": false
+        },
+        {
+          "name": "description",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_create_revision",
+      "description": "Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "branch",
+          "optional": true
+        },
+        {
+          "name": "baseRevisionId",
+          "optional": true
+        },
+        {
+          "name": "content",
+          "optional": false
+        },
+        {
+          "name": "message",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_find_relations",
+      "description": "Neighborhood of an entity: documents referencing it (with relation type, fact class, confidence) and entities within N hops.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "entity",
+          "optional": false
+        },
+        {
+          "name": "relationship",
+          "optional": true
+        },
+        {
+          "name": "depth",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_connector_run",
+      "description": "One sync run: status, current stage, and how many pages were created, updated, skipped, failed or left as conflicts. Warnings list what a run could not carry.",
+      "inputs": [
+        {
+          "name": "runId",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_document",
+      "description": "Get a document, its head (or a given) revision and indexed chunk summaries.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "revisionId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_historical_context",
+      "description": "What the knowledge base stated about an entity at a given revision (plan.md §11 historical queries): the fact snapshot at that point in the revision DAG, plus the entity\\u2019s current neighborhood for contrast.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "entityId",
+          "optional": false
+        },
+        {
+          "name": "atRevisionId",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_merge_request",
+      "description": "Get one merge request (heads, merge base, approvals, reviewers, draft flag). Set includeDiff for the merge-base text+structural diff, semantic for the graph-projection diff too.",
+      "inputs": [
+        {
+          "name": "mergeRequestId",
+          "optional": false
+        },
+        {
+          "name": "includeDiff",
+          "optional": true
+        },
+        {
+          "name": "semantic",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_workflow_run",
+      "description": "A workflow run with its frozen step graph and its node tree — every intermediate result, including drafts still awaiting review.",
+      "inputs": [
+        {
+          "name": "runId",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_workspace_graph",
+      "description": "The whole workspace (or one project) as a single relation graph: every document as a node, every entity it references, and the typed edges between them with provenance. Use this for an overview of how a knowledge base hangs together — or to find orphan pages, which appear with degree 0. For one page's neighbourhood use knowledge_find_relations instead.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_impact_analysis",
+      "description": "Transitive impact of changing an entity: dependents (what breaks) or dependencies (what it relies on), with document evidence paths.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "entityId",
+          "optional": false
+        },
+        {
+          "name": "direction",
+          "optional": true
+        },
+        {
+          "name": "maxDepth",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_ingest",
+      "description": "Force reindex of a document\\u2019s branch-head revisions (or every branch head in the workspace).",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "documentId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_agents",
+      "description": "s AI calls (feature 20): which agents exist, what each is for, \" + +",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_connectors",
+      "description": "List the external systems this workspace syncs with (Confluence, Jira, Notion, markdown/git). Each entry says which direction it moves content, how many pages it has claimed, and how its last sync went.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_merge_requests",
+      "description": "List merge requests across a workspace, filterable by document, status, author, or assigned reviewer. Cursor-paginated; mergeBaseRevisionId is null in list rows (fetch one MR for it).",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "documentId",
+          "optional": true
+        },
+        {
+          "name": "status",
+          "optional": true
+        },
+        {
+          "name": "authorId",
+          "optional": true
+        },
+        {
+          "name": "reviewerId",
+          "optional": true
+        },
+        {
+          "name": "search",
+          "optional": true
+        },
+        {
+          "name": "cursor",
+          "optional": true
+        },
+        {
+          "name": "limit",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_projects",
+      "description": "List the projects in a workspace. Workspace > Project > Document — every document belongs to exactly one project.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_revisions",
+      "description": "List the immutable revision DAG of a document (parent ids, branch, status).",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "branch",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_workflows",
+      "description": "List workflow definitions in a workspace: configurable step chains (entity → use-cases → API endpoints + pages) that can be run against a page.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_merge_revision",
+      "description": "Merge an open merge request (\"merge-commit\" creates a two-parent DAG node, \"squash\" a single-parent one). Fails with a comparison link when the target branch diverged — rebase the source branch first. Gated: draft MRs and MRs below MR_REQUIRED_APPROVALS non-author approvals are rejected with 409 details.",
+      "inputs": [
+        {
+          "name": "mergeRequestId",
+          "optional": false
+        },
+        {
+          "name": "strategy",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_query_graph",
+      "description": "TRUSTED-OPERATOR ONLY (plan.md §9): read-only SQL over the graph store. Single SELECT statement, row-limited, workspace predicate enforced server-side; every call is written to the audit log.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "query",
+          "optional": false
+        },
+        {
+          "name": "limit",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_search",
+      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "query",
+          "optional": false
+        },
+        {
+          "name": "limit",
+          "optional": true
+        },
+        {
+          "name": "projectIds",
+          "optional": true
+        },
+        {
+          "name": "tags",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_start_workflow",
+      "description": "Start a workflow run against a source page. Returns immediately — the run executes in the background and parks at its first review gate. 409 when a run of the same workflow is already in flight for that page.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "definitionId",
+          "optional": false
+        },
+        {
+          "name": "rootDocumentId",
+          "optional": false
+        },
+        {
+          "name": "note",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_sync_connector",
+      "description": "Start a sync run for one connector and return the run to poll with knowledge_get_connector_run. Pulling is idempotent: unchanged items are skipped, and an item changed on both sides opens a merge request rather than overwriting anything.",
+      "inputs": [
+        {
+          "name": "connectorId",
+          "optional": false
+        },
+        {
+          "name": "direction",
+          "optional": true
+        },
+        {
+          "name": "externalIds",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_trace_relation",
+      "description": "Shortest relation path between two entities, alternating entity/document steps with edge types.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "fromEntityId",
+          "optional": false
+        },
+        {
+          "name": "toEntityId",
+          "optional": false
+        },
+        {
+          "name": "maxDepth",
+          "optional": true
+        }
+      ]
+    }
+  ]
+}

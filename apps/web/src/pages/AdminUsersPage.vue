@@ -92,7 +92,7 @@ const fields = computed<FilterField[]>(() => [
     key: 'text',
     label: t('filter.nameOrEmail'),
     icon: AtSign,
-    group: 'Text',
+    group: t('filter.groupText'),
     type: 'text',
     placeholder: 'alice@…',
   },
@@ -139,7 +139,7 @@ async function createUser() {
         ...(newPassword.value ? { password: newPassword.value } : {}),
       }),
     })
-    toast.success(`Created ${newEmail.value}`)
+    toast.success(t('users.created', { email: newEmail.value }))
     newEmail.value = ''
     newName.value = ''
     newPassword.value = ''
@@ -164,9 +164,9 @@ async function patchUser(user: UserSummary, patch: Record<string, unknown>, okMe
 
 function setPassword(user: UserSummary) {
   // eslint-disable-next-line no-alert
-  const password = window.prompt(`New password for ${user.email} (min 8 chars):`)
+  const password = window.prompt(t('users.passwordPrompt', { email: user.email }))
   if (!password) return
-  void patchUser(user, { password }, 'Password set — existing sessions revoked')
+  void patchUser(user, { password }, t('users.passwordSet'))
 }
 </script>
 
@@ -175,7 +175,7 @@ function setPassword(user: UserSummary) {
     <div class="flex items-center justify-between gap-3">
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('users.title') }}</h1>
       <Button size="sm" @click="createOpen = true">
-        <Plus class="size-3.5" /> New user
+        <Plus class="size-3.5" /> {{ t('users.newUser') }}
       </Button>
     </div>
 
@@ -191,7 +191,7 @@ function setPassword(user: UserSummary) {
     </div>
 
     <p v-else-if="visibleUsers.length === 0" class="text-muted-foreground py-10 text-center text-sm">
-      No accounts match these filters.
+      {{ t('users.noneMatch') }}
     </p>
 
     <Table v-else>
@@ -199,9 +199,9 @@ function setPassword(user: UserSummary) {
         <TableRow>
           <TableHead>{{ t('users.user') }}</TableHead>
           <TableHead>{{ t('users.status') }}</TableHead>
-          <TableHead>Workspaces</TableHead>
-          <TableHead>Credentials</TableHead>
-          <TableHead class="text-right">Actions</TableHead>
+          <TableHead>{{ t('users.workspaces') }}</TableHead>
+          <TableHead>{{ t('users.credentials') }}</TableHead>
+          <TableHead class="text-right">{{ t('users.actions') }}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -212,32 +212,36 @@ function setPassword(user: UserSummary) {
           </TableCell>
           <TableCell>
             <div class="flex flex-wrap gap-1">
-              <Badge v-if="user.isAdmin" variant="default">platform admin</Badge>
-              <Badge v-if="user.disabled" variant="destructive">disabled</Badge>
-              <Badge v-if="!user.disabled && !user.isAdmin" variant="outline">active</Badge>
+              <Badge v-if="user.isAdmin" variant="default">{{ t('users.platformAdminBadge') }}</Badge>
+              <Badge v-if="user.disabled" variant="destructive">{{ t('users.disabledBadge') }}</Badge>
+              <Badge v-if="!user.disabled && !user.isAdmin" variant="outline">{{ t('users.activeBadge') }}</Badge>
             </div>
           </TableCell>
           <TableCell class="text-muted-foreground text-sm">
             <span v-if="user.memberships.length === 0">—</span>
-            <span v-else>{{ user.memberships.map((m) => m.role).join(', ') }} ({{ user.memberships.length }})</span>
+            <span v-else>{{ t('users.memberships', { roles: user.memberships.map((m) => t(`role.${m.role}`)).join(', '), n: user.memberships.length }) }}</span>
           </TableCell>
           <TableCell class="text-muted-foreground text-xs">
-            {{ [user.hasPassword ? 'password' : null, user.hasApiKey ? 'api key' : null].filter(Boolean).join(' + ') || 'none' }}
+            {{
+              [user.hasPassword ? t('users.credPassword') : null, user.hasApiKey ? t('users.credApiKey') : null]
+                .filter(Boolean)
+                .join(' + ') || t('users.credNone')
+            }}
           </TableCell>
           <TableCell class="text-right">
             <div class="flex justify-end gap-1.5">
               <Button
                 size="sm" variant="outline" :disabled="user.userId === auth.me?.userId"
-                @click="patchUser(user, { isAdmin: !user.isAdmin }, user.isAdmin ? 'Admin removed' : 'Promoted to platform admin')"
+                @click="patchUser(user, { isAdmin: !user.isAdmin }, user.isAdmin ? t('users.adminRemoved') : t('users.promotedToAdmin'))"
               >
-                {{ user.isAdmin ? 'Revoke admin' : 'Make admin' }}
+                {{ user.isAdmin ? t('users.revokeAdmin') : t('users.makeAdmin') }}
               </Button>
-              <Button size="sm" variant="outline" @click="setPassword(user)">Set password</Button>
+              <Button size="sm" variant="outline" @click="setPassword(user)">{{ t('users.setPassword') }}</Button>
               <Button
                 size="sm" :variant="user.disabled ? 'outline' : 'destructive'" :disabled="user.userId === auth.me?.userId"
-                @click="patchUser(user, { disabled: !user.disabled }, user.disabled ? 'Account enabled' : 'Account disabled')"
+                @click="patchUser(user, { disabled: !user.disabled }, user.disabled ? t('users.accountEnabled') : t('users.accountDisabled'))"
               >
-                {{ user.disabled ? 'Enable' : 'Disable' }}
+                {{ user.disabled ? t('users.enable') : t('users.disable') }}
               </Button>
             </div>
           </TableCell>
@@ -248,31 +252,31 @@ function setPassword(user: UserSummary) {
     <Dialog v-model:open="createOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New user</DialogTitle>
+          <DialogTitle>{{ t('users.newUser') }}</DialogTitle>
           <DialogDescription>
-            Leave the password empty to have the account claimed through a reset link.
+            {{ t('users.newUserDesc') }}
           </DialogDescription>
         </DialogHeader>
         <form id="create-user" class="space-y-3" @submit.prevent="createUser">
           <div class="space-y-1.5">
-            <Label for="new-email">Email</Label>
+            <Label for="new-email">{{ t('users.email') }}</Label>
             <Input id="new-email" v-model="newEmail" type="email" required placeholder="teammate@example.com" />
           </div>
           <div class="space-y-1.5">
-            <Label for="new-name">Display name</Label>
-            <Input id="new-name" v-model="newName" required placeholder="Teammate" />
+            <Label for="new-name">{{ t('users.displayName') }}</Label>
+            <Input id="new-name" v-model="newName" required :placeholder="t('users.displayNamePlaceholder')" />
           </div>
           <div class="space-y-1.5">
             <Label for="new-pass">
-              Initial password <span class="text-muted-foreground font-normal">(optional)</span>
+              {{ t('users.initialPassword') }} <span class="text-muted-foreground font-normal">({{ t('common.optional') }})</span>
             </Label>
-            <Input id="new-pass" v-model="newPassword" type="text" minlength="8" placeholder="via reset link if empty" />
+            <Input id="new-pass" v-model="newPassword" type="text" minlength="8" :placeholder="t('users.viaResetLink')" />
           </div>
         </form>
         <DialogFooter>
-          <Button variant="ghost" @click="createOpen = false">Cancel</Button>
+          <Button variant="ghost" @click="createOpen = false">{{ t('common.cancel') }}</Button>
           <Button type="submit" form="create-user" :disabled="creating">
-            {{ creating ? 'Creating…' : 'Create' }}
+            {{ creating ? t('users.creating') : t('common.create') }}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -60,9 +60,9 @@ async function pick(providerId: string | null) {
       <DropdownMenuItem class="gap-2" @select="pick(null)">
         <Check class="size-3.5" :class="!pinned && 'opacity-100'" v-show="!pinned" />
         <span :class="pinned && 'ml-[1.375rem]'">
-          Workspace default
+          {{ t('chat.workspaceDefault') }}
           <span class="text-muted-foreground block text-xs">
-            {{ choices.find((c) => c.id === defaultId)?.model ?? 'configured in settings' }}
+            {{ choices.find((c) => c.id === defaultId)?.model ?? t('ai.configuredInSettings') }}
           </span>
         </span>
       </DropdownMenuItem>

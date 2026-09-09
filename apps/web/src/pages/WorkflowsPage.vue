@@ -154,7 +154,7 @@ async function start() {
     starting.value = false
     documentIds.value = []
     note.value = ''
-    toast.success('Run started')
+    toast.success(t('workflow.runStarted'))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -197,15 +197,15 @@ watch(starting, (open) => {
       <Workflow class="size-8 opacity-40" />
       <div>
         <p class="text-foreground text-sm font-medium">
-          {{ runs.length ? 'No runs match these filters' : 'No runs yet' }}
+          {{ runs.length ? t('workflow.list.noRunsMatch') : t('workflow.list.noRunsYet') }}
         </p>
         <p class="mx-auto mt-1 max-w-md text-sm">
           <template v-if="runs.length">{{ t('workflow.clearFilterToSeeRest') }}</template>
           <template v-else-if="store.runnable.length">
-            Start one from here, or from the Workflows widget on any page.
+            {{ t('workflow.list.startFromHere') }}
           </template>
           <template v-else>
-            No workflows are configured yet — an admin defines the step chain in settings first.
+            {{ t('workflow.list.noneConfigured') }}
           </template>
         </p>
       </div>
@@ -237,21 +237,21 @@ watch(starting, (open) => {
           <Autocomplete
             v-model="documentIds"
             :label="t('workflow.sourcePage')"
-            placeholder="Search pages…"
+            :placeholder="t('workflow.list.searchPages')"
             :multiple="false"
             :load="loadDocuments"
             :empty-hint="t('hints.chainStartPage')"
           />
 
           <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">Notes for this run (optional)</span>
-            <Textarea v-model="note" rows="2" placeholder="Only cover the billing side of this entity." />
+            <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.list.notes') }}</span>
+            <Textarea v-model="note" rows="2" :placeholder="t('workflow.list.notesPlaceholder')" />
           </label>
         </div>
         <DialogFooter>
-          <Button variant="ghost" @click="starting = false">Cancel</Button>
+          <Button variant="ghost" @click="starting = false">{{ t('common.cancel') }}</Button>
           <Button :disabled="!definitionId || !documentIds[0] || startRun.isPending.value" @click="start">
-            {{ startRun.isPending.value ? 'Starting…' : 'Start' }}
+            {{ startRun.isPending.value ? t('workflow.list.starting') : t('workflow.list.start') }}
           </Button>
         </DialogFooter>
       </DialogContent>

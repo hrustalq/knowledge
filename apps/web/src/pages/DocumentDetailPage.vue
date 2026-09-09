@@ -243,7 +243,7 @@ function onDeleteComment(threadId: string, commentId: string) {
   deleteComment.mutate(
     { path: { id: documentId.value, threadId, commentId } },
     {
-      onSuccess: () => toast.success('Comment deleted'),
+      onSuccess: () => toast.success(t('documents.commentDeleted')),
       onError: (e) => toast.error(e.message),
     },
   )
@@ -417,7 +417,7 @@ watch(
         <Button v-if="auth.canEdit" variant="outline" size="sm" class="ml-auto" as-child>
           <RouterLink :to="`/documents/${detail.document.documentId}/edit`">
             <Pencil class="size-3.5" />
-            Edit
+            {{ t('common.edit') }}
           </RouterLink>
         </Button>
       </div>
@@ -507,7 +507,7 @@ watch(
 
             <div v-if="relations && relations.length" class="mt-3 border-t pt-3">
               <p class="mb-1.5 text-xs text-muted-foreground">
-                Relations <span class="text-foreground">{{ relations.length }}</span>
+                {{ t('documents.relationsCount') }} <span class="text-foreground">{{ relations.length }}</span>
               </p>
               <div class="flex flex-wrap gap-1.5">
                 <span

@@ -16,6 +16,7 @@ import { ProjectsModule } from '../projects/projects.module.js';
 import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
 import { WorkflowsModule } from '../workflows/workflows.module.js';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -48,6 +49,9 @@ import { McpService } from './mcp.service.js';
     ConnectorsCoreModule,
     ConnectorQueueModule,
     WorkflowsModule,
+    // The registry only — AiAgentsService is API-only (it validates tool lists
+    // against the plugin roster) and the agent tools here are read-only anyway.
+    AgentCoreModule,
   ],
   providers: [McpService],
 })

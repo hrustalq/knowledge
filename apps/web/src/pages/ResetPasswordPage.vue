@@ -48,8 +48,11 @@ async function submit() {
       </CardHeader>
       <CardContent>
         <p v-if="!token" class="text-sm text-muted-foreground">
-          Missing reset token — follow the link from your reset email, or
-          <RouterLink class="underline" to="/forgot-password">request a new one</RouterLink>.
+          <i18n-t keypath="auth.missingResetToken" tag="span" scope="global">
+            <template #link>
+              <RouterLink class="underline" to="/forgot-password">{{ t('auth.requestNewOne') }}</RouterLink>
+            </template>
+          </i18n-t>
         </p>
         <form v-else class="space-y-3" @submit.prevent="submit">
           <div class="space-y-1">

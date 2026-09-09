@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { Play, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
 import {
   ASSISTANT_TOOL_NAMES,
   type AiAgentSummary,
@@ -15,7 +15,7 @@ import {
   type ListAiProvidersResponse,
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
-import { getWorkspaceId } from '@/lib/api'
+import { getWorkspaceId, relativeTime } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -51,6 +51,9 @@ const createAgent = useApiMutation('post', '/v1/ai/agents', { invalidates })
 const updateAgent = useApiMutation('patch', '/v1/ai/agents/{key}', { invalidates })
 const resetAgent = useApiMutation('delete', '/v1/ai/agents/{key}/override', { invalidates })
 const deleteAgent = useApiMutation('delete', '/v1/ai/agents/{key}', { invalidates })
+const runAgent = useApiMutation('post', '/v1/ai/agents/{key}/run', {
+  invalidates: () => [['/v1/ai/agents'], ['/v1/ai/agents/runs']],
+})
 
 /**
  * reka-ui reserves the empty string for "nothing selected", so "follow the
@@ -60,7 +63,17 @@ const ROUTED = '__routed__'
 
 const open = ref(false)
 const editing = ref<AiAgentSummary | null>(null)
-const blank = { key: '', name: '', description: '', instructions: '', tools: [] as string[], providerId: ROUTED }
+const blank = {
+  key: '',
+  name: '',
+  description: '',
+  instructions: '',
+  tools: [] as string[],
+  providerId: ROUTED,
+  scheduleEnabled: false,
+  scheduleMinutes: null as number | null,
+  scheduleNote: '',
+}
 const form = ref({ ...blank })
 /** What the agent looked like when the dialog opened, so submit can send only what changed. */
 const snapshot = ref({ ...blank })
@@ -86,6 +99,9 @@ function openEdit(agent: AiAgentSummary) {
     instructions: agent.instructions,
     tools: [...agent.tools],
     providerId: agent.providerId ?? ROUTED,
+    scheduleEnabled: agent.scheduleEnabled,
+    scheduleMinutes: agent.scheduleMinutes,
+    scheduleNote: agent.scheduleNote ?? '',
   }
   form.value = { ...loaded, tools: [...loaded.tools] }
   snapshot.value = { ...loaded, tools: [...loaded.tools] }
@@ -126,12 +142,18 @@ async function submit() {
         instructions?: string
         tools?: string[]
         providerId?: string | null
+        scheduleEnabled?: boolean
+        scheduleMinutes?: number | null
+        scheduleNote?: string | null
       } = { workspaceId }
       if (f.name !== s.name) body.name = f.name.trim()
       if (f.description !== s.description) body.description = f.description.trim()
       if (f.instructions !== s.instructions) body.instructions = f.instructions
       if (JSON.stringify([...f.tools].sort()) !== JSON.stringify([...s.tools].sort())) body.tools = f.tools
       if (f.providerId !== s.providerId) body.providerId = f.providerId === ROUTED ? null : f.providerId
+      if (f.scheduleEnabled !== s.scheduleEnabled) body.scheduleEnabled = f.scheduleEnabled
+      if (f.scheduleMinutes !== s.scheduleMinutes) body.scheduleMinutes = f.scheduleMinutes
+      if (f.scheduleNote !== s.scheduleNote) body.scheduleNote = f.scheduleNote.trim() || null
       if (Object.keys(body).length === 1) {
         open.value = false
         return
@@ -149,6 +171,17 @@ async function toggle(agent: AiAgentSummary, enabled: boolean) {
   try {
     await updateAgent.mutateAsync({ path: { key: agent.key }, body: { workspaceId, enabled } })
   } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+async function runNow(agent: AiAgentSummary) {
+  try {
+    await runAgent.mutateAsync({ path: { key: agent.key }, body: { workspaceId } })
+    toast.success(t('ai.agents.runStarted', { name: agent.name }))
+  } catch (e) {
+    // The server owns the refusals a client cannot check for itself — a run
+    // already in flight, a spent budget, a disabled provider.
     toast.error((e as Error).message)
   }
 }
@@ -212,6 +245,9 @@ async function remove(agent: AiAgentSummary) {
                 <Badge v-if="agent.missing.length" variant="destructive" class="font-normal">
                   {{ t('ai.agents.missing', { caps: agent.missing.join(', ') }) }}
                 </Badge>
+                <Badge v-if="agent.scheduleEnabled && agent.scheduleMinutes" variant="outline" class="font-normal">
+                  {{ t('ai.agents.everyMinutes', { count: agent.scheduleMinutes }) }}
+                </Badge>
               </span>
               <span class="text-muted-foreground block text-xs">{{ agent.description }}</span>
             </button>
@@ -228,6 +264,17 @@ async function remove(agent: AiAgentSummary) {
             />
           </TableCell>
           <TableCell class="text-right">
+            <Button
+              v-if="canManage && agent.runnable"
+              variant="ghost"
+              size="sm"
+              :disabled="!agent.enabled || runAgent.isPending.value"
+              :aria-label="t('ai.agents.runNow')"
+              :title="t('ai.agents.runNow')"
+              @click="runNow(agent)"
+            >
+              <Play class="size-3.5" />
+            </Button>
             <Button
               v-if="canManage && agent.builtIn && agent.overridden.length"
               variant="ghost"
@@ -305,6 +352,54 @@ async function remove(agent: AiAgentSummary) {
               </SelectContent>
             </Select>
           </label>
+
+          <!--
+            Only for an agent that can actually run unattended. Gating on
+            `runnable` rather than on the `background` surface is deliberate: the
+            surface is a declaration, and a schedule set against a declaration
+            with no executor behind it is a failed job every interval.
+          -->
+          <div v-if="editing?.runnable" class="space-y-3 border-t pt-4">
+            <label class="flex items-start gap-2.5">
+              <Checkbox
+                class="mt-0.5"
+                :model-value="form.scheduleEnabled"
+                @update:model-value="form.scheduleEnabled = $event === true"
+              />
+              <span class="text-sm leading-snug">
+                {{ t('ai.agents.scheduleEnabled') }}
+                <span class="text-muted-foreground mt-0.5 block text-xs">
+                  {{ t('ai.agents.scheduleHint') }}
+                </span>
+              </span>
+            </label>
+
+            <div v-if="form.scheduleEnabled" class="space-y-3 pl-7">
+              <label class="block max-w-48 space-y-1">
+                <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.scheduleMinutes') }}</span>
+                <Input
+                  :model-value="form.scheduleMinutes ?? ''"
+                  type="number"
+                  min="15"
+                  max="20160"
+                  required
+                  @update:model-value="form.scheduleMinutes = $event === '' ? null : Number($event)"
+                />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.scheduleNote') }}</span>
+                <Textarea v-model="form.scheduleNote" rows="2" :placeholder="t('ai.agents.scheduleNotePlaceholder')" />
+              </label>
+              <p class="text-muted-foreground text-xs">
+                {{
+                  editing.lastRunAt
+                    ? t('ai.agents.lastRunAt', { when: relativeTime(editing.lastRunAt) })
+                    : t('ai.agents.neverRun')
+                }}
+                <span v-if="editing.scheduleOwner"> · {{ t('ai.agents.scheduleOwned') }}</span>
+              </p>
+            </div>
+          </div>
         </form>
 
         <DialogFooter class="gap-2">

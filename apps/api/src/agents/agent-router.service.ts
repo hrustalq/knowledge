@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { AgentCapability, AgentSurface, Locale } from '@knowledge/contracts';
 import { AiProvidersService } from '../ai/ai-providers.service.js';
+import { t } from '../i18n/t.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { capabilitiesFor } from './model-capabilities.js';
 
@@ -85,7 +86,7 @@ export class AgentRouterService {
     //    still learns the model cannot do the job.
     if (input.agentKey) {
       const picked = all.find((a) => a.key === input.agentKey);
-      if (picked) return this.decide(picked, 'explicit', 'Explicitly requested.', 1, rejected);
+      if (picked) return this.decide(picked, 'explicit', t('agent.route.explicit'), 1, rejected);
     }
 
     // 2. Deterministic filter: enabled, runs on this surface, and has a model
@@ -94,19 +95,19 @@ export class AgentRouterService {
     for (const agent of all) {
       if (agent.key === 'router') continue; // never routes to itself
       if (!agent.enabled) {
-        rejected.push({ agentKey: agent.key, reason: 'disabled' });
+        rejected.push({ agentKey: agent.key, reason: t('agent.route.disabled') });
         continue;
       }
       if (input.surface && !agent.surfaces.includes(input.surface)) {
-        rejected.push({ agentKey: agent.key, reason: `does not run on the ${input.surface} surface` });
+        rejected.push({ agentKey: agent.key, reason: t('agent.route.wrongSurface', { surface: input.surface }) });
         continue;
       }
       if (!agent.config.enabled) {
-        rejected.push({ agentKey: agent.key, reason: 'no provider configured' });
+        rejected.push({ agentKey: agent.key, reason: t('agent.route.noProvider') });
         continue;
       }
       if (agent.missing.length) {
-        rejected.push({ agentKey: agent.key, reason: `model lacks ${agent.missing.join(', ')}` });
+        rejected.push({ agentKey: agent.key, reason: t('agent.route.modelLacks', { capabilities: agent.missing.join(', ') }) });
         continue;
       }
       candidates.push(agent);
@@ -114,17 +115,17 @@ export class AgentRouterService {
 
     if (candidates.length === 0) {
       const fallback = all.find((a) => a.key === DEFAULT_AGENT) ?? all[0];
-      return this.decide(fallback, 'fallback', 'No agent passed the capability gate.', 0, rejected);
+      return this.decide(fallback, 'fallback', t('agent.route.noCandidate'), 0, rejected);
     }
     if (candidates.length === 1) {
-      return this.decide(candidates[0], 'only-candidate', 'The only agent able to run this.', 1, rejected);
+      return this.decide(candidates[0], 'only-candidate', t('agent.route.onlyCandidate'), 1, rejected);
     }
 
     // 3. No request to classify, or no tiebreak available: rules only.
     if (!input.request?.trim() || !tiebreak) {
       const chosen = candidates.find((a) => a.key === DEFAULT_AGENT) ?? candidates[0];
-      const why = tiebreak ? 'No request text to classify.' : 'No classifier available.';
-      return this.decide(chosen, 'rules', `${why} Fell back to ${chosen.name}.`, 0.5, rejected);
+      const why = tiebreak ? t('agent.route.noRequestText') : t('agent.route.noClassifier');
+      return this.decide(chosen, 'rules', t('agent.route.fellBackTo', { why, agent: chosen.name }), 0.5, rejected);
     }
 
     // 4. Tie broken by a model, over candidates that already passed the gate.
@@ -145,7 +146,7 @@ export class AgentRouterService {
       this.logger.warn(`Agent tiebreak failed, falling back to rules: ${String(error)}`);
     }
     const chosen = candidates.find((a) => a.key === DEFAULT_AGENT) ?? candidates[0];
-    return this.decide(chosen, 'rules', 'Classifier gave no usable answer.', 0.4, rejected);
+    return this.decide(chosen, 'rules', t('agent.route.noUsableAnswer'), 0.4, rejected);
   }
 
   /** The cheapest capable profile, used for the classifier's own call. */

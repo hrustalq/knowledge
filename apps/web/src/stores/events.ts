@@ -2,6 +2,7 @@
 // stores and toasts on revision lifecycle events.
 import { defineStore } from 'pinia'
 import { toast } from 'vue-sonner'
+import type { ComposerTranslation } from 'vue-i18n'
 import type { KnowledgeEvent } from '@knowledge/contracts'
 import { getToken, getWorkspaceId } from '@/lib/api'
 import { useAssistantStore } from '@/stores/assistant'
@@ -15,7 +16,7 @@ export const useEventsStore = defineStore('events', {
     revision: 0,
   }),
   actions: {
-    connect() {
+    connect(t: ComposerTranslation) {
       if (this.connected || import.meta.env.SSR) return
       // AUTH_MODE=api-key: EventSource cannot set headers — the API accepts ?token=.
       const token = getToken()
@@ -35,11 +36,11 @@ export const useEventsStore = defineStore('events', {
         const documents = useDocumentsStore()
         if (event.type === 'revision.indexed') {
           void documents.invalidate()
-          toast.success(`Indexed: ${event.title ?? event.documentId}`)
+          toast.success(t('activity.indexed', { name: event.title ?? event.documentId }))
         } else if (event.type === 'revision.failed') {
-          toast.error(`Indexing failed: ${event.title ?? event.documentId}`)
+          toast.error(t('activity.indexingFailed', { name: event.title ?? event.documentId }))
         } else if (event.type === 'revision.dependent-reindex') {
-          toast.info(`Re-indexing dependent: ${event.title ?? event.documentId}`)
+          toast.info(t('activity.reindexingDependent', { name: event.title ?? event.documentId }))
         } else if (event.type === 'assistant.turn.finished' && event.subjectId) {
           // Reconciles a chat this tab stopped watching (Stop, or a dropped
           // connection) and mirrors turns taken in another tab.

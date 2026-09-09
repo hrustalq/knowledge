@@ -49,7 +49,7 @@ const categoryOptions = computed<AutocompleteOption[]>(() =>
   DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c })),
 )
 const parentOptions = computed<AutocompleteOption[]>(() => [
-  { value: TOP_LEVEL, label: 'Top level' },
+  { value: TOP_LEVEL, label: t('documents.topLevel') },
   ...documents.items.map((d) => ({ value: d.documentId, label: d.title, meta: d.category })),
 ])
 </script>

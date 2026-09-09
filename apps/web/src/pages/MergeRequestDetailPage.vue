@@ -188,7 +188,7 @@ function saveEdit() {
     {
       onSuccess: () => {
         editing.value = false
-        toast.success('Merge request updated')
+        toast.success(t('mr.updated'))
       },
       onError: (e) => toast.error(e.message),
     },
@@ -258,7 +258,7 @@ function onCreateThread(
 function onAiComment(body: string) {
   onCreateThread(body, undefined, false, 'ai')
   if (tab.value !== 'overview') setTab('overview')
-  toast.success('Findings posted to the discussion')
+  toast.success(t('mr.findingsPosted'))
 }
 function onReply(threadId: string, body: string, replyToId: string | null = null) {
   replyThread.mutate(
@@ -282,7 +282,7 @@ function onDeleteComment(threadId: string, commentId: string) {
   deleteComment.mutate(
     { path: { id: id.value, threadId, commentId } },
     {
-      onSuccess: () => toast.success('Comment deleted'),
+      onSuccess: () => toast.success(t('mr.commentDeleted')),
       onError: (e) => toast.error(e.message),
     },
   )
@@ -319,7 +319,7 @@ function refresh() {
           class="ml-auto"
           @click="startEdit"
         >
-          <Pencil class="size-3.5" /> Edit
+          <Pencil class="size-3.5" /> {{ t('common.edit') }}
         </Button>
       </div>
 
@@ -335,20 +335,20 @@ function refresh() {
 
       <p class="text-xs text-muted-foreground">
         <span class="font-medium text-foreground">{{ actorLabel(mr.authorId) }}</span>
-        requested to merge
+        {{ t('mr.requestedToMerge') }}
         <RouterLink
           :to="`/documents/${mr.documentId}?tab=revisions`"
           class="font-mono text-primary hover:underline"
         >{{ mr.sourceBranch }}</RouterLink>
-        into
+        {{ t('mr.into') }}
         <RouterLink
           :to="`/documents/${mr.documentId}?tab=revisions`"
           class="font-mono text-primary hover:underline"
         >{{ mr.targetBranch }}</RouterLink>
-        · opened {{ relativeTime(mr.createdAt) }}
+        · {{ t('mr.openedAgo', { when: relativeTime(mr.createdAt) }) }}
         ·
         <RouterLink :to="`/documents/${mr.documentId}`" class="text-primary hover:underline">
-          view document
+          {{ t('mr.viewDocument') }}
         </RouterLink>
       </p>
     </header>
@@ -412,10 +412,10 @@ function refresh() {
         <div v-else-if="tab === 'review'" class="space-y-3">
           <Skeleton v-if="contentQuery.isPending.value" class="h-64 w-full" />
           <p v-else-if="!sourceHead" class="text-sm text-muted-foreground">
-            The source branch has no finalized revision yet — there is nothing to read.
+            {{ t('mr.noFinalizedRevision') }}
           </p>
           <p v-else-if="!reviewContent" class="text-sm text-muted-foreground">
-            This revision's content could not be loaded.
+            {{ t('mr.contentNotLoaded') }}
           </p>
           <DocumentCanvas
             v-else
@@ -439,13 +439,13 @@ function refresh() {
           <Skeleton v-if="diffQuery.isPending.value" class="h-40 w-full" />
           <template v-else-if="diff">
             <p class="text-xs text-muted-foreground">
-              Comparing merge base against <span class="font-mono">{{ mr.sourceBranch }}</span>
+              {{ t('mr.comparingAgainst') }} <span class="font-mono">{{ mr.sourceBranch }}</span>
               — <span class="text-emerald-600">+{{ diff.summary.additions }}</span>
               <span class="text-red-600">−{{ diff.summary.deletions }}</span>
             </p>
             <div v-if="pendingAnchor" class="rounded-lg border bg-card p-3">
               <p class="mb-2 text-xs font-medium">
-                New comment<template v-if="pendingAnchor.type === 'line'"> on line {{ pendingAnchor.line }}</template>
+                {{ t('mr.newComment') }}<template v-if="pendingAnchor.type === 'line'"> {{ t('mr.onLine', { n: pendingAnchor.line }) }}</template>
                 <button class="ml-2 text-muted-foreground hover:text-foreground" @click="pendingAnchor = null">{{ t('common.cancel') }}</button>
               </p>
               <CommentComposer
@@ -487,13 +487,13 @@ function refresh() {
             <CardHeader><CardTitle class="text-sm">{{ t('mr.structuralChanges') }}</CardTitle></CardHeader>
             <CardContent>
               <p v-if="!diff?.structural || diff.structural.changes.length === 0" class="text-sm text-muted-foreground">
-                No structural (frontmatter / JSON / YAML) changes.
+                {{ t('mr.noStructuralChanges') }}
               </p>
               <div v-else class="space-y-1">
-                <p class="mb-1 text-xs text-muted-foreground">source: {{ diff.structural.source }}</p>
+                <p class="mb-1 text-xs text-muted-foreground">{{ t('mr.source', { name: diff.structural.source }) }}</p>
                 <p v-for="(c, i) in diff.structural.changes" :key="i" class="font-mono text-xs">
-                  <span :class="c.kind === 'added' ? 'text-green-600' : c.kind === 'removed' ? 'text-red-600' : 'text-amber-600'">{{ c.kind }}</span>
-                  {{ c.path || '(root)' }}
+                  <span :class="c.kind === 'added' ? 'text-green-600' : c.kind === 'removed' ? 'text-red-600' : 'text-amber-600'">{{ t(`mr.change${c.kind[0].toUpperCase()}${c.kind.slice(1)}`) }}</span>
+                  {{ c.path || t('mr.root') }}
                 </p>
               </div>
             </CardContent>
@@ -504,7 +504,7 @@ function refresh() {
         <div v-else-if="tab === 'impact'" class="space-y-4">
           <Skeleton v-if="impactQuery.isPending.value" class="h-24 w-full" />
           <p v-else-if="!semantic" class="text-sm text-muted-foreground">
-            No graph projection to compare — both sides must be indexed.
+            {{ t('mr.noGraphProjection') }}
           </p>
           <template v-else>
             <div class="grid gap-4 md:grid-cols-2">
@@ -517,9 +517,9 @@ function refresh() {
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader><CardTitle class="text-sm">Relations</CardTitle></CardHeader>
+                <CardHeader><CardTitle class="text-sm">{{ t('mr.relations') }}</CardTitle></CardHeader>
                 <CardContent class="space-y-1 text-sm">
-                  <p v-if="semantic.relations.added.length === 0 && semantic.relations.removed.length === 0" class="text-muted-foreground">No relation changes.</p>
+                  <p v-if="semantic.relations.added.length === 0 && semantic.relations.removed.length === 0" class="text-muted-foreground">{{ t('mr.noRelationChanges') }}</p>
                   <p v-for="(r, i) in semantic.relations.added" :key="`a-${i}`" class="font-mono text-xs text-green-600">
                     + {{ r.type }} → {{ r.targetKey }} <span class="text-muted-foreground">({{ r.extractor }}, {{ r.confidence }})</span>
                   </p>
@@ -531,10 +531,10 @@ function refresh() {
             </div>
             <Card v-if="semantic.embeddingShift">
               <CardContent class="pt-4 text-sm">
-                Embedding shift
+                {{ t('mr.embeddingShift') }}
                 <span class="font-mono">{{ semantic.embeddingShift.score.toFixed(3) }}</span>
                 <Badge :variant="semantic.embeddingShift.meaningful ? 'default' : 'secondary'" class="ml-2">
-                  {{ semantic.embeddingShift.meaningful ? 'meaningful' : 'minor' }}
+                  {{ semantic.embeddingShift.meaningful ? t('mr.meaningful') : t('mr.minor') }}
                 </Badge>
               </CardContent>
             </Card>

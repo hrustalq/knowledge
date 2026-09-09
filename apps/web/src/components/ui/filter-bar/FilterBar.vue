@@ -107,7 +107,7 @@ function removeAt(index: number) {
       class="h-7 px-2 text-xs"
       @click="emit('update:modelValue', modelValue.filter((f) => fieldsByKey.get(f.key)?.pinned))"
     >
-      Clear
+      {{ t('common.clear') }}
     </Button>
 
     <FilterPopover

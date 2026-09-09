@@ -4,10 +4,12 @@
 // and so the prose still reaches the chunker when this serializes to a
 // GitHub alert blockquote.
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { AlertTriangle, Bookmark, CheckCircle2, Info, XCircle } from 'lucide-vue-next'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
 
+const { t } = useI18n()
 const props = defineProps(nodeViewProps)
 
 const ICONS = {
@@ -35,14 +37,14 @@ const type = computed<PanelType>(() => (props.node.attrs.type as PanelType) ?? '
       class="kn-panel-switch opacity-0 transition-opacity group-hover/panel:opacity-100 focus-within:opacity-100"
     >
       <button
-        v-for="t in PANEL_TYPES"
-        :key="t"
+        v-for="kind in PANEL_TYPES"
+        :key="kind"
         type="button"
         class="kn-panel-swatch"
-        :data-kn-panel-swatch="t"
-        :aria-label="`Change to ${PANEL_META[t].label}`"
-        :aria-pressed="t === type"
-        @click="updateAttributes({ type: t })"
+        :data-kn-panel-swatch="kind"
+        :aria-label="t('panel.changeTo', { label: t(PANEL_META[kind].label) })"
+        :aria-pressed="kind === type"
+        @click="updateAttributes({ type: kind })"
       />
     </div>
   </NodeViewWrapper>

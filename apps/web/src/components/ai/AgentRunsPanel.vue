@@ -1,12 +1,16 @@
 <script setup lang="ts">
-// Background agent runs (docs/features/20). A run proposes; it never writes, so
-// this view is a reading surface — findings with the pages they came from.
+// Background agent runs (docs/features/20). A run proposes; it never writes.
+// The one action here is Propose, which opens a merge request against the page
+// a finding cites — still not a change to the live page, just one a person can
+// review and merge.
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { CircleAlert, CircleCheck, Clock, Loader2, TriangleAlert } from 'lucide-vue-next'
+import { CircleAlert, CircleCheck, Clock, GitPullRequest, Loader2, TriangleAlert } from 'lucide-vue-next'
 import type { AgentFinding, AgentRunSummary, ListAgentRunsResponse } from '@knowledge/contracts'
-import { apiQueryOptions } from '@/api/queries'
+import { toast } from 'vue-sonner'
+import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import { Button } from '@/components/ui/button'
 import { getWorkspaceId } from '@/lib/api'
 import { relativeTime } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +25,36 @@ const runs = computed<AgentRunSummary[]>(
   () => (query.data.value as ListAgentRunsResponse | undefined)?.runs ?? [],
 )
 const counts = computed(() => (query.data.value as ListAgentRunsResponse | undefined)?.counts)
+
+const proposeFinding = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/propose', {
+  invalidates: () => [['/v1/ai/agents/runs'], ['/v1/merge-requests']],
+})
+/** Which finding is mid-flight, so only its own button spins. */
+const proposing = ref<string | null>(null)
+
+/**
+ * An orphan finding is about missing relations rather than page prose, and the
+ * server refuses it — so it is not offered. Everything else is proposable until
+ * it has been proposed once.
+ */
+function canPropose(f: AgentFinding): boolean {
+  return !f.mergeRequestId && f.kind !== 'orphan' && f.documentIds.length > 0
+}
+
+async function propose(run: AgentRunSummary, index: number) {
+  proposing.value = `${run.id}:${index}`
+  try {
+    const res = await proposeFinding.mutateAsync({
+      path: { id: run.id, index },
+      query: { workspaceId },
+    })
+    toast.success(t('ai.runs.proposed', { title: (res as { title: string }).title }))
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    proposing.value = null
+  }
+}
 
 const expanded = ref<string | null>(null)
 function toggle(id: string) {
@@ -107,6 +141,28 @@ const severityClass = (f: AgentFinding) =>
                   {{ f.documentTitles[n] ?? id }}
                 </RouterLink>
               </p>
+            </div>
+            <div class="ml-auto shrink-0">
+              <!-- Already acted on: the link replaces the button, so the same
+                   finding cannot open a second merge request. -->
+              <RouterLink
+                v-if="f.mergeRequestId"
+                :to="`/merge-requests/${f.mergeRequestId}`"
+                class="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
+              >
+                <GitPullRequest class="size-3" /> {{ t('ai.runs.viewProposal') }}
+              </RouterLink>
+              <Button
+                v-else-if="canPropose(f)"
+                variant="outline"
+                size="sm"
+                :disabled="proposing !== null"
+                @click="propose(run, i)"
+              >
+                <Loader2 v-if="proposing === `${run.id}:${i}`" class="size-3.5 animate-spin" />
+                <GitPullRequest v-else class="size-3.5" />
+                {{ t('ai.runs.propose') }}
+              </Button>
             </div>
           </li>
         </ul>

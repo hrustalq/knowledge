@@ -65,7 +65,7 @@ async function submit() {
           <Button class="w-full" type="submit" :disabled="busy">{{ busy ? t('auth.creating') : t('auth.signUp') }}</Button>
         </form>
         <p class="mt-4 text-sm text-muted-foreground">
-          Already have an account?
+          {{ t('auth.alreadyHaveAccount') }}
           <RouterLink class="hover:text-foreground hover:underline" to="/login">{{ t('auth.logIn') }}</RouterLink>
         </p>
       </CardContent>

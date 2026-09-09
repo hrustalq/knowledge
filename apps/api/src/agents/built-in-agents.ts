@@ -17,7 +17,9 @@ import type { AgentCapability, AgentSurface, AiPurpose, BuiltInAgentKey } from '
  */
 export interface BuiltInAgentDefault {
   key: BuiltInAgentKey;
+  /** i18n message key — a module constant cannot call t() (docs/features/18). */
   name: string;
+  /** i18n message key, resolved by AgentRegistryService.merge(). */
   description: string;
   instructions: string;
   tools: string[];
@@ -75,8 +77,8 @@ const UI_TOOLS = ['ask_user', 'render_component'];
 export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefault> = {
   router: {
     key: 'router',
-    name: 'Router',
-    description: 'Picks which agent and which model should answer a request.',
+    name: 'agent.router',
+    description: 'agent.routerDesc',
     // Deterministic filtering happens in code; the model is only ever asked to
     // break a tie between candidates that already passed the capability gate,
     // which is why the prompt describes a choice rather than a capability.
@@ -96,22 +98,27 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
 
   researcher: {
     key: 'researcher',
-    name: 'Researcher',
-    description: 'Answers questions from the workspace, read-only, with citations.',
+    name: 'agent.researcher',
+    description: 'agent.researcherDesc',
     instructions: CHAT_PREAMBLE + ASK_CLAUSE + FORM_CLAUSE + CHAT_RULES,
     // Exactly what definitions('ask', { ui: true }) offers today: read tools,
     // the form, the offer to switch modes, and inline components.
     tools: [...READ_TOOLS, ...UI_TOOLS, 'request_agent_mode'],
     skillIds: [],
     purpose: 'chat',
-    surfaces: ['interactive', 'background'],
+    // Interactive only. A researcher with nobody to answer has no job: every
+    // background pass here (curate, review, build a glossary) is defined by
+    // what it produces, and "research the workspace" produces nothing to act
+    // on. Declaring a surface no executor serves is the defect this feature was
+    // written against, so the declaration goes rather than gaining a stub.
+    surfaces: ['interactive'],
     requires: ['tools'],
   },
 
   author: {
     key: 'author',
-    name: 'Author',
-    description: 'Creates pages and opens merge requests on existing ones.',
+    name: 'agent.author',
+    description: 'agent.authorDesc',
     instructions: CHAT_PREAMBLE + AGENT_CLAUSE + FORM_CLAUSE + CHAT_RULES,
     // definitions('agent', { ui: true }) drops request_agent_mode — offering
     // the switch when the write tools are already on the table is confusing.
@@ -124,8 +131,8 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
 
   reviewer: {
     key: 'reviewer',
-    name: 'Reviewer',
-    description: 'Reviews a draft and reports issues with severities.',
+    name: 'agent.reviewer',
+    description: 'agent.reviewerDesc',
     instructions:
       'You review technical documentation drafts. Respond ONLY with a json object of the shape ' +
       '{"summary": string, "issues": [{"severity": "error"|"warning"|"suggestion", "message": string, "section"?: string}]}. ' +
@@ -140,8 +147,8 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
 
   drafter: {
     key: 'drafter',
-    name: 'Drafter',
-    description: 'Writes or rewrites one page of markdown from an instruction.',
+    name: 'agent.drafter',
+    description: 'agent.drafterDesc',
     instructions:
       'You help write technical documentation in markdown. Follow the instruction; ' +
       'respond with markdown only — no preamble, no code fences around the whole answer.',
@@ -154,8 +161,8 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
 
   planner: {
     key: 'planner',
-    name: 'Planner',
-    description: 'Breaks a page into the list of pages that should follow it.',
+    name: 'agent.planner',
+    description: 'agent.plannerDesc',
     // The workflow executor appends the JSON shape, the item cap and the
     // grounding rule per step, because the cap is a per-step setting. This is
     // only the opening line the step's own `prompt.system` overrides.
@@ -169,8 +176,8 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
 
   extractor: {
     key: 'extractor',
-    name: 'Extractor',
-    description: 'Infers graph relations from a page. Emits stable keys, never translated.',
+    name: 'agent.extractor',
+    description: 'agent.extractorDesc',
     // Intentionally empty: the OpenAI-compatible extractor builds its own
     // prompt around the chunk payload and the allowed edge types, which are a
     // closed SQL-interpolated allowlist. Overriding it from settings would let
@@ -185,8 +192,8 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
 
   glossarist: {
     key: 'glossarist',
-    name: 'Glossarist',
-    description: 'Proposes glossary terms grounded in occurrences on the page.',
+    name: 'agent.glossarist',
+    description: 'agent.glossaristDesc',
     // The term cap is appended by the caller, which owns MAX_SUGGESTIONS.
     instructions:
       'You build the glossary of a team knowledge base. Read the page and list the domain-specific terms ' +
@@ -206,8 +213,8 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
 
   transcriber: {
     key: 'transcriber',
-    name: 'Transcriber',
-    description: 'Transcribes a scanned page image to markdown. Never summarises.',
+    name: 'agent.transcriber',
+    description: 'agent.transcriberDesc',
     // Deliberately NOT localized (docs/features/18): this is a transcription,
     // and the prompt forbids translating. The output must match the language of
     // the image, not the language of whoever started the import.
@@ -224,8 +231,8 @@ Return only the markdown. If the image contains no legible text, return an empty
 
   curator: {
     key: 'curator',
-    name: 'Curator',
-    description: 'Scans the workspace for stale, orphaned and duplicated pages.',
+    name: 'agent.curator',
+    description: 'agent.curatorDesc',
     instructions:
       'You maintain the health of a team knowledge base. You are given a set of pages and asked to find ' +
       'concrete, actionable problems: content that contradicts another page, pages that duplicate each ' +

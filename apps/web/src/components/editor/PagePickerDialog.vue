@@ -79,21 +79,23 @@ function onKeydown(event: KeyboardEvent) {
   <Dialog :open="open" @update:open="emit('update:open', $event)">
     <DialogContent class="sm:max-w-lg">
       <DialogHeader>
-        <DialogTitle>Link to a page</DialogTitle>
+        <DialogTitle>{{ t('toolbar.linkToPage') }}</DialogTitle>
         <DialogDescription>
-          Inserts a reference chip. Typing <strong>@</strong> in the page does the same thing inline.
+          <i18n-t keypath="editor.pagePickerDescription" tag="span" scope="global">
+            <template #at><strong>@</strong></template>
+          </i18n-t>
         </DialogDescription>
       </DialogHeader>
 
       <Input
         ref="inputEl"
         v-model="query"
-        placeholder="Search pages…"
+        :placeholder="t('editor.searchPages')"
         autocomplete="off"
         @keydown="onKeydown"
       />
 
-      <ul class="quiet-scroll max-h-72 overflow-y-auto" role="listbox" aria-label="Pages">
+      <ul class="quiet-scroll max-h-72 overflow-y-auto" role="listbox" :aria-label="t('editor.pagesList')">
         <li v-for="(page, i) in matches" :key="page.documentId" role="option" :aria-selected="i === index">
           <button
             type="button"

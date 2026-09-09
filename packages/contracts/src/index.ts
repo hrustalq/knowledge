@@ -2539,6 +2539,13 @@ export interface AiAgentSummary {
   maxToolCalls: number;
   timeoutMs: number;
   surfaces: AgentSurface[];
+  /**
+   * A `background` surface says an agent *may* run unattended; this says one
+   * actually can — a background executor exists for it. The two differ while
+   * the executor catalogue is smaller than the surface declaration, and the UI
+   * must follow this one, or it offers a Run button the API refuses.
+   */
+  runnable: boolean;
   requires: AgentCapability[];
   /**
    * Required capabilities the routed model does not offer. Non-empty means this
@@ -2568,7 +2575,14 @@ export interface ListAiAgentsResponse {
 export const AGENT_RUN_STATUSES = ['pending', 'running', 'succeeded', 'failed', 'cancelled'] as const;
 export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
 
-export const AGENT_RUN_TRIGGERS = ['manual', 'schedule', 'event'] as const;
+/**
+ * How a run was started. Deliberately only what the code emits: an event
+ * trigger is a plausible third value, but a closed vocabulary that promises one
+ * nothing produces is the defect this feature was written against
+ * (`WorkflowStep.tools`, declared and ignored). Add `'event'` back together
+ * with the service that emits it, and with WorkflowTriggerService's guards.
+ */
+export const AGENT_RUN_TRIGGERS = ['manual', 'schedule'] as const;
 export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
 
 export const AGENT_FINDING_KINDS = [
@@ -2595,6 +2609,28 @@ export interface AgentFinding {
   detail: string;
   documentIds: string[];
   documentTitles: string[];
+  /**
+   * The merge request this finding was turned into, once somebody proposed a
+   * fix for it. A finding is still only ever a proposal — this records that a
+   * person acted on it, and is what stops the same finding opening a second
+   * merge request.
+   */
+  mergeRequestId?: string | null;
+  /**
+   * Claimed the moment a proposal starts, before the model is called, so two
+   * simultaneous presses cannot both open one. Cleared again if the proposal
+   * fails.
+   */
+  proposedAt?: string | null;
+}
+
+// POST /v1/ai/agents/runs/:id/findings/:index/propose
+export interface ProposeAgentFindingResponse {
+  mergeRequestId: string;
+  documentId: string;
+  documentTitle: string;
+  branch: string;
+  title: string;
 }
 
 export interface AgentRunSummary {

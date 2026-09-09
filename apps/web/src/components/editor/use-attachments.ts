@@ -5,6 +5,7 @@
  * document revisions do.
  */
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import type { Editor } from '@tiptap/core'
 import type {
@@ -26,6 +27,8 @@ export interface UploadTask {
 const ACCEPTED = new Set<string>(ATTACHMENT_CONTENT_TYPES)
 
 export function useAttachments(resolveDocumentId: () => Promise<string | null>) {
+  const { t } = useI18n()
+
   const uploads = ref<UploadTask[]>([])
 
   async function uploadOne(file: File, documentId: string): Promise<AttachmentSummary | null> {
@@ -63,7 +66,7 @@ export function useAttachments(resolveDocumentId: () => Promise<string | null>) 
       return done.attachment
     } catch (e) {
       finish()
-      toast.error(`${file.name}: ${(e as Error).message}`)
+      toast.error(t('editor.attachmentFailed', { name: file.name, error: (e as Error).message }))
       return null
     }
   }
@@ -73,7 +76,9 @@ export function useAttachments(resolveDocumentId: () => Promise<string | null>) 
     const accepted = files.filter((f) => ACCEPTED.has(f.type))
     const rejected = files.filter((f) => !ACCEPTED.has(f.type))
     for (const file of rejected) {
-      toast.error(`${file.name}: ${file.type || 'this file type'} is not an accepted attachment`)
+      toast.error(
+        t('editor.attachmentTypeRejected', { name: file.name, type: file.type || t('editor.thisFileType') }),
+      )
     }
     if (accepted.length === 0) return
 

@@ -51,17 +51,17 @@ const isLoading = computed(() => props.loading ?? (!!props.documentId && documen
       <SearchX class="size-8 text-muted-foreground/50" />
       <p class="mt-3 font-medium">{{ t('mr.noMatches') }}</p>
       <p class="mt-1 text-sm text-muted-foreground">
-        No merge request here matches the current search and filters.
+        {{ t('mr.noneMatchFilters') }}
       </p>
       <Button variant="outline" size="sm" class="mt-4" @click="$emit('clear')">
-        Clear search and filters
+        {{ t('mr.clearSearchFilters') }}
       </Button>
     </template>
     <template v-else>
       <GitPullRequestArrow class="size-8 text-muted-foreground/50" />
       <p class="mt-3 font-medium">{{ t('mr.noMergeRequests') }}</p>
       <p class="mt-1 text-sm text-muted-foreground">
-        Branch a document and open a merge request to propose changes.
+        {{ t('mr.branchToPropose') }}
       </p>
     </template>
   </div>

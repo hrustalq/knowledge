@@ -91,15 +91,20 @@ A background run stores `created_by` **NOT NULL** and rehydrates a real
 `AccessService.requireRole` an HTTP request asks. A disabled or demoted owner
 fails the run; there is no service principal for it to become.
 
-That is deliberately stricter than `workflow_runs.createdBy`, and the reason is
-a live defect this feature was careful not to repeat. A trigger-started workflow
-run sets no `createdBy`, so its model call bills `userId: run.createdBy ??
-'workflow'` — a non-UUID into `ai_usage.user_id @db.Uuid`, whose insert then
-fails and is swallowed. **Auto-triggered spend is invisible.** Relatedly,
-`assertWithinBudget` was wired only into request paths, so no background work
-checked a quota at all. Agent runs check it twice: at enqueue, and again in the
-processor, because a queued run can wait long enough for the month's budget to
-be spent by something else.
+This was written against a defect in `workflow_runs.createdBy`, which was
+nullable: a trigger-started run had no owner, so its model call billed `userId:
+run.createdBy ?? 'workflow'` — a non-UUID into `ai_usage.user_id @db.Uuid`,
+whose insert failed and was swallowed, making auto-triggered spend invisible.
+Relatedly, `assertWithinBudget` was wired only into request paths, so no
+background work checked a quota at all.
+
+Feature 17 has since been brought to this rule rather than left as the
+counter-example: its column is NOT NULL, a triggered run executes as the
+definition's author, and a definition without one does not auto-start. The
+shared half lives in `AccessService.principalFor`, so the two processors cannot
+drift apart on what a stored `created_by` means. Agent runs still check the
+budget twice — at enqueue and again in the processor — because a queued run can
+wait long enough for the month's budget to be spent by something else.
 
 `AUTH_MODE=none` is the one accommodation: the dev principal's id is the zeros
 stub and it has no `users` row, so it is short-circuited to `DEV_PRINCIPAL` —

@@ -35,12 +35,13 @@ export const KN = {
 export const PANEL_TYPES = ['note', 'tip', 'important', 'warning', 'caution'] as const;
 export type PanelType = (typeof PANEL_TYPES)[number];
 
+/** `label` is an i18n message key — resolve it with `t()` at the render site. */
 export const PANEL_META: Record<PanelType, { label: string; icon: string; hue: string }> = {
-  note: { label: 'Info', icon: 'info', hue: 'var(--kn-panel-note)' },
-  tip: { label: 'Success', icon: 'check', hue: 'var(--kn-panel-tip)' },
-  important: { label: 'Note', icon: 'bookmark', hue: 'var(--kn-panel-important)' },
-  warning: { label: 'Warning', icon: 'alert', hue: 'var(--kn-panel-warning)' },
-  caution: { label: 'Error', icon: 'x', hue: 'var(--kn-panel-caution)' },
+  note: { label: 'panel.note', icon: 'info', hue: 'var(--kn-panel-note)' },
+  tip: { label: 'panel.tip', icon: 'check', hue: 'var(--kn-panel-tip)' },
+  important: { label: 'panel.important', icon: 'bookmark', hue: 'var(--kn-panel-important)' },
+  warning: { label: 'panel.warning', icon: 'alert', hue: 'var(--kn-panel-warning)' },
+  caution: { label: 'panel.caution', icon: 'x', hue: 'var(--kn-panel-caution)' },
 };
 
 export function isPanelType(value: string): value is PanelType {

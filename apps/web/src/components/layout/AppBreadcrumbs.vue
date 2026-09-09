@@ -52,6 +52,8 @@ const SETTINGS: Record<string, string> = {
   '/settings/ai': 'nav.ai',
   '/settings/glossary': 'nav.glossary',
   '/settings/workflows': 'nav.workflows',
+  '/settings/connectors': 'nav.connectors',
+  '/settings/docs': 'nav.docs',
 }
 
 /** Pages live inside a project, so page trails lead with the active project. */
@@ -78,6 +80,13 @@ const crumbs = computed<Crumb[]>(() => {
     ]
   }
   if (path.startsWith('/settings')) {
+    // Docs stop at the section rather than naming the article. Resolving the
+    // title would mean importing the docs registry — whose eager glob holds
+    // every article body — into the layout, so the whole manual would ship in
+    // the main chunk to label one crumb the <h1> below already carries.
+    if (path.startsWith('/settings/docs/')) {
+      return [{ label: t('nav.settings'), to: '/settings' }, { label: t('nav.docs'), to: '/settings/docs' }]
+    }
     if (path.startsWith('/settings/projects/')) {
       const id = route.params.id as string
       const name = projects.items.find((p) => p.projectId === id)?.name ?? id.slice(0, 8)

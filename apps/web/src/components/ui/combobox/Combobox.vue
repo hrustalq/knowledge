@@ -31,6 +31,9 @@ import {
 } from 'reka-ui'
 import { Check, Plus, Search } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 export interface ComboboxOption {
   /** Stable identity; what `modelValue` carries. */
@@ -128,16 +131,18 @@ function requestCreate() {
         <ComboboxInput
           v-model="search"
           auto-focus
-          :placeholder="searchPlaceholder ?? `Search ${label.toLowerCase()}…`"
+          :placeholder="searchPlaceholder ?? t('common.searchIn', { label: label.toLowerCase() })"
           class="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-9 text-[13px] outline-none"
         />
       </div>
 
       <ComboboxViewport class="quiet-scroll min-h-0 flex-1 overflow-y-auto p-1">
         <ComboboxEmpty class="text-muted-foreground px-3 py-6 text-center text-xs">
-          <template v-if="options.length === 0">No {{ label.toLowerCase() }} yet.</template>
+          <template v-if="options.length === 0">{{ t('common.noneYet', { label: label.toLowerCase() }) }}</template>
           <template v-else>
-            No match for <span class="text-foreground font-medium">“{{ search }}”</span>
+            <i18n-t keypath="common.noMatchFor" tag="span" scope="global">
+              <template #query><span class="text-foreground font-medium">“{{ search }}”</span></template>
+            </i18n-t>
           </template>
         </ComboboxEmpty>
 

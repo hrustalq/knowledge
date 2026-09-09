@@ -112,7 +112,7 @@ async function onCreated(created: ScopeCreated) {
         <Skeleton v-for="i in 5" :key="i" class="h-8 w-full" />
       </div>
       <p v-else-if="projects.length === 0" class="p-3 text-xs text-muted-foreground">
-        No projects yet.
+        {{ t('project.noneYet') }}
       </p>
       <!-- Virtualized roster: the only part of the rail that scrolls. -->
       <div v-else v-bind="containerProps" class="min-h-0 flex-1">
@@ -147,7 +147,7 @@ async function onCreated(created: ScopeCreated) {
           @click="creating = 'project'"
         >
           <Plus class="size-4" />
-          New project
+          {{ t('project.new') }}
         </Button>
       </div>
     </div>

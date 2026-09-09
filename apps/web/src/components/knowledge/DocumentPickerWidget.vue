@@ -103,7 +103,7 @@ const filteredAll = computed(() => {
   <ResponsivePopover
     v-model:open="isOpen"
     :title="t('picker.applyDocuments')"
-    description="Ground this message in pages that already exist in the workspace."
+    :description="t('chat.groundInPages')"
     panel-class="w-80 p-2"
   >
     <template #trigger>
@@ -134,7 +134,7 @@ const filteredAll = computed(() => {
         <p v-if="!documents.loaded" class="text-muted-foreground px-2 py-1.5 text-xs">{{ t('picker.loadingPages') }}</p>
         <template v-else>
           <p v-if="filteredRecent.length > 0" class="text-muted-foreground px-2 pt-1 pb-0.5 text-[11px] font-medium">
-            Recent
+            {{ t('chat.recent') }}
           </p>
           <button
             v-for="d in filteredRecent"
@@ -149,7 +149,7 @@ const filteredAll = computed(() => {
           </button>
 
           <p v-if="filteredAll.length > 0" class="text-muted-foreground px-2 pt-2 pb-0.5 text-[11px] font-medium">
-            All pages
+            {{ t('chat.allPages') }}
           </p>
           <button
             v-for="d in filteredAll"

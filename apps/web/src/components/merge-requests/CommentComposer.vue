@@ -180,7 +180,7 @@ function cancel() {
         class="ml-auto"
         @click="cancel"
       >
-        Cancel
+        {{ t('common.cancel') }}
       </Button>
       <!-- GitLab's split action. The primary is the everyday one — most
            remarks are remarks — and the one that opens an obligation is a
@@ -219,7 +219,7 @@ function cancel() {
               <span>
                 <span class="block font-medium">{{ t('mr.startThread') }}</span>
                 <span class="block text-xs text-muted-foreground">
-                  Stays open until someone resolves it.
+                  {{ t('mr.staysOpen') }}
                 </span>
               </span>
             </DropdownMenuItem>

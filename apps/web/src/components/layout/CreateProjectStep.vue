@@ -56,7 +56,7 @@ async function submit() {
         for="create-project-step-name"
         class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
       >
-        Project name
+        {{ t('nav.projectName') }}
       </label>
       <Input
         id="create-project-step-name"
@@ -67,7 +67,7 @@ async function submit() {
         autocomplete="off"
       />
       <p class="text-muted-foreground text-xs">
-        Goes into {{ workspaceName ?? 'the new workspace' }}. You can add more later.
+        Goes into {{ workspaceName ?? t('nav.theNewWorkspace') }}. You can add more later.
       </p>
     </div>
 

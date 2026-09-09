@@ -77,7 +77,7 @@ async function confirmDelete() {
   try {
     await assistant.deleteThread(thread.id)
     deleting.value = null
-    toast.success('Chat deleted')
+    toast.success(t('chat.deleted'))
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -116,7 +116,7 @@ async function confirmDelete() {
       <DialogHeader>
         <DialogTitle>{{ t('chat.renameChat') }}</DialogTitle>
         <DialogDescription>
-          Changes the label in the chat list. Clear it to go back to the name taken from the first message.
+          {{ t('chat.renameHint') }}
         </DialogDescription>
       </DialogHeader>
       <Input v-model="renameDraft" :placeholder="t('chat.chatName')" autofocus @keyup.enter="confirmRename" />
@@ -132,8 +132,7 @@ async function confirmDelete() {
       <DialogHeader>
         <DialogTitle>{{ t('chat.deleteChat') }}</DialogTitle>
         <DialogDescription>
-          “{{ deleting ? threadLabel(deleting) : '' }}” and its whole message history will be removed, and this
-          cannot be undone. Pages the assistant created and merge requests it opened are not affected.
+          {{ t('chat.deleteChatBody', { name: deleting ? threadLabel(deleting) : '' }) }}
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>

@@ -206,11 +206,11 @@ async function startNewThread() {
         <DropdownMenuContent align="end" class="w-40">
           <DropdownMenuItem @select="emit('rename', assistant.activeThread!)">
             <Pencil class="size-3.5" />
-            Rename
+            {{ t('chat.rename') }}
           </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" @select="emit('delete', assistant.activeThread!)">
             <Trash2 class="size-3.5" />
-            Delete
+            {{ t('chat.delete') }}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

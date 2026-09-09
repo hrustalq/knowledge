@@ -8,6 +8,9 @@ import { Download, ExternalLink, File, FileText, Maximize2, Minimize2, Trash2 } 
 import { Collapse } from '@/components/ui/collapse'
 import { resolveAssetUrl } from '@/lib/api'
 import { attachmentKind, formatBytes } from '@/lib/markdown/nodes'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps(nodeViewProps)
 const expanded = ref(true)
@@ -31,18 +34,18 @@ const downloadHref = computed(() => {
         <button
           v-if="kind === 'pdf'"
           type="button"
-          :aria-label="expanded ? 'Collapse preview' : 'Expand preview'"
+          :aria-label="expanded ? t('editor.collapsePreview') : t('editor.expandPreview')"
           @click="expanded = !expanded"
         >
           <component :is="expanded ? Minimize2 : Maximize2" class="size-3.5" />
         </button>
-        <a :href="href" target="_blank" rel="noopener noreferrer" aria-label="Open in a new tab">
+        <a :href="href" target="_blank" rel="noopener noreferrer" :aria-label="t('editor.openInNewTab')">
           <ExternalLink class="size-3.5" />
         </a>
-        <a :href="downloadHref" :download="node.attrs.filename" aria-label="Download">
+        <a :href="downloadHref" :download="node.attrs.filename" :aria-label="t('editor.download')">
           <Download class="size-3.5" />
         </a>
-        <button v-if="editor.isEditable" type="button" aria-label="Remove attachment" @click="deleteNode()">
+        <button v-if="editor.isEditable" type="button" :aria-label="t('editor.removeAttachment')" @click="deleteNode()">
           <Trash2 class="size-3.5" />
         </button>
       </div>
@@ -55,12 +58,12 @@ const downloadHref = computed(() => {
         class="kn-file-pdf"
         :data="href"
         type="application/pdf"
-        :aria-label="`Preview of ${node.attrs.filename}`"
+        :aria-label="t('editor.previewOf', { name: node.attrs.filename })"
       >
         <div class="kn-file-fallback">
-          This browser cannot display PDFs inline.
+          {{ t('editor.pdfUnsupported') }}
           <a :href="downloadHref" :download="node.attrs.filename">
-            Download {{ node.attrs.filename }}
+            {{ t('editor.downloadNamed', { name: node.attrs.filename }) }}
           </a>
         </div>
       </object>

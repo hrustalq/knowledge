@@ -22,7 +22,7 @@ import { SearchService } from '../search/search.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import type { Principal } from '../auth/principal.js';
 import { AssistantClient, type AiCallContext } from './assistant.client.js';
-import { AiConfigService, type ResolvedAiConfig } from '../ai/ai-config.service.js';
+import { AiConfigService } from '../ai/ai-config.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AiPluginsService } from '../ai/ai-plugins.service.js';
@@ -129,11 +129,11 @@ export class AssistantService {
    * response rather than an error.
    */
   /**
-   * Config for the chat paths, which still resolve by purpose rather than by
-   * agent. Chat's provider chain (thread pin -> chat route -> inline -> env) is
-   * left exactly as it was: the agent supplies the *instructions* for a turn,
-   * and letting it also supply the provider would silently change which model a
-   * pinned thread runs on. That link is Phase C's, together with the router.
+   * Config for `ask`, the one entry point not backed by an agent (see the NOTE
+   * in {@link ask}). The chat paths went through here too until they resolved
+   * their agent, whose config then replaced this one for the actual call — a
+   * second `resolveFor` round trip per turn whose result was thrown away. They
+   * now open on the agent directly ({@link openTurn}).
    */
   private async openCall(
     workspaceId: string,
@@ -247,11 +247,15 @@ export class AssistantService {
     }
 
     // NOTE (docs/features/20): this endpoint keeps its own system prompt rather
-    // than taking the researcher agent's. It is the same *role* — read-only,
-    // grounded, cites its pages — but a materially different prompt: one-shot
-    // and page-scoped, with a stricter injection clause and no ask_user. Giving
-    // it the researcher's chat prompt would be a behaviour change, and giving
-    // it an eleventh built-in key would be roster drift. Left for a decision.
+    // than taking the researcher agent's, and that is a decision, not an
+    // oversight. It is the same *role* — read-only, grounded, cites its pages —
+    // but a materially different prompt: one-shot and page-scoped, with a
+    // stricter injection clause and no ask_user. Giving it the researcher's
+    // chat prompt would be a behaviour change; giving it an eleventh built-in
+    // key would put two agents in the roster whose descriptions differ only in
+    // "one-shot", which is roster drift for one call site. The cost is that no
+    // admin can edit this prompt — when somebody asks to, the answer is a
+    // `page-answerer` built-in, and this comment is what it replaces.
 
 
     let markdown = '';
@@ -454,12 +458,26 @@ export class AssistantService {
     const userMessage = await this.threads.appendMessage(threadId, 'user', dto.content);
     await this.threads.autoTitle(threadId, dto.content);
 
-    // Budget refusals must not leave the user's message stranded with no
-    // reply, so the 429 is raised only after the message is persisted — the
-    // caller sees their own turn plus the error, and can retry once an admin
-    // raises the budget.
-    const call = await this.openCall(thread.workspaceId, principal, 'chat', threadId, thread.providerId);
-    if (!call) {
+    // Agent mode is a workspace-level switch, so it comes from the base config
+    // — cached per workspace, and copied through `resolveFor` unchanged. An
+    // admin can take Agent mode away (feature 12); a client asking for it
+    // anyway is downgraded rather than refused.
+    const base = await this.aiConfig.resolve(thread.workspaceId);
+    const mode: AssistantChatMode = base.agentModeEnabled ? (dto.mode ?? 'ask') : 'ask';
+
+    // The agent is resolved before the disabled check rather than after, so the
+    // check reads the config the call will actually use. For chat that is the
+    // same resolution the purpose-based one performed (same 'chat' purpose,
+    // same thread pin) — it is simply no longer done twice.
+    const agent = await this.resolveTurnAgent(thread, dto, mode);
+    // Deliberately `config.enabled` and not `agent.enabled`: this is the
+    // provider check `openCall` made, and it is the one this message describes.
+    // A *disabled agent* reaching here can only be the mode's fallback, which
+    // `resolveTurnAgent` returns unfiltered — reporting that as "the assistant
+    // is disabled" would be wrong, and refusing the turn over it is a
+    // behaviour change that belongs with a decision about what disabling a
+    // built-in chat agent should mean (docs/features/20-agents-todo.md).
+    if (!agent.config.enabled) {
       const assistantMessage = await this.threads.appendMessage(
         threadId,
         'assistant',
@@ -468,6 +486,19 @@ export class AssistantService {
       return { enabled: false, userMessage, response: { enabled: false, userMessage, assistantMessage } };
     }
 
+    // Budget refusals must not leave the user's message stranded with no
+    // reply, so the 429 is raised only after the message is persisted — the
+    // caller sees their own turn plus the error, and can retry once an admin
+    // raises the budget.
+    await this.aiUsage.assertWithinBudget(thread.workspaceId, principal.userId);
+    const call: AiCallContext = {
+      config: agent.config,
+      userId: principal.userId,
+      operation: 'chat',
+      threadId,
+      locale: principal.locale,
+    };
+
     await this.events.publish({
       type: 'assistant.turn.started',
       workspaceId: thread.workspaceId,
@@ -475,7 +506,7 @@ export class AssistantService {
       actor: principal.userId,
     });
 
-    const turn = await this.prepareTurn(thread, dto, userMessage.id, call.config);
+    const turn = await this.prepareTurn(thread, dto, userMessage.id, agent, mode);
     return { enabled: true, userMessage, thread, turn, call };
   }
 
@@ -626,17 +657,21 @@ export class AssistantService {
     return this.agents.resolve(thread.workspaceId, fallbackKey, thread.providerId);
   }
 
-  /** Builds the prompt, the grounding blocks and the per-turn accumulators. */
+  /**
+   * Builds the prompt, the grounding blocks and the per-turn accumulators.
+   *
+   * The agent and the mode are decided by {@link openTurn} and passed in: the
+   * mode selects the agent, and the agent's config decides whether the turn can
+   * run at all, so both are settled before any grounding is fetched.
+   */
   private async prepareTurn(
     thread: AssistantThread,
     dto: PostAssistantMessageDto,
     userMessageId: string,
-    config: ResolvedAiConfig,
+    agent: ResolvedAgent,
+    mode: AssistantChatMode,
   ): Promise<PreparedTurn> {
     const threadId = thread.id;
-    // An admin can take Agent mode away for the whole workspace (feature 12);
-    // a client asking for it anyway is downgraded rather than refused.
-    const mode = config.agentModeEnabled ? (dto.mode ?? 'ask') : 'ask';
     const attachmentsBlock = (dto.attachments ?? [])
       .slice(0, 3)
       .map((a) => `<attachment filename=${JSON.stringify(a.filename)}>\n${a.content.slice(0, 20_000)}\n</attachment>`)
@@ -682,12 +717,10 @@ export class AssistantService {
       )
       .join('\n\n');
 
-    // The turn's static instructions now come from the agent the mode selects
+    // The turn's static instructions come from the agent the mode selected
     // (docs/features/20) — Ask mode is the researcher, Agent mode the author.
     // Everything appended below is *grounding*, which is per-turn and stays
     // here: the agent describes the role, the call site supplies the material.
-    const agent = await this.resolveTurnAgent(thread, dto, mode);
-
     const system =
       agent.instructions +
       (groundingDoc

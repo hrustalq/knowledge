@@ -23,10 +23,11 @@ const { t } = useI18n()
 const props = defineProps<{ canManage: boolean }>()
 
 const workspaceId = getWorkspaceId()
+// Message keys, resolved with t() at the render site (docs/features/18).
 const RANGES = [
-  { days: 7, label: '7 days' },
-  { days: 30, label: '30 days' },
-  { days: 90, label: '90 days' },
+  { days: 7, label: 'ai.range.d7' },
+  { days: 30, label: 'ai.range.d30' },
+  { days: 90, label: 'ai.range.d90' },
 ] as const
 const days = ref<number>(30)
 const groupBy = ref<'user' | 'model'>('user')
@@ -121,13 +122,13 @@ async function saveBudget(userId: string) {
   const raw = budgetDraft.value.trim()
   const parsed = raw ? Number(raw) : null
   if (raw && !Number.isFinite(parsed)) {
-    toast.error('Budget must be a number of tokens, or empty for unlimited')
+    toast.error(t('ai.budgetMustBeNumber'))
     return
   }
   try {
     await setBudget.mutateAsync({ path: { userId }, body: { workspaceId, monthlyTokenBudget: parsed } })
     editingUser.value = null
-    toast.success('Budget updated')
+    toast.success(t('ai.budgetUpdated'))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -151,7 +152,7 @@ function labelFor(userId: string): string {
           size="sm"
           @click="days = r.days"
         >
-          {{ r.label }}
+          {{ t(r.label) }}
         </Button>
       </div>
       <div class="flex gap-1">
@@ -163,7 +164,7 @@ function labelFor(userId: string): string {
           class="capitalize"
           @click="groupBy = g"
         >
-          by {{ g }}
+          {{ t(`ai.groupBy.${g}`) }}
         </Button>
       </div>
     </div>
@@ -242,16 +243,16 @@ function labelFor(userId: string): string {
 
         <!-- breakdown -->
         <div>
-          <p class="text-muted-foreground mb-2 text-xs font-medium">Breakdown by {{ groupBy }}</p>
+          <p class="text-muted-foreground mb-2 text-xs font-medium">{{ t(`ai.breakdownBy.${groupBy}`) }}</p>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead class="capitalize">{{ groupBy }}</TableHead>
+                <TableHead>{{ t(`ai.groupHead.${groupBy}`) }}</TableHead>
                 <TableHead class="text-right">{{ t('ai.calls') }}</TableHead>
                 <TableHead class="text-right">{{ t('ai.prompt') }}</TableHead>
                 <TableHead class="text-right">{{ t('ai.completion') }}</TableHead>
-                <TableHead class="text-right">Total</TableHead>
-                <TableHead class="text-right">Est. cost</TableHead>
+                <TableHead class="text-right">{{ t('ai.total') }}</TableHead>
+                <TableHead class="text-right">{{ t('ai.estCost') }}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -259,7 +260,7 @@ function labelFor(userId: string): string {
                 <TableCell class="font-medium">
                   {{ b.label }}
                   <Badge v-if="b.errors > 0" variant="outline" class="text-destructive ml-1.5 font-normal">
-                    {{ b.errors }} failed
+                    {{ t('ai.nFailed', { n: b.errors }) }}
                   </Badge>
                 </TableCell>
                 <TableCell class="text-right tabular-nums">{{ b.calls }}</TableCell>
@@ -281,15 +282,15 @@ function labelFor(userId: string): string {
     <!-- budgets -->
     <section v-if="budgetData" class="space-y-3 border-t pt-6">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-sm font-semibold">Budgets this month</h2>
+        <h2 class="text-sm font-semibold">{{ t('ai.budgetsThisMonth') }}</h2>
         <Badge v-if="!budgetData.workspace.enforced" variant="outline" class="font-normal">
-          not enforced — tracking only
+          {{ t('ai.notEnforced') }}
         </Badge>
       </div>
 
       <div v-if="budgetData.workspace.monthlyTokenBudget !== null" class="max-w-md space-y-1.5">
         <div class="flex justify-between text-xs">
-          <span class="text-muted-foreground">Workspace</span>
+          <span class="text-muted-foreground">{{ t('ai.workspace') }}</span>
           <span class="tabular-nums">
             {{ fmtTokens(budgetData.workspace.usedTokens) }} /
             {{ fmtTokens(budgetData.workspace.monthlyTokenBudget) }}
@@ -311,9 +312,9 @@ function labelFor(userId: string): string {
       <Table v-if="budgetData.users.length > 0">
         <TableHeader>
           <TableRow>
-            <TableHead>User</TableHead>
-            <TableHead class="text-right">Used</TableHead>
-            <TableHead class="w-64">Monthly budget</TableHead>
+            <TableHead>{{ t('ai.user') }}</TableHead>
+            <TableHead class="text-right">{{ t('ai.used') }}</TableHead>
+            <TableHead class="w-64">{{ t('ai.monthlyBudget') }}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -322,9 +323,9 @@ function labelFor(userId: string): string {
             <TableCell class="text-right tabular-nums">{{ fmtTokens(row.usedTokens) }}</TableCell>
             <TableCell>
               <div v-if="editingUser === row.userId" class="flex items-center gap-2">
-                <Input v-model="budgetDraft" placeholder="unlimited" class="h-8" />
-                <Button size="sm" :disabled="setBudget.isPending.value" @click="saveBudget(row.userId)">Save</Button>
-                <Button size="sm" variant="ghost" @click="editingUser = null">Cancel</Button>
+                <Input v-model="budgetDraft" :placeholder="t('ai.unlimited')" class="h-8" />
+                <Button size="sm" :disabled="setBudget.isPending.value" @click="saveBudget(row.userId)">{{ t('common.save') }}</Button>
+                <Button size="sm" variant="ghost" @click="editingUser = null">{{ t('common.cancel') }}</Button>
               </div>
               <button
                 v-else
@@ -334,16 +335,16 @@ function labelFor(userId: string): string {
                 @click="startEdit(row)"
               >
                 <span class="tabular-nums">
-                  {{ row.monthlyTokenBudget === null ? 'unlimited' : fmtTokens(row.monthlyTokenBudget) }}
+                  {{ row.monthlyTokenBudget === null ? t('ai.unlimited') : fmtTokens(row.monthlyTokenBudget) }}
                 </span>
-                <Badge v-if="row.overridden" variant="secondary" class="ml-1.5 font-normal">override</Badge>
+                <Badge v-if="row.overridden" variant="secondary" class="ml-1.5 font-normal">{{ t('ai.override') }}</Badge>
               </button>
             </TableCell>
           </TableRow>
         </TableBody>
       </Table>
       <p v-else class="text-muted-foreground text-sm">
-        No per-user spend yet. Set a workspace default in Configuration.
+        {{ t('ai.noPerUserSpend') }}
       </p>
     </section>
   </div>

@@ -1,0 +1,41 @@
+{
+  "router": "Router",
+  "routerDesc": "Picks which agent and which model should answer a request.",
+  "researcher": "Researcher",
+  "researcherDesc": "Answers questions from the workspace, read-only, with citations.",
+  "author": "Author",
+  "authorDesc": "Creates pages and opens merge requests on existing ones.",
+  "reviewer": "Reviewer",
+  "reviewerDesc": "Reviews a draft and reports issues with severities.",
+  "drafter": "Drafter",
+  "drafterDesc": "Writes or rewrites one page of markdown from an instruction.",
+  "planner": "Planner",
+  "plannerDesc": "Breaks a page into the list of pages that should follow it.",
+  "extractor": "Extractor",
+  "extractorDesc": "Infers graph relations from a page. Emits stable keys, never translated.",
+  "glossarist": "Glossarist",
+  "glossaristDesc": "Proposes glossary terms grounded in occurrences on the page.",
+  "transcriber": "Transcriber",
+  "transcriberDesc": "Transcribes a scanned page image to markdown. Never summarises.",
+  "curator": "Curator",
+  "curatorDesc": "Scans the workspace for stale, orphaned and duplicated pages.",
+  "route": {
+    "explicit": "Explicitly requested.",
+    "disabled": "disabled",
+    "wrongSurface": "does not run on the {surface} surface",
+    "noProvider": "no provider configured",
+    "modelLacks": "model lacks {capabilities}",
+    "noCandidate": "No agent passed the capability gate.",
+    "onlyCandidate": "The only agent able to run this.",
+    "noRequestText": "No request text to classify.",
+    "noClassifier": "No classifier available.",
+    "fellBackTo": "{why} Fell back to {agent}.",
+    "noUsableAnswer": "Classifier gave no usable answer."
+  },
+  "curation": {
+    "noPages": "This workspace has no pages yet.",
+    "orphanTitle": "\"{title}\" is not connected to anything",
+    "orphanDetail": "This page declares no relations and nothing references it, so it will not surface through the graph — only through search. Adding a relation in its frontmatter puts it back on the map.",
+    "summary": "Looked at {pages} pages. {orphans} are unconnected."
+  }
+}

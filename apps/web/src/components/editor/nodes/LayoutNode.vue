@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { Columns2, Columns3 } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps(nodeViewProps)
 
@@ -44,10 +47,10 @@ function setColumns(next: 2 | 3) {
       contenteditable="false"
       class="kn-layout-switch opacity-0 transition-opacity group-hover/layout:opacity-100 focus-within:opacity-100"
     >
-      <button type="button" aria-label="Two columns" :aria-pressed="node.attrs.columns === 2" @click="setColumns(2)">
+      <button type="button" :aria-label="t('toolbar.twoColumns')" :aria-pressed="node.attrs.columns === 2" @click="setColumns(2)">
         <Columns2 class="size-3.5" />
       </button>
-      <button type="button" aria-label="Three columns" :aria-pressed="node.attrs.columns === 3" @click="setColumns(3)">
+      <button type="button" :aria-label="t('toolbar.threeColumns')" :aria-pressed="node.attrs.columns === 3" @click="setColumns(3)">
         <Columns3 class="size-3.5" />
       </button>
     </div>

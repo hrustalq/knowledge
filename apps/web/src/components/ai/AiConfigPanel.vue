@@ -35,7 +35,7 @@ const query = useQuery(apiQueryOptions('/v1/ai/settings', { query: { workspaceId
 const settings = computed(() => query.data.value as AiSettingsResponse | undefined)
 
 const PROVIDERS = [
-  { value: 'none', label: 'None — assistant disabled' },
+  { value: 'none', label: t('ai.providerNone') },
   { value: 'deepseek', label: 'DeepSeek' },
   // gen-api.ru: an OpenAI-compatible aggregator, so one key reaches GPT,
   // Claude and Gemini models by id. Named rather than left to
@@ -145,7 +145,7 @@ async function onSave() {
       ...(clearKey.value ? { apiKey: null } : apiKey.value ? { apiKey: apiKey.value } : {}),
     },
   })
-  toast.success('AI settings saved')
+  toast.success(t('ai.settingsSaved'))
 }
 
 const testing = ref(false)
@@ -204,8 +204,8 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
     >
       <label class="block space-y-1.5">
         <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
-          Provider
-          <span v-if="overridden('provider')" class="text-primary/70">· overridden</span>
+          {{ t('ai.provider') }}
+          <span v-if="overridden('provider')" class="text-primary/70">{{ t('ai.overridden') }}</span>
         </span>
         <Select v-model="form.provider" :disabled="!canManage">
           <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
@@ -219,16 +219,16 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
             {{ t('ai.baseUrl') }}
-            <span v-if="overridden('baseUrl')" class="text-primary/70">· overridden</span>
+            <span v-if="overridden('baseUrl')" class="text-primary/70">{{ t('ai.overridden') }}</span>
           </span>
-          <Input v-model="form.baseUrl" :disabled="!canManage" placeholder="provider default" />
+          <Input v-model="form.baseUrl" :disabled="!canManage" :placeholder="t('ai.providerDefault')" />
         </label>
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
-            Model
-            <span v-if="overridden('model')" class="text-primary/70">· overridden</span>
+            {{ t('ai.model') }}
+            <span v-if="overridden('model')" class="text-primary/70">{{ t('ai.overridden') }}</span>
           </span>
-          <Input v-model="form.model" :disabled="!canManage" placeholder="provider default" />
+          <Input v-model="form.model" :disabled="!canManage" :placeholder="t('ai.providerDefault')" />
         </label>
       </div>
 
@@ -261,13 +261,12 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
               apiKey = ''
             "
           >
-            {{ clearKey ? 'Keep' : 'Clear' }}
+            {{ clearKey ? t('ai.keep') : t('common.clear') }}
           </Button>
         </div>
         <p class="text-muted-foreground text-xs">
           <template v-if="!settings?.canStoreSecrets">
-            Keys can't be stored until SETTINGS_ENCRYPTION_KEY is set on the server. Until then, set ASSISTANT_API_KEY
-            in the environment.
+            {{ t('ai.noSecretKey') }}
           </template>
           <template v-else-if="settings?.apiKeyHint">{{ t('ai.keyStored') }}</template>
           <template v-else>{{ t('ai.keyOverridesEnv') }}</template>
@@ -277,7 +276,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
 
     <AiSettingsSection
       :title="t('ai.behavior')"
-      description="How much freedom a single turn gets. The tool budget caps how many searches, reads and plugin calls the assistant may make before it has to answer."
+      :description="t('ai.behaviorDesc')"
     >
       <div class="grid gap-4 sm:grid-cols-3">
         <label class="block space-y-1.5">
@@ -293,6 +292,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
           <Input v-model.number="form.timeoutMs" type="number" min="1000" max="600000" :disabled="!canManage" />
         </label>
       </div>
+      <p class="text-muted-foreground text-xs leading-snug">{{ t('ai.behaviorAgentNote') }}</p>
       <label class="flex items-start gap-2.5">
         <Checkbox
           class="mt-0.5"
@@ -303,7 +303,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
         <span class="text-sm leading-snug">
           {{ t('ai.allowAgentMode') }}
           <span class="text-muted-foreground mt-0.5 block text-xs">
-            Lets the chat create pages and open merge requests. Turning it off downgrades every turn to Ask mode.
+            {{ t('ai.agentModeDesc') }}
           </span>
         </span>
       </label>
@@ -311,16 +311,16 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
 
     <AiSettingsSection
       :title="t('ai.budgets')"
-      description="Monthly token allowances, counted from the first of the month. Leave a field empty for unlimited."
+      :description="t('ai.budgetsDesc')"
     >
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="block space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('ai.workspaceTokensPerMonth') }}</span>
-          <Input v-model="form.workspaceMonthlyTokenBudget" :disabled="!canManage" placeholder="unlimited" />
+          <Input v-model="form.workspaceMonthlyTokenBudget" :disabled="!canManage" :placeholder="t('ai.unlimited')" />
         </label>
         <label class="block space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('ai.defaultPerUser') }}</span>
-          <Input v-model="form.defaultUserMonthlyTokenBudget" :disabled="!canManage" placeholder="unlimited" />
+          <Input v-model="form.defaultUserMonthlyTokenBudget" :disabled="!canManage" :placeholder="t('ai.unlimited')" />
         </label>
       </div>
       <label class="flex items-start gap-2.5">
@@ -331,9 +331,9 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
           @update:model-value="form.enforceBudget = $event === true"
         />
         <span class="text-sm leading-snug">
-          Refuse requests once a budget is spent
+          {{ t('ai.enforceBudget') }}
           <span class="text-muted-foreground mt-0.5 block text-xs">
-            Off records usage without ever blocking anyone.
+            {{ t('ai.enforceBudgetDesc') }}
           </span>
         </span>
       </label>
@@ -341,15 +341,15 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
 
     <AiSettingsSection
       :title="t('ai.costEstimate')"
-      description="USD per million tokens, used only to put a number next to the usage figures. Leave empty to use the built-in list price for known models."
+      :description="t('ai.costEstimateDesc')"
     >
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="block space-y-1.5">
-          <span class="text-muted-foreground text-xs font-medium">Prompt</span>
+          <span class="text-muted-foreground text-xs font-medium">{{ t('ai.prompt') }}</span>
           <Input v-model="form.pricePromptPerMTok" :disabled="!canManage" placeholder="0.27" />
         </label>
         <label class="block space-y-1.5">
-          <span class="text-muted-foreground text-xs font-medium">Completion</span>
+          <span class="text-muted-foreground text-xs font-medium">{{ t('ai.completion') }}</span>
           <Input v-model="form.priceCompletionPerMTok" :disabled="!canManage" placeholder="1.10" />
         </label>
       </div>

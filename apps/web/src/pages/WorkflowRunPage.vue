@@ -79,7 +79,7 @@ async function persistDraft(draft: { title: string; markdown: string }) {
   try {
     await saveDraft.mutateAsync({ path: { id: runId.value, nodeId: selected.value.id }, body: { draft } })
     await query.refetch()
-    toast.success('Draft saved')
+    toast.success(t('workflow.draftSaved'))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -95,10 +95,11 @@ async function sendRunEvent(type: WorkflowRunEventType) {
   }
 }
 
+// Message keys, resolved with t() at the render site (docs/features/18).
 const RUN_ACTION = {
-  PAUSE: { label: 'Pause', icon: PauseCircle },
-  RESUME: { label: 'Resume', icon: PlayCircle },
-  CANCEL: { label: 'Cancel', icon: XCircle },
+  PAUSE: { label: 'workflow.run.pause', icon: PauseCircle },
+  RESUME: { label: 'workflow.run.resume', icon: PlayCircle },
+  CANCEL: { label: 'workflow.run.cancel', icon: XCircle },
 } as const
 </script>
 
@@ -129,10 +130,10 @@ const RUN_ACTION = {
             {{ t(RUN_STATUS_LABEL[data.run.status]) }}
             <span>·</span>
             <RouterLink :to="`/documents/${data.run.rootDocumentId}`" class="hover:underline">
-              {{ data.run.rootDocumentTitle ?? 'source page' }}
+              {{ data.run.rootDocumentTitle ?? t('workflow.run.sourcePage') }}
             </RouterLink>
-            <span>· started {{ relativeTime(data.run.startedAt ?? data.run.createdAt) }}</span>
-            <span>· {{ data.run.nodeStats.materialized }} of {{ data.run.nodeStats.total }} published</span>
+            <span>· {{ t('workflow.run.startedAgo', { when: relativeTime(data.run.startedAt ?? data.run.createdAt) }) }}</span>
+            <span>· {{ t('workflow.run.publishedOf', { done: data.run.nodeStats.materialized, total: data.run.nodeStats.total }) }}</span>
           </p>
         </div>
 
@@ -147,7 +148,7 @@ const RUN_ACTION = {
             @click="sendRunEvent(action)"
           >
             <component :is="RUN_ACTION[action].icon" class="mr-1.5 size-4" />
-            {{ RUN_ACTION[action].label }}
+            {{ t(RUN_ACTION[action].label) }}
           </Button>
         </div>
       </header>
@@ -159,7 +160,7 @@ const RUN_ACTION = {
       <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
         <aside class="flex min-h-0 flex-col overflow-hidden rounded-lg border">
           <p class="text-muted-foreground border-b px-3 py-2 text-xs font-medium">
-            What this run produced
+            {{ t('workflow.run.produced') }}
           </p>
           <div class="min-h-0 flex-1 overflow-auto p-2">
           <WorkflowRunTree
@@ -184,7 +185,7 @@ const RUN_ACTION = {
             @select="(id) => (selectedId = id)"
           />
           <p v-else class="text-muted-foreground py-16 text-center text-sm">
-            This run has produced nothing yet.
+            {{ t('workflow.run.producedNothing') }}
           </p>
         </section>
       </div>

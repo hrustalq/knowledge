@@ -8,6 +8,9 @@ import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import DOMPurify from 'dompurify'
 import { Check, Code2, Trash2 } from 'lucide-vue-next'
 import { useTheme } from '@/lib/theme'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps(nodeViewProps)
 const editing = ref(false)
@@ -69,7 +72,7 @@ function onInput() {
           v-model="draft"
           spellcheck="false"
           class="kn-mermaid-textarea"
-          aria-label="Mermaid diagram source"
+          :aria-label="t('editor.mermaidSource')"
           @input="onInput"
         />
         <p v-if="error" class="kn-mermaid-error">{{ error }}</p>
@@ -79,9 +82,9 @@ function onInput() {
     </div>
 
     <div v-if="editor.isEditable" class="kn-block-actions" contenteditable="false">
-      <button v-if="!editing" type="button" @click="editing = true"><Code2 class="size-3.5" /> Edit source</button>
-      <button v-else type="button" @click="editing = false"><Check class="size-3.5" /> Done</button>
-      <button type="button" aria-label="Delete diagram" @click="deleteNode()"><Trash2 class="size-3.5" /></button>
+      <button v-if="!editing" type="button" @click="editing = true"><Code2 class="size-3.5" /> {{ t('editor.editSource') }}</button>
+      <button v-else type="button" @click="editing = false"><Check class="size-3.5" /> {{ t('editor.done') }}</button>
+      <button type="button" :aria-label="t('editor.deleteDiagram')" @click="deleteNode()"><Trash2 class="size-3.5" /></button>
     </div>
   </NodeViewWrapper>
 </template>

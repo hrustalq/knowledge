@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import type { AiAgentChoice } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -18,6 +19,7 @@ import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
 import { WorkflowsService } from '../workflows/workflows.service.js';
+import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AUTHOR_ID_STUB } from '../documents/merge-requests.service.js';
 
 /**
@@ -45,6 +47,7 @@ import { AUTHOR_ID_STUB } from '../documents/merge-requests.service.js';
  *   knowledge_list_connectors   → knowledge.list_connectors   (connectors, feature 19)
  *   knowledge_sync_connector    → knowledge.sync_connector
  *   knowledge_get_connector_run → knowledge.get_connector_run
+ *   knowledge_list_agents       → knowledge.list_agents       (agents, feature 20)
  *
  * Merge-request tools (create/list/get/approve/close/comment/merge) act as
  * the zeros AUTHOR_ID_STUB — stdio has no principal, so authorship/approvals
@@ -69,6 +72,7 @@ export class McpService {
     private readonly projects: ProjectsService,
     private readonly connectors: ConnectorsService,
     private readonly connectorProducer: ConnectorProducer,
+    private readonly agents: AgentRegistryService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -224,6 +228,35 @@ export class McpService {
           ),
         ),
     );
+
+    server.registerTool(
+      'knowledge_list_agents',
+      {
+        description:
+          "The named actors behind this workspace's AI calls (feature 20): which agents exist, what each is for, " +
+          'and whether it is enabled. Read-only — names and descriptions only, never prompts, tool lists or ' +
+          'provider endpoints.',
+        inputSchema: { workspaceId: z.string().uuid() },
+      },
+      async ({ workspaceId }) => {
+        const agents = await this.agents.list(workspaceId);
+        return this.json({
+          agents: agents
+            .filter((agent) => agent.enabled)
+            .map(
+              (agent): AiAgentChoice => ({ key: agent.key, name: agent.name, description: agent.description }),
+            ),
+        });
+      },
+    );
+
+    // There is deliberately no knowledge_run_agent. A background run stores
+    // `created_by` NOT NULL precisely so it always has an owner to authorise
+    // and bill as, and stdio has no principal — every other write tool here
+    // settles for AUTHOR_ID_STUB, but starting unattended AI is the one place
+    // where an unauthenticated transport should not be the thing that starts
+    // it. Runs begin from the Agents tab or from a schedule, both of which name
+    // a real user. (docs/features/20-agents-todo.md item 3.)
 
     server.registerTool(
       'knowledge_get_workflow_run',

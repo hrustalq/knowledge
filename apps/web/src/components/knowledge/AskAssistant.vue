@@ -192,7 +192,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
   <!-- Launcher -->
   <Button v-if="!open" class="fixed bottom-5 right-5 z-40 shadow-lg" @click="toggle">
     <Sparkles class="size-4" />
-    Ask AI
+    {{ t('assistant.askAi') }}
   </Button>
 
   <!-- Chat window -->
@@ -205,7 +205,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
       <Sparkles class="size-4 shrink-0 text-primary" />
       <div class="min-w-0 flex-1 leading-tight">
         <p class="text-sm font-semibold">{{ t('assistant.askAi') }}</p>
-        <p class="truncate text-[11px] text-muted-foreground">about “{{ title }}” and related pages</p>
+        <p class="truncate text-[11px] text-muted-foreground">{{ t('assistant.aboutAndRelated', { title }) }}</p>
       </div>
       <Button variant="ghost" size="icon-xs" :aria-label="t('assistant.closeChat')" @click="open = false">
         <X class="size-3.5" />
@@ -214,8 +214,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
 
     <div ref="listEl" class="flex-1 space-y-3 overflow-y-auto p-3">
       <p v-if="messages.length === 0" class="text-sm text-muted-foreground">
-        Ask anything about this page — answers are grounded in its content and related pages from the
-        knowledge graph.
+        {{ t('assistant.askAnything') }}
       </p>
       <div v-for="(m, i) in messages" :key="i" :class="m.role === 'user' ? 'flex justify-end' : ''">
         <div
@@ -296,7 +295,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
         :title="t('assistant.buildGlossaryHint')"
         @click="buildGlossary"
       >
-        <BookMarked class="size-3" /> Build glossary
+        <BookMarked class="size-3" /> {{ t('assistant.buildGlossary') }}
       </button>
     </div>
 

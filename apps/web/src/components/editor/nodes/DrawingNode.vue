@@ -7,6 +7,9 @@ import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { Check, PenLine, Trash2 } from 'lucide-vue-next'
 import { parseScene, renderSceneToSvg, serializeScene, emptyScene } from '@/lib/markdown/drawing'
 import Whiteboard from '../Whiteboard.vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps(nodeViewProps)
 const editing = ref(false)
@@ -29,7 +32,7 @@ function update(next: string) {
       <div v-if="!isEmpty" class="kn-drawing-canvas" v-html="preview" />
       <div v-else class="kn-drawing-placeholder">
         <PenLine class="size-5 opacity-50" />
-        <span>Empty diagram</span>
+        <span>{{ t('editor.emptyDiagram') }}</span>
       </div>
     </div>
 
@@ -37,10 +40,10 @@ function update(next: string) {
 
     <div v-if="editor.isEditable" class="kn-block-actions" contenteditable="false">
       <button v-if="!editing" type="button" @click="editing = true">
-        <PenLine class="size-3.5" /> Edit diagram
+        <PenLine class="size-3.5" /> {{ t('editor.editDiagram') }}
       </button>
-      <button v-else type="button" @click="editing = false"><Check class="size-3.5" /> Done</button>
-      <button type="button" aria-label="Delete diagram" @click="deleteNode()"><Trash2 class="size-3.5" /></button>
+      <button v-else type="button" @click="editing = false"><Check class="size-3.5" /> {{ t('editor.done') }}</button>
+      <button type="button" :aria-label="t('editor.deleteDiagram')" @click="deleteNode()"><Trash2 class="size-3.5" /></button>
     </div>
   </NodeViewWrapper>
 </template>

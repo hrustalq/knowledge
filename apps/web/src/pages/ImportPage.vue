@@ -227,8 +227,7 @@ function tryAgain(): void {
             <div class="flex min-h-72 min-w-0 flex-1 flex-col gap-3">
               <FileDropZone v-model="file" :max-bytes="MAX_BYTES" :disabled="busy" class="flex-1" />
               <p class="text-sm text-muted-foreground">
-                The file is parsed into a page you can edit, search and link — and the original stays
-                attached to it.
+                {{ t('import.parsedIntoPage') }}
               </p>
             </div>
 
@@ -293,9 +292,9 @@ function tryAgain(): void {
     <footer class="shrink-0 border-t px-4 py-4 lg:px-8">
       <div class="flex items-center gap-3">
         <template v-if="view === 'choose'">
-          <Button :disabled="!canStart" @click="start">{{ busy ? 'Starting…' : 'Import' }}</Button>
+          <Button :disabled="!canStart" @click="start">{{ busy ? t('import.starting') : t('import.start') }}</Button>
           <p v-if="file && !projectId" class="text-sm text-muted-foreground">
-            Pick a project first — every page belongs to exactly one.
+            {{ t('import.pickProjectFirst') }}
           </p>
           <p v-else-if="!file" class="text-sm text-muted-foreground">{{ t('import.chooseFileToContinue') }}</p>
         </template>
@@ -307,13 +306,13 @@ function tryAgain(): void {
         <template v-else-if="view === 'working'">
           <Button variant="ghost" @click="throwAway">{{ t('import.cancelImport') }}</Button>
           <p class="text-sm text-muted-foreground">
-            You can leave this page — the import keeps running.
+            {{ t('import.keepsRunning') }}
           </p>
         </template>
 
         <template v-else-if="view === 'review'">
           <Button :disabled="busy || !title.trim()" @click="create">
-            {{ busy ? 'Creating the page…' : 'Create page' }}
+            {{ busy ? t('import.creatingPage') : t('import.createPage') }}
           </Button>
           <Button variant="ghost" :disabled="busy" @click="throwAway">{{ t('common.discard') }}</Button>
         </template>
@@ -321,11 +320,11 @@ function tryAgain(): void {
         <template v-else>
           <Button variant="outline" @click="tryAgain">
             <RotateCcw class="size-4" aria-hidden="true" />
-            Try another file
+            {{ t('import.tryAnotherFile') }}
           </Button>
           <Button variant="ghost" @click="router.push('/create')">
             <ArrowLeft class="size-4" aria-hidden="true" />
-            Write the page instead
+            {{ t('import.writeInstead') }}
           </Button>
         </template>
       </div>

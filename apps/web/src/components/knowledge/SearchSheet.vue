@@ -135,7 +135,7 @@ watch(() => route.fullPath, () => ui.close())
       <SheetHeader class="sr-only">
         <SheetTitle>{{ t('nav.search') }}</SheetTitle>
         <SheetDescription>
-          Semantic, keyword and graph-expanded search across the workspace.
+          {{ t('search.sheetDescription') }}
         </SheetDescription>
       </SheetHeader>
 
@@ -154,14 +154,14 @@ watch(() => route.fullPath, () => ui.close())
             class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             @click="openFullPage"
           >
-            Open as page
+            {{ t('search.openAsPage') }}
             <ExternalLink class="size-3" />
           </button>
         </template>
       </SearchPanel>
 
       <p v-if="clearedNotice" class="px-4 pb-3 text-xs text-muted-foreground">
-        Project and tag filters were cleared for the new workspace.
+        {{ t('search.filtersClearedForWorkspace') }}
       </p>
     </SheetContent>
   </Sheet>

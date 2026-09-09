@@ -25,6 +25,7 @@ import {
   type RevisionInfo,
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { labelFor } from '@/lib/labels'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
@@ -116,10 +117,10 @@ const projectOptions = computed<AutocompleteOption[]>(() =>
   projects.items.map((p) => ({ value: p.projectId, label: p.name, meta: p.documentCount })),
 )
 const categoryOptions = computed<AutocompleteOption[]>(() =>
-  DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c })),
+  DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: labelFor(t, 'category', c) })),
 )
 const parentOptions = computed<AutocompleteOption[]>(() => [
-  { value: TOP_LEVEL, label: 'Top level' },
+  { value: TOP_LEVEL, label: t('documents.topLevel') },
   ...store.items
     .filter((d) => d.documentId !== editId.value)
     .map((d) => ({ value: d.documentId, label: d.title, meta: d.category })),
@@ -375,7 +376,7 @@ onBeforeUnmount(() => {
     <header class="kn-page-head">
       <div class="kn-page-crumb">
         <strong>{{ projectName }}</strong>
-        <span class="kn-page-state">{{ isEdit ? 'Editing' : 'New page' }}</span>
+        <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
         <span v-if="dirty" class="kn-dirty-dot" :title="t('editor.unsavedChanges')" />
       </div>
 
@@ -435,7 +436,7 @@ onBeforeUnmount(() => {
         </div>
         <ChatPane v-if="editId" :document-id="editId" class="kn-rail-chat" />
         <p v-else class="p-4 text-sm text-muted-foreground">
-          Save the page once and the assistant can read it, edit it, and answer questions about it.
+          {{ t('editor.saveFirstForAssistant') }}
         </p>
       </aside>
     </div>
@@ -445,8 +446,7 @@ onBeforeUnmount(() => {
         <AlertDialogHeader>
           <AlertDialogTitle>{{ t('editor.discardChanges') }}</AlertDialogTitle>
           <AlertDialogDescription>
-            This page has edits that were never published, so they exist only in this tab.
-            Leaving now throws them away.
+            {{ t('editor.discardBody') }}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -455,7 +455,7 @@ onBeforeUnmount(() => {
             class="bg-destructive text-white hover:bg-destructive/90"
             @click="discardAndLeave"
           >
-            Discard changes
+            {{ t('editor.discardChangesAction') }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -467,15 +467,15 @@ onBeforeUnmount(() => {
         <SheetHeader>
           <SheetTitle>{{ t('editor.pageSettings') }}</SheetTitle>
           <SheetDescription>
-            Placement and the deterministic facts this page asserts into the graph.
+            {{ t('editor.settingsDesc') }}
           </SheetDescription>
         </SheetHeader>
 
         <div class="space-y-5 px-4 pb-8">
           <Autocomplete
             v-model="projectSelection"
-            label="Project"
-            placeholder="Search projects…"
+            :label="t('editor.project')"
+            :placeholder="t('editor.searchProjects')"
             :options="projectOptions"
             :multiple="false"
             :empty-hint="t('hints.noProjects')"
@@ -483,50 +483,50 @@ onBeforeUnmount(() => {
 
           <Autocomplete
             v-model="parentSelection"
-            label="Parent page"
-            placeholder="Search pages…"
+            :label="t('editor.parentPage')"
+            :placeholder="t('editor.searchPages')"
             :options="parentOptions"
             :multiple="false"
           />
 
           <Autocomplete
             v-model="categorySelection"
-            label="Category"
-            placeholder="Search categories…"
+            :label="t('editor.category')"
+            :placeholder="t('editor.searchCategories')"
             :options="categoryOptions"
             :multiple="false"
           />
 
           <div v-if="isEdit" class="space-y-1.5">
-            <Label for="editor-message" class="kn-field-label">Revision message</Label>
-            <Input id="editor-message" v-model="message" placeholder="What changed?" class="h-8 text-xs" />
+            <Label for="editor-message" class="kn-field-label">{{ t('editor.revisionMessage') }}</Label>
+            <Input id="editor-message" v-model="message" :placeholder="t('editor.revisionMessagePlaceholder')" class="h-8 text-xs" />
           </div>
 
           <div class="space-y-2 border-t pt-5">
             <div class="space-y-1">
-              <h3 class="kn-field-label">Relations</h3>
+              <h3 class="kn-field-label">{{ t('editor.relations') }}</h3>
               <p class="text-xs leading-snug text-muted-foreground">
-                Written to frontmatter and indexed as graph facts with full confidence.
+                {{ t('editor.relationsHint') }}
               </p>
             </div>
             <div v-for="(row, i) in relationRows" :key="i" class="grid grid-cols-[1fr_auto] gap-2">
               <div class="space-y-2">
                 <Autocomplete
                   :model-value="[row.type]"
-                  :label="`Relation ${i + 1} type`"
+                  :label="t('editor.relationTypeLabel', { n: i + 1 })"
                   hide-label
-                  placeholder="Relation type…"
+                  :placeholder="t('editor.relationTypePlaceholder')"
                   :options="relationTypeOptions"
                   :multiple="false"
                   @update:model-value="row.type = $event[0] ?? row.type"
                 />
                 <Input v-model="row.key" placeholder="service:identity" class="h-8 font-mono text-xs" />
-                <Input v-model="row.name" placeholder="Display name (optional)" class="h-8 text-xs" />
+                <Input v-model="row.name" :placeholder="t('editor.relationDisplayName')" class="h-8 text-xs" />
               </div>
               <Button
                 size="icon-sm"
                 variant="ghost"
-                :aria-label="`Remove relation ${i + 1}`"
+                :aria-label="t('editor.removeRelation', { n: i + 1 })"
                 @click="relationRows.splice(i, 1)"
               >
                 <X class="size-4" />
@@ -537,13 +537,13 @@ onBeforeUnmount(() => {
               variant="outline"
               @click="relationRows.push({ type: 'DEPENDS_ON', key: '', name: '' })"
             >
-              Add relation
+              {{ t('editor.addRelation') }}
             </Button>
           </div>
 
           <div class="space-y-1.5">
-            <Label for="editor-tags" class="kn-field-label">Tags</Label>
-            <Input id="editor-tags" v-model="tags" placeholder="tags, comma, separated" class="h-8 text-xs" />
+            <Label for="editor-tags" class="kn-field-label">{{ t('editor.tags') }}</Label>
+            <Input id="editor-tags" v-model="tags" :placeholder="t('editor.tagsPlaceholder')" class="h-8 text-xs" />
           </div>
         </div>
       </SheetContent>

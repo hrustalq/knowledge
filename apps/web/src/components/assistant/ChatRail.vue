@@ -109,14 +109,14 @@ function open(threadId: string) {
     <!-- Virtualized roster: the only part of the rail that scrolls. -->
     <div v-else v-bind="containerProps" class="quiet-scroll min-h-0 flex-1">
       <ul v-bind="wrapperProps">
-        <li v-for="{ data: t } in list" :key="t.id">
+        <li v-for="{ data: thread } in list" :key="thread.id">
           <!-- Square and full-bleed, like the settings and projects rails:
                a rounded card inside a rail reads as a floating object in a
                list of them, and 16rem is too narrow to spend on the inset. -->
           <div
             class="group/row relative flex items-center border-l-2 transition-colors"
             :class="
-              t.id === assistant.activeThread?.id
+              thread.id === assistant.activeThread?.id
                 ? 'border-primary bg-primary/10'
                 : 'border-transparent hover:bg-accent'
             "
@@ -125,16 +125,16 @@ function open(threadId: string) {
             <button
               type="button"
               class="flex h-full min-w-0 flex-1 flex-col justify-center gap-0.5 px-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-              :aria-current="t.id === assistant.activeThread?.id ? 'true' : undefined"
-              @click="open(t.id)"
+              :aria-current="thread.id === assistant.activeThread?.id ? 'true' : undefined"
+              @click="open(thread.id)"
             >
               <span
                 class="truncate text-sm leading-tight"
-                :class="t.id === assistant.activeThread?.id ? 'font-medium text-primary' : 'text-foreground/90'"
+                :class="thread.id === assistant.activeThread?.id ? 'font-medium text-primary' : 'text-foreground/90'"
               >
-                {{ threadLabel(t) }}
+                {{ threadLabel(thread) }}
               </span>
-              <span class="truncate text-[11px] text-muted-foreground">{{ relativeTime(t.updatedAt) }}</span>
+              <span class="truncate text-[11px] text-muted-foreground">{{ relativeTime(thread.updatedAt) }}</span>
             </button>
 
             <!-- Row actions stay hidden until the row is hovered or the menu
@@ -145,19 +145,19 @@ function open(threadId: string) {
                   variant="ghost"
                   size="icon-sm"
                   class="mr-1 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-                  :aria-label="`Actions for ${threadLabel(t)}`"
+                  :aria-label="t('chat.actionsFor', { name: threadLabel(thread) })"
                 >
                   <MoreHorizontal class="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" class="w-40">
-                <DropdownMenuItem @select="emit('rename', t)">
+                <DropdownMenuItem @select="emit('rename', thread)">
                   <Pencil class="size-3.5" />
-                  Rename
+                  {{ t('chat.rename') }}
                 </DropdownMenuItem>
-                <DropdownMenuItem variant="destructive" @select="emit('delete', t)">
+                <DropdownMenuItem variant="destructive" @select="emit('delete', thread)">
                   <Trash2 class="size-3.5" />
-                  Delete
+                  {{ t('chat.delete') }}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -167,7 +167,7 @@ function open(threadId: string) {
     </div>
 
     <div v-if="assistant.threadsLoading && assistant.threadsLoaded" class="px-3 pb-1 text-[11px] text-muted-foreground">
-      Loading more…
+      {{ t('chat.loadingMore') }}
     </div>
 
     <!-- Create sits at the foot of the rail, below its own divider. -->

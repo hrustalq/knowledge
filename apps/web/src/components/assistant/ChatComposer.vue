@@ -250,7 +250,7 @@ function send() {
           class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-primary/10 text-sm font-medium text-primary backdrop-blur-[1px]"
         >
           <Upload class="size-4" />
-          Drop text files to attach them to this message
+          {{ t('chat.dropTextFiles') }}
         </div>
 
         <!-- Context chips: what this turn carries besides the words. -->
@@ -346,7 +346,7 @@ function send() {
                     <MicOff v-else class="size-4 animate-pulse" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{{ isListening ? 'Stop dictation' : 'Dictate' }}</TooltipContent>
+                <TooltipContent>{{ isListening ? t('chat.stopDictation') : t('chat.dictate') }}</TooltipContent>
               </Tooltip>
 
               <!-- Ask / Agent: the one control that changes what the assistant
@@ -388,7 +388,7 @@ function send() {
                   <TooltipContent>
                     {{
                       canEdit
-                        ? 'Can also write: new pages go live, edits open a merge request.'
+                        ? t('chat.canAlsoWrite')
                         : 'Needs the editor role in this workspace.'
                     }}
                   </TooltipContent>

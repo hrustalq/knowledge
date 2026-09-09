@@ -126,7 +126,7 @@ const props = withDefaults(
     people: () => [],
     editable: true,
     compact: false,
-    placeholder: 'Write, or press / for blocks…',
+    placeholder: '',
     commentAnchors: () => [],
   },
 )
@@ -215,36 +215,36 @@ const menu = ref<{
 } | null>(null)
 
 const SLASH_ITEMS: (CommandItem & { run: (e: CoreEditor) => void })[] = [
-  { id: 'h1', group: 'Text', label: 'Heading 1', icon: Heading1, keywords: 'title', run: (e) => e.chain().focus().toggleHeading({ level: 1 }).run() },
-  { id: 'h2', group: 'Text', label: 'Heading 2', icon: Heading2, run: (e) => e.chain().focus().toggleHeading({ level: 2 }).run() },
-  { id: 'h3', group: 'Text', label: 'Heading 3', icon: Heading3, run: (e) => e.chain().focus().toggleHeading({ level: 3 }).run() },
-  { id: 'bullet', group: 'Text', label: 'Bullet list', icon: List, run: (e) => e.chain().focus().toggleBulletList().run() },
-  { id: 'ordered', group: 'Text', label: 'Numbered list', icon: ListOrdered, run: (e) => e.chain().focus().toggleOrderedList().run() },
-  { id: 'task', group: 'Text', label: 'Task list', icon: ListTodo, keywords: 'todo checkbox action', run: (e) => e.chain().focus().toggleTaskList().run() },
-  { id: 'quote', group: 'Text', label: 'Quote', icon: Quote, run: (e) => e.chain().focus().toggleBlockquote().run() },
-  { id: 'code', group: 'Text', label: 'Code block', icon: Code, keywords: 'snippet syntax', run: (e) => e.chain().focus().toggleCodeBlock().run() },
-  { id: 'divider', group: 'Text', label: 'Divider', icon: Minus, keywords: 'hr rule separator', run: (e) => e.chain().focus().setHorizontalRule().run() },
+  { id: 'h1', group: t('toolbar.group.text'), label: t('toolbar.heading1'), icon: Heading1, keywords: 'title', run: (e) => e.chain().focus().toggleHeading({ level: 1 }).run() },
+  { id: 'h2', group: t('toolbar.group.text'), label: t('toolbar.heading2'), icon: Heading2, run: (e) => e.chain().focus().toggleHeading({ level: 2 }).run() },
+  { id: 'h3', group: t('toolbar.group.text'), label: t('toolbar.heading3'), icon: Heading3, run: (e) => e.chain().focus().toggleHeading({ level: 3 }).run() },
+  { id: 'bullet', group: t('toolbar.group.text'), label: t('toolbar.bulletList'), icon: List, run: (e) => e.chain().focus().toggleBulletList().run() },
+  { id: 'ordered', group: t('toolbar.group.text'), label: t('toolbar.numberedList'), icon: ListOrdered, run: (e) => e.chain().focus().toggleOrderedList().run() },
+  { id: 'task', group: t('toolbar.group.text'), label: t('toolbar.taskList'), icon: ListTodo, keywords: 'todo checkbox action', run: (e) => e.chain().focus().toggleTaskList().run() },
+  { id: 'quote', group: t('toolbar.group.text'), label: t('toolbar.quote'), icon: Quote, run: (e) => e.chain().focus().toggleBlockquote().run() },
+  { id: 'code', group: t('toolbar.group.text'), label: t('toolbar.codeBlock'), icon: Code, keywords: 'snippet syntax', run: (e) => e.chain().focus().toggleCodeBlock().run() },
+  { id: 'divider', group: t('toolbar.group.text'), label: t('toolbar.divider'), icon: Minus, keywords: 'hr rule separator', run: (e) => e.chain().focus().setHorizontalRule().run() },
 
   ...PANEL_TYPES.map((type) => ({
     id: `panel-${type}`,
-    group: 'Panels',
-    label: `${PANEL_META[type].label} panel`,
+    group: t('toolbar.group.panels'),
+    label: t('panel.suffix', { label: t(PANEL_META[type].label) }),
     icon: Info,
     keywords: `callout admonition ${type}`,
     run: (e: CoreEditor) => e.chain().focus().toggledPanel(type as PanelType).run(),
   })),
 
-  { id: 'table', group: 'Structure', label: 'Table', icon: Table2, run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
-  { id: 'expand', group: 'Structure', label: 'Expand', icon: Square, keywords: 'collapse details accordion', run: (e) => e.chain().focus().setExpand().run() },
-  { id: 'layout2', group: 'Structure', label: 'Two columns', icon: Columns2, keywords: 'section layout', run: (e) => e.chain().focus().setLayout(2).run() },
-  { id: 'layout3', group: 'Structure', label: 'Three columns', icon: Columns3, keywords: 'section layout', run: (e) => e.chain().focus().setLayout(3).run() },
-  { id: 'toc', group: 'Structure', label: 'Table of contents', icon: Type, keywords: 'outline headings', run: (e) => e.chain().focus().setToc().run() },
+  { id: 'table', group: t('toolbar.group.structure'), label: t('toolbar.table.label'), icon: Table2, run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+  { id: 'expand', group: t('toolbar.group.structure'), label: t('toolbar.expand'), icon: Square, keywords: 'collapse details accordion', run: (e) => e.chain().focus().setExpand().run() },
+  { id: 'layout2', group: t('toolbar.group.structure'), label: t('toolbar.twoColumns'), icon: Columns2, keywords: 'section layout', run: (e) => e.chain().focus().setLayout(2).run() },
+  { id: 'layout3', group: t('toolbar.group.structure'), label: t('toolbar.threeColumns'), icon: Columns3, keywords: 'section layout', run: (e) => e.chain().focus().setLayout(3).run() },
+  { id: 'toc', group: t('toolbar.group.structure'), label: t('toolbar.tableOfContents'), icon: Type, keywords: 'outline headings', run: (e) => e.chain().focus().setToc().run() },
 
-  { id: 'mermaid', group: 'Media', label: 'Mermaid diagram', icon: Workflow, keywords: 'graph flowchart sequence', run: (e) => e.chain().focus().setMermaid().run() },
-  { id: 'drawing', group: 'Media', label: 'Whiteboard', icon: PenLine, keywords: 'draw sketch excalidraw diagram', run: (e) => e.chain().focus().setDrawing().run() },
-  { id: 'image', group: 'Media', label: 'Image', icon: ImageIcon, keywords: 'picture photo upload', run: (e) => pickFiles(e, 'image/*') },
-  { id: 'file', group: 'Media', label: 'File or PDF', icon: Paperclip, keywords: 'attachment document upload', run: (e) => pickFiles(e, '') },
-  { id: 'mention', group: 'Media', label: 'Link to a page', icon: FileText, keywords: 'reference mention doc', run: () => { pagePickerOpen.value = true } },
+  { id: 'mermaid', group: t('toolbar.group.media'), label: t('toolbar.mermaid'), icon: Workflow, keywords: 'graph flowchart sequence', run: (e) => e.chain().focus().setMermaid().run() },
+  { id: 'drawing', group: t('toolbar.group.media'), label: t('toolbar.whiteboard'), icon: PenLine, keywords: 'draw sketch excalidraw diagram', run: (e) => e.chain().focus().setDrawing().run() },
+  { id: 'image', group: t('toolbar.group.media'), label: t('toolbar.image'), icon: ImageIcon, keywords: 'picture photo upload', run: (e) => pickFiles(e, 'image/*') },
+  { id: 'file', group: t('toolbar.group.media'), label: t('toolbar.fileOrPdf'), icon: Paperclip, keywords: 'attachment document upload', run: (e) => pickFiles(e, '') },
+  { id: 'mention', group: t('toolbar.group.media'), label: t('toolbar.linkToPage'), icon: FileText, keywords: 'reference mention doc', run: () => { pagePickerOpen.value = true } },
 ]
 
 /** Blocks that belong in a page but not in a comment. */
@@ -272,7 +272,7 @@ const menuItems = computed<CommandItem[]>(() => {
     .map((p): CommandItem => ({
       id: p.userId,
       kind: 'person',
-      group: 'People',
+      group: t('toolbar.group.people'),
       label: p.name,
       hint: p.hint,
       icon: AtSign,
@@ -282,7 +282,7 @@ const menuItems = computed<CommandItem[]>(() => {
     .map((p): CommandItem => ({
       id: p.documentId,
       kind: 'page',
-      group: 'Pages',
+      group: t('toolbar.group.pages'),
       label: p.title,
       hint: p.category,
       icon: FileText,
@@ -472,7 +472,9 @@ onMounted(() => {
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({
         placeholder: ({ node }) =>
-          node.type.name === 'heading' ? 'Heading' : (props.placeholder as string),
+          node.type.name === 'heading'
+            ? t('editor.headingPlaceholder')
+            : (props.placeholder as string) || t('editor.placeholder'),
       }),
       Panel,
       Expand,
@@ -616,14 +618,14 @@ defineExpose({
         @pointerenter="onHandle = true"
         @pointerleave="onHandle = false"
       >
-        <button type="button" class="kn-gutter-btn" title="Insert block below" @click="onHandleInsert">
+        <button type="button" class="kn-gutter-btn" :title="t('editor.insertBlockBelow')" @click="onHandleInsert">
           <Plus class="size-3.5" />
         </button>
         <button
           type="button"
           class="kn-gutter-btn kn-gutter-grip"
           draggable="true"
-          title="Drag to move · click for block actions"
+          :title="t('editor.dragToMove')"
           aria-haspopup="menu"
           :aria-expanded="blockMenuOpen"
           @dragstart="onHandleDragStart"
@@ -634,20 +636,20 @@ defineExpose({
 
         <div v-if="blockMenuOpen" class="kn-block-menu" role="menu">
           <button type="button" role="menuitem" @click="runBlockAction('duplicate')">
-            <CopyPlus class="size-3.5" /> Duplicate
+            <CopyPlus class="size-3.5" /> {{ t('editor.duplicate') }}
           </button>
           <button type="button" role="menuitem" class="kn-danger" @click="runBlockAction('delete')">
-            <Trash2 class="size-3.5" /> Delete
+            <Trash2 class="size-3.5" /> {{ t('common.delete') }}
           </button>
-          <div class="kn-block-menu-label">Turn into</div>
+          <div class="kn-block-menu-label">{{ t('editor.turnInto') }}</div>
           <button type="button" role="menuitem" @click="runBlockAction('paragraph')">
-            <Type class="size-3.5" /> Text
+            <Type class="size-3.5" /> {{ t('editor.text') }}
           </button>
           <button type="button" role="menuitem" @click="runBlockAction(1)">
-            <Heading1 class="size-3.5" /> Heading 1
+            <Heading1 class="size-3.5" /> {{ t('toolbar.heading1') }}
           </button>
           <button type="button" role="menuitem" @click="runBlockAction(2)">
-            <Heading2 class="size-3.5" /> Heading 2
+            <Heading2 class="size-3.5" /> {{ t('toolbar.heading2') }}
           </button>
           <button type="button" role="menuitem" @click="runBlockAction(3)">
             <Heading3 class="size-3.5" /> Heading 3

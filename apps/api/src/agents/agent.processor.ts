@@ -11,7 +11,6 @@ import { asLocale } from '../i18n/locale.js';
 import { AGENT_QUEUE } from './agent.constants.js';
 import { AgentExecutor } from './agent.executor.js';
 import { AgentRegistryService } from './agent-registry.service.js';
-import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 
 /**
  * Runs one background agent run per job (docs/features/20).
@@ -39,25 +38,6 @@ export class AgentProcessor extends WorkerHost {
     super();
   }
 
-  /**
-   * A run's owner as a real principal. A disabled or deleted owner fails the
-   * run — it never falls back to something with more authority.
-   */
-  private async rehydrate(userId: string, locale: Locale): Promise<Principal> {
-    const owner = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!owner || owner.disabledAt) {
-      throw new Error('The user this run belongs to no longer exists or is disabled.');
-    }
-    return {
-      userId: owner.id,
-      email: owner.email,
-      displayName: owner.displayName,
-      mode: 'api-key',
-      isAdmin: owner.isAdmin,
-      locale,
-    };
-  }
-
   async process(job: Job<{ runId: string }>): Promise<void> {
     const runId = job.data.runId;
     const row = await this.prisma.agentRun.findUnique({ where: { id: runId } });
@@ -74,15 +54,13 @@ export class AgentProcessor extends WorkerHost {
 
     await withLocale(asLocale(row.locale), async () => {
       try {
-        // In AUTH_MODE=none the caller IS the dev principal, whose id is the
-        // zeros stub and which has no `users` row — so rehydrating would fail
-        // every run in the default dev setup. The same accommodation the merge
-        // gates make for this identity (CLAUDE.md), and it changes nothing
-        // under api-key mode, where no real user can hold that id.
-        const principal =
-          row.createdBy === DEV_PRINCIPAL.userId
-            ? DEV_PRINCIPAL
-            : await this.rehydrate(row.createdBy, asLocale(row.locale) as Locale);
+        // The run's owner as a real principal, including the dev/MCP stub
+        // accommodation. Shared with the workflow processor, which needs the
+        // identical rule (docs/features/20).
+        const principal = await this.access.principalFor(
+          row.createdBy,
+          asLocale(row.locale) as Locale,
+        );
 
         // Exactly the check an HTTP request makes, with the owner's own role.
         await this.access.requireRole(principal, row.workspaceId, 'viewer');
@@ -100,7 +78,7 @@ export class AgentProcessor extends WorkerHost {
           subjectId: row.id,
         });
 
-        const result = await this.executor.run(row, agent);
+        const result = await this.executor.run(row, agent, principal);
 
         await this.prisma.agentRun.update({
           where: { id: runId },

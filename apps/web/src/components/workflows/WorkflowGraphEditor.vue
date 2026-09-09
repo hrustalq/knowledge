@@ -12,6 +12,9 @@ import { Plus, TriangleAlert } from 'lucide-vue-next'
 import type { WorkflowGraph, WorkflowStep, WorkflowStepKind, WorkflowValidationIssue } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import { blankStep, stepKind, STEP_KINDS } from './workflow-ui'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 /**
  * Drag-and-drop editor for a workflow definition (docs/features/17).
@@ -90,7 +93,7 @@ const edges = computed<Edge[]>(() =>
 
 /** What a node tells you at a glance: its job, then what comes out of it. */
 function nodeSummary(step: WorkflowStep): string {
-  const kind = stepKind(step.kind)?.label ?? step.kind
+  const kind = stepKind(step.kind) ? t(stepKind(step.kind)!.label) : step.kind
   if (step.fanOut) return `${kind} → a list of ${step.produces?.category ?? 'item'} pages`
   if (step.produces) {
     return `${kind} → one ${step.produces.category} page${step.autoApprove ? ', published straight away' : ''}`
@@ -141,7 +144,7 @@ function onEdgeClick(edgeId: string) {
 }
 
 function addStep(kind: WorkflowStepKind) {
-  const step = blankStep(kind, props.graph.steps.length + 1)
+  const step = blankStep(kind, props.graph.steps.length + 1, t(stepKind(kind)?.label ?? 'workflow.stepKind.fallback'))
   // Ids must stay unique: they are what a running node points at.
   let id = step.id
   let n = 2
@@ -194,16 +197,16 @@ watch(
         variant="ghost"
         size="sm"
         class="h-7 shrink-0 gap-1.5 px-2 text-xs whitespace-nowrap"
-        :title="kind.hint"
+        :title="t(kind.hint)"
         @click="addStep(kind.value)"
       >
         <component :is="kind.icon" class="size-3.5" />
-        {{ kind.label }}
+        {{ t(kind.label) }}
       </Button>
     </div>
 
     <div v-if="!mounted" class="text-muted-foreground flex h-full items-center justify-center text-sm">
-      Loading canvas…
+      {{ t('workflow.canvas.loading') }}
     </div>
 
     <VueFlow
@@ -248,7 +251,7 @@ watch(
       v-if="mounted && graph.steps.length === 0"
       class="text-muted-foreground pointer-events-none absolute inset-0 flex items-center justify-center text-sm"
     >
-      <Plus class="mr-1.5 size-4" /> Add a step to begin
+      <Plus class="mr-1.5 size-4" /> {{ t('workflow.canvas.addStepToBegin') }}
     </p>
   </div>
 </template>

@@ -122,3 +122,21 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
     'target',
   ],
 };
+
+/**
+ * Heading text → anchor id. Shared, not copied, because three surfaces assign
+ * these ids independently — the read view (MarkdownView), the read-only editor
+ * (DocumentCanvas) and the docs rail's section links — and a deep link into a
+ * section only survives the move between them while all three agree.
+ *
+ * Callers dedupe repeats themselves (`id`, `id-1`, `id-2`), since the counter
+ * belongs to one document's traversal rather than to the function.
+ */
+export function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .slice(0, 80);
+}

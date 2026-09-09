@@ -42,7 +42,7 @@ function go(id: string) {
 
 <template>
   <nav :aria-label="t('tree.onThisPage')" class="text-sm">
-    <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">On this page</p>
+    <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{{ t('tree.onThisPage') }}</p>
     <ul class="space-y-0.5 border-l">
       <li v-for="h in headings" :key="h.id">
         <button

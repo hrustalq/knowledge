@@ -223,14 +223,14 @@ const replyTarget = computed(() =>
           v-if="thread.resolved"
           class="flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-600 dark:text-emerald-400"
         >
-          <CheckCircle2 class="size-3.5" /> Resolved
+          <CheckCircle2 class="size-3.5" /> {{ t('mr.resolvedBadge') }}
         </span>
         <span
           v-if="outdated"
           class="flex shrink-0 items-center gap-1 whitespace-nowrap text-amber-600 dark:text-amber-400"
           :title="t('mr.anchorOutdated')"
         >
-          <History class="size-3.5" /> Outdated
+          <History class="size-3.5" /> {{ t('mr.outdatedBadge') }}
         </span>
         <span
           v-if="anchorLabel"
@@ -269,7 +269,7 @@ const replyTarget = computed(() =>
         :disabled="busy"
         @click="emit('resolve', !thread.resolved)"
       >
-        {{ thread.resolved ? 'Reopen' : 'Resolve' }}
+        {{ thread.resolved ? t('mr.reopenThread') : t('mr.resolveThread') }}
       </Button>
     </div>
 
@@ -420,24 +420,23 @@ const replyTarget = computed(() =>
     <AlertDialog :open="deleting !== null" @update:open="(o: boolean) => !o && (deleting = null)">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete this comment?</AlertDialogTitle>
+          <AlertDialogTitle>{{ t('mr.deleteCommentTitle') }}</AlertDialogTitle>
           <AlertDialogDescription>
             <template v-if="thread.comments.length === 1">
-              It is the only comment here, so the discussion goes with it. This cannot be undone.
+              {{ t('mr.deleteLastComment') }}
             </template>
             <template v-else>
-              It is removed for everyone and cannot be recovered. Replies to it stay where they
-              are.
+              {{ t('mr.deleteOneComment') }}
             </template>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="deleting = null">Keep it</AlertDialogCancel>
+          <AlertDialogCancel @click="deleting = null">{{ t('mr.keepIt') }}</AlertDialogCancel>
           <AlertDialogAction
             class="bg-destructive text-white hover:bg-destructive/90"
             @click="confirmDelete"
           >
-            Delete
+            {{ t('common.delete') }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

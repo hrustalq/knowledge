@@ -127,7 +127,7 @@ export class ConnectorSyncService {
           warnings.push({
             externalId: null,
             title: null,
-            message: `Stopped after ${this.maxItems} items (CONNECTOR_SYNC_MAX_ITEMS).`,
+            message: t('connector.stoppedAtMax', { max: this.maxItems }),
           });
           break;
         }
@@ -372,7 +372,7 @@ export class ConnectorSyncService {
   private async writeRevision(documentId: string, markdown: string, branch?: string): Promise<string> {
     const revision = await this.documents.createRevision(documentId, {
       branch,
-      message: 'Synced from a connector',
+      message: t('connector.syncRevisionMessage'),
       contentType: 'text/markdown',
     });
     const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });

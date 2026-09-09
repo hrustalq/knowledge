@@ -1,5 +1,3 @@
-export const RELATION_EXTRACTOR = Symbol('RELATION_EXTRACTOR');
-
 export interface ExtractionChunk {
   chunkId: string;
   text: string;

@@ -81,7 +81,7 @@ export class WorkflowMaterializeSweeper implements OnModuleInit, OnModuleDestroy
             node,
             node.run,
             step,
-            node.run.createdBy ?? undefined,
+            node.run.createdBy,
           );
           const updated = await this.prisma.workflowRunNode.update({
             where: { id: node.id },

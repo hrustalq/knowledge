@@ -6,7 +6,8 @@ import { SearchModule } from '../search/search.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { EventsSubscriber } from '../events/events.subscriber.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
-import { AssistantClient } from '../assistant/assistant.client.js';
+import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { WorkflowCoreModule } from './workflow-core.module.js';
 import { WorkflowExecutors } from './workflow.executors.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
@@ -19,10 +20,9 @@ import { WorkflowTriggerService } from './workflow-trigger.service.js';
  * exactly like `IngestionWorkerModule`. Loading it into `AppModule` would make
  * the API process start executing workflow steps.
  *
- * `EventsSubscriber` and `AssistantClient` are provided directly rather than by
- * importing the modules that own them. Each needs almost nothing —
- * `EventsSubscriber` wants Redis, `AssistantClient` wants `AiUsageService` from
- * `AiCoreModule` — while `EventsApiModule` also carries the SSE controller and
+ * `EventsSubscriber` is provided directly, and the model client comes from
+ * `AssistantClientModule`, rather than importing the modules that own them. Each needs almost nothing —
+ * `EventsSubscriber` wants Redis, the client wants only `AiUsageService` — while `EventsApiModule` also carries the SSE controller and
  * the WS gateway, and `AssistantModule` pulls in `DocumentsModule`, neither of
  * which will load here.
  *
@@ -38,11 +38,14 @@ import { WorkflowTriggerService } from './workflow-trigger.service.js';
     SearchModule,
     EventsModule,
     AiCoreModule,
+    // AccessService without the guards, so a node runs its owner's role
+    // through the same check an HTTP request does (docs/features/20).
+    AuthCoreModule,
+    AssistantClientModule,
     WorkflowCoreModule,
   ],
   providers: [
     EventsSubscriber,
-    AssistantClient,
     WorkflowExecutors,
     WorkflowProcessor,
     WorkflowSweeper,

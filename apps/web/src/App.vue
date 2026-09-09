@@ -13,6 +13,9 @@ import { useEventsStore } from '@/stores/events'
 import { useSearchUiStore } from '@/stores/search-ui'
 import { useSidebarStore } from '@/stores/sidebar'
 import { startLive } from '@/api'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const auth = useAuthStore()
 const events = useEventsStore()
@@ -30,7 +33,7 @@ const queryClient = useQueryClient()
 // WebSocket (tracked-entity updates → query-cache patching) starts alongside.
 watchEffect(() => {
   if (!import.meta.env.SSR && auth.authenticated) {
-    events.connect()
+    events.connect(t)
     startLive({ queryClient })
   }
 })

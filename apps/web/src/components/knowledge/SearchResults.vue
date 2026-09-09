@@ -40,8 +40,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
     >
       <p class="text-sm">{{ t('search.searchEveryPage') }}</p>
       <p class="max-w-sm text-xs leading-relaxed">
-        Narrow by project, category or tag on the left. Hybrid mode also follows relation edges to
-        surface pages that never mention your words.
+        {{ t('search.emptyHint') }}
       </p>
     </div>
 
@@ -50,13 +49,12 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
       class="flex flex-col items-center gap-2 py-16 text-center"
     >
       <SearchX class="size-5 text-muted-foreground" />
-      <p class="text-sm text-muted-foreground">No pages matched.</p>
+      <p class="text-sm text-muted-foreground">{{ t('search.noMatches') }}</p>
       <p v-if="activeFilterCount > 0" class="max-w-sm text-xs leading-relaxed text-muted-foreground">
-        {{ activeFilterCount }} filter{{ activeFilterCount === 1 ? ' is' : 's are' }} narrowing the
-        ranked candidates, so matches further down can be cut off.
+        {{ t('search.narrowedBy', { n: activeFilterCount }, activeFilterCount) }}
       </p>
       <p v-else class="max-w-sm text-xs leading-relaxed text-muted-foreground">
-        Try a broader query, or switch mode to keyword for an exact-word match.
+        {{ t('search.broaderQuery') }}
       </p>
       <button
         v-if="activeFilterCount > 0"
@@ -64,7 +62,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
         class="text-xs text-primary hover:underline"
         @click="emit('clear-filters')"
       >
-        Clear filters
+        {{ t('search.clearAllFilters') }}
       </button>
     </div>
 
@@ -103,7 +101,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
         <h3
           class="mt-6 mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
-          Related via graph
+          {{ t('search.relatedViaGraph') }}
         </h3>
         <ul class="divide-y">
           <li v-for="r in response.related" :key="r.documentId">

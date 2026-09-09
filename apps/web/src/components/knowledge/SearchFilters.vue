@@ -93,16 +93,16 @@ function onWorkspace(next: string[]) {
           for="search-mode"
           class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
-          Mode
+          {{ t('search.mode') }}
         </Label>
         <Select v-model="search.mode.value">
           <SelectTrigger id="search-mode" size="sm" class="text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="hybrid">hybrid</SelectItem>
-            <SelectItem value="semantic">semantic</SelectItem>
-            <SelectItem value="keyword">keyword</SelectItem>
+            <SelectItem value="hybrid">{{ t('search.modeHybrid') }}</SelectItem>
+            <SelectItem value="semantic">{{ t('search.modeSemantic') }}</SelectItem>
+            <SelectItem value="keyword">{{ t('search.modeKeyword') }}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -117,7 +117,7 @@ function onWorkspace(next: string[]) {
             v-model="search.expand.value"
             :disabled="search.mode.value !== 'hybrid'"
           />
-          Graph expansion
+          {{ t('search.graphExpansion') }}
         </Label>
         <Select
           v-model="search.depth.value"
@@ -139,7 +139,7 @@ function onWorkspace(next: string[]) {
           for="search-limit"
           class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
-          Limit
+          {{ t('search.limit') }}
         </Label>
         <Select v-model="search.limit.value">
           <SelectTrigger id="search-limit" size="sm" class="text-xs">

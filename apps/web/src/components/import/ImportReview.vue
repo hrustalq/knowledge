@@ -106,8 +106,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
             @keydown.enter.prevent="editorRef?.focus()"
           />
           <p v-if="empty" class="mt-2 text-sm text-muted-foreground">
-            The parser found no text in this file. You can write the page yourself here, or discard
-            the import and try a different one.
+            {{ t('import.parserFoundNoText') }}
           </p>
         </template>
       </RichEditor>
@@ -163,7 +162,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
           class="mt-2 flex items-center gap-1 text-xs font-medium text-amber-700 underline-offset-4 hover:underline dark:text-amber-300"
           @click="warningsOpen = !warningsOpen"
         >
-          {{ warningsOpen ? 'Show fewer' : `Show all ${warnings.length}` }}
+          {{ warningsOpen ? t('editor.showFewer') : t('editor.showAll', { n: warnings.length }) }}
           <ChevronDown class="size-3 transition-transform duration-150" :class="warningsOpen && 'rotate-180'" />
         </button>
       </section>
@@ -174,7 +173,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
           <FolderTree class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>{{ destination.join(' › ') }}</span>
         </p>
-        <Button variant="outline" size="sm" @click="emit('back')">Change destination</Button>
+        <Button variant="outline" size="sm" @click="emit('back')">{{ t('import.changeDestination') }}</Button>
       </section>
     </aside>
   </div>

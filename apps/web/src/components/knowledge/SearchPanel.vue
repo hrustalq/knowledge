@@ -21,7 +21,7 @@ withDefaults(
     railSurface?: boolean
     placeholder?: string
   }>(),
-  { railSurface: false, placeholder: 'Search every page…' },
+  { railSurface: false, placeholder: '' },
 )
 
 const emit = defineEmits<{ navigate: []; 'switch-workspace': [workspaceId: string] }>()
@@ -61,7 +61,7 @@ defineExpose({ focusQuery: () => queryEl.value?.focus() })
             <Input
               :ref="setQueryEl"
               v-model="search.query.value"
-              :placeholder="placeholder"
+              :placeholder="placeholder || t('search.searchEveryPagePlaceholder')"
               :aria-label="t('search.query')"
               class="pl-8"
             />
@@ -79,7 +79,7 @@ defineExpose({ focusQuery: () => queryEl.value?.focus() })
             @click="filtersOpen = !filtersOpen"
           >
             <SlidersHorizontal class="size-3.5" />
-            Filters
+            {{ t('search.filters') }}
             <span v-if="search.activeFilterCount.value" class="text-primary">
               ({{ search.activeFilterCount.value }})
             </span>

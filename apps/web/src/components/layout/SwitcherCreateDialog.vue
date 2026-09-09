@@ -223,8 +223,9 @@ async function finish() {
                      different things. -->
                 <DialogDescription class="mt-1.5">
                   <template v-if="stage === 'members'">
-                    Invite people to <span class="whitespace-nowrap">{{ workspaceName }}</span>
-                    so they can work in it.
+                    <i18n-t keypath="access.inviteTo" tag="span" scope="global">
+                      <template #workspace><span class="whitespace-nowrap">{{ workspaceName }}</span></template>
+                    </i18n-t>
                   </template>
                   <template v-else>{{ header.body }}</template>
                 </DialogDescription>
@@ -251,7 +252,7 @@ async function finish() {
                   for="switcher-create-name"
                   class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
                 >
-                  Name
+                  {{ t('nav.name') }}
                 </label>
                 <Input
                   id="switcher-create-name"
@@ -284,10 +285,10 @@ async function finish() {
 
             <DialogFooter class="pt-2">
               <Button type="button" variant="ghost" :disabled="busy" @click="open = false">
-                Cancel
+                {{ t('common.cancel') }}
               </Button>
               <Button type="submit" :disabled="busy || !name.trim()">
-                {{ busy ? 'Creating…' : isWorkspace ? 'Create workspace' : 'Create project' }}
+                {{ busy ? t('nav.creating') : isWorkspace ? t('nav.createWorkspace') : t('nav.createProject') }}
               </Button>
             </DialogFooter>
           </form>

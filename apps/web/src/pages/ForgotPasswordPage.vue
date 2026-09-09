@@ -44,15 +44,16 @@ async function submit() {
       <CardContent>
         <div v-if="sent" class="space-y-3 text-sm">
           <p>
-            If an account exists for <span class="font-medium">{{ email }}</span>, a reset link has been issued —
-            check the operator log / your email.
+            <i18n-t keypath="auth.resetIssued" tag="span" scope="global">
+              <template #email><span class="font-medium">{{ email }}</span></template>
+            </i18n-t>
           </p>
           <p v-if="debugToken" class="rounded-md border bg-muted/50 p-2 break-all">
-            Dev mode token:
-            <RouterLink class="underline" :to="`/reset-password?token=${debugToken}`">use it now</RouterLink>
+            {{ t('auth.devModeToken') }}
+            <RouterLink class="underline" :to="`/reset-password?token=${debugToken}`">{{ t('auth.useItNow') }}</RouterLink>
           </p>
           <RouterLink class="block text-muted-foreground hover:text-foreground hover:underline" to="/login">
-            Back to login
+            {{ t('auth.backToLogin') }}
           </RouterLink>
         </div>
         <form v-else class="space-y-3" @submit.prevent="submit">
@@ -62,7 +63,7 @@ async function submit() {
           </div>
           <Button class="w-full" type="submit" :disabled="busy">{{ busy ? t('auth.sending') : t('auth.forgotSubmit') }}</Button>
           <RouterLink class="block text-center text-sm text-muted-foreground hover:text-foreground hover:underline" to="/login">
-            Back to login
+            {{ t('auth.backToLogin') }}
           </RouterLink>
         </form>
       </CardContent>

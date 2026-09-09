@@ -91,7 +91,7 @@ function clear(): void {
         </span>
         <Button variant="ghost" size="sm" :disabled="disabled" @click="clear">
           <X class="size-4" aria-hidden="true" />
-          Choose a different file
+          {{ t('import.chooseDifferentFile') }}
         </Button>
       </div>
 

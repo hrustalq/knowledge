@@ -51,7 +51,7 @@ async function save() {
       method: 'PATCH',
       body: JSON.stringify({ name: name.value.trim(), description: description.value.trim() || null }),
     })
-    toast.success('Project updated')
+    toast.success(t('project.updated'))
     emit('changed')
   } catch (e) {
     toast.error((e as Error).message)
@@ -66,7 +66,7 @@ async function remove() {
   if (!confirm(`Delete project "${p.name}"? This cannot be undone.`)) return
   try {
     await apiFetch(`/v1/projects/${p.projectId}`, { method: 'DELETE' })
-    toast.success(`Project "${p.name}" deleted`)
+    toast.success(t('project.deleted', { name: p.name }))
     emit('changed')
     void router.push('/settings/projects')
   } catch (e) {
@@ -79,13 +79,12 @@ async function remove() {
   <div v-if="!route.params.id" class="space-y-2">
     <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('nav.projects') }}</h1>
     <p class="text-sm text-muted-foreground">
-      Every page belongs to exactly one project. Pick one from the list to rename it, or switch the
-      active project to re-scope the page tree.
+      {{ t('project.rosterHint') }}
     </p>
   </div>
 
   <p v-else-if="!project" class="text-sm text-muted-foreground">
-    {{ store.loaded ? 'Project not found in this workspace.' : 'Loading…' }}
+    {{ store.loaded ? t('project.notFound') : t('common.loading') }}
   </p>
 
   <div v-else class="space-y-6">
@@ -109,14 +108,14 @@ async function remove() {
       </label>
       <div class="flex flex-wrap gap-2 pt-1">
         <Button v-if="auth.canEdit" :disabled="!dirty || saving || !name.trim()" @click="save">
-          {{ saving ? 'Saving…' : 'Save' }}
+          {{ saving ? t('project.saving') : t('common.save') }}
         </Button>
         <Button
           v-if="project.projectId !== store.activeId"
           variant="outline"
           @click="store.switchProject(project.projectId)"
         >
-          Set as active
+          {{ t('project.setAsActive') }}
         </Button>
         <Button
           v-if="auth.canAdminWorkspace"
@@ -124,7 +123,7 @@ async function remove() {
           class="ml-auto text-destructive"
           @click="remove"
         >
-          Delete
+          {{ t('common.delete') }}
         </Button>
       </div>
     </div>

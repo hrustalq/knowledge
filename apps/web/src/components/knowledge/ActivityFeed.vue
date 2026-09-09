@@ -217,9 +217,9 @@ watch(() => events.revision, () => void refreshHead())
              scrolling pages in automatically and the button is the keyboard path. -->
         <div class="flex items-center gap-3 px-2 text-xs text-muted-foreground">
           <template v-if="capped">
-            <span>{{ entries.length }} most recent</span>
+            <span>{{ t('activity.mostRecent', { n: entries.length }) }}</span>
             <RouterLink to="/activity" class="underline underline-offset-2 hover:text-foreground">
-              View all activity
+              {{ t('activity.viewAll') }}
             </RouterLink>
           </template>
           <template v-else>

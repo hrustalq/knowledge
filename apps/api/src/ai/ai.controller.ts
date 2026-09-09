@@ -4,12 +4,13 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type {
   AgentRouteDecision,
   AgentRunSummary,
@@ -27,6 +28,7 @@ import type {
   ListAiProviderChoicesResponse,
   ListAiProvidersResponse,
   ListAiSkillsResponse,
+  ProposeAgentFindingResponse,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
@@ -37,6 +39,7 @@ import { AiConfigService } from './ai-config.service.js';
 import { AiSettingsService } from './ai-settings.service.js';
 import { AiSkillsService } from './ai-skills.service.js';
 import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
+import { AgentFindingsService } from './agent-findings.service.js';
 import { AgentRouterService } from '../agents/agent-router.service.js';
 import { AgentTiebreakService } from './agent-tiebreak.service.js';
 import {
@@ -67,6 +70,7 @@ export class AiController {
     private readonly skills: AiSkillsService,
     private readonly agents: AiAgentsService,
     private readonly runs: AgentRunsService,
+    private readonly findings: AgentFindingsService,
     private readonly router: AgentRouterService,
     private readonly tiebreak: AgentTiebreakService,
     private readonly plugins: AiPluginsService,
@@ -340,6 +344,27 @@ export class AiController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<AgentRunSummary> {
     return this.runs.start(dto.workspaceId, key, principal, dto.note);
+  }
+
+  /**
+   * Turn one finding into a merge request (docs/features/20).
+   *
+   * `editor`, not `viewer`: this writes a branch, a revision and a merge
+   * request. It is attributed to the caller rather than to the run's owner —
+   * the agent proposed, this person is the one asking for the change.
+   */
+  @Post('agents/runs/:id/findings/:index/propose')
+  @Access('editor', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
+  @ApiOperation({ summary: 'Open a merge request that addresses one finding' })
+  proposeFinding(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ProposeAgentFindingResponse> {
+    return this.findings.propose(workspaceId, id, index, principal);
   }
 
   @Post('agents/route')

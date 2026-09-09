@@ -23,7 +23,14 @@ import { WorkflowProducer } from './workflow.producer.js';
  *   - a definition with a non-terminal run for that page is skipped, so editing
  *     a page five times does not open five runs;
  *   - `WORKFLOW_AUTOSTART_MAX_ACTIVE` caps how many auto-started runs a single
- *     workspace can have in flight at once.
+ *     workspace can have in flight at once;
+ *   - and the definition must have an author, because that is the identity the
+ *     run executes and bills as. A definition without one is skipped rather
+ *     than started under nobody — the `AiAgent.scheduleOwner` rule
+ *     (docs/features/20), which exists because this service is what it was
+ *     written against: an ownerless run billed its model calls as the literal
+ *     string 'workflow', an insert that failed silently, so auto-triggered
+ *     spend never showed up anywhere.
  *
  * It runs in the worker, where the model calls happen, rather than in the API.
  */
@@ -73,6 +80,14 @@ export class WorkflowTriggerService implements OnModuleInit {
     for (const definition of definitions) {
       const trigger = (definition.trigger ?? {}) as Partial<WorkflowTrigger>;
       if (!trigger.autoStart) continue;
+      // Nobody to run as. Skipping is the whole point: this will not invent an
+      // identity to keep a trigger alive.
+      if (!definition.createdBy) {
+        this.logger.warn(
+          `Auto-start skipped for "${definition.name}": the definition has no author to run as`,
+        );
+        continue;
+      }
       if (!trigger.events?.includes(event.type)) continue;
       if (trigger.categories?.length && !trigger.categories.includes(document.category as never)) continue;
 
@@ -108,18 +123,28 @@ export class WorkflowTriggerService implements OnModuleInit {
         continue;
       }
 
-      await this.start(definition.id, definition.name, definition.graph, document, event.type);
+      await this.start(
+        // Spelled out rather than passed whole: `createdBy` is narrowed to a
+        // string by the guard above, and the Prisma row's type is not.
+        {
+          id: definition.id,
+          name: definition.name,
+          graph: definition.graph,
+          createdBy: definition.createdBy,
+        },
+        document,
+        event.type,
+      );
     }
   }
 
   private async start(
-    definitionId: string,
-    name: string,
-    rawGraph: Prisma.JsonValue,
+    definition: { id: string; name: string; graph: Prisma.JsonValue; createdBy: string },
     document: { id: string; workspaceId: string; projectId: string },
     eventType: string,
   ): Promise<void> {
-    const graph = rawGraph as unknown as WorkflowGraph;
+    const { id: definitionId, name } = definition;
+    const graph = definition.graph as unknown as WorkflowGraph;
     let entry;
     try {
       ({ entry } = compileDefinition(graph));
@@ -139,6 +164,8 @@ export class WorkflowTriggerService implements OnModuleInit {
         status: started.status,
         snapshot: started.snapshot as unknown as Prisma.InputJsonValue,
         startedBy: 'trigger',
+        // The author who turned auto-start on owns what it produces.
+        createdBy: definition.createdBy,
         startedAt: new Date(),
       },
     });
@@ -159,7 +186,7 @@ export class WorkflowTriggerService implements OnModuleInit {
 
     void this.activity.record({
       workspaceId: run.workspaceId,
-      actor: 'trigger',
+      actor: definition.createdBy,
       action: 'workflow-run.started',
       documentId: document.id,
       subjectId: run.id,

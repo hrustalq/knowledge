@@ -5,6 +5,9 @@
 import { computed } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { List } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps(nodeViewProps)
 
@@ -22,10 +25,10 @@ const headings = computed(() => {
 
 <template>
   <NodeViewWrapper class="kn-block kn-toc" :data-selected="selected" contenteditable="false">
-    <div class="kn-toc-head"><List class="size-3.5" /> On this page</div>
+    <div class="kn-toc-head"><List class="size-3.5" /> {{ t('tree.onThisPage') }}</div>
     <ol v-if="headings.length" class="kn-toc-list">
       <li v-for="(h, i) in headings" :key="i" :data-level="h.level">{{ h.text }}</li>
     </ol>
-    <p v-else class="kn-toc-empty">Headings you add will appear here.</p>
+    <p v-else class="kn-toc-empty">{{ t('editor.tocEmpty') }}</p>
   </NodeViewWrapper>
 </template>

@@ -97,10 +97,14 @@ api-schema: ## Generate the OpenAPI schema from the NestJS app -> apps/api/opena
 	node --env-file=apps/api/.env apps/api/dist/scripts/generate-openapi.main.js --out apps/api/openapi.json
 
 .PHONY: api-client
-api-client: api-schema ## Regenerate the typed web client: schema -> openapi-typescript -> apps/web/src/api/schema.d.ts
+api-client: api-schema docs-reference ## Regenerate the typed web client: schema -> openapi-typescript -> apps/web/src/api/schema.d.ts
 	$(WEB) run generate:api
 	$(WEB) run typecheck
-	@echo "✔ typed client regenerated — commit apps/api/openapi.json + apps/web/src/api/schema.d.ts"
+	@echo "✔ typed client regenerated — commit apps/api/openapi.json + apps/web/src/api/schema.d.ts + reference.generated.json"
+
+.PHONY: docs-reference
+docs-reference: ## Regenerate the docs page's endpoint + MCP tables from openapi.json, the controllers and mcp.service.ts
+	$(WEB) run generate:docs
 
 # ---------------------------------------------------------------- infra (docker)
 

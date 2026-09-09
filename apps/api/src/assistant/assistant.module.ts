@@ -4,7 +4,7 @@ import { SearchModule } from '../search/search.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { EventsModule } from '../events/events.module.js';
-import { AssistantClient } from './assistant.client.js';
+import { AssistantClientModule } from './assistant-client.module.js';
 import { AssistantToolsService } from './assistant.tools.js';
 import { AssistantService } from './assistant.service.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
@@ -13,11 +13,22 @@ import { AiModule } from '../ai/ai.module.js';
 
 // AiModule is a forwardRef because the dependency genuinely runs both ways:
 // a turn needs the workspace's AI config, and the settings page's "Test
-// connection" needs AssistantClient. AssistantClient is exported for that.
+// connection" needs AssistantClient. AssistantClientModule is re-exported for
+// that.
 @Module({
-  imports: [AgentCoreModule, SearchModule, DocumentsModule, StorageModule, EventsModule, forwardRef(() => AiModule)],
+  imports: [
+    AgentCoreModule,
+    AssistantClientModule,
+    SearchModule,
+    DocumentsModule,
+    StorageModule,
+    EventsModule,
+    forwardRef(() => AiModule),
+  ],
   controllers: [AssistantController],
-  providers: [AssistantClient, AssistantToolsService, AssistantService, AssistantThreadsService],
-  exports: [AssistantClient],
+  providers: [AssistantToolsService, AssistantService, AssistantThreadsService],
+  // Re-exported rather than re-provided, so the API and the worker share one
+  // client with one SDK cache.
+  exports: [AssistantClientModule],
 })
 export class AssistantModule {}

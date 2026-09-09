@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { WorkspaceRole } from '@knowledge/contracts';
+import type { Locale, WorkspaceRole } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { ROLE_ORDER, type Principal } from './principal.js';
+import { DEV_PRINCIPAL, ROLE_ORDER, type Principal } from './principal.js';
 import { t } from '../i18n/t.js';
 
 /**
@@ -38,6 +38,36 @@ export class AccessService {
     if (operator && !member.trustedOperator) {
       throw new ForbiddenException(t('error.auth.trustedOperatorRequired'));
     }
+  }
+
+  /**
+   * The principal a stored `created_by` stands for — how unattended work
+   * (agent runs, workflow nodes) gets an identity to execute as.
+   *
+   * A disabled or deleted owner throws: background work never falls back to
+   * ambient authority, and there is no service principal for it to become.
+   * The one accommodation is the dev/MCP stub id, which has no `users` row by
+   * design — the same allowance the merge gates make for that identity, and a
+   * no-op under `api-key`, where no real user can hold it.
+   *
+   * It lives here rather than in each processor because both callers need the
+   * exact same rule, and a second copy of it is a second place for the rule to
+   * drift (docs/features/20).
+   */
+  async principalFor(userId: string, locale: Locale): Promise<Principal> {
+    if (userId === DEV_PRINCIPAL.userId) return DEV_PRINCIPAL;
+    const owner = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!owner || owner.disabledAt) {
+      throw new ForbiddenException(t('error.auth.runOwnerUnavailable'));
+    }
+    return {
+      userId: owner.id,
+      email: owner.email,
+      displayName: owner.displayName,
+      mode: 'api-key',
+      isAdmin: owner.isAdmin,
+      locale,
+    };
   }
 
   /** For @Access(..., 'workspace') routes: 404 for unknown workspaces before the membership check. */

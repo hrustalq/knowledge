@@ -7,6 +7,7 @@
  * rejoins a parse already in flight instead of throwing away a 50 MB upload.
  */
 import { computed, ref, shallowRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type {
   CreateImportResponse,
   DocumentCategory,
@@ -15,6 +16,7 @@ import type {
   ImportJobResponse,
   SubmitImportResponse,
 } from '@knowledge/contracts'
+import type { ComposerTranslation } from 'vue-i18n'
 import { request } from '@/api/client'
 import { presignedPut } from '@/lib/presigned-put'
 
@@ -28,6 +30,8 @@ const POLL_MS = 900
 const POLL_TIMEOUT_MS = 10 * 60 * 1000
 
 export function useImport() {
+  const { t } = useI18n()
+
   const job = shallowRef<ImportJobInfo | null>(null)
   const content = shallowRef<ImportContentResponse | null>(null)
   const error = ref<string | null>(null)
@@ -157,7 +161,7 @@ export function useImport() {
       forget()
       return res
     } catch (e) {
-      error.value = messageOf(e)
+      error.value = messageOf(e, t)
       return null
     } finally {
       busy.value = false
@@ -229,7 +233,7 @@ export function useImport() {
   }
 
   function fail(e: unknown): void {
-    error.value = messageOf(e)
+    error.value = messageOf(e, t)
   }
 
   const remember = (id: string) => sessionStorage.setItem(RESUME_KEY, id)
@@ -252,8 +256,8 @@ export function useImport() {
   }
 }
 
-function messageOf(e: unknown): string {
-  if (e instanceof DOMException && e.name === 'AbortError') return 'Upload cancelled.'
+function messageOf(e: unknown, t: ComposerTranslation): string {
+  if (e instanceof DOMException && e.name === 'AbortError') return t('import.uploadCancelled')
   const message = (e as { message?: string })?.message
-  return message && message !== 'Request failed' ? message : 'Something went wrong. Try again.'
+  return message && message !== 'Request failed' ? message : t('import.somethingWentWrong')
 }

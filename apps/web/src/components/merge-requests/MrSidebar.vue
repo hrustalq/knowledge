@@ -148,7 +148,7 @@ function submitReviewers() {
     {
       onSuccess: () => {
         editingReviewers.value = false
-        toast.success('Reviewers updated')
+        toast.success(t('mr.reviewersUpdated'))
         emit('changed')
       },
       onError: (e) => toast.error(e.message),
@@ -168,10 +168,10 @@ function cancelReviewers() {
  */
 const revisionRows = computed(() =>
   [
-    { label: 'Source head', branch: mr.value.sourceBranch, id: mr.value.sourceHeadRevisionId },
-    { label: 'Merge base', branch: null, id: mr.value.mergeBaseRevisionId },
-    { label: 'Target head', branch: mr.value.targetBranch, id: mr.value.targetHeadRevisionId },
-    { label: 'Merged as', branch: null, id: mr.value.mergedRevisionId },
+    { label: t('mr.sourceHead'), branch: mr.value.sourceBranch, id: mr.value.sourceHeadRevisionId },
+    { label: t('mr.mergeBase'), branch: null, id: mr.value.mergeBaseRevisionId },
+    { label: t('mr.targetHead'), branch: mr.value.targetBranch, id: mr.value.targetHeadRevisionId },
+    { label: t('mr.mergedAs'), branch: null, id: mr.value.mergedRevisionId },
   ].filter((r): r is { label: string; branch: string | null; id: string } => r.id !== null),
 )
 </script>
@@ -267,7 +267,7 @@ const revisionRows = computed(() =>
         <section class="px-3 py-3">
           <div class="flex items-center gap-2">
             <h3 class="text-xs font-medium text-muted-foreground">
-              Reviewers
+              {{ t('mr.reviewers') }}
               <span v-if="mr.reviewers.length > 0" class="text-muted-foreground/70">
                 · {{ mr.reviewers.length }}
               </span>
@@ -275,7 +275,7 @@ const revisionRows = computed(() =>
             <button
               v-if="!readonly"
               class="ml-auto text-muted-foreground transition-colors hover:text-foreground"
-              :aria-label="editingReviewers ? 'Stop editing reviewers' : 'Edit reviewers'"
+              :aria-label="editingReviewers ? t('mr.stopEditingReviewers') : t('mr.editReviewers')"
               @click="editingReviewers ? cancelReviewers() : (editingReviewers = true)"
             >
               <component :is="editingReviewers ? X : Pencil" class="size-3" />
@@ -284,7 +284,7 @@ const revisionRows = computed(() =>
 
           <div v-if="!editingReviewers" class="mt-2 space-y-1.5">
             <p v-if="mr.reviewers.length === 0" class="text-xs text-muted-foreground">
-              No reviewers requested
+              {{ t('mr.noReviewers') }}
             </p>
             <div v-for="id in mr.reviewers" :key="id" class="flex items-center gap-2 text-sm">
               <UserAvatar :user-id="id" :name="nameOf(id)" size="sm" />
@@ -293,14 +293,14 @@ const revisionRows = computed(() =>
                 v-if="mr.approvedBy.includes(id)"
                 class="ml-auto flex items-center gap-0.5 text-[11px] text-emerald-600"
               >
-                <Check class="size-3" /> approved
+                <Check class="size-3" /> {{ t('mr.approvedShort') }}
               </span>
             </div>
           </div>
 
           <div v-else class="mt-2 space-y-0.5">
             <p v-if="members.length === 0" class="text-xs text-muted-foreground">
-              No workspace members to request.
+              {{ t('mr.noMembersToRequest') }}
             </p>
             <Label
               v-for="m in members"
@@ -317,10 +317,10 @@ const revisionRows = computed(() =>
             </Label>
             <div v-if="reviewersDirty" class="flex gap-1.5 pt-1.5">
               <Button size="xs" :disabled="saveReviewers.isPending.value" @click="submitReviewers">
-                Save
+                {{ t('common.save') }}
               </Button>
               <Button size="xs" variant="ghost" :disabled="saveReviewers.isPending.value" @click="cancelReviewers">
-                Cancel
+                {{ t('common.cancel') }}
               </Button>
             </div>
           </div>

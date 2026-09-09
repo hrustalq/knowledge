@@ -71,11 +71,11 @@ const props = withDefaults(
 const emit = defineEmits<{ pickImage: []; pickFile: []; linkPage: []; link: [] }>()
 
 const TEXT_STYLES = [
-  { id: 'paragraph', label: 'Normal text', level: 0 },
-  { id: 'h1', label: 'Heading 1', level: 1 },
-  { id: 'h2', label: 'Heading 2', level: 2 },
-  { id: 'h3', label: 'Heading 3', level: 3 },
-  { id: 'h4', label: 'Heading 4', level: 4 },
+  { id: 'paragraph', label: 'toolbar.normalText', level: 0 },
+  { id: 'h1', label: 'toolbar.heading1', level: 1 },
+  { id: 'h2', label: 'toolbar.heading2', level: 2 },
+  { id: 'h3', label: 'toolbar.heading3', level: 3 },
+  { id: 'h4', label: 'toolbar.heading4', level: 4 },
 ] as const
 
 const currentStyle = computed(() => {
@@ -92,9 +92,9 @@ function setStyle(level: number) {
 }
 
 const ALIGNMENTS = [
-  { id: 'left', icon: AlignLeft, label: 'Left' },
-  { id: 'center', icon: AlignCenter, label: 'Center' },
-  { id: 'right', icon: AlignRight, label: 'Right' },
+  { id: 'left', icon: AlignLeft, label: 'toolbar.left' },
+  { id: 'center', icon: AlignCenter, label: 'toolbar.center' },
+  { id: 'right', icon: AlignRight, label: 'toolbar.right' },
 ] as const
 </script>
 
@@ -124,7 +124,7 @@ const ALIGNMENTS = [
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
         <button type="button" class="kn-tb-select" :title="t('toolbar.textStyle')">
-          <span>{{ currentStyle.label }}</span>
+          <span>{{ t(currentStyle.label) }}</span>
           <ChevronDown class="size-3.5 opacity-60" />
         </button>
       </DropdownMenuTrigger>
@@ -135,7 +135,7 @@ const ALIGNMENTS = [
           class="justify-between"
           @select="setStyle(style.level)"
         >
-          <span :class="`kn-style-preview kn-style-${style.id}`">{{ style.label }}</span>
+          <span :class="`kn-style-preview kn-style-${style.id}`">{{ t(style.label) }}</span>
           <Check v-if="currentStyle.id === style.id" class="size-3.5 opacity-70" />
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -283,7 +283,7 @@ const ALIGNMENTS = [
             :key="a.id"
             @select="editor.chain().focus().setTextAlign(a.id).run()"
           >
-            <component :is="a.icon" class="size-4" /> {{ a.label }}
+            <component :is="a.icon" class="size-4" /> {{ t(a.label) }}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -296,7 +296,7 @@ const ALIGNMENTS = [
       >
         <Link2 class="size-4" />
       </button>
-      <button type="button" class="kn-tb-btn" title="Link to a page (@)" @click="emit('linkPage')">
+      <button type="button" class="kn-tb-btn" :title="t('toolbar.linkToPageHint')" @click="emit('linkPage')">
         <FileText class="size-4" />
       </button>
     </div>
@@ -315,7 +315,7 @@ const ALIGNMENTS = [
           :key="type"
           @select="editor.chain().focus().toggledPanel(type as PanelType).run()"
         >
-          <span class="kn-panel-dot" :data-kn-panel="type" /> {{ PANEL_META[type].label }}
+          <span class="kn-panel-dot" :data-kn-panel="type" /> {{ t(PANEL_META[type].label) }}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -330,41 +330,41 @@ const ALIGNMENTS = [
       <DropdownMenuContent align="end" class="w-60">
         <DropdownMenuLabel>{{ t('toolbar.insert') }}</DropdownMenuLabel>
         <DropdownMenuItem @select="editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()">
-          <Table2 class="size-4" /> Table
+          <Table2 class="size-4" /> {{ t('toolbar.table.label') }}
         </DropdownMenuItem>
-        <DropdownMenuItem @select="emit('pickImage')"><ImageIcon class="size-4" /> Image</DropdownMenuItem>
-        <DropdownMenuItem @select="emit('pickFile')"><Paperclip class="size-4" /> File or PDF</DropdownMenuItem>
+        <DropdownMenuItem @select="emit('pickImage')"><ImageIcon class="size-4" /> {{ t('toolbar.image') }}</DropdownMenuItem>
+        <DropdownMenuItem @select="emit('pickFile')"><Paperclip class="size-4" /> {{ t('toolbar.fileOrPdf') }}</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem @select="editor.chain().focus().setMermaid().run()">
-          <Workflow class="size-4" /> Mermaid diagram
+          <Workflow class="size-4" /> {{ t('toolbar.mermaid') }}
         </DropdownMenuItem>
         <DropdownMenuItem v-if="!compact" @select="editor.chain().focus().setDrawing().run()">
-          <PenLine class="size-4" /> Whiteboard
+          <PenLine class="size-4" /> {{ t('toolbar.whiteboard') }}
         </DropdownMenuItem>
         <template v-if="!compact">
           <DropdownMenuSeparator />
           <DropdownMenuItem @select="editor.chain().focus().setExpand().run()">
-            <Square class="size-4" /> Expand
+            <Square class="size-4" /> {{ t('toolbar.expand') }}
           </DropdownMenuItem>
           <DropdownMenuItem @select="editor.chain().focus().setLayout(2).run()">
-            <Columns2 class="size-4" /> Two columns
+            <Columns2 class="size-4" /> {{ t('toolbar.twoColumns') }}
           </DropdownMenuItem>
           <DropdownMenuItem @select="editor.chain().focus().setLayout(3).run()">
-            <Columns3 class="size-4" /> Three columns
+            <Columns3 class="size-4" /> {{ t('toolbar.threeColumns') }}
           </DropdownMenuItem>
         </template>
         <DropdownMenuSeparator />
         <DropdownMenuItem @select="editor.chain().focus().toggleCodeBlock().run()">
-          <Code class="size-4" /> Code block
+          <Code class="size-4" /> {{ t('toolbar.codeBlock') }}
         </DropdownMenuItem>
         <DropdownMenuItem @select="editor.chain().focus().toggleBlockquote().run()">
-          <Quote class="size-4" /> Quote
+          <Quote class="size-4" /> {{ t('toolbar.quote') }}
         </DropdownMenuItem>
         <DropdownMenuItem v-if="!compact" @select="editor.chain().focus().setToc().run()">
-          <Type class="size-4" /> Table of contents
+          <Type class="size-4" /> {{ t('toolbar.tableOfContents') }}
         </DropdownMenuItem>
         <DropdownMenuItem @select="editor.chain().focus().setHorizontalRule().run()">
-          <Minus class="size-4" /> Divider
+          <Minus class="size-4" /> {{ t('toolbar.divider') }}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

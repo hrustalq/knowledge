@@ -71,10 +71,10 @@ const outcome = computed<Outcome>(() => {
 })
 
 const OUTCOMES: Array<{ value: Outcome; label: string; hint: string }> = [
-  { value: 'items', label: 'A list of items', hint: 'Each becomes its own card to review, and the steps below run per item.' },
-  { value: 'page', label: 'A page, after review', hint: 'The draft waits for someone to approve it before it is published.' },
-  { value: 'page-auto', label: 'A page, published straight away', hint: 'No review gate. The run does not stop here.' },
-  { value: 'internal', label: 'Context for the next step', hint: 'Nothing is published; the result is only passed along.' },
+  { value: 'items', label: t('workflow.outcome.items'), hint: t('workflow.outcome.itemsHint') },
+  { value: 'page', label: t('workflow.outcome.page'), hint: t('workflow.outcome.pageHint') },
+  { value: 'page-auto', label: t('workflow.outcome.pageAuto'), hint: t('workflow.outcome.pageAutoHint') },
+  { value: 'internal', label: t('workflow.outcome.internal'), hint: t('workflow.outcome.internalHint') },
 ]
 
 function setOutcome(next: Outcome) {
@@ -141,7 +141,7 @@ const promptPlaceholder = computed(() =>
       </ul>
 
       <label class="block space-y-1.5">
-        <span class="text-muted-foreground text-xs font-medium">Name</span>
+        <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.name') }}</span>
         <Input
           :model-value="step.title"
           :disabled="!canManage"
@@ -152,7 +152,7 @@ const promptPlaceholder = computed(() =>
 
       <!-- Kind: a segmented row, not four stacked cards. It is chosen once. -->
       <div class="space-y-1.5">
-        <span class="text-muted-foreground text-xs font-medium">Does</span>
+        <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.does') }}</span>
         <div class="bg-muted/50 grid grid-cols-4 gap-0.5 rounded-md p-0.5">
           <button
             v-for="kind in STEP_KINDS"
@@ -160,7 +160,7 @@ const promptPlaceholder = computed(() =>
             type="button"
             :disabled="!canManage"
             :aria-pressed="step.kind === kind.value"
-            :title="kind.hint"
+            :title="t(kind.hint)"
             class="focus-visible:ring-ring flex flex-col items-center gap-1 rounded px-1 py-1.5 text-[10px] leading-tight transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60"
             :class="
               step.kind === kind.value
@@ -170,14 +170,14 @@ const promptPlaceholder = computed(() =>
             @click="setKind(kind.value)"
           >
             <component :is="kind.icon" class="size-3.5" />
-            <span class="text-center">{{ kind.short }}</span>
+            <span class="text-center">{{ t(kind.short) }}</span>
           </button>
         </div>
-        <p class="text-muted-foreground text-[11px] leading-snug">{{ kindMeta?.hint }}</p>
+        <p class="text-muted-foreground text-[11px] leading-snug">{{ kindMeta ? t(kindMeta.hint) : '' }}</p>
       </div>
 
       <label v-if="isAi" class="block space-y-1.5">
-        <span class="text-muted-foreground text-xs font-medium">Told to</span>
+        <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.toldTo') }}</span>
         <Textarea
           :model-value="step.prompt?.user ?? ''"
           :disabled="!canManage"
@@ -186,13 +186,13 @@ const promptPlaceholder = computed(() =>
           @update:model-value="(v) => patch({ prompt: { ...step.prompt, user: String(v) } })"
         />
         <span class="text-muted-foreground block text-[11px] leading-snug">
-          The source page and the item above are supplied automatically — describe the job, not the context.
+          {{ t('workflow.form.promptHint') }}
         </span>
       </label>
 
       <!-- One decision about the output, not three booleans. -->
       <div class="space-y-1.5">
-        <span class="text-muted-foreground text-xs font-medium">Produces</span>
+        <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.produces') }}</span>
         <div class="divide-y overflow-hidden rounded-md border">
           <button
             v-for="option in OUTCOMES"
@@ -221,7 +221,7 @@ const promptPlaceholder = computed(() =>
       <div v-if="step.produces" class="space-y-3">
         <div class="grid grid-cols-2 gap-2">
           <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">Filed as</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.filedAs') }}</span>
             <Select
               :model-value="step.produces.category"
               :disabled="!canManage"
@@ -234,7 +234,7 @@ const promptPlaceholder = computed(() =>
             </Select>
           </label>
           <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">Linked by</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.linkedBy') }}</span>
             <Select
               :model-value="step.produces.relationToParent"
               :disabled="!canManage"
@@ -248,12 +248,12 @@ const promptPlaceholder = computed(() =>
           </label>
         </div>
         <p class="text-muted-foreground text-[11px] leading-snug">
-          New pages are nested under the page they came from and linked back to it.
+          {{ t('workflow.form.nestingHint') }}
         </p>
       </div>
 
       <label v-if="step.fanOut" class="block space-y-1.5">
-        <span class="text-muted-foreground text-xs font-medium">At most</span>
+        <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.atMost') }}</span>
         <div class="flex items-center gap-2">
           <Input
             type="number"
@@ -264,14 +264,14 @@ const promptPlaceholder = computed(() =>
             :disabled="!canManage"
             @update:model-value="(v) => patch({ maxItems: Number(v) || undefined })"
           />
-          <span class="text-muted-foreground text-[11px]">items, so one long list cannot open hundreds of cards.</span>
+          <span class="text-muted-foreground text-[11px]">{{ t('workflow.form.maxItemsHint') }}</span>
         </div>
       </label>
 
       <!-- Downstream steps read as the chain they are, and each is a shortcut
            into that step rather than a checkbox to hunt through. -->
       <div class="space-y-1.5">
-        <span class="text-muted-foreground text-xs font-medium">Then</span>
+        <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.then') }}</span>
         <ul v-if="nextSteps.length" class="space-y-1">
           <li v-for="target in nextSteps" :key="target.id" class="flex items-center gap-1.5">
             <ArrowRight class="text-muted-foreground size-3 shrink-0" />
@@ -294,7 +294,7 @@ const promptPlaceholder = computed(() =>
             </Button>
           </li>
         </ul>
-        <p v-else class="text-muted-foreground text-[11px]">Nothing runs after this step.</p>
+        <p v-else class="text-muted-foreground text-[11px]">{{ t('workflow.form.nothingAfter') }}</p>
 
         <Select
           v-if="canManage && addable.length"
@@ -310,7 +310,7 @@ const promptPlaceholder = computed(() =>
             </SelectItem>
           </SelectContent>
         </Select>
-        <p class="text-muted-foreground text-[11px]">Or drag between the dots on the canvas.</p>
+        <p class="text-muted-foreground text-[11px]">{{ t('workflow.form.dragHint') }}</p>
       </div>
     </div>
   </div>

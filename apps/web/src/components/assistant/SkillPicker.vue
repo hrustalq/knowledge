@@ -35,7 +35,7 @@ function toggle(id: string, on: boolean) {
   <ResponsivePopover
     v-if="skills.length > 0"
     :title="t('chat.applySkills')"
-    description="Skills with matching trigger words apply on their own."
+    :description="t('chat.skillsAutoApply')"
     panel-class="w-72 p-2"
   >
     <template #trigger>
@@ -69,7 +69,7 @@ function toggle(id: string, on: boolean) {
         </span>
       </label>
       <p v-if="!compact" class="text-muted-foreground border-t px-1 pt-1.5 text-xs">
-        Skills with matching trigger words apply on their own.
+        {{ t('chat.skillsAutoApply') }}
       </p>
     </template>
   </ResponsivePopover>

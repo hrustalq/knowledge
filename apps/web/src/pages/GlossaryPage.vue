@@ -113,9 +113,9 @@ const filterFields = computed<FilterField[]>(() => [
     key: 'text',
     label: t('filter.termOrDefinition'),
     icon: Type,
-    group: 'Text',
+    group: t('filter.groupText'),
     type: 'text',
-    placeholder: 'merge base…',
+    placeholder: t('glossary.searchPlaceholder'),
   },
 ])
 
@@ -205,16 +205,16 @@ async function submit() {
   try {
     if (editing.value) {
       await updateTerm.mutateAsync({ path: { id: editing.value.termId }, body })
-      toast.success('Term updated')
+      toast.success(t('glossary.termUpdated'))
     } else {
       if (!targetProjectId.value) {
-        toast.error('Choose a project first — vocabulary belongs to a project.')
+        toast.error(t('glossary.pickProjectFirst'))
         return
       }
       await createTerm.mutateAsync({
         body: { workspaceId, projectId: targetProjectId.value, ...body },
       })
-      toast.success(`"${body.term}" added to the glossary`)
+      toast.success(t('glossary.termAdded', { term: body.term }))
     }
     afterWrite()
     open.value = false
@@ -238,7 +238,7 @@ async function remove(term: GlossaryTerm) {
   try {
     await deleteTerm.mutateAsync({ path: { id: term.termId } })
     afterWrite()
-    toast.success(`Removed "${term.term}"`)
+    toast.success(t('glossary.termRemoved', { term: term.term }))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -264,7 +264,7 @@ async function runSuggest() {
     // whatever the bar happens to be scoped to.
     suggestProjectId.value = res.projectId
     if (res.enabled && res.suggestions.length === 0) {
-      toast.info('Nothing new — every term on that page is already defined.')
+      toast.info(t('glossary.nothingNew'))
     }
   } catch (e) {
     toast.error((e as Error).message)
@@ -288,7 +288,7 @@ async function accept(suggestion: GlossaryTermSuggestion) {
     })
     afterWrite()
     dismiss(suggestion)
-    toast.success(`"${suggestion.term}" added`)
+    toast.success(t('glossary.suggestionAdded', { term: suggestion.term }))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -351,7 +351,7 @@ watch(highlighted, (id) => {
       </div>
 
       <p v-if="assistantOff" class="text-muted-foreground text-xs">
-        The assistant is disabled for this workspace — configure a provider under Settings → AI to extract terms.
+        {{ t('glossary.assistantOff') }}
       </p>
 
       <ul v-if="suggestions?.length" class="divide-y rounded-md border">
@@ -385,7 +385,7 @@ watch(highlighted, (id) => {
     <div v-else-if="visibleTerms.length === 0" class="text-muted-foreground py-12 text-center text-sm">
       <BookMarked class="mx-auto mb-2 size-6 opacity-50" />
       <p v-if="terms.length">{{ t('glossary.noTermMatches') }}</p>
-      <p v-else>No terms yet. Add one, or let the assistant read a page and propose some.</p>
+      <p v-else>{{ t('glossary.noTermsYet') }}</p>
     </div>
 
     <Table v-else>
@@ -454,8 +454,7 @@ watch(highlighted, (id) => {
         <DialogHeader>
           <DialogTitle>{{ editing ? t('glossary.editTerm') : t('glossary.newTerm') }}</DialogTitle>
           <DialogDescription>
-            The term and its aliases are what pages are matched against; the definition is what readers see when
-            they hover one.
+            {{ t('glossary.dialogDesc') }}
           </DialogDescription>
         </DialogHeader>
 
@@ -466,7 +465,7 @@ watch(highlighted, (id) => {
           </label>
           <label class="block space-y-1">
             <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.aliases') }}</span>
-            <Input v-model="form.aliases" placeholder="merge-base, common ancestor" />
+            <Input v-model="form.aliases" :placeholder="t('glossary.aliasesPlaceholder')" />
           </label>
           <div class="space-y-1">
             <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.definition') }}</span>
@@ -492,14 +491,14 @@ watch(highlighted, (id) => {
           />
           <label class="flex items-center gap-2">
             <Checkbox :model-value="form.enabled" @update:model-value="form.enabled = $event === true" />
-            <span class="text-sm">Link this term in documents</span>
+            <span class="text-sm">{{ t('glossary.linkInDocuments') }}</span>
           </label>
         </form>
 
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" @click="open = false">Cancel</Button>
+          <Button type="button" variant="outline" size="sm" @click="open = false">{{ t('common.cancel') }}</Button>
           <Button type="submit" form="glossary-form" size="sm" :disabled="busy">
-            {{ editing ? 'Save' : 'Create' }}
+            {{ editing ? t('common.save') : t('common.create') }}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,6 +4,7 @@
  * anchor to that table, so a page full of tables never shows more than one set.
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Editor } from '@tiptap/core'
 import {
   ArrowDownToLine,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-vue-next'
 import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
 
+const { t } = useI18n()
 const props = defineProps<{ editor: Editor }>()
 
 /**
@@ -52,25 +54,25 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="rect" :ref="setFloating" class="kn-table-bar" :style="floatingStyles" role="toolbar" aria-label="Table">
-    <button type="button" title="Add row below" @mousedown.prevent="editor.chain().focus().addRowAfter().run()">
-      <ArrowDownToLine class="size-3.5" /> Row
+  <div v-if="rect" :ref="setFloating" class="kn-table-bar" :style="floatingStyles" role="toolbar" :aria-label="t('toolbar.table.label')">
+    <button type="button" :title="t('toolbar.table.addRow')" @mousedown.prevent="editor.chain().focus().addRowAfter().run()">
+      <ArrowDownToLine class="size-3.5" /> {{ t('toolbar.table.row') }}
     </button>
-    <button type="button" title="Add column right" @mousedown.prevent="editor.chain().focus().addColumnAfter().run()">
-      <ArrowRightToLine class="size-3.5" /> Column
+    <button type="button" :title="t('toolbar.table.addColumn')" @mousedown.prevent="editor.chain().focus().addColumnAfter().run()">
+      <ArrowRightToLine class="size-3.5" /> {{ t('toolbar.table.column') }}
     </button>
     <span class="kn-bubble-sep" />
-    <button type="button" title="Delete row" @mousedown.prevent="editor.chain().focus().deleteRow().run()">
+    <button type="button" :title="t('toolbar.table.deleteRow')" @mousedown.prevent="editor.chain().focus().deleteRow().run()">
       <Rows3 class="size-3.5" />
     </button>
-    <button type="button" title="Delete column" @mousedown.prevent="editor.chain().focus().deleteColumn().run()">
+    <button type="button" :title="t('toolbar.table.deleteColumn')" @mousedown.prevent="editor.chain().focus().deleteColumn().run()">
       <Columns3 class="size-3.5" />
     </button>
-    <button type="button" title="Toggle header row" @mousedown.prevent="editor.chain().focus().toggleHeaderRow().run()">
+    <button type="button" :title="t('toolbar.table.toggleHeader')" @mousedown.prevent="editor.chain().focus().toggleHeaderRow().run()">
       H
     </button>
     <span class="kn-bubble-sep" />
-    <button type="button" class="kn-danger" title="Delete table" @mousedown.prevent="editor.chain().focus().deleteTable().run()">
+    <button type="button" class="kn-danger" :title="t('toolbar.table.deleteTable')" @mousedown.prevent="editor.chain().focus().deleteTable().run()">
       <Trash2 class="size-3.5" />
     </button>
   </div>

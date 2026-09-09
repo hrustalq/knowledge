@@ -86,7 +86,9 @@ async function runSuggest() {
 
     <div v-if="review" class="space-y-2">
       <p v-if="!review.enabled" class="text-xs text-muted-foreground">
-        LLM review is disabled — set <code>ASSISTANT_PROVIDER=openai-compatible</code> to enable it.
+        <i18n-t keypath="assistant.reviewDisabled" tag="span" scope="global">
+          <template #setting><code>ASSISTANT_PROVIDER=openai-compatible</code></template>
+        </i18n-t>
       </p>
       <template v-else>
         <p class="text-xs text-muted-foreground">{{ review.summary }}</p>
@@ -116,16 +118,18 @@ async function runSuggest() {
       <form class="flex gap-2" @submit.prevent="runSuggest">
         <Input v-model="instruction" :placeholder="t('assistant.suggestPlaceholder')" class="h-8 text-xs" />
         <Button size="sm" type="submit" :disabled="busy !== null || !instruction.trim()">
-          {{ busy === 'suggest' ? '…' : 'Go' }}
+          {{ busy === 'suggest' ? '…' : t('assistant.go') }}
         </Button>
       </form>
       <div v-if="suggestion" class="space-y-2">
         <p v-if="!suggestion.enabled" class="text-xs text-muted-foreground">
-          Suggestions are disabled — set <code>ASSISTANT_PROVIDER=openai-compatible</code>.
+          <i18n-t keypath="assistant.suggestionsDisabled" tag="span" scope="global">
+            <template #setting><code>ASSISTANT_PROVIDER=openai-compatible</code></template>
+          </i18n-t>
         </p>
         <template v-else>
           <pre class="max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-xs">{{ suggestion.suggestion }}</pre>
-          <Button size="sm" variant="outline" @click="emit('append', suggestion.suggestion)">Append to draft</Button>
+          <Button size="sm" variant="outline" @click="emit('append', suggestion.suggestion)">{{ t('assistant.appendToDraft') }}</Button>
         </template>
       </div>
     </div>

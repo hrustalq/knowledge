@@ -11,6 +11,7 @@ import {
   type AiAgentSummary,
   type ListAgentRunsResponse,
 } from '@knowledge/contracts';
+import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AiPluginsService } from './ai-plugins.service.js';
@@ -82,7 +83,7 @@ export class AiAgentsService {
   async update(workspaceId: string, key: string, dto: UpdateAiAgentDto, userId?: string): Promise<AiAgentSummary> {
     const isBuiltIn = (BUILT_IN_AGENT_KEYS as readonly string[]).includes(key);
     const existing = await this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key } } });
-    if (!isBuiltIn && !existing) throw new NotFoundException(`Unknown agent "${key}"`);
+    if (!isBuiltIn && !existing) throw new NotFoundException(t('error.ai.agentNotFound', { key }));
 
     await this.validate(workspaceId, dto.tools ?? undefined, dto.skillIds ?? undefined, dto.providerId ?? undefined);
 
@@ -112,10 +113,10 @@ export class AiAgentsService {
     };
 
     if (data.scheduleEnabled && !data.scheduleOwner && !existing?.scheduleOwner) {
-      throw new BadRequestException('A scheduled agent needs an owner to run as.');
+      throw new BadRequestException(t('error.ai.agentScheduleNeedsOwner'));
     }
     if (data.scheduleEnabled && !(dto.scheduleMinutes ?? existing?.scheduleMinutes)) {
-      throw new BadRequestException('A scheduled agent needs an interval in minutes.');
+      throw new BadRequestException(t('error.ai.agentScheduleNeedsInterval'));
     }
 
     await this.prisma.aiAgent.upsert({
@@ -134,7 +135,7 @@ export class AiAgentsService {
    */
   async reset(workspaceId: string, key: string): Promise<AiAgentSummary> {
     if (!(BUILT_IN_AGENT_KEYS as readonly string[]).includes(key)) {
-      throw new BadRequestException(`"${key}" is not a built-in agent — there is no default to reset to.`);
+      throw new BadRequestException(t('error.ai.agentNotBuiltIn', { key }));
     }
     await this.prisma.aiAgent.deleteMany({ where: { workspaceId, key } });
     this.registry.invalidate(workspaceId);
@@ -144,15 +145,15 @@ export class AiAgentsService {
   async create(workspaceId: string, dto: CreateAiAgentDto, userId?: string): Promise<AiAgentSummary> {
     const key = dto.key.trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9-]{1,59}$/.test(key)) {
-      throw new BadRequestException('Key must be lowercase letters, digits and dashes.');
+      throw new BadRequestException(t('error.ai.agentKeyInvalid'));
     }
     // A custom agent shadowing a built-in would make `resolve` ambiguous and
     // silently take over a call site, so the namespace is closed at the front.
     if ((BUILT_IN_AGENT_KEYS as readonly string[]).includes(key)) {
-      throw new BadRequestException(`"${key}" is a built-in agent — edit it instead of creating one.`);
+      throw new BadRequestException(t('error.ai.agentIsBuiltInCreate', { key }));
     }
     const clash = await this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key } } });
-    if (clash) throw new BadRequestException(`An agent named "${key}" already exists.`);
+    if (clash) throw new BadRequestException(t('error.ai.agentNameTaken', { key }));
 
     await this.validate(workspaceId, dto.tools, dto.skillIds, dto.providerId ?? undefined);
     await this.prisma.aiAgent.create({
@@ -175,10 +176,10 @@ export class AiAgentsService {
 
   async remove(workspaceId: string, key: string): Promise<void> {
     if ((BUILT_IN_AGENT_KEYS as readonly string[]).includes(key)) {
-      throw new BadRequestException(`"${key}" is a built-in agent — reset it or disable it instead of deleting.`);
+      throw new BadRequestException(t('error.ai.agentIsBuiltInDelete', { key }));
     }
     const deleted = await this.prisma.aiAgent.deleteMany({ where: { workspaceId, key } });
-    if (deleted.count === 0) throw new NotFoundException(`Unknown agent "${key}"`);
+    if (deleted.count === 0) throw new NotFoundException(t('error.ai.agentNotFound', { key }));
     this.registry.invalidate(workspaceId);
   }
 
@@ -208,16 +209,16 @@ export class AiAgentsService {
         ...pluginTools.map((tool) => tool.function.name),
       ]);
       const unknown = tools.filter((name) => !known.has(name));
-      if (unknown.length) throw new BadRequestException(`Unknown tools: ${unknown.join(', ')}`);
+      if (unknown.length) throw new BadRequestException(t('error.ai.agentUnknownTools', { tools: unknown.join(', ') }));
     }
     if (skillIds?.length) {
       const found = await this.prisma.aiSkill.count({ where: { workspaceId, id: { in: skillIds } } });
-      if (found !== new Set(skillIds).size) throw new BadRequestException('Unknown skill in skillIds.');
+      if (found !== new Set(skillIds).size) throw new BadRequestException(t('error.ai.agentUnknownSkill'));
     }
     if (providerId) {
       const provider = await this.prisma.aiProvider.findUnique({ where: { id: providerId } });
       if (!provider || provider.workspaceId !== workspaceId) {
-        throw new BadRequestException('Unknown provider profile.');
+        throw new BadRequestException(t('error.ai.agentUnknownProvider'));
       }
     }
   }
@@ -239,6 +240,8 @@ function toSummary(agent: ResolvedAgent, row: AiAgent | null): AiAgentSummary {
     maxToolCalls: agent.config.maxToolCalls,
     timeoutMs: agent.config.timeoutMs,
     surfaces: agent.surfaces,
+    // Surface vs. executor: `background` is a declaration, this is the fact.
+    runnable: agent.surfaces.includes('background') && RUNNABLE_AGENTS.has(agent.key),
     requires: agent.requires,
     missing: agent.missing,
     purpose: agent.purpose,
@@ -275,9 +278,9 @@ export class AgentRunsService {
 
   async start(workspaceId: string, agentKey: string, principal: Principal, note?: string): Promise<AgentRunSummary> {
     const agent = await this.registry.resolve(workspaceId, agentKey);
-    if (!agent.enabled) throw new BadRequestException(`Agent "${agentKey}" is disabled.`);
+    if (!agent.enabled) throw new BadRequestException(t('error.ai.agentDisabled', { key: agentKey }));
     if (!agent.surfaces.includes('background') || !RUNNABLE_AGENTS.has(agentKey)) {
-      throw new BadRequestException(`Agent "${agentKey}" cannot be run in the background.`);
+      throw new BadRequestException(t('error.ai.agentNotBackground', { key: agentKey }));
     }
     // Checked at enqueue and again in the processor: a queued run can wait long
     // enough for the month's quota to be spent by something else.
@@ -291,7 +294,7 @@ export class AgentRunsService {
     if (inFlight > 0) {
       throw new ConflictException({
         statusCode: 409,
-        message: `A run of "${agentKey}" is already in progress.`,
+        message: t('error.ai.agentRunInFlight', { key: agentKey }),
         reason: 'in-flight',
       });
     }
@@ -356,7 +359,7 @@ export class AgentRunsService {
 
   async get(workspaceId: string, id: string): Promise<AgentRunSummary> {
     const run = await this.prisma.agentRun.findUnique({ where: { id } });
-    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(`Unknown run ${id}`);
+    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id }));
     const agent = await this.registry.resolve(workspaceId, run.agentKey).catch(() => null);
     return toRunSummary(run, agent?.name ?? run.agentKey);
   }

@@ -152,7 +152,7 @@ const shift = computed(() => Math.max(0, focusDepth.value - sidebar.treeDepthBud
         <Skeleton v-for="i in 6" :key="i" class="h-7 w-full" />
       </div>
       <p v-else-if="store.tree.length === 0" class="text-muted-foreground px-2.5 pt-1 text-xs">
-        No pages yet<template v-if="auth.canEdit">
+        {{ t('nav.noPages') }}<template v-if="auth.canEdit">
           —
           <RouterLink to="/create" class="text-primary hover:underline">{{ t('nav.createFirstPage') }}</RouterLink></template>.
       </p>

@@ -87,6 +87,15 @@ export function createRouter() {
           { path: 'connectors', component: () => import('@/pages/ConnectorsPage.vue') },
           // Users management (platform admin only → /403 otherwise)
           { path: 'users', component: () => import('@/pages/AdminUsersPage.vue'), meta: { platformAdmin: true } },
+          // Docs: the product manual, bundled with the build it describes.
+          // Same shell-plus-roster shape as projects — the rail lives here, the
+          // article in the child, so switching articles replaces one pane.
+          // Open to everyone: documentation nobody may read documents nothing.
+          {
+            path: 'docs',
+            component: () => import('@/pages/DocsPage.vue'),
+            children: [{ path: ':slug?', component: () => import('@/pages/DocsArticlePage.vue') }],
+          },
         ],
       },
       // Legacy top-level paths → their settings home
@@ -95,6 +104,7 @@ export function createRouter() {
       { path: '/activity', redirect: '/settings/activity' },
       { path: '/access', redirect: '/settings/access' },
       { path: '/admin/users', redirect: '/settings/users' },
+      { path: '/docs', redirect: '/settings/docs' },
     ],
   })
 }

@@ -146,7 +146,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
           status: 'current',
           title: doc.title,
           body: { representation: 'storage', value },
-          version: { number: next, message: 'Updated from the knowledge base' },
+          version: { number: next, message: t('connector.pushVersionMessage') },
         }),
       })
     ).json()) as ConfluencePage;

@@ -6,11 +6,13 @@
  * diagrams, whiteboards) instead of hovering uselessly over them.
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Editor } from '@tiptap/core'
 import { Bold, Code, Highlighter, Italic, Link2, Strikethrough, Underline as UnderlineIcon } from 'lucide-vue-next'
 import { STATUS_COLORS, type StatusColor } from '@/lib/markdown/nodes'
 import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
 
+const { t } = useI18n()
 const props = defineProps<{ editor: Editor }>()
 const emit = defineEmits<{ link: [] }>()
 
@@ -65,27 +67,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="rect" :ref="setFloating" class="kn-bubble" :style="floatingStyles" role="toolbar" aria-label="Selection formatting">
-    <button type="button" :aria-pressed="editor.isActive('bold')" title="Bold" @mousedown.prevent="editor.chain().focus().toggleBold().run()">
+  <div v-if="rect" :ref="setFloating" class="kn-bubble" :style="floatingStyles" role="toolbar" :aria-label="t('toolbar.bubble.label')">
+    <button type="button" :aria-pressed="editor.isActive('bold')" :title="t('toolbar.bubble.bold')" @mousedown.prevent="editor.chain().focus().toggleBold().run()">
       <Bold class="size-4" />
     </button>
-    <button type="button" :aria-pressed="editor.isActive('italic')" title="Italic" @mousedown.prevent="editor.chain().focus().toggleItalic().run()">
+    <button type="button" :aria-pressed="editor.isActive('italic')" :title="t('toolbar.bubble.italic')" @mousedown.prevent="editor.chain().focus().toggleItalic().run()">
       <Italic class="size-4" />
     </button>
-    <button type="button" :aria-pressed="editor.isActive('underline')" title="Underline" @mousedown.prevent="editor.chain().focus().toggleUnderline().run()">
+    <button type="button" :aria-pressed="editor.isActive('underline')" :title="t('toolbar.bubble.underline')" @mousedown.prevent="editor.chain().focus().toggleUnderline().run()">
       <UnderlineIcon class="size-4" />
     </button>
-    <button type="button" :aria-pressed="editor.isActive('strike')" title="Strikethrough" @mousedown.prevent="editor.chain().focus().toggleStrike().run()">
+    <button type="button" :aria-pressed="editor.isActive('strike')" :title="t('toolbar.bubble.strikethrough')" @mousedown.prevent="editor.chain().focus().toggleStrike().run()">
       <Strikethrough class="size-4" />
     </button>
-    <button type="button" :aria-pressed="editor.isActive('code')" title="Inline code" @mousedown.prevent="editor.chain().focus().toggleCode().run()">
+    <button type="button" :aria-pressed="editor.isActive('code')" :title="t('toolbar.bubble.inlineCode')" @mousedown.prevent="editor.chain().focus().toggleCode().run()">
       <Code class="size-4" />
     </button>
     <span class="kn-bubble-sep" />
-    <button type="button" :aria-pressed="editor.isActive('highlight')" title="Highlight" @mousedown.prevent="editor.chain().focus().toggleHighlight().run()">
+    <button type="button" :aria-pressed="editor.isActive('highlight')" :title="t('toolbar.highlight')" @mousedown.prevent="editor.chain().focus().toggleHighlight().run()">
       <Highlighter class="size-4" />
     </button>
-    <button type="button" :aria-pressed="editor.isActive('link')" title="Link" @mousedown.prevent="emit('link')">
+    <button type="button" :aria-pressed="editor.isActive('link')" :title="t('toolbar.bubble.link')" @mousedown.prevent="emit('link')">
       <Link2 class="size-4" />
     </button>
     <span class="kn-bubble-sep" />

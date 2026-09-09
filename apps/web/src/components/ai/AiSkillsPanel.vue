@@ -77,10 +77,10 @@ async function submit() {
   try {
     if (editing.value) {
       await updateSkill.mutateAsync({ path: { id: editing.value.id }, body })
-      toast.success('Skill updated')
+      toast.success(t('ai.skillUpdated'))
     } else {
       await createSkill.mutateAsync({ body: { workspaceId, ...body } })
-      toast.success('Skill created')
+      toast.success(t('ai.skillCreated'))
     }
     open.value = false
   } catch (e) {
@@ -99,7 +99,7 @@ async function toggle(skill: AiSkillSummary, enabled: boolean) {
 async function remove(skill: AiSkillSummary) {
   try {
     await deleteSkill.mutateAsync({ path: { id: skill.id } })
-    toast.success(`Deleted "${skill.name}"`)
+    toast.success(t('ai.deletedNamed', { name: skill.name }))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -111,12 +111,12 @@ async function remove(skill: AiSkillSummary) {
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <p class="text-muted-foreground text-sm">
         <template v-if="skills.length">
-          {{ skills.filter((s) => s.enabled).length }} of {{ skills.length }} enabled
+          {{ t('ai.enabledOfTotal', { enabled: skills.filter((s) => s.enabled).length, total: skills.length }) }}
         </template>
         <template v-else>{{ t('ai.instructionsFollowed') }}</template>
       </p>
       <Button v-if="canManage && skills.length > 0" size="sm" @click="openNew">
-        <Plus class="size-3.5" /> New skill
+        <Plus class="size-3.5" /> {{ t('ai.skills.new') }}
       </Button>
     </div>
 
@@ -128,27 +128,27 @@ async function remove(skill: AiSkillSummary) {
       v-else-if="skills.length === 0"
       :icon="Sparkles"
       :title="t('ai.noSkills')"
-      body="A skill is a block of instructions the assistant follows — your house rules for how it writes. It joins a conversation when one of its trigger words appears, or when someone picks it in the chat composer."
+      :body="t('ai.skills.body')"
       :example="{
-        label: 'For example',
+        label: t('ai.forExample'),
         lines: [
-          'name      Release notes writer',
-          'triggers  release, changelog',
-          'says      Group by Added / Changed / Fixed.',
-          '          Cite the MR id for every bullet.',
+          t('ai.skills.exampleName'),
+          t('ai.skills.exampleTriggers'),
+          t('ai.skills.exampleSays1'),
+          t('ai.skills.exampleSays2'),
         ],
       }"
     >
       <template #action>
-        <Button v-if="canManage" size="sm" @click="openNew"><Plus class="size-3.5" /> New skill</Button>
-        <p v-else class="text-muted-foreground text-xs">A workspace admin can add one.</p>
+        <Button v-if="canManage" size="sm" @click="openNew"><Plus class="size-3.5" /> {{ t('ai.skills.new') }}</Button>
+        <p v-else class="text-muted-foreground text-xs">{{ t('ai.adminCanAdd') }}</p>
       </template>
     </AiEmptyState>
 
     <Table v-else>
       <TableHeader>
         <TableRow>
-          <TableHead>Name</TableHead>
+          <TableHead>{{ t('ai.name') }}</TableHead>
           <TableHead>{{ t('ai.triggers') }}</TableHead>
           <TableHead class="w-24">{{ t('ai.enabled') }}</TableHead>
           <TableHead class="w-20"></TableHead>
@@ -164,9 +164,9 @@ async function remove(skill: AiSkillSummary) {
           </TableCell>
           <TableCell>
             <div v-if="skill.triggers.length" class="flex flex-wrap gap-1">
-              <Badge v-for="t in skill.triggers" :key="t" variant="secondary" class="font-normal">{{ t }}</Badge>
+              <Badge v-for="trigger in skill.triggers" :key="trigger" variant="secondary" class="font-normal">{{ trigger }}</Badge>
             </div>
-            <span v-else class="text-muted-foreground text-xs">picked manually only</span>
+            <span v-else class="text-muted-foreground text-xs">{{ t('ai.skills.manualOnly') }}</span>
           </TableCell>
           <TableCell>
             <Checkbox
@@ -180,7 +180,7 @@ async function remove(skill: AiSkillSummary) {
               v-if="canManage"
               variant="ghost"
               size="sm"
-              :aria-label="`Delete ${skill.name}`"
+              :aria-label="t('ai.skills.deleteNamed', { name: skill.name })"
               @click="remove(skill)"
             >
               <Trash2 class="size-3.5" />
@@ -193,51 +193,50 @@ async function remove(skill: AiSkillSummary) {
     <Dialog v-model:open="open">
       <DialogContent class="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{{ editing ? 'Edit skill' : 'New skill' }}</DialogTitle>
+          <DialogTitle>{{ editing ? t('ai.skills.edit') : t('ai.skills.new') }}</DialogTitle>
           <DialogDescription>
-            Instructions are merged into the assistant's system prompt as trusted guidance — they shape how it
-            answers, and can never widen what it is allowed to read.
+            {{ t('ai.skills.dialogDesc') }}
           </DialogDescription>
         </DialogHeader>
 
         <form id="skill-form" class="space-y-4" @submit.prevent="submit">
           <label class="block space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">Name</span>
-            <Input v-model="form.name" required placeholder="Release notes writer" />
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.name') }}</span>
+            <Input v-model="form.name" required :placeholder="t('ai.skills.namePlaceholder')" />
           </label>
           <label class="block space-y-1">
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.description') }}</span>
-            <Input v-model="form.description" placeholder="Draft release notes from merged merge requests" />
+            <Input v-model="form.description" :placeholder="t('ai.skills.descriptionPlaceholder')" />
           </label>
           <label class="block space-y-1">
             <span class="text-muted-foreground text-xs font-medium">{{ t('ai.triggersCsv') }}</span>
             <Input v-model="form.triggers" placeholder="release, changelog, notes" />
           </label>
           <label class="block space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">Instructions (markdown)</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.skills.instructions') }}</span>
             <Textarea
               v-model="form.instructions"
               required
               rows="10"
               class="font-mono text-xs"
-              placeholder="Always group by Added / Changed / Fixed.&#10;Cite the MR id for every bullet.&#10;Never invent a version number."
+              :placeholder="t('ai.skills.instructionsPlaceholder')"
             />
           </label>
           <label class="flex items-center gap-2">
             <Checkbox :model-value="form.enabled" @update:model-value="form.enabled = $event === true" />
-            <span class="text-sm">Enabled</span>
+            <span class="text-sm">{{ t('ai.enabled') }}</span>
           </label>
         </form>
 
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" @click="open = false">Cancel</Button>
+          <Button type="button" variant="outline" size="sm" @click="open = false">{{ t('common.cancel') }}</Button>
           <Button
             type="submit"
             form="skill-form"
             size="sm"
             :disabled="createSkill.isPending.value || updateSkill.isPending.value"
           >
-            {{ editing ? 'Save' : 'Create' }}
+            {{ editing ? t('common.save') : t('common.create') }}
           </Button>
         </DialogFooter>
       </DialogContent>

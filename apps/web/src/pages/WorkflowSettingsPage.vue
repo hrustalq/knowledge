@@ -160,18 +160,18 @@ async function createNew() {
       body: {
         workspaceId,
         projectId: getProjectId(),
-        name: `Workflow ${workflows.value.length + 1}`,
+        name: t('workflow.settings.newName', { n: workflows.value.length + 1 }),
         graph: {
           steps: [
             {
               id: 'use-cases',
               kind: 'ai.generate',
-              title: 'Use cases',
+              title: t('workflow.settings.exampleTitle'),
               next: [],
               fanOut: true,
               autoApprove: false,
               maxItems: 8,
-              prompt: { user: 'List the use cases this entity takes part in.' },
+              prompt: { user: t('workflow.settings.seedPrompt') },
               produces: { category: 'use-case', relationToParent: 'IMPLEMENTS' },
             },
           ],
@@ -285,14 +285,13 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
       <div>
         <h1 class="text-lg font-semibold">{{ t('nav.workflows') }}</h1>
         <p class="text-muted-foreground mt-1 max-w-2xl text-sm">
-          A chain that turns one page into the next level of detail — an entity into use cases, a use case into
-          endpoints and screens. Nothing is published until someone approves it.
+          {{ t('workflow.settings.subtitle') }}
         </p>
       </div>
       <div class="flex items-center gap-2">
         <Badge v-if="!canManage" variant="outline">{{ t('workflow.readOnlyAdmin') }}</Badge>
         <Button v-if="canManage" size="sm" @click="createNew">
-          <Plus class="mr-1.5 size-4" /> New workflow
+          <Plus class="mr-1.5 size-4" /> {{ t('workflow.settings.newWorkflow') }}
         </Button>
       </div>
     </header>
@@ -313,12 +312,11 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
       <div class="max-w-md">
         <p class="text-sm font-medium">{{ t('workflow.noWorkflows') }}</p>
         <p class="text-muted-foreground mt-1.5 text-sm leading-relaxed">
-          A workflow is a chain of steps. The one this product was built for is three links long: an entity page
-          breaks down into use cases, and each use case becomes a set of API endpoints and screens.
+          {{ t('workflow.settings.emptyBody') }}
         </p>
       </div>
       <Button v-if="canManage" size="sm" @click="createNew">
-        <Plus class="mr-1.5 size-4" /> Create the first one
+        <Plus class="mr-1.5 size-4" /> {{ t('workflow.settings.createFirst') }}
       </Button>
     </div>
 
@@ -343,7 +341,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
             <span
               class="size-1.5 shrink-0 rounded-full"
               :class="workflow.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/30'"
-              :title="workflow.enabled ? 'Available to run' : 'Not available'"
+              :title="workflow.enabled ? t('workflow.settings.availableToRun') : t('workflow.settings.notAvailable')"
             />
             <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ workflow.name }}</span>
             <Zap
@@ -369,7 +367,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
           />
           <label class="text-muted-foreground flex items-center gap-1.5 text-xs">
             <Checkbox v-model="draft.enabled" :disabled="!canManage" />
-            Available to run
+            {{ t('workflow.settings.availableToRun') }}
           </label>
           <p v-if="errors.length" class="text-destructive ml-auto flex items-center gap-1.5 text-xs">
             <CircleAlert class="size-3.5" />
@@ -377,7 +375,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
           </p>
           <p v-else-if="dirty" class="text-muted-foreground ml-auto text-xs">{{ t('workflow.unsaved') }}</p>
           <p v-else class="text-muted-foreground ml-auto flex items-center gap-1.5 text-xs">
-            <Check class="size-3.5" /> Saved
+            <Check class="size-3.5" /> {{ t('workflow.settings.saved') }}
           </p>
         </div>
 
@@ -440,7 +438,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
                     <span class="min-w-0">
                       <span class="block text-xs font-medium">{{ t('workflow.whenSomeoneAsks') }}</span>
                       <span class="text-muted-foreground block text-[11px] leading-snug">
-                        A Run button on the page, and on /workflows.
+                        {{ t('workflow.settings.manualHint') }}
                       </span>
                     </span>
                   </label>
@@ -453,8 +451,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
                     <span class="min-w-0">
                       <span class="block text-xs font-medium">{{ t('workflow.onItsOwn') }}</span>
                       <span class="text-muted-foreground block text-[11px] leading-snug">
-                        Fires on the events below. A page that already has a run is never started again, and a
-                        workspace is capped on how many can run at once.
+                        {{ t('workflow.settings.autoHint') }}
                       </span>
                     </span>
                   </label>
@@ -462,7 +459,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
 
                 <div v-if="draft.trigger.autoStart" class="space-y-4">
                   <div class="space-y-1.5">
-                    <span class="text-muted-foreground text-xs font-medium">After</span>
+                    <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.settings.after') }}</span>
                     <label v-for="event in TRIGGER_EVENTS" :key="event" class="flex items-center gap-2">
                       <Checkbox
                         :model-value="draft.trigger.events.includes(event)"
@@ -473,7 +470,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
                     </label>
                   </div>
                   <div class="space-y-1.5">
-                    <span class="text-muted-foreground text-xs font-medium">Only for</span>
+                    <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.settings.onlyFor') }}</span>
                     <div class="flex flex-wrap gap-x-3 gap-y-1.5">
                       <label v-for="c in DOCUMENT_CATEGORIES" :key="c" class="flex items-center gap-1.5">
                         <Checkbox
@@ -484,7 +481,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
                         <span class="text-[11px]">{{ t(`category.${c}`) }}</span>
                       </label>
                     </div>
-                    <p class="text-muted-foreground text-[11px]">Nothing ticked means every category.</p>
+                    <p class="text-muted-foreground text-[11px]">{{ t('workflow.settings.everyCategory') }}</p>
                   </div>
                 </div>
               </div>
@@ -494,11 +491,11 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
 
         <footer v-if="canManage" class="flex flex-wrap items-center gap-2 border-t pt-3">
           <Button size="sm" :disabled="!dirty || saving || errors.length > 0" @click="save">
-            {{ saving ? 'Saving…' : 'Save' }}
+            {{ saving ? t('workflow.settings.saving') : t('common.save') }}
           </Button>
-          <Button size="sm" variant="ghost" :disabled="!dirty" @click="discard">Discard</Button>
+          <Button size="sm" variant="ghost" :disabled="!dirty" @click="discard">{{ t('common.discard') }}</Button>
           <Button size="sm" variant="ghost" class="text-muted-foreground" @click="validateOnServer">
-            Check on server
+            {{ t('workflow.settings.checkOnServer') }}
           </Button>
           <Button
             v-if="selected"
@@ -507,7 +504,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
             class="text-muted-foreground hover:text-destructive ml-auto"
             @click="remove(selected)"
           >
-            Delete workflow
+            {{ t('workflow.settings.deleteWorkflow') }}
           </Button>
         </footer>
       </section>

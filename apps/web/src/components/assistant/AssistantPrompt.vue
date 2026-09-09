@@ -226,8 +226,7 @@ function submit() {
           <div class="space-y-1">
             <p class="text-sm font-medium">{{ t('chat.needsAgentMode') }}</p>
             <p class="text-[13px] leading-relaxed text-muted-foreground">
-              Ask mode only reads. Switching lets the assistant write — a new page goes live immediately, a
-              change to an existing page opens a merge request for you to review.
+              {{ t('chat.agentModeExplainer') }}
             </p>
           </div>
           <p class="rounded-lg border bg-background px-3 py-2 text-[13px] leading-relaxed">
@@ -235,11 +234,11 @@ function submit() {
           </p>
           <p v-if="switched" class="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
             <Check class="size-3.5 text-emerald-500" />
-            Switched to Agent mode
+            {{ t('chat.switchedToAgent') }}
           </p>
           <Button v-else size="sm" :disabled="!active" @click="emit('switchMode', prompt.intent)">
             <Sparkles class="size-3.5" />
-            Switch to Agent and continue
+            {{ t('chat.switchAndContinue') }}
           </Button>
         </div>
       </div>
@@ -347,14 +346,14 @@ function submit() {
       <div class="flex items-center gap-2 pt-0.5">
         <p v-if="answered" class="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
           <Check class="size-3.5 text-emerald-500" />
-          Answered
+          {{ t('chat.answered') }}
         </p>
         <Button v-else type="submit" size="sm" :disabled="!active || !complete">
-          {{ prompt.submitLabel ?? 'Send answer' }}
+          {{ prompt.submitLabel ?? t('chat.sendAnswer') }}
           <ArrowRight class="size-3.5" />
         </Button>
         <p v-if="active && !complete" class="text-[11px] text-muted-foreground">
-          Answer the starred fields to continue.
+          {{ t('chat.answerStarred') }}
         </p>
       </div>
     </form>

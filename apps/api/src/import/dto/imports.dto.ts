@@ -79,6 +79,6 @@ export class SubmitImportDto {
    */
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })
   @ValidateIf((o: SubmitImportDto) => o.parentId !== undefined && o.parentId !== null)
-  @Matches(UUID_RE, { message: 'parentId must be a UUID' })
+  @Matches(UUID_RE, { message: vmsg('isUuid') })
   parentId?: string | null;
 }

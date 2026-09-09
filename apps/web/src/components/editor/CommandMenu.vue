@@ -5,6 +5,7 @@
  * thing people notice immediately and can never articulate.
  */
 import { computed, nextTick, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 export interface CommandItem {
   id: string
@@ -16,6 +17,8 @@ export interface CommandItem {
   /** What `id` names, for the menus whose entries are not all the same thing. */
   kind?: 'page' | 'person'
 }
+
+const { t } = useI18n()
 
 const props = defineProps<{
   items: CommandItem[]
@@ -96,7 +99,7 @@ defineExpose({ onKeyDown })
 </script>
 
 <template>
-  <div class="kn-cmd" :style="position" role="listbox" aria-label="Insert">
+  <div class="kn-cmd" :style="position" role="listbox" :aria-label="t('toolbar.insertMenu')">
     <div ref="listEl" class="kn-cmd-scroll quiet-scroll">
       <template v-for="group in groups" :key="group.name">
         <div class="kn-cmd-group">{{ group.name }}</div>
@@ -116,7 +119,7 @@ defineExpose({ onKeyDown })
           <span v-if="item.hint" class="kn-cmd-hint">{{ item.hint }}</span>
         </button>
       </template>
-      <p v-if="items.length === 0" class="kn-cmd-empty">{{ emptyLabel ?? 'No matches' }}</p>
+      <p v-if="items.length === 0" class="kn-cmd-empty">{{ emptyLabel ?? t('editor.noMatches') }}</p>
     </div>
   </div>
 </template>

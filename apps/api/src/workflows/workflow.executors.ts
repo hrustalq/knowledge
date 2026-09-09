@@ -3,7 +3,8 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import type { WorkflowRun, WorkflowRunNode } from '@prisma/client';
 import type { WorkflowNodeDraft, WorkflowStep } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { AgentRegistryService } from '../agents/agent-registry.service.js';
+import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
+import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { SearchService } from '../search/search.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -38,6 +39,7 @@ export class WorkflowExecutors {
     private readonly search: SearchService,
     private readonly storage: StorageService,
     private readonly agents: AgentRegistryService,
+    private readonly skills: AiSkillsService,
   ) {}
 
   async run(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
@@ -96,7 +98,7 @@ export class WorkflowExecutors {
           `Return JSON: {"items":[{"title":"…","summary":"…"}]}.`,
           `Return at most ${cap} items. Every item must be grounded in the source below —`,
           'do not invent things the source gives no basis for. Titles are short and specific.',
-          await this.skillText(step),
+          await this.skillText(run.workspaceId, step, planner),
         ]
           .filter(Boolean)
           .join('\n'),
@@ -113,7 +115,7 @@ export class WorkflowExecutors {
     ];
 
     const raw = await this.client.chat(
-      { config, userId: run.createdBy ?? 'workflow', operation: 'workflow', locale: asLocale(run.locale) },
+      { config, userId: run.createdBy, operation: 'workflow', locale: asLocale(run.locale) },
       messages,
       { json: true },
     );
@@ -141,7 +143,7 @@ export class WorkflowExecutors {
           'Return JSON: {"title":"…","markdown":"…","summary":"…"}.',
           'The markdown is the page body — no front matter, no wrapping code fence.',
           'Stay grounded in the source material; say plainly when something is not specified.',
-          await this.skillText(step),
+          await this.skillText(run.workspaceId, step, drafter),
         ]
           .filter(Boolean)
           .join('\n'),
@@ -159,7 +161,7 @@ export class WorkflowExecutors {
     ];
 
     const raw = await this.client.chat(
-      { config, userId: run.createdBy ?? 'workflow', operation: 'workflow', locale: asLocale(run.locale) },
+      { config, userId: run.createdBy, operation: 'workflow', locale: asLocale(run.locale) },
       messages,
       { json: true },
     );
@@ -227,16 +229,22 @@ export class WorkflowExecutors {
     return { title: document.title, markdown: raw.slice(0, 24_000) };
   }
 
-  /** Operator-authored instruction packs, exactly as `prepareTurn` appends them. */
-  private async skillText(step: WorkflowStep): Promise<string> {
-    if (!step.skillIds?.length) return '';
-    const skills = await this.prisma.aiSkill.findMany({
-      where: { id: { in: step.skillIds }, enabled: true },
-      select: { name: true, instructions: true },
-      take: 3,
-    });
-    if (skills.length === 0) return '';
-    return skills.map((s) => `## ${s.name}\n${s.instructions}`).join('\n\n').slice(0, 8_000);
+  /**
+   * Operator-authored instruction packs, through the same service `prepareTurn`
+   * uses. This used to hand-roll its own `<skills>` block because
+   * AiSkillsService was API-only; it now lives in AiCoreModule, so a step and a
+   * chat turn cannot render skills two different ways.
+   *
+   * The agent's own `skillIds` join the step's — that is what an agent
+   * *referencing* skills means (docs/features/20), and a step that names none
+   * still gets whatever its agent carries. Trigger matching runs against the
+   * step's prompt, which the workflow author wrote, never against the source
+   * document: page content must not be able to select instructions.
+   */
+  private async skillText(workspaceId: string, step: WorkflowStep, agent: ResolvedAgent): Promise<string> {
+    const ids = [...(step.skillIds ?? []), ...agent.skillIds];
+    const haystack = `${step.prompt?.system ?? ''}\n${step.prompt?.user ?? ''}`;
+    return this.skills.renderPrompt(await this.skills.forTurn(workspaceId, haystack, ids));
   }
 
   // ------------------------------------------------------------------ parsing

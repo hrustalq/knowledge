@@ -15,19 +15,20 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { vmsg } from '../common/validation.js';
 
 export class ExpandGraphDto {
   @ApiPropertyOptional({ default: 1, minimum: 1, maximum: 3, description: 'Entity hops from the vector hits' })
   @IsOptional()
   @IsInt()
-  @Min(1)
-  @Max(3)
+  @Min(1, { message: vmsg('min') })
+  @Max(3, { message: vmsg('max') })
   depth?: number;
 
   @ApiPropertyOptional({ type: [String], description: 'Relation edge types to follow (default: all)' })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(10)
+  @ArrayMaxSize(10, { message: vmsg('arrayMaxSize') })
   @IsString({ each: true })
   relationTypes?: string[];
 }
@@ -36,14 +37,14 @@ export class SearchFiltersDto {
   @ApiPropertyOptional({ enum: DOCUMENT_CATEGORIES, isArray: true, description: 'Only return documents in these categories (feature 02)' })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(8)
+  @ArrayMaxSize(8, { message: vmsg('arrayMaxSize') })
   @IsIn(DOCUMENT_CATEGORIES as unknown as string[], { each: true })
   categories?: DocumentCategory[];
 
   @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Only return documents in these projects' })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(20)
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
   @IsUUID('4', { each: true })
   projectIds?: string[];
 
@@ -54,9 +55,9 @@ export class SearchFiltersDto {
   @ApiPropertyOptional({ type: [String], description: 'Only return documents carrying any of these tags' })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(20)
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
   @IsString({ each: true })
-  @MaxLength(200, { each: true })
+  @MaxLength(200, { each: true, message: vmsg('maxLength') })
   tags?: string[];
 }
 
@@ -78,8 +79,8 @@ export class SearchDto {
   @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
   @IsOptional()
   @IsInt()
-  @Min(1)
-  @Max(100)
+  @Min(1, { message: vmsg('min') })
+  @Max(100, { message: vmsg('max') })
   limit?: number;
 
   /** Phase 4 hybrid expansion: walk relation edges out from the vector hits. */

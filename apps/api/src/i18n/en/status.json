@@ -1,0 +1,42 @@
+{
+  "mr": {
+    "open": "open",
+    "merged": "merged",
+    "closed": "closed"
+  },
+  "revision": {
+    "draft": "a draft",
+    "finalized": "finalized",
+    "indexing": "indexing",
+    "indexed": "indexed",
+    "failed": "failed"
+  },
+  "import": {
+    "awaiting-upload": "still awaiting its upload",
+    "queued": "queued",
+    "running": "still being parsed",
+    "parsed": "parsed",
+    "submitted": "already submitted",
+    "failed": "failed"
+  },
+  "node": {
+    "pending": "queued",
+    "running": "running",
+    "awaiting-review": "awaiting review",
+    "approved": "approved",
+    "materializing": "publishing",
+    "published": "published",
+    "rejected": "rejected",
+    "skipped": "skipped",
+    "failed": "failed"
+  },
+  "run": {
+    "pending": "pending",
+    "running": "running",
+    "awaiting-review": "awaiting review",
+    "completed": "completed",
+    "paused": "paused",
+    "cancelled": "cancelled",
+    "failed": "failed"
+  }
+}

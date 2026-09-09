@@ -2,6 +2,7 @@ import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpSta
 import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { type ApiErrorCode, type ApiErrorPayload, API_ERROR_CODES, errorCodeForStatus } from '@knowledge/contracts';
+import { t } from '../i18n/t.js';
 
 /**
  * Global HTTP exception filter: normalizes EVERY error — HttpException,
@@ -26,7 +27,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const requestId = (Array.isArray(headerId) ? headerId[0] : headerId) ?? randomUUID();
 
     let status: number = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
+    let message = t('error.internal');
     let code: ApiErrorCode | undefined;
     let details: Record<string, unknown> | undefined;
 
@@ -46,6 +47,13 @@ export class ApiExceptionFilter implements ExceptionFilter {
           details = { errors: rawMessage };
         } else {
           message = typeof rawMessage === 'string' ? rawMessage : exception.message;
+          // Nest's router 404 for an unmatched path ("Cannot GET /v1/nope") is
+          // produced by the framework, never by a throw site, so it is the one
+          // message that has to be recognised rather than translated at source.
+          const unmatched = /^Cannot ([A-Z]+) (.+)$/.exec(message);
+          if (status === HttpStatus.NOT_FOUND && unmatched) {
+            message = t('error.routeNotFound', { method: unmatched[1], path: unmatched[2] });
+          }
         }
         if (typeof rawCode === 'string' && (API_ERROR_CODES as readonly string[]).includes(rawCode)) {
           code = rawCode as ApiErrorCode;

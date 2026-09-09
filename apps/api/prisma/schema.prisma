@@ -365,6 +365,9 @@ model User {
   isAdmin      Boolean   @default(false) @map("is_admin")
   // Soft disable: authentication (sessions AND api keys) is refused while set.
   disabledAt   DateTime? @map("disabled_at") @db.Timestamptz
+  // UI + API language (docs/features/18). Mirrored into the kn_lang cookie so
+  // the SSR pass renders in it; the cookie alone would not follow a browser change.
+  locale       String    @default("en")
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   memberships    WorkspaceMember[]
@@ -790,6 +793,11 @@ model ImportJob {
   /// where a page came from.
   documentId String? @map("document_id") @db.Uuid
 
+  /// Language of whoever started the import, frozen here: OCR transcription and
+  /// parser warnings are produced later by the worker, which has no request to
+  /// read Accept-Language from.
+  locale String @default("en")
+
   createdBy   String?   @map("created_by") @db.Uuid
   startedAt   DateTime? @map("started_at") @db.Timestamptz
   completedAt DateTime? @map("completed_at") @db.Timestamptz
@@ -863,6 +871,9 @@ model WorkflowRun {
   /// crash, a deploy, and a week of nobody clicking Approve.
   snapshot  Json?
   error     String?
+  /// Language the generated pages are written in, frozen at start for the same
+  /// reason definition_snapshot is: the nodes run later, out of any request.
+  locale    String  @default("en")
   /// Set when the run was started by a trigger rather than by a person.
   startedBy String? @map("started_by")
 

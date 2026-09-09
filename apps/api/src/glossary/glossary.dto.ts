@@ -11,6 +11,7 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
+import { vmsg } from '../common/validation.js';
 
 /** Mirrors UUID_RE in acl.guard.ts (any version digit, nil allowed). */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,21 +55,21 @@ export class CreateGlossaryTermDto {
   @ApiProperty({ example: 'Merge base' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(MAX_TERM_CHARS)
+  @MaxLength(MAX_TERM_CHARS, { message: vmsg('maxLength') })
   term!: string;
 
   @ApiProperty({ example: 'The nearest common ancestor of two revisions in the DAG.' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(MAX_DEFINITION_CHARS)
+  @MaxLength(MAX_DEFINITION_CHARS, { message: vmsg('maxLength') })
   definition!: string;
 
   @ApiPropertyOptional({ type: [String], description: 'Abbreviations and inflections that link to this entry' })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(20)
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
   @IsString({ each: true })
-  @MaxLength(MAX_TERM_CHARS, { each: true })
+  @MaxLength(MAX_TERM_CHARS, { each: true, message: vmsg('maxLength') })
   aliases?: string[];
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Page that defines the term in full' })
@@ -96,22 +97,22 @@ export class UpdateGlossaryTermDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(MAX_TERM_CHARS)
+  @MaxLength(MAX_TERM_CHARS, { message: vmsg('maxLength') })
   term?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(MAX_DEFINITION_CHARS)
+  @MaxLength(MAX_DEFINITION_CHARS, { message: vmsg('maxLength') })
   definition?: string;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(20)
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
   @IsString({ each: true })
-  @MaxLength(MAX_TERM_CHARS, { each: true })
+  @MaxLength(MAX_TERM_CHARS, { each: true, message: vmsg('maxLength') })
   aliases?: string[];
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'null unlinks the defining page' })

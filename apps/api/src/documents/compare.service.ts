@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { parseStructured, structuralDiff } from './structural-diff.js';
+import { t } from '../i18n/t.js';
 
 const DIFF_FORMAT = 'unified-json';
 const STRUCTURAL_FORMAT = 'structural-json';
@@ -54,7 +55,7 @@ export class CompareService {
     opts: CompareOptions = {},
   ): Promise<CompareResponse> {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
-    if (!document) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
 
     const [from, to] = await Promise.all([
       this.getComparableRevision(documentId, fromId),
@@ -315,11 +316,11 @@ export class CompareService {
       include: { branch: true },
     });
     if (!rev || rev.documentId !== documentId) {
-      throw new NotFoundException(`Revision ${revisionId} not found on document ${documentId}`);
+      throw new NotFoundException(t('error.revision.notFoundOnDocument', { revisionId, documentId }));
     }
     if (!rev.contentHash) {
       throw new BadRequestException(
-        `Revision ${revisionId} is ${rev.status} — only finalized revisions can be compared`,
+        t('error.revision.notComparable', { id: revisionId, status: t(`status.revision.${rev.status}`) }),
       );
     }
     return rev;

@@ -1,0 +1,47 @@
+{
+  "stage": {
+    "reading-file": "Reading the file",
+    "reading-document": "Reading the document",
+    "reading-image": "Reading the image",
+    "reading-rows": "Reading rows",
+    "opening-pdf": "Opening the PDF",
+    "unpacking-deck": "Unpacking the deck",
+    "checking-vision": "Checking for a vision model",
+    "converting": "Converting to markdown",
+    "building-sections": "Building sections",
+    "building-table": "Building the table",
+    "rebuilding-structure": "Rebuilding structure",
+    "formatting": "Formatting",
+    "parsing": "Parsing"
+  },
+  "warning": {
+    "passthrough": "{text}",
+    "remoteImages": {
+      "one": "{count} image is linked from its original address rather than attached — it will break if that site goes away.",
+      "other": "{count} images are linked from their original address rather than attached — they will break if that site goes away."
+    },
+    "htmlFurnitureDropped": "Scripts, styles and page furniture (nav, header, footer) were dropped.",
+    "noLegibleText": "No legible text was found in this image.",
+    "scannedPdf": "Almost no selectable text was found — this looks like a scanned PDF, so its pages are images rather than text.",
+    "noHeadings": "No headings could be detected, so the whole file became one section. Adding headings below will improve how it is chunked and searched.",
+    "runningHeads": {
+      "one": "Removed {count} repeating header/footer line and page numbers.",
+      "other": "Removed {count} repeating header/footer lines and page numbers."
+    },
+    "frontmatterKept": "Frontmatter was kept, so any `relations:` and `tags:` it declares will be indexed as facts.",
+    "rejoinedLines": "Hard line breaks were rejoined into paragraphs.",
+    "imagesAttached": {
+      "one": "{count} image was imported and will be attached to the page.",
+      "other": "{count} images were imported and will be attached to the page."
+    },
+    "speakerNotes": {
+      "one": "Speaker notes from {count} slide were imported as quotes.",
+      "other": "Speaker notes from {count} slides were imported as quotes."
+    },
+    "slideChromeDropped": "Slide layout, animation and theming are not carried over — only the content is.",
+    "invalidStructured": "The file is not valid {lang} ({reason}), so it was imported verbatim.",
+    "singleCodeBlock": "The file was kept as a single code block because it is too large to split into readable sections.",
+    "rowsTruncated": "Only the first {kept} of {total} rows were imported.",
+    "wideTable": "{count} columns is wide for a page — the table will scroll sideways. Consider splitting it before importing."
+  }
+}

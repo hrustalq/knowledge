@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { ArrowLeft, PauseCircle, PlayCircle, XCircle } from 'lucide-vue-next'
+import { PauseCircle, PlayCircle, XCircle } from 'lucide-vue-next'
 import type {
   WorkflowNodeEventType,
   WorkflowRunEventType,

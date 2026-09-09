@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { vmsg } from '../common/validation.js';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'teammate@example.com' })
@@ -9,14 +10,14 @@ export class CreateUserDto {
   @ApiProperty({ example: 'Teammate' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   displayName!: string;
 
   @ApiPropertyOptional({ minLength: 8, description: 'Optional initial password; omit to let the user set one via password reset' })
   @IsOptional()
   @IsString()
-  @MinLength(8)
-  @MaxLength(200)
+  @MinLength(8, { message: vmsg('minLength') })
+  @MaxLength(200, { message: vmsg('maxLength') })
   password?: string;
 
   @ApiPropertyOptional({ default: false })
@@ -30,7 +31,7 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   displayName?: string;
 
   @ApiPropertyOptional()
@@ -46,7 +47,7 @@ export class UpdateUserDto {
   @ApiPropertyOptional({ minLength: 8, description: 'Admin password override; revokes the user sessions' })
   @IsOptional()
   @IsString()
-  @MinLength(8)
-  @MaxLength(200)
+  @MinLength(8, { message: vmsg('minLength') })
+  @MaxLength(200, { message: vmsg('maxLength') })
   password?: string;
 }

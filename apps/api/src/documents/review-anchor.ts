@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import type { ReviewThreadAnchor } from '@knowledge/contracts';
 import type { ThreadAnchorDto } from './dto/merge-requests.dto.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Whitespace as rendered is layout, not content: the same passage yields
@@ -22,7 +23,7 @@ export function validateThreadAnchor(dto: ThreadAnchorDto): ReviewThreadAnchor {
   switch (dto.type) {
     case 'line':
       if (!dto.revisionId || dto.line === undefined) {
-        throw new BadRequestException('Line anchors require revisionId and line');
+        throw new BadRequestException(t('error.anchor.line'));
       }
       return {
         type: 'line',
@@ -37,7 +38,7 @@ export function validateThreadAnchor(dto: ThreadAnchorDto): ReviewThreadAnchor {
       // written by one client resolves in every other.
       const quote = normalizeQuote(dto.quote);
       if (!dto.revisionId || !quote) {
-        throw new BadRequestException('Text anchors require revisionId and a non-empty quote');
+        throw new BadRequestException(t('error.anchor.text'));
       }
       return {
         type: 'text',
@@ -48,10 +49,10 @@ export function validateThreadAnchor(dto: ThreadAnchorDto): ReviewThreadAnchor {
       };
     }
     case 'section':
-      if (!dto.heading) throw new BadRequestException('Section anchors require heading');
+      if (!dto.heading) throw new BadRequestException(t('error.anchor.section'));
       return { type: 'section', heading: dto.heading };
     case 'entity':
-      if (!dto.entityKey) throw new BadRequestException('Entity anchors require entityKey');
+      if (!dto.entityKey) throw new BadRequestException(t('error.anchor.entity'));
       return { type: 'entity', entityKey: dto.entityKey };
   }
 }

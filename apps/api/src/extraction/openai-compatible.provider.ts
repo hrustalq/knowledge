@@ -20,6 +20,10 @@ const INFERABLE_TYPES = [
   'CONTRADICTS',
 ] as const;
 
+// Deliberately NOT localized (docs/features/18): this prompt emits stable graph
+// keys like "service:identity", and those must be identical whatever language
+// the page is written in. Localizing them would fragment the graph — the same
+// entity extracted from an English and a Russian page would never link up.
 const SYSTEM_PROMPT = `You extract relations between a documentation page and named entities (services, components, systems, teams, concepts) mentioned in it.
 Return STRICT JSON: {"relations":[{"type":<one of ${INFERABLE_TYPES.join(', ')}>,"entity":{"key":"<type>:<kebab-name>","type":"<service|component|team|concept|...>","name":"<Display Name>"},"confidence":<0..1>}]}
 Only include relations the text clearly supports. Use stable keys like "service:identity". Return {"relations":[]} when none.`;

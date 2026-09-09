@@ -12,6 +12,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { vmsg } from '../common/validation.js';
 
 const ROLES = ['viewer', 'editor', 'admin'] as const;
 
@@ -19,15 +20,15 @@ export class ListCandidatesQueryDto {
   @ApiPropertyOptional({ description: 'Case-insensitive email/display-name substring match' })
   @IsOptional()
   @IsString()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   q?: string;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 50, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @Max(50)
+  @Min(1, { message: vmsg('min') })
+  @Max(50, { message: vmsg('max') })
   limit?: number;
 }
 
@@ -35,7 +36,7 @@ export class CreateWorkspaceDto {
   @ApiProperty({ example: 'Platform Team' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   name!: string;
 }
 

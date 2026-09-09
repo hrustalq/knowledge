@@ -4,6 +4,47 @@
 export type RevisionStatus = 'draft' | 'finalized' | 'indexing' | 'indexed' | 'failed';
 export type IngestionJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
+// ---------------------------------------------------------------------------
+// Locales (docs/features/18) — the UI language and the language the API speaks.
+// Shared so the web, the API and the worker agree on one vocabulary; document
+// CONTENT is never translated, only the product around it.
+// ---------------------------------------------------------------------------
+
+export const SUPPORTED_LOCALES = ['en', 'ru'] as const;
+export type Locale = (typeof SUPPORTED_LOCALES)[number];
+/** English is the default everywhere, and the fallback when a key is missing. */
+export const DEFAULT_LOCALE: Locale = 'en';
+
+export function isLocale(value: unknown): value is Locale {
+  return typeof value === 'string' && (SUPPORTED_LOCALES as readonly string[]).includes(value);
+}
+
+/**
+ * First supported locale in an Accept-Language header, honouring q-weights.
+ * Matches on the primary subtag, so `ru-RU` resolves to `ru`. Returns null when
+ * nothing matches, which callers read as "fall through to the next source".
+ */
+export function parseAcceptLanguage(header: string | undefined | null): Locale | null {
+  if (!header) return null;
+  const ranked = header
+    .split(',')
+    .map((part) => {
+      const [tag, ...params] = part.trim().split(';');
+      const q = params.find((p) => p.trim().startsWith('q='));
+      const weight = q ? Number.parseFloat(q.trim().slice(2)) : 1;
+      return { tag: tag.trim().toLowerCase(), q: Number.isFinite(weight) ? weight : 0 };
+    })
+    .filter((entry) => entry.tag.length > 0 && entry.q > 0)
+    .sort((a, b) => b.q - a.q);
+
+  for (const { tag } of ranked) {
+    if (tag === '*') return DEFAULT_LOCALE;
+    const primary = tag.split('-')[0];
+    if (isLocale(primary)) return primary;
+  }
+  return null;
+}
+
 export interface DocumentSummary {
   documentId: string;
   workspaceId: string;
@@ -802,8 +843,16 @@ export interface MeResponse {
   mode: 'dev' | 'api-key' | 'session';
   /** Platform admin (users.is_admin): full access to every workspace + user management. */
   isAdmin: boolean;
+  /** UI + API language (docs/features/18). 'en' for the dev principal, which has no users row. */
+  locale: Locale;
   /** Empty in dev mode (the dev principal is admin+operator everywhere). */
   memberships: WorkspaceMembership[];
+}
+
+// PATCH /v1/me — the caller's own preferences. A no-op in AUTH_MODE=none:
+// the dev principal has no users row, so the choice lives in the kn_lang cookie.
+export interface UpdateMeRequest {
+  locale?: Locale;
 }
 
 // POST /v1/graph/query — trusted-operator only, read-only, row-limited, audited
@@ -2569,11 +2618,42 @@ export interface WorkflowDefinitionInfo {
   updatedAt: string;
 }
 
+/**
+ * Machine-readable identity of a graph problem. `validateGraph` emits these so
+ * the message can be translated once, server-side, instead of the catalog being
+ * duplicated into both the API and the web (docs/features/18).
+ */
+export type WorkflowIssueCode =
+  | 'empty'
+  | 'badId'
+  | 'duplicateId'
+  | 'unknownKind'
+  | 'missingTitle'
+  | 'unknownTarget'
+  | 'selfLoop'
+  | 'missingPrompt'
+  | 'producesNeedsCategory'
+  | 'deadEnd'
+  | 'maxItemsRange'
+  | 'fanOutIgnored'
+  | 'cycle'
+  | 'noEntry'
+  | 'manyEntries';
+
 /** One problem found by `compileDefinition` — surfaced live in the editor. */
 export interface WorkflowValidationIssue {
   /** Absent when the problem is the graph as a whole (a cycle, no entry step). */
   stepId?: string;
+  /**
+   * Already localized by the API to the caller's language — render it as-is.
+   * packages/workflow fills it with English, which is what a direct consumer of
+   * the package (or a worker path with no request) gets.
+   */
   message: string;
+  /** What went wrong, independent of language. Branch on this, never on `message`. */
+  code: WorkflowIssueCode;
+  /** Interpolation values for `code`; keys match the `{name}` slots in the catalog. */
+  params?: Record<string, string | number>;
   severity: 'error' | 'warning';
 }
 

@@ -20,6 +20,7 @@ import { ActivityService } from '../activity/activity.service.js';
 import { AUTHOR_ID_STUB } from './merge-requests.service.js';
 import type { CreateThreadDto } from './dto/merge-requests.dto.js';
 import { validateThreadAnchor } from './review-anchor.js';
+import { t } from '../i18n/t.js';
 
 type ThreadWithComments = ThreadRow & { comments: CommentRow[] };
 
@@ -122,7 +123,7 @@ export class DocumentThreadsService {
     const thread = await this.getThreadOrThrow(documentId, threadId);
     const comment = await this.requireCommentInThread(thread.id, commentId);
     if (comment.authorId !== actorId) {
-      throw new ForbiddenException('Only the author of a comment can edit it');
+      throw new ForbiddenException(t('error.comment.onlyAuthorCanEdit'));
     }
 
     await this.prisma.documentComment.update({
@@ -143,7 +144,7 @@ export class DocumentThreadsService {
     const thread = await this.getThreadOrThrow(documentId, threadId);
     const comment = await this.requireCommentInThread(thread.id, commentId);
     if (comment.authorId !== actorId) {
-      throw new ForbiddenException('Only the author of a comment can delete it');
+      throw new ForbiddenException(t('error.comment.onlyAuthorCanDelete'));
     }
 
     const remaining = await this.prisma.$transaction(async (tx) => {
@@ -172,7 +173,7 @@ export class DocumentThreadsService {
     const thread = await this.getThreadOrThrow(documentId, threadId);
     if (!thread.resolvable) {
       throw new BadRequestException(
-        `Thread ${thread.id} is a plain comment — only a thread can be resolved`,
+        t('error.thread.plainComment', { id: thread.id }),
       );
     }
 
@@ -241,14 +242,14 @@ export class DocumentThreadsService {
 
   private async getDocumentOrThrow(documentId: string) {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
-    if (!doc) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!doc) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
     return doc;
   }
 
   private async getThreadOrThrow(documentId: string, threadId: string) {
     const thread = await this.prisma.documentThread.findUnique({ where: { id: threadId } });
     if (!thread || thread.documentId !== documentId) {
-      throw new NotFoundException(`Thread ${threadId} not found on document ${documentId}`);
+      throw new NotFoundException(t('error.thread.notFoundOnDocument', { threadId, documentId }));
     }
     return thread;
   }
@@ -256,7 +257,7 @@ export class DocumentThreadsService {
   private async requireCommentInThread(threadId: string, commentId: string) {
     const comment = await this.prisma.documentComment.findUnique({ where: { id: commentId } });
     if (!comment || comment.threadId !== threadId) {
-      throw new NotFoundException(`Comment ${commentId} not found on thread ${threadId}`);
+      throw new NotFoundException(t('error.comment.notFoundOnThread', { commentId, threadId }));
     }
     return comment;
   }

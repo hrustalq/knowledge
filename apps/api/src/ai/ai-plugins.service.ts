@@ -14,6 +14,7 @@ import {
   slugFor,
   toolNameFor,
 } from './mcp-client.service.js';
+import { t } from '../i18n/t.js';
 
 /** How long the enabled-plugin roster is reused before PG is consulted again. */
 const CACHE_TTL_MS = 30_000;
@@ -70,7 +71,7 @@ export class AiPluginsService {
     const clash = await this.prisma.aiPlugin.findUnique({
       where: { workspaceId_name: { workspaceId, name: input.name } },
     });
-    if (clash) throw new ConflictException(`A plugin named "${input.name}" already exists in this workspace`);
+    if (clash) throw new ConflictException(t('error.ai.pluginNameTaken', { name: input.name }));
     await assertSafePluginUrl(input.url, this.allowPrivateUrls);
 
     const plugin = await this.prisma.aiPlugin.create({
@@ -98,7 +99,7 @@ export class AiPluginsService {
       const clash = await this.prisma.aiPlugin.findUnique({
         where: { workspaceId_name: { workspaceId: current.workspaceId, name: input.name } },
       });
-      if (clash) throw new ConflictException(`A plugin named "${input.name}" already exists in this workspace`);
+      if (clash) throw new ConflictException(t('error.ai.pluginNameTaken', { name: input.name }));
     }
     if (input.url && input.url !== current.url) {
       await assertSafePluginUrl(input.url, this.allowPrivateUrls);
@@ -244,7 +245,7 @@ export class AiPluginsService {
 
   private async getOrThrow(id: string): Promise<AiPlugin> {
     const plugin = await this.prisma.aiPlugin.findUnique({ where: { id } });
-    if (!plugin) throw new NotFoundException(`Plugin ${id} not found`);
+    if (!plugin) throw new NotFoundException(t('error.ai.pluginNotFound', { id }));
     return plugin;
   }
 

@@ -5,6 +5,7 @@ import { applyRunEvent, stepById } from '@knowledge/workflow';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { WorkflowProducer } from './workflow.producer.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Run progression (docs/features/17) — the part of the workflow engine that
@@ -157,7 +158,7 @@ export class WorkflowRunnerService {
       where: { id: runId },
       include: { nodes: { select: { status: true } }, definition: { select: { name: true } } },
     });
-    if (!run) throw new NotFoundException(`Workflow run ${runId} not found`);
+    if (!run) throw new NotFoundException(t('error.workflow.runNotFound', { id: runId }));
 
     const status = run.status as WorkflowRunStatus;
     // Paused and cancelled are operator intent; node progress must not undo it.

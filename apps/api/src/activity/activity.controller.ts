@@ -1,4 +1,5 @@
-import { Controller, Get, ParseUUIDPipe, Query } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
+import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Access } from '../auth/access.decorator.js';
 import { ActivityService } from './activity.service.js';

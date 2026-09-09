@@ -19,6 +19,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { hashPassword, verifyPassword } from './password.js';
 import type { Principal } from './principal.js';
 import { SessionsService } from './sessions.service.js';
+import { asLocale } from '../i18n/locale.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Auth flow (login / signup / password restoration) layered on Phase 5 auth.
@@ -37,11 +39,11 @@ export class AuthFlowService {
 
   async signup(email: string, displayName: string, password: string): Promise<AuthSessionResponse> {
     if (!this.config.get<boolean>('AUTH_SIGNUP_ENABLED')) {
-      throw new ForbiddenException('Self-service signup is disabled (AUTH_SIGNUP_ENABLED=false)');
+      throw new ForbiddenException(t('error.auth.signupDisabled'));
     }
     const normalized = email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email: normalized } });
-    if (existing) throw new ConflictException('An account with this email already exists');
+    if (existing) throw new ConflictException(t('error.auth.emailTaken'));
 
     const user = await this.prisma.user.create({
       data: { email: normalized, displayName: displayName.trim(), passwordHash: await hashPassword(password) },
@@ -67,7 +69,7 @@ export class AuthFlowService {
     const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     // Uniform failure: never reveal whether the email, password, or account state is wrong.
     if (!user?.passwordHash || user.disabledAt || !(await verifyPassword(password, user.passwordHash))) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException(t('error.auth.invalidCredentials'));
     }
     return this.openSession(user);
   }
@@ -104,7 +106,7 @@ export class AuthFlowService {
       where: { tokenHash: createHash('sha256').update(token).digest('hex') },
     });
     if (!reset || reset.usedAt || reset.expiresAt < new Date()) {
-      throw new BadRequestException('Invalid or expired reset token');
+      throw new BadRequestException(t('error.auth.invalidResetToken'));
     }
     await this.prisma.$transaction([
       this.prisma.passwordResetToken.update({ where: { id: reset.id }, data: { usedAt: new Date() } }),
@@ -114,10 +116,10 @@ export class AuthFlowService {
   }
 
   async changePassword(principal: Principal, currentPassword: string, newPassword: string): Promise<void> {
-    if (principal.mode === 'dev') throw new BadRequestException('No password to change in AUTH_MODE=none');
+    if (principal.mode === 'dev') throw new BadRequestException(t('error.auth.noPasswordInDevMode'));
     const user = await this.prisma.user.findUnique({ where: { id: principal.userId } });
     if (!user?.passwordHash || !(await verifyPassword(currentPassword, user.passwordHash))) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new UnauthorizedException(t('error.auth.currentPasswordIncorrect'));
     }
     await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(newPassword) } });
     await this.sessions.revokeAllForUser(user.id, principal.sessionId);
@@ -133,6 +135,7 @@ export class AuthFlowService {
       displayName: user.displayName,
       mode: 'session',
       isAdmin: user.isAdmin,
+      locale: asLocale(user.locale),
       memberships: memberships.map((m) => ({
         workspaceId: m.workspaceId,
         role: m.role as WorkspaceRole,

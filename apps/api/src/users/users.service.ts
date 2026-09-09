@@ -6,6 +6,7 @@ import type { Principal } from '../auth/principal.js';
 import { SessionsService } from '../auth/sessions.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateUserDto, UpdateUserDto } from './users.dto.js';
+import { t } from '../i18n/t.js';
 
 /** Users management (platform admin surface — AclGuard enforces @PlatformAdmin). */
 @Injectable()
@@ -26,7 +27,7 @@ export class UsersService {
   async create(dto: CreateUserDto): Promise<UserSummary> {
     const email = dto.email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) throw new ConflictException('An account with this email already exists');
+    if (existing) throw new ConflictException(t('error.auth.emailTaken'));
     const user = await this.prisma.user.create({
       data: {
         email,
@@ -41,14 +42,14 @@ export class UsersService {
 
   async update(actor: Principal, userId: string, dto: UpdateUserDto): Promise<UserSummary> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException(`User ${userId} not found`);
+    if (!user) throw new NotFoundException(t('error.user.notFound', { id: userId }));
 
     // Lock-out protection: admins cannot disable or de-admin themselves.
     if (actor.userId === userId && dto.disabled === true) {
-      throw new BadRequestException('You cannot disable your own account');
+      throw new BadRequestException(t('error.user.cannotDisableSelf'));
     }
     if (actor.userId === userId && dto.isAdmin === false) {
-      throw new BadRequestException('You cannot remove your own platform-admin flag');
+      throw new BadRequestException(t('error.user.cannotRemoveOwnAdmin'));
     }
 
     const data: Prisma.UserUpdateInput = {};

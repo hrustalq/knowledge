@@ -9,6 +9,8 @@ import type { AssistantToolCall, AiUsageOperation } from '@knowledge/contracts';
 import type { ResolvedAiConfig } from '../ai/ai-config.service.js';
 import { AiUsageService, estimateTokens, type AiUsageTokens } from '../ai/ai-usage.service.js';
 import { FREE_TOOLS } from './assistant.tools.js';
+import type { Locale } from '@knowledge/contracts';
+import { t } from '../i18n/t.js';
 
 /**
  * Everything one upstream call needs to know beyond its messages: which
@@ -20,6 +22,32 @@ export interface AiCallContext {
   userId: string;
   operation: AiUsageOperation;
   threadId?: string;
+  /**
+   * Language the model must answer in (docs/features/18). Applied centrally in
+   * `create`/`createStream`, so every caller gets it without editing prompts.
+   */
+  locale: Locale;
+}
+
+/**
+ * Append the language directive to the outgoing system message (docs/features/18).
+ *
+ * Done here rather than in each of the prompt builders so a new entry point
+ * cannot forget it. Pure — the caller's message array is never mutated, which
+ * matters because runWithTools reuses one conversation across rounds.
+ */
+function withLocaleDirective(
+  messages: ChatCompletionMessageParam[],
+  locale: Locale,
+): ChatCompletionMessageParam[] {
+  const directive = t('prompt.localeDirective', undefined, locale);
+  const at = messages.findIndex((m) => m.role === 'system');
+  if (at === -1) return [{ role: 'system', content: directive }, ...messages];
+  const system = messages[at];
+  if (typeof system.content !== 'string') return messages;
+  return messages.map((m, i) =>
+    i === at ? { ...m, content: `${system.content as string}\n\n${directive}` } : m,
+  );
 }
 
 /** How many distinct provider configurations keep a live SDK instance. */
@@ -128,7 +156,7 @@ export class AssistantClient {
    */
   private clientFor(config: ResolvedAiConfig): OpenAI {
     if (!config.enabled) {
-      throw new ServiceUnavailableException('Assistant provider is disabled for this workspace');
+      throw new ServiceUnavailableException(t('error.assistant.providerDisabled'));
     }
     const key = `${config.baseUrl}|${config.apiKey}|${config.timeoutMs}`;
     const hit = this.clients.get(key);
@@ -374,6 +402,7 @@ export class AssistantClient {
           // and every streamed turn would be invisible to token accounting.
           stream_options: { include_usage: true },
           ...params,
+          messages: withLocaleDirective(params.messages, ctx.locale),
         },
         signal ? { signal } : undefined,
       );
@@ -426,6 +455,7 @@ export class AssistantClient {
         model: ctx.config.model,
         temperature: ctx.config.temperature,
         ...params,
+        messages: withLocaleDirective(params.messages, ctx.locale),
       });
       this.bill(
         ctx,

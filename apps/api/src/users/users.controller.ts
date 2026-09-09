@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { ListUsersResponse, UserSummary } from '@knowledge/contracts';
 import { CurrentPrincipal, PlatformAdmin } from '../auth/access.decorator.js';

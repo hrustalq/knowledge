@@ -10,6 +10,7 @@ import {
   type ParsedImage,
   type ParseResult,
 } from './parser.types.js';
+import { t } from '../../i18n/t.js';
 
 /**
  * PPTX → markdown.
@@ -29,7 +30,7 @@ export class PptxParser implements DocumentParser {
   readonly id: ImportParserId = 'pptx';
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
-    await ctx.onStage('Unpacking the deck', 0.15);
+    await ctx.onStage(t('import.stage.unpacking-deck'), 0.15);
     const zip = unzipSync(bytes);
 
     const slideNames = Object.keys(zip)
@@ -99,15 +100,15 @@ export class PptxParser implements DocumentParser {
     const warnings: string[] = [];
     if (images.length > 0) {
       warnings.push(
-        `${images.length} ${images.length === 1 ? 'image was' : 'images were'} imported and will be attached to the page.`,
+        t('import.warning.imagesAttached', { count: images.length }),
       );
     }
     if (notesImported > 0) {
       warnings.push(
-        `Speaker notes from ${notesImported} ${notesImported === 1 ? 'slide' : 'slides'} were imported as quotes.`,
+        t('import.warning.speakerNotes', { count: notesImported }),
       );
     }
-    warnings.push('Slide layout, animation and theming are not carried over — only the content is.');
+    warnings.push(t('import.warning.slideChromeDropped'));
 
     return {
       markdown,

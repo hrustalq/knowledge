@@ -9,6 +9,7 @@ import {
   type ParseContext,
   type ParseResult,
 } from './parser.types.js';
+import { t } from '../../i18n/t.js';
 
 /** Below this, a config file is more readable as prose sections than as one fence. */
 const FLATTEN_LIMIT = 40_000;
@@ -27,7 +28,7 @@ export class StructuredParser implements DocumentParser {
   readonly id: ImportParserId = 'structured';
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
-    await ctx.onStage('Parsing', 0.4);
+    await ctx.onStage(t('import.stage.parsing'), 0.4);
     const text = new TextDecoder().decode(bytes);
     const isYaml = /\.ya?ml$/i.test(ctx.filename) || /yaml/i.test(ctx.contentType);
     const lang = isYaml ? 'yaml' : 'json';
@@ -39,7 +40,7 @@ export class StructuredParser implements DocumentParser {
       parsed = isYaml ? parseYaml(text) : JSON.parse(text);
     } catch (e) {
       // A file that will not parse is still worth importing — as its own text.
-      warnings.push(`The file is not valid ${lang.toUpperCase()} (${(e as Error).message}), so it was imported verbatim.`);
+      warnings.push(t('import.warning.invalidStructured', { lang: lang.toUpperCase(), reason: (e as Error).message }));
       const markdown = `# ${title}\n\n\`\`\`${lang}\n${text}\n\`\`\``;
       return { markdown, title, warnings, meta: { sections: 1, words: countWords(text) } };
     }
@@ -49,13 +50,13 @@ export class StructuredParser implements DocumentParser {
 
     if (!flat) {
       if (text.length > FLATTEN_LIMIT) {
-        warnings.push('The file was kept as a single code block because it is too large to split into readable sections.');
+        warnings.push(t('import.warning.singleCodeBlock'));
       }
       const markdown = `# ${title}\n\n\`\`\`${lang}\n${text.trimEnd()}\n\`\`\``;
       return { markdown, title, warnings, meta: { sections: 1, words: countWords(text) } };
     }
 
-    await ctx.onStage('Building sections', 0.7);
+    await ctx.onStage(t('import.stage.building-sections'), 0.7);
     const out: string[] = [`# ${title}`];
     for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
       out.push(`## ${key}`);

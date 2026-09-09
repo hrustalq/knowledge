@@ -29,6 +29,8 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { ImportProducer } from './import.producer.js';
 import type { CreateImportDto, SubmitImportDto } from './dto/imports.dto.js';
+import { t } from '../i18n/t.js';
+import { currentLocale } from '../i18n/locale.js';
 
 /** Author fallback in AUTH_MODE=none, the same stub the rest of the API uses. */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -64,12 +66,15 @@ export class ImportService {
     const format = importFormatFor(dto.filename, dto.contentType);
     if (!format) {
       throw new UnsupportedMediaTypeException(
-        `${dto.filename} is not a format that can be imported. Accepted: ${IMPORT_FORMATS.map((f) => f.extensions.join(', ')).join(', ')}.`,
+        t('error.import.unsupportedFormat', {
+          filename: dto.filename,
+          accepted: IMPORT_FORMATS.map((f) => f.extensions.join(', ')).join(', '),
+        }),
       );
     }
     if (dto.sizeBytes > this.maxBytes) {
       throw new PayloadTooLargeException(
-        `That file is ${formatBytes(dto.sizeBytes)}; the limit is ${formatBytes(this.maxBytes)}.`,
+        t('error.import.tooLarge', { size: formatBytes(dto.sizeBytes), limit: formatBytes(this.maxBytes) }),
       );
     }
     await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
@@ -87,6 +92,9 @@ export class ImportService {
         // Placeholder: the key needs the row id, which the insert just minted.
         s3Key: '',
         createdBy: userId ?? AUTHOR_ID_STUB,
+        // Frozen here: the parse runs in a worker minutes later, with no
+        // request left to read a language from (docs/features/18).
+        locale: currentLocale(),
       },
     });
 
@@ -117,15 +125,15 @@ export class ImportService {
     const row = await this.require(importId);
     if (row.status === 'running' || row.status === 'queued') return toInfo(row);
     if (row.status === 'submitted') {
-      throw new ConflictException('This import has already been turned into a page.');
+      throw new ConflictException(t('error.import.alreadySubmitted'));
     }
 
     const head = await this.storage.headObject(row.s3Key);
-    if (!head) throw new BadRequestException('The upload did not arrive in object storage. Try again.');
+    if (!head) throw new BadRequestException(t('error.import.uploadMissing'));
     if (head.contentLength > this.maxBytes) {
       await this.discard(importId);
       throw new PayloadTooLargeException(
-        `That file is ${formatBytes(head.contentLength)}; the limit is ${formatBytes(this.maxBytes)}.`,
+        t('error.import.tooLarge', { size: formatBytes(head.contentLength), limit: formatBytes(this.maxBytes) }),
       );
     }
 
@@ -151,7 +159,7 @@ export class ImportService {
   async content(importId: string): Promise<ImportContentResponse> {
     const row = await this.require(importId);
     if (row.status !== 'parsed' && row.status !== 'submitted') {
-      throw new ConflictException(`This import is ${row.status}, so there is nothing to review yet.`);
+      throw new ConflictException(t('error.import.notReviewable', { status: t(`status.import.${row.status}`) }));
     }
     const markdown = await this.storage.getObjectText(
       this.storage.importObjectKey(row.workspaceId, row.id, 'parsed.md'),
@@ -182,7 +190,7 @@ export class ImportService {
         });
       }
     }
-    throw new NotFoundException(`Image ${index} not found in import ${importId}`);
+    throw new NotFoundException(t('error.import.imageNotFound', { index, importId }));
   }
 
   /**
@@ -198,10 +206,10 @@ export class ImportService {
   async submit(importId: string, dto: SubmitImportDto, userId?: string): Promise<SubmitImportResponse> {
     const row = await this.require(importId);
     if (row.status === 'submitted') {
-      throw new ConflictException('This import has already been turned into a page.');
+      throw new ConflictException(t('error.import.alreadySubmitted'));
     }
     if (row.status !== 'parsed') {
-      throw new ConflictException(`This import is ${row.status}, so it cannot be submitted yet.`);
+      throw new ConflictException(t('error.import.notSubmittable', { status: t(`status.import.${row.status}`) }));
     }
 
     const projectId = dto.projectId ?? row.projectId;
@@ -234,7 +242,7 @@ export class ImportService {
 
     const markdown = await this.promoteImages(row, created.documentId, dto.markdown, userId);
     const revision = await this.prisma.documentRevision.findUnique({ where: { id: created.revisionId } });
-    if (!revision) throw new NotFoundException(`Revision ${created.revisionId} vanished mid-import`);
+    if (!revision) throw new NotFoundException(t('error.import.revisionVanished', { id: created.revisionId }));
     await this.storage.putObjectText(revision.s3Key, markdown, 'text/markdown');
     const finalized = await this.documents.finalizeRevision(created.documentId, created.revisionId);
 
@@ -269,14 +277,14 @@ export class ImportService {
 
   private async require(importId: string): Promise<ImportJob> {
     const row = await this.prisma.importJob.findUnique({ where: { id: importId } });
-    if (!row) throw new NotFoundException(`Import ${importId} not found`);
+    if (!row) throw new NotFoundException(t('error.import.notFound', { id: importId }));
     return row;
   }
 
   private async requireParent(parentId: string, projectId: string): Promise<void> {
     const parent = await this.prisma.document.findUnique({ where: { id: parentId } });
     if (!parent || parent.projectId !== projectId) {
-      throw new BadRequestException(`Parent page ${parentId} is not in this project`);
+      throw new BadRequestException(t('error.import.parentNotInProject', { id: parentId }));
     }
   }
 

@@ -7,6 +7,7 @@ import type {
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService, type DocumentRelation } from '../graph/graph.service.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Phase 5 historical queries (plan.md §11): "what did the KB state at
@@ -30,7 +31,7 @@ export class HistoryService {
   async factsAt(documentId: string, atRevisionId: string): Promise<FactsAtResponse> {
     const { document, byId } = await this.loadDag(documentId);
     if (!byId.has(atRevisionId)) {
-      throw new NotFoundException(`Revision ${atRevisionId} not found on document ${documentId}`);
+      throw new NotFoundException(t('error.revision.notFoundOnDocument', { revisionId: atRevisionId, documentId }));
     }
     const ancestors = this.ancestorSet(byId, atRevisionId);
     const rels = await this.graph.getDocumentRelations(document.workspaceId, documentId);
@@ -77,7 +78,7 @@ export class HistoryService {
     });
     if (!branch) {
       throw new NotFoundException(
-        `Branch ${branchName ?? document.defaultBranch} not found on document ${documentId}`,
+        t('error.branch.notFound', { name: branchName ?? document.defaultBranch, documentId }),
       );
     }
 
@@ -161,7 +162,7 @@ export class HistoryService {
 
   private async loadDag(documentId: string) {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
-    if (!document) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
     const revisions = await this.prisma.documentRevision.findMany({
       where: { documentId },
       include: { parents: { orderBy: { parentOrder: 'asc' } } },

@@ -1,4 +1,5 @@
-import { Controller, ParseUUIDPipe, Query, Sse } from '@nestjs/common';
+import { Controller, Query, Sse } from '@nestjs/common';
+import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Observable } from 'rxjs';
 import { Access } from '../auth/access.decorator.js';

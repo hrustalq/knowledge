@@ -1,0 +1,23 @@
+{
+  "issue": {
+    "empty": "A workflow needs at least one step.",
+    "badId": "Step id \"{id}\" must be lower-case letters, digits and dashes.",
+    "duplicateId": "Duplicate step id \"{id}\".",
+    "unknownKind": "Unknown step kind \"{kind}\".",
+    "missingTitle": "Step has no title.",
+    "unknownTarget": "Step \"{id}\" points at \"{target}\", which does not exist.",
+    "selfLoop": "Step \"{id}\" points at itself.",
+    "missingPrompt": "An AI step needs a prompt.",
+    "producesNeedsCategory": "A producing step must name the category of the pages it creates.",
+    "deadEnd": "This step produces nothing and leads nowhere.",
+    "maxItemsRange": "maxItems must be between 1 and 50.",
+    "fanOutIgnored": "Only ai.generate steps fan out; this step will produce a single node.",
+    "cycle": "The graph has a cycle: {cycle}.",
+    "noEntry": "Every step is pointed at by another — the workflow has no entry step.",
+    "manyEntries": "The workflow has several entry steps; all of them start when a run begins."
+  },
+  "transition": {
+    "badEvent": "Cannot {event} a run that is {status}.",
+    "badNodeEvent": "Cannot {event} a node that is {status}."
+  }
+}

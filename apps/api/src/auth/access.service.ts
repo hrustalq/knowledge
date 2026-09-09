@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import type { WorkspaceRole } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ROLE_ORDER, type Principal } from './principal.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Phase 5 ACLs (plan.md §11): authorization is resolved in PostgreSQL BEFORE
@@ -24,21 +25,25 @@ export class AccessService {
     const member = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId: principal.userId } },
     });
-    if (!member) throw new ForbiddenException(`Not a member of workspace ${workspaceId}`);
+    if (!member) throw new ForbiddenException(t('error.auth.notMember', { workspaceId }));
     if ((ROLE_ORDER[member.role as WorkspaceRole] ?? -1) < ROLE_ORDER[role]) {
       throw new ForbiddenException(
-        `Requires the ${role} role in workspace ${workspaceId} (current role: ${member.role})`,
+        t('error.auth.roleRequired', {
+          role: t(`role.${role}`),
+          workspaceId,
+          currentRole: t(`role.${member.role}`),
+        }),
       );
     }
     if (operator && !member.trustedOperator) {
-      throw new ForbiddenException('Requires trusted-operator membership (plan.md §9 query_graph gate)');
+      throw new ForbiddenException(t('error.auth.trustedOperatorRequired'));
     }
   }
 
   /** For @Access(..., 'workspace') routes: 404 for unknown workspaces before the membership check. */
   async workspaceExists(workspaceId: string): Promise<string> {
     const ws = await this.prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } });
-    if (!ws) throw new NotFoundException(`Workspace ${workspaceId} not found`);
+    if (!ws) throw new NotFoundException(t('error.workspace.notFound', { id: workspaceId }));
     return ws.id;
   }
 
@@ -47,7 +52,7 @@ export class AccessService {
       where: { id: documentId },
       select: { workspaceId: true },
     });
-    if (!doc) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!doc) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
     return doc.workspaceId;
   }
 
@@ -56,7 +61,7 @@ export class AccessService {
       where: { id: mergeRequestId },
       select: { document: { select: { workspaceId: true } } },
     });
-    if (!mr) throw new NotFoundException(`Merge request ${mergeRequestId} not found`);
+    if (!mr) throw new NotFoundException(t('error.mergeRequest.notFound', { id: mergeRequestId }));
     return mr.document.workspaceId;
   }
 
@@ -65,7 +70,7 @@ export class AccessService {
       where: { id: projectId },
       select: { workspaceId: true },
     });
-    if (!project) throw new NotFoundException(`Project ${projectId} not found`);
+    if (!project) throw new NotFoundException(t('error.project.notFound', { id: projectId }));
     return project.workspaceId;
   }
 
@@ -80,7 +85,7 @@ export class AccessService {
       where: { id: threadId },
       select: { workspaceId: true },
     });
-    if (!thread) throw new NotFoundException(`Assistant thread ${threadId} not found`);
+    if (!thread) throw new NotFoundException(t('error.assistant.threadNotFound', { id: threadId }));
     return thread.workspaceId;
   }
 
@@ -95,7 +100,7 @@ export class AccessService {
       where: { id: skillId },
       select: { workspaceId: true },
     });
-    if (!skill) throw new NotFoundException(`Skill ${skillId} not found`);
+    if (!skill) throw new NotFoundException(t('error.ai.skillNotFound', { id: skillId }));
     return skill.workspaceId;
   }
 
@@ -104,7 +109,7 @@ export class AccessService {
       where: { id: providerId },
       select: { workspaceId: true },
     });
-    if (!provider) throw new NotFoundException(`Provider ${providerId} not found`);
+    if (!provider) throw new NotFoundException(t('error.ai.providerNotFound', { id: providerId }));
     return provider.workspaceId;
   }
 
@@ -113,7 +118,7 @@ export class AccessService {
       where: { id: pluginId },
       select: { workspaceId: true },
     });
-    if (!plugin) throw new NotFoundException(`Plugin ${pluginId} not found`);
+    if (!plugin) throw new NotFoundException(t('error.ai.pluginNotFound', { id: pluginId }));
     return plugin.workspaceId;
   }
 
@@ -127,7 +132,7 @@ export class AccessService {
       where: { id: termId },
       select: { workspaceId: true },
     });
-    if (!term) throw new NotFoundException(`Glossary term ${termId} not found`);
+    if (!term) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
     return term.workspaceId;
   }
 
@@ -141,7 +146,7 @@ export class AccessService {
       where: { id: importId },
       select: { workspaceId: true },
     });
-    if (!job) throw new NotFoundException(`Import ${importId} not found`);
+    if (!job) throw new NotFoundException(t('error.import.notFound', { id: importId }));
     return job.workspaceId;
   }
 
@@ -155,7 +160,7 @@ export class AccessService {
       where: { id: definitionId },
       select: { workspaceId: true },
     });
-    if (!definition) throw new NotFoundException(`Workflow ${definitionId} not found`);
+    if (!definition) throw new NotFoundException(t('error.workflow.notFound', { id: definitionId }));
     return definition.workspaceId;
   }
 
@@ -164,7 +169,7 @@ export class AccessService {
       where: { id: runId },
       select: { workspaceId: true },
     });
-    if (!run) throw new NotFoundException(`Workflow run ${runId} not found`);
+    if (!run) throw new NotFoundException(t('error.workflow.runNotFound', { id: runId }));
     return run.workspaceId;
   }
 
@@ -173,7 +178,7 @@ export class AccessService {
       where: { id: jobId },
       select: { workspaceId: true },
     });
-    if (!job) throw new NotFoundException(`Ingestion job ${jobId} not found`);
+    if (!job) throw new NotFoundException(t('error.ingestionJob.notFound', { id: jobId }));
     return job.workspaceId;
   }
 

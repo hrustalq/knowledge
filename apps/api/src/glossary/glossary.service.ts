@@ -20,6 +20,7 @@ import type {
   SuggestGlossaryTermsDto,
   UpdateGlossaryTermDto,
 } from './glossary.dto.js';
+import { t } from '../i18n/t.js';
 
 /** How much of a page the extractor sees — the same ceiling `review` uses. */
 const MAX_SOURCE_CHARS = 60_000;
@@ -86,7 +87,7 @@ export class GlossaryService {
 
   async get(termId: string): Promise<GlossaryTerm> {
     const row = await this.prisma.glossaryTerm.findUnique({ where: { id: termId } });
-    if (!row) throw new NotFoundException(`Glossary term ${termId} not found`);
+    if (!row) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
     return (await this.withDocumentTitles([row]))[0]!;
   }
 
@@ -122,7 +123,7 @@ export class GlossaryService {
 
   async update(termId: string, dto: UpdateGlossaryTermDto, actorId?: string): Promise<GlossaryTerm> {
     const current = await this.prisma.glossaryTerm.findUnique({ where: { id: termId } });
-    if (!current) throw new NotFoundException(`Glossary term ${termId} not found`);
+    if (!current) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
 
     const term = dto.term?.trim();
     if (term && term.toLowerCase() !== current.term.toLowerCase()) {
@@ -153,7 +154,7 @@ export class GlossaryService {
 
   async remove(termId: string, actorId?: string): Promise<{ deleted: true }> {
     const row = await this.prisma.glossaryTerm.findUnique({ where: { id: termId } });
-    if (!row) throw new NotFoundException(`Glossary term ${termId} not found`);
+    if (!row) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
     await this.prisma.glossaryTerm.delete({ where: { id: termId } });
     await this.activity.record({
       workspaceId: row.workspaceId,
@@ -199,7 +200,7 @@ export class GlossaryService {
     }
 
     const raw = await this.client.chat(
-      { config, userId: principal.userId, operation: 'glossary' },
+      { config, userId: principal.userId, operation: 'glossary', locale: principal.locale },
       [
         {
           role: 'system',
@@ -287,7 +288,7 @@ export class GlossaryService {
       where: { projectId, term: { equals: term, mode: 'insensitive' } },
       select: { id: true },
     });
-    if (clash) throw new ConflictException(`"${term}" is already in this project's glossary`);
+    if (clash) throw new ConflictException(t('error.glossary.duplicate', { term }));
   }
 
   private async assertDocumentInWorkspace(
@@ -299,7 +300,7 @@ export class GlossaryService {
       select: { workspaceId: true, projectId: true },
     });
     if (!doc || doc.workspaceId !== workspaceId) {
-      throw new NotFoundException(`Document ${documentId} not found in workspace`);
+      throw new NotFoundException(t('error.glossary.documentNotFound', { id: documentId }));
     }
     return { projectId: doc.projectId };
   }

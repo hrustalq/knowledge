@@ -11,7 +11,11 @@ import {
   type ParseContext,
   type ParseResult,
 } from './parser.types.js';
+import { t } from '../../i18n/t.js';
 
+// Deliberately NOT localized (docs/features/18): this is a transcription, and
+// the prompt below already forbids translating. The output must match the
+// language of the image, not the language of whoever started the import.
 const SYSTEM_PROMPT = `You transcribe documents from images into GitHub-flavoured markdown.
 Reproduce the text exactly as written — do not summarise, translate, correct or add commentary.
 Use # / ## / ### for headings the layout implies, - for bullets, and | tables | for tabular data.
@@ -40,7 +44,7 @@ export class OcrParser implements DocumentParser {
   ) {}
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
-    await ctx.onStage('Checking for a vision model', 0.1);
+    await ctx.onStage(t('import.stage.checking-vision'), 0.1);
     // 'review' is the purpose the glossary suggester already routes at, so a
     // workspace that configured one provider gets OCR without configuring a
     // second thing.
@@ -48,11 +52,11 @@ export class OcrParser implements DocumentParser {
 
     if (!resolved.enabled || !resolved.model) {
       throw new Error(
-        'Reading text from images needs an AI provider with vision support. Configure one under Settings → AI, then run this import again.',
+        t('error.import.needsVisionModel'),
       );
     }
 
-    await ctx.onStage('Reading the image', 0.4);
+    await ctx.onStage(t('import.stage.reading-image'), 0.4);
     const client = new OpenAI({
       apiKey: resolved.apiKey || 'unset',
       baseURL: resolved.baseUrl || undefined,
@@ -99,13 +103,13 @@ export class OcrParser implements DocumentParser {
       })
       .catch((e: unknown) => this.logger.warn(`Usage not recorded: ${(e as Error).message}`));
 
-    await ctx.onStage('Formatting', 0.85);
+    await ctx.onStage(t('import.stage.formatting'), 0.85);
 
     const warnings = [
       `Text was read from the image by ${resolved.model}. Machine transcription makes mistakes — check names, numbers and anything technical before submitting.`,
     ];
     if (!markdown) {
-      warnings.push('No legible text was found in this image.');
+      warnings.push(t('import.warning.noLegibleText'));
     }
 
     return {

@@ -1,6 +1,17 @@
 import {
-  Body, Controller, Delete, Get, HttpException, Logger, Param, ParseUUIDPipe, Patch, Post, Query, Res,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpException,
+  Logger,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
 } from '@nestjs/common';
+import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { errorCodeForStatus, type ApiErrorPayload, type AssistantStreamFrame } from '@knowledge/contracts';

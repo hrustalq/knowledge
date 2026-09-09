@@ -4,6 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DEV_PRINCIPAL, type Principal } from './principal.js';
 import { SessionsService } from './sessions.service.js';
+import { asLocale } from '../i18n/locale.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Token → Principal resolution, shared by the HTTP AuthGuard and the live
@@ -22,20 +24,21 @@ export class TokenAuthService {
 
   async resolve(token: string | undefined): Promise<Principal> {
     if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
-    if (!token) throw new UnauthorizedException('Missing Authorization: Bearer <api key or session token>');
+    if (!token) throw new UnauthorizedException(t('error.auth.missingBearer'));
     return token.startsWith('ks_') ? this.resolveSession(token) : this.resolveApiKey(token);
   }
 
   private async resolveSession(token: string): Promise<Principal> {
     const session = await this.sessions.resolve(token);
-    if (!session) throw new UnauthorizedException('Invalid or expired session — log in again');
-    if (session.user.disabledAt) throw new UnauthorizedException('Account is disabled');
+    if (!session) throw new UnauthorizedException(t('error.auth.invalidSession'));
+    if (session.user.disabledAt) throw new UnauthorizedException(t('error.auth.accountDisabled'));
     return {
       userId: session.user.id,
       email: session.user.email,
       displayName: session.user.displayName,
       mode: 'session',
       isAdmin: session.user.isAdmin,
+      locale: asLocale(session.user.locale),
       sessionId: session.id,
     };
   }
@@ -44,14 +47,15 @@ export class TokenAuthService {
     const user = await this.prisma.user.findUnique({
       where: { apiKeyHash: createHash('sha256').update(key).digest('hex') },
     });
-    if (!user) throw new UnauthorizedException('Unknown API key');
-    if (user.disabledAt) throw new UnauthorizedException('Account is disabled');
+    if (!user) throw new UnauthorizedException(t('error.auth.unknownApiKey'));
+    if (user.disabledAt) throw new UnauthorizedException(t('error.auth.accountDisabled'));
     return {
       userId: user.id,
       email: user.email,
       displayName: user.displayName,
       mode: 'api-key',
       isAdmin: user.isAdmin,
+      locale: asLocale(user.locale),
     };
   }
 }

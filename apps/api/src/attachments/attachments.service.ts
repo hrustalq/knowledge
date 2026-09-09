@@ -16,6 +16,7 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { t } from '../i18n/t.js';
 
 /** Author fallback for the AUTH_MODE=none dev principal, same stub the rest of the API uses. */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -71,13 +72,13 @@ export class AttachmentsService {
     userId?: string,
   ): Promise<CreateAttachmentResponse> {
     if (dto.sizeBytes !== undefined && dto.sizeBytes > this.maxBytes) {
-      throw new PayloadTooLargeException(`Attachment exceeds the ${this.maxBytes}-byte limit`);
+      throw new PayloadTooLargeException(t('error.attachment.tooLarge', { limit: this.maxBytes }));
     }
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
       select: { id: true, workspaceId: true },
     });
-    if (!document) throw new NotFoundException('Document not found');
+    if (!document) throw new NotFoundException(t('error.attachment.documentNotFound'));
 
     const attachmentId = crypto.randomUUID();
     const s3Key = this.storage.attachmentObjectKey(
@@ -121,11 +122,11 @@ export class AttachmentsService {
   async complete(documentId: string, attachmentId: string): Promise<CompleteAttachmentResponse> {
     const row = await this.require(documentId, attachmentId);
     const head = await this.storage.headObject(row.s3Key);
-    if (!head) throw new BadRequestException('Upload not found in object storage');
+    if (!head) throw new BadRequestException(t('error.attachment.uploadMissing'));
     if (head.contentLength > this.maxBytes) {
       await this.storage.deleteObject(row.s3Key);
       await this.prisma.attachment.delete({ where: { id: row.id } });
-      throw new PayloadTooLargeException(`Attachment exceeds the ${this.maxBytes}-byte limit`);
+      throw new PayloadTooLargeException(t('error.attachment.tooLarge', { limit: this.maxBytes }));
     }
     const updated = await this.prisma.attachment.update({
       where: { id: row.id },
@@ -177,7 +178,7 @@ export class AttachmentsService {
     const row = await this.prisma.attachment.findUnique({ where: { id: attachmentId } });
     // Scoped by document on purpose: the ACL guard authorized *this* document,
     // so an attachment id belonging to another page must not resolve here.
-    if (!row || row.documentId !== documentId) throw new NotFoundException('Attachment not found');
+    if (!row || row.documentId !== documentId) throw new NotFoundException(t('error.attachment.notFound'));
     return row;
   }
 

@@ -7,6 +7,7 @@ import {
   type ParseContext,
   type ParseResult,
 } from './parser.types.js';
+import { t } from '../../i18n/t.js';
 
 /** Past this a markdown table stops being readable and starts being a wall. */
 const WIDE_COLUMNS = 12;
@@ -26,7 +27,7 @@ export class TabularParser implements DocumentParser {
   readonly id: ImportParserId = 'tabular';
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
-    await ctx.onStage('Reading rows', 0.3);
+    await ctx.onStage(t('import.stage.reading-rows'), 0.3);
     const text = new TextDecoder().decode(bytes).replace(/^﻿/, '');
     const delimiter = ctx.filename.toLowerCase().endsWith('.tsv') || countChar(text, '\t') > countChar(text, ',') ? '\t' : ',';
 
@@ -39,18 +40,16 @@ export class TabularParser implements DocumentParser {
 
     let body = rows.slice(1);
     if (body.length > MAX_ROWS) {
-      warnings.push(`Only the first ${MAX_ROWS.toLocaleString()} of ${body.length.toLocaleString()} rows were imported.`);
+      warnings.push(t('import.warning.rowsTruncated', { kept: MAX_ROWS, total: body.length }));
       body = body.slice(0, MAX_ROWS);
     }
 
     const width = Math.max(...rows.map((r) => r.length));
     if (width > WIDE_COLUMNS) {
-      warnings.push(
-        `${width} columns is wide for a page — the table will scroll sideways. Consider splitting it before importing.`,
-      );
+      warnings.push(t('import.warning.wideTable', { count: width }));
     }
 
-    await ctx.onStage('Building the table', 0.7);
+    await ctx.onStage(t('import.stage.building-table'), 0.7);
     const pad = (r: string[]) => [...r, ...Array(Math.max(0, width - r.length)).fill('')].map(escapeCell);
     const line = (cells: string[]) => `| ${cells.join(' | ')} |`;
     const header = pad(rows[0]);

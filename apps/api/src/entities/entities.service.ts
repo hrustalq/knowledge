@@ -9,6 +9,7 @@ import type {
 } from '@knowledge/contracts';
 import { GraphService, type WorkspaceRelationGraph } from '../graph/graph.service.js';
 import { bfs, buildAdjacency, docIdOf, docNode, isDocNode, shortestPath } from '../graph/graph-walk.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Phase 4 entity traversal (plan.md §9: find_relations / impact_analysis /
@@ -152,7 +153,7 @@ export class EntitiesService {
 
   private entityRef(g: WorkspaceRelationGraph, key: string): EntityRef {
     const e = g.entities[key];
-    if (!e) throw new NotFoundException(`Entity ${key} not found in workspace`);
+    if (!e) throw new NotFoundException(t('error.entity.notFound', { key }));
     return { key, type: e.type, name: e.name };
   }
 }

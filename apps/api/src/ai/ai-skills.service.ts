@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import type { AiSkill } from '@prisma/client';
 import type { AiSkillSummary } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { t } from '../i18n/t.js';
 
 /** Skills merged into one turn, and the total instruction budget they share. */
 const MAX_SKILLS_PER_TURN = 3;
@@ -45,7 +46,7 @@ export class AiSkillsService {
 
   async get(id: string): Promise<AiSkillSummary> {
     const skill = await this.prisma.aiSkill.findUnique({ where: { id } });
-    if (!skill) throw new NotFoundException(`Skill ${id} not found`);
+    if (!skill) throw new NotFoundException(t('error.ai.skillNotFound', { id }));
     return toSummary(skill);
   }
 
@@ -53,7 +54,7 @@ export class AiSkillsService {
     const existing = await this.prisma.aiSkill.findUnique({
       where: { workspaceId_name: { workspaceId, name: input.name } },
     });
-    if (existing) throw new ConflictException(`A skill named "${input.name}" already exists in this workspace`);
+    if (existing) throw new ConflictException(t('error.ai.skillNameTaken', { name: input.name }));
 
     const skill = await this.prisma.aiSkill.create({
       data: {
@@ -72,13 +73,13 @@ export class AiSkillsService {
 
   async update(id: string, input: Partial<UpsertSkillInput>): Promise<AiSkillSummary> {
     const current = await this.prisma.aiSkill.findUnique({ where: { id } });
-    if (!current) throw new NotFoundException(`Skill ${id} not found`);
+    if (!current) throw new NotFoundException(t('error.ai.skillNotFound', { id }));
 
     if (input.name && input.name !== current.name) {
       const clash = await this.prisma.aiSkill.findUnique({
         where: { workspaceId_name: { workspaceId: current.workspaceId, name: input.name } },
       });
-      if (clash) throw new ConflictException(`A skill named "${input.name}" already exists in this workspace`);
+      if (clash) throw new ConflictException(t('error.ai.skillNameTaken', { name: input.name }));
     }
 
     const skill = await this.prisma.aiSkill.update({
@@ -97,7 +98,7 @@ export class AiSkillsService {
 
   async remove(id: string): Promise<void> {
     const skill = await this.prisma.aiSkill.findUnique({ where: { id } });
-    if (!skill) throw new NotFoundException(`Skill ${id} not found`);
+    if (!skill) throw new NotFoundException(t('error.ai.skillNotFound', { id }));
     await this.prisma.aiSkill.delete({ where: { id } });
     this.cache.delete(skill.workspaceId);
   }

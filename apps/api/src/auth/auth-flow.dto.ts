@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { vmsg } from '../common/validation.js';
 
 export class SignupDto {
   @ApiProperty({ example: 'you@example.com' })
@@ -9,13 +10,13 @@ export class SignupDto {
   @ApiProperty({ example: 'Ada Lovelace' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   displayName!: string;
 
   @ApiProperty({ minLength: 8 })
   @IsString()
-  @MinLength(8)
-  @MaxLength(200)
+  @MinLength(8, { message: vmsg('minLength') })
+  @MaxLength(200, { message: vmsg('maxLength') })
   password!: string;
 }
 
@@ -44,8 +45,8 @@ export class ResetPasswordDto {
 
   @ApiProperty({ minLength: 8 })
   @IsString()
-  @MinLength(8)
-  @MaxLength(200)
+  @MinLength(8, { message: vmsg('minLength') })
+  @MaxLength(200, { message: vmsg('maxLength') })
   password!: string;
 }
 
@@ -57,7 +58,7 @@ export class ChangePasswordDto {
 
   @ApiProperty({ minLength: 8 })
   @IsString()
-  @MinLength(8)
-  @MaxLength(200)
+  @MinLength(8, { message: vmsg('minLength') })
+  @MaxLength(200, { message: vmsg('maxLength') })
   newPassword!: string;
 }

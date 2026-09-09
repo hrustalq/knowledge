@@ -9,6 +9,7 @@ import {
   type ParseContext,
   type ParseResult,
 } from './parser.types.js';
+import { t } from '../../i18n/t.js';
 
 /**
  * HTML → markdown. Saved articles, exported wikis, anything a browser produced.
@@ -22,7 +23,7 @@ export class HtmlParser implements DocumentParser {
   readonly id: ImportParserId = 'html';
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
-    await ctx.onStage('Converting to markdown', 0.4);
+    await ctx.onStage(t('import.stage.converting'), 0.4);
     const html = new TextDecoder().decode(bytes);
     const markdown = htmlToMarkdown(html);
 
@@ -30,11 +31,11 @@ export class HtmlParser implements DocumentParser {
     const remote = [...markdown.matchAll(/!\[[^\]]*\]\((https?:[^)\s]+)/g)].length;
     if (remote > 0) {
       warnings.push(
-        `${remote} ${remote === 1 ? 'image is' : 'images are'} linked from their original address rather than attached — they will break if that site goes away.`,
+        t('import.warning.remoteImages', { count: remote }),
       );
     }
     if (/<style|<script/i.test(html)) {
-      warnings.push('Scripts, styles and page furniture (nav, header, footer) were dropped.');
+      warnings.push(t('import.warning.htmlFurnitureDropped'));
     }
 
     return {

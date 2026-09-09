@@ -29,6 +29,7 @@ import {
   type WorkflowRunStatus,
   type WorkflowTrigger,
 } from '@knowledge/contracts';
+import { vmsg } from '../common/validation.js';
 
 /**
  * Dynamic document workflows (docs/features/17).
@@ -107,15 +108,15 @@ export class CreateWorkflowDto {
 
   @ApiProperty()
   @IsString()
-  @MinLength(1)
-  @MaxLength(120)
+  @MinLength(1, { message: vmsg('minLength') })
+  @MaxLength(120, { message: vmsg('maxLength') })
   name!: string;
 
   @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @ValidateIf((o: CreateWorkflowDto) => o.description !== null)
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(2000, { message: vmsg('maxLength') })
   description?: string | null;
 
   @ApiProperty({ type: WorkflowGraphDto })
@@ -141,15 +142,15 @@ export class UpdateWorkflowDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MinLength(1)
-  @MaxLength(120)
+  @MinLength(1, { message: vmsg('minLength') })
+  @MaxLength(120, { message: vmsg('maxLength') })
   name?: string;
 
   @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @ValidateIf((o: UpdateWorkflowDto) => o.description !== null)
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(2000, { message: vmsg('maxLength') })
   description?: string | null;
 
   @ApiPropertyOptional({ type: String, nullable: true })
@@ -211,7 +212,7 @@ export class StartWorkflowRunDto {
   @ApiPropertyOptional({ description: 'Extra instructions for this run only' })
   @IsOptional()
   @IsString()
-  @MaxLength(4000)
+  @MaxLength(4000, { message: vmsg('maxLength') })
   note?: string;
 }
 
@@ -249,20 +250,20 @@ export class ListWorkflowRunsQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @Max(100)
+  @Min(1, { message: vmsg('min') })
+  @Max(100, { message: vmsg('max') })
   limit?: number;
 }
 
 export class WorkflowNodeDraftDto {
   @ApiProperty()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   title!: string;
 
   @ApiProperty()
   @IsString()
-  @MaxLength(200_000)
+  @MaxLength(200_000, { message: vmsg('maxLength') })
   markdown!: string;
 
   @ApiPropertyOptional({ type: 'object', additionalProperties: true })
@@ -278,7 +279,7 @@ export class WorkflowNodeDraftDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(2000, { message: vmsg('maxLength') })
   summary?: string;
 }
 

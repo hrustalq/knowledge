@@ -4,11 +4,11 @@ import {
   Delete,
   Get,
   Param,
-  ParseUUIDPipe,
   Post,
   Query,
   Redirect,
 } from '@nestjs/common';
+import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   CompleteAttachmentResponse,

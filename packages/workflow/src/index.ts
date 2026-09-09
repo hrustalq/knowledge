@@ -20,6 +20,7 @@ import {
   type WorkflowRunEventType,
   type WorkflowRunStatus,
   type WorkflowStep,
+  type WorkflowIssueCode,
   type WorkflowValidationIssue,
 } from '@knowledge/contracts';
 
@@ -330,61 +331,73 @@ function findCycle(graph: WorkflowGraph): string[] | null {
 
 export function validateGraph(graph: WorkflowGraph): WorkflowValidationIssue[] {
   const issues: WorkflowValidationIssue[] = [];
-  const err = (message: string, stepId?: string) => issues.push({ message, stepId, severity: 'error' });
-  const warn = (message: string, stepId?: string) => issues.push({ message, stepId, severity: 'warning' });
+  // `message` is the English default so this package stays usable on its own;
+  // the API replaces it with a translation of `code` before responding
+  // (docs/features/18). Keep the two in sync when either changes.
+  const push = (
+    severity: 'error' | 'warning',
+    code: WorkflowIssueCode,
+    message: string,
+    stepId?: string,
+    params?: Record<string, string | number>,
+  ) => issues.push({ message, code, params, stepId, severity });
+  const err = (code: WorkflowIssueCode, message: string, stepId?: string, params?: Record<string, string | number>) =>
+    push('error', code, message, stepId, params);
+  const warn = (code: WorkflowIssueCode, message: string, stepId?: string, params?: Record<string, string | number>) =>
+    push('warning', code, message, stepId, params);
 
   if (!Array.isArray(graph.steps) || graph.steps.length === 0) {
-    err('A workflow needs at least one step.');
+    err('empty', 'A workflow needs at least one step.');
     return issues;
   }
 
   const seen = new Set<string>();
   for (const step of graph.steps) {
     if (!SLUG_RE.test(step.id)) {
-      err(`Step id "${step.id}" must be lower-case letters, digits and dashes.`, step.id);
+      err('badId', `Step id "${step.id}" must be lower-case letters, digits and dashes.`, step.id, { id: step.id });
     }
-    if (seen.has(step.id)) err(`Duplicate step id "${step.id}".`, step.id);
+    if (seen.has(step.id)) err('duplicateId', `Duplicate step id "${step.id}".`, step.id, { id: step.id });
     seen.add(step.id);
 
     if (!WORKFLOW_STEP_KINDS.includes(step.kind)) {
-      err(`Unknown step kind "${step.kind}".`, step.id);
+      err('unknownKind', `Unknown step kind "${step.kind}".`, step.id, { kind: String(step.kind) });
     }
-    if (!step.title?.trim()) warn('Step has no title.', step.id);
+    if (!step.title?.trim()) warn('missingTitle', 'Step has no title.', step.id);
 
     for (const next of step.next ?? []) {
       if (!graph.steps.some((s) => s.id === next)) {
-        err(`Step "${step.id}" points at "${next}", which does not exist.`, step.id);
+        err('unknownTarget', `Step "${step.id}" points at "${next}", which does not exist.`, step.id, { id: step.id, target: next });
       }
-      if (next === step.id) err(`Step "${step.id}" points at itself.`, step.id);
+      if (next === step.id) err('selfLoop', `Step "${step.id}" points at itself.`, step.id, { id: step.id });
     }
 
     if (step.kind === 'ai.generate' || step.kind === 'ai.draft') {
-      if (!step.prompt?.user?.trim()) err('An AI step needs a prompt.', step.id);
+      if (!step.prompt?.user?.trim()) err('missingPrompt', 'An AI step needs a prompt.', step.id);
     }
     // A fan-out step whose children are never materialised produces drafts that
     // can only ever be read inside the run — usually a mistake, never fatal.
     if (step.produces && !step.produces.category) {
-      err('A producing step must name the category of the pages it creates.', step.id);
+      err('producesNeedsCategory', 'A producing step must name the category of the pages it creates.', step.id);
     }
     if (!step.produces && step.next.length === 0 && step.kind !== 'review') {
-      warn('This step produces nothing and leads nowhere.', step.id);
+      warn('deadEnd', 'This step produces nothing and leads nowhere.', step.id);
     }
     if (step.maxItems !== undefined && (step.maxItems < 1 || step.maxItems > 50)) {
-      err('maxItems must be between 1 and 50.', step.id);
+      err('maxItemsRange', 'maxItems must be between 1 and 50.', step.id);
     }
     if (step.fanOut && step.kind !== 'ai.generate') {
-      warn('Only ai.generate steps fan out; this step will produce a single node.', step.id);
+      warn('fanOutIgnored', 'Only ai.generate steps fan out; this step will produce a single node.', step.id);
     }
   }
 
   const cycle = findCycle(graph);
-  if (cycle) err(`The graph has a cycle: ${cycle.join(' → ')}.`);
+  if (cycle) err('cycle', `The graph has a cycle: ${cycle.join(' → ')}.`, undefined, { cycle: cycle.join(' → ') });
 
   if (entrySteps(graph).length === 0 && !cycle) {
-    err('Every step is pointed at by another — the workflow has no entry step.');
+    err('noEntry', 'Every step is pointed at by another — the workflow has no entry step.');
   }
   if (entrySteps(graph).length > 1) {
-    warn('The workflow has several entry steps; all of them start when a run begins.');
+    warn('manyEntries', 'The workflow has several entry steps; all of them start when a run begins.');
   }
 
   return issues;

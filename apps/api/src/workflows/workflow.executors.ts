@@ -7,6 +7,7 @@ import { AiConfigService } from '../ai/ai-config.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { SearchService } from '../search/search.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import { asLocale } from '../i18n/locale.js';
 
 /** What a step produced: either a fan-out list, or one node's draft. */
 export type StepResult =
@@ -103,7 +104,7 @@ export class WorkflowExecutors {
     ];
 
     const raw = await this.client.chat(
-      { config, userId: run.createdBy ?? 'workflow', operation: 'workflow' },
+      { config, userId: run.createdBy ?? 'workflow', operation: 'workflow', locale: asLocale(run.locale) },
       messages,
       { json: true },
     );
@@ -148,7 +149,7 @@ export class WorkflowExecutors {
     ];
 
     const raw = await this.client.chat(
-      { config, userId: run.createdBy ?? 'workflow', operation: 'workflow' },
+      { config, userId: run.createdBy ?? 'workflow', operation: 'workflow', locale: asLocale(run.locale) },
       messages,
       { json: true },
     );

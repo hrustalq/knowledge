@@ -5,6 +5,7 @@ import type { AiProviderSummary, AiProviderKind } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { decryptSecret, encryptSecret, maskSecret, MissingEncryptionKeyError, parseKey } from './secret-box.js';
+import { t } from '../i18n/t.js';
 
 /** How long the provider roster is reused before PG is consulted again. */
 const CACHE_TTL_MS = 30_000;
@@ -88,7 +89,7 @@ export class AiProvidersService {
     const clash = await this.prisma.aiProvider.findUnique({
       where: { workspaceId_name: { workspaceId, name: input.name } },
     });
-    if (clash) throw new ConflictException(`A provider named "${input.name}" already exists in this workspace`);
+    if (clash) throw new ConflictException(t('error.ai.providerNameTaken', { name: input.name }));
 
     const row = await this.prisma.aiProvider.create({
       data: {
@@ -117,7 +118,7 @@ export class AiProvidersService {
       const clash = await this.prisma.aiProvider.findUnique({
         where: { workspaceId_name: { workspaceId: current.workspaceId, name: input.name } },
       });
-      if (clash) throw new ConflictException(`A provider named "${input.name}" already exists in this workspace`);
+      if (clash) throw new ConflictException(t('error.ai.providerNameTaken', { name: input.name }));
     }
     const row = await this.prisma.aiProvider.update({
       where: { id },
@@ -182,7 +183,7 @@ export class AiProvidersService {
 
   private async getOrThrow(id: string): Promise<AiProvider> {
     const row = await this.prisma.aiProvider.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException(`Provider ${id} not found`);
+    if (!row) throw new NotFoundException(t('error.ai.providerNotFound', { id }));
     return row;
   }
 

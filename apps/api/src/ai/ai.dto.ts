@@ -15,6 +15,7 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
+import { vmsg } from '../common/validation.js';
 
 /**
  * Request DTOs for the AI settings surface (docs/features/12).
@@ -45,14 +46,14 @@ export class UpdateAiSettingsDto {
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('baseUrl')
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   baseUrl?: string | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, example: 'deepseek-chat' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('model')
   @IsString()
-  @MaxLength(200)
+  @MaxLength(200, { message: vmsg('maxLength') })
   model?: string | null;
 
   @ApiPropertyOptional({
@@ -63,31 +64,31 @@ export class UpdateAiSettingsDto {
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('apiKey')
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   apiKey?: string | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 2 })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('temperature')
   @IsNumber()
-  @Min(0)
-  @Max(2)
+  @Min(0, { message: vmsg('min') })
+  @Max(2, { message: vmsg('max') })
   temperature?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 16 })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('maxToolCalls')
   @IsInt()
-  @Min(0)
-  @Max(16)
+  @Min(0, { message: vmsg('min') })
+  @Max(16, { message: vmsg('max') })
   maxToolCalls?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 1000, maximum: 600_000 })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('timeoutMs')
   @IsInt()
-  @Min(1_000)
-  @Max(600_000)
+  @Min(1_000, { message: vmsg('min') })
+  @Max(600_000, { message: vmsg('max') })
   timeoutMs?: number | null;
 
   @ApiPropertyOptional({ description: 'Allow Agent mode (write tools) in the chat for this workspace' })
@@ -99,28 +100,28 @@ export class UpdateAiSettingsDto {
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('pricePromptPerMTok')
   @IsNumber()
-  @Min(0)
+  @Min(0, { message: vmsg('min') })
   pricePromptPerMTok?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M completion tokens (cost estimate)' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('priceCompletionPerMTok')
   @IsNumber()
-  @Min(0)
+  @Min(0, { message: vmsg('min') })
   priceCompletionPerMTok?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Monthly workspace token budget; null = unlimited' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('workspaceMonthlyTokenBudget')
   @IsInt()
-  @Min(0)
+  @Min(0, { message: vmsg('min') })
   workspaceMonthlyTokenBudget?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'Default per-user monthly budget; null = unlimited' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('defaultUserMonthlyTokenBudget')
   @IsInt()
-  @Min(0)
+  @Min(0, { message: vmsg('min') })
   defaultUserMonthlyTokenBudget?: number | null;
 
   @ApiPropertyOptional({ description: 'Refuse assistant requests once a budget is spent (429)' })
@@ -168,7 +169,7 @@ export class CreateAiProviderDto {
   @ApiProperty({ example: 'DeepSeek prod' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   name!: string;
 
   @ApiProperty({ enum: ['openai-compatible', 'deepseek', 'gen-api'] })
@@ -179,58 +180,58 @@ export class CreateAiProviderDto {
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('baseUrl')
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   baseUrl?: string | null;
 
   @ApiProperty({ example: 'deepseek-chat' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(200)
+  @MaxLength(200, { message: vmsg('maxLength') })
   model!: string;
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Write-only credential; null clears it' })
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('apiKey')
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   apiKey?: string | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 2 })
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('temperature')
   @IsNumber()
-  @Min(0)
-  @Max(2)
+  @Min(0, { message: vmsg('min') })
+  @Max(2, { message: vmsg('max') })
   temperature?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 16 })
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('maxToolCalls')
   @IsInt()
-  @Min(0)
-  @Max(16)
+  @Min(0, { message: vmsg('min') })
+  @Max(16, { message: vmsg('max') })
   maxToolCalls?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 1000, maximum: 600_000 })
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('timeoutMs')
   @IsInt()
-  @Min(1_000)
-  @Max(600_000)
+  @Min(1_000, { message: vmsg('min') })
+  @Max(600_000, { message: vmsg('max') })
   timeoutMs?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M prompt tokens' })
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('pricePromptPerMTok')
   @IsNumber()
-  @Min(0)
+  @Min(0, { message: vmsg('min') })
   pricePromptPerMTok?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'USD per 1M completion tokens' })
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('priceCompletionPerMTok')
   @IsNumber()
-  @Min(0)
+  @Min(0, { message: vmsg('min') })
   priceCompletionPerMTok?: number | null;
 
   @ApiPropertyOptional({ default: true })
@@ -244,7 +245,7 @@ export class UpdateAiProviderDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   name?: string;
 
   @ApiPropertyOptional({ enum: ['openai-compatible', 'deepseek', 'gen-api'] })
@@ -256,59 +257,59 @@ export class UpdateAiProviderDto {
   @IsOptional()
   @NULLABLE<UpdateAiProviderDto>('baseUrl')
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   baseUrl?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(200)
+  @MaxLength(200, { message: vmsg('maxLength') })
   model?: string;
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Write-only; omit to keep, null to clear' })
   @IsOptional()
   @NULLABLE<UpdateAiProviderDto>('apiKey')
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   apiKey?: string | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @NULLABLE<UpdateAiProviderDto>('temperature')
   @IsNumber()
-  @Min(0)
-  @Max(2)
+  @Min(0, { message: vmsg('min') })
+  @Max(2, { message: vmsg('max') })
   temperature?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @NULLABLE<UpdateAiProviderDto>('maxToolCalls')
   @IsInt()
-  @Min(0)
-  @Max(16)
+  @Min(0, { message: vmsg('min') })
+  @Max(16, { message: vmsg('max') })
   maxToolCalls?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @NULLABLE<UpdateAiProviderDto>('timeoutMs')
   @IsInt()
-  @Min(1_000)
-  @Max(600_000)
+  @Min(1_000, { message: vmsg('min') })
+  @Max(600_000, { message: vmsg('max') })
   timeoutMs?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @NULLABLE<UpdateAiProviderDto>('pricePromptPerMTok')
   @IsNumber()
-  @Min(0)
+  @Min(0, { message: vmsg('min') })
   pricePromptPerMTok?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @NULLABLE<UpdateAiProviderDto>('priceCompletionPerMTok')
   @IsNumber()
-  @Min(0)
+  @Min(0, { message: vmsg('min') })
   priceCompletionPerMTok?: number | null;
 
   @ApiPropertyOptional()
@@ -327,24 +328,24 @@ export class CreateAiSkillDto {
   @ApiProperty({ example: 'Release notes writer' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   name!: string;
 
   @ApiProperty({ example: 'Draft release notes from merged merge requests' })
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   description!: string;
 
   @ApiProperty({ description: 'Markdown instructions merged into the system prompt', maxLength: 8000 })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(8_000)
+  @MaxLength(8_000, { message: vmsg('maxLength') })
   instructions!: string;
 
   @ApiPropertyOptional({ type: [String], description: 'Keywords that pull this skill into a turn' })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(20)
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
   @IsString({ each: true })
   triggers?: string[];
 
@@ -359,26 +360,26 @@ export class UpdateAiSkillDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   name?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   description?: string;
 
   @ApiPropertyOptional({ maxLength: 8000 })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(8_000)
+  @MaxLength(8_000, { message: vmsg('maxLength') })
   instructions?: string;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(20)
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
   @IsString({ each: true })
   triggers?: string[];
 
@@ -398,7 +399,7 @@ export class CreateAiPluginDto {
   @ApiProperty({ example: 'Jira' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   name!: string;
 
   @ApiPropertyOptional({ enum: ['streamable-http', 'sse'], default: 'streamable-http' })
@@ -409,21 +410,21 @@ export class CreateAiPluginDto {
   @ApiProperty({ example: 'https://mcp.example.com/jira' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   url!: string;
 
   @ApiPropertyOptional({ type: String, nullable: true, example: 'Authorization' })
   @IsOptional()
   @NULLABLE<CreateAiPluginDto>('authHeader')
   @IsString()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   authHeader?: string | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Write-only credential; null clears it' })
   @IsOptional()
   @NULLABLE<CreateAiPluginDto>('authValue')
   @IsString()
-  @MaxLength(2_000)
+  @MaxLength(2_000, { message: vmsg('maxLength') })
   authValue?: string | null;
 
   @ApiPropertyOptional({ default: true })
@@ -434,7 +435,7 @@ export class CreateAiPluginDto {
   @ApiPropertyOptional({ type: [String], description: 'Tools offered to the model; empty = every discovered tool' })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(200)
+  @ArrayMaxSize(200, { message: vmsg('arrayMaxSize') })
   @IsString({ each: true })
   enabledTools?: string[];
 }
@@ -444,7 +445,7 @@ export class UpdateAiPluginDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   name?: string;
 
   @ApiPropertyOptional({ enum: ['streamable-http', 'sse'] })
@@ -456,21 +457,21 @@ export class UpdateAiPluginDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(500)
+  @MaxLength(500, { message: vmsg('maxLength') })
   url?: string;
 
   @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @NULLABLE<UpdateAiPluginDto>('authHeader')
   @IsString()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   authHeader?: string | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Write-only; omit to keep, null to clear' })
   @IsOptional()
   @NULLABLE<UpdateAiPluginDto>('authValue')
   @IsString()
-  @MaxLength(2_000)
+  @MaxLength(2_000, { message: vmsg('maxLength') })
   authValue?: string | null;
 
   @ApiPropertyOptional()
@@ -481,7 +482,7 @@ export class UpdateAiPluginDto {
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(200)
+  @ArrayMaxSize(200, { message: vmsg('arrayMaxSize') })
   @IsString({ each: true })
   enabledTools?: string[];
 }
@@ -497,6 +498,6 @@ export class SetAiBudgetDto {
   @IsOptional()
   @NULLABLE<SetAiBudgetDto>('monthlyTokenBudget')
   @IsInt()
-  @Min(0)
+  @Min(0, { message: vmsg('min') })
   monthlyTokenBudget?: number | null;
 }

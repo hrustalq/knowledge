@@ -1,0 +1,42 @@
+{
+  "mr": {
+    "open": "открыт",
+    "merged": "влит",
+    "closed": "закрыт"
+  },
+  "revision": {
+    "draft": "черновик",
+    "finalized": "финализирована",
+    "indexing": "индексируется",
+    "indexed": "проиндексирована",
+    "failed": "завершилась ошибкой"
+  },
+  "import": {
+    "awaiting-upload": "ещё ждёт загрузки файла",
+    "queued": "в очереди",
+    "running": "ещё обрабатывается",
+    "parsed": "разобран",
+    "submitted": "уже превращён в страницу",
+    "failed": "завершился ошибкой"
+  },
+  "node": {
+    "pending": "в очереди",
+    "running": "выполняется",
+    "awaiting-review": "ожидает проверки",
+    "approved": "одобрен",
+    "materializing": "публикуется",
+    "published": "опубликован",
+    "rejected": "отклонён",
+    "skipped": "пропущен",
+    "failed": "завершился ошибкой"
+  },
+  "run": {
+    "pending": "ожидании",
+    "running": "выполнении",
+    "awaiting-review": "ожидании проверки",
+    "completed": "завершён",
+    "paused": "паузе",
+    "cancelled": "отменён",
+    "failed": "ошибке"
+  }
+}

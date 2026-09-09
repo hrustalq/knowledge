@@ -1,0 +1,6 @@
+{
+  "passwordReset": {
+    "subject": "Reset your password",
+    "body": "Open {url} to choose a new password. The link expires in {minutes} minutes. If you did not ask for this, ignore this message."
+  }
+}

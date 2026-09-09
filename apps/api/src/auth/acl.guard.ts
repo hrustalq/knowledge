@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { ACCESS_META, PLATFORM_ADMIN_META, PUBLIC_META, type AccessSpec } from './access.decorator.js';
 import { AccessService } from './access.service.js';
 import type { Principal } from './principal.js';
+import { t } from '../i18n/t.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -35,7 +36,7 @@ export class AclGuard implements CanActivate {
 
     if (this.reflector.getAllAndOverride<boolean>(PLATFORM_ADMIN_META, [ctx.getHandler(), ctx.getClass()])) {
       if (principal.mode !== 'dev' && !principal.isAdmin) {
-        throw new ForbiddenException('Requires platform admin');
+        throw new ForbiddenException(t('error.auth.platformAdminRequired'));
       }
     }
 
@@ -52,9 +53,11 @@ export class AclGuard implements CanActivate {
     spec: AccessSpec,
     req: { body?: Record<string, unknown>; query?: Record<string, unknown>; params?: Record<string, string> },
   ): Promise<string> {
-    const uuid = (value: unknown, what: string): string => {
+    // `subject` is a catalog key (subject.*), not an English fragment: Russian
+    // needs the noun declined, so it is translated rather than concatenated.
+    const uuid = (value: unknown, subject: string): string => {
       if (typeof value !== 'string' || !UUID_RE.test(value)) {
-        throw new BadRequestException(`${what} must be a UUID`);
+        throw new BadRequestException(t('error.invalidUuid', { subject: t(`subject.${subject}`) }));
       }
       return value;
     };
@@ -64,31 +67,31 @@ export class AclGuard implements CanActivate {
       case 'query':
         return uuid(req.query?.workspaceId, 'workspaceId');
       case 'document':
-        return this.access.workspaceOfDocument(uuid(req.params?.id, 'document id'));
+        return this.access.workspaceOfDocument(uuid(req.params?.id, 'document'));
       case 'merge-request':
-        return this.access.workspaceOfMergeRequest(uuid(req.params?.id, 'merge request id'));
+        return this.access.workspaceOfMergeRequest(uuid(req.params?.id, 'mergeRequest'));
       case 'job':
-        return this.access.workspaceOfJob(uuid(req.params?.id, 'job id'));
+        return this.access.workspaceOfJob(uuid(req.params?.id, 'job'));
       case 'project':
-        return this.access.workspaceOfProject(uuid(req.params?.id, 'project id'));
+        return this.access.workspaceOfProject(uuid(req.params?.id, 'project'));
       case 'assistant-thread':
-        return this.access.workspaceOfAssistantThread(uuid(req.params?.id, 'assistant thread id'));
+        return this.access.workspaceOfAssistantThread(uuid(req.params?.id, 'assistantThread'));
       case 'ai-skill':
-        return this.access.workspaceOfAiSkill(uuid(req.params?.id, 'skill id'));
+        return this.access.workspaceOfAiSkill(uuid(req.params?.id, 'skill'));
       case 'ai-plugin':
-        return this.access.workspaceOfAiPlugin(uuid(req.params?.id, 'plugin id'));
+        return this.access.workspaceOfAiPlugin(uuid(req.params?.id, 'plugin'));
       case 'ai-provider':
-        return this.access.workspaceOfAiProvider(uuid(req.params?.id, 'provider id'));
+        return this.access.workspaceOfAiProvider(uuid(req.params?.id, 'provider'));
       case 'glossary-term':
-        return this.access.workspaceOfGlossaryTerm(uuid(req.params?.id, 'glossary term id'));
+        return this.access.workspaceOfGlossaryTerm(uuid(req.params?.id, 'glossaryTerm'));
       case 'import':
-        return this.access.workspaceOfImport(uuid(req.params?.id, 'import id'));
+        return this.access.workspaceOfImport(uuid(req.params?.id, 'import'));
       case 'workflow-definition':
-        return this.access.workspaceOfWorkflowDefinition(uuid(req.params?.id, 'workflow id'));
+        return this.access.workspaceOfWorkflowDefinition(uuid(req.params?.id, 'workflow'));
       case 'workflow-run':
-        return this.access.workspaceOfWorkflowRun(uuid(req.params?.id, 'workflow run id'));
+        return this.access.workspaceOfWorkflowRun(uuid(req.params?.id, 'workflowRun'));
       case 'workspace':
-        return this.access.workspaceExists(uuid(req.params?.id, 'workspace id'));
+        return this.access.workspaceExists(uuid(req.params?.id, 'workspace'));
     }
   }
 }

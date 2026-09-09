@@ -14,6 +14,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { vmsg } from '../../common/validation.js';
 
 /**
  * Permissive UUID shape (any version digit, nil allowed) — class-validator's
@@ -147,8 +148,8 @@ export class ListMergeRequestsQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @Max(100)
+  @Min(1, { message: vmsg('min') })
+  @Max(100, { message: vmsg('max') })
   limit?: number;
 }
 
@@ -172,7 +173,7 @@ export class ThreadAnchorDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
+  @Min(1, { message: vmsg('min') })
   line?: number;
 
   @ApiPropertyOptional({ description: 'line: text excerpt for best-effort re-matching once the branch advances' })
@@ -183,19 +184,19 @@ export class ThreadAnchorDto {
   @ApiPropertyOptional({ description: 'text: the selected passage, as rendered (feature 13 review mode)' })
   @IsOptional()
   @IsString()
-  @MaxLength(MAX_QUOTE_CHARS)
+  @MaxLength(MAX_QUOTE_CHARS, { message: vmsg('maxLength') })
   quote?: string;
 
   @ApiPropertyOptional({ description: 'text: rendered text immediately before the quote, for disambiguation' })
   @IsOptional()
   @IsString()
-  @MaxLength(MAX_CONTEXT_CHARS)
+  @MaxLength(MAX_CONTEXT_CHARS, { message: vmsg('maxLength') })
   prefix?: string;
 
   @ApiPropertyOptional({ description: 'text: rendered text immediately after the quote, for disambiguation' })
   @IsOptional()
   @IsString()
-  @MaxLength(MAX_CONTEXT_CHARS)
+  @MaxLength(MAX_CONTEXT_CHARS, { message: vmsg('maxLength') })
   suffix?: string;
 
   @ApiPropertyOptional({ description: 'section: markdown heading text' })

@@ -1,0 +1,8 @@
+{
+  "disabled": "Живые обновления отключены (LIVE_WS_ENABLED=false)",
+  "subscriptionLimit": "Достигнут предел числа подписок ({max})",
+  "workspaceRequired": "Для подписки нужен workspaceId",
+  "badMessage": "Сообщение не является корректным JSON",
+  "unauthorized": "Токен недействителен или отсутствует",
+  "unknownType": "Неизвестный тип сообщения: {type}"
+}

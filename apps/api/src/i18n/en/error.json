@@ -1,0 +1,184 @@
+{
+  "internal": "Internal server error",
+  "invalidUuid": "{subject} must be a UUID",
+  "auth": {
+    "missingBearer": "Missing Authorization: Bearer <api key or session token>",
+    "invalidSession": "Invalid or expired session — log in again",
+    "accountDisabled": "Account is disabled",
+    "unknownApiKey": "Unknown API key",
+    "invalidCredentials": "Invalid email or password",
+    "invalidResetToken": "Invalid or expired reset token",
+    "noPasswordInDevMode": "No password to change in AUTH_MODE=none",
+    "currentPasswordIncorrect": "Current password is incorrect",
+    "signupDisabled": "Self-service signup is disabled (AUTH_SIGNUP_ENABLED=false)",
+    "emailTaken": "An account with this email already exists",
+    "platformAdminRequired": "Requires platform admin",
+    "notMember": "Not a member of workspace {workspaceId}",
+    "roleRequired": "Requires the {role} role in workspace {workspaceId} (current role: {currentRole})",
+    "trustedOperatorRequired": "Requires trusted-operator membership (plan.md §9 query_graph gate)"
+  },
+  "workspace": {
+    "notFound": "Workspace {id} not found",
+    "noUserWithEmail": "No user with that email — create the account first (signup or POST /v1/users)",
+    "notAMember": "User {userId} is not a member of workspace {workspaceId}",
+    "lastAdminDemote": "Cannot demote the last admin of the workspace",
+    "lastAdminRemove": "Cannot remove the last admin of the workspace"
+  },
+  "user": {
+    "notFound": "User {id} not found",
+    "cannotDisableSelf": "You cannot disable your own account",
+    "cannotRemoveOwnAdmin": "You cannot remove your own platform-admin flag"
+  },
+  "project": {
+    "notFound": "Project {id} not found",
+    "notInWorkspace": "Project {id} not found in this workspace",
+    "nothingToUpdate": "Nothing to update",
+    "notEmpty": {
+      "one": "Project still holds {count} document — move or delete it first",
+      "other": "Project still holds {count} documents — move or delete them first"
+    },
+    "lastInWorkspace": "Cannot delete the last project of the workspace"
+  },
+  "document": {
+    "notFound": "Document {id} not found",
+    "notFoundInWorkspace": "Document {id} not found in workspace",
+    "noRevisions": "Document {id} has no revisions",
+    "noReadableRevision": "Document {id} has no readable revision",
+    "parentNotInProject": "Parent document {id} not found in this project",
+    "selfParent": "A document cannot be its own parent",
+    "moveCycle": "Move would create a cycle in the document tree",
+    "nothingToUpdate": "Nothing to update",
+    "contentIsDraft": "Revision {id} is a draft — finalize it before reading content",
+    "uploadMissing": "No object uploaded at {key} — upload before finalizing",
+    "revisionNotDraft": "Revision {id} is {status}, expected draft"
+  },
+  "branch": {
+    "notFound": "Branch {name} not found on document {documentId}",
+    "exists": "Branch {name} already exists on document {documentId}",
+    "headMoved": "Branch {name} head is {actual}, not {expected} — compare before retrying",
+    "needsFinalized": "Revision {id} is {status} — branches must start from a finalized revision"
+  },
+  "revision": {
+    "notFoundOnDocument": "Revision {revisionId} not found on document {documentId}",
+    "notComparable": "Revision {id} is {status} — only finalized revisions can be compared"
+  },
+  "compare": {
+    "badMode": "mode must be \"direct\" or \"merge-base\", got \"{mode}\""
+  },
+  "relations": {
+    "missingParams": "type and targetKey query params are required"
+  },
+  "mergeRequest": {
+    "notFound": "Merge request {id} not found",
+    "sameBranches": "Source and target branches must differ",
+    "sourceNotFinalized": "Branch {branch} has no finalized revisions to merge",
+    "branchNoRevisions": "Branch {branch} has no revisions",
+    "targetNoRevisions": "Branch {branch} has no revisions to diff against",
+    "notOpenForEdit": "Merge request {id} is {status} — only open merge requests can be edited",
+    "notOpenForApproval": "Merge request {id} is {status} — only open merge requests can be approved",
+    "notOpenForClose": "Merge request {id} is {status} — only open merge requests can be closed",
+    "notOpenForMerge": "Merge request {id} is {status} — only open merge requests can be merged",
+    "notOpenForReviewers": "Merge request {id} is {status} — reviewers can only be set while open",
+    "notClosedForReopen": "Merge request {id} is {status} — only closed merge requests can be reopened",
+    "discussionsReadOnly": "Merge request {id} is {status} — discussions are read-only once it leaves open",
+    "concurrentChange": "Merge request {id} changed state concurrently — reload and retry",
+    "isDraft": "Merge request {id} is a draft — mark it ready before merging",
+    "needsApprovals": "Merge request {id} has {approvals} of {required} required approvals (the author's own approval does not count)",
+    "nothingToMerge": "Nothing to merge — the source head is already an ancestor of the target head",
+    "diverged": "Target branch {target} has advanced past the merge base — rebase {source} onto it and retry",
+    "divergedWhileMerging": "Target branch {target} advanced while merging — retry",
+    "alreadyOpen": "Open merge request {id} already exists for {source} → {target}",
+    "notMembers": "Not members of this workspace: {users}"
+  },
+  "thread": {
+    "notFoundOnDocument": "Thread {threadId} not found on document {documentId}",
+    "notFoundOnMergeRequest": "Thread {threadId} not found on merge request {mergeRequestId}",
+    "plainComment": "Thread {id} is a plain comment — only a thread can be resolved"
+  },
+  "comment": {
+    "notFoundOnThread": "Comment {commentId} not found on thread {threadId}",
+    "onlyAuthorCanEdit": "Only the author of a comment can edit it",
+    "onlyAuthorCanDelete": "Only the author of a comment can delete it"
+  },
+  "anchor": {
+    "line": "Line anchors require revisionId and line",
+    "text": "Text anchors require revisionId and a non-empty quote",
+    "section": "Section anchors require heading",
+    "entity": "Entity anchors require entityKey"
+  },
+  "entity": {
+    "notFound": "Entity {key} not found in workspace"
+  },
+  "graph": {
+    "selectOnly": "Only SELECT queries are allowed",
+    "singleStatement": "Multiple statements are not allowed",
+    "writeKeyword": "Query contains a write/DDL keyword — operator queries are read-only"
+  },
+  "glossary": {
+    "notFound": "Glossary term {id} not found",
+    "duplicate": "\"{term}\" is already in this project's glossary",
+    "documentNotFound": "Document {id} not found in workspace"
+  },
+  "attachment": {
+    "tooLarge": "Attachment exceeds the {limit}-byte limit",
+    "documentNotFound": "Document not found",
+    "uploadMissing": "Upload not found in object storage",
+    "notFound": "Attachment not found"
+  },
+  "import": {
+    "notFound": "Import {id} not found",
+    "unsupportedFormat": "{filename} is not a format that can be imported. Accepted: {accepted}.",
+    "tooLarge": "That file is {size}; the limit is {limit}.",
+    "alreadySubmitted": "This import has already been turned into a page.",
+    "uploadMissing": "The upload did not arrive in object storage. Try again.",
+    "notReviewable": "This import is {status}, so there is nothing to review yet.",
+    "notSubmittable": "This import is {status}, so it cannot be submitted yet.",
+    "imageNotFound": "Image {index} not found in import {importId}",
+    "revisionVanished": "Revision {id} vanished mid-import",
+    "parentNotInProject": "Parent page {id} is not in this project",
+    "needsVisionModel": "Reading text from images needs an AI provider with vision support. Configure one under Settings → AI, then run this import again."
+  },
+  "ingestionJob": {
+    "notFound": "Ingestion job {id} not found"
+  },
+  "ai": {
+    "skillNotFound": "Skill {id} not found",
+    "skillNameTaken": "A skill named \"{name}\" already exists in this workspace",
+    "pluginNotFound": "Plugin {id} not found",
+    "pluginNameTaken": "A plugin named \"{name}\" already exists in this workspace",
+    "providerNotFound": "Provider {id} not found",
+    "providerNameTaken": "A provider named \"{name}\" already exists in this workspace",
+    "providerUnavailable": "Provider {id} is not available in this workspace",
+    "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY is not configured, so API keys cannot be stored. Set it (openssl rand -base64 32) and restart the API, or configure the provider through ASSISTANT_API_KEY.",
+    "pluginUrlInvalid": "Plugin URL is not a valid URL",
+    "pluginUrlNotHttps": "Plugin URL must use https (http is allowed only with AI_PLUGINS_ALLOW_PRIVATE_URLS)",
+    "pluginHostUnresolved": "Plugin host {host} does not resolve",
+    "pluginUrlPrivate": "Plugin URL resolves to a private address ({address}). Set AI_PLUGINS_ALLOW_PRIVATE_URLS=true if this is intentional.",
+    "providerNone": "Provider is set to none for this workspace"
+  },
+  "assistant": {
+    "providerDisabled": "Assistant provider is disabled for this workspace",
+    "threadNotFound": "Assistant thread {id} not found",
+    "messageNotFound": "Message {messageId} not found in thread {threadId}",
+    "budgetUser": "Your monthly AI token budget for this workspace is spent. Ask a workspace admin to raise it.",
+    "budgetWorkspace": "This workspace's monthly AI token budget is spent. Ask a workspace admin to raise it."
+  },
+  "workflow": {
+    "notFound": "Workflow {id} not found",
+    "runNotFound": "Workflow run {id} not found",
+    "nodeNotFound": "Workflow node {id} not found",
+    "nameTaken": "A workflow named \"{name}\" already exists in this workspace",
+    "runsInFlight": {
+      "one": "{count} run of this workflow is still in flight",
+      "other": "{count} runs of this workflow are still in flight"
+    },
+    "disabled": "This workflow is disabled",
+    "differentProject": "This workflow is scoped to a different project",
+    "runInFlightForPage": "A run of this workflow is already in flight for this page",
+    "nodeNotAwaitingReview": "Only a node awaiting review can be edited (this one is {status})",
+    "stepGone": "Step \"{stepId}\" is no longer part of this run",
+    "invalidGraph": "The workflow graph is not valid"
+  },
+  "routeNotFound": "Cannot {method} {path}",
+  "validationFailed": "Validation failed"
+}

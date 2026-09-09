@@ -9,6 +9,7 @@ import type {
 import type { Principal } from '../auth/principal.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AddMemberDto, UpdateMemberDto } from './workspaces.dto.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Access-control management: workspaces + workspace_members CRUD. Role checks
@@ -115,7 +116,7 @@ export class WorkspacesService {
 
   async addMember(workspaceId: string, dto: AddMemberDto): Promise<ListWorkspaceMembersResponse> {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email.trim().toLowerCase() } });
-    if (!user) throw new NotFoundException('No user with that email — create the account first (signup or POST /v1/users)');
+    if (!user) throw new NotFoundException(t('error.workspace.noUserWithEmail'));
     await this.prisma.workspaceMember.upsert({
       where: { workspaceId_userId: { workspaceId, userId: user.id } },
       update: { role: dto.role, trustedOperator: dto.trustedOperator ?? false },
@@ -127,7 +128,7 @@ export class WorkspacesService {
   async updateMember(workspaceId: string, userId: string, dto: UpdateMemberDto): Promise<ListWorkspaceMembersResponse> {
     const member = await this.requireMember(workspaceId, userId);
     if (dto.role && dto.role !== 'admin' && member.role === 'admin') {
-      await this.requireAnotherAdmin(workspaceId, userId, 'demote');
+      await this.requireAnotherAdmin(workspaceId, userId, 'error.workspace.lastAdminDemote');
     }
     await this.prisma.workspaceMember.update({
       where: { workspaceId_userId: { workspaceId, userId } },
@@ -141,7 +142,7 @@ export class WorkspacesService {
 
   async removeMember(workspaceId: string, userId: string): Promise<ListWorkspaceMembersResponse> {
     const member = await this.requireMember(workspaceId, userId);
-    if (member.role === 'admin') await this.requireAnotherAdmin(workspaceId, userId, 'remove');
+    if (member.role === 'admin') await this.requireAnotherAdmin(workspaceId, userId, 'error.workspace.lastAdminRemove');
     await this.prisma.workspaceMember.delete({
       where: { workspaceId_userId: { workspaceId, userId } },
     });
@@ -152,17 +153,23 @@ export class WorkspacesService {
     const member = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId } },
     });
-    if (!member) throw new NotFoundException(`User ${userId} is not a member of workspace ${workspaceId}`);
+    if (!member) throw new NotFoundException(t('error.workspace.notAMember', { userId, workspaceId }));
     return member;
   }
 
   /** Last-admin protection: a workspace must always keep at least one admin. */
-  private async requireAnotherAdmin(workspaceId: string, exceptUserId: string, verb: string): Promise<void> {
+  private async requireAnotherAdmin(
+    workspaceId: string,
+    exceptUserId: string,
+    // A whole message key, not a verb spliced into a sentence: Russian cannot
+    // take an English infinitive in the middle of one.
+    key: 'error.workspace.lastAdminDemote' | 'error.workspace.lastAdminRemove',
+  ): Promise<void> {
     const otherAdmins = await this.prisma.workspaceMember.count({
       where: { workspaceId, role: 'admin', userId: { not: exceptUserId } },
     });
     if (otherAdmins === 0) {
-      throw new BadRequestException(`Cannot ${verb} the last admin of the workspace`);
+      throw new BadRequestException(t(key));
     }
   }
 }

@@ -6,11 +6,11 @@ import {
   Get,
   Headers,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
+import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { CompareMode } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
@@ -29,6 +29,7 @@ import {
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
 import { CreateCommentDto, CreateThreadDto, ResolveThreadDto } from './dto/merge-requests.dto.js';
+import { t } from '../i18n/t.js';
 
 @ApiTags('documents')
 @Controller('v1/documents')
@@ -151,7 +152,7 @@ export class DocumentsController {
     @Query('semantic') semantic?: string,
   ) {
     if (mode !== 'direct' && mode !== 'merge-base') {
-      throw new BadRequestException(`mode must be "direct" or "merge-base", got "${mode}"`);
+      throw new BadRequestException(t('error.compare.badMode', { mode }));
     }
     return this.compareService.compare(id, from, to, mode as CompareMode, {
       structural: structural !== 'false',
@@ -185,7 +186,7 @@ export class DocumentsController {
     @Query('targetKey') targetKey: string,
     @Query('extractor') extractor?: string,
   ) {
-    if (!type || !targetKey) throw new BadRequestException('type and targetKey query params are required');
+    if (!type || !targetKey) throw new BadRequestException(t('error.relations.missingParams'));
     return this.documents.deleteRelation(id, type, targetKey, extractor);
   }
 

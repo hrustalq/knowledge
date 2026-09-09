@@ -42,6 +42,9 @@ import type {
   ListWorkflowsQueryDto,
   UpdateWorkflowDto,
 } from './workflows.dto.js';
+import { t } from '../i18n/t.js';
+import { localizeIssues, localizeTransition } from '../i18n/workflow-messages.js';
+import { currentLocale } from '../i18n/locale.js';
 
 const DEFAULT_TRIGGER: WorkflowTrigger = {
   manual: true,
@@ -111,7 +114,7 @@ export class WorkflowsService {
       })
       .catch((e: { code?: string }) => {
         if (e.code === 'P2002') {
-          throw new ConflictException(`A workflow named "${dto.name}" already exists in this workspace`);
+          throw new ConflictException(t('error.workflow.nameTaken', { name: dto.name }));
         }
         throw e;
       });
@@ -170,7 +173,7 @@ export class WorkflowsService {
     if (live > 0) {
       throw new ConflictException({
         statusCode: 409,
-        message: `${live} run(s) of this workflow are still in flight`,
+        message: t('error.workflow.runsInFlight', { count: live }),
         reason: 'runs-in-flight',
         runs: live,
       });
@@ -190,7 +193,10 @@ export class WorkflowsService {
   async validate(id: string, graph?: WorkflowGraph): Promise<{ valid: boolean; issues: WorkflowValidationIssue[] }> {
     const target = graph ?? ((await this.requireDefinition(id)).graph as unknown as WorkflowGraph);
     const issues = validateGraph(target);
-    return { valid: !issues.some((i) => i.severity === 'error'), issues };
+    return {
+      valid: !issues.some((i) => i.severity === 'error'),
+      issues: localizeIssues(issues),
+    };
   }
 
   // -------------------------------------------------------------------- runs
@@ -202,19 +208,19 @@ export class WorkflowsService {
   ): Promise<WorkflowRunInfo> {
     const definition = await this.requireDefinition(input.definitionId);
     if (definition.workspaceId !== input.workspaceId) {
-      throw new NotFoundException(`Workflow ${input.definitionId} not found`);
+      throw new NotFoundException(t('error.workflow.notFound', { id: input.definitionId }));
     }
-    if (!definition.enabled) throw new BadRequestException('This workflow is disabled');
+    if (!definition.enabled) throw new BadRequestException(t('error.workflow.disabled'));
 
     const document = await this.prisma.document.findUnique({
       where: { id: input.rootDocumentId },
       select: { id: true, workspaceId: true, projectId: true, title: true },
     });
     if (!document || document.workspaceId !== input.workspaceId) {
-      throw new NotFoundException(`Document ${input.rootDocumentId} not found`);
+      throw new NotFoundException(t('error.document.notFound', { id: input.rootDocumentId }));
     }
     if (definition.projectId && definition.projectId !== document.projectId) {
-      throw new BadRequestException('This workflow is scoped to a different project');
+      throw new BadRequestException(t('error.workflow.differentProject'));
     }
 
     const graph = definition.graph as unknown as WorkflowGraph;
@@ -233,7 +239,7 @@ export class WorkflowsService {
     if (existing) {
       throw new ConflictException({
         statusCode: 409,
-        message: 'A run of this workflow is already in flight for this page',
+        message: t('error.workflow.runInFlightForPage'),
         reason: 'run-in-flight',
         runId: existing.id,
         runStatus: existing.status,
@@ -258,6 +264,9 @@ export class WorkflowsService {
           snapshot: started.snapshot as unknown as Prisma.InputJsonValue,
           startedBy,
           createdBy: userId ?? null,
+          // Frozen for the same reason definitionSnapshot is: the nodes run
+          // later, in a worker, and they write whole pages of prose.
+          locale: currentLocale(),
           startedAt: new Date(),
         },
       });
@@ -335,7 +344,7 @@ export class WorkflowsService {
       where: { id },
       include: { definition: { select: { name: true } }, nodes: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!run) throw new NotFoundException(`Workflow run ${id} not found`);
+    if (!run) throw new NotFoundException(t('error.workflow.runNotFound', { id }));
 
     const titles = await this.documentTitles([run.rootDocumentId]);
     return {
@@ -353,7 +362,7 @@ export class WorkflowsService {
     try {
       next = applyRunEvent(run.status as WorkflowRunStatus, { type }, { snapshot: run.snapshot ?? undefined });
     } catch (e) {
-      if (e instanceof WorkflowTransitionError) throw new ConflictException(e.message);
+      if (e instanceof WorkflowTransitionError) throw new ConflictException(localizeTransition(e, 'run'));
       throw e;
     }
 
@@ -401,7 +410,9 @@ export class WorkflowsService {
   async updateNodeDraft(runId: string, nodeId: string, draft: WorkflowNodeDraft): Promise<WorkflowRunNodeInfo> {
     const node = await this.requireNode(runId, nodeId);
     if (node.status !== 'awaiting-review') {
-      throw new ConflictException(`Only a node awaiting review can be edited (this one is ${node.status})`);
+      throw new ConflictException(
+        t('error.workflow.nodeNotAwaitingReview', { status: t(`status.node.${node.status}`) }),
+      );
     }
     const updated = await this.prisma.workflowRunNode.update({
       where: { id: nodeId },
@@ -427,13 +438,13 @@ export class WorkflowsService {
     const run = await this.requireRun(runId);
     const graph = run.definitionSnapshot as unknown as WorkflowGraph;
     const step = stepById(graph, node.stepId);
-    if (!step) throw new BadRequestException(`Step "${node.stepId}" is no longer part of this run`);
+    if (!step) throw new BadRequestException(t('error.workflow.stepGone', { stepId: node.stepId }));
 
     let nextStatus;
     try {
       nextStatus = nextNodeStatus(step, node.status as never, { type });
     } catch (e) {
-      if (e instanceof WorkflowTransitionError) throw new ConflictException(e.message);
+      if (e instanceof WorkflowTransitionError) throw new ConflictException(localizeTransition(e, 'node'));
       throw e;
     }
 
@@ -497,7 +508,7 @@ export class WorkflowsService {
       where: { id: runId },
       include: { definition: { select: { name: true } } },
     });
-    if (!run) throw new NotFoundException(`Workflow run ${runId} not found`);
+    if (!run) throw new NotFoundException(t('error.workflow.runNotFound', { id: runId }));
     const titles = await this.documentTitles([run.rootDocumentId]);
     return this.toRunInfo(
       run,
@@ -514,7 +525,7 @@ export class WorkflowsService {
       where: { id: documentId },
       select: { id: true, workspaceId: true, projectId: true },
     });
-    if (!document) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
 
     const rows = await this.prisma.workflowRun.findMany({
       where: { rootDocumentId: documentId },
@@ -549,9 +560,9 @@ export class WorkflowsService {
       if (e instanceof WorkflowDefinitionError) {
         throw new BadRequestException({
           statusCode: 400,
-          message: 'The workflow graph is not valid',
+          message: t('error.workflow.invalidGraph'),
           reason: 'invalid-graph',
-          issues: e.issues,
+          issues: localizeIssues(e.issues),
         });
       }
       throw e;
@@ -560,19 +571,19 @@ export class WorkflowsService {
 
   private async requireDefinition(id: string): Promise<WorkflowDefinition> {
     const row = await this.prisma.workflowDefinition.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException(`Workflow ${id} not found`);
+    if (!row) throw new NotFoundException(t('error.workflow.notFound', { id }));
     return row;
   }
 
   private async requireRun(id: string): Promise<WorkflowRun> {
     const row = await this.prisma.workflowRun.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException(`Workflow run ${id} not found`);
+    if (!row) throw new NotFoundException(t('error.workflow.runNotFound', { id }));
     return row;
   }
 
   private async requireNode(runId: string, nodeId: string): Promise<WorkflowRunNode> {
     const row = await this.prisma.workflowRunNode.findUnique({ where: { id: nodeId } });
-    if (!row || row.runId !== runId) throw new NotFoundException(`Workflow node ${nodeId} not found`);
+    if (!row || row.runId !== runId) throw new NotFoundException(t('error.workflow.nodeNotFound', { id: nodeId }));
     return row;
   }
 

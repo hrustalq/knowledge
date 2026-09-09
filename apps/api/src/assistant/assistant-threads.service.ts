@@ -17,6 +17,7 @@ import type {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { Prisma } from '@prisma/client';
 import type { AssistantMessage, AssistantThread } from '@prisma/client';
+import { t } from '../i18n/t.js';
 
 const DEFAULT_THREAD_PAGE = 50;
 const MAX_THREAD_PAGE = 100;
@@ -108,7 +109,7 @@ export class AssistantThreadsService {
         select: { workspaceId: true, enabled: true },
       });
       if (!provider || provider.workspaceId !== current.workspaceId || !provider.enabled) {
-        throw new NotFoundException(`Provider ${patch.providerId} is not available in this workspace`);
+        throw new NotFoundException(t('error.ai.providerUnavailable', { id: patch.providerId }));
       }
     }
     const thread = await this.prisma.assistantThread.update({
@@ -154,7 +155,7 @@ export class AssistantThreadsService {
     });
     const at = rows.findIndex((r) => r.id === messageId);
     // Also the answer for a message id belonging to some other thread.
-    if (at < 0) throw new NotFoundException(`Message ${messageId} not found in thread ${threadId}`);
+    if (at < 0) throw new NotFoundException(t('error.assistant.messageNotFound', { messageId, threadId }));
     const doomed = rows.slice(at).map((r) => r.id);
 
     const [, thread] = await this.prisma.$transaction([
@@ -205,7 +206,7 @@ export class AssistantThreadsService {
 
   async getThreadOrThrow(threadId: string): Promise<AssistantThread> {
     const thread = await this.prisma.assistantThread.findUnique({ where: { id: threadId } });
-    if (!thread) throw new NotFoundException(`Assistant thread ${threadId} not found`);
+    if (!thread) throw new NotFoundException(t('error.assistant.threadNotFound', { id: threadId }));
     return thread;
   }
 

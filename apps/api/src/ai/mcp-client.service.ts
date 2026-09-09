@@ -6,6 +6,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { AiPlugin } from '@prisma/client';
 import type { AiPluginTool } from '@knowledge/contracts';
+import { t } from '../i18n/t.js';
 
 /** Namespace separator: `mcp__<plugin slug>__<tool>` stays inside `^[a-zA-Z0-9_-]+$`. */
 export const MCP_TOOL_PREFIX = 'mcp__';
@@ -173,20 +174,20 @@ export async function assertSafePluginUrl(raw: string, allowPrivate: boolean): P
   try {
     url = new URL(raw);
   } catch {
-    throw new BadRequestException('Plugin URL is not a valid URL');
+    throw new BadRequestException(t('error.ai.pluginUrlInvalid'));
   }
   if (url.protocol !== 'https:' && !(allowPrivate && url.protocol === 'http:')) {
-    throw new BadRequestException('Plugin URL must use https (http is allowed only with AI_PLUGINS_ALLOW_PRIVATE_URLS)');
+    throw new BadRequestException(t('error.ai.pluginUrlNotHttps'));
   }
   if (allowPrivate) return;
 
   const host = url.hostname.replace(/^\[|\]$/g, '');
   const addresses = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((a) => a.address);
-  if (addresses.length === 0) throw new BadRequestException(`Plugin host ${host} does not resolve`);
+  if (addresses.length === 0) throw new BadRequestException(t('error.ai.pluginHostUnresolved', { host }));
   for (const address of addresses) {
     if (isPrivateAddress(address)) {
       throw new BadRequestException(
-        `Plugin URL resolves to a private address (${address}). Set AI_PLUGINS_ALLOW_PRIVATE_URLS=true if this is intentional.`,
+        t('error.ai.pluginUrlPrivate', { address }),
       );
     }
   }

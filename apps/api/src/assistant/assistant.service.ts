@@ -35,6 +35,7 @@ import type {
   AssistantSuggestDto,
   PostAssistantMessageDto,
 } from './assistant.dto.js';
+import { t } from '../i18n/t.js';
 
 const SEVERITIES = ['error', 'warning', 'suggestion'] as const;
 
@@ -112,7 +113,7 @@ export class AssistantService {
     const config = await this.aiConfig.resolveFor(workspaceId, purpose, pinnedProviderId);
     if (!config.enabled) return null;
     await this.aiUsage.assertWithinBudget(workspaceId, principal.userId);
-    return { config, userId: principal.userId, operation, threadId };
+    return { config, userId: principal.userId, operation, threadId, locale: principal.locale };
   }
 
   async review(dto: AssistantReviewDto, principal: Principal): Promise<AssistantReviewResponse> {
@@ -187,7 +188,7 @@ export class AssistantService {
     // (before any other branch, so disabled mode behaves identically).
     const document = await this.prisma.document.findUnique({ where: { id: dto.documentId } });
     if (!document || document.workspaceId !== dto.workspaceId) {
-      throw new NotFoundException(`Document ${dto.documentId} not found in workspace`);
+      throw new NotFoundException(t('error.document.notFoundInWorkspace', { id: dto.documentId }));
     }
     const call = await this.openCall(dto.workspaceId, principal, 'ask');
     if (!call) {

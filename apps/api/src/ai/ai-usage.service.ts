@@ -11,6 +11,7 @@ import type {
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiConfigService, type ResolvedAiConfig } from './ai-config.service.js';
+import { t } from '../i18n/t.js';
 
 /** Token counts as reported by the provider (OpenAI-shaped `usage` block). */
 export interface AiUsageTokens {
@@ -146,10 +147,7 @@ export class AiUsageService {
       {
         statusCode: HttpStatus.TOO_MANY_REQUESTS,
         code: 'ASSISTANT_BUDGET_EXCEEDED',
-        message:
-          scope === 'user'
-            ? 'Your monthly AI token budget for this workspace is spent. Ask a workspace admin to raise it.'
-            : "This workspace's monthly AI token budget is spent. Ask a workspace admin to raise it.",
+        message: t(scope === 'user' ? 'error.assistant.budgetUser' : 'error.assistant.budgetWorkspace'),
         scope,
         usedTokens: used,
         monthlyTokenBudget: budget,

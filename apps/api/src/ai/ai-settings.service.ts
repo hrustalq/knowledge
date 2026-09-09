@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AiConfigService } from './ai-config.service.js';
 import { encryptSecret, maskSecret, MissingEncryptionKeyError } from './secret-box.js';
+import { t } from '../i18n/t.js';
+import { currentLocale } from '../i18n/locale.js';
 
 export interface UpdateAiSettingsInput {
   /** Per-purpose routing; null clears a route back to the inline config. */
@@ -118,11 +120,11 @@ export class AiSettingsService {
       ? await this.aiConfig.resolveFor(workspaceId, 'chat', providerId)
       : await this.aiConfig.resolveFor(workspaceId, 'chat');
     if (!config.enabled) {
-      return { ok: false, model: '', latencyMs: 0, error: 'Provider is set to none for this workspace' };
+      return { ok: false, model: '', latencyMs: 0, error: t('error.ai.providerNone') };
     }
     const startedAt = Date.now();
     try {
-      await this.client.chat({ config, userId: principalId, operation: 'suggest' }, [
+      await this.client.chat({ config, userId: principalId, operation: 'suggest', locale: currentLocale() }, [
         { role: 'user', content: 'Reply with the single word: ok' },
       ]);
       return { ok: true, model: config.model, latencyMs: Date.now() - startedAt };
@@ -143,7 +145,7 @@ export class AiSettingsService {
     } catch (err) {
       if (err instanceof MissingEncryptionKeyError) {
         throw new BadRequestException(
-          'SETTINGS_ENCRYPTION_KEY is not configured, so API keys cannot be stored. Set it (openssl rand -base64 32) and restart the API, or configure the provider through ASSISTANT_API_KEY.',
+          t('error.ai.encryptionKeyMissing'),
         );
       }
       throw err;

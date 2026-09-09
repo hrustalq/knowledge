@@ -27,12 +27,23 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
     description: 'Error envelope — all non-2xx responses conform to ApiErrorResponse',
     content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } },
   };
+  // docs/features/18: every route honours Accept-Language, so it is stamped
+  // here rather than decorated onto 144 handlers.
+  const acceptLanguage = {
+    name: 'Accept-Language',
+    in: 'header',
+    required: false,
+    description: 'Response language (docs/features/18). Supported: en, ru. Default: en.',
+    schema: { type: 'string', enum: ['en', 'ru'] },
+  };
   for (const pathItem of Object.values(doc.paths)) {
     for (const op of Object.values(pathItem as Record<string, unknown>)) {
       if (op && typeof op === 'object' && 'responses' in op) {
         const responses = (op as { responses: Record<string, unknown> }).responses;
         responses['4XX'] ??= errorResponse;
         responses['5XX'] ??= errorResponse;
+        const holder = op as { parameters?: unknown[] };
+        holder.parameters = [...(holder.parameters ?? []), acceptLanguage];
       }
     }
   }

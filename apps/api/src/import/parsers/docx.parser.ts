@@ -12,6 +12,7 @@ import {
   type ParsedImage,
   type ParseResult,
 } from './parser.types.js';
+import { t } from '../../i18n/t.js';
 
 /**
  * DOCX → markdown, via mammoth's semantic HTML.
@@ -31,7 +32,7 @@ export class DocxParser implements DocumentParser {
   readonly id: ImportParserId = 'docx';
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
-    await ctx.onStage('Reading the document', 0.2);
+    await ctx.onStage(t('import.stage.reading-document'), 0.2);
 
     const images: ParsedImage[] = [];
     const result = await mammoth.convertToHtml(
@@ -62,20 +63,23 @@ export class DocxParser implements DocumentParser {
       },
     );
 
-    await ctx.onStage('Converting to markdown', 0.7);
+    await ctx.onStage(t('import.stage.converting'), 0.7);
     const markdown = normalizeGlyphBullets(htmlToMarkdown(result.value));
 
     // mammoth reports what it could not represent (unsupported styles, dropped
     // fields). Those are exactly the losses a reviewer needs to know about, so
     // they are passed through rather than logged and forgotten.
+    // mammoth's own text, in English, passed through a catalog key that is
+    // just `{text}` — a library's diagnostic is not ours to translate, but it
+    // still has to travel the same channel as the warnings that are.
     const warnings = dedupe(
       result.messages
         .filter((m) => m.type === 'warning' || m.type === 'error')
-        .map((m) => m.message),
+        .map((m) => t('import.warning.passthrough', { text: m.message })),
     ).slice(0, 8);
     if (images.length > 0) {
       warnings.unshift(
-        `${images.length} ${images.length === 1 ? 'image was' : 'images were'} imported and will be attached to the page.`,
+        t('import.warning.imagesAttached', { count: images.length }),
       );
     }
 

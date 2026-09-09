@@ -10,6 +10,7 @@ import {
   type ParseContext,
   type ParseResult,
 } from './parser.types.js';
+import { t } from '../../i18n/t.js';
 
 /**
  * Markdown and plain text.
@@ -29,7 +30,7 @@ export class PlaintextParser implements DocumentParser {
   readonly id: ImportParserId = 'plaintext';
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
-    await ctx.onStage('Reading the file', 0.5);
+    await ctx.onStage(t('import.stage.reading-file'), 0.5);
     const text = new TextDecoder().decode(bytes).replace(/^﻿/, '');
     const isMarkdown = /\.(md|markdown)$/i.test(ctx.filename) || /markdown/i.test(ctx.contentType);
     const warnings: string[] = [];
@@ -38,7 +39,7 @@ export class PlaintextParser implements DocumentParser {
       const parsed = matter(text);
       const frontTitle = typeof parsed.data?.title === 'string' ? parsed.data.title.trim() : '';
       if (Object.keys(parsed.data ?? {}).length > 0) {
-        warnings.push('Frontmatter was kept, so any `relations:` and `tags:` it declares will be indexed as facts.');
+        warnings.push(t('import.warning.frontmatterKept'));
       }
       return {
         markdown: text.trim(),
@@ -50,7 +51,7 @@ export class PlaintextParser implements DocumentParser {
 
     const markdown = rejoinHardWraps(text);
     if (markdown !== tidy(text)) {
-      warnings.push('Hard line breaks were rejoined into paragraphs.');
+      warnings.push(t('import.warning.rejoinedLines'));
     }
     return {
       markdown,

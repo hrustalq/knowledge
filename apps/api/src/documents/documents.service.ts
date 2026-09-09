@@ -40,6 +40,7 @@ import type {
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
 import type { Document, DocumentBranch, DocumentRevision } from '@prisma/client';
+import { t } from '../i18n/t.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -66,7 +67,7 @@ export class DocumentsService {
     if (dto.parentId) {
       const parent = await this.prisma.document.findUnique({ where: { id: dto.parentId } });
       if (!parent || parent.projectId !== dto.projectId) {
-        throw new BadRequestException(`Parent document ${dto.parentId} not found in this project`);
+        throw new BadRequestException(t('error.document.parentNotInProject', { id: dto.parentId }));
       }
     }
 
@@ -139,7 +140,12 @@ export class DocumentsService {
     if (dto.revisionId) {
       revision = await this.getRevisionOrThrow(documentId, dto.revisionId);
       if (revision.status !== 'draft') {
-        throw new BadRequestException(`Revision ${revision.id} is ${revision.status}, expected draft`);
+        throw new BadRequestException(
+        t('error.document.revisionNotDraft', {
+          id: revision.id,
+          status: t(`status.revision.${revision.status}`),
+        }),
+      );
       }
     } else {
       revision = await this.createDraftRevision(documentId, { contentType: dto.contentType, authorId });
@@ -173,13 +179,15 @@ export class DocumentsService {
       const branch = await this.prisma.documentBranch.findUnique({
         where: { documentId_name: { documentId, name: branchName } },
       });
-      if (!branch) throw new NotFoundException(`Branch ${branchName} not found on document ${documentId}`);
+      if (!branch) throw new NotFoundException(t('error.branch.notFound', { name: branchName, documentId }));
       if (branch.headRevisionId !== expectedHeadRevisionId) {
         throw new ConflictException({
           statusCode: 409,
-          message:
-            `Branch ${branchName} head is ${branch.headRevisionId ?? 'unset'}, not ${expectedHeadRevisionId} — ` +
-            'compare before retrying',
+          message: t('error.branch.headMoved', {
+            name: branchName,
+            actual: branch.headRevisionId ?? 'unset',
+            expected: expectedHeadRevisionId,
+          }),
           currentHeadRevisionId: branch.headRevisionId,
           comparisonUrl: branch.headRevisionId
             ? `/v1/documents/${documentId}/compare?from=${expectedHeadRevisionId}&to=${branch.headRevisionId}&mode=merge-base`
@@ -208,7 +216,7 @@ export class DocumentsService {
 
     const head = await this.storage.headObject(revision.s3Key);
     if (!head) {
-      throw new BadRequestException(`No object uploaded at ${revision.s3Key} — upload before finalizing`);
+      throw new BadRequestException(t('error.document.uploadMissing', { key: revision.s3Key }));
     }
 
     const text = await this.storage.getObjectText(revision.s3Key);
@@ -325,7 +333,7 @@ export class DocumentsService {
       where: { id: documentId },
       include: { branches: true },
     });
-    if (!document) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
 
     let revision: DocumentRevision | null = null;
     if (revisionId) {
@@ -339,7 +347,7 @@ export class DocumentsService {
             orderBy: { revisionNumber: 'desc' },
           });
     }
-    if (!revision) throw new NotFoundException(`Document ${documentId} has no revisions`);
+    if (!revision) throw new NotFoundException(t('error.document.noRevisions', { id: documentId }));
 
     const chunks =
       revision.status === 'indexed'
@@ -371,7 +379,7 @@ export class DocumentsService {
       where: { documentId_name: { documentId, name: dto.name } },
     });
     if (existing) {
-      throw new ConflictException(`Branch ${dto.name} already exists on document ${documentId}`);
+      throw new ConflictException(t('error.branch.exists', { name: dto.name, documentId }));
     }
 
     let head: string | null = null;
@@ -379,7 +387,7 @@ export class DocumentsService {
       const rev = await this.getRevisionOrThrow(documentId, dto.fromRevisionId);
       if (!rev.contentHash) {
         throw new BadRequestException(
-          `Revision ${rev.id} is ${rev.status} — branches must start from a finalized revision`,
+          t('error.branch.needsFinalized', { id: rev.id, status: t(`status.revision.${rev.status}`) }),
         );
       }
       head = rev.id;
@@ -420,7 +428,7 @@ export class DocumentsService {
       const branch = await this.prisma.documentBranch.findUnique({
         where: { documentId_name: { documentId, name: branchName } },
       });
-      if (!branch) throw new NotFoundException(`Branch ${branchName} not found on document ${documentId}`);
+      if (!branch) throw new NotFoundException(t('error.branch.notFound', { name: branchName, documentId }));
       branchId = branch.id;
     }
 
@@ -525,7 +533,7 @@ export class DocumentsService {
       where: { id: documentId },
       include: { branches: true },
     });
-    if (!document) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
 
     let revision: DocumentRevision | null = null;
     if (revisionId) {
@@ -534,9 +542,9 @@ export class DocumentsService {
       const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId;
       revision = headId ? await this.prisma.documentRevision.findUnique({ where: { id: headId } }) : null;
     }
-    if (!revision) throw new NotFoundException(`Document ${documentId} has no readable revision`);
+    if (!revision) throw new NotFoundException(t('error.document.noReadableRevision', { id: documentId }));
     if (revision.status === 'draft') {
-      throw new BadRequestException(`Revision ${revision.id} is a draft — finalize it before reading content`);
+      throw new BadRequestException(t('error.document.contentIsDraft', { id: revision.id }));
     }
 
     const raw = await this.storage.getObjectText(revision.s3Key);
@@ -573,11 +581,11 @@ export class DocumentsService {
 
     const targetProject = data.projectId ?? document.projectId;
     if (dto.parentId !== undefined) {
-      if (dto.parentId === documentId) throw new BadRequestException('A document cannot be its own parent');
+      if (dto.parentId === documentId) throw new BadRequestException(t('error.document.selfParent'));
       if (dto.parentId !== null) await this.assertValidParent(documentId, dto.parentId, targetProject);
       data.parentId = dto.parentId;
     }
-    if (Object.keys(data).length === 0) throw new BadRequestException('Nothing to update');
+    if (Object.keys(data).length === 0) throw new BadRequestException(t('error.document.nothingToUpdate'));
 
     const updated = await this.prisma.document.update({ where: { id: documentId }, data });
     // Children follow their parent, otherwise they would be orphaned into a
@@ -721,13 +729,13 @@ export class DocumentsService {
   private async assertValidParent(documentId: string, parentId: string, projectId: string): Promise<void> {
     const parent = await this.prisma.document.findUnique({ where: { id: parentId } });
     if (!parent || parent.projectId !== projectId) {
-      throw new BadRequestException(`Parent document ${parentId} not found in this project`);
+      throw new BadRequestException(t('error.document.parentNotInProject', { id: parentId }));
     }
     let cursor: string | null = parent.id;
     const seen = new Set<string>();
     while (cursor) {
       if (cursor === documentId) {
-        throw new BadRequestException('Move would create a cycle in the document tree');
+        throw new BadRequestException(t('error.document.moveCycle'));
       }
       if (seen.has(cursor)) break;
       seen.add(cursor);
@@ -821,7 +829,7 @@ export class DocumentsService {
     const branch = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name: branchName } },
     });
-    if (!branch) throw new NotFoundException(`Branch ${branchName} not found on document ${documentId}`);
+    if (!branch) throw new NotFoundException(t('error.branch.notFound', { name: branchName, documentId }));
 
     return this.prisma.$transaction(async (tx) => {
       const max = await tx.documentRevision.aggregate({
@@ -867,14 +875,14 @@ export class DocumentsService {
 
   private async getDocumentOrThrow(documentId: string) {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
-    if (!doc) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!doc) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
     return doc;
   }
 
   private async getRevisionOrThrow(documentId: string, revisionId: string) {
     const rev = await this.prisma.documentRevision.findUnique({ where: { id: revisionId } });
     if (!rev || rev.documentId !== documentId) {
-      throw new NotFoundException(`Revision ${revisionId} not found on document ${documentId}`);
+      throw new NotFoundException(t('error.revision.notFoundOnDocument', { revisionId, documentId }));
     }
     return rev;
   }

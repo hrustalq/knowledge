@@ -1,0 +1,9 @@
+{
+  "disabled": "Assistant disabled for this workspace.",
+  "note": {
+    "published": "Created and published immediately — it is a new page, so there was nothing to review.",
+    "mergeRequest": "Opened as a merge request — a human must review and merge it before the change goes live.",
+    "formShown": "The form is now in front of the user. End your turn — their answer arrives as the next message.",
+    "agentOffered": "The user has been offered the switch to Agent mode — wait for their answer."
+  }
+}

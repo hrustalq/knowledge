@@ -1,4 +1,5 @@
-import { Controller, Get, ParseUUIDPipe, Query } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
+import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { ListAuditLogsResponse, MeResponse, WorkspaceRole } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from './access.decorator.js';
@@ -24,6 +25,7 @@ export class AuthController {
       displayName: principal.displayName,
       mode: principal.mode,
       isAdmin: principal.isAdmin,
+      locale: principal.locale,
       memberships: memberships.map((m) => ({
         workspaceId: m.workspaceId,
         role: m.role as WorkspaceRole,

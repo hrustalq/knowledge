@@ -11,6 +11,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { vmsg } from '../common/validation.js';
 
 export class ListProjectsQueryDto {
   // Field name must stay `workspaceId`: @Access('viewer','query') resolves it.
@@ -33,8 +34,8 @@ export class ListProjectsQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @Max(200)
+  @Min(1, { message: vmsg('min') })
+  @Max(200, { message: vmsg('max') })
   limit?: number;
 }
 
@@ -47,7 +48,7 @@ export class CreateProjectDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   name!: string;
 
   // Explicit `type: String` on a nullable property — without it openapi-typescript
@@ -56,7 +57,7 @@ export class CreateProjectDto {
   @IsOptional()
   @ValidateIf((o: CreateProjectDto) => o.description !== null)
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(2000, { message: vmsg('maxLength') })
   description?: string | null;
 }
 
@@ -65,7 +66,7 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(120, { message: vmsg('maxLength') })
   name?: string;
 
   /** `null` clears the description; omitting the field leaves it untouched. */
@@ -73,6 +74,6 @@ export class UpdateProjectDto {
   @IsOptional()
   @ValidateIf((o: UpdateProjectDto) => o.description !== null)
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(2000, { message: vmsg('maxLength') })
   description?: string | null;
 }

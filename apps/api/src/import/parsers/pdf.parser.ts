@@ -11,6 +11,7 @@ import {
   type ParseContext,
   type ParseResult,
 } from './parser.types.js';
+import { t } from '../../i18n/t.js';
 
 interface Line {
   text: string;
@@ -39,7 +40,7 @@ export class PdfParser implements DocumentParser {
   readonly id: ImportParserId = 'pdf';
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
-    await ctx.onStage('Opening the PDF');
+    await ctx.onStage(t('import.stage.opening-pdf'));
     const pdf = await getDocumentProxy(bytes);
     const totalPages = pdf.numPages;
 
@@ -81,7 +82,7 @@ export class PdfParser implements DocumentParser {
     const warnings: string[] = [];
     const kept = dropRunningHeads(lines, totalPages, warnings);
 
-    await ctx.onStage('Rebuilding structure', 0.8);
+    await ctx.onStage(t('import.stage.rebuilding-structure'), 0.8);
     const bodySize = modeSize(kept);
     const headingSizes = rankHeadingSizes(kept, bodySize);
     const markdown = assemble(kept, bodySize, headingSizes, medianLineGap(kept));
@@ -94,11 +95,11 @@ export class PdfParser implements DocumentParser {
     const needsOcr = words < Math.max(20, totalPages * 5);
     if (needsOcr) {
       warnings.push(
-        'Almost no selectable text was found — this looks like a scanned PDF, so its pages are images rather than text.',
+        t('import.warning.scannedPdf'),
       );
     } else if (sections === 0) {
       warnings.push(
-        'No headings could be detected, so the whole file became one section. Adding headings below will improve how it is chunked and searched.',
+        t('import.warning.noHeadings'),
       );
     }
 
@@ -144,7 +145,7 @@ function dropRunningHeads(lines: Line[], totalPages: number, warnings: string[])
   const kept = lines.filter((l) => !isBareNumber(l.text) && !repeated.has(normalize(l.text)));
   if (repeated.size > 0) {
     warnings.push(
-      `Removed ${repeated.size} repeating header/footer ${repeated.size === 1 ? 'line' : 'lines'} and page numbers.`,
+      t('import.warning.runningHeads', { count: repeated.size }),
     );
   }
   return kept;

@@ -22,6 +22,7 @@ import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
 import type { CreateMergeRequestDto, UpdateMergeRequestDto } from './dto/merge-requests.dto.js';
+import { t } from '../i18n/t.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -68,11 +69,11 @@ export class MergeRequestsService {
     authorId: string = AUTHOR_ID_STUB,
   ): Promise<CreateMergeRequestResponse> {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
-    if (!document) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
 
     const targetName = dto.targetBranch ?? document.defaultBranch;
     if (dto.sourceBranch === targetName) {
-      throw new BadRequestException('Source and target branches must differ');
+      throw new BadRequestException(t('error.mergeRequest.sameBranches'));
     }
 
     const [source, target] = await Promise.all([
@@ -80,7 +81,7 @@ export class MergeRequestsService {
       this.getBranchOrThrow(documentId, targetName),
     ]);
     if (!source.headRevisionId) {
-      throw new BadRequestException(`Branch ${source.name} has no finalized revisions to merge`);
+      throw new BadRequestException(t('error.mergeRequest.sourceNotFinalized', { branch: source.name }));
     }
 
     await this.rejectDuplicateOpen(documentId, source, target);
@@ -106,7 +107,7 @@ export class MergeRequestsService {
 
   async list(documentId: string): Promise<ListMergeRequestsResponse> {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
-    if (!document) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
 
     const rows = await this.prisma.mergeRequest.findMany({
       where: { documentId },
@@ -178,7 +179,7 @@ export class MergeRequestsService {
   ): Promise<{ mergeRequest: MergeRequestInfo }> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     if (mr.status !== 'open') {
-      throw new BadRequestException(`Merge request ${mr.id} is ${mr.status} — only open merge requests can be edited`);
+      throw new BadRequestException(t('error.mergeRequest.notOpenForEdit', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
     const changed = (['title', 'description', 'isDraft', 'assigneeId'] as const).filter(
       (k) => dto[k] !== undefined && dto[k] !== mr[k],
@@ -214,7 +215,7 @@ export class MergeRequestsService {
   async reopen(mergeRequestId: string, actorId?: string): Promise<{ mergeRequest: MergeRequestInfo }> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     if (mr.status !== 'closed') {
-      throw new BadRequestException(`Merge request ${mr.id} is ${mr.status} — only closed merge requests can be reopened`);
+      throw new BadRequestException(t('error.mergeRequest.notClosedForReopen', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
     await this.rejectDuplicateOpen(mr.documentId, mr.sourceBranch, mr.targetBranch);
 
@@ -224,7 +225,7 @@ export class MergeRequestsService {
       data: { status: 'open', closedAt: null },
     });
     if (flipped.count === 0) {
-      throw new ConflictException(`Merge request ${mr.id} changed state concurrently — reload and retry`);
+      throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
     }
     const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
     await this.recordActivity(mr.documentId, 'merge-request.reopened', mr.id, actorId, { title: mr.title });
@@ -239,7 +240,7 @@ export class MergeRequestsService {
   ): Promise<{ mergeRequest: MergeRequestInfo }> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     if (mr.status !== 'open') {
-      throw new BadRequestException(`Merge request ${mr.id} is ${mr.status} — reviewers can only be set while open`);
+      throw new BadRequestException(t('error.mergeRequest.notOpenForReviewers', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
     const wanted = [...new Set(reviewerIds)];
     await this.assertWorkspaceMembers(mr.documentId, wanted);
@@ -272,8 +273,8 @@ export class MergeRequestsService {
     const mr = await this.getMrOrThrow(mergeRequestId);
     const sourceHead = mr.sourceBranch.headRevisionId;
     const targetHead = mr.targetBranch.headRevisionId;
-    if (!sourceHead) throw new BadRequestException(`Branch ${mr.sourceBranch.name} has no revisions`);
-    if (!targetHead) throw new BadRequestException(`Branch ${mr.targetBranch.name} has no revisions to diff against`);
+    if (!sourceHead) throw new BadRequestException(t('error.mergeRequest.branchNoRevisions', { branch: mr.sourceBranch.name }));
+    if (!targetHead) throw new BadRequestException(t('error.mergeRequest.targetNoRevisions', { branch: mr.targetBranch.name }));
 
     const compare = await this.compare.compare(mr.documentId, targetHead, sourceHead, 'merge-base', {
       structural: true,
@@ -289,7 +290,7 @@ export class MergeRequestsService {
   ): Promise<{ mergeRequest: MergeRequestInfo }> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     if (mr.status !== 'open') {
-      throw new BadRequestException(`Merge request ${mr.id} is ${mr.status} — only open merge requests can be approved`);
+      throw new BadRequestException(t('error.mergeRequest.notOpenForApproval', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
     const approved = [...new Set([...this.approvers(mr), approverId])];
     const updated = await this.prisma.mergeRequest.update({
@@ -304,7 +305,7 @@ export class MergeRequestsService {
   async close(mergeRequestId: string, actorId?: string): Promise<{ mergeRequest: MergeRequestInfo }> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     if (mr.status !== 'open') {
-      throw new BadRequestException(`Merge request ${mr.id} is ${mr.status} — only open merge requests can be closed`);
+      throw new BadRequestException(t('error.mergeRequest.notOpenForClose', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
     const updated = await this.prisma.mergeRequest.update({
       where: { id: mr.id },
@@ -322,7 +323,7 @@ export class MergeRequestsService {
   ): Promise<MergeMergeRequestResponse> {
     const mr = await this.getMrOrThrow(mergeRequestId);
     if (mr.status !== 'open') {
-      throw new BadRequestException(`Merge request ${mr.id} is ${mr.status} — only open merge requests can be merged`);
+      throw new BadRequestException(t('error.mergeRequest.notOpenForMerge', { id: mr.id, status: t(`status.mr.${mr.status}`) }));
     }
 
     // --- Merge gates (all before any side effect). The extra keys on these
@@ -331,7 +332,7 @@ export class MergeRequestsService {
     if (mr.isDraft) {
       throw new ConflictException({
         statusCode: 409,
-        message: `Merge request ${mr.id} is a draft — mark it ready before merging`,
+        message: t('error.mergeRequest.isDraft', { id: mr.id }),
         reason: 'draft',
       });
     }
@@ -344,9 +345,7 @@ export class MergeRequestsService {
     if (approvals < requiredApprovals) {
       throw new ConflictException({
         statusCode: 409,
-        message:
-          `Merge request ${mr.id} has ${approvals} of ${requiredApprovals} required approvals ` +
-          `(the author's own approval does not count)`,
+        message: t('error.mergeRequest.needsApprovals', { id: mr.id, approvals, required: requiredApprovals }),
         reason: 'approvals',
         requiredApprovals,
         approvals,
@@ -364,14 +363,14 @@ export class MergeRequestsService {
     }
 
     const sourceHeadId = mr.sourceBranch.headRevisionId;
-    if (!sourceHeadId) throw new BadRequestException(`Branch ${mr.sourceBranch.name} has no revisions`);
+    if (!sourceHeadId) throw new BadRequestException(t('error.mergeRequest.branchNoRevisions', { branch: mr.sourceBranch.name }));
     const targetHeadId = mr.targetBranch.headRevisionId;
 
     const mergeBase = targetHeadId
       ? await this.compare.findMergeBase(mr.documentId, targetHeadId, sourceHeadId)
       : null;
     if (mergeBase === sourceHeadId) {
-      throw new BadRequestException('Nothing to merge — the source head is already an ancestor of the target head');
+      throw new BadRequestException(t('error.mergeRequest.nothingToMerge'));
     }
     if (targetHeadId && mergeBase !== targetHeadId) {
       // Fast-forward precondition (plan.md §7 conflict semantics): the target
@@ -379,9 +378,7 @@ export class MergeRequestsService {
       // rebase the source branch (new revision on top of target head) instead.
       throw new ConflictException({
         statusCode: 409,
-        message:
-          `Target branch ${mr.targetBranch.name} has advanced past the merge base — ` +
-          `rebase ${mr.sourceBranch.name} onto it and retry`,
+        message: t('error.mergeRequest.diverged', { target: mr.targetBranch.name, source: mr.sourceBranch.name }),
         reason: 'diverged',
         currentHeadRevisionId: targetHeadId,
         comparisonUrl: `/v1/documents/${mr.documentId}/compare?from=${targetHeadId}&to=${sourceHeadId}&mode=merge-base`,
@@ -428,7 +425,7 @@ export class MergeRequestsService {
     if ((headNow?.headRevisionId ?? null) !== targetHeadId) {
       throw new ConflictException({
         statusCode: 409,
-        message: `Target branch ${mr.targetBranch.name} advanced while merging — retry`,
+        message: t('error.mergeRequest.divergedWhileMerging', { target: mr.targetBranch.name }),
         reason: 'diverged',
         currentHeadRevisionId: headNow?.headRevisionId ?? null,
         comparisonUrl: `/v1/documents/${mr.documentId}/compare?from=${headNow?.headRevisionId}&to=${sourceHeadId}&mode=merge-base`,
@@ -444,7 +441,7 @@ export class MergeRequestsService {
       data: { status: 'merged', strategy, mergedRevisionId: finalized.revisionId, mergedAt: new Date() },
     });
     if (flipped.count === 0) {
-      throw new ConflictException(`Merge request ${mr.id} changed state concurrently — reload and retry`);
+      throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
     }
     const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
     const mergedRevision = await this.prisma.documentRevision.findUnique({ where: { id: finalized.revisionId } });
@@ -470,7 +467,7 @@ export class MergeRequestsService {
     });
     if (existing) {
       throw new ConflictException(
-        `Open merge request ${existing.id} already exists for ${source.name} → ${target.name}`,
+        t('error.mergeRequest.alreadyOpen', { id: existing.id, source: source.name, target: target.name }),
       );
     }
   }
@@ -526,7 +523,7 @@ export class MergeRequestsService {
     const memberIds = new Set(members.map((m) => m.userId));
     const unknown = userIds.filter((id) => !memberIds.has(id));
     if (unknown.length > 0) {
-      throw new BadRequestException(`Not members of this workspace: ${unknown.join(', ')}`);
+      throw new BadRequestException(t('error.mergeRequest.notMembers', { users: unknown.join(', ') }));
     }
   }
 
@@ -605,7 +602,7 @@ export class MergeRequestsService {
       where: { id: mergeRequestId },
       include: MR_INCLUDE,
     });
-    if (!mr) throw new NotFoundException(`Merge request ${mergeRequestId} not found`);
+    if (!mr) throw new NotFoundException(t('error.mergeRequest.notFound', { id: mergeRequestId }));
     return mr;
   }
 
@@ -613,7 +610,7 @@ export class MergeRequestsService {
     const branch = await this.prisma.documentBranch.findUnique({
       where: { documentId_name: { documentId, name } },
     });
-    if (!branch) throw new NotFoundException(`Branch ${name} not found on document ${documentId}`);
+    if (!branch) throw new NotFoundException(t('error.branch.notFound', { name, documentId }));
     return branch;
   }
 }

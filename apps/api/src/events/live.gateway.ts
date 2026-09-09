@@ -22,6 +22,9 @@ import { TokenAuthService } from '../auth/token-auth.service.js';
 import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.js';
 import { EventsSubscriber } from './events.subscriber.js';
+import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts';
+import { localeFromRequest } from '../i18n/locale.js';
+import { t, withLocale } from '../i18n/t.js';
 
 interface SocketState {
   principal: Principal;
@@ -54,6 +57,8 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   private readonly serverTracked: string[];
   private readonly maxSubscriptions: number;
   private readonly enabled: boolean;
+  /** Per-socket language, resolved from the upgrade request (docs/features/18). */
+  private readonly locales = new Map<WebSocket, Locale>();
   private eventsSub?: Subscription;
   private heartbeat?: NodeJS.Timeout;
 
@@ -86,8 +91,12 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   async handleConnection(socket: WebSocket, request: IncomingMessage): Promise<void> {
+    // Middleware never runs on an upgrade, so there is no I18nContext here:
+    // resolve once from the upgrade request and keep it on the socket.
+    const locale = localeFromRequest(request);
+    this.locales.set(socket, locale);
     if (!this.enabled) {
-      this.sendError(socket, 503, 'Live updates are disabled (LIVE_WS_ENABLED=false)');
+      this.sendError(socket, 503, t('ws.disabled', undefined, locale));
       socket.close(4503, 'live updates disabled');
       return;
     }
@@ -98,7 +107,9 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       : undefined;
     const token = bearer ?? (url.searchParams.get('token') || undefined);
     try {
-      const principal = await this.tokenAuth.resolve(token);
+      // withLocale so exceptions thrown deep inside tokenAuth come back
+      // translated — their ambient t() has no request context out here.
+      const principal = await withLocale(locale, () => this.tokenAuth.resolve(token));
       this.state.set(socket, { principal, subscriptions: new Map(), alive: true });
     } catch (e) {
       this.sendError(socket, e);
@@ -112,11 +123,14 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     // Raw protocol (contracts LiveClientMessage) — @SubscribeMessage's
     // {event,data} envelope is skipped on purpose so browser clients can
     // speak plain JSON.
-    socket.on('message', (raw) => void this.handleMessage(socket, raw.toString()));
+    // One wrap at the entry point: every t() inside handleMessage — including
+    // those in AccessService — then answers in this socket's language.
+    socket.on('message', (raw) => void withLocale(locale, () => this.handleMessage(socket, raw.toString())));
   }
 
   handleDisconnect(socket: WebSocket): void {
     this.state.delete(socket);
+    this.locales.delete(socket);
   }
 
   onModuleDestroy(): void {
@@ -132,7 +146,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       msg = JSON.parse(raw) as LiveClientMessage;
       if (typeof msg !== 'object' || msg === null || typeof msg.type !== 'string') throw new Error('not a message');
     } catch {
-      this.sendError(socket, 400, `Malformed live message: ${raw.slice(0, 120)}`);
+      this.sendError(socket, 400, t('ws.badMessage', undefined, this.localeOf(socket)));
       return;
     }
     try {
@@ -142,11 +156,11 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
           return;
         case 'subscribe': {
           if (typeof msg.workspaceId !== 'string' || !msg.workspaceId) {
-            this.sendError(socket, 400, 'subscribe requires a workspaceId');
+            this.sendError(socket, 400, t('ws.workspaceRequired', undefined, this.localeOf(socket)));
             return;
           }
           if (!st.subscriptions.has(msg.workspaceId) && st.subscriptions.size >= this.maxSubscriptions) {
-            this.sendError(socket, 400, `Subscription limit reached (${this.maxSubscriptions})`);
+            this.sendError(socket, 400, t('ws.subscriptionLimit', { max: this.maxSubscriptions }, this.localeOf(socket)));
             return;
           }
           // Access control: membership check in PG BEFORE the subscription exists.
@@ -164,7 +178,11 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
           this.send(socket, { type: 'unsubscribed', workspaceId: msg.workspaceId });
           return;
         default:
-          this.sendError(socket, 400, `Unknown live message type: ${String((msg as { type: unknown }).type).slice(0, 40)}`);
+          this.sendError(
+            socket,
+            400,
+            t('ws.unknownType', { type: String((msg as { type: unknown }).type).slice(0, 40) }, this.localeOf(socket)),
+          );
       }
     } catch (e) {
       this.sendError(socket, e);
@@ -183,6 +201,10 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
   }
 
+  private localeOf(socket: WebSocket): Locale {
+    return this.locales.get(socket) ?? DEFAULT_LOCALE;
+  }
+
   private send(socket: WebSocket, message: LiveServerMessage): void {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
   }
@@ -195,7 +217,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       payload = this.errorPayload(statusOrError.getStatus(), statusOrError.message);
     } else {
       this.logger.error(`Live gateway error: ${(statusOrError as Error)?.message ?? String(statusOrError)}`);
-      payload = this.errorPayload(500, 'Internal server error');
+      payload = this.errorPayload(500, t('error.internal', undefined, this.localeOf(socket)));
     }
     this.send(socket, { type: 'error', error: payload });
   }

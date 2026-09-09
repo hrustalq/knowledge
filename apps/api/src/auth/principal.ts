@@ -1,4 +1,4 @@
-import type { WorkspaceRole } from '@knowledge/contracts';
+import type { Locale, WorkspaceRole } from '@knowledge/contracts';
 
 /**
  * Resolved caller identity (Phase 5, plan.md §11). Attached to the request by
@@ -14,6 +14,13 @@ export interface Principal {
   mode: 'dev' | 'api-key' | 'session';
   /** Platform admin (users.is_admin): user management + implicit admin in every workspace. */
   isAdmin: boolean;
+  /**
+   * Stored UI + API language (users.locale, docs/features/18). Not what a given
+   * request is answered in — nestjs-i18n resolves that from ?lang=/cookie/header
+   * in middleware, before this principal exists. This is the durable preference
+   * the web mirrors into kn_lang at sign-in.
+   */
+  locale: Locale;
   /** Set when authenticated via a ks_ session token — lets logout revoke exactly this session. */
   sessionId?: string;
 }
@@ -25,6 +32,7 @@ export const DEV_PRINCIPAL: Principal = {
   displayName: 'Dev (AUTH_MODE=none)',
   mode: 'dev',
   isAdmin: true,
+  locale: 'en',
 };
 
 /** Role hierarchy: higher number ⇒ more rights. */

@@ -6,6 +6,7 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { embeddingSignature } from '../embedding/embedding.provider.js';
 import { IngestionProducer } from './ingestion.producer.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Phase 5 API-side ingestion surface (plan.md §7/§11): job status, workspace
@@ -22,7 +23,7 @@ export class IngestionAdminService {
 
   async getJob(jobId: string): Promise<IngestionJobInfo> {
     const job = await this.prisma.ingestionJob.findUnique({ where: { id: jobId } });
-    if (!job) throw new NotFoundException(`Ingestion job ${jobId} not found`);
+    if (!job) throw new NotFoundException(t('error.ingestionJob.notFound', { id: jobId }));
     return this.toInfo(job);
   }
 

@@ -7,6 +7,8 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import { WORKFLOW_QUEUE } from './workflow.constants.js';
 import { WorkflowExecutors } from './workflow.executors.js';
 import { WorkflowRunnerService } from './workflow-runner.service.js';
+import { asLocale } from '../i18n/locale.js';
+import { withLocale } from '../i18n/t.js';
 
 /**
  * Runs one workflow node per job (docs/features/17).
@@ -51,49 +53,53 @@ export class WorkflowProcessor extends WorkerHost {
     // original. Only one of them gets to call the model.
     if (!(await this.runner.claim(nodeId))) return;
 
-    try {
-      const result = await this.executors.run(step, node, run);
+    // The run's frozen language, so a step's generated page — and anything it
+    // throws on the way — comes out in the language it was started in.
+    return withLocale(asLocale(run.locale), async () => {
+      try {
+        const result = await this.executors.run(step, node, run);
 
-      if (result.kind === 'items') {
-        // A fan-out step's own node did its job the moment it produced the
-        // list: each item becomes a child node holding a reviewable draft, and
-        // *those* carry the chain forward when they are approved. The parent
-        // deliberately does NOT open `step.next` — doing so produced a second,
-        // parentless copy of every downstream step hanging off the list itself.
-        await this.runner.fanOut(run, node, step, result.items);
-        await this.runner.setStatus(nodeId, 'approved', { output: { items: result.items } });
-      } else {
-        const draft = result.kind === 'draft' ? result.draft : null;
-        if (draft) await this.runner.writeDraft(nodeId, draft, draft);
-        if (result.kind === 'context') await this.runner.writeDraft(nodeId, node.draft, result.context);
+        if (result.kind === 'items') {
+          // A fan-out step's own node did its job the moment it produced the
+          // list: each item becomes a child node holding a reviewable draft, and
+          // *those* carry the chain forward when they are approved. The parent
+          // deliberately does NOT open `step.next` — doing so produced a second,
+          // parentless copy of every downstream step hanging off the list itself.
+          await this.runner.fanOut(run, node, step, result.items);
+          await this.runner.setStatus(nodeId, 'approved', { output: { items: result.items } });
+        } else {
+          const draft = result.kind === 'draft' ? result.draft : null;
+          if (draft) await this.runner.writeDraft(nodeId, draft, draft);
+          if (result.kind === 'context') await this.runner.writeDraft(nodeId, node.draft, result.context);
 
-        const status = nextNodeStatus(step, 'running' as WorkflowNodeStatus, { type: 'DONE' });
-        await this.runner.setStatus(nodeId, status);
+          const status = nextNodeStatus(step, 'running' as WorkflowNodeStatus, { type: 'DONE' });
+          await this.runner.setStatus(nodeId, status);
 
-        if (status === 'awaiting-review') {
-          await this.publish(run.workspaceId, 'workflow-node.awaiting-review', run.id, run.rootDocumentId, draft);
+          if (status === 'awaiting-review') {
+            await this.publish(run.workspaceId, 'workflow-node.awaiting-review', run.id, run.rootDocumentId, draft);
+          }
+          // `materializing` is deliberately terminal for this process: writing a
+          // page needs DocumentsService, which does not load in the worker, so
+          // the API-side sweeper finishes the job.
         }
-        // `materializing` is deliberately terminal for this process: writing a
-        // page needs DocumentsService, which does not load in the worker, so
-        // the API-side sweeper finishes the job.
-      }
 
-      // A non-fan-out step that needs no review opens its children right away.
-      // Fan-out steps are excluded above: their items are the continuation.
-      if (result.kind !== 'items') {
-        const after = await this.runner.loadNode(nodeId);
-        if (after && after.node.status === 'approved') {
-          await this.runner.spawnChildren(run, after.node, step);
+        // A non-fan-out step that needs no review opens its children right away.
+        // Fan-out steps are excluded above: their items are the continuation.
+        if (result.kind !== 'items') {
+          const after = await this.runner.loadNode(nodeId);
+          if (after && after.node.status === 'approved') {
+            await this.runner.spawnChildren(run, after.node, step);
+          }
         }
+      } catch (e) {
+        const message = (e as Error).message;
+        this.logger.warn(`Workflow node ${nodeId} failed: ${message}`);
+        await this.runner.failNode(nodeId, message);
+        await this.publish(run.workspaceId, 'workflow-node.failed', run.id, run.rootDocumentId, null, message);
+      } finally {
+        await this.runner.reconcileRun(run.id);
       }
-    } catch (e) {
-      const message = (e as Error).message;
-      this.logger.warn(`Workflow node ${nodeId} failed: ${message}`);
-      await this.runner.failNode(nodeId, message);
-      await this.publish(run.workspaceId, 'workflow-node.failed', run.id, run.rootDocumentId, null, message);
-    } finally {
-      await this.runner.reconcileRun(run.id);
-    }
+    });
   }
 
   private async publish(

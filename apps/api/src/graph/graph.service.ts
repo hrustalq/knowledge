@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ArcadeClient } from './arcade.client.js';
+import { t } from '../i18n/t.js';
 
 export interface ChunkInput {
   chunkId: string;
@@ -523,11 +524,11 @@ export class GraphService {
     limit: number,
   ): Promise<{ rows: Record<string, unknown>[]; truncated: boolean }> {
     const q = query.trim().replace(/;+\s*$/, '');
-    if (!/^select\b/i.test(q)) throw new BadRequestException('Only SELECT queries are allowed');
-    if (q.includes(';')) throw new BadRequestException('Multiple statements are not allowed');
+    if (!/^select\b/i.test(q)) throw new BadRequestException(t('error.graph.selectOnly'));
+    if (q.includes(';')) throw new BadRequestException(t('error.graph.singleStatement'));
     const forbidden = /\b(insert|update|delete|create|drop|alter|truncate|grant|revoke|backup|import|export)\b/i;
     if (forbidden.test(q)) {
-      throw new BadRequestException('Query contains a write/DDL keyword — operator queries are read-only');
+      throw new BadRequestException(t('error.graph.writeKeyword'));
     }
     const cap = Math.max(1, Math.floor(limit));
     const rows = await this.arcade.query<Record<string, unknown>>(

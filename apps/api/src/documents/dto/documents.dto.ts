@@ -13,6 +13,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { vmsg } from '../../common/validation.js';
 
 export class InlineContentDto {
   @ApiProperty({ enum: ['inline'] })
@@ -93,7 +94,7 @@ export class CreateDocumentDto {
   @ApiPropertyOptional({ type: [RelationInputDto] })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(100)
+  @ArrayMaxSize(100, { message: vmsg('arrayMaxSize') })
   @ValidateNested({ each: true })
   @Type(() => RelationInputDto)
   relations?: RelationInputDto[];
@@ -195,7 +196,7 @@ export class CurateRelationDto {
 export class AddRelationsDto {
   @ApiProperty({ type: [RelationInputDto] })
   @IsArray()
-  @ArrayMaxSize(100)
+  @ArrayMaxSize(100, { message: vmsg('arrayMaxSize') })
   @ValidateNested({ each: true })
   @Type(() => RelationInputDto)
   relations!: RelationInputDto[];

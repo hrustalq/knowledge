@@ -129,6 +129,14 @@ export const envSchema = z.object({
   LIVE_TRACKED_EVENTS: z.string().default('*'),
   /** Max concurrent workspace subscriptions per socket. */
   LIVE_WS_MAX_SUBSCRIPTIONS: z.coerce.number().int().positive().max(64).default(8),
+
+  /**
+   * Interface + API language (docs/features/18). Also the fallback whenever a
+   * request carries no ?lang=, no kn_lang cookie and no usable Accept-Language,
+   * and the language worker-generated prose defaults to. Must keep a default:
+   * scripts/generate-openapi.main.ts runs this validation with no infra.
+   */
+  I18N_DEFAULT_LOCALE: z.enum(['en', 'ru']).default('en'),
 });
 
 export type Env = z.infer<typeof envSchema>;

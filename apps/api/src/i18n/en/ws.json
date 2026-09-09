@@ -1,0 +1,8 @@
+{
+  "disabled": "Live updates are disabled (LIVE_WS_ENABLED=false)",
+  "subscriptionLimit": "Subscription limit reached ({max})",
+  "workspaceRequired": "subscribe requires a workspaceId",
+  "badMessage": "Message is not valid JSON",
+  "unauthorized": "Invalid or missing token",
+  "unknownType": "Unknown live message type: {type}"
+}

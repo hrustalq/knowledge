@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { vmsg } from '../common/validation.js';
 
 export class GraphQueryDto {
   @ApiProperty({ format: 'uuid' })
@@ -14,6 +15,6 @@ export class GraphQueryDto {
   @ApiPropertyOptional({ description: 'Row cap; clamped to GRAPH_QUERY_MAX_ROWS' })
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(1, { message: vmsg('min') })
   limit?: number;
 }

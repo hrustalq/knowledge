@@ -1,0 +1,17 @@
+{
+  "workspaceId": "workspaceId",
+  "workspace": "workspace id",
+  "document": "document id",
+  "mergeRequest": "merge request id",
+  "job": "job id",
+  "project": "project id",
+  "assistantThread": "assistant thread id",
+  "skill": "skill id",
+  "plugin": "plugin id",
+  "provider": "provider id",
+  "glossaryTerm": "glossary term id",
+  "import": "import id",
+  "workflow": "workflow id",
+  "workflowRun": "workflow run id",
+  "id": "identifier"
+}

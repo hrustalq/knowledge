@@ -3,6 +3,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
 import { Prisma } from '@prisma/client';
+import type { ImportJob } from '@prisma/client';
 import type { ImportMeta } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -13,6 +14,8 @@ import { ParserRegistry } from './parsers/parser.registry.js';
 import { extensionFor } from './parsers/docx.parser.js';
 import { stripLeadingTitle } from './parsers/parser.types.js';
 import type { ParsedImage, ParseResult } from './parsers/parser.types.js';
+import { asLocale } from '../i18n/locale.js';
+import { withLocale } from '../i18n/t.js';
 
 interface ImportJobData {
   importJobId: string;
@@ -56,6 +59,14 @@ export class ImportProcessor extends WorkerHost {
       this.logger.warn(`Import ${importJobId} not found — skipping`);
       return;
     }
+    // Everything below runs in the language the import was started in
+    // (docs/features/18): parsers emit their stage labels and lossy-parse
+    // warnings through the ambient t(), and out here there is no request to
+    // resolve one from. The row's frozen locale is the answer.
+    return withLocale(asLocale(row.locale), () => this.parse(job, row));
+  }
+
+  private async parse(job: Job<ImportJobData>, row: ImportJob): Promise<void> {
     // Idempotent: a re-delivered job for something already parsed (or already
     // turned into a page) must not overwrite what the reviewer is editing.
     if (row.status === 'parsed' || row.status === 'submitted') return;

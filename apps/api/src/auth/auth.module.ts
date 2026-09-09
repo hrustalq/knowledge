@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from '../prisma/prisma.module.js';
-import { AccessService } from './access.service.js';
+import { AuthCoreModule } from './auth-core.module.js';
 import { AclGuard } from './acl.guard.js';
 import { AuditService } from './audit.service.js';
 import { AuthController } from './auth.controller.js';
@@ -19,10 +19,9 @@ import { TokenAuthService } from './token-auth.service.js';
  */
 @Global()
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthCoreModule],
   controllers: [AuthController, AuthFlowController],
   providers: [
-    AccessService,
     AuditService,
     SessionsService,
     TokenAuthService,
@@ -30,6 +29,7 @@ import { TokenAuthService } from './token-auth.service.js';
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: AclGuard },
   ],
-  exports: [AccessService, AuditService, SessionsService, TokenAuthService],
+  // AuthCoreModule is re-exported so existing importers keep getting AccessService.
+  exports: [AuthCoreModule, AuditService, SessionsService, TokenAuthService],
 })
 export class AuthModule {}

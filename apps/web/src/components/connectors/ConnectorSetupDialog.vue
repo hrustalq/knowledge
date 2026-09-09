@@ -281,7 +281,7 @@ function startOver() {
            stepper is built from the chosen kind's own steps. -->
       <ImportStepper :current="current" :steps="labels" :label="t('connectors.steps')" class="overflow-x-auto pb-1" />
 
-      <div class="min-h-[13rem] py-1">
+      <div class="min-h-52 py-1">
         <!-- 1 · Name and system ------------------------------------------->
         <div v-if="state === 'naming'" class="space-y-4">
           <label class="block space-y-1.5">
@@ -360,7 +360,7 @@ function startOver() {
               <CircleAlert class="text-destructive mt-0.5 size-4 shrink-0" />
               <div class="min-w-0">
                 <p class="text-sm font-medium">{{ t('connectors.testFailed') }}</p>
-                <p class="text-muted-foreground mt-1 text-xs break-words">{{ context?.error }}</p>
+                <p class="text-muted-foreground mt-1 text-xs wrap-break-word">{{ context?.error }}</p>
               </div>
             </div>
           </div>

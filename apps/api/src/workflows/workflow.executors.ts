@@ -3,7 +3,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import type { WorkflowRun, WorkflowRunNode } from '@prisma/client';
 import type { WorkflowNodeDraft, WorkflowStep } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { AiConfigService } from '../ai/ai-config.service.js';
+import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { SearchService } from '../search/search.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -34,10 +34,10 @@ export class WorkflowExecutors {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly aiConfig: AiConfigService,
     private readonly client: AssistantClient,
     private readonly search: SearchService,
     private readonly storage: StorageService,
+    private readonly agents: AgentRegistryService,
   ) {}
 
   async run(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
@@ -72,8 +72,18 @@ export class WorkflowExecutors {
   // ------------------------------------------------------------- ai.generate
 
   private async runGenerate(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
-    const config = await this.aiConfig.resolveFor(run.workspaceId, 'chat', step.providerId ?? undefined);
-    if (!config.enabled) throw new Error('The AI assistant is disabled for this workspace');
+    // The step's default instructions come from the agent (docs/features/20);
+    // an explicit `step.prompt.system` still wins, because a workflow author
+    // writing a prompt for one step means that step and not the roster.
+    //
+    // The step's own providerId still pins the model; absent one, the agent's
+    // routing bucket decides. That moved `ai.draft` from the 'chat' route to
+    // 'review' — the bucket feature 12 describes as background generation, and
+    // the one the editor's Suggest already used. A workspace that wants the old
+    // model back pins it on the step or on the drafter agent.
+    const planner = await this.agents.resolve(run.workspaceId, 'planner', step.providerId ?? undefined);
+    const config = planner.config;
+    if (!planner.enabled || !config.enabled) throw new Error('The AI assistant is disabled for this workspace');
 
     const context = await this.gather(node, run);
     const cap = Math.min(step.maxItems ?? 8, 50);
@@ -82,8 +92,7 @@ export class WorkflowExecutors {
       {
         role: 'system',
         content: [
-          step.prompt?.system ??
-            'You break a piece of documentation down into the next level of detail.',
+          step.prompt?.system ?? planner.instructions,
           `Return JSON: {"items":[{"title":"…","summary":"…"}]}.`,
           `Return at most ${cap} items. Every item must be grounded in the source below —`,
           'do not invent things the source gives no basis for. Titles are short and specific.',
@@ -117,8 +126,9 @@ export class WorkflowExecutors {
   // ---------------------------------------------------------------- ai.draft
 
   private async runDraft(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
-    const config = await this.aiConfig.resolveFor(run.workspaceId, 'chat', step.providerId ?? undefined);
-    if (!config.enabled) throw new Error('The AI assistant is disabled for this workspace');
+    const drafter = await this.agents.resolve(run.workspaceId, 'drafter', step.providerId ?? undefined);
+    const config = drafter.config;
+    if (!drafter.enabled || !config.enabled) throw new Error('The AI assistant is disabled for this workspace');
 
     const context = await this.gather(node, run);
     const title = context.parentTitle || context.title;
@@ -127,7 +137,7 @@ export class WorkflowExecutors {
       {
         role: 'system',
         content: [
-          step.prompt?.system ?? 'You write a single documentation page in Markdown.',
+          step.prompt?.system ?? drafter.instructions,
           'Return JSON: {"title":"…","markdown":"…","summary":"…"}.',
           'The markdown is the page body — no front matter, no wrapping code fence.',
           'Stay grounded in the source material; say plainly when something is not specified.',

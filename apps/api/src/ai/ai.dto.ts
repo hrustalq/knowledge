@@ -15,6 +15,7 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
+import { AGENT_CAPABILITIES, AGENT_SURFACES, type AgentCapability, type AgentSurface } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 /**
@@ -238,6 +239,21 @@ export class CreateAiProviderDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  @ApiPropertyOptional({
+    type: [String],
+    enum: AGENT_CAPABILITIES,
+    nullable: true,
+    description:
+      'What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20).',
+  })
+  @IsOptional()
+  @NULLABLE<CreateAiProviderDto>('capabilities')
+  @IsArray()
+  @ArrayMaxSize(8, { message: vmsg('arrayMaxSize') })
+  @IsIn(AGENT_CAPABILITIES as unknown as string[], { each: true, message: vmsg('isIn') })
+  capabilities?: AgentCapability[] | null;
+
 }
 
 export class UpdateAiProviderDto {
@@ -316,6 +332,21 @@ export class UpdateAiProviderDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  @ApiPropertyOptional({
+    type: [String],
+    enum: AGENT_CAPABILITIES,
+    nullable: true,
+    description:
+      'What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20).',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiProviderDto>('capabilities')
+  @IsArray()
+  @ArrayMaxSize(8, { message: vmsg('arrayMaxSize') })
+  @IsIn(AGENT_CAPABILITIES as unknown as string[], { each: true, message: vmsg('isIn') })
+  capabilities?: AgentCapability[] | null;
+
 }
 
 // ---- Skills ----------------------------------------------------------------
@@ -500,4 +531,202 @@ export class SetAiBudgetDto {
   @IsInt()
   @Min(0, { message: vmsg('min') })
   monthlyTokenBudget?: number | null;
+}
+
+// ---- Agents (docs/features/20) ---------------------------------------------
+
+/**
+ * Every field is an override: absent leaves it alone, `null` clears it back to
+ * the built-in's code default. That is why each one is @NULLABLE rather than
+ * merely @IsOptional — "reset this field" and "don't touch this field" have to
+ * stay distinguishable on the wire (the UpdateMergeRequestDto.assigneeId
+ * precedent).
+ */
+export class UpdateAiAgentDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Reviewer' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('name')
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120, { message: vmsg('maxLength') })
+  name?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('description')
+  @IsString()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  description?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'System prompt. Null restores the shipped default.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('instructions')
+  @IsString()
+  @MaxLength(16_000, { message: vmsg('maxLength') })
+  instructions?: string | null;
+
+  @ApiPropertyOptional({ type: [String], nullable: true, description: 'Tool names this agent may call.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('tools')
+  @IsArray()
+  @ArrayMaxSize(40, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  tools?: string[] | null;
+
+  @ApiPropertyOptional({ type: [String], nullable: true, description: 'Skills always attached to this agent.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('skillIds')
+  @IsArray()
+  @ArrayMaxSize(10, { message: vmsg('arrayMaxSize') })
+  @IsUUID('4', { each: true })
+  skillIds?: string[] | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid', description: 'Provider profile. Null follows the workspace route.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('providerId')
+  @IsUUID()
+  providerId?: string | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('temperature')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(2, { message: vmsg('max') })
+  temperature?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('maxToolCalls')
+  @IsInt()
+  @Min(0, { message: vmsg('min') })
+  @Max(50, { message: vmsg('max') })
+  maxToolCalls?: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('timeoutMs')
+  @IsInt()
+  @Min(1_000, { message: vmsg('min') })
+  @Max(600_000, { message: vmsg('max') })
+  timeoutMs?: number | null;
+
+  @ApiPropertyOptional({ description: 'Run this agent on a schedule. Defaults to false.' })
+  @IsOptional()
+  @IsBoolean()
+  scheduleEnabled?: boolean;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Minutes between scheduled runs.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleMinutes')
+  @IsInt()
+  @Min(15, { message: vmsg('min') })
+  @Max(20_160, { message: vmsg('max') })
+  scheduleMinutes?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Instruction seeded into every scheduled run.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleNote')
+  @IsString()
+  @MaxLength(2_000, { message: vmsg('maxLength') })
+  scheduleNote?: string | null;
+
+  // Not nullable: `enabled` is a real column with its own default, not an
+  // inherited field. Describing the default in prose rather than declaring
+  // `default:` keeps openapi-typescript from making it required (CLAUDE.md).
+  @ApiPropertyOptional({ description: 'Defaults to true.' })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+}
+
+/** A workspace's own agent, alongside the built-in roster. */
+export class CreateAiAgentDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ example: 'release-notes', description: 'Slug, unique in the workspace. Cannot shadow a built-in.' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(60, { message: vmsg('maxLength') })
+  key!: string;
+
+  @ApiProperty({ example: 'Release notes writer' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120, { message: vmsg('maxLength') })
+  name!: string;
+
+  @ApiProperty({ example: 'Drafts release notes from merged merge requests' })
+  @IsString()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  description!: string;
+
+  @ApiProperty({ maxLength: 16_000 })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(16_000, { message: vmsg('maxLength') })
+  instructions!: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  tools?: string[];
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10, { message: vmsg('arrayMaxSize') })
+  @IsUUID('4', { each: true })
+  skillIds?: string[];
+
+  @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid' })
+  @IsOptional()
+  @NULLABLE<CreateAiAgentDto>('providerId')
+  @IsUUID()
+  providerId?: string | null;
+}
+
+/** Ask the router what it would do, without running the agent it picks. */
+export class RouteAgentDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ description: 'The request to classify. Omitted, the router answers from rules alone.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(4_000, { message: vmsg('maxLength') })
+  request?: string;
+
+  @ApiPropertyOptional({ enum: AGENT_SURFACES, description: 'Restrict candidates to agents that run here.' })
+  @IsOptional()
+  @IsIn(AGENT_SURFACES as unknown as string[], { message: vmsg('isIn') })
+  surface?: AgentSurface;
+
+  @ApiPropertyOptional({ description: 'Skip classification and report this agent instead.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60, { message: vmsg('maxLength') })
+  agentKey?: string;
+}
+
+/** Start a background run of an agent, as the calling user. */
+export class StartAgentRunDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ description: 'Extra instruction seeded into this run only.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2_000, { message: vmsg('maxLength') })
+  note?: string;
 }

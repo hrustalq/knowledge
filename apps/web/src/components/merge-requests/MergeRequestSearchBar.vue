@@ -21,14 +21,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { refDebounced } from '@vueuse/core'
-import {
-  GitBranch,
-  GitMerge,
-  Search,
-  UserRound,
-  UserRoundCheck,
-  UserRoundPlus,
-} from 'lucide-vue-next'
+import { Search } from 'lucide-vue-next'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import {
   FilterChip,
@@ -38,7 +31,13 @@ import {
   type FilterOperator,
 } from '@/components/ui/filter-bar'
 import { useAuthStore } from '@/stores/auth'
-import { setFilterValue, type MrFilterKey } from './mr-filters'
+import {
+  MR_BRANCH_FIELDS,
+  MR_PEOPLE_FIELDS,
+  setFilterValue,
+  useMrFilterFields,
+  type MrFilterKey,
+} from './mr-filters'
 import { useMembers } from './use-members'
 
 const { t } = useI18n()
@@ -52,18 +51,11 @@ const emit = defineEmits<{
 const auth = useAuthStore()
 const { members } = useMembers()
 
-/** People axes share the member roster; only the param they set differs. */
-const PEOPLE_FIELDS = [
-  { key: 'author', label: 'Author', icon: UserRound, mine: 'Opened by me' },
-  { key: 'assignee', label: 'Assignee', icon: UserRoundPlus, mine: 'Assigned to me' },
-  { key: 'reviewer', label: 'Reviewer', icon: UserRoundCheck, mine: 'Review requested from me' },
-] as const
-
-/** Branches have no workspace-wide roster, so their value is typed, not picked. */
-const BRANCH_FIELDS = [
-  { key: 'sourceBranch', label: 'Source branch', icon: GitBranch },
-  { key: 'targetBranch', label: 'Target branch', icon: GitMerge },
-] as const
+// The axes themselves live in mr-filters, so the saved-filter rail reads the
+// same definitions rather than a second copy of them.
+const PEOPLE_FIELDS = MR_PEOPLE_FIELDS
+const BRANCH_FIELDS = MR_BRANCH_FIELDS
+const { fieldsByKey } = useMrFilterFields()
 
 // --- title text ------------------------------------------------------------
 // The field is the only writer, so this mirrors rather than syncs. Debounced
@@ -87,36 +79,6 @@ watch(
 )
 
 // --- fields ----------------------------------------------------------------
-/** Role is the one thing that tells two same-named colleagues apart. */
-const memberOptions = computed(() =>
-  members.value.map((m) => ({ value: m.userId, label: m.displayName, meta: m.role })),
-)
-
-// People are single-value `is`: the API takes one id per field and has no
-// negation, so offering "is not" or a second value would promise a query the
-// server cannot answer. A fixed operator renders as plain text, not a button.
-const fields = computed<FilterField[]>(() => [
-  ...PEOPLE_FIELDS.map((f) => ({
-    key: f.key,
-    label: f.label,
-    icon: f.icon,
-    options: memberOptions.value,
-    multiple: false,
-    operators: ['is'] as FilterOperator[],
-  })),
-  ...BRANCH_FIELDS.map((f) => ({
-    key: f.key,
-    label: f.label,
-    icon: f.icon,
-    type: 'text' as const,
-    // Substring, matching the server: "auth" should find "feature/auth".
-    operators: ['contains'] as FilterOperator[],
-    placeholder: 'feature/…',
-  })),
-])
-
-const fieldsByKey = computed(() => new Map(fields.value.map((f) => [f.key, f])))
-
 const chipEntries = computed(() =>
   props.filters
     .map((filter, index) => ({ filter, index, field: fieldsByKey.value.get(filter.key) }))
@@ -153,12 +115,12 @@ async function loadTokens(query: string): Promise<AutocompleteOption[]> {
     const meId = auth.me?.userId
     if (meId) {
       for (const f of [...PEOPLE_FIELDS].reverse()) {
-        add(`me:${f.key}`, f.mine, f.label, { kind: 'set', key: f.key, operator: 'is', value: meId })
+        add(`me:${f.key}`, t(f.mine), t(f.label), { kind: 'set', key: f.key, operator: 'is', value: meId })
       }
     }
     for (const f of [...PEOPLE_FIELDS, ...BRANCH_FIELDS]) {
       if (props.filters.some((active) => active.key === f.key)) continue
-      add(`field:${f.key}`, f.label, 'Filter', { kind: 'field', key: f.key })
+      add(`field:${f.key}`, t(f.label), t('common.filter'), { kind: 'field', key: f.key })
     }
     return options
   }
@@ -170,7 +132,7 @@ async function loadTokens(query: string): Promise<AutocompleteOption[]> {
       continue
     }
     for (const f of PEOPLE_FIELDS) {
-      add(`set:${f.key}:${m.userId}`, m.displayName, f.label, {
+      add(`set:${f.key}:${m.userId}`, m.displayName, t(f.label), {
         kind: 'set',
         key: f.key,
         operator: 'is',
@@ -179,7 +141,7 @@ async function loadTokens(query: string): Promise<AutocompleteOption[]> {
     }
   }
   for (const f of BRANCH_FIELDS) {
-    add(`branch:${f.key}`, `“${text}”`, f.label, {
+    add(`branch:${f.key}`, `“${text}”`, t(f.label), {
       kind: 'set',
       key: f.key,
       operator: 'contains',
@@ -274,7 +236,7 @@ function clearAll() {
       class="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       @click="clearAll"
     >
-      Clear
+      {{ t('common.clear') }}
     </button>
   </div>
 </template>

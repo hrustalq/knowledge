@@ -15,5 +15,6 @@
   "workflowRun": "workflow run id",
   "connector": "connector id",
   "connectorRun": "connector run id",
-  "id": "identifier"
+  "id": "identifier",
+  "savedFilter": "saved filter id"
 }

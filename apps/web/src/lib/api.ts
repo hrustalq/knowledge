@@ -14,6 +14,8 @@ const PROJECT_KEY = 'kn_proj'
 const PANE_KEY = 'kn_pane'
 const RAIL_KEY = 'kn_rail'
 const RAIL_OPEN_KEY = 'kn_railopen'
+/** The merge-request page's filter rail — its own state, not the app rail's. */
+const FILTER_RAIL_KEY = 'kn_filterrail'
 const LANG_KEY = 'kn_lang'
 
 /** Which level of the sidebar's navigation stack is showing (see stores/sidebar-nav). */
@@ -41,6 +43,7 @@ interface SsrRequestContext {
   pane: string | null
   rail: string | null
   railOpen: string | null
+  filterRail: string | null
   locale: Locale | null
 }
 function ssrContext(): SsrRequestContext | undefined {
@@ -55,6 +58,7 @@ let clientProjectId: string | null = null
 let clientPane: string | null = null
 let clientRail: string | null = null
 let clientRailOpen: string | null = null
+let clientFilterRail: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
   try {
@@ -64,6 +68,7 @@ if (!import.meta.env.SSR) {
     clientPane = localStorage.getItem(PANE_KEY)
     clientRail = localStorage.getItem(RAIL_KEY)
     clientRailOpen = localStorage.getItem(RAIL_OPEN_KEY)
+    clientFilterRail = localStorage.getItem(FILTER_RAIL_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
     if (isLocale(storedLocale)) clientLocale = storedLocale
   } catch {
@@ -202,6 +207,30 @@ export function getRailOpen(): boolean {
   // Unset means open: the rail is the default reading of this app, and a first
   // visit should not inherit "collapsed" from a missing cookie.
   return raw !== '0'
+}
+
+/**
+ * The merge-request filter rail. Read on the server for the same reason as the
+ * app rail: a rail the reader left open must not pop in after the first frame.
+ *
+ * Unset means closed, the opposite of the app rail: that one is how you get
+ * anywhere, while this is a tool you reach for. The list is the page.
+ */
+export function getFilterRailOpen(): boolean {
+  const raw = import.meta.env.SSR ? ssrContext()?.filterRail : clientFilterRail
+  return raw === '1'
+}
+
+export function setFilterRailOpen(open: boolean): void {
+  if (import.meta.env.SSR) return
+  const value = open ? '1' : '0'
+  clientFilterRail = value
+  try {
+    localStorage.setItem(FILTER_RAIL_KEY, value)
+    document.cookie = `${FILTER_RAIL_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
 }
 
 export function setRailOpen(open: boolean): void {

@@ -65,6 +65,21 @@ export class AccessService {
     return mr.document.workspaceId;
   }
 
+  /**
+   * Saved merge-request filters are private to their owner, but the workspace
+   * still gates them: the chips hold member ids and branch names that only
+   * mean anything inside it. Ownership itself is checked in the service — the
+   * guard resolves workspaces, not rows.
+   */
+  async workspaceOfSavedFilter(filterId: number): Promise<string> {
+    const filter = await this.prisma.savedFilter.findUnique({
+      where: { id: filterId },
+      select: { workspaceId: true },
+    });
+    if (!filter) throw new NotFoundException(t('error.savedFilter.notFound', { id: filterId }));
+    return filter.workspaceId;
+  }
+
   async workspaceOfProject(projectId: string): Promise<string> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },

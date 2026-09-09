@@ -11,6 +11,12 @@ import {
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type {
+  AgentRouteDecision,
+  AgentRunSummary,
+  AiAgentSummary,
+  ListAgentRunsResponse,
+  ListAiAgentChoicesResponse,
+  ListAiAgentsResponse,
   AiConnectionTestResponse,
   AiPluginSummary,
   AiPluginTestResponse,
@@ -30,7 +36,11 @@ import { AiProvidersService } from './ai-providers.service.js';
 import { AiConfigService } from './ai-config.service.js';
 import { AiSettingsService } from './ai-settings.service.js';
 import { AiSkillsService } from './ai-skills.service.js';
+import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
+import { AgentRouterService } from '../agents/agent-router.service.js';
+import { AgentTiebreakService } from './agent-tiebreak.service.js';
 import {
+  CreateAiAgentDto,
   CreateAiPluginDto,
   CreateAiProviderDto,
   CreateAiSkillDto,
@@ -38,6 +48,9 @@ import {
   UpdateAiPluginDto,
   UpdateAiProviderDto,
   UpdateAiSettingsDto,
+  RouteAgentDto,
+  StartAgentRunDto,
+  UpdateAiAgentDto,
   UpdateAiSkillDto,
 } from './ai.dto.js';
 
@@ -52,6 +65,10 @@ export class AiController {
   constructor(
     private readonly settings: AiSettingsService,
     private readonly skills: AiSkillsService,
+    private readonly agents: AiAgentsService,
+    private readonly runs: AgentRunsService,
+    private readonly router: AgentRouterService,
+    private readonly tiebreak: AgentTiebreakService,
     private readonly plugins: AiPluginsService,
     private readonly providers: AiProvidersService,
     private readonly aiConfig: AiConfigService,
@@ -260,6 +277,165 @@ export class AiController {
       metadata: { name: skill.name },
     });
     return { ok: true };
+  }
+
+  // ---- Agents (docs/features/20) -------------------------------------------
+
+  @Get('agents')
+  @Access('admin', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'Effective agent roster: built-in defaults ∪ this workspace overrides' })
+  async listAgents(@Query('workspaceId', ParseUUIDPipe) workspaceId: string): Promise<ListAiAgentsResponse> {
+    return { agents: await this.agents.list(workspaceId) };
+  }
+
+  // Declared before ':key' or the router would match "choices" as an agent key.
+  @Get('agents/choices')
+  @Access('viewer', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'Agents offerable in the composer (viewer — names only, no prompts)' })
+  async listAgentChoices(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<ListAiAgentChoicesResponse> {
+    return { agents: await this.agents.choices(workspaceId) };
+  }
+
+  // Runs (background execution). Declared before ':key' so "runs" is not read
+  // as an agent key.
+  @Get('agents/runs')
+  @Access('viewer', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiQuery({ name: 'agentKey', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'cursor', required: false })
+  @ApiOperation({ summary: 'Background agent runs, newest first' })
+  listAgentRuns(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Query('agentKey') agentKey?: string,
+    @Query('status') status?: string,
+    @Query('cursor') cursor?: string,
+  ): Promise<ListAgentRunsResponse> {
+    return this.runs.list(workspaceId, { agentKey, status, cursor });
+  }
+
+  @Get('agents/runs/:id')
+  @Access('viewer', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'One run, with its findings' })
+  getAgentRun(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<AgentRunSummary> {
+    return this.runs.get(workspaceId, id);
+  }
+
+  @Post('agents/:key/run')
+  @Access('editor', 'body')
+  @ApiOperation({
+    summary: 'Start a background run. It executes as the caller and is capped by the caller\'s role.',
+  })
+  startAgentRun(
+    @Param('key') key: string,
+    @Body() dto: StartAgentRunDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AgentRunSummary> {
+    return this.runs.start(dto.workspaceId, key, principal, dto.note);
+  }
+
+  @Post('agents/route')
+  @Access('viewer', 'body')
+  @ApiOperation({
+    summary: 'Ask the router which agent and model would handle a request, without running it',
+  })
+  async routeAgent(
+    @Body() dto: RouteAgentDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AgentRouteDecision> {
+    return this.router.route(
+      {
+        workspaceId: dto.workspaceId,
+        request: dto.request,
+        surface: dto.surface,
+        agentKey: dto.agentKey,
+        locale: principal?.locale,
+        userId: principal?.userId,
+      },
+      this.tiebreak,
+    );
+  }
+
+  @Post('agents')
+  @Access('admin', 'body')
+  @ApiOperation({ summary: "Create an agent of the workspace's own, alongside the built-in roster" })
+  async createAgent(
+    @Body() dto: CreateAiAgentDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AiAgentSummary> {
+    const agent = await this.agents.create(dto.workspaceId, dto, principal?.userId);
+    await this.activity.record({
+      workspaceId: dto.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.created',
+      subjectId: agent.id ?? undefined,
+      metadata: { key: agent.key, name: agent.name },
+    });
+    return agent;
+  }
+
+  @Patch('agents/:key')
+  @Access('admin', 'body')
+  @ApiOperation({ summary: 'Override an agent. Sending null for a field restores its shipped default.' })
+  async updateAgent(
+    @Param('key') key: string,
+    @Body() dto: UpdateAiAgentDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AiAgentSummary> {
+    const agent = await this.agents.update(dto.workspaceId, key, dto, principal?.userId);
+    await this.activity.record({
+      workspaceId: dto.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.updated',
+      subjectId: agent.id ?? undefined,
+      metadata: { key: agent.key },
+    });
+    return agent;
+  }
+
+  @Delete('agents/:key/override')
+  @Access('admin', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'Reset a built-in agent: drop the override row so every field inherits again' })
+  async resetAgent(
+    @Param('key') key: string,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AiAgentSummary> {
+    const agent = await this.agents.reset(workspaceId, key);
+    await this.activity.record({
+      workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.reset',
+      metadata: { key },
+    });
+    return agent;
+  }
+
+  @Delete('agents/:key')
+  @Access('admin', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: "Delete one of the workspace's own agents. Built-ins are reset or disabled, never deleted." })
+  async deleteAgent(
+    @Param('key') key: string,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<void> {
+    await this.agents.remove(workspaceId, key);
+    await this.activity.record({
+      workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.deleted',
+      metadata: { key },
+    });
   }
 
   // ---- Plugins (MCP servers) ----------------------------------------------

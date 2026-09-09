@@ -238,7 +238,7 @@ async function finish() {
             <div
               v-if="busy"
               class="text-muted-foreground flex flex-col items-center justify-center gap-2.5 text-sm"
-              :class="isWorkspace ? 'min-h-[4.75rem]' : 'min-h-[9.25rem]'"
+              :class="isWorkspace ? 'min-h-19' : 'min-h-37'"
               role="status"
             >
               <Loader2 class="text-primary size-5 animate-spin" />

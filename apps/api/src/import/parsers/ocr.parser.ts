@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import OpenAI from 'openai';
 import type { ImportParserId } from '@knowledge/contracts';
-import { AiConfigService } from '../../ai/ai-config.service.js';
+import { AgentRegistryService } from '../../agents/agent-registry.service.js';
 import { AiUsageService } from '../../ai/ai-usage.service.js';
 import {
   countSections,
@@ -13,13 +13,15 @@ import {
 } from './parser.types.js';
 import { t } from '../../i18n/t.js';
 
-// Deliberately NOT localized (docs/features/18): this is a transcription, and
-// the prompt below already forbids translating. The output must match the
-// language of the image, not the language of whoever started the import.
-const SYSTEM_PROMPT = `You transcribe documents from images into GitHub-flavoured markdown.
-Reproduce the text exactly as written — do not summarise, translate, correct or add commentary.
-Use # / ## / ### for headings the layout implies, - for bullets, and | tables | for tabular data.
-Return only the markdown. If the image contains no legible text, return an empty response.`;
+// The prompt now lives on the `transcriber` agent (docs/features/20), so an
+// admin can adapt it to their documents. It is still deliberately NOT localized
+// (docs/features/18): this is a transcription, the prompt forbids translating,
+// and the output must match the language of the image rather than the language
+// of whoever started the import.
+//
+// That exemption is also why this parser keeps its own OpenAI client instead of
+// going through AssistantClient: `create`/`createStream` append the locale
+// directive centrally and unconditionally, which is exactly wrong here.
 
 /**
  * Images → markdown, by asking a vision model to transcribe them.
@@ -39,18 +41,23 @@ export class OcrParser implements DocumentParser {
   private readonly logger = new Logger(OcrParser.name);
 
   constructor(
-    private readonly aiConfig: AiConfigService,
+    private readonly agents: AgentRegistryService,
     private readonly usage: AiUsageService,
   ) {}
 
   async parse(bytes: Uint8Array, ctx: ParseContext): Promise<ParseResult> {
     await ctx.onStage(t('import.stage.checking-vision'), 0.1);
-    // 'review' is the purpose the glossary suggester already routes at, so a
-    // workspace that configured one provider gets OCR without configuring a
-    // second thing.
-    const resolved = await this.aiConfig.resolveFor(ctx.workspaceId, 'review');
+    // The transcriber agent declares `review` as its routing bucket — the same
+    // one the glossary suggester uses — so a workspace that configured one
+    // provider still gets OCR without configuring a second thing.
+    const agent = await this.agents.resolve(ctx.workspaceId, 'transcriber');
+    const resolved = agent.config;
 
-    if (!resolved.enabled || !resolved.model) {
+    // The capability gate (docs/features/20): refuse rather than transcribe with
+    // a model that cannot see. A blind model given an image does not fail — it
+    // invents a plausible page, and nothing downstream can tell that apart from
+    // a real transcription.
+    if (!agent.enabled || !resolved.enabled || !resolved.model || agent.missing.length > 0) {
       throw new Error(
         t('error.import.needsVisionModel'),
       );
@@ -69,7 +76,7 @@ export class OcrParser implements DocumentParser {
       model: resolved.model,
       temperature: 0,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: agent.instructions },
         {
           role: 'user',
           content: [

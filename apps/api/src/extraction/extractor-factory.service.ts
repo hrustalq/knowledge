@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
-import { AiConfigService } from '../ai/ai-config.service.js';
+import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { NoopExtractor } from './noop.provider.js';
 import { OpenAICompatibleExtractor } from './openai-compatible.provider.js';
 import type { RelationExtractor } from './relation-extractor.provider.js';
@@ -23,10 +23,11 @@ import type { RelationExtractor } from './relation-extractor.provider.js';
 export class ExtractorFactory {
   private readonly cache = new Map<string, RelationExtractor>();
   private readonly envExtractor: RelationExtractor;
+  private readonly noopExtractor: RelationExtractor = new NoopExtractor();
 
   constructor(
     private readonly config: ConfigService<Env, true>,
-    private readonly aiConfig: AiConfigService,
+    private readonly agents: AgentRegistryService,
   ) {
     this.envExtractor =
       config.get('EXTRACTOR_PROVIDER', { infer: true }) === 'openai-compatible'
@@ -41,7 +42,18 @@ export class ExtractorFactory {
   }
 
   async forWorkspace(workspaceId: string): Promise<RelationExtractor> {
-    const resolved = await this.aiConfig.resolveFor(workspaceId, 'extraction');
+    // The `extractor` agent (docs/features/20) owns this call's routing, so an
+    // admin can pin extraction at one profile or switch it off without touching
+    // the workspace-wide 'extraction' route. Its instructions are deliberately
+    // empty: OpenAICompatibleExtractor builds its own prompt around the closed
+    // RELATION_EDGE_TYPES allowlist, and letting settings rewrite that would
+    // invite edge types GraphService is required to refuse.
+    const agent = await this.agents.resolve(workspaceId, 'extractor');
+    // Switched off explicitly — do no extraction rather than quietly falling
+    // back to the env extractor, which would ignore the admin's decision.
+    if (!agent.enabled) return this.noopExtractor;
+
+    const resolved = agent.config;
     // No profile routed at extraction: keep the env-configured extractor,
     // which is a different provider setting from the assistant's and stays
     // independent of it.

@@ -3809,6 +3809,298 @@
         ]
       }
     },
+    "/v1/merge-requests/filters": {
+      "get": {
+        "operationId": "MergeRequestsController_listSavedFilters",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List your saved merge-request filters in a workspace",
+        "tags": [
+          "merge-requests"
+        ]
+      },
+      "post": {
+        "operationId": "MergeRequestsController_createSavedFilter",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSavedFilterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save the current narrowing under a name",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
+    "/v1/merge-requests/filters/{filterId}": {
+      "get": {
+        "operationId": "MergeRequestsController_getSavedFilter",
+        "parameters": [
+          {
+            "name": "filterId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Restore one saved filter by its number (the `?view=` link target)",
+        "tags": [
+          "merge-requests"
+        ]
+      },
+      "patch": {
+        "operationId": "MergeRequestsController_updateSavedFilter",
+        "parameters": [
+          {
+            "name": "filterId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSavedFilterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rename a saved filter, or overwrite it with the current narrowing",
+        "tags": [
+          "merge-requests"
+        ]
+      },
+      "delete": {
+        "operationId": "MergeRequestsController_removeSavedFilter",
+        "parameters": [
+          {
+            "name": "filterId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a saved filter",
+        "tags": [
+          "merge-requests"
+        ]
+      }
+    },
     "/v1/merge-requests/{id}": {
       "get": {
         "operationId": "MergeRequestsController_get",
@@ -7240,6 +7532,644 @@
           }
         },
         "summary": "Delete a skill",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents": {
+      "get": {
+        "operationId": "AiController_listAgents",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Effective agent roster: built-in defaults ∪ this workspace overrides",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "operationId": "AiController_createAgent",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAiAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create an agent of the workspace's own, alongside the built-in roster",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/choices": {
+      "get": {
+        "operationId": "AiController_listAgentChoices",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Agents offerable in the composer (viewer — names only, no prompts)",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/runs": {
+      "get": {
+        "operationId": "AiController_listAgentRuns",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Background agent runs, newest first",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/runs/{id}": {
+      "get": {
+        "operationId": "AiController_getAgentRun",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One run, with its findings",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/{key}/run": {
+      "post": {
+        "operationId": "AiController_startAgentRun",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartAgentRunDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start a background run. It executes as the caller and is capped by the caller's role.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/route": {
+      "post": {
+        "operationId": "AiController_routeAgent",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ask the router which agent and model would handle a request, without running it",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/{key}": {
+      "patch": {
+        "operationId": "AiController_updateAgent",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAiAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Override an agent. Sending null for a field restores its shipped default.",
+        "tags": [
+          "ai"
+        ]
+      },
+      "delete": {
+        "operationId": "AiController_deleteAgent",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete one of the workspace's own agents. Built-ins are reset or disabled, never deleted.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/{key}/override": {
+      "delete": {
+        "operationId": "AiController_resetAgent",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reset a built-in agent: drop the override row so every field inherits again",
         "tags": [
           "ai"
         ]
@@ -10806,6 +11736,91 @@
           "title"
         ]
       },
+      "SavedFilterChipDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "reviewer"
+          },
+          "operator": {
+            "type": "string",
+            "example": "is"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "operator",
+          "values"
+        ]
+      },
+      "SavedFilterQueryDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "merged",
+              "closed",
+              "all"
+            ],
+            "description": "Status tab; 'all' (or absent) applies no status filter"
+          },
+          "search": {
+            "type": "string",
+            "description": "Title substring"
+          },
+          "chips": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedFilterChipDto"
+            }
+          }
+        },
+        "required": [
+          "chips"
+        ]
+      },
+      "CreateSavedFilterDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "My open reviews"
+          },
+          "query": {
+            "$ref": "#/components/schemas/SavedFilterQueryDto"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name",
+          "query"
+        ]
+      },
+      "UpdateSavedFilterDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "My open reviews"
+          },
+          "query": {
+            "$ref": "#/components/schemas/SavedFilterQueryDto"
+          }
+        }
+      },
       "UpdateMergeRequestDto": {
         "type": "object",
         "properties": {
@@ -11241,6 +12256,10 @@
             "default": "ask",
             "description": "'ask' (default) excludes write tools this turn regardless of role; 'agent' allows them (still gated by editor role)"
           },
+          "agentKey": {
+            "type": "string",
+            "description": "Agent to run this turn (docs/features/20). 'auto' asks the router to choose. Omitted, the mode picks: researcher for ask, author for agent. The mode is still the ceiling — an agent can never gain write tools in ask mode."
+          },
           "attachments": {
             "description": "Ephemeral file content for this turn only — not persisted verbatim into thread history",
             "type": "array",
@@ -11451,6 +12470,19 @@
           "enabled": {
             "type": "boolean",
             "default": true
+          },
+          "capabilities": {
+            "type": "array",
+            "nullable": true,
+            "description": "What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20).",
+            "items": {
+              "type": "string",
+              "enum": [
+                "tools",
+                "vision",
+                "json"
+              ]
+            }
           }
         },
         "required": [
@@ -11508,6 +12540,19 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "capabilities": {
+            "type": "array",
+            "nullable": true,
+            "description": "What this model can do, overriding the built-in model table. Null returns to the table (docs/features/20).",
+            "items": {
+              "type": "string",
+              "enum": [
+                "tools",
+                "vision",
+                "json"
+              ]
+            }
           }
         }
       },
@@ -11574,6 +12619,179 @@
             "type": "boolean"
           }
         }
+      },
+      "StartAgentRunDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "note": {
+            "type": "string",
+            "description": "Extra instruction seeded into this run only."
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "RouteAgentDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request": {
+            "type": "string",
+            "description": "The request to classify. Omitted, the router answers from rules alone."
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "interactive",
+              "background",
+              "workflow"
+            ],
+            "description": "Restrict candidates to agents that run here."
+          },
+          "agentKey": {
+            "type": "string",
+            "description": "Skip classification and report this agent instead."
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "CreateAiAgentDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string",
+            "example": "release-notes",
+            "description": "Slug, unique in the workspace. Cannot shadow a built-in."
+          },
+          "name": {
+            "type": "string",
+            "example": "Release notes writer"
+          },
+          "description": {
+            "type": "string",
+            "example": "Drafts release notes from merged merge requests"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 16000
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skillIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "providerId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "key",
+          "name",
+          "description",
+          "instructions"
+        ]
+      },
+      "UpdateAiAgentDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Reviewer"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true,
+            "description": "System prompt. Null restores the shipped default."
+          },
+          "tools": {
+            "nullable": true,
+            "description": "Tool names this agent may call.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skillIds": {
+            "nullable": true,
+            "description": "Skills always attached to this agent.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "providerId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "Provider profile. Null follows the workspace route."
+          },
+          "temperature": {
+            "type": "number",
+            "nullable": true
+          },
+          "maxToolCalls": {
+            "type": "number",
+            "nullable": true
+          },
+          "timeoutMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "scheduleEnabled": {
+            "type": "boolean",
+            "description": "Run this agent on a schedule. Defaults to false."
+          },
+          "scheduleMinutes": {
+            "type": "number",
+            "nullable": true,
+            "description": "Minutes between scheduled runs."
+          },
+          "scheduleNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "Instruction seeded into every scheduled run."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Defaults to true."
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
       },
       "CreateAiPluginDto": {
         "type": "object",

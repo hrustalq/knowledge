@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AiCoreModule } from '../../ai/ai-core.module.js';
+import { AgentCoreModule } from '../../agents/agent-core.module.js';
 import { DocxParser } from './docx.parser.js';
 import { HtmlParser } from './html.parser.js';
 import { OcrParser } from './ocr.parser.js';
@@ -15,11 +16,12 @@ import { TabularParser } from './tabular.parser.js';
  * process should ever be able to start a parse, and keeping the module out of
  * `AppModule` is what guarantees it.
  *
- * AiCoreModule is imported for the OCR parser alone, and is the worker-safe
- * slice of the AI layer — the same one `ExtractorFactory` depends on.
+ * AiCoreModule and AgentCoreModule are imported for the OCR parser alone, and
+ * are the worker-safe slices of the AI layer — the same ones `ExtractorFactory`
+ * depends on.
  */
 @Module({
-  imports: [AiCoreModule],
+  imports: [AiCoreModule, AgentCoreModule],
   providers: [
     PdfParser,
     DocxParser,

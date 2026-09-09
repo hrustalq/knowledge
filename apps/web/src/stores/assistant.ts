@@ -322,6 +322,7 @@ export const useAssistantStore = defineStore('assistant', {
         attachments?: AssistantChatAttachment[]
         documentRefs?: string[]
         skillIds?: string[]
+        agentKey?: string
       } = {},
     ) {
       if (!this.activeThread) await this.newThread(documentId)
@@ -349,6 +350,9 @@ export const useAssistantStore = defineStore('assistant', {
         ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
         ...(opts.documentRefs?.length ? { documentRefs: opts.documentRefs } : {}),
         ...(opts.skillIds?.length ? { skillIds: opts.skillIds } : {}),
+        // '' means "follow the mode" — the server's own default, so it is
+        // simply not sent rather than encoded as an empty string.
+        ...(opts.agentKey ? { agentKey: opts.agentKey } : {}),
       }
 
       const abort = markRaw(new AbortController())

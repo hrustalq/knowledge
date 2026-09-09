@@ -246,6 +246,11 @@ export type I18nTranslations = {
         };
         "routeNotFound": string;
         "validationFailed": string;
+        "savedFilter": {
+            "notFound": string;
+            "duplicate": string;
+        };
+        "invalidNumericId": string;
     };
     "import": {
         "stage": {
@@ -376,6 +381,7 @@ export type I18nTranslations = {
         "connector": string;
         "connectorRun": string;
         "id": string;
+        "savedFilter": string;
     };
     "validation": {
         "isDefined": string;

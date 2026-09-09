@@ -10,7 +10,7 @@
  * instead of as a graph library's chrome bolted onto it.
  *
  * Legend rows are the filter. A separate list of checkboxes duplicating the
- * colours would be two things to keep in sync and one more thing to read.
+ * colors would be two things to keep in sync and one more thing to read.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -71,7 +71,7 @@ const hiddenGroups = computed(() => props.options.hidden.length)
 
 <template>
   <div
-    class="pointer-events-auto w-[15.5rem] overflow-hidden rounded-xl border bg-card/90 shadow-[0_16px_48px_-12px] shadow-foreground/15 backdrop-blur-md dark:shadow-black/50"
+    class="pointer-events-auto w-62 overflow-hidden rounded-xl border bg-card/90 shadow-[0_16px_48px_-12px] shadow-foreground/15 backdrop-blur-md dark:shadow-black/50"
   >
     <!-- Filters ------------------------------------------------------------->
     <button

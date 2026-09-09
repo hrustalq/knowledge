@@ -202,5 +202,10 @@
     "notLinked": "This page is not linked to any connector"
   },
   "routeNotFound": "Cannot {method} {path}",
-  "validationFailed": "Validation failed"
+  "validationFailed": "Validation failed",
+  "savedFilter": {
+    "notFound": "Saved filter #{id} not found",
+    "duplicate": "You already have a saved filter named \"{name}\""
+  },
+  "invalidNumericId": "{subject} must be a number"
 }

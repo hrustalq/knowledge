@@ -8,6 +8,7 @@ import { CompareService } from './compare.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
 import { MergeRequestsService } from './merge-requests.service.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
+import { SavedFiltersService } from './saved-filters.service.js';
 import { DocumentThreadsService } from './document-threads.service.js';
 import { HistoryService } from './history.service.js';
 import { ActivityModule } from '../activity/activity.module.js';
@@ -37,6 +38,7 @@ import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
     CompareService,
     MergeRequestsService,
     MergeRequestThreadsService,
+    SavedFiltersService,
     DocumentThreadsService,
     HistoryService,
   ],

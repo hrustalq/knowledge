@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { nativeEl } from '@/lib/utils'
 import DocumentPickerWidget, { type AppliedDocRef } from '@/components/knowledge/DocumentPickerWidget.vue'
 import SkillPicker from './SkillPicker.vue'
+import AgentPicker from './AgentPicker.vue'
 import ModelPicker from './ModelPicker.vue'
 import { assistantMode } from './use-mode'
 
@@ -41,6 +42,7 @@ const emit = defineEmits<{
       attachments: AssistantChatAttachment[]
       documentRefs: string[]
       skillIds: string[]
+      agentKey: string
     },
   ): void
   (e: 'stop'): void
@@ -59,6 +61,8 @@ const attachments = ref<AssistantChatAttachment[]>([])
 const appliedDocs = ref<AppliedDocRef[]>([])
 // Skills explicitly applied to the next turn; trigger matches apply on their own.
 const skillIds = ref<string[]>([])
+// '' = follow the mode; 'auto' = ask the router (docs/features/20).
+const agentKey = ref('')
 const dropZoneEl = ref<HTMLElement | null>(null)
 
 // Autosize: `rows=1` with a max height only ever produced a one-line box that
@@ -218,6 +222,7 @@ function send() {
     attachments: attachments.value,
     documentRefs: appliedDocs.value.map((d) => d.documentId),
     skillIds: skillIds.value,
+    agentKey: agentKey.value,
   })
   draft.value = ''
   attachments.value = []
@@ -323,6 +328,7 @@ function send() {
               <DocumentPickerWidget v-model="appliedDocs" />
 
               <SkillPicker v-model="skillIds" />
+              <AgentPicker v-model="agentKey" />
 
               <ModelPicker />
 

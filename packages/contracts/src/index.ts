@@ -515,6 +515,67 @@ export interface SetMergeRequestReviewersRequest {
   reviewerIds: string[];
 }
 
+// --- Saved merge-request filters -------------------------------------------
+// A named narrowing of GET /v1/merge-requests, stored per user so it survives
+// the session it was built in.
+
+/** One chip of the filter bar, stored verbatim (mirrors ActiveFilter on the web). */
+export interface SavedFilterChip {
+  key: string;
+  operator: string;
+  values: string[];
+}
+
+/**
+ * Everything that narrows the list, in one object — the status tab and the
+ * typed search included, because those live outside the chip bar and a view
+ * that restored only the chips could not express "my *open* reviews".
+ */
+export interface SavedFilterQuery {
+  /** 'all' is the tab that applies no status filter; absent means the same. */
+  status?: MergeRequestStatus | 'all';
+  search?: string;
+  chips: SavedFilterChip[];
+}
+
+/**
+ * A saved view. The id is a small integer rather than the uuid every other
+ * table uses, and deliberately so: it is shown to the user (`#7`) and carried
+ * in the URL (`/merge-requests?view=7`), which a uuid cannot be.
+ *
+ * Views are private to their owner. The workspace is still recorded — the
+ * chips hold member ids and branch names that only mean anything inside it,
+ * and losing membership must take the view with it.
+ */
+export interface SavedFilter {
+  id: number;
+  workspaceId: string;
+  ownerId: string;
+  name: string;
+  query: SavedFilterQuery;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /v1/merge-requests/filters?workspaceId=…
+export interface ListSavedFiltersResponse {
+  workspaceId: string;
+  filters: SavedFilter[];
+}
+
+// POST /v1/merge-requests/filters
+export interface CreateSavedFilterRequest {
+  workspaceId: string;
+  name: string;
+  query: SavedFilterQuery;
+}
+
+// PATCH /v1/merge-requests/filters/:filterId
+export interface UpdateSavedFilterRequest {
+  name?: string;
+  query?: SavedFilterQuery;
+}
+
 /**
  * 409 `details` vocabulary for merge gating (see RevisionConflictResponse for
  * the diverged case): `draft` — MR is flagged draft; `approvals` — fewer
@@ -1185,6 +1246,9 @@ export const KNOWN_EVENT_TYPES = [
   'workflow-node.awaiting-review',
   'workflow-node.materialized',
   'workflow-node.failed',
+  'agent.run.started',
+  'agent.run.succeeded',
+  'agent.run.failed',
   'connector.created',
   'connector.updated',
   'connector.deleted',
@@ -2034,6 +2098,8 @@ export interface AiProviderSummary {
   lastCheckedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Admin-declared capabilities, overriding the model table. Null = use the table. */
+  capabilities: AgentCapability[] | null;
 }
 // GET /v1/ai/providers?workspaceId=
 export interface ListAiProvidersResponse {
@@ -2151,7 +2217,11 @@ export type AiUsageOperation =
   | 'suggest'
   | 'glossary'
   | 'import'
-  | 'workflow';
+  | 'workflow'
+  /** The router's classifier call (docs/features/20). */
+  | 'route'
+  /** A background agent run (docs/features/20). */
+  | 'agent';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {
@@ -2261,6 +2331,320 @@ export interface AiBudgetExceededDetails {
   usedTokens: number;
   monthlyTokenBudget: number;
   periodStart: string;
+}
+
+// ---------------------------------------------------------------------------
+// Agents (docs/features/20): named, configurable actors. An agent is the tuple
+// this codebase already wrote three times anonymously — instructions + tool
+// allowlist + model + output contract — given a name, so it can be reused,
+// edited by an admin, and pointed at a provider profile of its own.
+// ---------------------------------------------------------------------------
+
+/**
+ * Built-in agent keys. Closed set: each maps to a code default in the API's
+ * built-in registry, and an `ai_agents` row is a *sparse override* of one —
+ * null columns inherit the code default. That is what makes "reset to default"
+ * meaningful, and what lets a release improve a shipped prompt for every
+ * workspace that never touched it.
+ */
+export const BUILT_IN_AGENT_KEYS = [
+  'router',
+  'researcher',
+  'author',
+  'reviewer',
+  'drafter',
+  'planner',
+  'extractor',
+  'glossarist',
+  'transcriber',
+  'curator',
+] as const;
+export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
+
+/**
+ * Where an agent may run. The surface caps its tools: `background` has nobody
+ * to answer an `ask_user` form, and per feature 17 may not write to the page
+ * tree — the worker generates, the API publishes.
+ */
+export const AGENT_SURFACES = ['interactive', 'background', 'workflow'] as const;
+export type AgentSurface = (typeof AGENT_SURFACES)[number];
+
+/**
+ * What a model must support for an agent to run on it. The router filters
+ * provider profiles by these before anything else, so a vision agent can never
+ * be routed at a blind model — a confident transcription of an image the model
+ * cannot see is worse than a refusal.
+ */
+export const AGENT_CAPABILITIES = ['tools', 'vision', 'json'] as const;
+export type AgentCapability = (typeof AGENT_CAPABILITIES)[number];
+
+/**
+ * Catalogue entry for a built-in, shipped in contracts so the settings form can
+ * render the roster without a round trip (the CONNECTOR_KIND_INFO precedent).
+ *
+ * Default *instructions* deliberately stay server-side and reach the UI as
+ * effective values on AiAgentSummary: prompt text does not belong in the
+ * browser bundle, and the editor should show what is actually in force.
+ */
+export interface BuiltInAgentInfo {
+  key: BuiltInAgentKey;
+  label: string;
+  /** One line for the roster row. */
+  summary: string;
+  surfaces: AgentSurface[];
+  requires: AgentCapability[];
+  /** Routing bucket this agent's provider resolution falls back to (feature 12). */
+  purpose: AiPurpose;
+  /** Tool names offered by default; empty means a plain completion, no loop. */
+  defaultTools: string[];
+}
+
+/**
+ * The shipped roster. Every entry replaces a model call site that existed
+ * before this feature, except `router` and `curator`, which are new.
+ */
+export const BUILT_IN_AGENTS: readonly BuiltInAgentInfo[] = [
+  {
+    key: 'router',
+    label: 'Router',
+    summary: 'Picks which agent and which model should answer a request.',
+    surfaces: ['interactive', 'background'],
+    requires: ['json'],
+    purpose: 'chat',
+    defaultTools: [],
+  },
+  {
+    key: 'researcher',
+    label: 'Researcher',
+    summary: 'Answers questions from the workspace, read-only, with citations.',
+    surfaces: ['interactive', 'background'],
+    requires: ['tools'],
+    purpose: 'chat',
+    defaultTools: ['search_knowledge', 'read_document', 'explore_document_graph'],
+  },
+  {
+    key: 'author',
+    label: 'Author',
+    summary: 'Creates pages and opens merge requests on existing ones.',
+    surfaces: ['interactive'],
+    requires: ['tools'],
+    purpose: 'chat',
+    defaultTools: [
+      'search_knowledge',
+      'read_document',
+      'explore_document_graph',
+      'create_document',
+      'propose_update',
+    ],
+  },
+  {
+    key: 'reviewer',
+    label: 'Reviewer',
+    summary: 'Reviews a draft and reports issues with severities.',
+    surfaces: ['interactive', 'background'],
+    requires: ['json'],
+    purpose: 'review',
+    defaultTools: [],
+  },
+  {
+    key: 'drafter',
+    label: 'Drafter',
+    summary: 'Writes or rewrites one page of markdown from an instruction.',
+    surfaces: ['interactive', 'workflow'],
+    requires: [],
+    purpose: 'review',
+    defaultTools: [],
+  },
+  {
+    key: 'planner',
+    label: 'Planner',
+    summary: 'Breaks a page into the list of pages that should follow it.',
+    surfaces: ['workflow'],
+    requires: ['json'],
+    purpose: 'chat',
+    defaultTools: [],
+  },
+  {
+    key: 'extractor',
+    label: 'Extractor',
+    summary: 'Infers graph relations from a page. Emits stable keys, never translated.',
+    surfaces: ['background'],
+    requires: ['json'],
+    purpose: 'extraction',
+    defaultTools: [],
+  },
+  {
+    key: 'glossarist',
+    label: 'Glossarist',
+    summary: 'Proposes glossary terms grounded in occurrences on the page.',
+    surfaces: ['interactive', 'background'],
+    requires: ['json'],
+    purpose: 'review',
+    defaultTools: [],
+  },
+  {
+    key: 'transcriber',
+    label: 'Transcriber',
+    summary: 'Transcribes a scanned page image to markdown. Never summarises.',
+    surfaces: ['background'],
+    requires: ['vision'],
+    purpose: 'review',
+    defaultTools: [],
+  },
+  {
+    key: 'curator',
+    label: 'Curator',
+    summary: 'Scans the workspace for stale, orphaned and duplicated pages.',
+    surfaces: ['background'],
+    requires: ['json'],
+    purpose: 'review',
+    defaultTools: [],
+  },
+];
+
+/**
+ * The built-in tool vocabulary an agent's allowlist is validated against.
+ * Lives here rather than being derived from AssistantToolsService so the API
+ * can validate a write and the settings form can render the picker from the
+ * same list — an agent may additionally be given `mcp__<slug>__<tool>` names
+ * from the workspace's enabled plugins, which are discovered at runtime.
+ */
+export const ASSISTANT_TOOL_NAMES = [
+  'search_knowledge',
+  'read_document',
+  'explore_document_graph',
+  'ask_user',
+  'request_agent_mode',
+  'render_component',
+  'create_document',
+  'propose_update',
+] as const;
+export type AssistantToolName = (typeof ASSISTANT_TOOL_NAMES)[number];
+
+/** Effective configuration of one agent: the code default ⊕ this workspace's override row. */
+export interface AiAgentSummary {
+  /** Null until the workspace has actually overridden something. */
+  id: string | null;
+  key: string;
+  builtIn: boolean;
+  name: string;
+  description: string;
+  instructions: string;
+  tools: string[];
+  skillIds: string[];
+  /** Provider profile pinned to this agent; null falls through to the purpose route. */
+  providerId: string | null;
+  providerName: string | null;
+  temperature: number;
+  maxToolCalls: number;
+  timeoutMs: number;
+  surfaces: AgentSurface[];
+  requires: AgentCapability[];
+  /**
+   * Required capabilities the routed model does not offer. Non-empty means this
+   * agent will refuse to run — surfaced so an admin sees the misconfiguration
+   * in the roster rather than in a failed job.
+   */
+  missing: AgentCapability[];
+  purpose: AiPurpose;
+  enabled: boolean;
+  /** Field names this workspace has overridden — drives the "from default" badges. */
+  overridden: string[];
+  /** Background schedule. Off unless an admin turned it on and named an owner. */
+  scheduleEnabled: boolean;
+  scheduleMinutes: number | null;
+  scheduleNote: string | null;
+  scheduleOwner: string | null;
+  lastRunAt: string | null;
+  updatedAt: string | null;
+}
+
+// GET /v1/ai/agents?workspaceId=
+export interface ListAiAgentsResponse {
+  agents: AiAgentSummary[];
+}
+
+/** Background agent runs (docs/features/20). */
+export const AGENT_RUN_STATUSES = ['pending', 'running', 'succeeded', 'failed', 'cancelled'] as const;
+export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
+
+export const AGENT_RUN_TRIGGERS = ['manual', 'schedule', 'event'] as const;
+export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
+
+export const AGENT_FINDING_KINDS = [
+  'stale',
+  'duplicate',
+  'contradiction',
+  'orphan',
+  'gap',
+  'other',
+] as const;
+export type AgentFindingKind = (typeof AGENT_FINDING_KINDS)[number];
+
+/**
+ * One thing an agent noticed. Never a change — a proposal a person acts on.
+ *
+ * `documentIds` is not decoration: plan.md §12.7 requires source-backed
+ * citations and never a bare LLM answer, so a finding that cites nothing is
+ * dropped by the executor rather than shown.
+ */
+export interface AgentFinding {
+  kind: AgentFindingKind;
+  severity: 'info' | 'warning' | 'error';
+  title: string;
+  detail: string;
+  documentIds: string[];
+  documentTitles: string[];
+}
+
+export interface AgentRunSummary {
+  id: string;
+  workspaceId: string;
+  agentKey: string;
+  agentName: string;
+  trigger: AgentRunTrigger;
+  status: AgentRunStatus;
+  createdBy: string;
+  summary: string | null;
+  findings: AgentFinding[];
+  findingCount: number;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+}
+
+// GET /v1/ai/agents/runs?workspaceId=&agentKey=&status=&cursor=
+export interface ListAgentRunsResponse {
+  runs: AgentRunSummary[];
+  nextCursor: string | null;
+  counts: Record<AgentRunStatus, number>;
+}
+
+/** Why the router chose what it chose — the dry-run endpoint's answer. */
+export interface AgentRouteDecision {
+  agentKey: string;
+  providerId: string | null;
+  providerName: string | null;
+  model: string;
+  /** explicit | only-candidate | rules | model | fallback */
+  via: string;
+  reason: string;
+  confidence: number;
+  /** Agents considered and dropped, with the reason — this is what makes routing debuggable. */
+  rejected: Array<{ agentKey: string; reason: string }>;
+}
+
+/** Viewer-safe projection: no instructions, no tools, no provider endpoints. */
+export interface AiAgentChoice {
+  key: string;
+  name: string;
+  description: string;
+}
+
+// GET /v1/ai/agents/choices?workspaceId=
+export interface ListAiAgentChoicesResponse {
+  agents: AiAgentChoice[];
 }
 
 // ---------------------------------------------------------------------------
@@ -2398,50 +2782,50 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
   {
     parser: 'pdf',
     label: 'PDF',
-    extensions: ['.pdf'],
-    contentTypes: ['application/pdf'],
+    extensions: ['.pdf'] as string[],
+    contentTypes: ['application/pdf'] as string[],
   },
   {
     parser: 'docx',
     label: 'Word',
-    extensions: ['.docx'],
-    contentTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    extensions: ['.docx'] as string[],
+    contentTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'] as string[],
   },
   {
     parser: 'pptx',
     label: 'PowerPoint',
-    extensions: ['.pptx'],
-    contentTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    extensions: ['.pptx'] as string[],
+    contentTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'] as string[],
   },
   {
     parser: 'html',
     label: 'HTML',
-    extensions: ['.html', '.htm'],
-    contentTypes: ['text/html', 'application/xhtml+xml'],
+    extensions: ['.html', '.htm'] as string[],
+    contentTypes: ['text/html', 'application/xhtml+xml'] as string[],
   },
   {
     parser: 'tabular',
     label: 'Spreadsheet data',
-    extensions: ['.csv', '.tsv'],
-    contentTypes: ['text/csv', 'text/tab-separated-values'],
+    extensions: ['.csv', '.tsv'] as string[],
+    contentTypes: ['text/csv', 'text/tab-separated-values'] as string[],
   },
   {
     parser: 'structured',
     label: 'JSON / YAML',
-    extensions: ['.json', '.yaml', '.yml'],
-    contentTypes: ['application/json', 'application/yaml', 'text/yaml', 'text/x-yaml'],
+    extensions: ['.json', '.yaml', '.yml'] as string[],
+    contentTypes: ['application/json', 'application/yaml', 'text/yaml', 'text/x-yaml'] as string[],
   },
   {
     parser: 'ocr',
     label: 'Image (OCR)',
-    extensions: ['.png', '.jpg', '.jpeg', '.webp', '.gif'],
-    contentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+    extensions: ['.png', '.jpg', '.jpeg', '.webp', '.gif'] as string[],
+    contentTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as string[],
   },
   {
     parser: 'plaintext',
     label: 'Markdown / text',
-    extensions: ['.md', '.markdown', '.txt', '.text'],
-    contentTypes: ['text/markdown', 'text/plain', 'text/x-markdown'],
+    extensions: ['.md', '.markdown', '.txt', '.text'] as string[],
+    contentTypes: ['text/markdown', 'text/plain', 'text/x-markdown'] as string[],
   },
 ] as const;
 

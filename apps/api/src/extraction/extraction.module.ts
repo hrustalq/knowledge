@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { RELATION_EXTRACTOR } from './relation-extractor.provider.js';
 import { NoopExtractor } from './noop.provider.js';
 import { OpenAICompatibleExtractor } from './openai-compatible.provider.js';
@@ -14,7 +15,7 @@ import { ExtractorFactory } from './extractor-factory.service.js';
  * this same instance when none is (docs/features/12).
  */
 @Module({
-  imports: [AiCoreModule],
+  imports: [AgentCoreModule, AiCoreModule],
   providers: [
     ExtractorFactory,
     {

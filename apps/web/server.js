@@ -98,6 +98,7 @@ app.use('*all', async (req, res) => {
       pane: readCookie(req.headers.cookie, 'kn_pane'),
       rail: readCookie(req.headers.cookie, 'kn_rail'),
       railOpen: readCookie(req.headers.cookie, 'kn_railopen'),
+      filterRail: readCookie(req.headers.cookie, 'kn_filterrail'),
       workspaceId: readCookie(req.headers.cookie, 'kn_ws'),
       locale,
     })

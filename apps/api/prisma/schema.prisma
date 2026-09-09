@@ -587,6 +587,11 @@ model AiProvider {
   pricePromptPerMTok     Decimal? @map("price_prompt_per_mtok") @db.Decimal(12, 6)
   priceCompletionPerMTok Decimal? @map("price_completion_per_mtok") @db.Decimal(12, 6)
 
+  /// AgentCapability[] declared by an admin, overriding the MODEL_CAPABILITIES
+  /// code table the router filters on. Same shape as the price overrides above:
+  /// a code table that will go stale, plus a per-profile escape hatch.
+  capabilities  Json?
+
   enabled       Boolean   @default(true)
   lastStatus    String?   @map("last_status")
   lastError     String?   @map("last_error")
@@ -633,6 +638,115 @@ model AiSkill {
   @@unique([workspaceId, name])
   @@index([workspaceId, createdAt])
   @@map("ai_skills")
+}
+
+/// An agent is a named actor: instructions + a tool allowlist + a model + an
+/// output contract (docs/features/20). Before this table that tuple existed
+/// three times anonymously — as an ai_skill without tools or a model, as one of
+/// three hardcoded routing purposes, and inline on every WorkflowStep.
+///
+/// For a BUILT_IN_AGENT_KEYS agent a row is a *sparse override*: every column
+/// below `key` is nullable and null means "inherit the code default", exactly
+/// as ai_settings inherits the ASSISTANT_* env vars. An empty ai_agents table
+/// therefore reproduces the pre-feature behaviour of every call site.
+model AiAgent {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// A BUILT_IN_AGENT_KEYS value, or an admin-chosen slug for a custom agent.
+  key         String
+  builtIn     Boolean @default(false) @map("built_in")
+
+  name         String?
+  description  String?
+  instructions String?
+  /// string[] of tool names. Null = the built-in's default set. Validated on
+  /// write against the built-in tool registry plus this workspace's enabled
+  /// MCP plugin tools — Json, not text[], per the no-Postgres-arrays house rule.
+  tools        Json?
+  /// string[] of ai_skills ids always attached to this agent's turns.
+  skillIds     Json?   @map("skill_ids")
+
+  /// ai_providers profile pinned to this agent. Null falls through to the
+  /// purpose route, then the inline config, then env (feature 12's chain).
+  /// No FK, matching the other routing columns (house style).
+  providerId   String? @map("provider_id") @db.Uuid
+
+  temperature  Float?
+  maxToolCalls Int?    @map("max_tool_calls")
+  timeoutMs    Int?    @map("timeout_ms")
+
+  enabled   Boolean  @default(true)
+
+  /// Background schedule (docs/features/20). Off by default — the failure mode
+  /// of unattended AI is an avalanche, not a slow queue. A due check inside a
+  /// fixed sweep, mirroring Connector.syncIntervalMinutes; not a cron.
+  scheduleEnabled Boolean   @default(false) @map("schedule_enabled")
+  scheduleMinutes Int?      @map("schedule_minutes")
+  /// Extra instruction seeded into every scheduled run.
+  scheduleNote    String?   @map("schedule_note")
+  /// Who owns scheduled runs: they execute as this user and are capped by that
+  /// user's role. NOT NULL in effect for scheduling — the sweeper skips a row
+  /// without one rather than inventing ambient authority.
+  scheduleOwner   String?   @map("schedule_owner") @db.Uuid
+  lastRunAt       DateTime? @map("last_run_at") @db.Timestamptz
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  runs AgentRun[]
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId, createdAt])
+  @@index([scheduleEnabled, lastRunAt])
+  @@map("ai_agents")
+}
+
+/// One execution of an agent outside a request (docs/features/20).
+///
+/// `created_by` is NOT NULL, deliberately stricter than workflow_runs: a
+/// trigger-started workflow run carries no creator, so its model call bills a
+/// non-UUID and the usage insert is silently dropped. A run with nobody to bill
+/// or authorise as is not a run this feature will start.
+model AgentRun {
+  id          String @id @default(uuid()) @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  /// ai_agents.key — resolved through the registry at execution time.
+  agentKey    String @map("agent_key")
+  /// The override row, when one exists. Null for an untouched built-in.
+  agentId     String? @map("agent_id") @db.Uuid
+
+  /// 'manual' | 'schedule' | 'event'
+  trigger String @default("manual")
+  /// pending → running → succeeded | failed | cancelled
+  status  String @default("pending")
+
+  /// The user this run acts as. Its role caps what the run's tools may do, and
+  /// a disabled or demoted owner fails the run rather than escalating it.
+  createdBy String @map("created_by") @db.Uuid
+  /// Frozen at enqueue, like import_jobs.locale and workflow_runs.locale.
+  locale    String @default("en")
+
+  /// What the run was asked to do (scope, note).
+  input    Json?
+  /// AgentFinding[] — every entry cites the pages it came from (plan.md §12.7).
+  findings Json?
+  /// Free-text summary the agent wrote for a human.
+  summary  String?
+  error    String?
+  /// Incremented by the sweeper when a run is re-queued after going stale.
+  attempt  Int @default(0)
+
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  finishedAt  DateTime? @map("finished_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  agent AiAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, agentKey, createdAt])
+  @@map("agent_runs")
 }
 
 /// A plugin is an external MCP server whose tools join the assistant's bounded
@@ -1105,4 +1219,34 @@ model ConnectorConflict {
   @@index([status, createdAt])
   @@index([connectorId, createdAt])
   @@map("connector_conflicts")
+}
+
+/**
+ * A named narrowing of the workspace merge-request list, private to its owner.
+ *
+ * The integer id is the one deliberate departure from the uuid convention: a
+ * saved view is addressed by the person who saved it (`#7`) and by the URL
+ * (`/merge-requests?view=7`), and a uuid is unusable in both places. Nothing
+ * else keys off it, so the sequence leaking a rough global count is harmless.
+ *
+ * No FK on workspaceId/ownerId, mirroring documents.workspace_id and
+ * merge_requests.author_id — the workspace is a scope here, enforced by the
+ * ACL (AccessService.workspaceOfSavedFilter) rather than by the column.
+ */
+model SavedFilter {
+  id          Int      @id @default(autoincrement())
+  workspaceId String   @map("workspace_id") @db.Uuid
+  ownerId     String   @map("owner_id") @db.Uuid
+  name        String
+  /// SavedFilterQuery: { status?, search?, chips[] } — stored verbatim so a
+  /// filter axis added to the bar needs no migration here.
+  query       Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // One name per person per workspace: re-saving under an existing name is an
+  // update, and the UI offers exactly that rather than a second "My reviews".
+  @@unique([ownerId, workspaceId, name])
+  @@index([workspaceId, ownerId])
+  @@map("saved_filters")
 }

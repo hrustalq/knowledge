@@ -14,9 +14,9 @@
  * - **Size is the hierarchy.** Radius comes from degree, so the hubs of a
  *   knowledge base are visible before a single word is read.
  * - **Labels are earned.** Below the zoom threshold only the loud nodes are
- *   named; everything gets named as you zoom in, and the focused neighbourhood
+ *   named; everything gets named as you zoom in, and the focused neighborhood
  *   is always named whatever the zoom.
- * - **Hover is the query.** Lighting one neighbourhood and dropping the rest to
+ * - **Hover is the query.** Lighting one neighborhood and dropping the rest to
  *   a whisper answers "what does this touch" without a click or a panel.
  *
  * The simulation is a real one — drag reheats it and the graph re-settles —
@@ -103,7 +103,7 @@ const reduced =
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const compact = computed(() => props.density === 'compact')
-/** Eased 0..1 toward "a neighbourhood is lit", so dimming never snaps. */
+/** Eased 0..1 toward "a neighborhood is lit", so dimming never snaps. */
 let focusMix = 0
 let raf = 0
 let running = false
@@ -395,7 +395,7 @@ function draw() {
     for (const n of simNodes) if (matches(n)) lit.add(n.id)
   }
   const hasFocus = lit.size > 0
-  /** 1 while nothing is focused, easing to 0.10 as a neighbourhood lights up. */
+  /** 1 while nothing is focused, easing to 0.10 as a neighborhood lights up. */
   const dim = 1 - focusMix * 0.9
   const strength = (id: string) => (!hasFocus || lit.has(id) ? 1 : dim)
 
@@ -486,7 +486,7 @@ function draw() {
       ctx.stroke()
     }
 
-    // Loud enough to name unasked: hubs, the root, the lit neighbourhood, and
+    // Loud enough to name unasked: hubs, the root, the lit neighborhood, and
     // search hits. Everything else waits for the reader to zoom in.
     const loud = isRoot || isFocus || (hasFocus && lit.has(n.id)) || (n.degree ?? 0) >= 6 || matches(n)
     if ((showAll || loud) && r > 1.5) {
@@ -506,7 +506,7 @@ function draw() {
     }
   }
 
-  /* ---- labels last, so no node is drawn over its neighbour's name.
+  /* ---- labels last, so no node is drawn over its neighbor's name.
      A name that overlaps another name is worse than no name: the old graph's
      failure was exactly this, a cluster of titles printed on top of each other
      until the block was unreadable and told you nothing. So the highest-ranked
@@ -796,7 +796,7 @@ const documentNodes = computed(() => projection.value.nodes.filter((n) => n.kind
     <Transition name="kn-fade">
       <div
         v-if="focusNode && hoverPoint"
-        class="pointer-events-none absolute z-10 max-w-[15rem] rounded-lg border bg-card/95 px-2.5 py-2 shadow-[0_16px_48px_-12px] shadow-foreground/20 backdrop-blur-sm dark:shadow-black/60"
+        class="pointer-events-none absolute z-10 max-w-60 rounded-lg border bg-card/95 px-2.5 py-2 shadow-[0_16px_48px_-12px] shadow-foreground/20 backdrop-blur-sm dark:shadow-black/60"
         :style="cardStyle"
       >
         <p class="truncate font-display text-[0.8rem] font-semibold leading-tight">{{ focusNode.label }}</p>

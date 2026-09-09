@@ -10,11 +10,12 @@ import {
   Query,
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MergeRequestsService } from './merge-requests.service.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
+import { SavedFiltersService } from './saved-filters.service.js';
 import {
   CreateCommentDto,
   CreateMergeRequestDto,
@@ -25,6 +26,11 @@ import {
   SetReviewersDto,
   UpdateMergeRequestDto,
 } from './dto/merge-requests.dto.js';
+import {
+  CreateSavedFilterDto,
+  ListSavedFiltersQueryDto,
+  UpdateSavedFilterDto,
+} from './dto/saved-filters.dto.js';
 
 /**
  * Merge-request surface (plan.md §7/§8): nested under the document for
@@ -37,6 +43,7 @@ export class MergeRequestsController {
   constructor(
     private readonly mergeRequests: MergeRequestsService,
     private readonly threads: MergeRequestThreadsService,
+    private readonly savedFilters: SavedFiltersService,
   ) {}
 
   @Post('documents/:id/merge-requests')
@@ -62,6 +69,65 @@ export class MergeRequestsController {
   @ApiOperation({ summary: 'List merge requests across a workspace (filterable, cursor-paginated)' })
   listWorkspace(@Query() query: ListMergeRequestsQueryDto) {
     return this.mergeRequests.listWorkspace(query);
+  }
+
+  /**
+   * Saved filters: named narrowings of the list above, private to their owner.
+   *
+   * Declared before `merge-requests/:id` because Nest matches in declaration
+   * order and `filters` would otherwise be read as a merge-request id — the
+   * same reason `documents/tree` precedes `documents/:id`. The path param is
+   * `:filterId`, not `:id`, so the integer never reaches a UUID pipe.
+   */
+  @Get('merge-requests/filters')
+  @Access('viewer', 'query')
+  @ApiOperation({ summary: 'List your saved merge-request filters in a workspace' })
+  listSavedFilters(
+    @Query() query: ListSavedFiltersQueryDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.savedFilters.list(query.workspaceId, principal);
+  }
+
+  @Post('merge-requests/filters')
+  @Access('viewer', 'body')
+  @ApiOperation({ summary: 'Save the current narrowing under a name' })
+  createSavedFilter(@Body() dto: CreateSavedFilterDto, @CurrentPrincipal() principal: Principal) {
+    return this.savedFilters.create(dto, principal);
+  }
+
+  @Get('merge-requests/filters/:filterId')
+  @Access('viewer', 'saved-filter')
+  @ApiParam({ name: 'filterId', type: Number })
+  @ApiOperation({ summary: 'Restore one saved filter by its number (the `?view=` link target)' })
+  getSavedFilter(
+    @Param('filterId') filterId: string,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.savedFilters.get(Number(filterId), principal);
+  }
+
+  @Patch('merge-requests/filters/:filterId')
+  @Access('viewer', 'saved-filter')
+  @ApiParam({ name: 'filterId', type: Number })
+  @ApiOperation({ summary: 'Rename a saved filter, or overwrite it with the current narrowing' })
+  updateSavedFilter(
+    @Param('filterId') filterId: string,
+    @Body() dto: UpdateSavedFilterDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.savedFilters.update(Number(filterId), dto, principal);
+  }
+
+  @Delete('merge-requests/filters/:filterId')
+  @Access('viewer', 'saved-filter')
+  @ApiParam({ name: 'filterId', type: Number })
+  @ApiOperation({ summary: 'Delete a saved filter' })
+  removeSavedFilter(
+    @Param('filterId') filterId: string,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.savedFilters.remove(Number(filterId), principal);
   }
 
   @Get('merge-requests/:id')

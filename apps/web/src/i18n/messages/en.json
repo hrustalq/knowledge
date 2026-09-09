@@ -32,7 +32,8 @@
     "hoursAgo": "{n}h ago",
     "andNMore": "+{n} more",
     "clear": "Clear",
-    "previous": "Previous"
+    "previous": "Previous",
+    "loadMore": "Load more"
   },
   "nav": {
     "toggleSidebar": "Toggle navigation",
@@ -605,7 +606,15 @@
     "modeAsk": "Ask",
     "modeAgent": "Agent",
     "sourcesHint": "Read, created, or drafted an update for.",
-    "noSourcesYet": "Nothing yet. Sources appear here as soon as the assistant reaches for a page."
+    "noSourcesYet": "Nothing yet. Sources appear here as soon as the assistant reaches for a page.",
+    "agent": {
+      "title": "Agent",
+      "hint": "Which agent answers. The Ask/Agent toggle still decides what it may do.",
+      "default": "Default",
+      "defaultHint": "Follow the Ask/Agent toggle.",
+      "auto": "Auto",
+      "autoHint": "Let the router choose."
+    }
   },
   "ai": {
     "excludesUnpriced": "excludes {calls} with no",
@@ -652,6 +661,7 @@
     "completion": "Completion",
     "name": "Name",
     "tabConfig": "Configuration",
+    "tabAgents": "Agents",
     "tabSkills": "Skills",
     "tabPlugins": "Plugins",
     "tabUsage": "Usage",
@@ -673,7 +683,51 @@
     "defaultProviderDesc": "Used for anything not routed at a named profile above. Blank fields inherit the server's ASSISTANT_* environment values; anything you set here overrides them for this workspace only.",
     "setInEnvironment": "set in the environment",
     "notConfigured": "not configured",
-    "savedAt": "Saved {when}"
+    "savedAt": "Saved {when}",
+    "agents": {
+      "subtitle": "Named actors behind every AI call. Built-ins ship with defaults you can override.",
+      "new": "New agent",
+      "newTitle": "New agent",
+      "colAgent": "Agent",
+      "colModel": "Model",
+      "custom": "custom",
+      "overridden": "no overrides | {count} override | {count} overrides",
+      "routed": "workspace {purpose} route",
+      "key": "Key",
+      "name": "Name",
+      "instructions": "Instructions (system prompt)",
+      "tools": "Tools",
+      "provider": "Model",
+      "followRoute": "Follow the workspace route",
+      "dialogHint": "Fields you leave alone keep inheriting the shipped default, so a future release can still improve them.",
+      "reset": "Reset to default",
+      "resetDone": "\"{name}\" reset to its default",
+      "created": "Agent created",
+      "saved": "Agent saved",
+      "deleted": "Deleted \"{name}\"",
+      "delete": "Delete {name}",
+      "missing": "model cannot: {caps}"
+    },
+    "tabRuns": "Runs",
+    "runs": {
+      "subtitle": "Background runs. An agent proposes; nothing it finds changes a page.",
+      "emptyTitle": "No runs yet",
+      "emptyBody": "Start one from the Agents tab, or give an agent a schedule.",
+      "noSummary": "No summary.",
+      "findings": "no findings | {count} finding | {count} findings",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "trigger": {
+        "manual": "manual",
+        "schedule": "scheduled",
+        "event": "event"
+      }
+    }
   },
   "search": {
     "activeFilters": "{n} filter | {n} filters",
@@ -907,5 +961,39 @@
     "system": "Systems",
     "contract": "Contracts",
     "entity": "Other"
+  },
+  "filters": {
+    "author": "Author",
+    "assignee": "Assignee",
+    "reviewer": "Reviewer",
+    "sourceBranch": "Source branch",
+    "targetBranch": "Target branch",
+    "openedByMe": "Opened by me",
+    "assignedToMe": "Assigned to me",
+    "reviewFromMe": "Review requested from me",
+    "status": "Status",
+    "title": "Title",
+    "applied": "Current filter",
+    "appliedEmpty": "Nothing is narrowing this list yet.",
+    "nApplied": "{count} filter | {count} filters",
+    "savedViews": "Saved filters",
+    "savedEmpty": "Nothing saved yet. Narrow the list, then save it under a name.",
+    "saveView": "Save filter",
+    "saveAsNew": "Save as new",
+    "updateView": "Update saved filter",
+    "namePlaceholder": "Name this filter…",
+    "nameLabel": "Filter name",
+    "edited": "edited",
+    "rename": "Rename",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied",
+    "deleteTitle": "Delete “{name}”?",
+    "deleteBody": "The saved filter is removed for good. The merge requests it matched are untouched.",
+    "removeNamed": "Remove {name} filter",
+    "viewActions": "Actions for {name}",
+    "showRail": "Show filters",
+    "hideRail": "Hide filters",
+    "saveFailed": "Could not save this filter",
+    "railLabel": "Filters"
   }
 }

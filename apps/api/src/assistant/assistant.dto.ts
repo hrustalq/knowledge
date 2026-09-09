@@ -162,6 +162,17 @@ export class PostAssistantMessageDto {
   mode?: 'ask' | 'agent';
 
   @ApiPropertyOptional({
+    description:
+      "Agent to run this turn (docs/features/20). 'auto' asks the router to choose. " +
+      'Omitted, the mode picks: researcher for ask, author for agent. The mode is still the ceiling — ' +
+      'an agent can never gain write tools in ask mode.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60, { message: vmsg('maxLength') })
+  agentKey?: string;
+
+  @ApiPropertyOptional({
     type: [ChatAttachmentDto],
     description: 'Ephemeral file content for this turn only — not persisted verbatim into thread history',
   })

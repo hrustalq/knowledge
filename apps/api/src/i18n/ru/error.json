@@ -206,5 +206,10 @@
     "notLinked": "Страница не связана ни с одним коннектором"
   },
   "routeNotFound": "Маршрут {method} {path} не найден",
-  "validationFailed": "Проверка данных не пройдена"
+  "validationFailed": "Проверка данных не пройдена",
+  "savedFilter": {
+    "notFound": "Сохранённый фильтр #{id} не найден",
+    "duplicate": "У вас уже есть сохранённый фильтр с именем «{name}»"
+  },
+  "invalidNumericId": "{subject} должен быть числом"
 }

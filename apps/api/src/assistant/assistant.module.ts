@@ -1,4 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { SearchModule } from '../search/search.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { StorageModule } from '../storage/storage.module.js';
@@ -14,7 +15,7 @@ import { AiModule } from '../ai/ai.module.js';
 // a turn needs the workspace's AI config, and the settings page's "Test
 // connection" needs AssistantClient. AssistantClient is exported for that.
 @Module({
-  imports: [SearchModule, DocumentsModule, StorageModule, EventsModule, forwardRef(() => AiModule)],
+  imports: [AgentCoreModule, SearchModule, DocumentsModule, StorageModule, EventsModule, forwardRef(() => AiModule)],
   controllers: [AssistantController],
   providers: [AssistantClient, AssistantToolsService, AssistantService, AssistantThreadsService],
   exports: [AssistantClient],

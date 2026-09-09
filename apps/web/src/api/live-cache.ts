@@ -104,6 +104,15 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     // Connectors (docs/features/19). `subjectId` is the connector id on every
     // connector event, so one rule refreshes the roster and that connector's
     // runs and links without knowing which of them changed.
+    // Background agent runs (docs/features/20). `subjectId` is the run id on
+    // every agent event, so one rule refreshes the list and that run's detail.
+    on: 'agent.run.*',
+    invalidate: (e) => [
+      ['/v1/ai/agents/runs'],
+      ...(e.subjectId ? [['/v1/ai/agents/runs/{id}', { id: e.subjectId }]] : []),
+    ],
+  },
+  {
     on: 'connector.*',
     invalidate: (e) => [
       ['/v1/connectors'],

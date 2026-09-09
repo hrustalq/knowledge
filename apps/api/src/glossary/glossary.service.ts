@@ -11,7 +11,7 @@ import { ActivityService } from '../activity/activity.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
-import { AiConfigService } from '../ai/ai-config.service.js';
+import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import type { Principal } from '../auth/principal.js';
 import type {
@@ -55,7 +55,7 @@ export class GlossaryService {
     private readonly documents: DocumentsService,
     private readonly projects: ProjectsService,
     private readonly client: AssistantClient,
-    private readonly aiConfig: AiConfigService,
+    private readonly agents: AgentRegistryService,
     private readonly aiUsage: AiUsageService,
   ) {}
 
@@ -182,8 +182,9 @@ export class GlossaryService {
     // Term extraction is an authoring job, not a conversation, so it routes
     // through the workspace's `review` provider profile like the other
     // background passes over a draft (docs/features/12).
-    const config = await this.aiConfig.resolveFor(dto.workspaceId, 'review');
-    if (!config.enabled) return { enabled: false, projectId, suggestions: [] };
+    const agent = await this.agents.resolve(dto.workspaceId, 'glossarist');
+    const config = agent.config;
+    if (!agent.enabled || !config.enabled) return { enabled: false, projectId, suggestions: [] };
     await this.aiUsage.assertWithinBudget(dto.workspaceId, principal.userId);
 
     // "Already defined" is a question about the project the term would land
@@ -204,15 +205,9 @@ export class GlossaryService {
       [
         {
           role: 'system',
-          content:
-            'You build the glossary of a team knowledge base. Read the page and list the domain-specific terms ' +
-            'a new reader would need defined: product concepts, internal system and service names, acronyms, ' +
-            'and terms this team uses with a narrower meaning than the everyday one. ' +
-            'Ignore general programming vocabulary, common English, and anything the page does not actually explain. ' +
-            'Respond ONLY with a json object of the shape ' +
-            '{"terms": [{"term": string, "aliases": string[], "definition": string}]}. ' +
-            'Write each definition as one self-contained sentence, in the language of the page, grounded in what ' +
-            `the page says. "term" must appear verbatim in the page. At most ${MAX_SUGGESTIONS} terms.`,
+          // The cap is appended by the caller because MAX_SUGGESTIONS is this
+          // service's constant, not something an admin edits on the agent.
+          content: `${agent.instructions} At most ${MAX_SUGGESTIONS} terms.`,
         },
         {
           role: 'user',

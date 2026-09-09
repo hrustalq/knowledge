@@ -61,6 +61,16 @@ export class AclGuard implements CanActivate {
       }
       return value;
     };
+    // Saved filters are the one resource keyed by an integer (they are shown
+    // and linked as `#7`), so they need their own parse — uuid() would reject
+    // every valid id.
+    const intId = (value: unknown, subject: string): number => {
+      const n = Number(value);
+      if (!Number.isInteger(n) || n <= 0) {
+        throw new BadRequestException(t('error.invalidNumericId', { subject: t(`subject.${subject}`) }));
+      }
+      return n;
+    };
     switch (spec.source) {
       case 'body':
         return uuid(req.body?.workspaceId, 'workspaceId');
@@ -82,6 +92,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfAiPlugin(uuid(req.params?.id, 'plugin'));
       case 'ai-provider':
         return this.access.workspaceOfAiProvider(uuid(req.params?.id, 'provider'));
+      case 'saved-filter':
+        return this.access.workspaceOfSavedFilter(intId(req.params?.filterId, 'savedFilter'));
       case 'glossary-term':
         return this.access.workspaceOfGlossaryTerm(uuid(req.params?.id, 'glossaryTerm'));
       case 'import':

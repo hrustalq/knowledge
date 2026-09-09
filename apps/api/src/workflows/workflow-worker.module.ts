@@ -9,6 +9,7 @@ import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { WorkflowCoreModule } from './workflow-core.module.js';
 import { WorkflowExecutors } from './workflow.executors.js';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { WorkflowProcessor } from './workflow.processor.js';
 import { WorkflowSweeper } from './workflow.sweeper.js';
 import { WorkflowTriggerService } from './workflow-trigger.service.js';
@@ -30,7 +31,7 @@ import { WorkflowTriggerService } from './workflow-trigger.service.js';
  * which is what puts materialisation on the API side.
  */
 @Module({
-  imports: [
+  imports: [AgentCoreModule, 
     PrismaModule,
     ActivityModule,
     StorageModule,

@@ -54,6 +54,9 @@ export const envSchema = z.object({
 
   /** Phase 5 stale-doc detection & reindex scheduling (worker sweeper). */
   STALE_SWEEP_ENABLED: z.coerce.boolean().default(true),
+  // Background agent schedules (docs/features/20). Off by default: the failure
+  // mode of unattended AI is an avalanche, not a slow queue.
+  AGENT_SCHEDULE_ENABLED: z.coerce.boolean().default(false),
   STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
   STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 

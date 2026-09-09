@@ -541,6 +541,73 @@
 }
 
 /*
+ * The merge-request page's filter rail.
+ *
+ * Shaped like the settings nav — a hairline-separated column flush against the
+ * shell rather than a card inside the page — but collapsible, which the
+ * settings nav is not. That is what these rules add.
+ *
+ * One element, two collapses. Below lg the rail is a panel stacked above the
+ * list and closes by height (`grid-template-rows`, the same technique as
+ * .kn-collapse — nothing here can know how tall a list of saved filters is).
+ * At lg it becomes a column beside the list and closes by width instead.
+ *
+ * The inner element carries the width, so the outer edge is the only thing that
+ * travels: labels inside never reflow mid-transition. It also carries the
+ * border, so a closed rail leaves no orphan hairline behind.
+ */
+.kn-filter-rail {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--rail-duration) var(--pane-ease);
+}
+.kn-filter-rail[data-open='false'] {
+  grid-template-rows: 0fr;
+}
+.kn-filter-rail-inner {
+  /* A grid item will not shrink below its content without both of these. */
+  overflow: hidden;
+  min-height: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+@media (min-width: 1024px) {
+  .kn-filter-rail {
+    display: block;
+    flex: none;
+    width: 14rem;
+    overflow: hidden;
+    transition: width var(--rail-duration) var(--pane-ease);
+  }
+  .kn-filter-rail[data-open='false'] {
+    width: 0;
+  }
+  .kn-filter-rail-inner {
+    /* Sticky and self-scrolling, like the settings nav: the list column
+       scrolls inside <main>, the filters stay put. 100vh minus the topbar
+       (h-14) and the breadcrumb strip (h-9). */
+    position: sticky;
+    top: 0;
+    width: 14rem;
+    height: calc(100vh - 5.75rem);
+    overflow-y: auto;
+    border-bottom: 0;
+    border-right: 1px solid var(--border);
+  }
+}
+
+/*
+ * Reduced motion: no substitute, for the same reason as .kn-collapse and the
+ * app rail — the change here *is* the shape of the layout, which is perceptible
+ * standing still.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .kn-filter-rail {
+    transition: none;
+  }
+}
+
+/*
  * The plain fade. For a control that belongs to a section being opened or
  * closed — it should arrive with the section, not switch on the frame the
  * click lands, which reads as a glitch next to something already moving.

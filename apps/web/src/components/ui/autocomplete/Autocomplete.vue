@@ -4,7 +4,7 @@
  *
  * The list renders inline rather than in a floating popover on purpose — this
  * is used inside the search sheet's dialog, and a portalled popper fights the
- * dialog focus trap. Inline also keeps the rail's scroll behaviour predictable.
+ * dialog focus trap. Inline also keeps the rail's scroll behavior predictable.
  *
  * Options can be static (`options`) or loaded per keystroke (`load`), so the
  * same control backs both the bounded lists (workspace, category, project) and
@@ -402,7 +402,7 @@ const listId = useId()
         dialog:
         - pointer-events-auto: an open reka-ui dialog sets `pointer-events:none`
           on <body>, so without it every click falls through to what's beneath.
-        - @pointerdown.stop: reka-ui's DismissableLayer listens for pointerdown
+        - @pointerdown.stop: reka-ui's DismissibleLayer listens for pointerdown
           on the document to detect an "outside" press, so a click in here would
           otherwise dismiss the sheet. Containing it also covers scrollbar drags.
       -->
@@ -428,7 +428,7 @@ const listId = useId()
           :style="floatingStyles"
           :data-side="side"
           @pointerdown.stop
-          class="kn-pop pointer-events-auto z-[60]"
+          class="kn-pop pointer-events-auto z-60"
         >
           <div
             class="kn-pop-surface overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground shadow-md"

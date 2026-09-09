@@ -62,7 +62,7 @@ const editingDestination = ref(false)
 /**
  * True until the resume check has answered. Rendering a step before then would
  * commit to "choose" and immediately swap to "review", which is both a visible
- * flash and — because it retargets `mode="out-in"` mid-leave — a way to wedge
+ * flash and — because it re-targets `mode="out-in"` mid-leave — a way to wedge
  * the transition with the outgoing step still on screen.
  */
 const booting = ref(true)
@@ -224,7 +224,7 @@ function tryAgain(): void {
                both without depending on how flex resolves a percentage height
                three ancestors up. -->
           <div class="flex w-full flex-col gap-6 lg:h-[clamp(18rem,calc(100vh-21rem),34rem)] lg:flex-row lg:gap-8">
-            <div class="flex min-h-[18rem] min-w-0 flex-1 flex-col gap-3">
+            <div class="flex min-h-72 min-w-0 flex-1 flex-col gap-3">
               <FileDropZone v-model="file" :max-bytes="MAX_BYTES" :disabled="busy" class="flex-1" />
               <p class="text-sm text-muted-foreground">
                 The file is parsed into a page you can edit, search and link — and the original stays
@@ -233,7 +233,7 @@ function tryAgain(): void {
             </div>
 
             <!-- Rail at the width every other rail in the product uses. -->
-            <div class="shrink-0 lg:w-96 xl:w-[28rem]">
+            <div class="shrink-0 lg:w-96 xl:w-md">
               <h2 class="mb-4 text-sm font-medium text-muted-foreground">{{ t('import.whereItGoes') }}</h2>
               <DestinationFields
                 v-model:project-id="projectId"
@@ -347,7 +347,7 @@ function tryAgain(): void {
  * state is simply *visible*, so the worst case is a step that appears without
  * ceremony instead of one that never appears at all. `:duration` on the
  * Transition times the pair for the same reason: no waiting on a transitionend
- * that a retarget can swallow.
+ * that a re-target can swallow.
  */
 .kn-step-enter-active {
   animation: kn-step-in-push 260ms cubic-bezier(0.16, 1, 0.3, 1);

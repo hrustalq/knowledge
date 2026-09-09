@@ -5,6 +5,7 @@ import { DocumentsModule } from '../documents/documents.module.js';
 import { ProjectsModule } from '../projects/projects.module.js';
 import { AssistantModule } from '../assistant/assistant.module.js';
 import { AiModule } from '../ai/ai.module.js';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { GlossaryController } from './glossary.controller.js';
 import { GlossaryService } from './glossary.service.js';
 
@@ -18,7 +19,7 @@ import { GlossaryService } from './glossary.service.js';
  * config and the token budget it has to respect.
  */
 @Module({
-  imports: [PrismaModule, ActivityModule, DocumentsModule, ProjectsModule, AssistantModule, AiModule],
+  imports: [AgentCoreModule, PrismaModule, ActivityModule, DocumentsModule, ProjectsModule, AssistantModule, AiModule],
   controllers: [GlossaryController],
   providers: [GlossaryService],
   exports: [GlossaryService],

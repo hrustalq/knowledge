@@ -11,6 +11,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/auth'
 import AiConfigPanel from '@/components/ai/AiConfigPanel.vue'
+import AiAgentsPanel from '@/components/ai/AiAgentsPanel.vue'
+import AgentRunsPanel from '@/components/ai/AgentRunsPanel.vue'
 import AiSkillsPanel from '@/components/ai/AiSkillsPanel.vue'
 import AiPluginsPanel from '@/components/ai/AiPluginsPanel.vue'
 import AiUsagePanel from '@/components/ai/AiUsagePanel.vue'
@@ -21,6 +23,8 @@ const { t } = useI18n()
 // `label` is a message key — resolved with t() where the tab renders.
 const TABS = [
   { key: 'config', label: 'ai.tabConfig' },
+  { key: 'agents', label: 'ai.tabAgents' },
+  { key: 'runs', label: 'ai.tabRuns' },
   { key: 'skills', label: 'ai.tabSkills' },
   { key: 'plugins', label: 'ai.tabPlugins' },
   { key: 'usage', label: 'ai.tabUsage' },
@@ -81,6 +85,8 @@ function setTab(key: TabKey) {
 
     <div class="min-h-0 flex-1">
       <AiConfigPanel v-if="tab === 'config'" :can-manage="canManage" />
+      <AiAgentsPanel v-else-if="tab === 'agents'" :can-manage="canManage" />
+      <AgentRunsPanel v-else-if="tab === 'runs'" />
       <AiSkillsPanel v-else-if="tab === 'skills'" :can-manage="canManage" />
       <AiPluginsPanel v-else-if="tab === 'plugins'" :can-manage="canManage" />
       <AiUsagePanel v-else-if="tab === 'usage'" :can-manage="canManage" />

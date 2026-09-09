@@ -196,6 +196,51 @@ export class ValidateWorkflowDto {
   graph?: WorkflowGraph;
 }
 
+/**
+ * One turn of the architect conversation (docs/features/17).
+ *
+ * `role` is a two-value enum rather than the assistant's full message union:
+ * this transcript has no system or tool turns, and accepting one would let a
+ * caller inject instructions into a prompt the server owns.
+ */
+export class WorkflowDraftMessageDto {
+  @ApiProperty({ enum: ['user', 'assistant'] })
+  @IsIn(['user', 'assistant'])
+  role!: 'user' | 'assistant';
+
+  @ApiProperty({ maxLength: 4000 })
+  @IsString()
+  @MaxLength(4000, { message: vmsg('maxLength') })
+  content!: string;
+}
+
+export class DraftWorkflowDto {
+  @ApiProperty()
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: DraftWorkflowDto) => o.projectId !== null)
+  @IsUUID()
+  projectId?: string | null;
+
+  @ApiProperty({ type: [WorkflowDraftMessageDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WorkflowDraftMessageDto)
+  messages!: WorkflowDraftMessageDto[];
+
+  @ApiPropertyOptional({
+    type: WorkflowGraphDto,
+    description: 'The proposal on screen, so a follow-up edits it instead of restarting',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => WorkflowGraphDto)
+  graph?: WorkflowGraph | null;
+}
+
 export class StartWorkflowRunDto {
   @ApiProperty()
   @IsUUID()

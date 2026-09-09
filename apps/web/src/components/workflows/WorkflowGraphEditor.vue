@@ -1,33 +1,45 @@
 <script setup lang="ts">
+/**
+ * The editing canvas (docs/features/17).
+ *
+ * The canvas edits *structure* only — dragging writes `graph.layout`, drawing a
+ * connection writes `step.next`. What a step does lives in the inspector.
+ *
+ * It stays on Vue Flow while every read-only view of the same graph moved to a
+ * drawn canvas (`WorkflowMap`), and the split is not a compromise: editing
+ * needs real elements to grab — handles, hit targets, a focus ring the browser
+ * manages — and reading needs none of them. What keeps the two honest is that
+ * they share `workflow-layout`: Tidy up writes the exact coordinates the map
+ * would have drawn, so the arrangement you leave is the arrangement everyone
+ * else sees.
+ *
+ * Vue Flow is client-only, so the canvas is behind a `mounted` guard —
+ * rendering it during SSR produces markup the client immediately discards, the
+ * same reason `Autocomplete.vue` guards its `<Teleport>`.
+ */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { VueFlow, useVueFlow, type Connection, type Edge, type Node, type NodeChange } from '@vue-flow/core'
+import {
+  MarkerType,
+  VueFlow,
+  useVueFlow,
+  type Connection,
+  type Edge,
+  type Node,
+  type NodeChange,
+} from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
 // Vue Flow ships unstyled, and its node positioning *is* CSS: without these the
 // canvas renders blank even though the nodes are in the DOM.
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
-import '@vue-flow/controls/dist/style.css'
-import { Plus, TriangleAlert } from 'lucide-vue-next'
-import type { WorkflowGraph, WorkflowStep, WorkflowStepKind, WorkflowValidationIssue } from '@knowledge/contracts'
-import { Button } from '@/components/ui/button'
-import { blankStep, stepKind, STEP_KINDS } from './workflow-ui'
+import { Maximize2, Minus, Plus, Wand2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import type { WorkflowGraph, WorkflowStep, WorkflowStepKind, WorkflowValidationIssue } from '@knowledge/contracts'
+import WorkflowStepNode from './WorkflowStepNode.vue'
+import WorkflowStepEdge from './WorkflowStepEdge.vue'
+import { blankStep, stepKind } from './workflow-ui'
+import { DEFAULT_LAYOUT, layoutPositions } from './workflow-layout'
 
-const { t } = useI18n()
-
-/**
- * Drag-and-drop editor for a workflow definition (docs/features/17).
- *
- * The canvas edits *structure* only — dragging writes `graph.layout`, drawing a
- * connection writes `step.next`. Everything about what a step does lives in the
- * side panel, because a node big enough to hold a prompt is a node you cannot
- * see the graph through.
- *
- * VueFlow is client-only, so the canvas is behind a `mounted` guard: rendering
- * it during SSR produces markup the client immediately discards, which is the
- * same reason `Autocomplete.vue` guards its `<Teleport>`.
- */
 const props = defineProps<{
   graph: WorkflowGraph
   issues: WorkflowValidationIssue[]
@@ -40,41 +52,35 @@ const emit = defineEmits<{
   'update:selectedId': [string | null]
 }>()
 
+const { t } = useI18n()
+
 const mounted = ref(false)
 onMounted(() => (mounted.value = true))
 
-const { onConnect, removeEdges, fitView } = useVueFlow()
+const { onConnect, onNodesInitialized, fitView, zoomIn, zoomOut, screenToFlowCoordinate } = useVueFlow()
 
-/** Errors are per-step, so a node can show its own problem rather than a banner. */
-const issuesByStep = computed(() => {
-  const map = new Map<string, WorkflowValidationIssue[]>()
+/** Errors are per-step, so a node shows its own problem rather than a banner. */
+const invalidSteps = computed(() => {
+  const set = new Set<string>()
   for (const issue of props.issues) {
-    if (!issue.stepId) continue
-    map.set(issue.stepId, [...(map.get(issue.stepId) ?? []), issue])
+    if (issue.stepId && issue.severity === 'error') set.add(issue.stepId)
   }
-  return map
+  return set
 })
 
-// A step with no stored position is laid out in a column rather than stacked at
-// the origin: a freshly imported definition has no layout, and every node
-// landing on the same pixel looks like one node.
+// A step with no stored position is laid out by the same algorithm Tidy up
+// runs, not stacked at the origin. An imported or model-designed graph carries
+// no layout at all, and every node landing on one pixel looks like one node.
+const fallback = computed(() => layoutPositions(props.graph))
+
 const nodes = computed<Node[]>(() =>
-  props.graph.steps.map((step, index) => {
-    const stored = props.graph.layout?.[step.id]
-    const worst = issuesByStep.value.get(step.id)?.some((i) => i.severity === 'error')
-    return {
-      id: step.id,
-      position: stored ?? { x: 40 + (index % 3) * 260, y: 40 + Math.floor(index / 3) * 160 },
-      data: { step, invalid: worst },
-      type: 'default',
-      class: [
-        'kn-wf-node',
-        props.selectedId === step.id ? 'kn-wf-node--selected' : '',
-        worst ? 'kn-wf-node--invalid' : '',
-      ].join(' '),
-      label: step.title || step.id,
-    }
-  }),
+  props.graph.steps.map((step) => ({
+    id: step.id,
+    type: 'step',
+    position: props.graph.layout?.[step.id] ?? fallback.value[step.id] ?? { x: 0, y: 0 },
+    selected: props.selectedId === step.id,
+    data: { step, invalid: invalidSteps.value.has(step.id), connectable: props.canManage },
+  })),
 )
 
 const edges = computed<Edge[]>(() =>
@@ -85,21 +91,12 @@ const edges = computed<Edge[]>(() =>
         id: `${step.id}->${target}`,
         source: step.id,
         target,
-        animated: false,
-        class: 'kn-wf-edge',
+        type: 'step',
+        data: { canManage: props.canManage },
+        markerEnd: MarkerType.ArrowClosed,
       })),
   ),
 )
-
-/** What a node tells you at a glance: its job, then what comes out of it. */
-function nodeSummary(step: WorkflowStep): string {
-  const kind = stepKind(step.kind) ? t(stepKind(step.kind)!.label) : step.kind
-  if (step.fanOut) return `${kind} → a list of ${step.produces?.category ?? 'item'} pages`
-  if (step.produces) {
-    return `${kind} → one ${step.produces.category} page${step.autoApprove ? ', published straight away' : ''}`
-  }
-  return `${kind} → context for the next step`
-}
 
 function commit(steps: WorkflowStep[], layout = props.graph.layout) {
   emit('update:graph', { steps, layout })
@@ -110,8 +107,8 @@ function onNodesChange(changes: NodeChange[]) {
   const layout = { ...(props.graph.layout ?? {}) }
   let moved = false
   for (const change of changes) {
-    // Only persist the end of a drag: writing every intermediate frame would
-    // mark the form dirty hundreds of times per gesture.
+    // Only the end of a drag is persisted: writing every intermediate frame
+    // would mark the form dirty hundreds of times per gesture.
     if (change.type === 'position' && change.position && change.dragging === false) {
       layout[change.id] = { x: Math.round(change.position.x), y: Math.round(change.position.y) }
       moved = true
@@ -122,17 +119,16 @@ function onNodesChange(changes: NodeChange[]) {
 
 onConnect((connection: Connection) => {
   if (!props.canManage) return
-  if (!connection.source || !connection.target || connection.source === connection.target) return
+  const { source, target } = connection
+  if (!source || !target || source === target) return
   commit(
     props.graph.steps.map((step) =>
-      step.id === connection.source && !step.next.includes(connection.target as string)
-        ? { ...step, next: [...step.next, connection.target as string] }
-        : step,
+      step.id === source && !step.next.includes(target) ? { ...step, next: [...step.next, target] } : step,
     ),
   )
 })
 
-function onEdgeClick(edgeId: string) {
+function disconnect(edgeId: string) {
   if (!props.canManage) return
   const [source, target] = edgeId.split('->')
   commit(
@@ -140,38 +136,70 @@ function onEdgeClick(edgeId: string) {
       step.id === source ? { ...step, next: step.next.filter((n) => n !== target) } : step,
     ),
   )
-  removeEdges([edgeId])
 }
 
-function addStep(kind: WorkflowStepKind) {
-  const step = blankStep(kind, props.graph.steps.length + 1, t(stepKind(kind)?.label ?? 'workflow.stepKind.fallback'))
-  // Ids must stay unique: they are what a running node points at.
-  let id = step.id
+/** Ids are what a running node points at, so a collision would orphan one. */
+function uniqueId(base: string): string {
+  let id = base
   let n = 2
-  while (props.graph.steps.some((s) => s.id === id)) id = `${step.id}-${n++}`
-  const created = { ...step, id }
-  commit([...props.graph.steps, created], {
-    ...(props.graph.layout ?? {}),
-    [id]: { x: 40 + (props.graph.steps.length % 3) * 260, y: 40 + Math.floor(props.graph.steps.length / 3) * 160 },
-  })
+  while (props.graph.steps.some((s) => s.id === id)) id = `${base}-${n++}`
+  return id
+}
+
+function addStep(kind: WorkflowStepKind, at?: { x: number; y: number }) {
+  const meta = stepKind(kind)
+  const seed = blankStep(kind, props.graph.steps.length + 1, meta ? t(meta.label) : kind)
+  const id = uniqueId(seed.id)
+  // Dropped where the pointer let go, centred on the cursor rather than hung
+  // off its top-left corner — the card should land where it looked like it was.
+  const position = at
+    ? { x: Math.round(at.x - DEFAULT_LAYOUT.nodeWidth / 2), y: Math.round(at.y - DEFAULT_LAYOUT.nodeHeight / 2) }
+    : (layoutPositions({ steps: [...props.graph.steps, { ...seed, id }] })[id] ?? { x: 0, y: 0 })
+  commit([...props.graph.steps, { ...seed, id }], { ...(props.graph.layout ?? {}), [id]: position })
   emit('update:selectedId', id)
 }
 
-// `fit-view-on-init` fires before the nodes computed has resolved, so the first
-// paint left the graph parked in a corner. Fit once, when nodes first appear.
-const fitted = ref(false)
-watch(
-  () => nodes.value.length,
-  async (count) => {
-    if (fitted.value || count === 0) return
-    fitted.value = true
-    await nextTick()
-    fitView({ padding: 0.2 })
-  },
-  { immediate: true },
-)
+/**
+ * Hand the arrangement back to the algorithm.
+ *
+ * The same function the read-only map lays out with, so tidying is literally
+ * "make the canvas agree with every preview of this workflow".
+ */
+function tidy() {
+  if (!props.canManage) return
+  commit(props.graph.steps, layoutPositions(props.graph))
+  void nextTick(() => fitView({ padding: 0.18, duration: 260 }))
+}
 
-// Deleting the selected step must also clear the selection, or the side panel
+/* ------------------------------------------------------------ drag & drop */
+
+const dragOver = ref(false)
+
+function onDrop(event: DragEvent) {
+  dragOver.value = false
+  const kind = event.dataTransfer?.getData('application/kn-step') as WorkflowStepKind | undefined
+  if (!kind || !props.canManage) return
+  addStep(kind, screenToFlowCoordinate({ x: event.clientX, y: event.clientY }))
+}
+
+defineExpose({ addStep, tidy })
+
+/**
+ * Fit once the nodes have been *measured*, not once they exist.
+ *
+ * Watching `nodes.length` (and `fit-view-on-init` before it) runs while every
+ * node still reports zero width, so the fit computed a bounding box of points
+ * and left the graph at 100% with its right-hand steps hanging off the canvas.
+ * `onNodesInitialized` is the event that means the dimensions are real.
+ */
+const fitted = ref(false)
+onNodesInitialized(() => {
+  if (fitted.value || !nodes.value.length) return
+  fitted.value = true
+  void nextTick(() => fitView({ padding: 0.18 }))
+})
+
+// Deleting the selected step must also clear the selection, or the inspector
 // keeps editing a step that is no longer in the graph.
 watch(
   () => props.graph.steps.map((s) => s.id).join(','),
@@ -184,27 +212,13 @@ watch(
 </script>
 
 <template>
-  <div class="bg-muted/15 relative min-h-0 flex-1 overflow-hidden rounded-lg border">
-    <div
-      v-if="canManage"
-      class="bg-background/90 absolute top-3 left-3 z-10 flex max-w-[calc(100%_-_1.5rem)] items-center gap-0.5 overflow-x-auto rounded-lg border p-1 shadow-xs backdrop-blur"
-    >
-      <span class="text-muted-foreground shrink-0 px-2 text-[11px] font-medium whitespace-nowrap">Add a step</span>
-      <span class="bg-border mx-0.5 h-4 w-px" aria-hidden="true" />
-      <Button
-        v-for="kind in STEP_KINDS"
-        :key="kind.value"
-        variant="ghost"
-        size="sm"
-        class="h-7 shrink-0 gap-1.5 px-2 text-xs whitespace-nowrap"
-        :title="t(kind.hint)"
-        @click="addStep(kind.value)"
-      >
-        <component :is="kind.icon" class="size-3.5" />
-        {{ t(kind.label) }}
-      </Button>
-    </div>
-
+  <div
+    class="bg-muted/20 relative min-h-0 flex-1 overflow-hidden"
+    :class="dragOver ? 'kn-wf-canvas--armed' : ''"
+    @dragover.prevent="dragOver = true"
+    @dragleave="dragOver = false"
+    @drop.prevent="onDrop"
+  >
     <div v-if="!mounted" class="text-muted-foreground flex h-full items-center justify-center text-sm">
       {{ t('workflow.canvas.loading') }}
     </div>
@@ -216,94 +230,214 @@ watch(
       :nodes-draggable="canManage"
       :nodes-connectable="canManage"
       :edges-updatable="false"
-      fit-view-on-init
-      :min-zoom="0.3"
-      :max-zoom="1.6"
+      :elevate-edges-on-select="true"
+      :min-zoom="0.25"
+      :max-zoom="1.8"
+      :delete-key-code="null"
+      :connection-radius="34"
       class="h-full"
       @nodes-change="onNodesChange"
       @node-click="(e: { node: Node }) => emit('update:selectedId', e.node.id)"
       @pane-click="emit('update:selectedId', null)"
-      @edge-click="(e: { edge: Edge }) => onEdgeClick(e.edge.id)"
     >
-      <template #node-default="slotProps">
-        <div class="w-[12rem] px-3 py-2.5 text-left">
-          <div class="flex items-start gap-2">
-            <component
-              :is="stepKind(slotProps.data.step.kind)?.icon"
-              class="text-muted-foreground mt-px size-4 shrink-0"
-            />
-            <span class="min-w-0 flex-1 text-[13px] leading-snug font-medium">
-              {{ slotProps.data.step.title || slotProps.id }}
-            </span>
-            <TriangleAlert v-if="slotProps.data.invalid" class="text-destructive mt-px size-3.5 shrink-0" />
-          </div>
-          <p class="text-muted-foreground mt-1.5 pl-6 text-[11px] leading-snug">
-            {{ nodeSummary(slotProps.data.step) }}
-          </p>
-        </div>
+      <!-- Registered as slots rather than through `node-types`/`edge-types`:
+           the slot form is the one Vue Flow types the props of, so a custom
+           node stays checked instead of being cast into place. -->
+      <template #node-step="nodeProps">
+        <WorkflowStepNode v-bind="nodeProps" />
       </template>
 
-      <Background :gap="16" />
-      <Controls :show-interactive="false" />
+      <template #edge-step="edgeProps">
+        <WorkflowStepEdge v-bind="edgeProps" @disconnect="disconnect" />
+      </template>
+
+      <Background :gap="18" :size="1.2" />
     </VueFlow>
 
-    <p
-      v-if="mounted && graph.steps.length === 0"
-      class="text-muted-foreground pointer-events-none absolute inset-0 flex items-center justify-center text-sm"
+    <!-- Framing controls, bottom-right, matching the knowledge graph's cluster
+         so the two canvases in this product are driven the same way. -->
+    <div
+      v-if="mounted && graph.steps.length"
+      class="bg-card/90 absolute right-3 bottom-3 flex overflow-hidden rounded-lg border shadow-xs backdrop-blur-md"
     >
-      <Plus class="mr-1.5 size-4" /> {{ t('workflow.canvas.addStepToBegin') }}
-    </p>
+      <button class="kn-graph-btn" :title="t('graph.zoomOut')" :aria-label="t('graph.zoomOut')" @click="zoomOut({ duration: 160 })">
+        <Minus class="size-4" />
+      </button>
+      <button
+        class="kn-graph-btn border-x"
+        :title="t('graph.fitToView')"
+        :aria-label="t('graph.fitToView')"
+        @click="fitView({ padding: 0.18, duration: 220 })"
+      >
+        <Maximize2 class="size-4" />
+      </button>
+      <button class="kn-graph-btn" :title="t('graph.zoomIn')" :aria-label="t('graph.zoomIn')" @click="zoomIn({ duration: 160 })">
+        <Plus class="size-4" />
+      </button>
+      <button
+        v-if="canManage"
+        class="kn-graph-btn border-l"
+        :title="t('workflow.canvas.tidyHint')"
+        :aria-label="t('workflow.canvas.tidy')"
+        @click="tidy"
+      >
+        <Wand2 class="size-4" />
+      </button>
+    </div>
+
+    <slot />
   </div>
 </template>
 
 <style>
-/* VueFlow renders its own node shell, so these have to be unscoped. */
+/* Vue Flow renders its own node shell, so these have to be unscoped. */
+
 /* A card lifts off the canvas by being whiter than it, not by casting a shadow
    — the inversion this design system uses everywhere instead of depth. */
-.kn-wf-node {
+.kn-wf-card {
+  position: relative;
+  width: 216px;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--card-foreground);
+  text-align: left;
   transition:
     border-color 160ms ease-out,
     box-shadow 160ms ease-out;
 }
-.kn-wf-node:hover {
+.kn-wf-card:hover {
   border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
 }
 /* Indigo marks structure — here, the step you are editing. */
-.kn-wf-node--selected {
+.kn-wf-card--selected {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 14%, transparent);
 }
-.kn-wf-node--invalid {
+.kn-wf-card--invalid {
   border-color: var(--destructive);
 }
-.kn-wf-node--invalid.kn-wf-node--selected {
+.kn-wf-card--invalid.kn-wf-card--selected {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 14%, transparent);
 }
-.vue-flow__edge-path {
+
+/* The fan-out stack. Two cards behind one, drawn with the card's own border and
+   ground so it reads as more of the same thing rather than as a shadow. */
+.kn-wf-stack,
+.kn-wf-stack::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  z-index: -1;
+}
+.kn-wf-stack {
+  transform: translate(5px, 5px);
+  opacity: 0.7;
+}
+.kn-wf-stack::before {
+  transform: translate(5px, 5px);
+  opacity: 0.7;
+}
+
+.vue-flow__node-step {
+  /* The card draws its own everything; Vue Flow's default chrome would double
+     the border and round the corner twice. */
+  background: transparent;
+  border: 0;
+  padding: 0;
+  width: auto;
+}
+.vue-flow__node-step.selected .kn-wf-card {
+  border-color: var(--primary);
+}
+
+.kn-wf-edge {
   stroke: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
   stroke-width: 1.5;
   transition: stroke 160ms ease-out;
 }
-.vue-flow__edge:hover .vue-flow__edge-path {
-  stroke: var(--destructive);
+.vue-flow__edge:hover .kn-wf-edge,
+.vue-flow__edge.selected .kn-wf-edge {
+  stroke: var(--primary);
 }
-/* An edge is removed by clicking it, so it has to say so on hover. */
-.vue-flow__edge {
-  cursor: pointer;
+.vue-flow__arrowhead * {
+  fill: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  stroke: none;
 }
-.vue-flow__handle {
-  background: var(--primary);
-  border: none;
-  width: 7px;
-  height: 7px;
+.vue-flow__edge:hover .vue-flow__arrowhead * {
+  fill: var(--primary);
 }
-.vue-flow__controls-button {
+
+/* Disconnect: hidden until the connection is hovered, so the line is quiet at
+   rest and the control is visible before it is used. */
+.kn-wf-cut {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
   background: var(--card);
-  border-bottom: 1px solid var(--border);
-  fill: var(--foreground);
+  color: var(--muted-foreground);
+  opacity: 0;
+  pointer-events: all;
+  transition:
+    opacity 140ms ease-out,
+    color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+.vue-flow__edge:hover .kn-wf-cut,
+.kn-wf-cut:hover,
+.kn-wf-cut:focus-visible {
+  opacity: 1;
+}
+.kn-wf-cut:hover {
+  color: var(--destructive);
+  border-color: var(--destructive);
+}
+
+.vue-flow__handle {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--card);
+  background: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  transition:
+    background 140ms ease-out,
+    transform 140ms ease-out;
+}
+.kn-wf-card:hover .vue-flow__handle,
+.vue-flow__handle:hover,
+.vue-flow__handle.connecting {
+  background: var(--primary);
+  transform: scale(1.25);
+}
+
+/* Dragging a step over the canvas: the ground answers before the drop. */
+.kn-wf-canvas--armed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--primary) 45%, transparent);
+  background: color-mix(in oklab, var(--primary) 5%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-wf-card,
+  .kn-wf-edge,
+  .kn-wf-cut,
+  .vue-flow__handle {
+    transition-duration: 0.01ms;
+  }
 }
 </style>

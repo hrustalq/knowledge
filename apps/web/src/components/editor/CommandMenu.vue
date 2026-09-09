@@ -15,7 +15,7 @@ export interface CommandItem {
   icon?: unknown
   keywords?: string
   /** What `id` names, for the menus whose entries are not all the same thing. */
-  kind?: 'page' | 'person'
+  kind?: 'page' | 'person' | 'agent'
 }
 
 const { t } = useI18n()

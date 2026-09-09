@@ -1,3 +1,5 @@
+import { AGENT_MENTION_ATTR } from '@knowledge/contracts';
+
 /**
  * The rich-block vocabulary, shared by the editor, the serializer and the read
  * view so all three agree on one encoding.
@@ -25,6 +27,10 @@ export const KN = {
   toc: 'data-kn-toc',
   mention: 'data-kn-mention',
   user: 'data-kn-user',
+  // Taken from contracts rather than spelled here: the API parses this
+  // attribute out of comment bodies to find out which agent was tagged, so the
+  // writer and the reader must not be able to drift apart.
+  agent: AGENT_MENTION_ATTR,
 } as const;
 
 /**

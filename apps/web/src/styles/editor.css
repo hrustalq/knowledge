@@ -1419,6 +1419,40 @@
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8'/%3E%3C/svg%3E");
 }
 
+/* An agent chip is the third member of the family, and the one that has to
+   read as *not a person*. It borrows the person chip's shape so a sentence
+   holding both stays even, and departs on the two channels a reader takes in
+   before words: a warmer hue, and a bot glyph. That distinction is load-bearing
+   rather than decorative — tagging one of these spends a model call, and a
+   reader deciding how much weight to give a remark needs to know at a glance
+   whether a colleague or a model wrote it. */
+
+.kn-mention-agent,
+.markdown-body span[data-kn-agent] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.05em 0.45em 0.05em 0.35em;
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--kn-panel-tip) 14%, transparent);
+  color: color-mix(in oklch, var(--kn-panel-tip) 82%, var(--foreground));
+  font-weight: 520;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.markdown-body span[data-kn-agent]::before {
+  content: '';
+  width: 0.85em;
+  height: 0.85em;
+  flex: none;
+  background-color: currentColor;
+  opacity: 0.7;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2M20 14h2M15 13v2M9 13v2'/%3E%3C/svg%3E");
+}
+
 /* Discussion threads (ThreadCard) -------------------------------------------
 
    Comments are a flat, time-ordered list on the wire, and the card's job is to

@@ -15,6 +15,11 @@ import { ActivityModule } from '../activity/activity.module.js';
 import { ProjectsModule } from '../projects/projects.module.js';
 import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { AiCoreModule } from '../ai/ai-core.module.js';
+import { AssistantClientModule } from '../assistant/assistant-client.module.js';
+import { MentionRepliesService } from './mention-replies.service.js';
+import { MentionReplySweeper } from './mention-reply.sweeper.js';
 
 /**
  * API side. DocumentsService itself lives in DocumentsCoreModule (worker-safe);
@@ -32,6 +37,13 @@ import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
     // The page-side connector surface (docs/features/19): 'linked to' and 'push now'.
     ConnectorsCoreModule,
     ConnectorQueueModule,
+    // Agent mentions in review discussions (docs/features/21). All three are
+    // Core/Client splits with no controllers and no reach for AccessService, so
+    // none of them imports DocumentsModule back — which is what lets a mention
+    // reply live here instead of behind a forwardRef.
+    AgentCoreModule,
+    AiCoreModule,
+    AssistantClientModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [
@@ -41,6 +53,8 @@ import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
     SavedFiltersService,
     DocumentThreadsService,
     HistoryService,
+    MentionRepliesService,
+    MentionReplySweeper,
   ],
   exports: [
     DocumentsCoreModule,

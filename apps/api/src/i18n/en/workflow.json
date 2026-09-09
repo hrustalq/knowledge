@@ -19,5 +19,9 @@
   "transition": {
     "badEvent": "Cannot {event} a run that is {status}.",
     "badNodeEvent": "Cannot {event} a node that is {status}."
+  },
+  "draft": {
+    "needMore": "Tell me a little more and I will sketch the chain.",
+    "designed": "Here is a chain that would do that."
   }
 }

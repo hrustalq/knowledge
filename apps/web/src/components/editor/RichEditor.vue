@@ -27,6 +27,7 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { createLowlight, common } from 'lowlight'
 import {
   AtSign,
+  Bot,
   Code,
   Columns2,
   CopyPlus,
@@ -57,7 +58,7 @@ import { htmlToMarkdown } from '@/lib/markdown/serialize'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
 import { Layout, LayoutColumn, Expand, Panel, TableOfContents } from './extensions/blocks'
 import { Drawing, FileEmbed, Mermaid, ResizableImage } from './extensions/media'
-import { DocMention, StatusMark, UserMention } from './extensions/inline'
+import { AgentMention, DocMention, StatusMark, UserMention } from './extensions/inline'
 import { createSuggestionExtension, type SuggestionSession } from './extensions/suggestion'
 import {
   createDragHandle,
@@ -89,6 +90,18 @@ export interface MentionablePerson {
   hint?: string
 }
 
+/**
+ * An AI agent `@` can bring into a discussion (docs/features/21).
+ *
+ * Keyed, not identified: an agent is a configuration, and the built-in ones
+ * have no database row at all until a workspace overrides them.
+ */
+export interface MentionableAgent {
+  key: string
+  name: string
+  description?: string
+}
+
 const { t } = useI18n()
 
 const props = withDefaults(
@@ -101,6 +114,12 @@ const props = withDefaults(
      * toolbar button while a person has only this.
      */
     people?: MentionablePerson[]
+    /**
+     * Agents `@` can tag. Offered last, under people and pages: mentioning one
+     * spends a model call, so it should be the deliberate choice in the menu
+     * rather than the one the cursor lands on.
+     */
+    agents?: MentionableAgent[]
     editable?: boolean
     /** Resolves (creating if needed) the document attachments belong to. */
     resolveDocumentId?: () => Promise<string | null>
@@ -124,6 +143,7 @@ const props = withDefaults(
   {
     pages: () => [],
     people: () => [],
+    agents: () => [],
     editable: true,
     compact: false,
     placeholder: '',
@@ -287,7 +307,19 @@ const menuItems = computed<CommandItem[]>(() => {
       hint: p.category,
       icon: FileText,
     }))
-  return [...people, ...pages]
+  const agents = (
+    query ? props.agents.filter((a) => matches(query, a.name, a.description)) : props.agents
+  )
+    .slice(0, 6)
+    .map((a): CommandItem => ({
+      id: a.key,
+      kind: 'agent',
+      group: t('toolbar.group.agents'),
+      label: a.name,
+      hint: a.description,
+      icon: Bot,
+    }))
+  return [...people, ...pages, ...agents]
 })
 
 function matches(query: string, ...fields: (string | undefined)[]): boolean {
@@ -342,6 +374,7 @@ const MentionCommand = createSuggestionExtension(
       if (!item) return
       const chain = e.chain().focus().deleteRange(range)
       if (item.kind === 'person') chain.insertUserMention({ userId: item.id, label: item.label })
+      else if (item.kind === 'agent') chain.insertAgentMention({ agentKey: item.id, label: item.label })
       else chain.insertDocMention({ documentId: item.id, label: item.label })
       chain.run()
     },
@@ -488,6 +521,7 @@ onMounted(() => {
       StatusMark,
       DocMention,
       UserMention,
+      AgentMention,
       SlashCommand,
       MentionCommand,
       DragHandleExtension,

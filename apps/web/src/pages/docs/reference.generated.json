@@ -12,6 +12,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/activity/calendar",
+      "tag": "activity",
+      "summary": "One person's activity aggregated per UTC day, for the profile contribution ledger",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/ai/agents",
       "tag": "ai",
       "summary": "Effective agent roster: built-in defaults ∪ this workspace overrides",
@@ -605,6 +615,26 @@
       "path": "/v1/me",
       "tag": "auth",
       "summary": "Resolved caller identity + workspace memberships (Phase 5)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/me",
+      "tag": "auth",
+      "summary": "Update the caller's own display name and language (docs/features/18)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/me/api-key",
+      "tag": "auth",
+      "summary": "Mint a fresh API key for the caller, replacing any existing one (shown once)",
       "role": null,
       "source": null,
       "public": false,
@@ -1452,6 +1482,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/profiles/{userId}",
+      "tag": "profiles",
+      "summary": "A workspace member's identity, membership, open work and pages",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/projects",
       "tag": "projects",
       "summary": "List projects in a workspace (searchable; cursor-paginated when limit is given)",
@@ -1607,6 +1647,16 @@
       "summary": "Compile a graph and report its issues without saving — the editor’s live check. Omit `graph` to validate the stored one.",
       "role": "viewer",
       "source": "workflow-definition",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/workflows/draft",
+      "tag": "workflows",
+      "summary": "Design a workflow by describing it — returns a proposal, never a saved row",
+      "role": "admin",
+      "source": "body",
       "public": false,
       "platformAdmin": false
     },

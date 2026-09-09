@@ -8,6 +8,7 @@ import type {
 } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { userAvatarUrl } from '../common/avatar-url.js';
 import type { AddMemberDto, UpdateMemberDto } from './workspaces.dto.js';
 import { t } from '../i18n/t.js';
 
@@ -64,6 +65,7 @@ export class WorkspacesService {
         userId: m.userId,
         email: m.user.email,
         displayName: m.user.displayName,
+        avatarUrl: userAvatarUrl(m.user),
         role: m.role as WorkspaceRole,
         trustedOperator: m.trustedOperator,
         disabled: m.user.disabledAt !== null,

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { userAvatarUrl } from '../common/avatar-url.js';
 import { DEV_PRINCIPAL, type Principal } from './principal.js';
 import { SessionsService } from './sessions.service.js';
 import { asLocale } from '../i18n/locale.js';
@@ -36,6 +37,7 @@ export class TokenAuthService {
       userId: session.user.id,
       email: session.user.email,
       displayName: session.user.displayName,
+      avatarUrl: userAvatarUrl(session.user),
       mode: 'session',
       isAdmin: session.user.isAdmin,
       locale: asLocale(session.user.locale),
@@ -53,6 +55,7 @@ export class TokenAuthService {
       userId: user.id,
       email: user.email,
       displayName: user.displayName,
+      avatarUrl: userAvatarUrl(user),
       mode: 'api-key',
       isAdmin: user.isAdmin,
       locale: asLocale(user.locale),

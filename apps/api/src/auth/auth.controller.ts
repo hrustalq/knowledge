@@ -23,6 +23,7 @@ export class AuthController {
       userId: principal.userId,
       email: principal.email,
       displayName: principal.displayName,
+      avatarUrl: principal.avatarUrl,
       mode: principal.mode,
       isAdmin: principal.isAdmin,
       locale: principal.locale,

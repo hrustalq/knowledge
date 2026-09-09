@@ -16,6 +16,7 @@ import type {
 } from '@knowledge/contracts';
 import type { User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { userAvatarUrl } from '../common/avatar-url.js';
 import { hashPassword, verifyPassword } from './password.js';
 import type { Principal } from './principal.js';
 import { SessionsService } from './sessions.service.js';
@@ -133,6 +134,7 @@ export class AuthFlowService {
       userId: user.id,
       email: user.email,
       displayName: user.displayName,
+      avatarUrl: userAvatarUrl(user),
       mode: 'session',
       isAdmin: user.isAdmin,
       locale: asLocale(user.locale),

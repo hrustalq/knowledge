@@ -16,7 +16,8 @@
     "notMember": "Вы не участник рабочего пространства {workspaceId}",
     "roleRequired": "Требуется роль «{role}» в рабочем пространстве {workspaceId} (текущая роль: «{currentRole}»)",
     "runOwnerUnavailable": "Пользователь, которому принадлежит запуск, удалён или отключён",
-    "trustedOperatorRequired": "Требуется статус доверенного оператора (plan.md §9, доступ к query_graph)"
+    "trustedOperatorRequired": "Требуется статус доверенного оператора (plan.md §9, доступ к query_graph)",
+    "noApiKeyInDevMode": "API-ключи принадлежат реальной учётной записи. Запустите API с AUTH_MODE=api-key, чтобы создать ключ."
   },
   "workspace": {
     "notFound": "Рабочее пространство {id} не найдено",
@@ -239,5 +240,10 @@
     "notFound": "Сохранённый фильтр #{id} не найден",
     "duplicate": "У вас уже есть сохранённый фильтр с именем «{name}»"
   },
-  "invalidNumericId": "{subject} должен быть числом"
+  "invalidNumericId": "{subject} должен быть числом",
+  "activity": {
+    "actorRequired": "Требуется участник: календарь активности принадлежит одному человеку.",
+    "rangeInverted": "Начало диапазона не может быть позже его конца.",
+    "rangeTooWide": "Календарь активности охватывает не более {max} дней за один запрос."
+  }
 }

@@ -47,6 +47,14 @@ export const useAuthStore = defineStore('auth', {
       }
       this.loaded = true
     },
+    /** Re-resolve /v1/me after a change the principal carries (rename, key rotation). */
+    async reload() {
+      try {
+        this.adopt(await apiFetch<MeResponse>('/v1/me'))
+      } catch {
+        /* the caller's own change already succeeded; a stale name is not worth an error */
+      }
+    },
     async login(email: string, password: string) {
       const res = await apiFetch<AuthSessionResponse>('/v1/auth/login', {
         method: 'POST',

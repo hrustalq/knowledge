@@ -637,7 +637,34 @@ export interface ReviewComment {
    * as an edit rather than silently replacing the text.
    */
   updatedAt: string | null;
+  /**
+   * The agent that wrote this, or null when a person did.
+   *
+   * `ReviewThreadSource` answers the same question for a thread, but only about
+   * its opening comment. An agent brought in by an @mention replies inside
+   * somebody else's thread, and `authorId` is the person who mentioned it — so
+   * without this the reply would render under their name and their face, which
+   * is the one thing a reader must not be misled about.
+   */
+  agentKey: string | null;
+  /**
+   * The agent has been asked and has not answered yet. A model turn outlives
+   * the request that triggers it, so the comment is posted empty and filled in
+   * when the answer arrives; until then the body is a placeholder, not a reply.
+   */
+  pending: boolean;
 }
+
+/**
+ * The attribute an agent mention is written as, shared so the editor node that
+ * creates it, the markdown serializer that stores it and the API parser that
+ * reads it cannot drift apart (the CONNECTOR_KIND_INFO precedent).
+ *
+ * A person's mention is `data-kn-user` with a UUID; an agent has a slug key and
+ * no users row, so it cannot reuse that attribute even though it renders
+ * alongside one in the same @ menu.
+ */
+export const AGENT_MENTION_ATTR = 'data-kn-agent';
 
 /**
  * PATCH .../threads/:threadId/comments/:commentId — only the comment's own
@@ -896,10 +923,24 @@ export interface WorkspaceMembership {
 }
 
 // GET /v1/me
+/**
+ * Where to fetch a picture, or null when there is none and the face is drawn
+ * from initials (people) or a monogram (projects) instead.
+ *
+ * Always a bare `/v1/...` path, never an absolute URL: one value has to work
+ * through the dev proxy, in production, and during SSR. The browser turns it
+ * into something an `<img>` can load with `resolveAssetUrl()`, which adds the
+ * host and the `?token=` — an `<img>` cannot send an Authorization header. A
+ * `?v=` stamp rides along, because replacing a picture reuses its key and would
+ * otherwise be invisible to everyone who had already loaded the old one.
+ */
+export type AvatarUrl = string | null;
+
 export interface MeResponse {
   userId: string;
   email: string;
   displayName: string;
+  avatarUrl: AvatarUrl;
   /** 'dev' = AUTH_MODE=none (full access); 'api-key' = Bearer API key; 'session' = login session token. */
   mode: 'dev' | 'api-key' | 'session';
   /** Platform admin (users.is_admin): full access to every workspace + user management. */
@@ -914,6 +955,8 @@ export interface MeResponse {
 // the dev principal has no users row, so the choice lives in the kn_lang cookie.
 export interface UpdateMeRequest {
   locale?: Locale;
+  /** Self-service rename. Platform admins rename anyone via PATCH /v1/users/:id. */
+  displayName?: string;
 }
 
 // POST /v1/graph/query — trusted-operator only, read-only, row-limited, audited
@@ -1181,6 +1224,12 @@ export interface ActivityEntry {
   action: string;
   documentId: string | null;
   documentTitle: string | null;
+  /**
+   * The project the action happened in, denormalized from the page it touched
+   * so a project feed is one indexed read. Null for workspace-level rows, and
+   * for history predating the column that the backfill could not attribute.
+   */
+  projectId: string | null;
   subjectId: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
@@ -1189,6 +1238,68 @@ export interface ListActivityResponse {
   workspaceId: string;
   entries: ActivityEntry[];
   nextCursor: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Activity kinds — the four things a person does to a knowledge base.
+//
+// One classifier, shared by the API (which aggregates the calendar server-side)
+// and the web (which colours a legend and filters a list from the same names),
+// for the reason `importFormatFor` is shared: two copies of a prefix table
+// drift, and then a day's ink and that day's list disagree about what happened.
+//
+// Deliberately NOT stored on activity_log. The action string is the durable
+// fact; the kind is a reading of it, and a reading may be re-cut later without
+// a migration. An unknown action is 'curate' rather than dropped, so a feature
+// that ships a new action still counts in someone's year.
+// ---------------------------------------------------------------------------
+
+export const ACTIVITY_KINDS = ['write', 'review', 'discuss', 'curate'] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+
+export function activityKindFor(action: string): ActivityKind {
+  // Comments first: 'merge-request.comment.created' is discussion, not review.
+  if (action.includes('.comment.')) return 'discuss';
+  if (action.startsWith('merge-request.')) return 'review';
+  if (
+    action.startsWith('document.') ||
+    action.startsWith('revision.') ||
+    action.startsWith('branch.') ||
+    action.startsWith('import.') ||
+    action.startsWith('attachment.')
+  ) {
+    return 'write';
+  }
+  // relations, glossary, projects, workflows, connectors, ai settings, and
+  // whatever ships next: shaping the base rather than writing in it.
+  return 'curate';
+}
+
+/** One day of one person's year. `date` is a calendar day, `YYYY-MM-DD` in UTC. */
+export interface ActivityCalendarDay {
+  date: string;
+  total: number;
+  byKind: Record<ActivityKind, number>;
+}
+
+// GET /v1/activity/calendar?workspaceId=&actor=&from=&to=
+export interface ActivityCalendarResponse {
+  workspaceId: string;
+  /** users.id whose year this is, or 'dev' for the AUTH_MODE=none actor. */
+  actor: string;
+  /** Inclusive bounds, `YYYY-MM-DD`. */
+  from: string;
+  to: string;
+  /** Only days with at least one entry; absent days are empty by construction. */
+  days: ActivityCalendarDay[];
+  total: number;
+  byKind: Record<ActivityKind, number>;
+  /** Busiest single day in the window — the ramp's top step is scaled to it. */
+  busiestDay: number;
+  /** Consecutive active days ending today (0 when today is empty). */
+  currentStreak: number;
+  /** Longest run of consecutive active days in the window. */
+  longestStreak: number;
 }
 
 // GET /v1/events?workspaceId= — SSE `data:` payload (feature 04)
@@ -1229,9 +1340,14 @@ export const KNOWN_EVENT_TYPES = [
   'merge-request.reopened',
   'merge-request.review-requested',
   'merge-request.comment.created',
+  // An agent's reply arriving in a comment that was posted empty. Distinct from
+  // .created because the card is already on screen: the reader is watching a
+  // placeholder, and a second .created would read as a second remark.
+  'merge-request.comment.updated',
   'merge-request.comment.resolved',
   'merge-request.comment.deleted',
   'document.comment.created',
+  'document.comment.updated',
   'document.comment.resolved',
   'document.comment.deleted',
   'import.parsed',
@@ -1695,6 +1811,7 @@ export interface UserSummary {
   userId: string;
   email: string;
   displayName: string;
+  avatarUrl: AvatarUrl;
   isAdmin: boolean;
   /** Disabled users cannot authenticate (sessions and API keys stop working). */
   disabled: boolean;
@@ -1707,6 +1824,69 @@ export interface UserSummary {
 // GET /v1/users
 export interface ListUsersResponse {
   users: UserSummary[];
+}
+
+// ---------------------------------------------------------------------------
+// Profiles — one workspace member as a work record (identity, what is open on
+// them, what they have touched). Workspace-scoped because activity_log is: a
+// profile answers "who is this, here", never "who is this, everywhere".
+// ---------------------------------------------------------------------------
+
+/** A page this person has written on, newest touch first. */
+export interface ProfilePage {
+  documentId: string;
+  title: string;
+  category: string;
+  projectId: string;
+  /** Head-revision status, for the lifecycle dot. */
+  status: RevisionStatus | null;
+  /** True when this person created the document, not merely revised it. */
+  authored: boolean;
+  revisions: number;
+  lastTouchedAt: string;
+}
+
+/** Work still owed, in the product's own terms. */
+export interface ProfileOpenWork {
+  /** Merge requests they opened that are still open. */
+  authoredMergeRequests: number;
+  /** Open merge requests where they are a reviewer and have not approved. */
+  awaitingTheirReview: number;
+  /** Unresolved, resolvable threads they have commented in. */
+  unresolvedThreads: number;
+}
+
+// GET /v1/profiles/:userId?workspaceId=
+export interface UserProfileResponse {
+  userId: string;
+  email: string;
+  displayName: string;
+  avatarUrl: AvatarUrl;
+  /** Platform admin (users.is_admin). */
+  isAdmin: boolean;
+  disabled: boolean;
+  /** users.created_at — when the account was made, not when they joined here. */
+  createdAt: string;
+  /** Null when the subject is not a member of this workspace (a platform admin looking in). */
+  role: WorkspaceRole | null;
+  trustedOperator: boolean;
+  /** workspace_members.created_at — when they joined THIS workspace. */
+  memberSince: string | null;
+  /** True when this profile is the caller's own. */
+  isSelf: boolean;
+  hasPassword: boolean;
+  hasApiKey: boolean;
+  pages: ProfilePage[];
+  /** Distinct documents they have revised in this workspace (pages[] is capped). */
+  pageCount: number;
+  openWork: ProfileOpenWork;
+}
+
+// POST /v1/me/api-key — rotate the caller's key; the plaintext is shown once.
+export interface RotateApiKeyResponse {
+  /** `kn_…`. Never retrievable again — only its SHA-256 is stored. */
+  apiKey: string;
+  rotatedAt: string;
 }
 
 // POST /v1/users
@@ -1764,6 +1944,19 @@ export interface ProjectSummary {
   workspaceId: string;
   name: string;
   description: string | null;
+  /** An uploaded picture. Null when the project uses an emoji, or neither. */
+  avatarUrl: AvatarUrl;
+  /**
+   * A chosen emoji, drawn on `avatarColor`. Null when the project has a picture
+   * or neither — the three states are exclusive, and the API clears whichever
+   * one the write did not set.
+   *
+   * Worth offering beside an upload because a project tile is 20px in the
+   * sidebar, where an emoji stays legible and a scaled-down photograph does not.
+   */
+  avatarEmoji: string | null;
+  /** Backs the emoji only; an image brings its own colours. Hex, e.g. `#3b82f6`. */
+  avatarColor: string | null;
   documentCount: number;
   createdAt: string;
 }
@@ -1796,12 +1989,95 @@ export interface CreateProjectResponse {
 export interface UpdateProjectRequest {
   name?: string;
   description?: string | null;
+  /**
+   * Setting an emoji clears any uploaded picture, and vice versa — a project has
+   * one face. Pass null to clear the emoji and fall back to the monogram.
+   */
+  avatarEmoji?: string | null;
+  avatarColor?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// GET /v1/projects/:id/overview — what a project *is*, for the page you read
+// rather than the form you edit it in.
+//
+// Derived on every request, with no stored table, exactly as UserProfileResponse
+// is: every number here is a count over rows that already exist, and a cached
+// copy would only introduce a second answer to the same question.
+// ---------------------------------------------------------------------------
+
+/**
+ * Someone who has worked in this project.
+ *
+ * Derived, never assigned. Projects hold no members and are not going to
+ * (docs/features/11: "organizational only") — a second ACL layer under the
+ * workspace boundary would be a new authorization surface for no gain. So the
+ * people shown here are the people who have actually revised a page in it,
+ * which has the useful property of staying true without anyone maintaining it.
+ *
+ * Ids only: names and faces come from the workspace-member roster the client
+ * already has cached, so this endpoint never re-sends them.
+ */
+export interface ProjectContributor {
+  userId: string;
+  /** Distinct pages in this project they have authored a revision of. */
+  pageCount: number;
+  /** Their most recent revision here. */
+  lastActiveAt: string;
+}
+
+export interface ProjectOverviewResponse {
+  project: ProjectSummary;
+  contributors: ProjectContributor[];
+  counts: {
+    documents: number;
+    glossaryTerms: number;
+    connectors: number;
+    workflows: number;
+    openMergeRequests: number;
+  };
+  /** Most recently updated pages, capped — the rail links out for the rest. */
+  recentPages: { documentId: string; title: string; updatedAt: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// Avatars. The same three-step upload page attachments use, for the same
+// reason: the bytes go straight to object storage on a presigned URL, so a
+// picture never streams through Node. `POST …/avatar` reserves and answers with
+// the URL to PUT to; `POST …/avatar/complete` is what makes it the live face,
+// after the API has confirmed the bytes actually arrived.
+// ---------------------------------------------------------------------------
+
+/** Image types an avatar may be. Checked at reserve time, before any bytes move. */
+export const AVATAR_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
+export type AvatarContentType = (typeof AVATAR_CONTENT_TYPES)[number];
+
+/**
+ * 2 MB. Smaller than a page attachment on purpose: this is a face rendered at
+ * 28px, and the cost of a large one is paid on every screen that lists people.
+ */
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+// POST /v1/me/avatar · POST /v1/projects/:id/avatar
+export interface CreateAvatarUploadRequest {
+  filename: string;
+  contentType: AvatarContentType;
+  sizeBytes: number;
+}
+export interface CreateAvatarUploadResponse {
+  upload: { url: string; method: 'PUT'; headers: Record<string, string>; expiresAt: string };
+}
+
+// POST /v1/me/avatar/complete · POST /v1/projects/:id/avatar/complete
+export interface CompleteAvatarUploadResponse {
+  avatarUrl: AvatarUrl;
 }
 
 export interface WorkspaceMemberEntry {
   userId: string;
   email: string;
   displayName: string;
+  avatarUrl: AvatarUrl;
   role: WorkspaceRole;
   trustedOperator: boolean;
   disabled: boolean;
@@ -2358,6 +2634,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'glossarist',
   'transcriber',
   'curator',
+  /** Designs a workflow definition from a description (docs/features/17). */
+  'architect',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -2498,6 +2776,18 @@ export const BUILT_IN_AGENTS: readonly BuiltInAgentInfo[] = [
     surfaces: ['background'],
     requires: ['json'],
     purpose: 'review',
+    defaultTools: [],
+  },
+  {
+    key: 'architect',
+    label: 'Architect',
+    summary: 'Turns a description of a chain into a workflow definition to review.',
+    // Interactive only, and deliberately: it designs a definition in a
+    // conversation with an admin who then edits and saves it. There is nothing
+    // for it to do unattended — a workflow nobody asked for is not a finding.
+    surfaces: ['interactive'],
+    requires: ['json'],
+    purpose: 'chat',
     defaultTools: [],
   },
 ];
@@ -3225,6 +3515,49 @@ export interface ValidateWorkflowRequest {
 }
 export interface ValidateWorkflowResponse {
   valid: boolean;
+  issues: WorkflowValidationIssue[];
+}
+
+/**
+ * One turn of the architect conversation (docs/features/17).
+ *
+ * Deliberately not an `assistant_threads` row: designing a chain is a scenario
+ * with an end — you leave with a definition — not a conversation worth keeping,
+ * and a saved transcript whose product is a saved workflow is the same fact
+ * stored twice. The wizard holds the turns and sends them back each time.
+ */
+export interface WorkflowDraftMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+// POST /v1/workflows/draft
+export interface DraftWorkflowRequest {
+  workspaceId: string;
+  /** Scopes the categories the architect is told about; not persisted here. */
+  projectId?: string | null;
+  /** The conversation so far, oldest first. The last entry is the user's. */
+  messages: WorkflowDraftMessage[];
+  /** The proposal on screen, so a follow-up edits it rather than starting over. */
+  graph?: WorkflowGraph | null;
+}
+
+export interface DraftWorkflowResponse {
+  /** false when the workspace has no usable provider — the wizard says so and
+   *  offers the manual lane rather than failing. */
+  enabled: boolean;
+  /** What the architect says back: a question, or what it just changed. */
+  reply: string;
+  /** A complete proposal, or null while it is still asking. */
+  graph: WorkflowGraph | null;
+  /** Offered alongside a graph; the wizard pre-fills its name field with it. */
+  name: string | null;
+  description: string | null;
+  /**
+   * Issues from compiling the proposal here, before it is returned. The wizard
+   * therefore never holds a graph the save would reject — the same guarantee
+   * `validate` gives the canvas, applied to the model's output.
+   */
   issues: WorkflowValidationIssue[];
 }
 

@@ -27,6 +27,7 @@ import {
   ChevronRight,
   CornerUpLeft,
   History,
+  Loader2,
   MapPin,
   MessagesSquare,
   Pencil,
@@ -52,6 +53,7 @@ import { excerpt } from '@/lib/markdown/plain'
 import CommentComposer from './CommentComposer.vue'
 import UserAvatar from './UserAvatar.vue'
 import { useMembers } from './use-members'
+import { useAgentNames } from './use-agent-names'
 import { fullTime, timelineTime } from './mr-ui'
 import { useAuthStore } from '@/stores/auth'
 
@@ -77,6 +79,7 @@ const emit = defineEmits<{
 }>()
 
 const { nameOf } = useMembers()
+const { agentNames } = useAgentNames()
 const auth = useAuthStore()
 const panelId = useId()
 
@@ -116,6 +119,30 @@ function parentOf(comment: ReviewComment): ReviewComment | null {
  */
 function isMine(authorId: string): boolean {
   return !props.readonly && !props.thread.resolved && auth.me?.userId === authorId
+}
+
+/**
+ * Whether a machine wrote this comment.
+ *
+ * Per comment, not per thread. `thread.source` says who *opened* a discussion,
+ * which was enough while the only AI remark was a posted review finding — but an
+ * agent tagged with `@` replies inside somebody else's thread, and `authorId` is
+ * the person who tagged it. Reading the thread's source here would put a
+ * colleague's name and face on a model's words.
+ */
+function isAgent(comment: ReviewComment): boolean {
+  return comment.agentKey !== null
+}
+
+function authorLabel(comment: ReviewComment): string {
+  return comment.agentKey
+    ? t('mention.agentLabel', { agent: agentName(comment.agentKey) })
+    : nameOf(comment.authorId)
+}
+
+/** Falls back to the key: a workspace may rename an agent, or drop a custom one. */
+function agentName(key: string): string {
+  return agentNames.value.get(key) ?? key
 }
 
 function startEdit(commentId: string) {
@@ -289,7 +316,7 @@ const replyTarget = computed(() =>
               <UserAvatar
                 :user-id="comment.authorId"
                 :name="nameOf(comment.authorId)"
-                :ai="thread.source === 'ai' && i === 0"
+                :ai="isAgent(comment)"
                 :size="i === 0 ? 'md' : 'sm'"
               />
             </div>
@@ -297,7 +324,13 @@ const replyTarget = computed(() =>
             <div class="kn-comment-surface min-w-0 flex-1">
               <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span class="truncate font-medium text-foreground">
-                  {{ thread.source === 'ai' && i === 0 ? 'Assistant' : nameOf(comment.authorId) }}
+                  {{ authorLabel(comment) }}
+                </span>
+                <!-- An agent replies under the identity of whoever tagged it —
+                     it has no account — so the person is named here rather than
+                     silently standing in as the author. -->
+                <span v-if="comment.agentKey" class="shrink-0 truncate">
+                  · {{ t('mention.viaActor', { actor: nameOf(comment.authorId) }) }}
                 </span>
                 <span class="shrink-0" :title="fullTime(comment.createdAt)">
                   · {{ timelineTime(comment.createdAt) }}
@@ -376,6 +409,16 @@ const replyTarget = computed(() =>
                 @submit="submitEdit"
                 @cancel="editing = null"
               />
+              <!-- Posted before the answer exists, so there is nothing to
+                   render yet. Saying which agent is working beats an empty
+                   card, which reads as a comment somebody failed to write. -->
+              <p
+                v-else-if="comment.pending"
+                class="flex items-center gap-1.5 text-sm text-muted-foreground italic"
+              >
+                <Loader2 class="size-3.5 animate-spin" aria-hidden="true" />
+                {{ t('mention.thinking', { agent: agentName(comment.agentKey ?? '') }) }}
+              </p>
               <MarkdownView v-else :markdown="comment.body" />
             </div>
           </li>

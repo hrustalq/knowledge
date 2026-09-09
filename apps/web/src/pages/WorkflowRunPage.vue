@@ -7,6 +7,7 @@ import { toast } from 'vue-sonner'
 import { PauseCircle, PlayCircle, XCircle } from 'lucide-vue-next'
 import type {
   WorkflowNodeEventType,
+  WorkflowNodeStatus,
   WorkflowRunEventType,
   WorkflowRunResponse,
 } from '@knowledge/contracts'
@@ -16,6 +17,7 @@ import { relativeTime } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import WorkflowMap from '@/components/workflows/WorkflowMap.vue'
 import WorkflowNodePanel from '@/components/workflows/WorkflowNodePanel.vue'
 import WorkflowRunTree from '@/components/workflows/WorkflowRunTree.vue'
 import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '@/components/workflows/workflow-ui'
@@ -49,6 +51,51 @@ watch(nodes, (list) => {
   if (selectedId.value && list.some((n) => n.id === selectedId.value)) return
   selectedId.value = (list.find((n) => n.status === 'awaiting-review') ?? list[0])?.id ?? null
 })
+
+/**
+ * The frozen graph, lit by what the run has actually done.
+ *
+ * A step can hold several nodes — that is what a fan-out is — so each step
+ * shows the state that most deserves attention rather than an average: anything
+ * waiting for a person outranks anything still working, which outranks a
+ * failure worth retrying, which outranks work already finished. A map whose
+ * amber dot meant "some of these are done" would be a map you have to open the
+ * tree to interpret, and then the map is decoration.
+ */
+const STATUS_RANK: Record<string, number> = {
+  'awaiting-review': 6,
+  running: 5,
+  materializing: 5,
+  failed: 4,
+  pending: 3,
+  approved: 2,
+  materialized: 1,
+  rejected: 0,
+  skipped: 0,
+}
+
+const stepStatuses = computed(() => {
+  const out: Record<string, WorkflowNodeStatus> = {}
+  for (const node of nodes.value) {
+    const current = out[node.stepId]
+    if (!current || (STATUS_RANK[node.status] ?? 0) > (STATUS_RANK[current] ?? 0)) out[node.stepId] = node.status
+  }
+  return out
+})
+
+/** How many cards a step is carrying, so a fan-out says how wide it opened. */
+const stepCounts = computed(() => {
+  const out: Record<string, number> = {}
+  for (const node of nodes.value) out[node.stepId] = (out[node.stepId] ?? 0) + 1
+  return out
+})
+
+/** Clicking a step on the map selects its first card that wants a person. */
+function selectStep(stepId: string) {
+  const atStep = nodes.value.filter((n) => n.stepId === stepId)
+  const wanted = atStep.find((n) => n.status === 'awaiting-review') ?? atStep[0]
+  if (wanted) selectedId.value = wanted.id
+}
 
 const invalidates = () => [['/v1/workflows/runs'], ['/v1/documents']]
 const nodeEvent = useApiMutation('post', '/v1/workflows/runs/{id}/nodes/{nodeId}/events', { invalidates })
@@ -156,6 +203,19 @@ const RUN_ACTION = {
       <p v-if="data.run.error" class="text-destructive bg-destructive/5 rounded-md border px-3 py-2 text-sm">
         {{ data.run.error }}
       </p>
+
+      <!-- The chain, lit by the run. It is the fastest answer to "where has
+           this got to", and the one thing a nested list of cards cannot show:
+           how wide the fan-out opened and what is still ahead of it. -->
+      <section class="bg-muted/15 h-40 shrink-0 overflow-hidden rounded-xl border sm:h-44">
+        <WorkflowMap
+          :graph="data.graph"
+          :statuses="stepStatuses"
+          :counts="stepCounts"
+          :selected-id="selected ? selected.stepId : null"
+          @select="selectStep"
+        />
+      </section>
 
       <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
         <aside class="flex min-h-0 flex-col overflow-hidden rounded-lg border">

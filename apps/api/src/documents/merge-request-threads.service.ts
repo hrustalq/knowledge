@@ -18,8 +18,9 @@ import type {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AUTHOR_ID_STUB, MergeRequestsService } from './merge-requests.service.js';
 import type { CreateThreadDto } from './dto/merge-requests.dto.js';
+import { MentionRepliesService } from './mention-replies.service.js';
 import { validateThreadAnchor } from './review-anchor.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 
 type ThreadWithComments = ThreadRow & { comments: CommentRow[] };
 
@@ -38,6 +39,7 @@ export class MergeRequestThreadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mergeRequests: MergeRequestsService,
+    private readonly mentions: MentionRepliesService,
   ) {}
 
   /** Threads are readable on merged/closed MRs too — only writes require `open`. */
@@ -83,7 +85,15 @@ export class MergeRequestThreadsService {
       threadId: thread.id,
       anchored: anchor !== null,
     });
-    return { thread: this.toThread(thread) };
+    await this.mentions.handleMention({
+      subject: { kind: 'merge-request', mergeRequestId: mr.id, documentId: mr.documentId },
+      threadId: thread.id,
+      body: dto.body,
+      documentId: mr.documentId,
+      actorId: authorId,
+      locale: currentLocale(),
+    });
+    return { thread: await this.reload(thread.id) };
   }
 
   async reply(
@@ -104,6 +114,14 @@ export class MergeRequestThreadsService {
       title: mr.title,
       threadId: thread.id,
       anchored: thread.anchorType !== null,
+    });
+    await this.mentions.handleMention({
+      subject: { kind: 'merge-request', mergeRequestId: mr.id, documentId: mr.documentId },
+      threadId: thread.id,
+      body,
+      documentId: mr.documentId,
+      actorId: authorId,
+      locale: currentLocale(),
     });
     return { thread: await this.reload(thread.id) };
   }
@@ -223,6 +241,8 @@ export class MergeRequestThreadsService {
           replyToId: c.replyToId,
           createdAt: c.createdAt.toISOString(),
           updatedAt: c.updatedAt?.toISOString() ?? null,
+          agentKey: c.agentKey,
+          pending: c.pending,
         }),
       ),
       createdAt: t.createdAt.toISOString(),

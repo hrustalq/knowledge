@@ -148,6 +148,19 @@ turndown.addRule('knUser', {
     `<span ${KN.user}="${attr(node, KN.user)}">${content.trim() || '@?'}</span>`,
 });
 
+/**
+ * Inline agent mention. Same shape as the person chip and for the same reason —
+ * the name survives into the prose, so a search for "reviewer" still finds the
+ * discussions it was pulled into — but a separate attribute, because the value
+ * is an agent key rather than a user id and the API acts on one and not the
+ * other.
+ */
+turndown.addRule('knAgent', {
+  filter: (node) => (node as HTMLElement).hasAttribute?.(KN.agent),
+  replacement: (content, node) =>
+    `<span ${KN.agent}="${attr(node, KN.agent)}">${content.trim() || '@?'}</span>`,
+});
+
 /** Table-of-contents macro: a marker, resolved at read time from the real headings. */
 turndown.addRule('knToc', {
   filter: (node) => (node as HTMLElement).hasAttribute?.(KN.toc),

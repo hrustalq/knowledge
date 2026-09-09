@@ -45,6 +45,7 @@ const STATIC: Record<string, string> = {
 }
 
 const SETTINGS: Record<string, string> = {
+  '/settings/profile': 'nav.profile',
   '/settings/projects': 'nav.projects',
   '/settings/users': 'nav.users',
   '/settings/access': 'nav.access',
@@ -97,6 +98,10 @@ const crumbs = computed<Crumb[]>(() => {
       ? [{ label: t('nav.settings'), to: '/settings' }, { label: t(key) }]
       : [{ label: t('nav.settings') }]
   }
+  // Both /u and /u/:userId. Neutral on purpose: the page's own header names
+  // the person, and a crumb reading "Your profile" over a colleague's page
+  // would be a lie the header then contradicts.
+  if (path === '/u' || path.startsWith('/u/')) return [{ label: t('nav.profile') }]
   if (path.startsWith('/workflows/')) return [{ label: t('nav.workflows'), to: '/workflows' }, { label: t('nav.run') }]
   if (path === '/create') return [...pageRoot(), { label: t('nav.newPage') }]
   if (path === '/upload' || path === '/import') return [...pageRoot(), { label: t('nav.import') }]

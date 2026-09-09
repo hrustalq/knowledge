@@ -16,7 +16,8 @@
     "notMember": "Not a member of workspace {workspaceId}",
     "roleRequired": "Requires the {role} role in workspace {workspaceId} (current role: {currentRole})",
     "runOwnerUnavailable": "The user this run belongs to no longer exists or is disabled",
-    "trustedOperatorRequired": "Requires trusted-operator membership (plan.md §9 query_graph gate)"
+    "trustedOperatorRequired": "Requires trusted-operator membership (plan.md §9 query_graph gate)",
+    "noApiKeyInDevMode": "API keys belong to a real account. Run the API with AUTH_MODE=api-key to mint one."
   },
   "workspace": {
     "notFound": "Workspace {id} not found",
@@ -235,5 +236,10 @@
     "notFound": "Saved filter #{id} not found",
     "duplicate": "You already have a saved filter named \"{name}\""
   },
-  "invalidNumericId": "{subject} must be a number"
+  "invalidNumericId": "{subject} must be a number",
+  "activity": {
+    "actorRequired": "An actor is required: a contribution calendar belongs to one person.",
+    "rangeInverted": "The start of the range must not come after its end.",
+    "rangeTooWide": "A contribution calendar covers at most {max} days in one request."
+  }
 }

@@ -34,7 +34,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update the caller's own display name and language (docs/features/18) */
+        patch: operations["MeController_update"];
         trace?: never;
     };
     "/v1/audit-logs": {
@@ -156,6 +157,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/api-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint a fresh API key for the caller, replacing any existing one (shown once) */
+        post: operations["MeController_rotateApiKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/users": {
         parameters: {
             query?: never;
@@ -260,6 +278,23 @@ export interface paths {
         head?: never;
         /** Change a member role / trusted-operator flag (workspace admin) */
         patch: operations["WorkspacesController_updateMember"];
+        trace?: never;
+    };
+    "/v1/profiles/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A workspace member's identity, membership, open work and pages */
+        get: operations["ProfilesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/projects": {
@@ -941,6 +976,23 @@ export interface paths {
         head?: never;
         /** Resolve or unresolve a review thread */
         patch: operations["MergeRequestsController_resolveThread"];
+        trace?: never;
+    };
+    "/v1/activity/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One person's activity aggregated per UTC day, for the profile contribution ledger */
+        get: operations["ActivityController_calendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/activity": {
@@ -2036,6 +2088,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workflows/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Design a workflow by describing it — returns a proposal, never a saved row
+         * @description One turn of the architect conversation (docs/features/17). The proposal is compiled before it is returned, so the caller never holds a graph POST /v1/workflows would reject. Nothing is persisted: saving is the ordinary create. `admin`, because it drafts what only an admin may save.
+         */
+        post: operations["WorkflowsController_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workflows/runs": {
         parameters: {
             query?: never;
@@ -2220,6 +2292,15 @@ export interface components {
         ChangePasswordDto: {
             currentPassword: string;
             newPassword: string;
+        };
+        UpdateMeDto: {
+            /**
+             * @description UI + API language; omit to leave unchanged
+             * @enum {string}
+             */
+            locale?: "en" | "ru";
+            /** @description Display name shown wherever this account acts; omit to leave unchanged */
+            displayName?: string;
         };
         CreateUserDto: {
             /** @example teammate@example.com */
@@ -2984,6 +3065,28 @@ export interface components {
             /** Format: uuid */
             parentId?: string | null;
         };
+        WorkflowDraftMessageDto: {
+            /** @enum {string} */
+            role: "user" | "assistant";
+            content: string;
+        };
+        WorkflowGraphDto: {
+            /** @description WorkflowStep[] — validated by the compiler */
+            steps: {
+                [key: string]: unknown;
+            }[];
+            /** @description Editor canvas coordinates, keyed by step id */
+            layout?: {
+                [key: string]: unknown;
+            };
+        };
+        DraftWorkflowDto: {
+            workspaceId: string;
+            projectId?: string | null;
+            messages: components["schemas"]["WorkflowDraftMessageDto"][];
+            /** @description The proposal on screen, so a follow-up edits it instead of restarting */
+            graph?: components["schemas"]["WorkflowGraphDto"];
+        };
         StartWorkflowRunDto: {
             workspaceId: string;
             definitionId: string;
@@ -3013,16 +3116,6 @@ export interface components {
             /** @enum {string} */
             type: "APPROVE" | "REJECT" | "SKIP" | "RETRY";
             draft?: components["schemas"]["WorkflowNodeDraftDto"];
-        };
-        WorkflowGraphDto: {
-            /** @description WorkflowStep[] — validated by the compiler */
-            steps: {
-                [key: string]: unknown;
-            }[];
-            /** @description Editor canvas coordinates, keyed by step id */
-            layout?: {
-                [key: string]: unknown;
-            };
         };
         WorkflowTriggerDto: {
             /** @description Offer a Run button on matching pages */
@@ -3139,6 +3232,48 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MeController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMeDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -3428,6 +3563,44 @@ export interface operations {
                 "application/json": components["schemas"]["ChangePasswordDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    MeController_rotateApiKey: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -3846,6 +4019,48 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateMemberDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProfilesController_get: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -6326,6 +6541,52 @@ export interface operations {
             };
         };
     };
+    ActivityController_calendar: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description users.id, or 'dev' in AUTH_MODE=none */
+                actor: string;
+                /** @description Inclusive YYYY-MM-DD; defaults to 52 weeks before `to` */
+                from?: string;
+                /** @description Inclusive YYYY-MM-DD; defaults to today */
+                to?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     ActivityController_list: {
         parameters: {
             query: {
@@ -6333,6 +6594,12 @@ export interface operations {
                 documentId?: string;
                 /** @description Secondary subject id — e.g. a merge request id, for its own timeline */
                 subjectId?: string;
+                /** @description users.id (or 'dev') — exact match, for one person's feed */
+                actor?: string;
+                /** @description Inclusive YYYY-MM-DD lower bound */
+                from?: string;
+                /** @description Inclusive YYYY-MM-DD upper bound (whole day) */
+                to?: string;
                 limit?: string;
                 cursor?: string;
             };
@@ -9853,6 +10120,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SubmitImportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkflowsController_draft: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftWorkflowDto"];
             };
         };
         responses: {

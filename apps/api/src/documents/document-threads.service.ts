@@ -19,8 +19,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { AUTHOR_ID_STUB } from './merge-requests.service.js';
 import type { CreateThreadDto } from './dto/merge-requests.dto.js';
+import { MentionRepliesService } from './mention-replies.service.js';
 import { validateThreadAnchor } from './review-anchor.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 
 type ThreadWithComments = ThreadRow & { comments: CommentRow[] };
 
@@ -44,6 +45,7 @@ export class DocumentThreadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly mentions: MentionRepliesService,
   ) {}
 
   async list(documentId: string): Promise<ListDocumentThreadsResponse> {
@@ -88,7 +90,15 @@ export class DocumentThreadsService {
     await this.recordActivity(doc, 'document.comment.created', thread.id, authorId, {
       anchored: anchor !== null,
     });
-    return { thread: this.toThread(thread) };
+    await this.mentions.handleMention({
+      subject: { kind: 'document', documentId },
+      threadId: thread.id,
+      body: dto.body,
+      documentId,
+      actorId: authorId,
+      locale: currentLocale(),
+    });
+    return { thread: await this.reload(thread.id) };
   }
 
   async reply(
@@ -107,6 +117,14 @@ export class DocumentThreadsService {
     });
     await this.recordActivity(doc, 'document.comment.created', thread.id, authorId, {
       anchored: thread.anchorType !== null,
+    });
+    await this.mentions.handleMention({
+      subject: { kind: 'document', documentId },
+      threadId: thread.id,
+      body,
+      documentId,
+      actorId: authorId,
+      locale: currentLocale(),
     });
     return { thread: await this.reload(thread.id) };
   }
@@ -208,6 +226,8 @@ export class DocumentThreadsService {
           replyToId: c.replyToId,
           createdAt: c.createdAt.toISOString(),
           updatedAt: c.updatedAt?.toISOString() ?? null,
+          agentKey: c.agentKey,
+          pending: c.pending,
         }),
       ),
       createdAt: t.createdAt.toISOString(),

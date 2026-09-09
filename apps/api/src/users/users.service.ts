@@ -5,6 +5,7 @@ import { hashPassword } from '../auth/password.js';
 import type { Principal } from '../auth/principal.js';
 import { SessionsService } from '../auth/sessions.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { userAvatarUrl } from '../common/avatar-url.js';
 import type { CreateUserDto, UpdateUserDto } from './users.dto.js';
 import { t } from '../i18n/t.js';
 
@@ -75,6 +76,7 @@ export class UsersService {
       userId: user.id,
       email: user.email,
       displayName: user.displayName,
+      avatarUrl: userAvatarUrl(user),
       isAdmin: user.isAdmin,
       disabled: user.disabledAt !== null,
       hasPassword: user.passwordHash !== null,

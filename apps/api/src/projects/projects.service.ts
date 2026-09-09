@@ -7,6 +7,7 @@ import type {
 import type { Project } from '@prisma/client';
 import { ActivityService } from '../activity/activity.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { projectAvatarUrl } from '../common/avatar-url.js';
 import type { CreateProjectDto, ListProjectsQueryDto, UpdateProjectDto } from './projects.dto.js';
 import { t } from '../i18n/t.js';
 
@@ -163,6 +164,9 @@ function toSummary(project: Project, documentCount: number): ProjectSummary {
     workspaceId: project.workspaceId,
     name: project.name,
     description: project.description,
+    avatarUrl: projectAvatarUrl(project),
+    avatarEmoji: project.avatarEmoji,
+    avatarColor: project.avatarColor,
     documentCount,
     createdAt: project.createdAt.toISOString(),
   };

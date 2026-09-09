@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Locale, WorkspaceRole } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { userAvatarUrl } from '../common/avatar-url.js';
 import { DEV_PRINCIPAL, ROLE_ORDER, type Principal } from './principal.js';
 import { t } from '../i18n/t.js';
 
@@ -64,6 +65,7 @@ export class AccessService {
       userId: owner.id,
       email: owner.email,
       displayName: owner.displayName,
+      avatarUrl: userAvatarUrl(owner),
       mode: 'api-key',
       isAdmin: owner.isAdmin,
       locale,

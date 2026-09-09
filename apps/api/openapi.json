@@ -96,6 +96,63 @@
         "tags": [
           "auth"
         ]
+      },
+      "patch": {
+        "operationId": "MeController_update",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update the caller's own display name and language (docs/features/18)",
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/v1/audit-logs": {
@@ -502,6 +559,55 @@
           }
         },
         "summary": "Change own password (requires the current one); revokes other sessions",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/me/api-key": {
+      "post": {
+        "operationId": "MeController_rotateApiKey",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mint a fresh API key for the caller, replacing any existing one (shown once)",
         "tags": [
           "auth"
         ]
@@ -1120,6 +1226,71 @@
         "summary": "Remove a member (workspace admin; last admin is protected)",
         "tags": [
           "workspaces"
+        ]
+      }
+    },
+    "/v1/profiles/{userId}": {
+      "get": {
+        "operationId": "ProfilesController_get",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A workspace member's identity, membership, open work and pages",
+        "tags": [
+          "profiles"
         ]
       }
     },
@@ -5020,6 +5191,90 @@
         ]
       }
     },
+    "/v1/activity/calendar": {
+      "get": {
+        "operationId": "ActivityController_calendar",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actor",
+            "required": true,
+            "in": "query",
+            "description": "users.id, or 'dev' in AUTH_MODE=none",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive YYYY-MM-DD; defaults to 52 weeks before `to`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive YYYY-MM-DD; defaults to today",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One person's activity aggregated per UTC day, for the profile contribution ledger",
+        "tags": [
+          "activity"
+        ]
+      }
+    },
     "/v1/activity": {
       "get": {
         "operationId": "ActivityController_list",
@@ -5045,6 +5300,33 @@
             "required": false,
             "in": "query",
             "description": "Secondary subject id — e.g. a merge request id, for its own timeline",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actor",
+            "required": false,
+            "in": "query",
+            "description": "users.id (or 'dev') — exact match, for one person's feed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive YYYY-MM-DD lower bound",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive YYYY-MM-DD upper bound (whole day)",
             "schema": {
               "type": "string"
             }
@@ -10351,6 +10633,66 @@
         ]
       }
     },
+    "/v1/workflows/draft": {
+      "post": {
+        "description": "One turn of the architect conversation (docs/features/17). The proposal is compiled before it is returned, so the caller never holds a graph POST /v1/workflows would reject. Nothing is persisted: saving is the ordinary create. `admin`, because it drafts what only an admin may save.",
+        "operationId": "WorkflowsController_draft",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftWorkflowDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Design a workflow by describing it — returns a proposal, never a saved row",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
     "/v1/workflows/runs": {
       "get": {
         "operationId": "WorkflowsController_listRuns",
@@ -11322,6 +11664,23 @@
           "currentPassword",
           "newPassword"
         ]
+      },
+      "UpdateMeDto": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ru"
+            ],
+            "description": "UI + API language; omit to leave unchanged"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Display name shown wherever this account acts; omit to leave unchanged"
+          }
+        }
       },
       "CreateUserDto": {
         "type": "object",
@@ -13360,6 +13719,77 @@
           "markdown"
         ]
       },
+      "WorkflowDraftMessageDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ]
+      },
+      "WorkflowGraphDto": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "WorkflowStep[] — validated by the compiler"
+          },
+          "layout": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Editor canvas coordinates, keyed by step id"
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      },
+      "DraftWorkflowDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowDraftMessageDto"
+            }
+          },
+          "graph": {
+            "description": "The proposal on screen, so a follow-up edits it instead of restarting",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowGraphDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "workspaceId",
+          "messages"
+        ]
+      },
       "StartWorkflowRunDto": {
         "type": "object",
         "properties": {
@@ -13457,27 +13887,6 @@
         },
         "required": [
           "type"
-        ]
-      },
-      "WorkflowGraphDto": {
-        "type": "object",
-        "properties": {
-          "steps": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": true
-            },
-            "description": "WorkflowStep[] — validated by the compiler"
-          },
-          "layout": {
-            "type": "object",
-            "additionalProperties": true,
-            "description": "Editor canvas coordinates, keyed by step id"
-          }
-        },
-        "required": [
-          "steps"
         ]
       },
       "WorkflowTriggerDto": {

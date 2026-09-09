@@ -27,7 +27,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useQuery } from '@tanstack/vue-query'
+import type { ListAiAgentChoicesResponse } from '@knowledge/contracts'
 import RichEditor from '@/components/editor/RichEditor.vue'
+import { apiQueryOptions } from '@/api/queries'
+import { getWorkspaceId } from '@/lib/api'
 import { useDocumentsStore } from '@/stores/documents'
 import { useMembers } from './use-members'
 
@@ -76,14 +80,23 @@ const props = withDefaults(
 const emit = defineEmits<{ submit: [body: string, resolvable: boolean]; cancel: [] }>()
 
 /**
- * `@` names a teammate or a page, and the box sources both itself rather than
- * making five call sites pass them. A comment that says "ask @Ada about
- * @Token rotation" is the whole reason threads get read by the right person,
- * so the lists have to be there wherever a comment is written — not only in
- * the two places a host remembered to wire up.
+ * `@` names a teammate, a page, or an AI agent, and the box sources all three
+ * itself rather than making five call sites pass them. A comment that says "ask
+ * @Ada about @Token rotation" is the whole reason threads get read by the right
+ * person, so the lists have to be there wherever a comment is written — not only
+ * in the two places a host remembered to wire up.
+ *
+ * Agents come from the viewer-safe choices endpoint (key, name, description —
+ * never prompts). Tagging one is what pulls it into the discussion, and because
+ * this component serves both merge-request threads and page comments, the
+ * affordance works identically on both: a chip that inserted here and did
+ * nothing on one of the two surfaces would be worse than no chip.
  */
 const { members } = useMembers()
 const documents = useDocumentsStore()
+const agentChoices = useQuery(
+  apiQueryOptions('/v1/ai/agents/choices', { query: { workspaceId: getWorkspaceId() } }),
+)
 onMounted(() => {
   if (!documents.loaded) void documents.fetchList()
 })
@@ -94,6 +107,14 @@ const people = computed(() =>
 )
 const pages = computed(() =>
   documents.items.map((d) => ({ documentId: d.documentId, title: d.title, category: d.category })),
+)
+const agents = computed(
+  () =>
+    (agentChoices.data.value as ListAiAgentChoicesResponse | undefined)?.agents.map((a) => ({
+      key: a.key,
+      name: a.name,
+      description: a.description,
+    })) ?? [],
 )
 
 const body = ref(props.initialBody)
@@ -156,6 +177,7 @@ function cancel() {
         compact
         :people="people"
         :pages="pages"
+        :agents="agents"
         :resolve-document-id="resolveDocumentId"
         :placeholder="`${placeholder} Press @ to mention, / for blocks.`"
       />

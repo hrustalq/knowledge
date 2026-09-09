@@ -26,6 +26,20 @@ export function withLocale<T>(lang: Locale, fn: () => T): T {
   return forced.run(lang, fn);
 }
 
+/**
+ * The language resolved for the work happening right now, as a value.
+ *
+ * `t()` reads this ambiently and needs no help, so this exists for the one case
+ * that cannot: work that outlives the request which started it. A detached
+ * continuation — an agent answering an @mention long after the comment POST has
+ * returned — has no request context left to read, so the locale has to be
+ * captured while there still is one and handed back with `withLocale`. Same
+ * reason `import_jobs.locale` and `workflow_runs.locale` are columns.
+ */
+export function currentLocale(fallback: Locale = 'en'): Locale {
+  return forced.getStore() ?? ((I18nContext.current()?.lang as Locale | undefined) ?? fallback);
+}
+
 @Injectable()
 export class I18nRegistry implements OnModuleInit {
   constructor(private readonly i18n: I18nService) {}

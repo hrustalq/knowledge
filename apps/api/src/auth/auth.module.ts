@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller.js';
 import { AuthFlowController } from './auth-flow.controller.js';
 import { AuthFlowService } from './auth-flow.service.js';
 import { AuthGuard } from './auth.guard.js';
+import { MeController } from './me.controller.js';
 import { SessionsService } from './sessions.service.js';
 import { TokenAuthService } from './token-auth.service.js';
 
@@ -20,7 +21,7 @@ import { TokenAuthService } from './token-auth.service.js';
 @Global()
 @Module({
   imports: [PrismaModule, AuthCoreModule],
-  controllers: [AuthController, AuthFlowController],
+  controllers: [AuthController, AuthFlowController, MeController],
   providers: [
     AuditService,
     SessionsService,

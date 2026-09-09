@@ -1,4 +1,4 @@
-import type { Locale, WorkspaceRole } from '@knowledge/contracts';
+import type { AvatarUrl, Locale, WorkspaceRole } from '@knowledge/contracts';
 
 /**
  * Resolved caller identity (Phase 5, plan.md §11). Attached to the request by
@@ -10,6 +10,15 @@ export interface Principal {
   userId: string;
   email: string;
   displayName: string;
+  /**
+   * The caller's own picture, or null when their face is drawn from initials.
+   *
+   * Carried on the principal because three separate places answer GET /v1/me
+   * from one, and the topbar avatar is the first thing rendered on every page —
+   * asking for it separately would be a second round trip for something the
+   * session lookup already read.
+   */
+  avatarUrl: AvatarUrl;
   /** 'dev' = AUTH_MODE=none — admin + trusted operator everywhere, keeps Phase 0-4 flows working. */
   mode: 'dev' | 'api-key' | 'session';
   /** Platform admin (users.is_admin): user management + implicit admin in every workspace. */
@@ -30,6 +39,8 @@ export const DEV_PRINCIPAL: Principal = {
   userId: '00000000-0000-0000-0000-000000000000',
   email: 'dev@localhost',
   displayName: 'Dev (AUTH_MODE=none)',
+  // No users row to hang a picture on; the initials face is correct here.
+  avatarUrl: null,
   mode: 'dev',
   isAdmin: true,
   locale: 'en',

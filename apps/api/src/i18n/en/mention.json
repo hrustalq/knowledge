@@ -1,0 +1,9 @@
+{
+  "failed": "{agent} could not answer this — the request to the model failed. Mention it again to retry.",
+  "timedOut": "This reply never arrived. The server restarted while the agent was answering, or the model took too long. Mention it again to retry.",
+  "unknownAgent": "There is no agent called “{agent}” in this workspace.",
+  "agentDisabled": "{agent} is switched off for this workspace. A workspace admin can enable it in AI settings.",
+  "providerDisabled": "{agent} has no AI provider configured. A workspace admin can set one up in AI settings.",
+  "notConversational": "{agent} does not answer discussions — it only runs as a background pass.",
+  "modelMissing": "{agent} needs a model that supports {capabilities}, and the one configured for it does not."
+}

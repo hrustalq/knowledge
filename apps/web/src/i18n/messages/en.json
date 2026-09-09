@@ -36,7 +36,9 @@
     "loadMore": "Load more",
     "searchIn": "Search {label}…",
     "noneYet": "No {label} yet.",
-    "noMatchFor": "No match for {query}"
+    "noMatchFor": "No match for {query}",
+    "continue": "Continue",
+    "send": "Send"
   },
   "nav": {
     "toggleSidebar": "Toggle navigation",
@@ -106,7 +108,11 @@
     "createWorkspace": "Create workspace",
     "createProject": "Create project",
     "theNewWorkspace": "the new workspace",
-    "docs": "Docs"
+    "docs": "Docs",
+    "profile": "Profile",
+    "yourProfile": "Your profile",
+    "accountSettings": "Account settings",
+    "accountMenu": "Account menu"
   },
   "role": {
     "viewer": "Viewer",
@@ -198,7 +204,8 @@
     "aiHint": "Assistant, skills, usage",
     "workflowsHint": "Document step chains",
     "connectorsHint": "Bring pages in from other systems, and publish them back.",
-    "docsHint": "How all of this works"
+    "docsHint": "How all of this works",
+    "profileHint": "Name, language, password"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -415,11 +422,18 @@
       "editFirst": "Edit first",
       "tryAgain": "Try again",
       "skip": "Skip",
-      "reject": "Reject"
+      "reject": "Reject",
+      "manyItems": "a list of {category} pages",
+      "onePage": "one {category} page, for review",
+      "onePageAuto": "one {category} page, published straight away",
+      "context": "context for the next step",
+      "item": "item"
     },
     "canvas": {
       "loading": "Loading canvas…",
-      "addStepToBegin": "Add a step to begin"
+      "addStepToBegin": "Add a step to begin",
+      "tidy": "Tidy up",
+      "tidyHint": "Lay the steps out in order"
     },
     "rail": {
       "noRun": "No workflow has been run against this page.",
@@ -464,16 +478,126 @@
       "newName": "Workflow {n}",
       "notAvailable": "Not available",
       "saving": "Saving…",
-      "seedPrompt": "List the use cases this entity takes part in."
+      "seedPrompt": "List the use cases this entity takes part in.",
+      "edit": "Edit",
+      "runs": "Runs",
+      "retired": "Not available to run",
+      "openInBuilder": "Open “{name}” in the builder",
+      "actionsFor": "Actions for “{name}”"
     },
     "runStarted": "Run started",
-    "draftSaved": "Draft saved"
+    "draftSaved": "Draft saved",
+    "map": {
+      "many": "many",
+      "empty": "This workflow has no steps yet.",
+      "summary": "A chain of {steps}: {chain}"
+    },
+    "palette": {
+      "title": "Steps",
+      "hint": "Drag one onto the canvas, or click to add it."
+    },
+    "reading": {
+      "search": "Searches the knowledge base and hands what it finds to the next step.",
+      "review": "Stops and waits for a person.",
+      "fanOut": "Breaks the source into a list of {category} pages, up to {n}, each becoming its own card to review.",
+      "page": "Writes one {category} page, held for review.",
+      "pageAuto": "Writes one {category} page and publishes it without review.",
+      "context": "Gathers context for the steps after it."
+    },
+    "builder": {
+      "serverAccepts": "The server accepts this graph.",
+      "leaveUnsaved": "Leave without saving? The canvas has changes that have not been sent anywhere.",
+      "openInspector": "Step settings",
+      "seeRuns": "See runs",
+      "deleteTitle": "Delete “{name}”?",
+      "deleteBody": "Pages this workflow already published stay where they are. Runs still in flight will stop it being deleted.",
+      "moreActions": "More actions"
+    },
+    "wizard": {
+      "title": "New workflow",
+      "subtitle": "A chain of steps that turns one page into the next level of detail.",
+      "step": {
+        "approach": "Approach",
+        "design": "Design",
+        "review": "Review"
+      },
+      "footer": {
+        "approach": "Pick how you want to start.",
+        "design": "Nothing is saved yet.",
+        "review": "This is what it will do on every run."
+      },
+      "approachTitle": "How do you want to build it?",
+      "approachBody": "Either way you end up on the canvas, where you can change anything. Nothing is saved until the last step.",
+      "laneDescribe": "Describe it",
+      "laneDescribeBody": "Say what you want in your own words. The architect asks what it needs and proposes a chain.",
+      "laneDraw": "Draw it",
+      "laneDrawBody": "Start from a shape that already works, or from a single step, and wire it up yourself.",
+      "architectOpener": "Tell me what you want generated, and from what kind of page. I will sketch the chain and you can edit it afterwards.",
+      "seedEntity": "From an entity page, generate its use cases, then an API contract for each one.",
+      "seedProcess": "From a process page, write a step-by-step guide for each role involved.",
+      "seedContract": "From an API contract, draft the reference page and a short integration guide.",
+      "thinking": "Working it out…",
+      "followUp": "Ask for a change…",
+      "describePlaceholder": "Describe what this workflow should produce…",
+      "composerHint": "Enter sends · Shift+Enter for a new line",
+      "pickShape": "Start from a shape",
+      "pickShapeBody": "These are the arrangements this feature was built around. Pick the closest and change it on the canvas.",
+      "aiUnavailable": "No AI provider is configured for this workspace, so the architect cannot run.",
+      "switchToDraw": "Draw it instead",
+      "mapPendingAi": "The chain appears here as soon as the architect has enough to propose one.",
+      "mapPendingDraw": "Pick a shape on the left to see it here.",
+      "reviewTitle": "Check what it will do",
+      "reviewBody": "Every step parks its result for review. Nothing reaches the page tree until someone approves it.",
+      "namePlaceholder": "Entity → use cases",
+      "create": "Create workflow",
+      "creating": "Creating…",
+      "created": "“{name}” created",
+      "startOver": "Start over"
+    },
+    "pattern": {
+      "breakdown": {
+        "name": "Break a page into its parts",
+        "summary": "One page becomes a list, and each item becomes a page.",
+        "itemsTitle": "List the parts",
+        "itemsPrompt": "List the use cases this page takes part in. One line each, no explanation.",
+        "writeTitle": "Write each one",
+        "writePrompt": "Write the full page for this use case: what it is for, who does it, and what happens step by step."
+      },
+      "twoLevel": {
+        "name": "Entity → use cases → contracts and screens",
+        "summary": "Two levels deep: each use case gets an API contract and a screen reference.",
+        "useCasesTitle": "Use cases",
+        "useCasesPrompt": "List the use cases this entity takes part in. One line each, no explanation.",
+        "endpointsTitle": "API contract",
+        "endpointsPrompt": "Write the API contract this use case needs: endpoints, request and response shapes, and error cases.",
+        "screensTitle": "Screens",
+        "screensPrompt": "Describe the screens this use case needs: what each one shows, and what the person can do on it."
+      },
+      "research": {
+        "name": "Look it up, then write one page",
+        "summary": "Searches the workspace first, drafts one page, then waits for a person.",
+        "gatherTitle": "Gather context",
+        "draftTitle": "Draft the page",
+        "draftPrompt": "Using the source page and what the search found, write one guide covering it end to end.",
+        "checkTitle": "Read it before it lands"
+      },
+      "blank": {
+        "name": "Start from one step",
+        "summary": "An empty chain with a single step, for building up from scratch.",
+        "firstTitle": "First step"
+      }
+    }
   },
   "activity": {
     "action": {
       "document": {
         "created": "created document",
-        "updated": "updated document"
+        "updated": "updated document",
+        "comment": {
+          "created": "commented on",
+          "resolved": "resolved a comment on",
+          "deleted": "deleted a comment on"
+        }
       },
       "revision": {
         "finalized": "published a revision of"
@@ -495,8 +619,79 @@
         "review-requested": "requested review on",
         "comment": {
           "created": "commented on a merge request on",
-          "resolved": "resolved a review thread on"
+          "resolved": "resolved a review thread on",
+          "deleted": "deleted a review comment on"
         }
+      },
+      "ai": {
+        "agent": {
+          "created": "created an agent",
+          "updated": "updated an agent",
+          "deleted": "deleted an agent",
+          "reset": "reset an agent"
+        },
+        "plugin": {
+          "created": "connected a plugin",
+          "updated": "updated a plugin",
+          "deleted": "removed a plugin"
+        },
+        "provider": {
+          "created": "added an AI provider",
+          "updated": "updated an AI provider",
+          "deleted": "removed an AI provider"
+        },
+        "skill": {
+          "created": "created a skill",
+          "updated": "updated a skill",
+          "deleted": "deleted a skill"
+        },
+        "settings": {
+          "updated": "updated AI settings"
+        }
+      },
+      "attachment": {
+        "created": "attached a file to",
+        "deleted": "removed an attachment from"
+      },
+      "connector": {
+        "created": "added a connector",
+        "updated": "updated a connector",
+        "deleted": "removed a connector",
+        "link": {
+          "removed": "unlinked a page from a connector"
+        }
+      },
+      "glossary": {
+        "term": {
+          "created": "defined a term",
+          "updated": "updated a term",
+          "deleted": "removed a term"
+        }
+      },
+      "graph": {
+        "query": "ran a graph query"
+      },
+      "import": {
+        "submitted": "imported"
+      },
+      "project": {
+        "created": "created a project",
+        "updated": "updated a project",
+        "deleted": "deleted a project"
+      },
+      "workflow": {
+        "created": "created a workflow",
+        "updated": "updated a workflow",
+        "deleted": "deleted a workflow"
+      },
+      "workflow-node": {
+        "materialized": "published a workflow step as"
+      },
+      "workflow-run": {
+        "started": "started a workflow run",
+        "paused": "paused a workflow run",
+        "resumed": "resumed a workflow run",
+        "cancelled": "cancelled a workflow run"
       }
     },
     "loading": "Loading activity…",
@@ -1435,7 +1630,8 @@
       "structure": "Structure",
       "media": "Media",
       "people": "People",
-      "pages": "Pages"
+      "pages": "Pages",
+      "agents": "AI agents"
     },
     "heading1": "Heading 1",
     "heading2": "Heading 2",
@@ -1645,5 +1841,121 @@
     "noTools": "No tool matches that filter.",
     "requiredInput": "Required",
     "optionalInput": "Optional"
+  },
+  "profile": {
+    "notFound": "That person is not in this workspace, or the profile could not be loaded.",
+    "memberSince": "Member since {date}",
+    "notAMember": "Not a member of this workspace",
+    "platformAdmin": "Platform admin",
+    "trustedOperator": "Trusted operator",
+    "disabled": "Disabled",
+    "editProfile": "Edit profile",
+    "kind": {
+      "write": "Wrote",
+      "review": "Reviewed",
+      "discuss": "Discussed",
+      "curate": "Curated"
+    },
+    "ledger": {
+      "heading": "{n} contributions | {n} contribution | {n} contributions",
+      "headingLoading": "Contributions",
+      "window": "Period",
+      "rolling": "Past year",
+      "gridLabel": "Contribution calendar — arrow keys move between days, Enter filters the list below",
+      "cell": "{n} contributions on {date} | {n} contribution on {date} | {n} contributions on {date}",
+      "cellCount": "{n} contributions | {n} contribution | {n} contributions",
+      "busiest": "Busiest day: {n}",
+      "streak": "{current} day streak now · {longest} at its longest",
+      "less": "Less",
+      "more": "More"
+    },
+    "strip": {
+      "label": "Contributions by kind",
+      "filter": "{kind}: {n} — filter the list"
+    },
+    "activity": {
+      "heading": "Activity",
+      "clear": "Clear filter",
+      "empty": "Nothing recorded in this period.",
+      "emptyKind": "Nothing of that kind in this period.",
+      "failed": "Activity could not be loaded.",
+      "dayCount": "{n} entries | {n} entry | {n} entries",
+      "loadMore": "Load more",
+      "loading": "Loading…"
+    },
+    "pages": {
+      "title": "Pages",
+      "preview": "{n} pages | {n} page | {n} pages",
+      "empty": "No pages written here yet.",
+      "authored": "author",
+      "revisions": "{n} revisions | {n} revision | {n} revisions",
+      "more": "and {n} more"
+    },
+    "open": {
+      "title": "Open work",
+      "preview": "{n} open",
+      "clear": "Nothing open",
+      "authored": "Merge requests they opened",
+      "awaiting": "Awaiting their review",
+      "threads": "Unresolved threads",
+      "viewMergeRequests": "Open the merge request list"
+    },
+    "access": {
+      "title": "Access",
+      "role": "Workspace role",
+      "operator": "Trusted operator",
+      "signIn": "Sign-in",
+      "password": "Password",
+      "apiKey": "API key",
+      "none": "None set",
+      "accountCreated": "Account created"
+    }
+  },
+  "profileSettings": {
+    "title": "Your account",
+    "subtitle": "Everything here applies to you. Renaming or disabling somebody else is done in Users.",
+    "name": {
+      "title": "Display name",
+      "hint": "Shown wherever you act — revisions, review threads, this workspace's member list.",
+      "label": "Display name",
+      "saved": "Name updated.",
+      "failed": "The name could not be saved.",
+      "email": "Signed in as {email}. ",
+      "viewProfile": "View your profile"
+    },
+    "language": {
+      "title": "Language",
+      "hint": "Applies to the interface and to what the API says back. Page content is never translated."
+    },
+    "password": {
+      "title": "Password",
+      "hint": "Changing it signs out nothing else — your other sessions keep working.",
+      "current": "Current password",
+      "next": "New password",
+      "confirm": "Confirm new password",
+      "submit": "Change password",
+      "tooShort": "Use at least 8 characters.",
+      "mismatch": "The two new passwords do not match.",
+      "saved": "Password changed.",
+      "failed": "The password could not be changed — check your current one."
+    },
+    "apiKey": {
+      "title": "API key",
+      "hint": "For agents and scripts calling this workspace as you. Only its hash is stored, so a key is shown once and never again.",
+      "status": "One key per account. Rotating replaces the current one immediately.",
+      "devMode": "Not applicable while the API runs with AUTH_MODE=none.",
+      "rotate": "Rotate key",
+      "rotating": "Rotating…",
+      "onceOnly": "Copy this now. It cannot be shown again — only its hash is stored.",
+      "failed": "The key could not be rotated.",
+      "copyFailed": "Copying failed — select the key and copy it manually."
+    }
+  },
+  "mention": {
+    "tagged": "AI agent: {agent}",
+    "thinking": "{agent} is reading the discussion…",
+    "agentLabel": "{agent} (AI)",
+    "viaActor": "tagged by {actor}",
+    "hint": "Type @ to mention someone, link a page, or tag an AI agent"
   }
 }

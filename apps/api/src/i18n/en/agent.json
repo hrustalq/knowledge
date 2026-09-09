@@ -19,6 +19,8 @@
   "transcriberDesc": "Transcribes a scanned page image to markdown. Never summarises.",
   "curator": "Curator",
   "curatorDesc": "Scans the workspace for stale, orphaned and duplicated pages.",
+  "architect": "Architect",
+  "architectDesc": "Turns a description of a chain into a workflow definition to review.",
   "route": {
     "explicit": "Explicitly requested.",
     "disabled": "disabled",

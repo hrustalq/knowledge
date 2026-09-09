@@ -912,3 +912,161 @@
     transition-duration: 120ms;
   }
 }
+
+/*
+ * The activity ledger (profile) — a year of one person's work as ink on paper.
+ *
+ * One hue at five densities, because the accent already means structure and the
+ * lifecycle colours already mean indexing. Step 0 is not a pale fill but bare
+ * page inside a hairline: an empty day should read as paper nobody wrote on,
+ * which is a different statement from "a very small amount of work".
+ *
+ * Density is set as a step index rather than a colour so the ramp is defined
+ * once here and the component only ever counts.
+ */
+.kn-ledger-cell {
+  --kn-ink: color-mix(in oklch, var(--primary) calc(var(--kn-step, 0) * 25%), transparent);
+  border-radius: 2px;
+  background-color: var(--kn-ink);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition:
+    box-shadow 120ms ease-out,
+    background-color 120ms ease-out;
+}
+/* An inked cell does not need the hairline; only bare paper is outlined. */
+.kn-ledger-cell:not(.kn-ledger-cell--empty) {
+  box-shadow: none;
+}
+.kn-ledger-cell:not(:disabled):hover {
+  box-shadow: inset 0 0 0 1px var(--foreground);
+}
+.kn-ledger-cell:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px var(--background),
+    0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+/* Selected: a ring in the accent, held until the day is released. */
+.kn-ledger-cell--on {
+  box-shadow:
+    inset 0 0 0 1px var(--background),
+    0 0 0 2px var(--primary);
+}
+.kn-ledger-cell--on:not(:disabled):hover {
+  box-shadow:
+    inset 0 0 0 1px var(--background),
+    0 0 0 2px var(--primary);
+}
+/* Days outside the window: the tail of the last week. Present for the grid's
+   shape, absent to every other sense. */
+.kn-ledger-cell--filler {
+  visibility: hidden;
+}
+
+/*
+ * The one authored moment on this surface: the year inks in, left to right,
+ * as though the page were being written. It runs on mount and on a change of
+ * window — a new year is a new sheet — and never at rest, because the only
+ * motion this system allows at rest is the amber indexing pulse and a second
+ * moving thing would dilute it.
+ */
+.kn-ledger-cell:not(.kn-ledger-cell--static) {
+  animation: kn-ledger-ink 260ms cubic-bezier(0.32, 0.72, 0, 1) backwards;
+  animation-delay: calc(var(--kn-week, 0) * 6ms);
+}
+@keyframes kn-ledger-ink {
+  from {
+    background-color: transparent;
+    opacity: 0.4;
+  }
+}
+
+/* Horizontal scroller: themed, because an unstyled scrollbar is a browser
+   default that belongs to no design system. */
+.kn-ledger-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.kn-ledger-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.kn-ledger-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background-color: var(--border);
+}
+.kn-ledger-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The swap stays perceptible — the cells still arrive, they just arrive
+     together instead of sweeping. */
+  .kn-ledger-cell:not(.kn-ledger-cell--static) {
+    animation: kn-ledger-fade 120ms linear backwards;
+    animation-delay: 0ms;
+  }
+  @keyframes kn-ledger-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
+/*
+ * The composition strip: what the year was made of. A real breakdown that is
+ * also a control, not a progress bar standing in for content — every segment
+ * filters the list beneath it.
+ */
+.kn-strip-seg {
+  position: relative;
+  height: 8px;
+  border-radius: 2px;
+  background-color: var(--kn-seg);
+  transition:
+    opacity 120ms ease-out,
+    transform 160ms cubic-bezier(0.32, 0.72, 0, 1);
+  transform-origin: center bottom;
+}
+.kn-strip-seg:hover,
+.kn-strip-seg:focus-visible {
+  transform: scaleY(1.5);
+}
+.kn-strip-seg:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+/* When one kind is picked, the others recede rather than vanish: the shape of
+   the whole year stays legible while one part of it is being read. */
+[data-kn-strip-filtered='true'] .kn-strip-seg:not(.kn-strip-seg--on) {
+  opacity: 0.28;
+}
+
+/*
+ * Year picker on the profile ledger. Four options that fit on one line, so
+ * they are shown rather than folded into a menu — a <select> here would hide
+ * the whole range behind a click to save no space at all.
+ */
+.kn-year {
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+.kn-year:hover {
+  background-color: var(--accent);
+  color: var(--foreground);
+}
+.kn-year:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+.kn-year--on,
+.kn-year--on:hover {
+  background-color: color-mix(in oklch, var(--primary) 10%, transparent);
+  color: var(--primary);
+  font-weight: 500;
+}

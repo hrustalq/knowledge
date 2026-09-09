@@ -109,6 +109,7 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
     'data-kn-toc',
     'data-kn-mention',
     'data-kn-user',
+    'data-kn-agent',
     'data-type',
     'data-checked',
     'data-align',

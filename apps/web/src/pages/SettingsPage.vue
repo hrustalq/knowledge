@@ -12,6 +12,7 @@ import {
   Plug,
   ShieldCheck,
   Sparkles,
+  UserRound,
   Users,
   Workflow,
 } from 'lucide-vue-next'
@@ -24,6 +25,9 @@ const route = useRoute()
 
 interface SettingsLink { to: string; label: string; icon: Component; hint: string }
 const links = computed<SettingsLink[]>(() => [
+  // First, and open to every role: the only section that acts on you rather
+  // than on the workspace.
+  { to: '/settings/profile', label: t('nav.profile'), icon: UserRound, hint: t('settings.profileHint') },
   { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
   { to: '/settings/glossary', label: t('nav.glossary'), icon: BookMarked, hint: t('settings.glossaryHint') },
   ...(auth.isAdmin || auth.isDev

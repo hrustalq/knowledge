@@ -258,6 +258,16 @@ model MergeRequestComment {
   // Null until the author rewrites the comment — an edit is surfaced as one
   // rather than quietly replacing what someone read.
   updatedAt DateTime? @map("updated_at") @db.Timestamptz
+  // Which agent wrote this, or null when a person did. MergeRequestThread.source
+  // answers the same question for a *thread*, but only about its opening
+  // comment — an agent answering an @mention posts into a human's thread, and a
+  // reader must still be told a machine is speaking. `authorId` stays the person
+  // who mentioned it: they are who authorized the call, and who it is billed to.
+  agentKey  String?   @map("agent_key")
+  // A model turn outlives the request that triggers it, so the comment is
+  // written first and filled in after. While set, the body is not yet an answer.
+  // The row doubles as the claim that stops one mention firing twice.
+  pending   Boolean   @default(false)
 
   thread  MergeRequestThread    @relation(fields: [threadId], references: [id])
   replyTo MergeRequestComment?  @relation("MergeRequestCommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
@@ -309,6 +319,9 @@ model DocumentComment {
   // Null until the author rewrites the comment — an edit is surfaced as one
   // rather than quietly replacing what someone read.
   updatedAt DateTime? @map("updated_at") @db.Timestamptz
+  // See MergeRequestComment.agentKey / .pending.
+  agentKey  String?   @map("agent_key")
+  pending   Boolean   @default(false)
 
   thread  DocumentThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
   replyTo DocumentComment?  @relation("DocumentCommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
@@ -344,6 +357,15 @@ model Project {
   workspaceId String   @map("workspace_id") @db.Uuid
   name        String
   description String?
+  // A project's face, in one of three states. An uploaded picture (avatarKey),
+  // a chosen emoji, or neither — in which case the monogram tile from
+  // apps/web/src/lib/monogram.ts is drawn from the name and id. Never both:
+  // the DTO clears one when the other is set. `avatarColor` backs the emoji
+  // (and only the emoji); an image brings its own colours.
+  avatarKey       String?   @map("avatar_key")
+  avatarEmoji     String?   @map("avatar_emoji")
+  avatarColor     String?   @map("avatar_color")
+  avatarUpdatedAt DateTime? @map("avatar_updated_at") @db.Timestamptz
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]
@@ -369,6 +391,13 @@ model User {
   // UI + API language (docs/features/18). Mirrored into the kn_lang cookie so
   // the SSR pass renders in it; the cookie alone would not follow a browser change.
   locale       String    @default("en")
+  // S3 key of an uploaded picture, null while the face is drawn from initials
+  // (apps/web/src/lib/avatar.ts). The bytes never pass through the API: the
+  // browser PUTs them to a presigned URL, exactly as page attachments do.
+  avatarKey       String?   @map("avatar_key")
+  // Cache-buster for the avatar URL. The key can be reused on replace, so
+  // without this every reader keeps the picture they already fetched.
+  avatarUpdatedAt DateTime? @map("avatar_updated_at") @db.Timestamptz
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   memberships    WorkspaceMember[]
@@ -452,6 +481,12 @@ model ActivityLog {
   actor       String
   action      String
   documentId  String?  @map("document_id") @db.Uuid
+  // Denormalized from the document, so a project feed is one indexed read
+  // rather than a join through every page the project owns. Null for rows that
+  // belong to no project (workspace-level actions), and for history older than
+  // the column that the backfill could not attribute. No FK, mirroring
+  // documents.workspace_id: activity outlives the thing it describes.
+  projectId   String?  @map("project_id") @db.Uuid
   // Revision / merge-request / branch id the action touched, when applicable.
   subjectId   String?  @map("subject_id") @db.Uuid
   metadata    Json     @default("{}")
@@ -459,6 +494,7 @@ model ActivityLog {
 
   @@index([workspaceId, createdAt])
   @@index([documentId, createdAt])
+  @@index([projectId, createdAt])
   @@map("activity_log")
 }
 

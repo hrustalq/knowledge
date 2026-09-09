@@ -46,8 +46,33 @@ export function createRouter() {
         meta: { fill: true },
       },
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
+
+      // A person, inside this workspace. `/u` with no id is your own — the
+      // avatar menu's target, and a link that stays right after a rename.
+      { path: '/u', component: () => import('@/pages/ProfilePage.vue') },
+      { path: '/u/:userId', component: () => import('@/pages/ProfilePage.vue') },
       { path: '/merge-requests', component: () => import('@/pages/MergeRequestsPage.vue') },
       { path: '/merge-requests/:id', component: () => import('@/pages/MergeRequestDetailPage.vue') },
+      // Creating and editing a workflow (docs/features/17).
+      //
+      // Declared at the top level while keeping the `/settings/workflows/…`
+      // path: the URL still reads as workspace administration, but rendering
+      // inside the settings shell would put a second navigation rail beside the
+      // builder's step palette and box the canvas into a column again — which
+      // is exactly what this rebuild was for. `meta.fill` gives each the
+      // viewport; `meta.bare` drops the app trail, because both carry a header
+      // that already says where you are and offers the way back.
+      {
+        path: '/settings/workflows/new',
+        component: () => import('@/pages/WorkflowWizardPage.vue'),
+        meta: { fill: true, bare: true },
+      },
+      {
+        path: '/settings/workflows/:id/edit',
+        component: () => import('@/pages/WorkflowBuilderPage.vue'),
+        meta: { fill: true, bare: true },
+      },
+
       // Workflows (docs/features/17): the run list, and one run's node tree.
       { path: '/workflows', component: () => import('@/pages/WorkflowsPage.vue') },
       { path: '/workflows/:id', component: () => import('@/pages/WorkflowRunPage.vue') },
@@ -59,6 +84,9 @@ export function createRouter() {
         component: () => import('@/pages/SettingsPage.vue'),
         children: [
           { path: '', redirect: '/settings/projects' },
+          // Your own account: name, language, password, API key. Open to every
+          // role — it takes no user id, so there is nobody else to act on.
+          { path: 'profile', component: () => import('@/pages/ProfileSettingsPage.vue') },
           {
             path: 'projects',
             component: () => import('@/pages/ProjectsPage.vue'),

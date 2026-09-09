@@ -1,30 +1,18 @@
 <script setup lang="ts">
 // Top bar: nav toggle, global search ("/" or Cmd/Ctrl+K), theme toggle, user.
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
-import { LogOut, Moon, PanelLeft, Search, Sun } from 'lucide-vue-next'
-import { useAuthStore } from '@/stores/auth'
+import { Moon, PanelLeft, Search, Sun } from 'lucide-vue-next'
 import { useSearchUiStore } from '@/stores/search-ui'
 import { toggleTheme } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 import LocaleSwitcher from './LocaleSwitcher.vue'
+import UserMenu from './UserMenu.vue'
 
 defineEmits<{ 'toggle-sidebar': [] }>()
 
 const { t } = useI18n()
-const auth = useAuthStore()
-const router = useRouter()
 const searchUi = useSearchUiStore()
-
-const initials = computed(() =>
-  (auth.me?.displayName ?? '?')
-    .split(/\s+/)
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase(),
-)
 
 function onKeydown(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null
@@ -51,10 +39,6 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
-async function logout() {
-  await auth.logout()
-  await router.push('/login')
-}
 </script>
 
 <template>
@@ -86,18 +70,7 @@ async function logout() {
         <Sun class="hidden size-4 dark:block" />
         <Moon class="size-4 dark:hidden" />
       </Button>
-      <div v-if="auth.me" class="hidden items-center gap-2 pl-1 sm:flex" :title="auth.me.email">
-        <span class="grid size-7 place-items-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-          {{ initials }}
-        </span>
-        <div class="leading-tight">
-          <p class="text-xs font-medium">{{ auth.me.displayName }}</p>
-          <p class="text-[10px] text-muted-foreground">{{ auth.role ? t(`role.${auth.role}`) : t('nav.noRole') }}</p>
-        </div>
-      </div>
-      <Button v-if="!auth.isDev" variant="ghost" size="icon-sm" :aria-label="t('nav.logOut')" :title="t('nav.logOut')" @click="logout">
-        <LogOut class="size-4" />
-      </Button>
+      <UserMenu />
     </div>
   </header>
 </template>

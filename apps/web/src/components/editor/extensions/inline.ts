@@ -11,6 +11,7 @@ import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import { KN, isStatusColor, type StatusColor } from '@/lib/markdown/nodes'
 import MentionNode from '../nodes/MentionNode.vue'
 import UserMentionNode from '../nodes/UserMentionNode.vue'
+import AgentMentionNode from '../nodes/AgentMentionNode.vue'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -20,6 +21,7 @@ declare module '@tiptap/core' {
       unsetStatus: () => ReturnType
       insertDocMention: (attrs: { documentId: string; label: string }) => ReturnType
       insertUserMention: (attrs: { userId: string; label: string }) => ReturnType
+      insertAgentMention: (attrs: { agentKey: string; label: string }) => ReturnType
     }
   }
 }
@@ -185,6 +187,67 @@ export const UserMention = Node.create({
   addCommands() {
     return {
       insertUserMention:
+        (attrs) =>
+        ({ commands }) =>
+          commands.insertContent([
+            { type: this.name, attrs },
+            { type: 'text', text: ' ' },
+          ]),
+    }
+  },
+})
+
+/**
+ * An agent, mentioned.
+ *
+ * A second node rather than a flag on `UserMention`, for two reasons that both
+ * matter. The value is an agent key, not a UUID — `merge_request_comments`
+ * stores `author_id` as a uuid and an agent has no users row, so the two can
+ * never share an attribute. And the API *acts* on this one: finding this
+ * attribute in a comment body is what brings the agent into the discussion, so
+ * a mistyped person chip must not be able to spend a model call.
+ */
+export const AgentMention = Node.create({
+  name: 'knAgentMention',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      agentKey: {
+        default: '',
+        parseHTML: (element) => element.getAttribute(KN.agent) ?? '',
+        renderHTML: () => ({}),
+      },
+      label: {
+        default: '',
+        parseHTML: (element) => (element.textContent ?? '').replace(/^@/, ''),
+        renderHTML: () => ({}),
+      },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: `span[${KN.agent}]` }]
+  },
+
+  renderHTML({ node }) {
+    return ['span', { [KN.agent]: node.attrs.agentKey as string }, `@${node.attrs.label as string}`]
+  },
+
+  renderText({ node }) {
+    return `@${node.attrs.label as string}`
+  },
+
+  addNodeView() {
+    return VueNodeViewRenderer(AgentMentionNode)
+  },
+
+  addCommands() {
+    return {
+      insertAgentMention:
         (attrs) =>
         ({ commands }) =>
           commands.insertContent([

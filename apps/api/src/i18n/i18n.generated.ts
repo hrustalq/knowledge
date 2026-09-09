@@ -26,6 +26,8 @@ export type I18nTranslations = {
         "transcriberDesc": string;
         "curator": string;
         "curatorDesc": string;
+        "architect": string;
+        "architectDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -100,6 +102,7 @@ export type I18nTranslations = {
             "roleRequired": string;
             "runOwnerUnavailable": string;
             "trustedOperatorRequired": string;
+            "noApiKeyInDevMode": string;
         };
         "workspace": {
             "notFound": string;
@@ -323,6 +326,11 @@ export type I18nTranslations = {
             "duplicate": string;
         };
         "invalidNumericId": string;
+        "activity": {
+            "actorRequired": string;
+            "rangeInverted": string;
+            "rangeTooWide": string;
+        };
     };
     "import": {
         "stage": {
@@ -501,6 +509,10 @@ export type I18nTranslations = {
         "transition": {
             "badEvent": string;
             "badNodeEvent": string;
+        };
+        "draft": {
+            "needMore": string;
+            "designed": string;
         };
     };
     "ws": {

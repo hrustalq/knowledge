@@ -9,6 +9,10 @@ import { DocumentWorkflowsController } from './document-workflows.controller.js'
 import { WorkflowsService } from './workflows.service.js';
 import { WorkflowMaterializerService } from './workflow-materializer.service.js';
 import { WorkflowMaterializeSweeper } from './workflow-materialize.sweeper.js';
+import { WorkflowDraftService } from './workflow-draft.service.js';
+import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { AiCoreModule } from '../ai/ai-core.module.js';
+import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 
 /**
  * Dynamic document workflows (docs/features/17). API-only — the controller
@@ -17,11 +21,25 @@ import { WorkflowMaterializeSweeper } from './workflow-materialize.sweeper.js';
  *
  * DocumentsModule is imported for the one thing the worker cannot do: writing
  * an approved draft into the page tree.
+ *
+ * The three AI imports serve the architect alone (`POST /v1/workflows/draft`).
+ * They are the Core halves deliberately — the wizard needs to resolve an agent,
+ * call a provider and bill the call, and nothing more; importing AssistantModule
+ * for its client would pull DocumentsModule back in through a second door.
  */
 @Module({
-  imports: [PrismaModule, ActivityModule, DocumentsModule, ProjectsModule, WorkflowCoreModule],
+  imports: [
+    PrismaModule,
+    ActivityModule,
+    DocumentsModule,
+    ProjectsModule,
+    WorkflowCoreModule,
+    AgentCoreModule,
+    AiCoreModule,
+    AssistantClientModule,
+  ],
   controllers: [WorkflowsController, DocumentWorkflowsController],
-  providers: [WorkflowsService, WorkflowMaterializerService, WorkflowMaterializeSweeper],
+  providers: [WorkflowsService, WorkflowMaterializerService, WorkflowMaterializeSweeper, WorkflowDraftService],
   exports: [WorkflowsService, WorkflowMaterializerService],
 })
 export class WorkflowsModule {}

@@ -30,11 +30,18 @@ export function avatarColorDeep(userId: string): string {
   return `hsl(${avatarHue(userId)} 60% 30%)`
 }
 
-/** Up to two letters. Falls back to the id when there is no name to read. */
+/**
+ * Up to two letters. Falls back to the id when there is no name to read.
+ *
+ * Only word characters count as initials. Splitting on whitespace alone made
+ * "Dev (AUTH_MODE=none)" render as `D(` — a bracket is not an initial, and the
+ * larger avatar on the profile page put that two characters wide across the
+ * page header. `\p{L}\p{N}` rather than `\w` because the product ships
+ * Russian: `\w` is ASCII-only, and every Cyrillic name would fall through it.
+ */
 export function avatarInitials(label: string): string {
-  const name = label.trim()
-  if (!name || name === 'dev') return 'D'
-  const parts = name.split(/\s+/)
-  const pair = (parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')
-  return pair.toUpperCase() || name.slice(0, 2).toUpperCase()
+  const words = label.trim().match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []
+  if (words.length === 0 || label.trim() === 'dev') return 'D'
+  const pair = (words[0]?.[0] ?? '') + (words.length > 1 ? (words[1]?.[0] ?? '') : '')
+  return pair.toUpperCase()
 }

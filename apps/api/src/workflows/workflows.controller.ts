@@ -11,6 +11,7 @@ import {
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type {
+  DraftWorkflowResponse,
   ListWorkflowRunsResponse,
   ListWorkflowsResponse,
   ValidateWorkflowResponse,
@@ -24,8 +25,10 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { WorkflowsService } from './workflows.service.js';
 import { WorkflowMaterializerService } from './workflow-materializer.service.js';
+import { WorkflowDraftService } from './workflow-draft.service.js';
 import {
   CreateWorkflowDto,
+  DraftWorkflowDto,
   ListWorkflowRunsQueryDto,
   ListWorkflowsQueryDto,
   StartWorkflowRunDto,
@@ -54,7 +57,24 @@ export class WorkflowsController {
   constructor(
     private readonly workflows: WorkflowsService,
     private readonly materializer: WorkflowMaterializerService,
+    private readonly architect: WorkflowDraftService,
   ) {}
+
+  // ----------------------------------------------------------------- design
+  // Also before `:id`, for the reason the runs block gives.
+
+  @Post('draft')
+  @Access('admin', 'body')
+  @ApiOperation({
+    summary: 'Design a workflow by describing it — returns a proposal, never a saved row',
+    description:
+      'One turn of the architect conversation (docs/features/17). The proposal is compiled before it is ' +
+      'returned, so the caller never holds a graph POST /v1/workflows would reject. Nothing is persisted: ' +
+      'saving is the ordinary create. `admin`, because it drafts what only an admin may save.',
+  })
+  draft(@Body() dto: DraftWorkflowDto, @CurrentPrincipal() principal: Principal): Promise<DraftWorkflowResponse> {
+    return this.architect.draft(dto, principal);
+  }
 
   // --------------------------------------------------------------- runs
   // Declared before `:id` — Nest matches in declaration order, so the literal

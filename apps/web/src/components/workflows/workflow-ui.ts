@@ -12,7 +12,9 @@ import {
   UserCheck,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
+import { labelFor } from '@/lib/labels'
 import type {
+  WorkflowGraph,
   WorkflowNodeStatus,
   WorkflowRunStatus,
   WorkflowStep,
@@ -158,4 +160,62 @@ export function blankStep(kind: WorkflowStepKind, index: number, title: string):
     autoApprove: false,
     ...(kind === 'ai.generate' || kind === 'ai.draft' ? { prompt: { user: '' } } : {}),
   }
+}
+
+/**
+ * A chain read as sentences.
+ *
+ * The canvas shows the shape; this says what the shape *does*, in the order it
+ * happens. It is the text equivalent of `WorkflowMap` — which is a canvas, and
+ * therefore says nothing at all to a screen reader on its own — and it is also
+ * the only honest way to answer "what will this actually publish" before
+ * anyone presses Run. Both the wizard's last step and the roster read from
+ * here, so the promise made while designing is the promise shown afterwards.
+ *
+ * Ordered by longest-path rank rather than by array position, so the reading
+ * follows the run and not whatever order the steps happen to be stored in.
+ */
+export function describeChain(
+  graph: WorkflowGraph,
+  t: (key: string, named?: Record<string, unknown>) => string,
+): Array<{ id: string; title: string; sentence: string }> {
+  const byId = new Map(graph.steps.map((s) => [s.id, s]))
+  const incoming = new Set<string>()
+  for (const step of graph.steps) {
+    for (const next of step.next) if (byId.has(next) && next !== step.id) incoming.add(next)
+  }
+
+  // Breadth-first from the entry steps: the order a run visits them in.
+  const order: WorkflowStep[] = []
+  const seen = new Set<string>()
+  const queue = graph.steps.filter((s) => !incoming.has(s.id)).map((s) => s.id)
+  for (let head = 0; head < queue.length; head++) {
+    const id = queue[head]!
+    if (seen.has(id)) continue
+    seen.add(id)
+    const step = byId.get(id)
+    if (!step) continue
+    order.push(step)
+    for (const next of step.next) if (byId.has(next) && !seen.has(next)) queue.push(next)
+  }
+  // Anything unreachable is still part of the definition and still worth
+  // reading — silently dropping it is how an orphaned step goes unnoticed.
+  for (const step of graph.steps) if (!seen.has(step.id)) order.push(step)
+
+  return order.map((step) => {
+    const category = step.produces
+      ? labelFor(t as never, 'category', step.produces.category)
+      : t('workflow.node.item')
+    let sentence: string
+    if (step.kind === 'search') sentence = t('workflow.reading.search')
+    else if (step.kind === 'review') sentence = t('workflow.reading.review')
+    else if (step.fanOut) {
+      sentence = t('workflow.reading.fanOut', { category, n: step.maxItems ?? 8 })
+    } else if (step.produces) {
+      sentence = step.autoApprove
+        ? t('workflow.reading.pageAuto', { category })
+        : t('workflow.reading.page', { category })
+    } else sentence = t('workflow.reading.context')
+    return { id: step.id, title: step.title || step.id, sentence }
+  })
 }

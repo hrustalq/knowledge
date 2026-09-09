@@ -2,6 +2,7 @@
 // Applies workspace skills to the next turn. Skills also join a turn on their
 // own when a trigger word matches, so this is the override for "use this one
 // even though I did not say the magic word" — hence the hint in the footer.
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { Sparkles } from 'lucide-vue-next'
@@ -11,6 +12,8 @@ import { getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ResponsivePopover } from '@/components/ui/popover'
+
+const { t } = useI18n()
 
 const selected = defineModel<string[]>({ default: () => [] })
 
@@ -31,7 +34,7 @@ function toggle(id: string, on: boolean) {
        dismissed. On a phone the same list arrives as a bottom sheet. -->
   <ResponsivePopover
     v-if="skills.length > 0"
-    title="Apply skills"
+    :title="t('chat.applySkills')"
     description="Skills with matching trigger words apply on their own."
     panel-class="w-72 p-2"
   >
@@ -42,7 +45,7 @@ function toggle(id: string, on: boolean) {
         type="button"
         class="gap-1.5"
         :class="selected.length > 0 && 'text-primary'"
-        aria-label="Apply skills to this message"
+        :aria-label="t('chat.applySkillsToMessage')"
       >
         <Sparkles class="size-4" />
         <span v-if="selected.length > 0" class="text-xs tabular-nums">{{ selected.length }}</span>
@@ -50,7 +53,7 @@ function toggle(id: string, on: boolean) {
     </template>
 
     <template #default="{ compact }">
-      <p v-if="!compact" class="text-muted-foreground px-1 pb-1.5 text-xs font-medium">Apply skills</p>
+      <p v-if="!compact" class="text-muted-foreground px-1 pb-1.5 text-xs font-medium">{{ t('chat.applySkills') }}</p>
       <label
         v-for="skill in skills"
         :key="skill.id"

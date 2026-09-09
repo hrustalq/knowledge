@@ -1,6 +1,9 @@
 <script setup lang="ts">
 // "On this page" rail (GitBook/Hugo-docs style) with scroll-spy.
+import { useI18n } from 'vue-i18n'
 import { onBeforeUnmount, ref, watch } from 'vue'
+
+const { t } = useI18n()
 
 interface Heading { id: string; text: string; level: number }
 const props = defineProps<{ headings: Heading[] }>()
@@ -38,7 +41,7 @@ function go(id: string) {
 </script>
 
 <template>
-  <nav aria-label="On this page" class="text-sm">
+  <nav :aria-label="t('tree.onThisPage')" class="text-sm">
     <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">On this page</p>
     <ul class="space-y-0.5 border-l">
       <li v-for="h in headings" :key="h.id">

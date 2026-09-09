@@ -1,11 +1,16 @@
 <script setup lang="ts">
 // Feature 08 (docs/features/08): recursive tree row for the Pages index.
+import { useI18n } from 'vue-i18n'
+import { formatDate } from '@/lib/format'
+import { labelFor } from '@/lib/labels'
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ChevronRight, FileText } from 'lucide-vue-next'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { Badge } from '@/components/ui/badge'
 import { statusDot } from '@/lib/api'
+
+const { t } = useI18n()
 
 defineOptions({ name: 'DocumentTreeNode' })
 const props = defineProps<{ node: TreeNode; depth: number }>()
@@ -21,7 +26,7 @@ const open = ref(props.depth < 2)
       <button
         v-if="node.children.length > 0"
         class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted"
-        :aria-label="open ? 'Collapse' : 'Expand'"
+        :aria-label="open ? t('tree.collapse') : t('tree.expand')"
         :aria-expanded="open"
         @click="open = !open"
       >
@@ -41,9 +46,9 @@ const open = ref(props.depth < 2)
       >
         {{ node.title }}
       </RouterLink>
-      <Badge variant="outline" class="hidden shrink-0 text-xs sm:inline-flex">{{ node.category }}</Badge>
+      <Badge variant="outline" class="hidden shrink-0 text-xs sm:inline-flex">{{ labelFor(t, 'category', node.category) }}</Badge>
       <span class="ml-auto shrink-0 text-xs text-muted-foreground">
-        {{ new Date(node.createdAt).toLocaleDateString() }}
+        {{ formatDate(node.createdAt) }}
       </span>
     </div>
     <template v-if="open">

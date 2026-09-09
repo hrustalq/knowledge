@@ -2,6 +2,7 @@
 // Left navigation rail: brand, workspace switcher, primary nav, and the
 // Projects → Pages navigation stack (Confluence-style space sidebar).
 import { computed, ref, type Component } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { GitPullRequestArrow, House, Library, Settings, Sparkles,
   Workflow,
@@ -10,6 +11,8 @@ import type { ScopeCreated } from '@/lib/scopes'
 import ScopeSwitcher from './ScopeSwitcher.vue'
 import SidebarPanes from './SidebarPanes.vue'
 import SwitcherCreateDialog from './SwitcherCreateDialog.vue'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -35,13 +38,13 @@ function onCreated(created: ScopeCreated) {
 
 interface NavLink { to: string; label: string; icon: Component }
 const links = computed<NavLink[]>(() => [
-  { to: '/documents', label: 'Home', icon: House },
+  { to: '/documents', label: t('nav.home'), icon: House },
   // Search is not a destination — it is the topbar trigger's sheet ("/" or ⌘K).
-  { to: '/merge-requests', label: 'Merge requests', icon: GitPullRequestArrow },
-  { to: '/workflows', label: 'Workflows', icon: Workflow },
-  { to: '/assistant', label: 'Assistant', icon: Sparkles },
+  { to: '/merge-requests', label: t('nav.mergeRequests'), icon: GitPullRequestArrow },
+  { to: '/workflows', label: t('nav.workflows'), icon: Workflow },
+  { to: '/assistant', label: t('nav.assistant'), icon: Sparkles },
   // Projects, users, access and activity live under the settings shell.
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/settings', label: t('nav.settings'), icon: Settings },
 ])
 
 function isCurrent(to: string): boolean {
@@ -56,12 +59,12 @@ function isCurrent(to: string): boolean {
         <span class="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-md">
           <Library class="size-4" />
         </span>
-        <span class="font-display text-[15px] font-bold tracking-tight">Knowledge</span>
+        <span class="font-display text-[15px] font-bold tracking-tight">{{ t('nav.brand') }}</span>
       </RouterLink>
       <ScopeSwitcher @create="openCreate" />
     </div>
 
-    <nav class="space-y-px px-2" aria-label="Primary">
+    <nav class="space-y-px px-2" :aria-label="t('nav.primary')">
       <RouterLink
         v-for="l in links"
         :key="l.to"

@@ -15,6 +15,7 @@
  * that would list a thousand titles, and a definition is written in the same
  * editor a page is.
  */
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -57,6 +58,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import RichEditor from '@/components/editor/RichEditor.vue'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 
+const { t } = useI18n()
+
 const route = useRoute()
 const auth = useAuthStore()
 const documents = useDocumentsStore()
@@ -81,7 +84,7 @@ const scopedProjectId = computed(
 const filterFields = computed<FilterField[]>(() => [
   {
     key: PROJECT_KEY,
-    label: 'Project',
+    label: t('filter.project'),
     icon: FolderKanban,
     pinned: true,
     multiple: false,
@@ -90,25 +93,25 @@ const filterFields = computed<FilterField[]>(() => [
   },
   {
     key: 'source',
-    label: 'Source',
+    label: t('filter.source'),
     icon: Sparkles,
     options: [
-      { value: 'manual', label: 'Written by hand' },
-      { value: 'ai', label: 'Accepted from AI' },
+      { value: 'manual', label: t('filter.writtenByHand') },
+      { value: 'ai', label: t('filter.acceptedFromAi') },
     ],
   },
   {
     key: 'enabled',
-    label: 'Linked in pages',
+    label: t('filter.linkedInPages'),
     icon: BookMarked,
     options: [
-      { value: 'true', label: 'Yes' },
-      { value: 'false', label: 'No' },
+      { value: 'true', label: t('common.yes') },
+      { value: 'false', label: t('common.no') },
     ],
   },
   {
     key: 'text',
-    label: 'Term or definition',
+    label: t('filter.termOrDefinition'),
     icon: Type,
     group: 'Text',
     type: 'text',
@@ -313,13 +316,12 @@ watch(highlighted, (id) => {
   <div class="space-y-4">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 class="font-display text-2xl font-bold tracking-tight">Glossary</h1>
+        <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('glossary.title') }}</h1>
         <p class="text-muted-foreground max-w-2xl text-sm">
-          The words this project uses precisely. Every page links them automatically as it renders — nothing is
-          written into the documents themselves, so editing a definition here updates it everywhere.
+          {{ t('glossary.subtitle') }}
         </p>
       </div>
-      <Button v-if="canEdit" size="sm" @click="openNew()"><Plus class="size-3.5" /> New term</Button>
+      <Button v-if="canEdit" size="sm" @click="openNew()"><Plus class="size-3.5" /> {{ t('glossary.newTerm') }}</Button>
     </div>
 
     <!-- AI extraction -->
@@ -329,12 +331,12 @@ watch(highlighted, (id) => {
         <div class="min-w-56 flex-1">
           <Autocomplete
             v-model="sourceDocument"
-            label="Build the glossary from a page"
-            placeholder="Find a page…"
+            :label="t('glossary.buildFromPage')"
+            :placeholder="t('glossary.findPage')"
             :multiple="false"
             :options="pageOptions"
             :fallback-label="pageLabel"
-            empty-hint="No pages in this project yet."
+            :empty-hint="t('glossary.noPagesInProject')"
           />
         </div>
         <Button
@@ -344,7 +346,7 @@ watch(highlighted, (id) => {
           @click="runSuggest"
         >
           <Wand2 class="size-3.5" />
-          {{ suggest.isPending.value ? 'Reading…' : 'Suggest terms' }}
+          {{ suggest.isPending.value ? t('glossary.reading') : t('glossary.suggestTerms') }}
         </Button>
       </div>
 
@@ -358,7 +360,7 @@ watch(highlighted, (id) => {
             <p class="flex flex-wrap items-center gap-2 text-sm font-medium">
               {{ s.term }}
               <Badge variant="secondary" class="font-normal">{{ s.occurrences }}× on the page</Badge>
-              <Badge v-if="s.existingTermId" variant="outline">already defined</Badge>
+              <Badge v-if="s.existingTermId" variant="outline">{{ t('glossary.alreadyDefined') }}</Badge>
             </p>
             <p class="text-muted-foreground text-sm">{{ s.definition }}</p>
             <p v-if="s.aliases.length" class="text-muted-foreground mt-1 text-xs">
@@ -367,14 +369,14 @@ watch(highlighted, (id) => {
           </div>
           <div class="flex shrink-0 gap-1">
             <Button size="xs" :disabled="busy || !!s.existingTermId" @click="accept(s)">Add</Button>
-            <Button size="xs" variant="ghost" @click="openNew(s)">Edit…</Button>
-            <Button size="xs" variant="ghost" @click="dismiss(s)">Skip</Button>
+            <Button size="xs" variant="ghost" @click="openNew(s)">{{ t('glossary.editEllipsis') }}</Button>
+            <Button size="xs" variant="ghost" @click="dismiss(s)">{{ t('glossary.skip') }}</Button>
           </div>
         </li>
       </ul>
     </section>
 
-    <FilterBar v-model="filters" :fields="filterFields" empty-label="Filter terms" />
+    <FilterBar v-model="filters" :fields="filterFields" :empty-label="t('glossary.filterTerms')" />
 
     <div v-if="query.isPending.value" class="space-y-2">
       <Skeleton v-for="i in 4" :key="i" class="h-10 w-full" />
@@ -382,17 +384,17 @@ watch(highlighted, (id) => {
 
     <div v-else-if="visibleTerms.length === 0" class="text-muted-foreground py-12 text-center text-sm">
       <BookMarked class="mx-auto mb-2 size-6 opacity-50" />
-      <p v-if="terms.length">No term matches these filters.</p>
+      <p v-if="terms.length">{{ t('glossary.noTermMatches') }}</p>
       <p v-else>No terms yet. Add one, or let the assistant read a page and propose some.</p>
     </div>
 
     <Table v-else>
       <TableHeader>
         <TableRow>
-          <TableHead>Term</TableHead>
-          <TableHead>Definition</TableHead>
-          <TableHead class="w-40">Defined in</TableHead>
-          <TableHead class="w-24">Linked</TableHead>
+          <TableHead>{{ t('glossary.term') }}</TableHead>
+          <TableHead>{{ t('glossary.definition') }}</TableHead>
+          <TableHead class="w-40">{{ t('glossary.definedIn') }}</TableHead>
+          <TableHead class="w-24">{{ t('glossary.linked') }}</TableHead>
           <TableHead class="w-12"></TableHead>
         </TableRow>
       </TableHeader>
@@ -450,7 +452,7 @@ watch(highlighted, (id) => {
     <Dialog v-model:open="open">
       <DialogContent class="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{{ editing ? 'Edit term' : 'New term' }}</DialogTitle>
+          <DialogTitle>{{ editing ? t('glossary.editTerm') : t('glossary.newTerm') }}</DialogTitle>
           <DialogDescription>
             The term and its aliases are what pages are matched against; the definition is what readers see when
             they hover one.
@@ -459,15 +461,15 @@ watch(highlighted, (id) => {
 
         <form id="glossary-form" class="space-y-4" @submit.prevent="submit">
           <label class="block space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">Term</span>
-            <Input v-model="form.term" required placeholder="Merge base" />
+            <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.term') }}</span>
+            <Input v-model="form.term" required :placeholder="t('glossary.termPlaceholder')" />
           </label>
           <label class="block space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">Aliases (comma separated)</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.aliases') }}</span>
             <Input v-model="form.aliases" placeholder="merge-base, common ancestor" />
           </label>
           <div class="space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">Definition</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('glossary.definition') }}</span>
             <div
               class="focus-within:border-ring focus-within:ring-ring/25 overflow-hidden rounded-md border bg-card shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:ring-3"
             >
@@ -475,18 +477,18 @@ watch(highlighted, (id) => {
                 ref="definitionEl"
                 v-model="form.definition"
                 compact
-                placeholder="The nearest common ancestor of two revisions in the DAG."
+                :placeholder="t('glossary.definitionPlaceholder')"
               />
             </div>
           </div>
           <Autocomplete
             v-model="formDocument"
-            label="Defined in (optional)"
-            placeholder="Find a page…"
+            :label="t('glossary.definedInOptional')"
+            :placeholder="t('glossary.findPage')"
             :multiple="false"
             :options="pageOptions"
             :fallback-label="pageLabel"
-            empty-hint="No pages to link to yet."
+            :empty-hint="t('hints.noPagesToLink')"
           />
           <label class="flex items-center gap-2">
             <Checkbox :model-value="form.enabled" @update:model-value="form.enabled = $event === true" />

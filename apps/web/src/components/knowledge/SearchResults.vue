@@ -1,11 +1,14 @@
 <script setup lang="ts">
 // Result list for the search sheet. Denser than the /search page's card stack —
 // a sheet earns its keep by showing more at once.
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { SearchX } from 'lucide-vue-next'
 import type { SearchResponse } from '@knowledge/contracts'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+
+const { t } = useI18n()
 
 defineProps<{
   response: SearchResponse | null
@@ -35,7 +38,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
       v-else-if="!response"
       class="flex flex-col items-center gap-1.5 py-16 text-center text-muted-foreground"
     >
-      <p class="text-sm">Search across every page in the workspace.</p>
+      <p class="text-sm">{{ t('search.searchEveryPage') }}</p>
       <p class="max-w-sm text-xs leading-relaxed">
         Narrow by project, category or tag on the left. Hybrid mode also follows relation edges to
         surface pages that never mention your words.
@@ -112,7 +115,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
               <div class="flex items-baseline justify-between gap-3">
                 <span class="truncate text-sm">{{ r.title }}</span>
                 <span class="shrink-0 text-xs tabular-nums text-muted-foreground">
-                  {{ r.distance }} hop{{ r.distance === 1 ? '' : 's' }}
+                  {{ t('count.hops', { n: r.distance }, r.distance) }}
                 </span>
               </div>
               <p class="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">

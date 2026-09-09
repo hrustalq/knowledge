@@ -12,12 +12,15 @@
 // (it used to be an `absolute` box, which the chat page's `overflow-hidden`
 // cropped and a narrow viewport pushed off-screen), and a bottom sheet on a
 // phone, where a 288px panel hung off a toolbar button has nowhere to go.
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { Check, FileText, FolderOpen } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ResponsivePopover } from '@/components/ui/popover'
+
+const { t } = useI18n()
 
 export interface AppliedDocRef {
   documentId: string
@@ -99,7 +102,7 @@ const filteredAll = computed(() => {
 <template>
   <ResponsivePopover
     v-model:open="isOpen"
-    title="Apply documents"
+    :title="t('picker.applyDocuments')"
     description="Ground this message in pages that already exist in the workspace."
     panel-class="w-80 p-2"
   >
@@ -109,8 +112,8 @@ const filteredAll = computed(() => {
         size="icon-sm"
         type="button"
         :class="selected.length > 0 ? 'text-primary' : ''"
-        aria-label="Apply documents"
-        title="Apply documents"
+        :aria-label="t('picker.applyDocuments')"
+        :title="t('picker.applyDocuments')"
       >
         <FolderOpen class="size-4" />
       </Button>
@@ -121,14 +124,14 @@ const filteredAll = computed(() => {
         v-model="query"
         type="text"
         :autofocus="!compact"
-        placeholder="Search pages by title…"
+        :placeholder="t('picker.searchByTitle')"
         class="mb-2 h-8 text-sm"
       />
 
       <!-- On the sheet the surface already scrolls, so a second capped
            scroller here would trap the list in a box inside a box. -->
       <div :class="compact ? '' : 'max-h-64 overflow-y-auto'">
-        <p v-if="!documents.loaded" class="text-muted-foreground px-2 py-1.5 text-xs">Loading pages…</p>
+        <p v-if="!documents.loaded" class="text-muted-foreground px-2 py-1.5 text-xs">{{ t('picker.loadingPages') }}</p>
         <template v-else>
           <p v-if="filteredRecent.length > 0" class="text-muted-foreground px-2 pt-1 pb-0.5 text-[11px] font-medium">
             Recent

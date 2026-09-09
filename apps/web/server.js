@@ -38,6 +38,23 @@ if (!isProduction) {
   app.use(base, sirv('./dist/client', { extensions: [] }))
 }
 
+const SUPPORTED_LOCALES = ['en', 'ru']
+
+/**
+ * Language for one render. The cookie is a decision the user made in this app;
+ * Accept-Language is only the browser's default, so it loses to the cookie.
+ * Matching is on the primary subtag, so `ru-RU` resolves to `ru`.
+ */
+function resolveLocale(cookie, acceptLanguage) {
+  if (SUPPORTED_LOCALES.includes(cookie)) return cookie
+  for (const part of (acceptLanguage ?? '').split(',')) {
+    const tag = part.split(';')[0].trim().toLowerCase()
+    const primary = tag.split('-')[0]
+    if (SUPPORTED_LOCALES.includes(primary)) return primary
+  }
+  return 'en'
+}
+
 /** Minimal cookie read — auth token, active scope and sidebar pane for the SSR pass. */
 function readCookie(header, name) {
   if (!header) return null
@@ -69,14 +86,22 @@ app.use('*all', async (req, res) => {
       render = (await import('./dist/server/entry-server.js')).render
     }
 
+    // Language for this render (docs/features/18): the user's own choice first
+    // (kn_lang mirrors users.locale), then whatever the browser asks for, then
+    // English. Resolved here so the SSR HTML is already in the right language
+    // rather than flashing English and swapping after hydration.
+    const locale = resolveLocale(readCookie(req.headers.cookie, 'kn_lang'), req.headers['accept-language'])
+
     const rendered = await render(url, {
       token: readCookie(req.headers.cookie, 'kn_token'),
       projectId: readCookie(req.headers.cookie, 'kn_proj'),
       pane: readCookie(req.headers.cookie, 'kn_pane'),
       workspaceId: readCookie(req.headers.cookie, 'kn_ws'),
+      locale,
     })
 
     const html = template
+      .replace(`<!--app-lang-->`, locale)
       .replace(`<!--app-css-->`, devStyles)
       .replace(`<!--app-head-->`, rendered.head ?? '')
       .replace(`<!--app-html-->`, rendered.html ?? '')

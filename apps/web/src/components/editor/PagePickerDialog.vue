@@ -7,6 +7,8 @@
  * character in the text and no menu — the toolbar button appeared to do
  * nothing. Typing `@` still opens the inline menu; this is the pointer path.
  */
+import { useI18n } from 'vue-i18n'
+import { labelFor } from '@/lib/labels'
 import { computed, nextTick, ref, watch } from 'vue'
 import { FileText } from 'lucide-vue-next'
 import {
@@ -18,6 +20,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import type { MentionablePage } from './RichEditor.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{ open: boolean; pages: MentionablePage[] }>()
 const emit = defineEmits<{ 'update:open': [boolean]; pick: [MentionablePage] }>()
@@ -101,7 +105,7 @@ function onKeydown(event: KeyboardEvent) {
             <FileText class="size-4 shrink-0 opacity-60" />
             <span class="truncate">{{ page.title }}</span>
             <span v-if="page.category" class="ml-auto shrink-0 text-xs text-muted-foreground">
-              {{ page.category }}
+              {{ labelFor(t, 'category', page.category) }}
             </span>
           </button>
         </li>

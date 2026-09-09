@@ -8,11 +8,11 @@
  * ProseMirror expects, as inline decorations over document positions, which
  * also means they survive an edit without being re-injected.
  *
- * Positions come from a projection of the document's text that matches the DOM
- * projection in `text-anchor.ts` character for character — whitespace
- * collapsed, one synthetic space at every block boundary — so a quote captured
- * from a browser selection resolves against the document, and an anchor written
- * by review mode resolves here.
+ * Positions come from a projection of the document's text — whitespace
+ * collapsed, one synthetic space at every block boundary — matched against the
+ * quote by the shared algorithm in `lib/anchor-match.ts`, so a quote captured
+ * from a browser selection resolves against the document. (Feature 13's DOM
+ * projection in `text-anchor.ts` is gone; this is the only projection left.)
  */
 import { Decoration, Extension } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
@@ -190,8 +190,21 @@ export function anchorFromDomSelection(doc: PMNode, revisionId: string): TextAnc
   return anchorFromQuote(doc, revisionId, selection.toString())
 }
 
-export const CommentAnchors = Extension.create<Record<string, never>, CommentAnchorsStorage>({
+export interface CommentAnchorsOptions {
+  /**
+   * Translator for the accessibility labels. Injected by the component: the
+   * i18n instance is created per app (SSR isolation), so a module here must not
+   * reach for a global one (docs/features/18).
+   */
+  t: (key: string, named?: Record<string, unknown>, plural?: number) => string
+}
+
+export const CommentAnchors = Extension.create<CommentAnchorsOptions, CommentAnchorsStorage>({
   name: 'commentAnchors',
+
+  addOptions() {
+    return { t: (key: string) => key }
+  },
 
   addStorage() {
     return { anchors: [], outdated: [] }
@@ -209,6 +222,8 @@ export const CommentAnchors = Extension.create<Record<string, never>, CommentAnc
   },
 
   addDecorations() {
+    // Captured here: `create` is an arrow function, so it cannot reach `this`.
+    const { options } = this
     return {
       // The anchor set changes when someone comments, not when the document
       // changes, so redraws are driven by the command rather than by every
@@ -234,7 +249,7 @@ export const CommentAnchors = Extension.create<Record<string, never>, CommentAnc
             outdated.push(entry.id)
             continue
           }
-          const label = `${entry.count} comment${entry.count === 1 ? '' : 's'} on this passage`
+          const label = options.t('review.commentsOnPassage', { n: entry.count }, entry.count)
           decorations.push(
             Decoration.Inline(range.from, range.to, {
               class: entry.resolved ? 'kn-anchor kn-anchor-resolved' : 'kn-anchor',
@@ -272,10 +287,14 @@ export const CommentAnchors = Extension.create<Record<string, never>, CommentAnc
 
         for (const group of groups.values()) {
           const threads = group.ids.length
+          const comments = options.t('review.commentsOnPassage', { n: group.count }, group.count)
           const label =
-            `${group.count} comment${group.count === 1 ? '' : 's'}` +
-            (threads > 1 ? ` in ${threads} discussions` : '') +
-            ' on this passage'
+            threads > 1
+              ? options.t('review.commentsInDiscussions', {
+                  comments: options.t('count.comments', { n: group.count }, group.count),
+                  discussions: options.t('review.discussions', { n: threads }, threads),
+                })
+              : comments
           // The count is a widget, not `::after` on the highlight: ProseMirror
           // splits one inline decoration into a span per text node, so a pin
           // drawn in CSS appears once per fragment — and no selector can tell

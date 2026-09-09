@@ -2,6 +2,7 @@
 // Plugins: external MCP servers whose tools join the assistant's tool harness.
 // Registering one is an admin action with real reach — the server sees every
 // argument the model sends it — so the rows show status and last error plainly.
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -31,6 +32,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import AiEmptyState from './AiEmptyState.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{ canManage: boolean }>()
 
@@ -169,7 +172,7 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
         <template v-if="plugins.length">
           {{ plugins.filter((p) => p.enabled).length }} of {{ plugins.length }} enabled
         </template>
-        <template v-else>External tools for the assistant</template>
+        <template v-else>{{ t('ai.externalTools') }}</template>
       </p>
       <Button v-if="canManage && plugins.length > 0" size="sm" @click="openNew">
         <Plus class="size-3.5" /> Add plugin
@@ -183,7 +186,7 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
     <AiEmptyState
       v-else-if="plugins.length === 0"
       :icon="Plug"
-      title="No plugins connected"
+      :title="t('ai.noPlugins')"
       body="Connect an MCP server and its tools join the assistant's own — so it can reach your issue tracker or CI the same way it searches this workspace. Anything a plugin returns is treated as untrusted data."
       :example="{
         label: 'What you need',
@@ -280,7 +283,7 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
             <Input v-model="form.name" required placeholder="Jira" />
           </label>
           <label class="block space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">Transport</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.transport') }}</span>
             <Select v-model="form.transport">
               <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -295,11 +298,11 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
           </label>
           <div class="grid gap-3 sm:grid-cols-2">
             <label class="block space-y-1">
-              <span class="text-muted-foreground text-xs font-medium">Auth header</span>
+              <span class="text-muted-foreground text-xs font-medium">{{ t('ai.authHeader') }}</span>
               <Input v-model="form.authHeader" placeholder="Authorization" />
             </label>
             <label class="block space-y-1">
-              <span class="text-muted-foreground text-xs font-medium">Auth value</span>
+              <span class="text-muted-foreground text-xs font-medium">{{ t('ai.authValue') }}</span>
               <Input
                 v-model="form.authValue"
                 type="password"

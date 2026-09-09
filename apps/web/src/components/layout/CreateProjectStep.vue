@@ -8,6 +8,7 @@
  * switched into yet: without the name, "Create" would look like it targets the
  * workspace still on screen behind the dialog.
  */
+import { useI18n } from 'vue-i18n'
 import { nextTick, onMounted, ref } from 'vue'
 import { Loader2 } from 'lucide-vue-next'
 import type { ProjectSummary } from '@knowledge/contracts'
@@ -16,6 +17,8 @@ import { createProject } from '@/lib/scopes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DialogFooter } from '@/components/ui/dialog'
+
+const { t } = useI18n()
 
 const props = defineProps<{ workspaceId: string; workspaceName?: string | null }>()
 const emit = defineEmits<{ created: [ProjectSummary]; skip: [] }>()
@@ -39,7 +42,7 @@ async function submit() {
   } catch (e) {
     error.value =
       e instanceof ApiError && e.status === 403
-        ? 'You do not have permission to create a project here.'
+        ? t('nav.noProjectPermission')
         : (e as Error).message
     submitting.value = false
   }
@@ -58,7 +61,7 @@ async function submit() {
       <Input
         id="create-project-step-name"
         v-model="name"
-        placeholder="Platform docs"
+        :placeholder="t('nav.projectNamePlaceholder')"
         :aria-invalid="error !== null || undefined"
         :disabled="submitting"
         autocomplete="off"
@@ -72,7 +75,7 @@ async function submit() {
 
     <DialogFooter class="pt-2">
       <Button type="button" variant="ghost" :disabled="submitting" @click="emit('skip')">
-        Skip for now
+        {{ t('nav.skipForNow') }}
       </Button>
       <Button type="submit" :disabled="submitting || !name.trim()">
         <Loader2 v-if="submitting" class="size-4 animate-spin" />

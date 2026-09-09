@@ -2,6 +2,7 @@
 // The conversation column: header, transcript, composer. It owns the turn —
 // the rail beside it only ever switches which thread is open, and the
 // documents pane only reads what the turn produced.
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { MoreHorizontal, PanelLeft, Pencil, Plus, Trash2 } from 'lucide-vue-next'
@@ -33,6 +34,8 @@ import ChatComposer from './ChatComposer.vue'
 import { assistantMode } from './use-mode'
 import { threadLabel } from './thread-label'
 
+const { t } = useI18n()
+
 const props = defineProps<{ documentId?: string }>()
 // Rename/delete are confirmed by the page, which owns one set of dialogs
 // shared with the rail's row menu.
@@ -48,12 +51,12 @@ const auth = useAuthStore()
 const composerEl = ref<InstanceType<typeof ChatComposer> | null>(null)
 const transcriptEl = ref<InstanceType<typeof ChatTranscript> | null>(null)
 
-const title = computed(() => (assistant.activeThread ? threadLabel(assistant.activeThread) : 'New chat'))
+const title = computed(() => (assistant.activeThread ? threadLabel(assistant.activeThread) : t('chat.newChat')))
 
 const placeholder = computed(() =>
   props.documentId
     ? 'Ask about this page, or ask for a change to it…'
-    : 'Ask about anything in this workspace…',
+    : t('chat.askPlaceholderWorkspace'),
 )
 
 async function handleSend(payload: {
@@ -174,7 +177,7 @@ async function startNewThread() {
         variant="ghost"
         size="icon-sm"
         class="-ml-1 shrink-0 lg:hidden"
-        aria-label="Browse chats"
+        :aria-label="t('chat.browseChats')"
         @click="emit('browse')"
       >
         <PanelLeft class="size-4" />
@@ -183,19 +186,18 @@ async function startNewThread() {
       <div class="min-w-0 flex-1">
         <h1 class="truncate text-sm font-semibold">{{ title }}</h1>
         <p class="truncate text-[11px] text-muted-foreground">
-          Answers cite the pages they came from. Edits open a merge request for review — nothing is changed behind
-          your back.
+          {{ t('chat.headerHint') }}
         </p>
       </div>
 
       <Button variant="ghost" size="sm" class="shrink-0" :disabled="assistant.sending" @click="startNewThread">
         <Plus class="size-3.5" />
-        <span class="hidden sm:inline">New chat</span>
+        <span class="hidden sm:inline">{{ t('chat.newChat') }}</span>
       </Button>
 
       <DropdownMenu v-if="assistant.activeThread">
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="icon-sm" class="shrink-0" aria-label="Chat actions">
+          <Button variant="ghost" size="icon-sm" class="shrink-0" :aria-label="t('chat.chatActions')">
             <MoreHorizontal class="size-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -244,18 +246,18 @@ async function startNewThread() {
         </DialogTitle>
         <DialogDescription>
           <template v-if="resetting?.role === 'user'">
-            {{ resetCount }} message{{ resetCount === 1 ? '' : 's' }} will be removed from this chat, and the
+            {{ t('count.messages', { n: resetCount }, resetCount) }} {{ t('chat.willBeRemovedFrom') }}
             text comes back to the composer. This cannot be undone.
           </template>
           <template v-else>
-            {{ resetCount }} message{{ resetCount === 1 ? '' : 's' }} will be removed and the question above
+            {{ t('count.messages', { n: resetCount }, resetCount) }} {{ t('chat.willBeRemovedAnd') }}
             asked again. This cannot be undone, and the new turn runs in {{ assistantMode }} mode without any
             files the original carried.
           </template>
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>
-        <Button variant="ghost" @click="resetting = null">Cancel</Button>
+        <Button variant="ghost" @click="resetting = null">{{ t('common.cancel') }}</Button>
         <Button variant="destructive" :disabled="rewinding" @click="confirmReset">
           {{ rewinding ? 'Rewinding…' : resetting?.role === 'user' ? 'Reset' : 'Ask again' }}
         </Button>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 // Feature 05 (docs/features/05): revision DAG + inline compare.
+import { useI18n } from 'vue-i18n'
+import { formatDateTime } from '@/lib/format'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type {
@@ -22,6 +24,8 @@ import {
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DiffView from '@/components/knowledge/DiffView.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{ documentId: string }>()
 
@@ -77,18 +81,18 @@ watch(branchFilter, () => void load())
   <div class="space-y-4">
     <div class="flex flex-wrap items-center gap-2">
       <Select v-model="branchModel">
-        <SelectTrigger size="sm" class="text-sm" aria-label="Filter by branch">
+        <SelectTrigger size="sm" class="text-sm" :aria-label="t('revisions.filterByBranch')">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem :value="ALL_BRANCHES">all branches</SelectItem>
+          <SelectItem :value="ALL_BRANCHES">{{ t('revisions.allBranches') }}</SelectItem>
           <SelectItem v-for="b in branches" :key="b.branchId" :value="b.name">{{ b.name }}</SelectItem>
         </SelectContent>
       </Select>
       <Button size="sm" :disabled="!from || !to || from === to || busy" @click="runCompare">
-        {{ busy ? 'Comparing…' : 'Compare selected' }}
+        {{ busy ? t('revisions.comparing') : t('revisions.compareSelected') }}
       </Button>
-      <span class="text-xs text-muted-foreground">pick “from” and “to” below</span>
+      <span class="text-xs text-muted-foreground">{{ t('revisions.pickFromTo') }}</span>
     </div>
 
     <div v-if="!revisions" class="space-y-2">
@@ -99,15 +103,15 @@ watch(branchFilter, () => void load())
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b text-left text-xs text-muted-foreground">
-            <th class="px-2 py-2">from</th>
-            <th class="px-2 py-2">to</th>
+            <th class="px-2 py-2">{{ t('revisions.from') }}</th>
+            <th class="px-2 py-2">{{ t('revisions.to') }}</th>
             <th class="px-3 py-2">#</th>
-            <th class="px-3 py-2">Revision</th>
-            <th class="px-3 py-2">Branch</th>
-            <th class="px-3 py-2">Status</th>
-            <th class="px-3 py-2">Message</th>
-            <th class="px-3 py-2">Parents</th>
-            <th class="px-3 py-2">Created</th>
+            <th class="px-3 py-2">{{ t('revisions.revision') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.branch') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.status') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.message') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.parents') }}</th>
+            <th class="px-3 py-2">{{ t('revisions.created') }}</th>
             <th class="px-3 py-2"></th>
           </tr>
         </thead>
@@ -137,7 +141,7 @@ watch(branchFilter, () => void load())
             <td class="px-3 py-2 font-mono text-xs text-muted-foreground">
               {{ r.parentRevisionIds.map((p) => p.slice(0, 8)).join(', ') || '—' }}
             </td>
-            <td class="px-3 py-2 text-xs text-muted-foreground">{{ new Date(r.createdAt).toLocaleString() }}</td>
+            <td class="px-3 py-2 text-xs text-muted-foreground">{{ formatDateTime(r.createdAt) }}</td>
             <td class="px-3 py-2">
               <RouterLink
                 v-if="r.contentHash"

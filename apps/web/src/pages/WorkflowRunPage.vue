@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -18,6 +19,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import WorkflowNodePanel from '@/components/workflows/WorkflowNodePanel.vue'
 import WorkflowRunTree from '@/components/workflows/WorkflowRunTree.vue'
 import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from '@/components/workflows/workflow-ui'
+
+const { t } = useI18n()
 
 /**
  * One run: the chain on the left, the selected step's draft on the right
@@ -114,7 +117,7 @@ const RUN_ACTION = {
             v-if="data.run.nodeStats.awaitingReview"
             class="mt-1 text-sm font-medium text-amber-600 dark:text-amber-500"
           >
-            {{ data.run.nodeStats.awaitingReview }} card{{ data.run.nodeStats.awaitingReview === 1 ? '' : 's' }}
+            {{ t('count.cards', { n: data.run.nodeStats.awaitingReview }, data.run.nodeStats.awaitingReview) }}
             waiting for you
           </p>
           <p class="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
@@ -123,7 +126,7 @@ const RUN_ACTION = {
               class="size-3.5"
               :class="[RUN_STATUS_CLASS[data.run.status], isBusyStatus(data.run.status) ? 'animate-spin' : '']"
             />
-            {{ RUN_STATUS_LABEL[data.run.status] }}
+            {{ t(RUN_STATUS_LABEL[data.run.status]) }}
             <span>·</span>
             <RouterLink :to="`/documents/${data.run.rootDocumentId}`" class="hover:underline">
               {{ data.run.rootDocumentTitle ?? 'source page' }}

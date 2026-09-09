@@ -5,6 +5,7 @@
 // hundreds of projects still renders a screenful of rows.
 // Editing needs the `editor` role — the API enforces it, this only hides what
 // would 403.
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useInfiniteQuery } from '@tanstack/vue-query'
@@ -19,6 +20,8 @@ import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocompl
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import SwitcherCreateDialog from '@/components/layout/SwitcherCreateDialog.vue'
+
+const { t } = useI18n()
 
 const auth = useAuthStore()
 const store = useProjectsStore()
@@ -97,11 +100,11 @@ async function onCreated(created: ScopeCreated) {
       <div class="border-b p-2">
         <Autocomplete
           v-model="picked"
-          label="Projects"
-          placeholder="Search projects…"
+          :label="t('nav.projects')"
+          :placeholder="t('project.searchProjects')"
           :multiple="false"
           :load="searchProjects"
-          empty-hint="No projects in this workspace yet."
+          :empty-hint="t('hints.noProjects')"
         />
       </div>
 

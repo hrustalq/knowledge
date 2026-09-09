@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { FileText } from 'lucide-vue-next'
 import type { WorkflowRunInfo } from '@knowledge/contracts'
 import { relativeTime } from '@/lib/api'
 import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from './workflow-ui'
+
+const { t } = useI18n()
 
 /** One run in a list (docs/features/17): what it is, where it got to, what it wants. */
 const props = defineProps<{ run: WorkflowRunInfo }>()
@@ -32,7 +35,7 @@ const progress = computed(() => {
         <p class="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
           <FileText class="size-3" />
           <span class="truncate">{{ run.rootDocumentTitle ?? run.rootDocumentId }}</span>
-          <span>· {{ RUN_STATUS_LABEL[run.status] }}</span>
+          <span>· {{ t(RUN_STATUS_LABEL[run.status]) }}</span>
           <span>· {{ relativeTime(run.startedAt ?? run.createdAt) }}</span>
           <span v-if="run.startedBy === 'trigger'" class="bg-muted rounded px-1">auto</span>
         </p>

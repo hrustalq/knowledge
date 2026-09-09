@@ -9,6 +9,7 @@
 //
 // Findings are a dead end unless they can become review feedback, so the dock
 // carries a second action that posts them into the discussion as a thread.
+import { useI18n } from 'vue-i18n'
 import { computed, ref, type Component } from 'vue'
 import {
   AlertCircle,
@@ -28,6 +29,8 @@ import type {
 import { api } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   mergeRequest: MergeRequestInfo
@@ -89,7 +92,7 @@ async function run() {
 /** Findings → a review comment someone can actually reply to. */
 function asMarkdown(): string {
   const lines = [
-    `**AI review** — ${issues.value.length} finding${issues.value.length === 1 ? '' : 's'} on \`${props.mergeRequest.sourceBranch}\``,
+    t('mr.aiReviewHeading', { findings: t('count.findings', { n: issues.value.length }, issues.value.length), branch: props.mergeRequest.sourceBranch }),
     '',
     ...issues.value.map((i: AssistantIssue) =>
       `- **${SEVERITY[i.severity].label}** — ${i.message}${i.section ? ` _(${i.section})_` : ''}`,
@@ -143,7 +146,7 @@ function postFindings() {
             class="text-xs font-medium"
             :class="errorCount > 0 ? 'text-red-600' : 'text-amber-600'"
           >
-            {{ issues.length }} finding{{ issues.length === 1 ? '' : 's' }}<template v-if="errorCount > 0">,
+            {{ t('count.findings', { n: issues.length }, issues.length) }}<template v-if="errorCount > 0">,
             {{ errorCount }} to fix</template>
           </p>
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -11,6 +12,8 @@ import { useWorkflowsStore } from '@/stores/workflows'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { isBusyStatus, RUN_STATUS_CLASS, RUN_STATUS_ICON, RUN_STATUS_LABEL } from './workflow-ui'
+
+const { t } = useI18n()
 
 /**
  * The document page's workflow widget (docs/features/17).
@@ -75,7 +78,7 @@ async function start(definitionId: string) {
             <span class="min-w-0 flex-1">
               <span class="block truncate text-sm">{{ run.definitionName }}</span>
               <span class="text-muted-foreground block text-[11px]">
-                {{ RUN_STATUS_LABEL[run.status] }} · {{ relativeTime(run.startedAt ?? run.createdAt) }}
+                {{ t(RUN_STATUS_LABEL[run.status]) }} · {{ relativeTime(run.startedAt ?? run.createdAt) }}
                 <template v-if="run.nodeStats.awaitingReview">
                   · {{ run.nodeStats.awaitingReview }} to review
                 </template>

@@ -13,6 +13,7 @@
  * 12px above it, while in the list they do real work telling several
  * workspaces apart at a glance.
  */
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref } from 'vue'
 import { ChevronsUpDown } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -20,6 +21,8 @@ import { useWorkspacesStore } from '@/stores/workspaces'
 import { getWorkspaceId } from '@/lib/api'
 import { hueOf, initialsOf } from '@/lib/monogram'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
+
+const { t } = useI18n()
 
 // The dialog itself lives in the sidebar, which is the only place that can
 // serve both the workspace row here and the project roster below it.
@@ -43,7 +46,7 @@ const workspaceOptions = computed<ComboboxOption[]>(() =>
 )
 
 const activeWorkspaceName = computed(
-  () => workspaces.items.find((w) => w.workspaceId === activeWs.value)?.name ?? 'Workspace',
+  () => workspaces.items.find((w) => w.workspaceId === activeWs.value)?.name ?? t('nav.workspace'),
 )
 
 /** Any authenticated principal may create a workspace — they become its admin. */
@@ -55,9 +58,9 @@ const showWorkspaceRow = computed(() => workspaces.items.length > 0)
     <div class="bg-sidebar-accent/60 rounded-lg p-1">
       <Combobox
         :model-value="activeWs"
-        label="Workspaces"
+        :label="t('nav.workspaces')"
         :options="workspaceOptions"
-        :create-label="auth.authenticated ? 'New workspace' : undefined"
+        :create-label="auth.authenticated ? t('nav.newWorkspace') : undefined"
         @update:model-value="workspaces.switchWorkspace($event)"
         @create="emit('create', 'workspace', $event)"
       >

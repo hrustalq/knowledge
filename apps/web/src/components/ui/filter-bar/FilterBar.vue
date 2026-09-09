@@ -8,12 +8,15 @@
  * impossible AND ("role is admin and role is viewer") far more often than as
  * what the user meant.
  */
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref } from 'vue'
 import { ListFilter } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import FilterChip from './FilterChip.vue'
 import FilterPopover from './FilterPopover.vue'
 import { defaultOperators, type ActiveFilter, type FilterField } from './types'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -22,7 +25,10 @@ const props = withDefaults(
     /** Shown next to the funnel while the bar is empty. */
     emptyLabel?: string
   }>(),
-  { emptyLabel: 'Filter' },
+  // Default only; every caller passes a specific empty-label. Left untranslated
+  // here because a prop default is evaluated at module scope, outside any app's
+  // i18n instance — the fallback below resolves it at render (docs/features/18).
+  {},
 )
 
 const emit = defineEmits<{ 'update:modelValue': [ActiveFilter[]] }>()
@@ -114,11 +120,11 @@ function removeAt(index: number) {
         <button
           type="button"
           class="text-muted-foreground hover:bg-accent hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors"
-          :aria-label="emptyLabel"
+          :aria-label="emptyLabel ?? t('common.filter')"
           @click="toggle"
         >
           <ListFilter class="size-3.5" />
-          <span v-if="clearable.length === 0">{{ emptyLabel }}</span>
+          <span v-if="clearable.length === 0">{{ emptyLabel ?? t('common.filter') }}</span>
         </button>
       </template>
     </FilterPopover>

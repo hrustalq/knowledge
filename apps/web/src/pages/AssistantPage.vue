@@ -11,6 +11,7 @@
 //
 // Rename and delete live here, once, for both the rail's row menu and the
 // chat header — the same wording either way.
+import { useI18n } from 'vue-i18n'
 import { onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import type { AssistantThreadSummary } from '@knowledge/contracts'
@@ -30,6 +31,8 @@ import ChatRail from '@/components/assistant/ChatRail.vue'
 import ChatPane from '@/components/assistant/ChatPane.vue'
 import ThreadDocuments from '@/components/assistant/ThreadDocuments.vue'
 import { threadLabel } from '@/components/assistant/thread-label'
+
+const { t } = useI18n()
 
 const assistant = useAssistantStore()
 
@@ -97,7 +100,7 @@ async function confirmDelete() {
   <Sheet v-model:open="railOpen">
     <SheetContent side="left" class="w-72 p-0">
       <SheetHeader class="sr-only">
-        <SheetTitle>Chats</SheetTitle>
+        <SheetTitle>{{ t('chat.chats') }}</SheetTitle>
       </SheetHeader>
       <ChatRail
         class="flex w-full border-r-0"
@@ -111,14 +114,14 @@ async function confirmDelete() {
   <Dialog :open="renaming !== null" @update:open="(open: boolean) => { if (!open) renaming = null }">
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
-        <DialogTitle>Rename chat</DialogTitle>
+        <DialogTitle>{{ t('chat.renameChat') }}</DialogTitle>
         <DialogDescription>
           Changes the label in the chat list. Clear it to go back to the name taken from the first message.
         </DialogDescription>
       </DialogHeader>
-      <Input v-model="renameDraft" placeholder="Chat name" autofocus @keyup.enter="confirmRename" />
+      <Input v-model="renameDraft" :placeholder="t('chat.chatName')" autofocus @keyup.enter="confirmRename" />
       <DialogFooter>
-        <Button variant="ghost" @click="renaming = null">Cancel</Button>
+        <Button variant="ghost" @click="renaming = null">{{ t('common.cancel') }}</Button>
         <Button :disabled="busy" @click="confirmRename">{{ busy ? 'Saving…' : 'Save' }}</Button>
       </DialogFooter>
     </DialogContent>
@@ -127,14 +130,14 @@ async function confirmDelete() {
   <Dialog :open="deleting !== null" @update:open="(open: boolean) => { if (!open) deleting = null }">
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
-        <DialogTitle>Delete this chat?</DialogTitle>
+        <DialogTitle>{{ t('chat.deleteChat') }}</DialogTitle>
         <DialogDescription>
           “{{ deleting ? threadLabel(deleting) : '' }}” and its whole message history will be removed, and this
           cannot be undone. Pages the assistant created and merge requests it opened are not affected.
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>
-        <Button variant="ghost" @click="deleting = null">Cancel</Button>
+        <Button variant="ghost" @click="deleting = null">{{ t('common.cancel') }}</Button>
         <Button variant="destructive" :disabled="busy" @click="confirmDelete">
           {{ busy ? 'Deleting…' : 'Delete chat' }}
         </Button>

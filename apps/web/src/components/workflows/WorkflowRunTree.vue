@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import type { WorkflowGraph, WorkflowRunNodeInfo } from '@knowledge/contracts'
 import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } from './workflow-ui'
+
+const { t } = useI18n()
 
 /**
  * The run's intermediate results (docs/features/17): entity → use cases → API
@@ -85,14 +88,14 @@ const wantsYou = (node: WorkflowRunNodeInfo) => node.status === 'awaiting-review
           >
           <span class="text-muted-foreground block truncate text-[11px]">
             {{ stepTitle(node.stepId) }}
-            <template v-if="!wantsYou(node)"> · {{ NODE_STATUS_LABEL[node.status] }}</template>
+            <template v-if="!wantsYou(node)"> · {{ t(NODE_STATUS_LABEL[node.status]) }}</template>
           </span>
         </span>
         <!-- The one thing worth a color: this card is waiting on you. -->
         <span
           v-if="wantsYou(node)"
           class="mt-1 size-1.5 shrink-0 rounded-full bg-amber-500"
-          title="Waiting for review"
+          :title="t('workflow.waitingForReview')"
         />
       </button>
     </li>

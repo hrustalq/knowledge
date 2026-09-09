@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -6,6 +7,8 @@ import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -17,7 +20,7 @@ const busy = ref(false)
 
 async function submit() {
   if (password.value !== confirm.value) {
-    toast.error('Passwords do not match')
+    toast.error(t('auth.passwordsDoNotMatch'))
     return
   }
   busy.value = true
@@ -26,7 +29,7 @@ async function submit() {
       method: 'POST',
       body: JSON.stringify({ token: token.value, password: password.value }),
     })
-    toast.success('Password updated — log in with your new password')
+    toast.success(t('auth.passwordUpdated'))
     await router.push('/login')
   } catch (e) {
     toast.error((e as Error).message)
@@ -40,8 +43,8 @@ async function submit() {
   <div class="mx-auto mt-16 max-w-sm">
     <Card>
       <CardHeader>
-        <CardTitle>Choose a new password</CardTitle>
-        <CardDescription>Sessions on all devices will be signed out</CardDescription>
+        <CardTitle>{{ t('auth.chooseNewPassword') }}</CardTitle>
+        <CardDescription>{{ t('auth.resetSignsOutEverywhere') }}</CardDescription>
       </CardHeader>
       <CardContent>
         <p v-if="!token" class="text-sm text-muted-foreground">
@@ -50,14 +53,14 @@ async function submit() {
         </p>
         <form v-else class="space-y-3" @submit.prevent="submit">
           <div class="space-y-1">
-            <label class="text-sm font-medium" for="password">New password</label>
+            <label class="text-sm font-medium" for="password">{{ t('auth.newPassword') }}</label>
             <Input id="password" v-model="password" type="password" required minlength="8" autocomplete="new-password" />
           </div>
           <div class="space-y-1">
-            <label class="text-sm font-medium" for="confirm">Confirm password</label>
+            <label class="text-sm font-medium" for="confirm">{{ t('auth.confirmPassword') }}</label>
             <Input id="confirm" v-model="confirm" type="password" required autocomplete="new-password" />
           </div>
-          <Button class="w-full" type="submit" :disabled="busy">{{ busy ? 'Saving…' : 'Set new password' }}</Button>
+          <Button class="w-full" type="submit" :disabled="busy">{{ busy ? t('common.saving') : t('auth.resetSubmit') }}</Button>
         </form>
       </CardContent>
     </Card>

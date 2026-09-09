@@ -7,6 +7,7 @@
 // Widgets are all @vueuse/core (already a dependency): file dialog + drop
 // zone for attachments, SpeechRecognition for dictation, key handlers for
 // shell-style history recall.
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { onKeyStroke, useDropZone, useFileDialog, useSpeechRecognition, useTextareaAutosize } from '@vueuse/core'
 import { CornerDownLeft, FileText, Mic, MicOff, Paperclip, SendHorizontal, Square, Upload, X } from 'lucide-vue-next'
@@ -19,6 +20,8 @@ import DocumentPickerWidget, { type AppliedDocRef } from '@/components/knowledge
 import SkillPicker from './SkillPicker.vue'
 import ModelPicker from './ModelPicker.vue'
 import { assistantMode } from './use-mode'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   sending: boolean
@@ -282,7 +285,7 @@ function send() {
         </div>
 
         <form @submit.prevent="send">
-          <label class="sr-only" for="chat-input">Message the assistant</label>
+          <label class="sr-only" for="chat-input">{{ t('chat.messageAssistant') }}</label>
           <Textarea
             id="chat-input"
             :ref="setInputEl"
@@ -302,7 +305,7 @@ function send() {
                     size="icon-sm"
                     type="button"
                     :disabled="attachments.length >= MAX_ATTACHMENTS"
-                    aria-label="Attach a text file"
+                    :aria-label="t('chat.attachTextFile')"
                     @click="openFileDialog()"
                   >
                     <Paperclip class="size-4" />
@@ -345,7 +348,7 @@ function send() {
               <div
                 class="ml-1 inline-flex rounded-full border bg-muted/60 p-0.5 text-[11px]"
                 role="radiogroup"
-                aria-label="Assistant mode"
+                :aria-label="t('chat.assistantMode')"
               >
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -357,10 +360,10 @@ function send() {
                       :class="mode === 'ask' ? 'bg-background font-medium text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
                       @click="mode = 'ask'"
                     >
-                      Ask
+                      {{ t('chat.modeAsk') }}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>Reads the workspace. Never changes anything.</TooltipContent>
+                  <TooltipContent>{{ t('chat.askModeHint') }}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -373,7 +376,7 @@ function send() {
                       :class="mode === 'agent' ? 'bg-primary font-medium text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
                       @click="mode = 'agent'"
                     >
-                      Agent
+                      {{ t('chat.modeAgent') }}
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -389,7 +392,7 @@ function send() {
 
             <span class="ml-auto hidden items-center gap-1 pr-1 text-[11px] text-muted-foreground sm:inline-flex">
               <CornerDownLeft class="size-3" />
-              to send
+              {{ t('chat.toSend') }}
             </span>
 
             <!-- Send becomes Stop mid-turn: same position, so interrupting is
@@ -399,12 +402,12 @@ function send() {
               type="button"
               size="icon-sm"
               variant="outline"
-              aria-label="Stop generating"
+              :aria-label="t('chat.stopGenerating')"
               @click="emit('stop')"
             >
               <Square class="size-3 fill-current" />
             </Button>
-            <Button v-else type="submit" size="icon-sm" :disabled="!canSend" aria-label="Send message">
+            <Button v-else type="submit" size="icon-sm" :disabled="!canSend" :aria-label="t('chat.sendMessage')">
               <SendHorizontal class="size-4" />
             </Button>
           </div>

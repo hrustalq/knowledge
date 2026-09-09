@@ -11,6 +11,7 @@
  * back button *and* a location), with the chevron leaning left on hover to
  * name the direction, mirroring the roster's right-leaning row chevrons.
  */
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ChevronLeft, FileUp, Plus } from 'lucide-vue-next'
@@ -19,6 +20,8 @@ import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { Skeleton } from '@/components/ui/skeleton'
 import SidebarTreeNode from './SidebarTreeNode.vue'
+
+const { t } = useI18n()
 
 defineEmits<{ back: [] }>()
 
@@ -30,7 +33,7 @@ const route = useRoute()
 // No active project means the API is answering workspace-wide, so the title
 // tells the truth about what is listed rather than naming a project we are
 // not scoped to.
-const title = computed(() => projects.activeName ?? 'All pages')
+const title = computed(() => projects.activeName ?? t('nav.allPages'))
 
 const activeDocId = computed(() =>
   route.path.startsWith('/documents/') ? ((route.params.id as string) ?? null) : null,
@@ -50,8 +53,8 @@ const activeDocId = computed(() =>
       <button
         type="button"
         class="group/back hover:bg-sidebar-accent -ml-3.5 flex h-6 min-w-0 items-center gap-0.5 rounded-md pr-1.5 transition-colors"
-        aria-label="Back to projects"
-        title="Back to projects"
+        :aria-label="t('nav.backToProjects')"
+        :title="t('nav.backToProjects')"
         @click="$emit('back')"
       >
         <ChevronLeft
@@ -68,14 +71,14 @@ const activeDocId = computed(() =>
       <div v-if="auth.canEdit" class="ml-auto flex shrink-0 gap-0.5">
         <RouterLink
           to="/upload"
-          title="Import a document"
+          :title="t('nav.importDocument')"
           class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-6 place-items-center rounded transition-colors"
         >
           <FileUp class="size-3.5" />
         </RouterLink>
         <RouterLink
           to="/create"
-          title="New page"
+          :title="t('nav.newPage')"
           class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-6 place-items-center rounded transition-colors"
         >
           <Plus class="size-4" />
@@ -90,7 +93,7 @@ const activeDocId = computed(() =>
       <p v-else-if="store.tree.length === 0" class="text-muted-foreground px-2.5 pt-1 text-xs">
         No pages yet<template v-if="auth.canEdit">
           —
-          <RouterLink to="/create" class="text-primary hover:underline">create the first one</RouterLink></template>.
+          <RouterLink to="/create" class="text-primary hover:underline">{{ t('nav.createFirstPage') }}</RouterLink></template>.
       </p>
       <ul v-else class="space-y-px">
         <SidebarTreeNode

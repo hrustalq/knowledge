@@ -24,6 +24,7 @@
  * viewport, so it scrolls with the passage it belongs to, and is marked
  * `data-kn-anno-ui` so its own text can never end up inside an anchor quote.
  */
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MessageSquarePlus, X } from 'lucide-vue-next'
 import type { ReviewThread, ReviewThreadAnchor } from '@knowledge/contracts'
@@ -42,6 +43,8 @@ import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { useMembers } from '@/components/merge-requests/use-members'
 import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -153,7 +156,7 @@ const anchors = computed<CommentAnchor[]>(() =>
  * finding would look like a colleague's remark.
  */
 function authorsOf(thread: ReviewThread): AnchorAuthor[] {
-  if (thread.source === 'ai') return [{ userId: 'ai', name: 'Assistant', ai: true }]
+  if (thread.source === 'ai') return [{ userId: 'ai', name: t('assistant.name'), ai: true }]
   const seen = new Set<string>()
   const out: AnchorAuthor[] = []
   for (const comment of thread.comments) {
@@ -445,8 +448,8 @@ function onOutdated(ids: string[]) {
       data-kn-anno-ui
       class="kn-comment-affordance absolute z-10 size-6 place-items-center rounded-md border bg-background text-muted-foreground opacity-70 shadow-sm transition-opacity hover:opacity-100"
       :style="{ top: `${hoverAt.top}px` }"
-      title="Comment on this block"
-      aria-label="Comment on this block"
+      :title="t('review.commentOnBlock')"
+      :aria-label="t('review.commentOnBlock')"
       @click="startBlockThread"
     >
       <MessageSquarePlus class="size-3.5" />
@@ -487,11 +490,11 @@ function onOutdated(ids: string[]) {
           New comment on this page — this selection can't be pinned to a passage.
         </p>
         <p v-else class="min-w-0 flex-1 text-xs text-muted-foreground">
-          {{ openThreads.length }} thread{{ openThreads.length === 1 ? '' : 's' }} on this passage
+          {{ t('count.threads', { n: openThreads.length }, openThreads.length) }}{{ ' ' }}{{ t('review.onThisPassage') }}
         </p>
         <button
           class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-          aria-label="Close"
+          :aria-label="t('common.close')"
           @click="closePopover"
         >
           <X class="size-3.5" />
@@ -502,8 +505,8 @@ function onOutdated(ids: string[]) {
         v-if="composing"
         auto-expand
         offer-thread
-        placeholder="Write a comment…"
-        submit-label="Comment"
+        :placeholder="t('review.writeComment')"
+        :submit-label="t('review.comment')"
         :busy="busy"
         :resolve-document-id="resolveDocumentId"
         @submit="submitNewThread"

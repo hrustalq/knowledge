@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Settings shell: nested pages (projects / users / access / activity) rendered
 // in the content column, with their own nav rail flush against the left edge.
+import { useI18n } from 'vue-i18n'
 import { computed, type Component } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { Activity, BookMarked, FolderKanban, ShieldCheck, Sparkles, Users,
@@ -8,20 +9,22 @@ import { Activity, BookMarked, FolderKanban, ShieldCheck, Sparkles, Users,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 
+const { t } = useI18n()
+
 const auth = useAuthStore()
 const route = useRoute()
 
 interface SettingsLink { to: string; label: string; icon: Component; hint: string }
 const links = computed<SettingsLink[]>(() => [
-  { to: '/settings/projects', label: 'Projects', icon: FolderKanban, hint: 'Organize documents' },
-  { to: '/settings/glossary', label: 'Glossary', icon: BookMarked, hint: 'Shared vocabulary' },
+  { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
+  { to: '/settings/glossary', label: t('nav.glossary'), icon: BookMarked, hint: t('settings.glossaryHint') },
   ...(auth.isAdmin || auth.isDev
-    ? [{ to: '/settings/users', label: 'Users', icon: Users, hint: 'Platform accounts' }]
+    ? [{ to: '/settings/users', label: t('nav.users'), icon: Users, hint: t('settings.usersHint') }]
     : []),
-  { to: '/settings/access', label: 'Access', icon: ShieldCheck, hint: 'Workspace members' },
-  { to: '/settings/activity', label: 'Activity', icon: Activity, hint: 'Workspace timeline' },
-  { to: '/settings/ai', label: 'AI', icon: Sparkles, hint: 'Assistant, skills, usage' },
-  { to: '/settings/workflows', label: 'Workflows', icon: Workflow, hint: 'Document step chains' },
+  { to: '/settings/access', label: t('nav.access'), icon: ShieldCheck, hint: t('settings.accessHint') },
+  { to: '/settings/activity', label: t('nav.activity'), icon: Activity, hint: t('settings.activityHint') },
+  { to: '/settings/ai', label: t('nav.ai'), icon: Sparkles, hint: t('settings.aiHint') },
+  { to: '/settings/workflows', label: t('nav.workflows'), icon: Workflow, hint: t('settings.workflowsHint') },
 ])
 </script>
 

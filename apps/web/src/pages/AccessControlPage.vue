@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Access control management: workspaces + member roles (RBAC lives in the API;
 // mutations here are admin-only and 403 for everyone else).
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { AtSign, Library, ShieldCheck, UserPlus, Wrench } from 'lucide-vue-next'
@@ -47,6 +48,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 
+const { t } = useI18n()
+
 const ROLES: WorkspaceRole[] = ['viewer', 'editor', 'admin']
 
 const auth = useAuthStore()
@@ -73,7 +76,7 @@ const filterFields = computed<FilterField[]>(() => [
     // pinned to the bar and has no accessor — `matchesFilters` ignores keys it
     // has no accessor for, which is exactly right here.
     key: WORKSPACE_KEY,
-    label: 'Workspace',
+    label: t('filter.workspace'),
     icon: Library,
     pinned: true,
     multiple: false,
@@ -82,22 +85,22 @@ const filterFields = computed<FilterField[]>(() => [
   },
   {
     key: 'role',
-    label: 'Role',
+    label: t('filter.role'),
     icon: ShieldCheck,
     options: ROLES.map((r) => ({ value: r, label: r })),
   },
   {
     key: 'trustedOperator',
-    label: 'Trusted operator',
+    label: t('filter.trustedOperator'),
     icon: Wrench,
     options: [
-      { value: 'true', label: 'Yes' },
-      { value: 'false', label: 'No' },
+      { value: 'true', label: t('common.yes') },
+      { value: 'false', label: t('common.no') },
     ],
   },
   {
     key: 'text',
-    label: 'Name or email',
+    label: t('filter.nameOrEmail'),
     icon: AtSign,
     group: 'Text',
     type: 'text',
@@ -262,17 +265,17 @@ async function removeMember(member: WorkspaceMemberEntry) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-3">
-      <h1 class="font-display text-2xl font-bold tracking-tight">Access control</h1>
+      <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('access.title') }}</h1>
       <Button v-if="canManage" size="sm" @click="addOpen = true">
-        <UserPlus class="size-3.5" /> Add member
+        <UserPlus class="size-3.5" /> {{ t('access.addMember') }}
       </Button>
-      <Badge v-else variant="outline">read-only — workspace admin required</Badge>
+      <Badge v-else variant="outline">{{ t('access.readOnly') }}</Badge>
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <FilterBar v-model="filters" :fields="filterFields" />
       <p class="text-muted-foreground text-xs tabular-nums">
-        {{ visibleMembers.length }} of {{ members.length }} member{{ members.length === 1 ? '' : 's' }}
+        {{ t('documents.ofMembers', { shown: visibleMembers.length, total: t('count.members', { n: members.length }, members.length) }) }}
       </p>
     </div>
 
@@ -280,7 +283,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
       <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
     </div>
     <p v-else-if="members.length === 0" class="text-muted-foreground py-10 text-center text-sm">
-      No members visible — you may not have access to this workspace's roster.
+      {{ t('access.noMembersVisible') }}
     </p>
     <p v-else-if="visibleMembers.length === 0" class="text-muted-foreground py-10 text-center text-sm">
       No members match these filters.
@@ -289,10 +292,10 @@ async function removeMember(member: WorkspaceMemberEntry) {
     <Table v-else>
       <TableHeader>
         <TableRow>
-          <TableHead>Member</TableHead>
-          <TableHead>Role</TableHead>
-          <TableHead>Trusted operator</TableHead>
-          <TableHead class="text-right">Actions</TableHead>
+          <TableHead>{{ t('access.member') }}</TableHead>
+          <TableHead>{{ t('access.role') }}</TableHead>
+          <TableHead>{{ t('access.trustedOperator') }}</TableHead>
+          <TableHead class="text-right">{{ t('access.actions') }}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -300,7 +303,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
           <TableCell>
             <div class="font-medium">
               {{ member.displayName }}
-              <Badge v-if="member.disabled" variant="destructive" class="ml-1">disabled</Badge>
+              <Badge v-if="member.disabled" variant="destructive" class="ml-1">{{ t('access.disabled') }}</Badge>
             </div>
             <div class="text-muted-foreground text-xs">{{ member.email }}</div>
           </TableCell>
@@ -329,7 +332,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
             <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? 'yes' : 'no' }}</span>
           </TableCell>
           <TableCell class="text-right">
-            <Button v-if="canManage" size="sm" variant="destructive" @click="removeMember(member)">Remove</Button>
+            <Button v-if="canManage" size="sm" variant="destructive" @click="removeMember(member)">{{ t('access.remove') }}</Button>
           </TableCell>
         </TableRow>
       </TableBody>
@@ -338,7 +341,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
     <Dialog v-model:open="addOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add member</DialogTitle>
+          <DialogTitle>{{ t('access.addMember') }}</DialogTitle>
           <DialogDescription>
             The picker searches accounts that are not members yet — create new ones under Users.
           </DialogDescription>
@@ -346,8 +349,8 @@ async function removeMember(member: WorkspaceMemberEntry) {
         <form id="add-member" class="space-y-3" @submit.prevent="addMember">
           <Autocomplete
             v-model="pickedValue"
-            label="User"
-            placeholder="Search users by name or email…"
+            :label="t('access.user')"
+            :placeholder="t('access.searchUsers')"
             :multiple="false"
             :load="loadCandidates"
           />
@@ -369,7 +372,7 @@ async function removeMember(member: WorkspaceMemberEntry) {
           </div>
         </form>
         <DialogFooter>
-          <Button variant="ghost" @click="addOpen = false">Cancel</Button>
+          <Button variant="ghost" @click="addOpen = false">{{ t('common.cancel') }}</Button>
           <Button type="submit" form="add-member" :disabled="!pickedUser">Add</Button>
         </DialogFooter>
       </DialogContent>

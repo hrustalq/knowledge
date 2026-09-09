@@ -9,7 +9,7 @@ import {
   type ApiErrorCode,
   type ApiErrorPayload,
 } from '@knowledge/contracts'
-import { getToken } from '@/lib/api'
+import { getLocale, getToken } from '@/lib/api'
 
 export class ApiRequestError extends Error {
   readonly payload: ApiErrorPayload
@@ -92,6 +92,8 @@ export const http: AxiosInstance = axios.create({ baseURL: base, timeout: 30_000
 http.interceptors.request.use((config) => {
   const token = getToken()
   if (token) config.headers.set('Authorization', `Bearer ${token}`)
+  // Second HTTP stack, same contract: the API replies in the UI's language.
+  config.headers.set('Accept-Language', getLocale())
   return config
 })
 

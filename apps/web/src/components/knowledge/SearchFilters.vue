@@ -5,6 +5,7 @@
 // Every facet is an autocomplete: workspace/project/category are bounded lists
 // filtered in the browser, tags are unbounded and searched server-side via
 // GET /v1/entities?type=tag&q=.
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import type { DocumentCategory, ListEntitiesResponse } from '@knowledge/contracts'
 import { DOCUMENT_CATEGORIES } from '@knowledge/contracts'
@@ -22,6 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { UseSearch } from './use-search'
+
+const { t } = useI18n()
 
 const props = defineProps<{ search: UseSearch }>()
 const emit = defineEmits<{ 'switch-workspace': [workspaceId: string] }>()
@@ -92,39 +95,39 @@ function onWorkspace(next: string[]) {
     <div class="space-y-1">
       <Autocomplete
         :model-value="activeWs"
-        label="Workspace"
-        placeholder="Switch workspace…"
+        :label="t('search.workspace')"
+        :placeholder="t('search.switchWorkspace')"
         :multiple="false"
         :options="workspaceOptions"
         @update:model-value="onWorkspace"
       />
-      <p class="text-[11px] leading-snug text-muted-foreground">Switching reloads the app.</p>
+      <p class="text-[11px] leading-snug text-muted-foreground">{{ t('search.switchingReloads') }}</p>
     </div>
 
     <div class="border-t" />
 
     <Autocomplete
       v-model="selectedProjects"
-      label="Projects"
-      placeholder="Filter by project…"
+      :label="t('search.projects')"
+      :placeholder="t('search.filterByProject')"
       :options="projectOptions"
-      empty-hint="No projects in this workspace yet."
+      :empty-hint="t('hints.noProjects')"
     />
 
     <Autocomplete
       v-model="selectedCategories"
-      label="Category"
-      placeholder="Filter by category…"
+      :label="t('search.category')"
+      :placeholder="t('search.filterByCategory')"
       :options="categoryOptions"
     />
 
     <Autocomplete
       v-model="selectedTags"
-      label="Tags"
-      placeholder="Filter by tag…"
+      :label="t('search.tags')"
+      :placeholder="t('search.filterByTag')"
       :load="loadTags"
       :fallback-label="(v: string) => v.replace(/^tag:/, '')"
-      empty-hint="Tags come from a page's frontmatter `tags:` list."
+      :empty-hint="t('hints.tagsFromFrontmatter')"
     />
 
     <div class="border-t" />
@@ -165,7 +168,7 @@ function onWorkspace(next: string[]) {
           v-model="search.depth.value"
           :disabled="!search.expand.value || search.mode.value !== 'hybrid'"
         >
-          <SelectTrigger size="sm" class="text-xs" aria-label="Expansion depth">
+          <SelectTrigger size="sm" class="text-xs" :aria-label="t('search.expansionDepth')">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -202,8 +205,10 @@ function onWorkspace(next: string[]) {
       class="text-xs text-primary hover:underline"
       @click="search.clearFilters()"
     >
-      Clear {{ search.activeFilterCount.value }} filter{{
-        search.activeFilterCount.value === 1 ? '' : 's'
+      {{
+        t('search.clearFilters', {
+          filters: t('search.activeFilters', { n: search.activeFilterCount.value }, search.activeFilterCount.value),
+        })
       }}
     </button>
   </div>

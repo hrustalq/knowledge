@@ -80,11 +80,12 @@ rather than on every keystroke). They survive editing for free.
 Anchoring itself is unchanged and deliberately shared. The quote-matching
 algorithm moved to `lib/anchor-match.ts` — normalize whitespace, find every
 occurrence of the quote, score each by how much of the recorded prefix/suffix
-still matches, take the best — and both projections feed it: the DOM projection
-in `text-anchor.ts` (review mode) and the ProseMirror projection in
-`comment-anchors.ts` (this feature). They agree character for character —
-whitespace collapsed, one synthetic space at each block boundary — so an anchor
-written by one resolves in the other. An unresolvable quote is reported
+still matches, take the best. The ProseMirror projection in
+`comment-anchors.ts` feeds it. Feature 13's DOM projection in `text-anchor.ts`
+fed it the same shape until that module was deleted as dead code, which is why
+the normalization is specified so exactly — whitespace collapsed, one synthetic
+space at each block boundary — so an anchor written by either resolves in the
+other. An unresolvable quote is reported
 **outdated** and never silently re-anchored: a comment moved onto text nobody
 wrote it about is worse than a missing one.
 

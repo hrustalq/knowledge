@@ -10,6 +10,7 @@
 //
 // Overview is one timeline. State changes come from the activity log, threads
 // from the review API, and they are sorted together — see MrActivityFeed.
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -42,14 +43,16 @@ import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { matchAnchoredThreads } from '@/components/merge-requests/thread-anchors'
 import { actorLabel, mrIcon } from '@/components/merge-requests/mr-ui'
 
+const { t } = useI18n()
+
 const TABS = ['overview', 'review', 'changes', 'structure', 'impact'] as const
 type Tab = (typeof TABS)[number]
 const TAB_LABELS: Record<Tab, string> = {
-  overview: 'Overview',
-  review: 'Review',
-  changes: 'Changes',
-  structure: 'Structure',
-  impact: 'Knowledge impact',
+  overview: 'mr.tabOverview',
+  review: 'mr.tabReview',
+  changes: 'mr.tabChanges',
+  structure: 'mr.tabStructure',
+  impact: 'mr.tabImpact',
 }
 
 const route = useRoute()
@@ -308,7 +311,7 @@ function refresh() {
         <Badge :variant="mr.status === 'open' ? 'default' : mr.status === 'merged' ? 'secondary' : 'outline'">
           {{ mr.status }}
         </Badge>
-        <Badge v-if="mr.isDraft" variant="outline">Draft</Badge>
+        <Badge v-if="mr.isDraft" variant="outline">{{ t('mr.draft') }}</Badge>
         <Button
           v-if="canEdit && isOpen"
           variant="outline"
@@ -322,11 +325,11 @@ function refresh() {
 
       <!-- inline title/description editor -->
       <div v-else class="space-y-2 rounded-lg border bg-card p-3">
-        <Input v-model="editTitle" placeholder="Title" />
-        <Textarea v-model="editDescription" rows="4" placeholder="Description (markdown)" class="font-mono text-sm" />
+        <Input v-model="editTitle" :placeholder="t('mr.titlePlaceholder')" />
+        <Textarea v-model="editDescription" rows="4" :placeholder="t('mr.descriptionPlaceholder')" class="font-mono text-sm" />
         <div class="flex gap-2">
-          <Button size="sm" :disabled="updateMr.isPending.value || !editTitle.trim()" @click="saveEdit">Save</Button>
-          <Button size="sm" variant="ghost" :disabled="updateMr.isPending.value" @click="editing = false">Cancel</Button>
+          <Button size="sm" :disabled="updateMr.isPending.value || !editTitle.trim()" @click="saveEdit">{{ t('common.save') }}</Button>
+          <Button size="sm" variant="ghost" :disabled="updateMr.isPending.value" @click="editing = false">{{ t('common.cancel') }}</Button>
         </div>
       </div>
 
@@ -359,28 +362,28 @@ function refresh() {
         <!-- tabs -->
         <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
           <button
-            v-for="t in TABS"
-            :key="t"
+            v-for="tabId in TABS"
+            :key="tabId"
             role="tab"
-            :aria-selected="tab === t"
+            :aria-selected="tab === tabId"
             class="flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors"
-            :class="tab === t
+            :class="tab === tabId
               ? 'border-primary font-medium text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'"
-            @click="setTab(t)"
+            @click="setTab(tabId)"
           >
-            {{ TAB_LABELS[t] }}
+            {{ t(TAB_LABELS[tabId]) }}
             <!-- Circle at one digit, stadium at two: a fixed height and a
                  min-width the padding cannot undercut. The count belongs to
                  the tab, so it takes the tab's state rather than staying grey
                  next to an active label. -->
             <span
-              v-if="tabCounts[t]"
+              v-if="tabCounts[tabId]"
               class="inline-grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[0.6875rem] font-semibold tabular-nums"
-              :class="tab === t
+              :class="tab === tabId
                 ? 'bg-primary/15 text-primary'
                 : 'bg-muted text-foreground/85'"
-            >{{ tabCounts[t] }}</span>
+            >{{ tabCounts[tabId] }}</span>
           </button>
         </div>
 
@@ -443,13 +446,13 @@ function refresh() {
             <div v-if="pendingAnchor" class="rounded-lg border bg-card p-3">
               <p class="mb-2 text-xs font-medium">
                 New comment<template v-if="pendingAnchor.type === 'line'"> on line {{ pendingAnchor.line }}</template>
-                <button class="ml-2 text-muted-foreground hover:text-foreground" @click="pendingAnchor = null">cancel</button>
+                <button class="ml-2 text-muted-foreground hover:text-foreground" @click="pendingAnchor = null">{{ t('common.cancel') }}</button>
               </p>
               <CommentComposer
                 auto-expand
                 offer-thread
-                placeholder="Write a comment…"
-                submit-label="Comment"
+                :placeholder="t('review.writeComment')"
+                :submit-label="t('review.comment')"
                 :busy="threadsBusy"
                 :resolve-document-id="resolveDocumentId"
                 @submit="(b, r) => onCreateThread(b, pendingAnchor ?? undefined, r)"
@@ -481,7 +484,7 @@ function refresh() {
         <div v-else-if="tab === 'structure'">
           <Skeleton v-if="diffQuery.isPending.value" class="h-24 w-full" />
           <Card v-else>
-            <CardHeader><CardTitle class="text-sm">Structural changes</CardTitle></CardHeader>
+            <CardHeader><CardTitle class="text-sm">{{ t('mr.structuralChanges') }}</CardTitle></CardHeader>
             <CardContent>
               <p v-if="!diff?.structural || diff.structural.changes.length === 0" class="text-sm text-muted-foreground">
                 No structural (frontmatter / JSON / YAML) changes.
@@ -506,9 +509,9 @@ function refresh() {
           <template v-else>
             <div class="grid gap-4 md:grid-cols-2">
               <Card>
-                <CardHeader><CardTitle class="text-sm">Entities</CardTitle></CardHeader>
+                <CardHeader><CardTitle class="text-sm">{{ t('mr.entities') }}</CardTitle></CardHeader>
                 <CardContent class="space-y-1 text-sm">
-                  <p v-if="semantic.entities.added.length === 0 && semantic.entities.removed.length === 0" class="text-muted-foreground">No entity changes.</p>
+                  <p v-if="semantic.entities.added.length === 0 && semantic.entities.removed.length === 0" class="text-muted-foreground">{{ t('mr.noEntityChanges') }}</p>
                   <p v-for="e in semantic.entities.added" :key="`a-${e}`" class="font-mono text-xs text-green-600">+ {{ e }}</p>
                   <p v-for="e in semantic.entities.removed" :key="`r-${e}`" class="font-mono text-xs text-red-600">− {{ e }}</p>
                 </CardContent>

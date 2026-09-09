@@ -1,3 +1,6 @@
+import { DEFAULT_LOCALE, isLocale, type Locale } from '@knowledge/contracts'
+import { formatRelative } from './format'
+
 /** Fallback workspace when the caller has no memberships (AUTH_MODE=none demo flow). */
 export const DEMO_WORKSPACE_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -9,6 +12,7 @@ const TOKEN_KEY = 'kn_token'
 const WS_KEY = 'kn_ws'
 const PROJECT_KEY = 'kn_proj'
 const PANE_KEY = 'kn_pane'
+const LANG_KEY = 'kn_lang'
 
 /** Which level of the sidebar's navigation stack is showing (see stores/sidebar-nav). */
 export type SidebarPane = 'projects' | 'pages'
@@ -33,6 +37,7 @@ interface SsrRequestContext {
   workspaceId: string | null
   projectId: string | null
   pane: string | null
+  locale: Locale | null
 }
 function ssrContext(): SsrRequestContext | undefined {
   return (
@@ -44,12 +49,15 @@ let clientToken: string | null = null
 let clientWorkspaceId: string | null = null
 let clientProjectId: string | null = null
 let clientPane: string | null = null
+let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
   try {
     clientToken = localStorage.getItem(TOKEN_KEY)
     clientWorkspaceId = localStorage.getItem(WS_KEY)
     clientProjectId = localStorage.getItem(PROJECT_KEY)
     clientPane = localStorage.getItem(PANE_KEY)
+    const storedLocale = localStorage.getItem(LANG_KEY)
+    if (isLocale(storedLocale)) clientLocale = storedLocale
   } catch {
     /* storage unavailable (private mode) — stay anonymous */
   }
@@ -156,6 +164,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      // The API answers in this language (docs/features/18) — errors included,
+      // and those surface straight into toasts.
+      'Accept-Language': getLocale(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
@@ -187,12 +198,13 @@ export function resolveAssetUrl(path: string): string {
   return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
 }
 
+/**
+ * Kept as the shared entry point its 11 call sites already import; the actual
+ * formatting moved to lib/format so it follows the UI language rather than the
+ * host's (docs/features/18).
+ */
 export function relativeTime(iso: string): string {
-  const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000)
-  if (s < 60) return 'just now'
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
-  return new Date(iso).toLocaleString()
+  return formatRelative(iso)
 }
 
 export function statusVariant(status: string | null): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -211,5 +223,26 @@ export function statusDot(status: string | null): string {
     case 'failed': return 'bg-red-500'
     case 'indexing': case 'finalized': return 'bg-amber-500 animate-pulse'
     default: return 'bg-muted-foreground/40'
+  }
+}
+
+/**
+ * Active UI language (docs/features/18). Persisted exactly like the sidebar
+ * pane — localStorage for the client plus a cookie, so the SSR pass renders in
+ * the same language the client is about to hydrate rather than flashing English
+ * and swapping. The durable copy lives in users.locale; this mirrors it.
+ */
+export function getLocale(): Locale {
+  return (import.meta.env.SSR ? ssrContext()?.locale : clientLocale) ?? DEFAULT_LOCALE
+}
+
+export function setLocale(locale: Locale): void {
+  if (import.meta.env.SSR) return
+  clientLocale = locale
+  try {
+    localStorage.setItem(LANG_KEY, locale)
+    document.cookie = `${LANG_KEY}=${locale}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
   }
 }

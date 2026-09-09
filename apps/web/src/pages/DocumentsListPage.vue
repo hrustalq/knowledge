@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+import { formatDate } from '@/lib/format'
 import { computed, onMounted, onServerPrefetch, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { FileText, Plus, Upload } from 'lucide-vue-next'
@@ -12,13 +14,20 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import DocumentTreeNode from '@/components/knowledge/DocumentTreeNode.vue'
 
+const { t } = useI18n()
+
 const auth = useAuthStore()
 const store = useDocumentsStore()
 const projects = useProjectsStore()
 const category = ref<DocumentCategory | null>(null)
 
 /** "in <project>" once the projects store resolves, "in this workspace" before. */
-const scopeLabel = computed(() => (projects.activeName ? `in ${projects.activeName}` : 'in this workspace'))
+/** A whole prepositional phrase, not "in" + a name: Russian declines it. */
+const scopeLabel = computed(() =>
+  projects.activeName
+    ? t('documents.scopeProject', { name: projects.activeName })
+    : t('documents.scopeWorkspace'),
+)
 
 onServerPrefetch(() => Promise.all([store.fetchTree(), store.fetchList()]))
 onMounted(() => {
@@ -37,17 +46,17 @@ const filtered = computed(() =>
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="font-display text-2xl font-bold tracking-tight">Pages</h1>
+        <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('documents.title') }}</h1>
         <p v-if="store.loaded" class="mt-0.5 text-sm text-muted-foreground">
-          {{ store.items.length }} page{{ store.items.length === 1 ? '' : 's' }} {{ scopeLabel }}
+          {{ t('documents.pageCount', { count: store.items.length, scope: scopeLabel }, store.items.length) }}
         </p>
       </div>
       <div v-if="auth.canEdit" class="flex gap-2">
         <Button variant="outline" as-child>
-          <RouterLink to="/upload"><Upload class="size-4" /> Upload</RouterLink>
+          <RouterLink to="/upload"><Upload class="size-4" /> {{ t('documents.upload') }}</RouterLink>
         </Button>
         <Button as-child>
-          <RouterLink to="/create"><Plus class="size-4" /> New page</RouterLink>
+          <RouterLink to="/create"><Plus class="size-4" /> {{ t('documents.newPage') }}</RouterLink>
         </Button>
       </div>
     </div>
@@ -61,7 +70,7 @@ const filtered = computed(() =>
           : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
         @click="category = null"
       >
-        all
+        {{ t('common.all') }}
       </button>
       <button
         v-for="c in DOCUMENT_CATEGORIES"
@@ -72,7 +81,7 @@ const filtered = computed(() =>
           : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
         @click="category = category === c ? null : c"
       >
-        {{ c }}
+        {{ t(`category.${c}`) }}
       </button>
     </div>
 
@@ -86,18 +95,18 @@ const filtered = computed(() =>
       class="grid place-items-center rounded-lg border border-dashed bg-card py-16 text-center"
     >
       <FileText class="size-8 text-muted-foreground/50" />
-      <p class="mt-3 font-medium">No pages yet</p>
+      <p class="mt-3 font-medium">{{ t('documents.noPagesYet') }}</p>
       <p class="mt-1 text-sm text-muted-foreground">
-        {{ auth.canEdit ? `Create the first page ${scopeLabel}.` : `Nothing has been published ${scopeLabel}.` }}
+        {{ auth.canEdit ? t('documents.createFirst', { scope: scopeLabel }) : t('documents.nothingPublished', { scope: scopeLabel }) }}
       </p>
       <Button v-if="auth.canEdit" class="mt-4" as-child>
-        <RouterLink to="/create"><Plus class="size-4" /> New page</RouterLink>
+        <RouterLink to="/create"><Plus class="size-4" /> {{ t('documents.newPage') }}</RouterLink>
       </Button>
     </div>
 
     <!-- Flat filtered list (category active) -->
     <div v-else-if="filtered" class="rounded-lg border bg-card p-2">
-      <p v-if="filtered.length === 0" class="p-2 text-sm text-muted-foreground">No pages in this category.</p>
+      <p v-if="filtered.length === 0" class="p-2 text-sm text-muted-foreground">{{ t('documents.noPagesInCategory') }}</p>
       <div
         v-for="doc in filtered"
         :key="doc.documentId"
@@ -118,7 +127,7 @@ const filtered = computed(() =>
           {{ doc.headRevisionStatus ?? 'draft' }}
         </Badge>
         <span class="ml-auto shrink-0 text-xs text-muted-foreground">
-          {{ new Date(doc.createdAt).toLocaleDateString() }}
+          {{ formatDate(doc.createdAt) }}
         </span>
       </div>
     </div>

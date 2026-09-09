@@ -13,10 +13,13 @@
 // swapping the chip with a short animation so an update is noticed without
 // re-reading the whole thing. Expanding restores the full ordered legs, prose
 // and all.
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { Check, ChevronRight, Square, X } from 'lucide-vue-next'
 import type { LiveTurn } from '@/stores/assistant'
 import { toolVocabulary } from './tool-vocabulary'
+
+const { t } = useI18n()
 
 const props = defineProps<{ live: LiveTurn }>()
 
@@ -55,7 +58,7 @@ const latestKey = computed(() =>
 
 const headline = computed(() => {
   const running = props.live.running.at(-1)
-  if (running) return toolVocabulary(running).running
+  if (running) return t(toolVocabulary(running).running)
   return props.live.phase === 'responding' ? 'Writing the answer' : 'Thinking'
 })
 
@@ -70,7 +73,7 @@ const hasTrail = computed(
     <div class="flex items-center gap-2 text-muted-foreground">
       <template v-if="live.stopped">
         <Square class="size-3 fill-current" aria-hidden="true" />
-        <span>Stopped</span>
+        <span>{{ t('chat.stopped') }}</span>
       </template>
       <template v-else>
         <span class="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
@@ -103,7 +106,7 @@ const hasTrail = computed(
           "
         >
           <component :is="toolVocabulary(latest.tool).icon" class="size-3" />
-          {{ latest.running ? toolVocabulary(latest.tool).running : toolVocabulary(latest.tool).done }}
+          {{ latest.running ? t(toolVocabulary(latest.tool).running) : t(toolVocabulary(latest.tool).done) }}
           <span v-if="latest.running" class="tool-pulse" aria-hidden="true" />
           <Check v-else-if="latest.ok" class="size-3 text-emerald-500" />
           <X v-else class="size-3" />
@@ -123,7 +126,7 @@ const hasTrail = computed(
             :class="tc.ok ? 'text-muted-foreground' : 'border-destructive/40 text-destructive'"
           >
             <component :is="toolVocabulary(tc.tool).icon" class="size-3" />
-            {{ toolVocabulary(tc.tool).done }}
+            {{ t(toolVocabulary(tc.tool).done) }}
             <Check v-if="tc.ok" class="size-3 text-emerald-500" />
             <X v-else class="size-3" />
           </span>
@@ -140,7 +143,7 @@ const hasTrail = computed(
             :class="tc.ok ? 'text-muted-foreground' : 'border-destructive/40 text-destructive'"
           >
             <component :is="toolVocabulary(tc.tool).icon" class="size-3" />
-            {{ toolVocabulary(tc.tool).done }}
+            {{ t(toolVocabulary(tc.tool).done) }}
             <Check v-if="tc.ok" class="size-3 text-emerald-500" />
             <X v-else class="size-3" />
           </span>
@@ -150,7 +153,7 @@ const hasTrail = computed(
             class="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-2 py-0.5 text-[11px] text-primary"
           >
             <component :is="toolVocabulary(tool).icon" class="size-3" />
-            {{ toolVocabulary(tool).running }}
+            {{ t(toolVocabulary(tool).running) }}
             <span class="tool-pulse" aria-hidden="true" />
           </span>
         </div>

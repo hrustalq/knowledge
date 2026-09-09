@@ -18,6 +18,7 @@
  * list is cursor-paginated, so a filter the browser applied to the loaded page
  * would disagree with the tab counts and with "Load more" (see mr-filters.ts).
  */
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { refDebounced } from '@vueuse/core'
 import {
@@ -39,6 +40,8 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { setFilterValue, type MrFilterKey } from './mr-filters'
 import { useMembers } from './use-members'
+
+const { t } = useI18n()
 
 const props = defineProps<{ filters: ActiveFilter[]; search: string }>()
 const emit = defineEmits<{
@@ -253,10 +256,10 @@ function clearAll() {
     <div class="min-w-56 flex-1">
       <Autocomplete
         :model-value="picked"
-        label="Search merge requests"
+        :label="t('mr.searchMergeRequests')"
         hide-label
         bare
-        placeholder="Search or filter…"
+        :placeholder="t('mr.searchOrFilter')"
         :multiple="false"
         :load="loadTokens"
         :query="typed"

@@ -3,9 +3,12 @@
 // Changes tab can reuse it. Thread rendering is delegated to the parent via
 // the #thread slot — DiffView only decides WHERE an anchored thread appears
 // (see thread-anchors.ts) and exposes a comment gutter when canComment.
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import type { CompareResponse, MergeRequestThread, MergeRequestThreadAnchor } from '@knowledge/contracts'
 import { matchAnchoredThreads } from '@/components/merge-requests/thread-anchors'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -40,7 +43,7 @@ function commentOn(line: { new?: number; text: string }) {
         {{ c.path || '(root)' }}
       </p>
     </div>
-    <p v-if="compare.hunks.length === 0" class="text-sm text-muted-foreground">No line changes.</p>
+    <p v-if="compare.hunks.length === 0" class="text-sm text-muted-foreground">{{ t('review.noLineChanges') }}</p>
     <div v-for="(hunk, hi) in compare.hunks" :key="hi" class="overflow-x-auto rounded-md border font-mono text-xs">
       <p class="bg-muted px-3 py-1 text-muted-foreground">
         @@ -{{ hunk.oldStart }},{{ hunk.oldLines }} +{{ hunk.newStart }},{{ hunk.newLines }} @@
@@ -54,7 +57,7 @@ function commentOn(line: { new?: number; text: string }) {
             v-if="canComment && line.kind !== 'deleted' && line.new !== undefined"
             type="button"
             class="w-5 shrink-0 text-center text-muted-foreground opacity-0 hover:text-primary group-hover:opacity-100"
-            title="Comment on this line"
+            :title="t('review.commentOnLine')"
             @click="commentOn(line)"
           >+</button>
           <span v-else class="w-5 shrink-0" />

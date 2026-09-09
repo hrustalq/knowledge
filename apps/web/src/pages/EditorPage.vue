@@ -9,6 +9,7 @@
 // Metadata that is not the page itself — project, parent, category, relations,
 // tags — lives in a settings sheet rather than a form above the content, so
 // what is on screen while you write is the page and nothing else.
+import { useI18n } from 'vue-i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -50,6 +51,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import RichEditor from '@/components/editor/RichEditor.vue'
 import ChatPane from '@/components/assistant/ChatPane.vue'
+
+const { t } = useI18n()
 
 const RELATION_TYPES = ['DESCRIBES', 'DEPENDS_ON', 'IMPLEMENTS', 'RELATED_TO', 'OWNED_BY', 'SUPERSEDES', 'CONTRADICTS'] as const
 
@@ -211,7 +214,7 @@ function buildSource(markdown: string): string {
 async function ensureDocumentId(): Promise<string | null> {
   if (editId.value) return editId.value
   if (!projectId.value) {
-    toast.error('Pick a project in page settings before attaching files')
+    toast.error(t('editor.pickProjectForFiles'))
     settingsOpen.value = true
     return null
   }
@@ -233,7 +236,7 @@ async function ensureDocumentId(): Promise<string | null> {
     void store.fetchList()
     // Keep the URL honest without unmounting the editor mid-upload.
     await router.replace(`/documents/${res.documentId}/edit`)
-    toast.success('Draft page created so files can be attached')
+    toast.success(t('editor.draftCreatedForFiles'))
     return res.documentId
   } catch (e) {
     toast.error((e as Error).message)
@@ -244,11 +247,11 @@ async function ensureDocumentId(): Promise<string | null> {
 async function save() {
   const markdown = editorRef.value?.flush() ?? body.value
   if (!title.value.trim() || !markdown.trim()) {
-    toast.error('Title and content are required')
+    toast.error(t('editor.titleAndContentRequired'))
     return
   }
   if (!projectId.value) {
-    toast.error('Pick a project for this page')
+    toast.error(t('editor.pickProject'))
     settingsOpen.value = true
     return
   }
@@ -268,7 +271,7 @@ async function save() {
         }),
       })
       dirty.value = false
-      toast.success('Document created — indexing started')
+      toast.success(t('editor.documentCreated'))
       await router.push(`/documents/${res.documentId}`)
       return
     }
@@ -303,12 +306,12 @@ async function save() {
       { method: 'POST' },
     )
     dirty.value = false
-    toast.success(fin.deduplicated ? 'No content changes — metadata updated' : 'Revision published — indexing started')
+    toast.success(fin.deduplicated ? t('editor.noContentChanges') : t('editor.revisionPublished'))
     await router.push(`/documents/${editId.value}`)
   } catch (e) {
     const msg = (e as Error).message
     if (msg.startsWith('409')) {
-      toast.error('The document head moved while you were editing — reload and compare before retrying')
+      toast.error(t('editor.headMoved'))
     } else {
       toast.error(msg)
     }
@@ -373,7 +376,7 @@ onBeforeUnmount(() => {
       <div class="kn-page-crumb">
         <strong>{{ projectName }}</strong>
         <span class="kn-page-state">{{ isEdit ? 'Editing' : 'New page' }}</span>
-        <span v-if="dirty" class="kn-dirty-dot" title="Unsaved changes" />
+        <span v-if="dirty" class="kn-dirty-dot" :title="t('editor.unsavedChanges')" />
       </div>
 
       <div class="ml-auto flex items-center gap-1.5">
@@ -381,9 +384,9 @@ onBeforeUnmount(() => {
           <Sparkles class="size-4" /> <span class="hidden sm:inline">AI</span>
         </Button>
         <Button variant="ghost" size="sm" @click="settingsOpen = true">
-          <Settings2 class="size-4" /> <span class="hidden sm:inline">Settings</span>
+          <Settings2 class="size-4" /> <span class="hidden sm:inline">{{ t('editor.settings') }}</span>
         </Button>
-        <Button variant="ghost" size="sm" @click="cancel">Cancel</Button>
+        <Button variant="ghost" size="sm" @click="cancel">{{ t('common.cancel') }}</Button>
         <Button size="sm" :disabled="busy || loading" @click="save">
           {{ busy ? 'Saving…' : isEdit ? 'Publish' : 'Create & index' }}
         </Button>
@@ -411,8 +414,8 @@ onBeforeUnmount(() => {
               v-model="title"
               class="kn-title-input"
               rows="1"
-              placeholder="Page title"
-              aria-label="Page title"
+              :placeholder="t('editor.pageTitle')"
+              :aria-label="t('editor.pageTitle')"
               spellcheck="false"
               @keydown.enter.prevent="editorRef?.focus()"
             />
@@ -425,8 +428,8 @@ onBeforeUnmount(() => {
            from it within a release. -->
       <aside v-if="assistantOpen" class="kn-page-rail">
         <div class="kn-rail-head">
-          <h2 class="text-sm font-semibold">Assistant</h2>
-          <Button variant="ghost" size="icon-sm" aria-label="Close assistant" @click="assistantOpen = false">
+          <h2 class="text-sm font-semibold">{{ t('editor.assistant') }}</h2>
+          <Button variant="ghost" size="icon-sm" :aria-label="t('editor.closeAssistant')" @click="assistantOpen = false">
             <X class="size-4" />
           </Button>
         </div>
@@ -440,14 +443,14 @@ onBeforeUnmount(() => {
     <AlertDialog v-model:open="confirmOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Discard unpublished changes?</AlertDialogTitle>
+          <AlertDialogTitle>{{ t('editor.discardChanges') }}</AlertDialogTitle>
           <AlertDialogDescription>
             This page has edits that were never published, so they exist only in this tab.
             Leaving now throws them away.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="pendingLeave = null">Keep editing</AlertDialogCancel>
+          <AlertDialogCancel @click="pendingLeave = null">{{ t('editor.keepEditing') }}</AlertDialogCancel>
           <AlertDialogAction
             class="bg-destructive text-white hover:bg-destructive/90"
             @click="discardAndLeave"
@@ -462,7 +465,7 @@ onBeforeUnmount(() => {
     <Sheet v-model:open="settingsOpen">
       <SheetContent side="right" class="w-full overflow-y-auto sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Page settings</SheetTitle>
+          <SheetTitle>{{ t('editor.pageSettings') }}</SheetTitle>
           <SheetDescription>
             Placement and the deterministic facts this page asserts into the graph.
           </SheetDescription>
@@ -475,7 +478,7 @@ onBeforeUnmount(() => {
             placeholder="Search projects…"
             :options="projectOptions"
             :multiple="false"
-            empty-hint="No projects in this workspace yet."
+            :empty-hint="t('hints.noProjects')"
           />
 
           <Autocomplete

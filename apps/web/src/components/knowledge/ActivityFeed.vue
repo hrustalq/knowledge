@@ -17,6 +17,7 @@
 // `collapsible` folds either shape down to one line — the newest entry, which
 // is the part anyone reads — and is how the feed appears where it is context
 // rather than the subject.
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useInfiniteScroll, useVirtualList } from '@vueuse/core'
@@ -26,6 +27,8 @@ import { apiFetch, getWorkspaceId, relativeTime } from '@/lib/api'
 import { useEventsStore } from '@/stores/events'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -64,26 +67,16 @@ const visible = computed(() =>
 
 const newest = computed<ActivityEntry | null>(() => entries.value[0] ?? null)
 
-const ACTION_LABELS: Record<string, string> = {
-  'document.created': 'created document',
-  'document.updated': 'updated document',
-  'revision.finalized': 'published a revision of',
-  'branch.created': 'created a branch on',
-  'relations.curated': 'curated a relation on',
-  'relations.deleted': 'removed a relation from',
-  'merge-request.created': 'opened a merge request on',
-  'merge-request.approved': 'approved a merge request on',
-  'merge-request.merged': 'merged a merge request on',
-  'merge-request.closed': 'closed a merge request on',
-  'merge-request.updated': 'updated a merge request on',
-  'merge-request.reopened': 'reopened a merge request on',
-  'merge-request.review-requested': 'requested review on',
-  'merge-request.comment.created': 'commented on a merge request on',
-  'merge-request.comment.resolved': 'resolved a review thread on',
-}
+/**
+ * The action code IS the key path (activity.action.<code>, stored nested since
+ * vue-i18n reads a dot as a separator), so there is no second map to keep in
+ * sync. An unknown code falls back to itself rather than rendering a raw key.
+ */
 
 function label(e: ActivityEntry): string {
-  return ACTION_LABELS[e.action] ?? e.action
+  const key = `activity.action.${e.action}`
+  const text = t(key)
+  return text === key ? e.action : text
 }
 
 /** Stub/zeros ids read as "dev" everywhere else in the UI. */
@@ -175,10 +168,10 @@ watch(() => events.revision, () => void refreshHead())
         class="size-3.5 shrink-0 self-center text-muted-foreground transition-transform duration-200"
         :class="open ? 'rotate-90' : ''"
       />
-      <span v-if="!loaded" class="text-muted-foreground">Loading activity…</span>
-      <span v-else-if="!newest" class="text-muted-foreground">No activity yet.</span>
+      <span v-if="!loaded" class="text-muted-foreground">{{ t('activity.loading') }}</span>
+      <span v-else-if="!newest" class="text-muted-foreground">{{ t('activity.empty') }}</span>
       <template v-else-if="open">
-        <span class="text-muted-foreground">{{ entries.length }} recent event{{ entries.length === 1 ? '' : 's' }}</span>
+        <span class="text-muted-foreground">{{ t('count.events', { n: entries.length }, entries.length) }}</span>
       </template>
       <span v-else class="truncate text-muted-foreground">{{ summary(newest) }}</span>
       <span v-if="newest && !open" class="ml-auto shrink-0 text-xs text-muted-foreground">
@@ -190,7 +183,7 @@ watch(() => events.revision, () => void refreshHead())
       <div v-if="!loaded" class="space-y-2">
         <Skeleton v-for="i in 3" :key="i" class="h-8 w-full" />
       </div>
-      <p v-else-if="entries.length === 0" class="text-sm text-muted-foreground">No activity yet.</p>
+      <p v-else-if="entries.length === 0" class="text-sm text-muted-foreground">{{ t('activity.empty') }}</p>
       <template v-else>
         <!-- Capped mode drops the virtualizer's container/wrapper bindings, and
              with them the nested scrollport: the rows just flow. -->

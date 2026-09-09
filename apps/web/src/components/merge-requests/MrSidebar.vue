@@ -20,6 +20,7 @@
 // Both panes stay mounted (v-show, not v-if): switching to the findings and
 // back must not throw away a half-picked reviewer set, and re-running the
 // review because you looked at the assignee is not a thing anyone wants.
+import { useI18n } from 'vue-i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { Check, Pencil, X } from 'lucide-vue-next'
@@ -31,6 +32,8 @@ import { Label } from '@/components/ui/label'
 import UserAvatar from './UserAvatar.vue'
 import AiCheckPane from './AiCheckPane.vue'
 import { useMembers } from './use-members'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   mergeRequest: MergeRequestInfo
@@ -216,7 +219,7 @@ const revisionRows = computed(() =>
         <!-- assignee -->
         <section class="px-3 py-3">
           <div class="flex items-center gap-2">
-            <h3 class="text-xs font-medium text-muted-foreground">Assignee</h3>
+            <h3 class="text-xs font-medium text-muted-foreground">{{ t('mr.assignee') }}</h3>
             <button
               v-if="!readonly"
               class="ml-auto text-muted-foreground transition-colors hover:text-foreground"
@@ -232,7 +235,7 @@ const revisionRows = computed(() =>
               <UserAvatar :user-id="mr.assigneeId" :name="nameOf(mr.assigneeId)" size="sm" />
               <span class="truncate">{{ nameOf(mr.assigneeId) }}</span>
             </template>
-            <span v-else class="text-xs text-muted-foreground">Unassigned</span>
+            <span v-else class="text-xs text-muted-foreground">{{ t('mr.unassigned') }}</span>
           </div>
 
           <div v-else class="mt-2 space-y-0.5">
@@ -243,7 +246,7 @@ const revisionRows = computed(() =>
               @click="setAssignee(null)"
             >
               <span class="size-5" />
-              <span class="text-muted-foreground">Unassigned</span>
+              <span class="text-muted-foreground">{{ t('mr.unassigned') }}</span>
             </button>
             <button
               v-for="m in members"
@@ -325,7 +328,7 @@ const revisionRows = computed(() =>
 
         <!-- revisions -->
         <section class="px-3 py-3">
-          <h3 class="text-xs font-medium text-muted-foreground">Revisions</h3>
+          <h3 class="text-xs font-medium text-muted-foreground">{{ t('mr.revisions') }}</h3>
           <dl class="mt-2 space-y-1.5">
             <div v-for="row in revisionRows" :key="row.label" class="flex items-baseline gap-2 text-xs">
               <dt class="shrink-0 text-muted-foreground">{{ row.label }}</dt>

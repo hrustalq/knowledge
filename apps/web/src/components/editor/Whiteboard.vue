@@ -13,6 +13,7 @@
  * 2. **Geometry lives in lib/markdown/drawing.ts**, shared with the read view's
  *    static renderer. The published page and the editing canvas cannot drift.
  */
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import {
   ArrowRight,
@@ -47,6 +48,8 @@ import {
   type DrawTool,
   type ShapeKind,
 } from '@/lib/markdown/drawing'
+
+const { t } = useI18n()
 
 const props = defineProps<{ modelValue: string }>()
 const emit = defineEmits<{ 'update:modelValue': [string]; close: [] }>()
@@ -608,7 +611,7 @@ function resize(delta: number) {
     </div>
 
     <div class="kn-wb-foot">
-      <span class="text-xs text-muted-foreground">{{ scene.els.length }} object{{ scene.els.length === 1 ? '' : 's' }}</span>
+      <span class="text-xs text-muted-foreground">{{ t('count.objects', { n: scene.els.length }, scene.els.length) }}</span>
       <div class="ml-auto flex items-center gap-1">
         <button type="button" class="kn-wb-tool" title="Shorter canvas" @click="resize(-120)">−</button>
         <span class="text-xs tabular-nums text-muted-foreground">{{ scene.w }}×{{ scene.h }}</span>

@@ -7,11 +7,14 @@
  * direction the pane is about to travel. The count sits in tabular figures so
  * the column of numbers stays a column instead of wobbling per digit.
  */
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
 import { hueOf, initialsOf } from '@/lib/monogram'
 import { ChevronRight, Plus } from 'lucide-vue-next'
 import { Skeleton } from '@/components/ui/skeleton'
+
+const { t } = useI18n()
 
 defineEmits<{ open: [projectId: string]; create: [] }>()
 
@@ -28,8 +31,8 @@ const projects = useProjectsStore()
       <button
         v-if="auth.canEdit"
         type="button"
-        title="New project"
-        aria-label="New project"
+        :title="t('nav.newProject')"
+        :aria-label="t('nav.newProject')"
         class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-6 place-items-center rounded transition-colors"
         @click="$emit('create')"
       >
@@ -46,7 +49,7 @@ const projects = useProjectsStore()
         No projects yet<template v-if="auth.canEdit">
           —
           <button type="button" class="text-primary hover:underline" @click="$emit('create')">
-            create the first one
+            {{ t('nav.createFirstPage') }}
           </button></template>.
       </p>
 

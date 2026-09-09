@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // One project's settings, rendered beside the project rail. Deleting needs
 // `admin`, editing `editor` — hidden here, enforced by the API.
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -10,6 +11,8 @@ import { useProjectsStore } from '@/stores/projects'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ changed: [] }>()
 
@@ -74,7 +77,7 @@ async function remove() {
 
 <template>
   <div v-if="!route.params.id" class="space-y-2">
-    <h1 class="font-display text-2xl font-bold tracking-tight">Projects</h1>
+    <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('nav.projects') }}</h1>
     <p class="text-sm text-muted-foreground">
       Every page belongs to exactly one project. Pick one from the list to rename it, or switch the
       active project to re-scope the page tree.
@@ -89,7 +92,7 @@ async function remove() {
     <header class="space-y-2">
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ project.name }}</h1>
       <div class="flex flex-wrap items-center gap-2">
-        <Badge v-if="project.projectId === store.activeId" variant="secondary">active</Badge>
+        <Badge v-if="project.projectId === store.activeId" variant="secondary">{{ t('project.active') }}</Badge>
         <Badge variant="outline">{{ project.documentCount }} pages</Badge>
         <span class="text-xs text-muted-foreground">Created {{ relativeTime(project.createdAt) }}</span>
       </div>
@@ -97,12 +100,12 @@ async function remove() {
 
     <div class="space-y-3">
       <label class="block space-y-1">
-        <span class="text-xs font-medium text-muted-foreground">Name</span>
-        <Input v-model="name" :disabled="!auth.canEdit" placeholder="Name" />
+        <span class="text-xs font-medium text-muted-foreground">{{ t('project.name') }}</span>
+        <Input v-model="name" :disabled="!auth.canEdit" :placeholder="t('project.name')" />
       </label>
       <label class="block space-y-1">
-        <span class="text-xs font-medium text-muted-foreground">Description</span>
-        <Input v-model="description" :disabled="!auth.canEdit" placeholder="Optional" />
+        <span class="text-xs font-medium text-muted-foreground">{{ t('project.description') }}</span>
+        <Input v-model="description" :disabled="!auth.canEdit" :placeholder="t('project.optional')" />
       </label>
       <div class="flex flex-wrap gap-2 pt-1">
         <Button v-if="auth.canEdit" :disabled="!dirty || saving || !name.trim()" @click="save">

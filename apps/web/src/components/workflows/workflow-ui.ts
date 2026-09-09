@@ -66,16 +66,21 @@ export const STEP_KINDS: Array<{
 
 export const stepKind = (kind: WorkflowStepKind) => STEP_KINDS.find((k) => k.value === kind)
 
+/**
+ * Message keys, not labels: this is a module constant, so it cannot call
+ * useI18n(). Components resolve it with `t(NODE_STATUS_LABEL[status])`
+ * (docs/features/18).
+ */
 export const NODE_STATUS_LABEL: Record<WorkflowNodeStatus, string> = {
-  pending: 'Queued',
-  running: 'Working',
-  'awaiting-review': 'Needs review',
-  approved: 'Approved',
-  materializing: 'Publishing',
-  materialized: 'Published',
-  rejected: 'Rejected',
-  skipped: 'Skipped',
-  failed: 'Failed',
+  pending: 'workflow.nodeStatus.pending',
+  running: 'workflow.nodeStatus.running',
+  'awaiting-review': 'workflow.nodeStatus.awaiting-review',
+  approved: 'workflow.nodeStatus.approved',
+  materializing: 'workflow.nodeStatus.materializing',
+  materialized: 'workflow.nodeStatus.materialized',
+  rejected: 'workflow.nodeStatus.rejected',
+  skipped: 'workflow.nodeStatus.skipped',
+  failed: 'workflow.nodeStatus.failed',
 }
 
 export const NODE_STATUS_ICON: Record<WorkflowNodeStatus, Component> = {
@@ -103,14 +108,15 @@ export const NODE_STATUS_CLASS: Record<WorkflowNodeStatus, string> = {
   failed: 'text-destructive',
 }
 
+/** Message keys — see NODE_STATUS_LABEL. */
 export const RUN_STATUS_LABEL: Record<WorkflowRunStatus, string> = {
-  pending: 'Starting',
-  running: 'Running',
-  'awaiting-review': 'Needs review',
-  paused: 'Paused',
-  completed: 'Completed',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
+  pending: 'workflow.runStatus.pending',
+  running: 'workflow.runStatus.running',
+  'awaiting-review': 'workflow.runStatus.awaiting-review',
+  paused: 'workflow.runStatus.paused',
+  completed: 'workflow.runStatus.completed',
+  failed: 'workflow.runStatus.failed',
+  cancelled: 'workflow.runStatus.cancelled',
 }
 
 export const RUN_STATUS_ICON: Record<WorkflowRunStatus, Component> = {

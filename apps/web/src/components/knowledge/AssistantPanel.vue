@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // Feature 09 (docs/features/09): editor sidebar — review, related docs, suggestions.
+import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import type {
@@ -11,6 +12,8 @@ import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+
+const { t } = useI18n()
 
 const props = defineProps<{ title: string; markdown: string }>()
 const emit = defineEmits<{ append: [text: string] }>()
@@ -68,7 +71,7 @@ async function runSuggest() {
 
 <template>
   <div class="space-y-4 rounded-lg border p-4">
-    <h2 class="text-sm font-semibold">AI assistant</h2>
+    <h2 class="text-sm font-semibold">{{ t('assistant.title') }}</h2>
 
     <div class="flex flex-wrap gap-2">
       <Button size="sm" variant="outline" :disabled="busy !== null || !markdown.trim()" @click="runReview">
@@ -93,13 +96,13 @@ async function runSuggest() {
             <span v-if="issue.section" class="font-medium">{{ issue.section }}: </span>{{ issue.message }}
           </span>
         </div>
-        <p v-if="review.issues.length === 0" class="text-xs text-muted-foreground">No issues found.</p>
+        <p v-if="review.issues.length === 0" class="text-xs text-muted-foreground">{{ t('assistant.noIssues') }}</p>
       </template>
     </div>
 
     <div v-if="related" class="space-y-1.5">
-      <p class="text-xs font-medium text-muted-foreground">Related documents</p>
-      <p v-if="related.results.length === 0" class="text-xs text-muted-foreground">Nothing similar yet.</p>
+      <p class="text-xs font-medium text-muted-foreground">{{ t('assistant.relatedDocuments') }}</p>
+      <p v-if="related.results.length === 0" class="text-xs text-muted-foreground">{{ t('assistant.nothingSimilar') }}</p>
       <div v-for="r in related.results" :key="r.chunkId" class="text-xs">
         <RouterLink :to="`/documents/${r.documentId}`" class="font-medium hover:underline" target="_blank">
           {{ r.title }}
@@ -109,9 +112,9 @@ async function runSuggest() {
     </div>
 
     <div class="space-y-2 border-t pt-3">
-      <p class="text-xs font-medium text-muted-foreground">Suggest</p>
+      <p class="text-xs font-medium text-muted-foreground">{{ t('assistant.suggest') }}</p>
       <form class="flex gap-2" @submit.prevent="runSuggest">
-        <Input v-model="instruction" placeholder="e.g. Draft an outline for the missing sections" class="h-8 text-xs" />
+        <Input v-model="instruction" :placeholder="t('assistant.suggestPlaceholder')" class="h-8 text-xs" />
         <Button size="sm" type="submit" :disabled="busy !== null || !instruction.trim()">
           {{ busy === 'suggest' ? '…' : 'Go' }}
         </Button>

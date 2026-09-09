@@ -5,6 +5,7 @@
 // Tabs are hand-rolled (there is no shadcn Tabs component here) using the same
 // role="tablist" + border-b-2 strip as MergeRequestsPage, and the active tab
 // lives in the query string so a link can point at one.
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Badge } from '@/components/ui/badge'
@@ -15,12 +16,15 @@ import AiPluginsPanel from '@/components/ai/AiPluginsPanel.vue'
 import AiUsagePanel from '@/components/ai/AiUsagePanel.vue'
 import AiLogsPanel from '@/components/ai/AiLogsPanel.vue'
 
+const { t } = useI18n()
+
+// `label` is a message key — resolved with t() where the tab renders.
 const TABS = [
-  { key: 'config', label: 'Configuration' },
-  { key: 'skills', label: 'Skills' },
-  { key: 'plugins', label: 'Plugins' },
-  { key: 'usage', label: 'Usage' },
-  { key: 'logs', label: 'Logs' },
+  { key: 'config', label: 'ai.tabConfig' },
+  { key: 'skills', label: 'ai.tabSkills' },
+  { key: 'plugins', label: 'ai.tabPlugins' },
+  { key: 'usage', label: 'ai.tabUsage' },
+  { key: 'logs', label: 'ai.tabLogs' },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
 
@@ -51,27 +55,27 @@ function setTab(key: TabKey) {
       <div>
         <h1 class="font-display text-2xl font-bold tracking-tight">AI</h1>
         <p class="text-muted-foreground mt-0.5 text-sm">
-          Assistant provider, skills, plugins and token spend for this workspace.
+          {{ t('ai.pageSubtitle') }}
         </p>
       </div>
-      <Badge v-if="!canManage" variant="outline">read-only — workspace admin required</Badge>
+      <Badge v-if="!canManage" variant="outline">{{ t('ai.readOnlyBadge') }}</Badge>
     </div>
 
     <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
       <button
-        v-for="t in TABS"
-        :key="t.key"
+        v-for="tabDef in TABS"
+        :key="tabDef.key"
         role="tab"
-        :aria-selected="tab === t.key"
+        :aria-selected="tab === tabDef.key"
         class="focus-visible:ring-ring rounded-t-sm border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none"
         :class="
-          tab === t.key
+          tab === tabDef.key
             ? 'border-primary text-primary font-medium'
             : 'text-muted-foreground hover:text-foreground hover:border-border border-transparent'
         "
-        @click="setTab(t.key)"
+        @click="setTab(tabDef.key)"
       >
-        {{ t.label }}
+        {{ t(tabDef.label) }}
       </button>
     </div>
 

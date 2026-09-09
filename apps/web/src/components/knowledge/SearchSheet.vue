@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Global search surface: filters on the left rail, query top-right, results
 // below it. Opened from the topbar trigger, "/" or Cmd/Ctrl+K.
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { watchDebounced } from '@vueuse/core'
@@ -11,6 +12,8 @@ import { useWorkspacesStore } from '@/stores/workspaces'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import SearchPanel from './SearchPanel.vue'
 import { useSearch } from './use-search'
+
+const { t } = useI18n()
 
 const ui = useSearchUiStore()
 const workspaces = useWorkspacesStore()
@@ -130,7 +133,7 @@ watch(() => route.fullPath, () => ui.close())
       @close-auto-focus="onCloseAutoFocus"
     >
       <SheetHeader class="sr-only">
-        <SheetTitle>Search</SheetTitle>
+        <SheetTitle>{{ t('nav.search') }}</SheetTitle>
         <SheetDescription>
           Semantic, keyword and graph-expanded search across the workspace.
         </SheetDescription>

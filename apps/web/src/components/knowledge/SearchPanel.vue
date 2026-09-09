@@ -2,6 +2,7 @@
 // The whole search surface — filters rail, query field, results — shared by the
 // global sheet (SearchSheet.vue) and the standalone /search page
 // (SearchWidget.vue) so the two can never drift apart.
+import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { Search, SlidersHorizontal } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,8 @@ import { nativeEl } from '@/lib/utils'
 import SearchFilters from './SearchFilters.vue'
 import SearchResults from './SearchResults.vue'
 import type { UseSearch } from './use-search'
+
+const { t } = useI18n()
 
 withDefaults(
   defineProps<{
@@ -59,12 +62,12 @@ defineExpose({ focusQuery: () => queryEl.value?.focus() })
               :ref="setQueryEl"
               v-model="search.query.value"
               :placeholder="placeholder"
-              aria-label="Search query"
+              :aria-label="t('search.query')"
               class="pl-8"
             />
           </div>
           <Button type="submit" :disabled="search.busy.value || !search.query.value.trim()">
-            {{ search.busy.value ? 'Searching…' : 'Search' }}
+            {{ search.busy.value ? t('search.searching') : t('nav.search') }}
           </Button>
         </form>
 

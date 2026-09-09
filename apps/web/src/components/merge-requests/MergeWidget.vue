@@ -2,6 +2,8 @@
 // GitLab-style merge widget: readiness checklist + the merge/close/reopen
 // controls in one card. 409 gate reasons (draft | approvals | diverged, see
 // MergeGateConflictDetails) surface as toasts — divergence with a compare link.
+import { useI18n } from 'vue-i18n'
+import { formatDateTime } from '@/lib/format'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -18,6 +20,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { actorLabel, mrIcon } from './mr-ui'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{ mergeRequest: MergeRequestInfo; unresolvedThreads?: number }>(), {
   unresolvedThreads: 0,
@@ -115,15 +119,15 @@ function toggleDraft() {
       <p class="flex items-center gap-2" :class="mr.isDraft ? 'text-muted-foreground' : ''">
         <CircleDashed v-if="mr.isDraft" class="size-4 text-amber-500" />
         <Check v-else class="size-4 text-emerald-500" />
-        <span v-if="mr.isDraft">Marked as draft — cannot be merged yet</span>
-        <span v-else>Ready — not a draft</span>
+        <span v-if="mr.isDraft">{{ t('mr.markedDraft') }}</span>
+        <span v-else>{{ t('mr.readyNotDraft') }}</span>
       </p>
       <p class="flex items-center gap-2">
         <ThumbsUp class="size-4" :class="mr.approvedBy.length > 0 ? 'text-emerald-500' : 'text-muted-foreground/60'" />
         <span v-if="mr.approvedBy.length > 0">
           Approved by {{ mr.approvedBy.map((a) => actorLabel(a)).join(', ') }}
         </span>
-        <span v-else class="text-muted-foreground">No approvals yet</span>
+        <span v-else class="text-muted-foreground">{{ t('mr.noApprovals') }}</span>
         <Button
           v-if="auth.canEdit"
           variant="outline"
@@ -138,9 +142,9 @@ function toggleDraft() {
       <p class="flex items-center gap-2">
         <MessageSquare class="size-4" :class="unresolvedThreads > 0 ? 'text-amber-500' : 'text-muted-foreground/60'" />
         <span v-if="unresolvedThreads > 0">
-          {{ unresolvedThreads }} unresolved thread{{ unresolvedThreads === 1 ? '' : 's' }}
+          {{ t('count.unresolvedThreads', { n: unresolvedThreads }, unresolvedThreads) }}
         </span>
-        <span v-else class="text-muted-foreground">All threads resolved</span>
+        <span v-else class="text-muted-foreground">{{ t('mr.allThreadsResolved') }}</span>
       </p>
     </div>
 
@@ -148,10 +152,10 @@ function toggleDraft() {
     <div v-else class="flex items-center gap-2 border-b px-4 py-3 text-sm">
       <component :is="mrIcon(mr).icon" class="size-4" :class="mrIcon(mr).class" />
       <span v-if="mr.status === 'merged'">
-        Merged{{ mr.mergedAt ? ` ${new Date(mr.mergedAt).toLocaleString()}` : '' }}{{ mr.strategy ? ` (${mr.strategy})` : '' }}
+        {{ t('mr.mergedAt', { when: mr.mergedAt ? formatDateTime(mr.mergedAt) : '' }) }}{{ mr.strategy ? ` (${mr.strategy})` : '' }}
       </span>
       <span v-else>
-        Closed{{ mr.closedAt ? ` ${new Date(mr.closedAt).toLocaleString()}` : '' }}
+        {{ t('mr.closedAt', { when: mr.closedAt ? formatDateTime(mr.closedAt) : '' }) }}
       </span>
       <RouterLink
         v-if="mr.mergedRevisionId"
@@ -166,12 +170,12 @@ function toggleDraft() {
     <div v-if="auth.canEdit" class="flex flex-wrap items-center gap-2 px-4 py-3">
       <template v-if="isOpen">
         <Select v-model="strategy" :disabled="busy">
-          <SelectTrigger size="sm" class="text-xs" aria-label="Merge strategy">
+          <SelectTrigger size="sm" class="text-xs" :aria-label="t('mr.mergeStrategy')">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="merge-commit">Merge commit</SelectItem>
-            <SelectItem value="squash">Squash</SelectItem>
+            <SelectItem value="merge-commit">{{ t('mr.mergeCommit') }}</SelectItem>
+            <SelectItem value="squash">{{ t('mr.squash') }}</SelectItem>
           </SelectContent>
         </Select>
         <Button size="sm" :disabled="busy || mr.isDraft" @click="onMerge">

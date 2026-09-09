@@ -7,6 +7,7 @@
 // (as the project rail does) rather than the measuring one the transcript
 // needs. Search runs server-side over titles *and* message bodies, because
 // almost no one renames a chat and a title-only filter would find nothing.
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { refDebounced, useInfiniteScroll, useVirtualList } from '@vueuse/core'
 import { toast } from 'vue-sonner'
@@ -24,6 +25,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { threadLabel } from './thread-label'
+
+const { t } = useI18n()
 
 const props = defineProps<{ documentId?: string }>()
 
@@ -80,14 +83,14 @@ function open(threadId: string) {
       <Search class="pointer-events-none absolute left-4 size-3.5 text-muted-foreground" />
       <Input
         v-model="query"
-        placeholder="Search chats…"
-        aria-label="Search chats"
+        :placeholder="t('chat.searchChats')"
+        :aria-label="t('chat.searchChats')"
         class="h-8 pr-7 pl-8 text-sm"
       />
       <button
         v-if="query"
         type="button"
-        aria-label="Clear search"
+        :aria-label="t('chat.clearSearch')"
         class="absolute right-4 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
         @click="query = ''"
       >
@@ -171,7 +174,7 @@ function open(threadId: string) {
     <div class="mt-auto shrink-0 border-t p-2">
       <Button variant="outline" size="sm" class="w-full justify-start" @click="startNewThread">
         <Plus class="size-4" />
-        New chat
+        {{ t('chat.newChat') }}
       </Button>
     </div>
   </div>

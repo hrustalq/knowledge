@@ -17,11 +17,14 @@
  * the chosen file arrives rather than replacing the invitation instantly, so
  * you can see that what you dropped is what it got.
  */
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { FileUp, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ACCEPT_ATTR, PARSER_ICONS, formatBytes, inspectFile } from './formats'
 import { IMPORT_FORMATS } from '@knowledge/contracts'
+
+const { t } = useI18n()
 
 const props = defineProps<{ modelValue: File | null; maxBytes: number; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [File | null] }>()
@@ -100,7 +103,7 @@ function clear(): void {
         @click="input?.click()"
       >
         <FileUp class="kn-drop-icon mb-2 size-8 text-muted-foreground" aria-hidden="true" />
-        <span class="text-base font-medium">Drop a file here, or choose one</span>
+        <span class="text-base font-medium">{{ t('import.dropFile') }}</span>
         <span class="mt-0.5 max-w-sm text-sm text-muted-foreground">{{ offered }}</span>
         <span class="text-xs text-muted-foreground">Up to {{ formatBytes(maxBytes) }}</span>
       </button>

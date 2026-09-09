@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // One merge request as a card (GitLab MR-list style): state icon, title,
 // branches, assignee + reviewer avatars, approval/thread stats, age.
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { MessageSquare, ThumbsUp } from 'lucide-vue-next'
 import type { MergeRequestInfo } from '@knowledge/contracts'
@@ -9,6 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import UserAvatar from './UserAvatar.vue'
 import { mrIcon } from './mr-ui'
 import { useMembers } from './use-members'
+
+const { t } = useI18n()
 
 const props = defineProps<{ mergeRequest: MergeRequestInfo }>()
 const { nameOf } = useMembers()
@@ -20,7 +23,7 @@ const state = computed(() => mrIcon(mr.value))
 <template>
   <div class="rounded-lg border bg-card p-3 transition-colors hover:border-primary/40">
     <div class="flex items-start gap-3">
-      <component :is="state.icon" class="mt-0.5 size-4 shrink-0" :class="state.class" :title="state.label" />
+      <component :is="state.icon" class="mt-0.5 size-4 shrink-0" :class="state.class" :title="t(state.label)" />
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
           <RouterLink
@@ -29,11 +32,11 @@ const state = computed(() => mrIcon(mr.value))
           >
             {{ mr.title }}
           </RouterLink>
-          <Badge v-if="mr.isDraft" variant="outline" class="text-xs">Draft</Badge>
+          <Badge v-if="mr.isDraft" variant="outline" class="text-xs">{{ t('mr.draft') }}</Badge>
         </div>
         <p class="mt-0.5 truncate text-xs text-muted-foreground">
           <span class="font-mono">{{ mr.sourceBranch }} → {{ mr.targetBranch }}</span>
-          · opened {{ relativeTime(mr.createdAt) }} by {{ nameOf(mr.authorId) }}
+          · {{ t('mr.openedByAt', { when: relativeTime(mr.createdAt), who: nameOf(mr.authorId) }) }}
         </p>
       </div>
 

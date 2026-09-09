@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Merge-request card stack. Used by the workspace page (pass rows) and the
 // document tab (pass documentId — fetches the document-scoped list itself).
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { GitPullRequestArrow, SearchX } from 'lucide-vue-next'
@@ -9,6 +10,8 @@ import { apiQueryOptions } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import MergeRequestCard from './MergeRequestCard.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   documentId?: string
@@ -46,7 +49,7 @@ const isLoading = computed(() => props.loading ?? (!!props.documentId && documen
   >
     <template v-if="narrowed">
       <SearchX class="size-8 text-muted-foreground/50" />
-      <p class="mt-3 font-medium">No matches</p>
+      <p class="mt-3 font-medium">{{ t('mr.noMatches') }}</p>
       <p class="mt-1 text-sm text-muted-foreground">
         No merge request here matches the current search and filters.
       </p>
@@ -56,7 +59,7 @@ const isLoading = computed(() => props.loading ?? (!!props.documentId && documen
     </template>
     <template v-else>
       <GitPullRequestArrow class="size-8 text-muted-foreground/50" />
-      <p class="mt-3 font-medium">No merge requests</p>
+      <p class="mt-3 font-medium">{{ t('mr.noMergeRequests') }}</p>
       <p class="mt-1 text-sm text-muted-foreground">
         Branch a document and open a merge request to propose changes.
       </p>

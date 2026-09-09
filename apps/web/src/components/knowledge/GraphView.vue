@@ -6,6 +6,7 @@
 // at any node count for free, and fixes the old version's crowding at
 // depth > 1 (nodes were clamped inside a fixed 860x560 viewBox with no way
 // to zoom in).
+import { useI18n } from 'vue-i18n'
 import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useResizeObserver } from '@vueuse/core'
@@ -24,6 +25,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+
+const { t } = useI18n()
 
 const props = defineProps<{ documentId: string }>()
 const router = useRouter()
@@ -245,7 +248,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="space-y-3">
     <div class="flex items-center gap-3">
-      <Label for="graph-depth" class="text-sm font-normal text-muted-foreground">Depth</Label>
+      <Label for="graph-depth" class="text-sm font-normal text-muted-foreground">{{ t('graph.depth') }}</Label>
       <Select v-model="depth">
         <SelectTrigger id="graph-depth" size="sm" class="text-sm">
           <SelectValue />
@@ -270,13 +273,13 @@ onBeforeUnmount(() => {
     <div v-else class="relative h-[480px] w-full overflow-hidden rounded-lg border bg-background">
       <div ref="containerEl" class="h-full w-full" />
       <div class="absolute right-2 top-2 flex flex-col gap-1 rounded-md border bg-background/90 p-1 shadow-sm backdrop-blur-sm">
-        <Button variant="ghost" size="icon-sm" title="Zoom in" @click="zoomBy(1.25)">
+        <Button variant="ghost" size="icon-sm" :title="t('graph.zoomIn')" @click="zoomBy(1.25)">
           <ZoomIn class="size-4" />
         </Button>
-        <Button variant="ghost" size="icon-sm" title="Zoom out" @click="zoomBy(0.8)">
+        <Button variant="ghost" size="icon-sm" :title="t('graph.zoomOut')" @click="zoomBy(0.8)">
           <ZoomOut class="size-4" />
         </Button>
-        <Button variant="ghost" size="icon-sm" title="Fit to view" @click="fitToView">
+        <Button variant="ghost" size="icon-sm" :title="t('graph.fitToView')" @click="fitToView">
           <Maximize2 class="size-4" />
         </Button>
       </div>

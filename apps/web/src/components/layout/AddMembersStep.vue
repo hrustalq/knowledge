@@ -9,6 +9,7 @@
  * while nothing has happened and "Done" once something has, because by then it
  * is no longer a skip.
  */
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import type {
   ListWorkspaceCandidatesResponse,
@@ -28,6 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+
+const { t } = useI18n()
 
 const props = defineProps<{ workspaceId: string; workspaceName?: string | null }>()
 const emit = defineEmits<{ done: [] }>()
@@ -92,11 +95,11 @@ async function add() {
          sit on the Autocomplete's own line height. -->
     <Autocomplete
       v-model="pickedValue"
-      label="Person"
-      placeholder="Search by name or email…"
+      :label="t('nav.person')"
+      :placeholder="t('nav.searchPeoplePlaceholder')"
       :multiple="false"
       :load="loadCandidates"
-      empty-hint="No one else to add to this workspace yet."
+      empty-hint="{{ t('nav.noOneToAdd') }}"
     />
 
     <div class="flex items-end gap-2">
@@ -150,7 +153,7 @@ async function add() {
         :variant="added.length > 0 ? 'default' : 'outline'"
         @click="emit('done')"
       >
-        {{ added.length > 0 ? 'Done' : 'Skip for now' }}
+        {{ added.length > 0 ? t('nav.done') : t('nav.skipForNow') }}
       </Button>
     </DialogFooter>
   </div>

@@ -30,7 +30,7 @@ Hold documentation as a queryable, versioned, machine-readable structure instead
 a folder of files. A page is stored as immutable revisions on a branch DAG, chunked
 and embedded, and projected into a graph of documents, entities and typed relations
 with provenance. That combination makes three things possible that a wiki cannot do:
-ask *what breaks if this changes*, review a documentation change the way a merge
+ask _what breaks if this changes_, review a documentation change the way a merge
 request is reviewed, and let an agent traverse the same knowledge a person reads.
 
 Success is that the knowledge base stays trustworthy as it grows: relations reflect
@@ -45,7 +45,7 @@ The combination is the position — each half exists elsewhere, the pair does no
   BM25 and graph expansion; `impact-analysis` answers dependency questions across
   document→entity edges. This is not "search plus a diagram."
 - **GitLab-shaped governance for prose.** Immutable revision DAG, branches, merge
-  requests with structural *and* semantic diff, quote-anchored review threads,
+  requests with structural _and_ semantic diff, quote-anchored review threads,
   approval gates, `If-Match` concurrency. Documents are governed like code.
 - **Agent-native by construction.** MCP is a constrained tool surface over the same
   ACLs, not raw DB access — the API and the agent interface cannot drift apart.
@@ -100,9 +100,10 @@ landing on the API and has no web surface yet.
 
 **Known gaps future work must not paper over:**
 
-- **Internationalization is required and absent.** The interface must serve English
-  and Russian; there is no i18n layer today and every string is inline English.
-  Layouts must survive Cyrillic's longer strings.
+- **Cyrillic layouts are checked only at desktop widths.** The interface serves
+  English and Russian (docs/features/18), and the main surfaces were walked at
+  1024–1440 px. Narrow/mobile widths and the workflow canvas were not, and
+  Russian runs 15–20% longer — so that is where clipping will show up first.
 - There is no test suite; verification is `make check` plus the end-to-end flow.
 - First-run experience, empty states and setup guidance are unbuilt — the app
   assumes an operator who already knows the model.

@@ -17,6 +17,7 @@
 // The same box also rewrites an existing comment: `initialBody` seeds it and
 // `cancellable` gives the way back out, since an edit that cannot be
 // abandoned is a trap.
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ChevronDown, MessageSquare, MessagesSquare, Paperclip } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,8 @@ import {
 import RichEditor from '@/components/editor/RichEditor.vue'
 import { useDocumentsStore } from '@/stores/documents'
 import { useMembers } from './use-members'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -164,7 +167,7 @@ function cancel() {
         variant="ghost"
         size="sm"
         class="text-muted-foreground"
-        title="Attach an image, PDF or file"
+        :title="t('mr.attachFile')"
         @click="editorEl?.attach()"
       >
         <Paperclip class="size-3.5" />
@@ -198,7 +201,7 @@ function cancel() {
               size="sm"
               class="rounded-l-none border-l border-primary-foreground/25 px-1.5"
               :disabled="busy || isEmpty()"
-              aria-label="More comment actions"
+              :aria-label="t('mr.moreCommentActions')"
             >
               <ChevronDown class="size-3.5" />
             </Button>
@@ -208,13 +211,13 @@ function cancel() {
               <MessageSquare class="mt-0.5 size-4 shrink-0" />
               <span>
                 <span class="block font-medium">{{ submitLabel }}</span>
-                <span class="block text-xs text-muted-foreground">A remark. Nothing to resolve.</span>
+                <span class="block text-xs text-muted-foreground">{{ t('mr.plainRemark') }}</span>
               </span>
             </DropdownMenuItem>
             <DropdownMenuItem class="items-start gap-2" @select="submit(true)">
               <MessagesSquare class="mt-0.5 size-4 shrink-0" />
               <span>
-                <span class="block font-medium">Start thread</span>
+                <span class="block font-medium">{{ t('mr.startThread') }}</span>
                 <span class="block text-xs text-muted-foreground">
                   Stays open until someone resolves it.
                 </span>

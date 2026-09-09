@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { Check, ExternalLink, RotateCcw, SkipForward, X } from 'lucide-vue-next'
 import type {
@@ -12,6 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } from './workflow-ui'
+
+const { t } = useI18n()
 
 /**
  * One node's draft, and the review gate over it (docs/features/17).
@@ -87,7 +90,7 @@ function approve() {
             class="size-3.5"
             :class="[NODE_STATUS_CLASS[node.status], isBusyStatus(node.status) ? 'animate-spin' : '']"
           />
-          {{ NODE_STATUS_LABEL[node.status] }}
+          {{ t(NODE_STATUS_LABEL[node.status]) }}
           <template v-if="step"> · {{ step.title }}</template>
           <template v-if="node.attempt > 0"> · attempt {{ node.attempt + 1 }}</template>
         </p>
@@ -107,7 +110,7 @@ function approve() {
 
     <div v-if="children.length" class="space-y-2">
       <p class="text-muted-foreground text-xs">
-        This step broke the source into {{ children.length }} item{{ children.length === 1 ? '' : 's' }}.
+        {{ t('workflow.brokeIntoItems', { items: t('count.items', { n: children.length }, children.length) }) }}
       </p>
       <ul class="divide-y overflow-hidden rounded-md border">
         <li v-for="child in children" :key="child.id">
@@ -124,7 +127,7 @@ function approve() {
             <span class="min-w-0 flex-1">
               <span class="block truncate text-[13px]">{{ child.draft?.title ?? 'Untitled' }}</span>
               <span class="text-muted-foreground block truncate text-[11px]">
-                {{ child.draft?.summary || NODE_STATUS_LABEL[child.status] }}
+                {{ child.draft?.summary || t(NODE_STATUS_LABEL[child.status]) }}
               </span>
             </span>
           </button>

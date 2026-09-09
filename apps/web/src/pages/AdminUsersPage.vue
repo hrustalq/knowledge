@@ -4,6 +4,7 @@
 // Layout is toolbar + table: the roster is the page, so creating an account
 // lives behind a dialog and narrowing the list lives in the filter bar rather
 // than in stacked cards above the thing you came to read.
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { AtSign, CircleDashed, Library, Plus, ShieldCheck } from 'lucide-vue-next'
@@ -39,6 +40,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 
+const { t } = useI18n()
+
 const auth = useAuthStore()
 const users = ref<UserSummary[]>([])
 const workspaces = ref<WorkspaceSummary[]>([])
@@ -57,27 +60,27 @@ const filters = ref<ActiveFilter[]>([])
 const fields = computed<FilterField[]>(() => [
   {
     key: 'status',
-    label: 'Status',
+    label: t('filter.status'),
     icon: CircleDashed,
     options: [
-      { value: 'active', label: 'Active' },
-      { value: 'disabled', label: 'Disabled' },
-      { value: 'admin', label: 'Platform admin' },
+      { value: 'active', label: t('filter.active') },
+      { value: 'disabled', label: t('filter.disabled') },
+      { value: 'admin', label: t('filter.platformAdmin') },
     ],
   },
   {
     key: 'role',
-    label: 'Role',
+    label: t('filter.role'),
     icon: ShieldCheck,
     options: [
-      { value: 'viewer', label: 'Viewer' },
-      { value: 'editor', label: 'Editor' },
-      { value: 'admin', label: 'Admin' },
+      { value: 'viewer', label: t('role.viewer') },
+      { value: 'editor', label: t('role.editor') },
+      { value: 'admin', label: t('role.admin') },
     ],
   },
   {
     key: 'workspace',
-    label: 'Workspace',
+    label: t('filter.workspace'),
     icon: Library,
     options: workspaces.value.map((w) => ({
       value: w.workspaceId,
@@ -87,7 +90,7 @@ const fields = computed<FilterField[]>(() => [
   },
   {
     key: 'text',
-    label: 'Name or email',
+    label: t('filter.nameOrEmail'),
     icon: AtSign,
     group: 'Text',
     type: 'text',
@@ -170,7 +173,7 @@ function setPassword(user: UserSummary) {
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-3">
-      <h1 class="font-display text-2xl font-bold tracking-tight">Users</h1>
+      <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('users.title') }}</h1>
       <Button size="sm" @click="createOpen = true">
         <Plus class="size-3.5" /> New user
       </Button>
@@ -179,7 +182,7 @@ function setPassword(user: UserSummary) {
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <FilterBar v-model="filters" :fields="fields" />
       <p class="text-muted-foreground text-xs tabular-nums">
-        {{ visibleUsers.length }} of {{ users.length }} account{{ users.length === 1 ? '' : 's' }}
+        {{ t('documents.ofAccounts', { shown: visibleUsers.length, total: t('count.accounts', { n: users.length }, users.length) }) }}
       </p>
     </div>
 
@@ -194,8 +197,8 @@ function setPassword(user: UserSummary) {
     <Table v-else>
       <TableHeader>
         <TableRow>
-          <TableHead>User</TableHead>
-          <TableHead>Status</TableHead>
+          <TableHead>{{ t('users.user') }}</TableHead>
+          <TableHead>{{ t('users.status') }}</TableHead>
           <TableHead>Workspaces</TableHead>
           <TableHead>Credentials</TableHead>
           <TableHead class="text-right">Actions</TableHead>

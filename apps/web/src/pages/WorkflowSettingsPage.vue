@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -27,6 +28,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import WorkflowGraphEditor from '@/components/workflows/WorkflowGraphEditor.vue'
 import WorkflowStepForm from '@/components/workflows/WorkflowStepForm.vue'
+
+const { t } = useI18n()
 
 /**
  * The workflow workbench (docs/features/17).
@@ -186,7 +189,7 @@ async function createNew() {
 async function save() {
   if (!selected.value || !draft.value) return
   if (errors.value.length) {
-    toast.error('Fix the problems on the canvas before saving')
+    toast.error(t('workflow.fixProblems'))
     return
   }
   saving.value = true
@@ -203,7 +206,7 @@ async function save() {
     })
     await query.refetch()
     await store.refresh()
-    toast.success('Workflow saved')
+    toast.success(t('workflow.saved'))
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -225,7 +228,7 @@ async function remove(workflow: WorkflowDefinitionInfo) {
     await query.refetch()
     await store.refresh()
     if (selectedId.value === workflow.id) selectedId.value = null
-    toast.success('Workflow deleted')
+    toast.success(t('workflow.deleted'))
   } catch (e) {
     toast.error((e as Error).message)
   }
@@ -272,7 +275,7 @@ function toggleTriggerCategory(category: string, on: boolean) {
 /** The one-line summary a roster row carries, so the list stays scannable. */
 function summarize(workflow: WorkflowDefinitionInfo): string {
   const n = workflow.graph.steps.length
-  return `${n} step${n === 1 ? '' : 's'}`
+  return t('count.steps', { n }, n)
 }
 </script>
 
@@ -280,14 +283,14 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
   <div class="flex min-h-0 w-full flex-1 flex-col gap-4">
     <header class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 class="text-lg font-semibold">Workflows</h1>
+        <h1 class="text-lg font-semibold">{{ t('nav.workflows') }}</h1>
         <p class="text-muted-foreground mt-1 max-w-2xl text-sm">
           A chain that turns one page into the next level of detail — an entity into use cases, a use case into
           endpoints and screens. Nothing is published until someone approves it.
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <Badge v-if="!canManage" variant="outline">read-only — workspace admin</Badge>
+        <Badge v-if="!canManage" variant="outline">{{ t('workflow.readOnlyAdmin') }}</Badge>
         <Button v-if="canManage" size="sm" @click="createNew">
           <Plus class="mr-1.5 size-4" /> New workflow
         </Button>
@@ -308,7 +311,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
     >
       <Workflow class="text-muted-foreground/40 size-8" />
       <div class="max-w-md">
-        <p class="text-sm font-medium">No workflows yet</p>
+        <p class="text-sm font-medium">{{ t('workflow.noWorkflows') }}</p>
         <p class="text-muted-foreground mt-1.5 text-sm leading-relaxed">
           A workflow is a chain of steps. The one this product was built for is three links long: an entity page
           breaks down into use cases, and each use case becomes a set of API endpoints and screens.
@@ -346,7 +349,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
             <Zap
               v-if="workflow.trigger.autoStart"
               class="text-muted-foreground size-3 shrink-0"
-              title="Starts on its own"
+              :title="t('workflow.startsOnItsOwn')"
             />
           </span>
           <span class="text-muted-foreground mt-0.5 block pl-3 text-[11px]">{{ summarize(workflow) }}</span>
@@ -361,7 +364,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
           <Input
             v-model="draft.name"
             :disabled="!canManage"
-            aria-label="Workflow name"
+            :aria-label="t('workflow.name')"
             class="focus-visible:border-input h-auto max-w-sm border-transparent bg-transparent px-0 text-base font-semibold shadow-none focus-visible:px-2"
           />
           <label class="text-muted-foreground flex items-center gap-1.5 text-xs">
@@ -370,9 +373,9 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
           </label>
           <p v-if="errors.length" class="text-destructive ml-auto flex items-center gap-1.5 text-xs">
             <CircleAlert class="size-3.5" />
-            {{ errors.length }} problem{{ errors.length === 1 ? '' : 's' }}
+            {{ t('count.problems', { n: errors.length }, errors.length) }}
           </p>
-          <p v-else-if="dirty" class="text-muted-foreground ml-auto text-xs">Unsaved</p>
+          <p v-else-if="dirty" class="text-muted-foreground ml-auto text-xs">{{ t('workflow.unsaved') }}</p>
           <p v-else class="text-muted-foreground ml-auto flex items-center gap-1.5 text-xs">
             <Check class="size-3.5" /> Saved
           </p>
@@ -412,22 +415,22 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
 
             <template v-else>
               <header class="border-b px-4 py-3">
-                <p class="text-sm font-medium">This workflow</p>
-                <p class="text-muted-foreground text-[11px]">Select a step on the canvas to edit it.</p>
+                <p class="text-sm font-medium">{{ t('workflow.thisWorkflow') }}</p>
+                <p class="text-muted-foreground text-[11px]">{{ t('workflow.selectStep') }}</p>
               </header>
               <div class="min-h-0 flex-1 space-y-5 overflow-auto px-4 py-4">
                 <label class="block space-y-1.5">
-                  <span class="text-muted-foreground text-xs font-medium">Description</span>
+                  <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.description') }}</span>
                   <Textarea
                     v-model="draft.description"
                     :disabled="!canManage"
                     rows="3"
-                    placeholder="What this chain is for."
+                    :placeholder="t('workflow.descriptionPlaceholder')"
                   />
                 </label>
 
                 <div class="space-y-2">
-                  <span class="text-muted-foreground text-xs font-medium">Starts</span>
+                  <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.starts') }}</span>
                   <label class="flex items-start gap-2">
                     <Checkbox
                       :model-value="draft.trigger.manual"
@@ -435,7 +438,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
                       @update:model-value="(v) => (draft!.trigger = { ...draft!.trigger, manual: Boolean(v) })"
                     />
                     <span class="min-w-0">
-                      <span class="block text-xs font-medium">When someone asks</span>
+                      <span class="block text-xs font-medium">{{ t('workflow.whenSomeoneAsks') }}</span>
                       <span class="text-muted-foreground block text-[11px] leading-snug">
                         A Run button on the page, and on /workflows.
                       </span>
@@ -448,7 +451,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
                       @update:model-value="(v) => (draft!.trigger = { ...draft!.trigger, autoStart: Boolean(v) })"
                     />
                     <span class="min-w-0">
-                      <span class="block text-xs font-medium">On its own</span>
+                      <span class="block text-xs font-medium">{{ t('workflow.onItsOwn') }}</span>
                       <span class="text-muted-foreground block text-[11px] leading-snug">
                         Fires on the events below. A page that already has a run is never started again, and a
                         workspace is capped on how many can run at once.
@@ -478,7 +481,7 @@ function summarize(workflow: WorkflowDefinitionInfo): string {
                           :disabled="!canManage"
                           @update:model-value="(v) => toggleTriggerCategory(c, Boolean(v))"
                         />
-                        <span class="text-[11px]">{{ c }}</span>
+                        <span class="text-[11px]">{{ t(`category.${c}`) }}</span>
                       </label>
                     </div>
                     <p class="text-muted-foreground text-[11px]">Nothing ticked means every category.</p>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { ArrowRight, Trash2 } from 'lucide-vue-next'
 import {
@@ -14,6 +15,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { STEP_KINDS, stepKind } from './workflow-ui'
+
+const { t } = useI18n()
 
 /**
  * The step inspector (docs/features/17).
@@ -118,7 +121,7 @@ const promptPlaceholder = computed(() =>
         variant="ghost"
         size="sm"
         class="text-muted-foreground hover:text-destructive -mr-1 size-7 shrink-0 p-0"
-        title="Remove this step"
+        :title="t('workflow.removeStep')"
         @click="emit('remove', step.id)"
       >
         <Trash2 class="size-3.5" />
@@ -142,7 +145,7 @@ const promptPlaceholder = computed(() =>
         <Input
           :model-value="step.title"
           :disabled="!canManage"
-          placeholder="Use cases"
+          :placeholder="t('workflow.stepTitlePlaceholder')"
           @update:model-value="(v) => patch({ title: String(v) })"
         />
       </label>
@@ -226,7 +229,7 @@ const promptPlaceholder = computed(() =>
             >
               <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ c }}</SelectItem>
+                <SelectItem v-for="c in DOCUMENT_CATEGORIES" :key="c" :value="c">{{ t(`category.${c}`) }}</SelectItem>
               </SelectContent>
             </Select>
           </label>
@@ -284,7 +287,7 @@ const promptPlaceholder = computed(() =>
               variant="ghost"
               size="sm"
               class="text-muted-foreground hover:text-destructive size-6 shrink-0 p-0"
-              title="Disconnect"
+              :title="t('workflow.disconnect')"
               @click="patch({ next: step.next.filter((n) => n !== target.id) })"
             >
               <Trash2 class="size-3" />
@@ -299,7 +302,7 @@ const promptPlaceholder = computed(() =>
           @update:model-value="(v) => v && patch({ next: [...step.next, String(v)] })"
         >
           <SelectTrigger class="h-8 w-full text-xs">
-            <SelectValue placeholder="Connect a step…" />
+            <SelectValue :placeholder="t('workflow.connectStep')" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem v-for="option in addable" :key="option.id" :value="option.id">

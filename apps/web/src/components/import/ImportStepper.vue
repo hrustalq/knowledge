@@ -8,8 +8,11 @@
  * Rendered as an ordered list because that is what it is: assistive technology
  * gets "step 2 of 3, current" for free, which no arrangement of divs provides.
  */
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { Check } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 const props = defineProps<{ current: 0 | 1 | 2 }>()
 
@@ -26,7 +29,7 @@ const state = computed(() =>
 </script>
 
 <template>
-  <ol class="flex items-center gap-1 text-sm" aria-label="Import steps">
+  <ol class="flex items-center gap-1 text-sm" :aria-label="t('import.steps')">
     <li
       v-for="(step, i) in state"
       :key="step.label"

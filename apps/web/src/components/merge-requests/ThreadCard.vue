@@ -19,6 +19,7 @@
 // Deliberately *not* a tree. Indenting a conversation trades the answer to
 // "what was said, in what order" for the answer to "what hangs off what", and
 // a thread pinned to one passage is short enough that order is worth more.
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import {
   Bot,
@@ -53,6 +54,8 @@ import UserAvatar from './UserAvatar.vue'
 import { useMembers } from './use-members'
 import { fullTime, timelineTime } from './mr-ui'
 import { useAuthStore } from '@/stores/auth'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -209,7 +212,7 @@ const replyTarget = computed(() =>
         <span
           v-if="thread.source === 'ai'"
           class="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-violet-500/12 px-1.5 py-px font-medium text-violet-700 dark:text-violet-300"
-          title="Posted from an assistant review"
+          :title="t('mr.fromAssistantReview')"
         >
           <Bot class="size-3" /> AI
         </span>
@@ -222,7 +225,7 @@ const replyTarget = computed(() =>
         <span
           v-if="outdated"
           class="flex shrink-0 items-center gap-1 whitespace-nowrap text-amber-600 dark:text-amber-400"
-          title="The branch advanced past this anchor"
+          :title="t('mr.anchorOutdated')"
         >
           <History class="size-3.5" /> Outdated
         </span>
@@ -321,8 +324,8 @@ const replyTarget = computed(() =>
                   v-if="isMine(comment.authorId)"
                   type="button"
                   class="rounded p-1 hover:bg-accent hover:text-foreground"
-                  title="Edit this comment"
-                  aria-label="Edit this comment"
+                  :title="t('mr.editComment')"
+                  :aria-label="t('mr.editComment')"
                   @click="startEdit(comment.commentId)"
                 >
                   <Pencil class="size-3.5" />
@@ -331,8 +334,8 @@ const replyTarget = computed(() =>
                   v-if="isMine(comment.authorId)"
                   type="button"
                   class="rounded p-1 hover:bg-destructive/10 hover:text-destructive"
-                  title="Delete this comment"
-                  aria-label="Delete this comment"
+                  :title="t('mr.deleteComment')"
+                  :aria-label="t('mr.deleteComment')"
                   @click="deleting = comment.commentId"
                 >
                   <Trash2 class="size-3.5" />
@@ -362,8 +365,8 @@ const replyTarget = computed(() =>
               auto-expand
               cancellable
               :initial-body="editingBody"
-              placeholder="Edit your comment…"
-              submit-label="Save"
+              :placeholder="t('mr.editYourComment')"
+              :submit-label="t('common.save')"
               :busy="busy"
               :resolve-document-id="resolveDocumentId"
               @submit="submitEdit"
@@ -382,7 +385,7 @@ const replyTarget = computed(() =>
           class="mb-1.5 flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground"
         >
           <CornerUpLeft class="size-3 shrink-0" aria-hidden="true" />
-          <span class="shrink-0">Replying to</span>
+          <span class="shrink-0">{{ t('mr.replyingTo') }}</span>
           <span class="shrink-0 font-medium text-foreground">
             {{ nameOf(replyTarget.authorId) }}
           </span>
@@ -390,8 +393,8 @@ const replyTarget = computed(() =>
           <button
             type="button"
             class="shrink-0 rounded p-0.5 hover:bg-accent hover:text-foreground"
-            title="Reply to the thread instead"
-            aria-label="Reply to the thread instead"
+            :title="t('mr.replyToThread')"
+            :aria-label="t('mr.replyToThread')"
             @click="replyTo = null"
           >
             <X class="size-3" />
@@ -400,7 +403,7 @@ const replyTarget = computed(() =>
         <CommentComposer
           ref="replyBox"
           :placeholder="replyTarget ? `Reply to ${nameOf(replyTarget.authorId)}…` : 'Reply…'"
-          submit-label="Reply"
+          :submit-label="t('mr.reply')"
           :busy="busy"
           :resolve-document-id="resolveDocumentId"
           @submit="submitReply"

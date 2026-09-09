@@ -4,6 +4,7 @@
  * the control does to the text, with the rarer inserts folded behind a single
  * "+" so the row does not become a wall of glyphs at narrow widths.
  */
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import type { Editor } from '@tiptap/core'
 import {
@@ -52,6 +53,8 @@ import {
 import { PANEL_META, PANEL_TYPES, STATUS_COLORS, type PanelType, type StatusColor } from '@/lib/markdown/nodes'
 import { canIndent, canOutdent, indent, outdent } from './extensions/list-indent'
 
+const { t } = useI18n()
+
 const props = withDefaults(
   defineProps<{
     editor: Editor
@@ -96,12 +99,12 @@ const ALIGNMENTS = [
 </script>
 
 <template>
-  <div class="kn-toolbar" :data-compact="compact ? 'true' : undefined" role="toolbar" aria-label="Formatting">
+  <div class="kn-toolbar" :data-compact="compact ? 'true' : undefined" role="toolbar" :aria-label="t('toolbar.formatting')">
     <div class="kn-tb-group">
       <button
         type="button"
         class="kn-tb-btn"
-        title="Undo (⌘Z)"
+        :title="t('toolbar.undo')"
         :disabled="!editor.can().undo()"
         @click="editor.chain().focus().undo().run()"
       >
@@ -110,7 +113,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Redo (⇧⌘Z)"
+        :title="t('toolbar.redo')"
         :disabled="!editor.can().redo()"
         @click="editor.chain().focus().redo().run()"
       >
@@ -120,7 +123,7 @@ const ALIGNMENTS = [
 
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
-        <button type="button" class="kn-tb-select" title="Text style">
+        <button type="button" class="kn-tb-select" :title="t('toolbar.textStyle')">
           <span>{{ currentStyle.label }}</span>
           <ChevronDown class="size-3.5 opacity-60" />
         </button>
@@ -142,7 +145,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Bold (⌘B)"
+        :title="t('toolbar.bold')"
         :aria-pressed="editor.isActive('bold')"
         @click="editor.chain().focus().toggleBold().run()"
       >
@@ -151,7 +154,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Italic (⌘I)"
+        :title="t('toolbar.italic')"
         :aria-pressed="editor.isActive('italic')"
         @click="editor.chain().focus().toggleItalic().run()"
       >
@@ -160,7 +163,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Underline (⌘U)"
+        :title="t('toolbar.underline')"
         :aria-pressed="editor.isActive('underline')"
         @click="editor.chain().focus().toggleUnderline().run()"
       >
@@ -169,7 +172,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Strikethrough"
+        :title="t('toolbar.strikethrough')"
         :aria-pressed="editor.isActive('strike')"
         @click="editor.chain().focus().toggleStrike().run()"
       >
@@ -178,7 +181,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Inline code (⌘E)"
+        :title="t('toolbar.inlineCode')"
         :aria-pressed="editor.isActive('code')"
         @click="editor.chain().focus().toggleCode().run()"
       >
@@ -190,7 +193,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Highlight"
+        :title="t('toolbar.highlight')"
         :aria-pressed="editor.isActive('highlight')"
         @click="editor.chain().focus().toggleHighlight().run()"
       >
@@ -198,13 +201,13 @@ const ALIGNMENTS = [
       </button>
       <DropdownMenu v-if="!compact">
         <DropdownMenuTrigger as-child>
-          <button type="button" class="kn-tb-btn" title="Status lozenge">
+          <button type="button" class="kn-tb-btn" :title="t('toolbar.statusLozenge')">
             <span class="kn-tb-status-dot" />
             <ChevronDown class="size-3 opacity-60" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          <DropdownMenuLabel>Status</DropdownMenuLabel>
+          <DropdownMenuLabel>{{ t('toolbar.status') }}</DropdownMenuLabel>
           <DropdownMenuItem
             v-for="color in STATUS_COLORS"
             :key="color"
@@ -213,7 +216,7 @@ const ALIGNMENTS = [
             <span class="kn-status-sample" :data-kn-status="color">{{ color }}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem @select="editor.chain().focus().unsetStatus().run()">Remove status</DropdownMenuItem>
+          <DropdownMenuItem @select="editor.chain().focus().unsetStatus().run()">{{ t('toolbar.removeStatus') }}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -222,7 +225,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Bullet list"
+        :title="t('toolbar.bulletList')"
         :aria-pressed="editor.isActive('bulletList')"
         @click="editor.chain().focus().toggleBulletList().run()"
       >
@@ -231,7 +234,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Numbered list"
+        :title="t('toolbar.numberedList')"
         :aria-pressed="editor.isActive('orderedList')"
         @click="editor.chain().focus().toggleOrderedList().run()"
       >
@@ -240,7 +243,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Task list"
+        :title="t('toolbar.taskList')"
         :aria-pressed="editor.isActive('taskList')"
         @click="editor.chain().focus().toggleTaskList().run()"
       >
@@ -249,7 +252,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Outdent (⇧Tab)"
+        :title="t('toolbar.outdent')"
         :disabled="!canOutdent(editor)"
         @click="outdent(editor)"
       >
@@ -258,7 +261,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Indent (Tab)"
+        :title="t('toolbar.indent')"
         :disabled="!canIndent(editor)"
         @click="indent(editor)"
       >
@@ -269,7 +272,7 @@ const ALIGNMENTS = [
     <div class="kn-tb-group">
       <DropdownMenu v-if="!compact">
         <DropdownMenuTrigger as-child>
-          <button type="button" class="kn-tb-btn" title="Alignment">
+          <button type="button" class="kn-tb-btn" :title="t('toolbar.alignment')">
             <AlignLeft class="size-4" />
             <ChevronDown class="size-3 opacity-60" />
           </button>
@@ -287,7 +290,7 @@ const ALIGNMENTS = [
       <button
         type="button"
         class="kn-tb-btn"
-        title="Link (⌘K)"
+        :title="t('toolbar.link')"
         :aria-pressed="editor.isActive('link')"
         @click="emit('link')"
       >
@@ -300,13 +303,13 @@ const ALIGNMENTS = [
 
     <DropdownMenu v-if="!compact">
       <DropdownMenuTrigger as-child>
-        <button type="button" class="kn-tb-btn" title="Insert a panel">
+        <button type="button" class="kn-tb-btn" :title="t('toolbar.insertPanel')">
           <Info class="size-4" />
           <ChevronDown class="size-3 opacity-60" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        <DropdownMenuLabel>Panels</DropdownMenuLabel>
+        <DropdownMenuLabel>{{ t('toolbar.panels') }}</DropdownMenuLabel>
         <DropdownMenuItem
           v-for="type in PANEL_TYPES"
           :key="type"
@@ -319,13 +322,13 @@ const ALIGNMENTS = [
 
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
-        <button type="button" class="kn-tb-btn kn-tb-insert" title="Insert">
+        <button type="button" class="kn-tb-btn kn-tb-insert" :title="t('toolbar.insert')">
           <Plus class="size-4" />
           <ChevronDown class="size-3 opacity-60" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" class="w-60">
-        <DropdownMenuLabel>Insert</DropdownMenuLabel>
+        <DropdownMenuLabel>{{ t('toolbar.insert') }}</DropdownMenuLabel>
         <DropdownMenuItem @select="editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()">
           <Table2 class="size-4" /> Table
         </DropdownMenuItem>

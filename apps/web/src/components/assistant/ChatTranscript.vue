@@ -13,6 +13,7 @@
 // something you were reading: it auto-scrolls only while you are already at
 // the bottom. Scroll up and the stream keeps running without moving you;
 // a button offers the way back.
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { ArrowDown, Sparkles } from 'lucide-vue-next'
@@ -25,6 +26,8 @@ import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
 import ChatMessage from './ChatMessage.vue'
 import AssistantPrompt from './AssistantPrompt.vue'
 import ThinkingTrail from './ThinkingTrail.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   messages: AssistantMessageInfo[]
@@ -234,16 +237,16 @@ defineExpose({ scrollToEnd })
           >
             <Sparkles class="size-4.5" />
           </span>
-          <h2 class="mt-4 font-display text-xl font-semibold tracking-tight">Ask the knowledge base</h2>
+          <h2 class="mt-4 font-display text-xl font-semibold tracking-tight">{{ t('chat.askKnowledgeBase') }}</h2>
           <p class="mt-1.5 max-w-prose text-sm leading-relaxed text-muted-foreground">
-            Questions are answered from the pages in this workspace, with the sources it used listed under every
-            reply. In <strong class="font-medium text-foreground">Agent</strong> mode it can also write: a new page
-            goes live immediately, a change to an existing page opens a merge request for you to review first.
+            {{ t('chat.emptyBodyBefore') }}
+            <strong class="font-medium text-foreground">{{ t('chat.modeAgent') }}</strong>
+            {{ t('chat.emptyBodyAfter') }}
           </p>
           <ul class="mt-5 space-y-1.5 text-sm text-muted-foreground">
-            <li>“How does session revocation work on password reset?”</li>
-            <li>“Summarize everything we have on the ingestion pipeline.”</li>
-            <li>“Draft an onboarding page for new backend hires.”</li>
+            <li>{{ t('chat.example1') }}</li>
+            <li>{{ t('chat.example2') }}</li>
+            <li>{{ t('chat.example3') }}</li>
           </ul>
         </div>
 

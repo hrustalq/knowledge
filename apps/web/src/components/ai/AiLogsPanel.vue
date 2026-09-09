@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // One row per upstream LLM call. Cursor-paginated with the "Load more" footer
 // the activity feed uses; pages accumulate so scroll position survives.
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import type { AiUsageLogEntry, ListAiUsageLogsResponse } from '@knowledge/contracts'
@@ -11,6 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
+const { t } = useI18n()
 
 const props = defineProps<{ canManage: boolean }>()
 
@@ -101,14 +104,14 @@ function fmtDuration(ms: number): string {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead class="w-8"><span class="sr-only">Outcome</span></TableHead>
+              <TableHead class="w-8"><span class="sr-only">{{ t('ai.outcome') }}</span></TableHead>
               <TableHead>When</TableHead>
               <TableHead>User</TableHead>
-              <TableHead>Operation</TableHead>
-              <TableHead>Model</TableHead>
-              <TableHead class="text-right">Tokens</TableHead>
-              <TableHead class="text-right">Tools</TableHead>
-              <TableHead class="text-right">Duration</TableHead>
+              <TableHead>{{ t('ai.operation') }}</TableHead>
+              <TableHead>{{ t('ai.model') }}</TableHead>
+              <TableHead class="text-right">{{ t('ai.tokens') }}</TableHead>
+              <TableHead class="text-right">{{ t('ai.tools') }}</TableHead>
+              <TableHead class="text-right">{{ t('ai.duration') }}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -129,7 +132,7 @@ function fmtDuration(ms: number): string {
               <TableCell class="text-right tabular-nums">
                 {{ fmtTokens(e.totalTokens) }}
                 <!-- Some OpenAI-compatible servers report no usage; those rows are estimates. -->
-                <span v-if="e.estimated" class="text-muted-foreground" title="Estimated — provider reported no usage">
+                <span v-if="e.estimated" class="text-muted-foreground" :title="t('ai.estimatedNoUsage')">
                   ~
                 </span>
               </TableCell>

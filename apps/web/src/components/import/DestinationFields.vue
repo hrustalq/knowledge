@@ -7,11 +7,14 @@
  * screen you are on. Everything is pre-filled from the active scope, so the
  * common path through this step is to change nothing.
  */
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{ stacked?: boolean }>(), { stacked: false })
 
@@ -55,27 +58,27 @@ const parentOptions = computed<AutocompleteOption[]>(() => [
   <div :class="props.stacked ? 'grid gap-4' : 'grid gap-5 sm:grid-cols-2'">
     <Autocomplete
       v-model="projectSelection"
-      label="Project"
-      placeholder="Search projects…"
+      :label="t('import.project')"
+      :placeholder="t('import.searchProjects')"
       :options="projectOptions"
       :multiple="false"
-      empty-hint="No projects in this workspace yet."
+      :empty-hint="t('hints.noProjects')"
     />
     <Autocomplete
       v-model="categorySelection"
-      label="Category"
-      placeholder="Search categories…"
+      :label="t('import.category')"
+      :placeholder="t('import.searchCategories')"
       :options="categoryOptions"
       :multiple="false"
     />
     <div :class="props.stacked ? '' : 'sm:col-span-2'">
       <Autocomplete
         v-model="parentSelection"
-        label="Parent page"
-        placeholder="Search pages…"
+        :label="t('import.parentPage')"
+        :placeholder="t('import.searchPages')"
         :options="parentOptions"
         :multiple="false"
-        empty-hint="No pages yet — this one will sit at the top level."
+        :empty-hint="t('hints.noPagesTopLevel')"
       />
     </div>
   </div>

@@ -16,6 +16,7 @@
  * so the losses sit beside the text, legible while you read it, rather than in
  * a toast that has already gone.
  */
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { AlertTriangle, ChevronDown, FolderTree, ScanText } from 'lucide-vue-next'
 import type { ImportJobInfo, ImportMeta } from '@knowledge/contracts'
@@ -24,6 +25,8 @@ import RichEditor from '@/components/editor/RichEditor.vue'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { PARSER_ICONS, formatBytes } from './formats'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   job: ImportJobInfo
@@ -54,7 +57,7 @@ const found = computed(() => {
   if (m.pages) parts.push(`${m.pages} ${m.pages === 1 ? 'page' : 'pages'}`)
   if (m.slides) parts.push(`${m.slides} ${m.slides === 1 ? 'slide' : 'slides'}`)
   if (m.sections) parts.push(`${m.sections} ${m.sections === 1 ? 'section' : 'sections'}`)
-  if (m.words) parts.push(`${m.words.toLocaleString()} words`)
+  if (m.words) parts.push(t('import.words', { n: m.words }, m.words))
   if (m.images) parts.push(`${m.images} ${m.images === 1 ? 'image' : 'images'}`)
   return parts
 })
@@ -96,8 +99,8 @@ const empty = computed(() => markdown.value.trim().length === 0)
             v-model="title"
             class="kn-title-input"
             rows="1"
-            placeholder="Page title"
-            aria-label="Page title"
+            :placeholder="t('import.pageTitle')"
+            :aria-label="t('import.pageTitle')"
             spellcheck="false"
             @keydown.enter.prevent="editorRef?.focus()"
           />
@@ -112,7 +115,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
     <aside class="kn-import-rail">
       <!-- Provenance: what this was, and what the parser made of it. -->
       <section class="space-y-3 border-b p-4">
-        <h2 class="text-sm font-semibold">Imported from</h2>
+        <h2 class="text-sm font-semibold">{{ t('import.importedFrom') }}</h2>
         <div class="flex items-start gap-3">
           <span class="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-primary">
             <component :is="ParserIcon" class="size-4" aria-hidden="true" />
@@ -123,7 +126,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
           </div>
         </div>
         <p v-if="found.length" class="text-sm text-muted-foreground">{{ found.join(' · ') }}</p>
-        <p class="text-xs text-muted-foreground">The original file stays attached to the page.</p>
+        <p class="text-xs text-muted-foreground">{{ t('import.originalStaysAttached') }}</p>
       </section>
 
       <!-- What the parse could not carry. Never swallowed. -->
@@ -164,7 +167,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
       </section>
 
       <section class="space-y-3 p-4">
-        <h2 class="text-sm font-semibold">Where it goes</h2>
+        <h2 class="text-sm font-semibold">{{ t('import.whereItGoes') }}</h2>
         <p class="flex items-start gap-2 text-sm text-muted-foreground">
           <FolderTree class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>{{ destination.join(' › ') }}</span>

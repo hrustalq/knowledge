@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { renderToString } from 'vue/server-renderer'
+import type { Locale } from '@knowledge/contracts'
 import { createApp } from './main'
 
 interface SsrRequestContext {
@@ -7,6 +8,7 @@ interface SsrRequestContext {
   workspaceId: string | null
   projectId: string | null
   pane: string | null
+  locale: Locale | null
 }
 
 // Per-request auth context for lib/api (async-context scoped, so concurrent
@@ -21,6 +23,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     workspaceId: ctx.workspaceId ?? null,
     projectId: ctx.projectId ?? null,
     pane: ctx.pane ?? null,
+    locale: ctx.locale ?? null,
   }
   return ssrCtx.run(request, async () => {
     const { app, router, pinia } = createApp()

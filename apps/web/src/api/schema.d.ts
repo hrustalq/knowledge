@@ -2514,7 +2514,10 @@ export interface operations {
     AppController_getHello: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2549,7 +2552,10 @@ export interface operations {
     AuthController_me: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2587,7 +2593,10 @@ export interface operations {
                 workspaceId: string;
                 limit?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2622,7 +2631,10 @@ export interface operations {
     AuthFlowController_signup: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2661,7 +2673,10 @@ export interface operations {
     AuthFlowController_login: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2700,7 +2715,10 @@ export interface operations {
     AuthFlowController_logout: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2735,7 +2753,10 @@ export interface operations {
     AuthFlowController_forgotPassword: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2774,7 +2795,10 @@ export interface operations {
     AuthFlowController_resetPassword: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2813,7 +2837,10 @@ export interface operations {
     AuthFlowController_changePassword: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2852,7 +2879,10 @@ export interface operations {
     UsersController_list: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2887,7 +2917,10 @@ export interface operations {
     UsersController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -2926,7 +2959,10 @@ export interface operations {
     UsersController_update: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -2967,7 +3003,10 @@ export interface operations {
     WorkspacesController_list: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -3002,7 +3041,10 @@ export interface operations {
     WorkspacesController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -3041,7 +3083,10 @@ export interface operations {
     WorkspacesController_listMembers: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3078,7 +3123,10 @@ export interface operations {
     WorkspacesController_addMember: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3123,7 +3171,10 @@ export interface operations {
                 q?: string;
                 limit?: number;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3160,7 +3211,10 @@ export interface operations {
     WorkspacesController_removeMember: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 userId: string;
@@ -3198,7 +3252,10 @@ export interface operations {
     WorkspacesController_updateMember: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 userId: string;
@@ -3248,7 +3305,10 @@ export interface operations {
                 /** @description Omit for the full roster */
                 limit?: number;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -3283,7 +3343,10 @@ export interface operations {
     ProjectsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -3322,7 +3385,10 @@ export interface operations {
     ProjectsController_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3359,7 +3425,10 @@ export interface operations {
     ProjectsController_remove: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3396,7 +3465,10 @@ export interface operations {
     ProjectsController_update: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3444,7 +3516,10 @@ export interface operations {
                 limit?: string;
                 cursor?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -3486,7 +3561,10 @@ export interface operations {
                 /** @description Restrict to one project */
                 projectId?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -3521,7 +3599,10 @@ export interface operations {
     DocumentsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -3564,7 +3645,10 @@ export interface operations {
                 /** @description Restrict the tree to one project */
                 projectId?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -3601,7 +3685,10 @@ export interface operations {
             query: {
                 revision: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3638,7 +3725,10 @@ export interface operations {
     DocumentsController_update: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3681,7 +3771,10 @@ export interface operations {
             query?: {
                 revision?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3720,7 +3813,10 @@ export interface operations {
             query?: {
                 depth?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3759,7 +3855,10 @@ export interface operations {
             query?: {
                 branch?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3800,6 +3899,8 @@ export interface operations {
                 "if-match": string;
                 /** @description Optimistic concurrency (plan.md §7): expected branch-head revision id; 409 + comparison link when the head advanced */
                 "If-Match"?: string;
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
             };
             path: {
                 id: string;
@@ -3841,7 +3942,10 @@ export interface operations {
     DocumentsController_listBranches: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3878,7 +3982,10 @@ export interface operations {
     DocumentsController_createBranch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3927,7 +4034,10 @@ export interface operations {
                 semantic?: string;
                 mode?: "direct" | "merge-base";
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -3964,7 +4074,10 @@ export interface operations {
     DocumentsController_listRelations: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4001,7 +4114,10 @@ export interface operations {
     DocumentsController_addRelations: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4046,7 +4162,10 @@ export interface operations {
                 targetKey: string;
                 extractor?: "explicit" | "frontmatter" | "inferred" | "curated";
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4083,7 +4202,10 @@ export interface operations {
     DocumentsController_curateRelation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4124,7 +4246,10 @@ export interface operations {
     DocumentsController_upload: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4165,7 +4290,10 @@ export interface operations {
     DocumentsController_finalize: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 revisionId: string;
@@ -4206,7 +4334,10 @@ export interface operations {
                 /** @description Revision id to evaluate the fact set at */
                 at: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4246,7 +4377,10 @@ export interface operations {
                 /** @description Defaults to the default branch */
                 branch?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4283,7 +4417,10 @@ export interface operations {
     DocumentsController_listThreads: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4320,7 +4457,10 @@ export interface operations {
     DocumentsController_createThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4361,7 +4501,10 @@ export interface operations {
     DocumentsController_replyToThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 threadId: string;
@@ -4403,7 +4546,10 @@ export interface operations {
     DocumentsController_deleteThreadComment: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 threadId: string;
@@ -4442,7 +4588,10 @@ export interface operations {
     DocumentsController_editThreadComment: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 threadId: string;
@@ -4485,7 +4634,10 @@ export interface operations {
     DocumentsController_resolveThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 threadId: string;
@@ -4527,7 +4679,10 @@ export interface operations {
     MergeRequestsController_list: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4564,7 +4719,10 @@ export interface operations {
     MergeRequestsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4623,7 +4781,10 @@ export interface operations {
                 cursor?: string;
                 limit?: number;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -4658,7 +4819,10 @@ export interface operations {
     MergeRequestsController_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4695,7 +4859,10 @@ export interface operations {
     MergeRequestsController_update: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4736,7 +4903,10 @@ export interface operations {
     MergeRequestsController_reopen: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4773,7 +4943,10 @@ export interface operations {
     MergeRequestsController_setReviewers: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4817,7 +4990,10 @@ export interface operations {
                 /** @description Include graph-projection semantic diff (default false) */
                 semantic?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4854,7 +5030,10 @@ export interface operations {
     MergeRequestsController_approve: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4891,7 +5070,10 @@ export interface operations {
     MergeRequestsController_merge: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4932,7 +5114,10 @@ export interface operations {
     MergeRequestsController_close: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -4969,7 +5154,10 @@ export interface operations {
     MergeRequestsController_listThreads: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -5006,7 +5194,10 @@ export interface operations {
     MergeRequestsController_createThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -5047,7 +5238,10 @@ export interface operations {
     MergeRequestsController_reply: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 threadId: string;
@@ -5089,7 +5283,10 @@ export interface operations {
     MergeRequestsController_deleteComment: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 threadId: string;
@@ -5128,7 +5325,10 @@ export interface operations {
     MergeRequestsController_editComment: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 threadId: string;
@@ -5171,7 +5371,10 @@ export interface operations {
     MergeRequestsController_resolveThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 threadId: string;
@@ -5213,7 +5416,10 @@ export interface operations {
     AttachmentsController_list: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -5250,7 +5456,10 @@ export interface operations {
     AttachmentsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -5291,7 +5500,10 @@ export interface operations {
     AttachmentsController_complete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 attachmentId: string;
@@ -5329,7 +5541,10 @@ export interface operations {
     AttachmentsController_remove: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 attachmentId: string;
@@ -5367,7 +5582,10 @@ export interface operations {
     SearchController_run: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5414,7 +5632,10 @@ export interface operations {
                 /** @description Max entities to return (1-200) */
                 limit?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5454,7 +5675,10 @@ export interface operations {
                 to: string;
                 maxDepth?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5494,7 +5718,10 @@ export interface operations {
                 /** @description Comma-separated relation types */
                 types?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 key: string;
             };
@@ -5531,7 +5758,10 @@ export interface operations {
     EntitiesController_impact: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 key: string;
             };
@@ -5572,7 +5802,10 @@ export interface operations {
     GraphQueryController_run: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5611,7 +5844,10 @@ export interface operations {
     IngestionController_getJob: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -5650,7 +5886,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5685,7 +5924,10 @@ export interface operations {
     IngestionController_reindex: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5726,7 +5968,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5761,7 +6006,10 @@ export interface operations {
     AssistantController_review: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5800,7 +6048,10 @@ export interface operations {
     AssistantController_suggest: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5839,7 +6090,10 @@ export interface operations {
     AssistantController_ask: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5878,7 +6132,10 @@ export interface operations {
     AssistantController_related: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5924,7 +6181,10 @@ export interface operations {
                 /** @description updatedAt of the last row of the previous page (keyset cursor) */
                 cursor?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5959,7 +6219,10 @@ export interface operations {
     AssistantController_createThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -5998,7 +6261,10 @@ export interface operations {
     AssistantController_getThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6035,7 +6301,10 @@ export interface operations {
     AssistantController_deleteThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6072,7 +6341,10 @@ export interface operations {
     AssistantController_updateThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6113,7 +6385,10 @@ export interface operations {
     AssistantController_truncateThread: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 messageId: string;
@@ -6151,7 +6426,10 @@ export interface operations {
     AssistantController_postMessage: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6192,7 +6470,10 @@ export interface operations {
     AssistantController_streamMessage: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6235,7 +6516,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6270,7 +6554,10 @@ export interface operations {
     AiController_updateSettings: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6309,7 +6596,10 @@ export interface operations {
     AiController_testConnection: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6350,7 +6640,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6385,7 +6678,10 @@ export interface operations {
     AiController_createProvider: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6426,7 +6722,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6461,7 +6760,10 @@ export interface operations {
     AiController_deleteProvider: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6498,7 +6800,10 @@ export interface operations {
     AiController_updateProvider: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6541,7 +6846,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6576,7 +6884,10 @@ export interface operations {
     AiController_createSkill: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6615,7 +6926,10 @@ export interface operations {
     AiController_getSkill: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6652,7 +6966,10 @@ export interface operations {
     AiController_deleteSkill: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6689,7 +7006,10 @@ export interface operations {
     AiController_updateSkill: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6732,7 +7052,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6767,7 +7090,10 @@ export interface operations {
     AiController_createPlugin: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6806,7 +7132,10 @@ export interface operations {
     AiController_deletePlugin: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6843,7 +7172,10 @@ export interface operations {
     AiController_updatePlugin: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6884,7 +7216,10 @@ export interface operations {
     AiController_testPlugin: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -6928,7 +7263,10 @@ export interface operations {
                 to?: string;
                 groupBy?: "user" | "model" | "day";
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -6971,7 +7309,10 @@ export interface operations {
                 /** @description "true" / "false" to filter by outcome */
                 ok?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7008,7 +7349,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7045,7 +7389,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7080,7 +7427,10 @@ export interface operations {
     AiUsageController_setBudget: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 userId: string;
             };
@@ -7123,7 +7473,10 @@ export interface operations {
             query: {
                 workspaceId: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 userId: string;
             };
@@ -7166,7 +7519,10 @@ export interface operations {
                 /** @description Case-insensitive substring match on term, aliases or definition */
                 search?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7201,7 +7557,10 @@ export interface operations {
     GlossaryController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7240,7 +7599,10 @@ export interface operations {
     GlossaryController_suggest: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7279,7 +7641,10 @@ export interface operations {
     GlossaryController_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7316,7 +7681,10 @@ export interface operations {
     GlossaryController_remove: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7353,7 +7721,10 @@ export interface operations {
     GlossaryController_update: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7394,7 +7765,10 @@ export interface operations {
     ImportController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7433,7 +7807,10 @@ export interface operations {
     ImportController_start: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7470,7 +7847,10 @@ export interface operations {
     ImportController_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7507,7 +7887,10 @@ export interface operations {
     ImportController_discard: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7544,7 +7927,10 @@ export interface operations {
     ImportController_content: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7581,7 +7967,10 @@ export interface operations {
     ImportController_submit: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7632,7 +8021,10 @@ export interface operations {
                 /** @description Defaults to 25, max 100 */
                 limit?: number;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7667,7 +8059,10 @@ export interface operations {
     WorkflowsController_startRun: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7706,7 +8101,10 @@ export interface operations {
     WorkflowsController_getRun: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7743,7 +8141,10 @@ export interface operations {
     WorkflowsController_runEvent: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7784,7 +8185,10 @@ export interface operations {
     WorkflowsController_updateNode: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 nodeId: string;
@@ -7826,7 +8230,10 @@ export interface operations {
     WorkflowsController_nodeEvent: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
                 nodeId: string;
@@ -7872,7 +8279,10 @@ export interface operations {
                 /** @description Adds this project’s definitions to the workspace-wide ones */
                 projectId?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7907,7 +8317,10 @@ export interface operations {
     WorkflowsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7946,7 +8359,10 @@ export interface operations {
     WorkflowsController_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -7983,7 +8399,10 @@ export interface operations {
     WorkflowsController_remove: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -8020,7 +8439,10 @@ export interface operations {
     WorkflowsController_update: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -8061,7 +8483,10 @@ export interface operations {
     WorkflowsController_validate: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };
@@ -8102,7 +8527,10 @@ export interface operations {
     DocumentWorkflowsController_runsForDocument: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
             path: {
                 id: string;
             };

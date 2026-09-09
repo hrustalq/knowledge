@@ -7,24 +7,28 @@ import type { Component } from 'vue'
 
 interface ToolVocabulary {
   icon: Component
-  /** Present continuous, for a call that is running right now. */
+  /** Message key: present continuous, for a call running right now. */
   running: string
-  /** Past tense, for a call in the finished record. */
+  /** Message key: past tense, for a call in the finished record. */
   done: string
 }
 
 const TOOLS: Record<string, ToolVocabulary> = {
-  search_knowledge: { icon: Search, running: 'Searching the workspace', done: 'Searched the workspace' },
-  read_document: { icon: FileText, running: 'Reading a page', done: 'Read a page' },
-  explore_document_graph: { icon: Network, running: 'Following the graph', done: 'Followed the graph' },
-  render_component: { icon: LayoutTemplate, running: 'Building a view', done: 'Built a view' },
-  create_document: { icon: FilePlus2, running: 'Creating a page', done: 'Created a page' },
-  propose_update: { icon: SquarePen, running: 'Drafting a merge request', done: 'Drafted a merge request' },
-  ask_user: { icon: MessageCircleQuestion, running: 'Asking you', done: 'Asked you' },
-  request_agent_mode: { icon: Wand2, running: 'Requesting Agent mode', done: 'Requested Agent mode' },
+  search_knowledge: { icon: Search, running: 'tool.search_knowledge.running', done: 'tool.search_knowledge.done' },
+  read_document: { icon: FileText, running: 'tool.read_document.running', done: 'tool.read_document.done' },
+  explore_document_graph: { icon: Network, running: 'tool.explore_document_graph.running', done: 'tool.explore_document_graph.done' },
+  render_component: { icon: LayoutTemplate, running: 'tool.render_component.running', done: 'tool.render_component.done' },
+  create_document: { icon: FilePlus2, running: 'tool.create_document.running', done: 'tool.create_document.done' },
+  propose_update: { icon: SquarePen, running: 'tool.propose_update.running', done: 'tool.propose_update.done' },
+  ask_user: { icon: MessageCircleQuestion, running: 'tool.ask_user.running', done: 'tool.ask_user.done' },
+  request_agent_mode: { icon: Wand2, running: 'tool.request_agent_mode.running', done: 'tool.request_agent_mode.done' },
 }
 
-/** Falls back to the raw tool name so a tool added on the API stays legible here. */
+/**
+ * `running`/`done` are message keys — resolve them with t() at the call site
+ * (docs/features/18). A tool added on the API and not yet in this map falls
+ * back to its own spoken name, which t() passes through unchanged.
+ */
 export function toolVocabulary(tool: string): ToolVocabulary {
   const known = TOOLS[tool]
   if (known) return known

@@ -16,11 +16,14 @@
 // back out of that message (see `parseAnswer`). Local state would not do it —
 // the transcript is virtualized, so a prompt scrolled out of view and back is
 // a fresh instance, as is every prompt after a reload.
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { ArrowRight, Check, Sparkles, Wand2 } from 'lucide-vue-next'
 import type { AssistantPrompt, AssistantPromptField } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   prompt: AssistantPrompt
@@ -221,7 +224,7 @@ function submit() {
         </span>
         <div class="min-w-0 flex-1 space-y-2.5">
           <div class="space-y-1">
-            <p class="text-sm font-medium">This needs Agent mode</p>
+            <p class="text-sm font-medium">{{ t('chat.needsAgentMode') }}</p>
             <p class="text-[13px] leading-relaxed text-muted-foreground">
               Ask mode only reads. Switching lets the assistant write — a new page goes live immediately, a
               change to an existing page opens a merge request for you to review.
@@ -332,10 +335,10 @@ function submit() {
       <!-- The escape hatch: the offered options are the assistant's guess at
            the answer space, and it is allowed to be wrong. -->
       <div v-if="prompt.allowOther" class="space-y-1.5">
-        <p class="text-xs font-medium text-muted-foreground">Something else</p>
+        <p class="text-xs font-medium text-muted-foreground">{{ t('chat.somethingElse') }}</p>
         <Input
           v-model="other"
-          placeholder="Answer in your own words instead"
+          :placeholder="t('chat.answerInOwnWords')"
           :disabled="!active"
           class="h-9 text-[13px]"
         />

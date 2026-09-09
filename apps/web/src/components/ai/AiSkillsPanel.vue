@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Skills: instruction packs merged into the assistant's system prompt when a
 // trigger word matches the user's message, or when picked in the composer.
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -24,6 +25,8 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import AiEmptyState from './AiEmptyState.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{ canManage: boolean }>()
 
@@ -110,7 +113,7 @@ async function remove(skill: AiSkillSummary) {
         <template v-if="skills.length">
           {{ skills.filter((s) => s.enabled).length }} of {{ skills.length }} enabled
         </template>
-        <template v-else>Instructions the assistant follows</template>
+        <template v-else>{{ t('ai.instructionsFollowed') }}</template>
       </p>
       <Button v-if="canManage && skills.length > 0" size="sm" @click="openNew">
         <Plus class="size-3.5" /> New skill
@@ -124,7 +127,7 @@ async function remove(skill: AiSkillSummary) {
     <AiEmptyState
       v-else-if="skills.length === 0"
       :icon="Sparkles"
-      title="No skills yet"
+      :title="t('ai.noSkills')"
       body="A skill is a block of instructions the assistant follows — your house rules for how it writes. It joins a conversation when one of its trigger words appears, or when someone picks it in the chat composer."
       :example="{
         label: 'For example',
@@ -146,8 +149,8 @@ async function remove(skill: AiSkillSummary) {
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
-          <TableHead>Triggers</TableHead>
-          <TableHead class="w-24">Enabled</TableHead>
+          <TableHead>{{ t('ai.triggers') }}</TableHead>
+          <TableHead class="w-24">{{ t('ai.enabled') }}</TableHead>
           <TableHead class="w-20"></TableHead>
         </TableRow>
       </TableHeader>
@@ -203,11 +206,11 @@ async function remove(skill: AiSkillSummary) {
             <Input v-model="form.name" required placeholder="Release notes writer" />
           </label>
           <label class="block space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">Description</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.description') }}</span>
             <Input v-model="form.description" placeholder="Draft release notes from merged merge requests" />
           </label>
           <label class="block space-y-1">
-            <span class="text-muted-foreground text-xs font-medium">Triggers (comma separated)</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.triggersCsv') }}</span>
             <Input v-model="form.triggers" placeholder="release, changelog, notes" />
           </label>
           <label class="block space-y-1">

@@ -10,6 +10,7 @@
 // project's vocabulary without leaving the page being read. Nothing the model
 // proposes is saved until it is accepted here, which is the same rule the
 // glossary page enforces.
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { BookMarked, Check, Send, Sparkles, X } from 'lucide-vue-next'
@@ -28,6 +29,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { nativeEl } from '@/lib/utils'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
+
+const { t } = useI18n()
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -56,12 +59,16 @@ const setInputEl = (c: unknown) => {
   inputEl.value = nativeEl<HTMLInputElement>(c)
 }
 
-/** Prompt shortcuts — offered while the conversation is still empty. */
-const PROMPTS = [
-  { label: 'Summarize', prompt: 'Summarize this page in five bullet points.' },
-  { label: "What's missing?", prompt: 'What important information is missing or unclear on this page?' },
-  { label: 'Related pages', prompt: 'Which other pages in this knowledge base relate to this one, and how?' },
-] as const
+/**
+ * Prompt shortcuts — offered while the conversation is still empty. Computed
+ * rather than a const so switching language re-labels them; the prompt text is
+ * translated too, so a Russian user asks in Russian.
+ */
+const PROMPTS = computed(() => [
+  { label: t('assistant.promptSummarize'), prompt: t('assistant.promptSummarizeBody') },
+  { label: t('assistant.promptMissing'), prompt: t('assistant.promptMissingBody') },
+  { label: t('assistant.promptRelated'), prompt: t('assistant.promptRelatedBody') },
+])
 
 const canBuildGlossary = computed(() => auth.canEdit)
 
@@ -128,7 +135,7 @@ async function send() {
 /** Quick action: extract vocabulary from the page currently being read. */
 async function buildGlossary() {
   if (busy.value) return
-  messages.value.push({ role: 'user', content: 'Build a glossary from this page.' })
+  messages.value.push({ role: 'user', content: t('assistant.buildGlossaryPrompt') })
   busy.value = true
   error.value = null
   void scrollToEnd()
@@ -140,10 +147,10 @@ async function buildGlossary() {
     messages.value.push({
       role: 'assistant',
       content: !res.enabled
-        ? 'The assistant is disabled for this workspace — configure a provider under Settings → AI.'
+        ? t('assistant.disabledForWorkspace')
         : res.suggestions.length === 0
-          ? 'Nothing to add: every term this page defines is already in the glossary.'
-          : `${res.suggestions.length} term${res.suggestions.length === 1 ? '' : 's'} worth defining. Add the ones you want — nothing is saved until you do.`,
+          ? t('assistant.glossaryNothingToAdd')
+          : t('assistant.termsWorthDefining', { terms: t('count.terms', { n: res.suggestions.length }, res.suggestions.length) }),
       glossary: res.suggestions,
       accepted: [],
       projectId: res.projectId,
@@ -191,16 +198,16 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
   <!-- Chat window -->
   <section
     v-else
-    aria-label="Ask AI about this page"
+    :aria-label="t('assistant.askAiAbout')"
     class="fixed bottom-5 right-5 z-40 flex h-[32rem] max-h-[calc(100vh-6rem)] w-96 max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-xl border bg-card shadow-2xl"
   >
     <header class="flex items-center gap-2 border-b px-3 py-2.5">
       <Sparkles class="size-4 shrink-0 text-primary" />
       <div class="min-w-0 flex-1 leading-tight">
-        <p class="text-sm font-semibold">Ask AI</p>
+        <p class="text-sm font-semibold">{{ t('assistant.askAi') }}</p>
         <p class="truncate text-[11px] text-muted-foreground">about “{{ title }}” and related pages</p>
       </div>
-      <Button variant="ghost" size="icon-xs" aria-label="Close chat" @click="open = false">
+      <Button variant="ghost" size="icon-xs" :aria-label="t('assistant.closeChat')" @click="open = false">
         <X class="size-3.5" />
       </Button>
     </header>
@@ -227,7 +234,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
                 <p class="flex flex-wrap items-center gap-1.5 font-medium">
                   {{ s.term }}
                   <Badge variant="secondary" class="font-normal">{{ s.occurrences }}×</Badge>
-                  <Badge v-if="s.existingTermId" variant="outline">defined</Badge>
+                  <Badge v-if="s.existingTermId" variant="outline">{{ t('assistant.defined') }}</Badge>
                 </p>
                 <p class="text-muted-foreground text-xs">{{ s.definition }}</p>
               </div>
@@ -262,7 +269,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
           </div>
         </div>
       </div>
-      <p v-if="busy" class="text-sm text-muted-foreground">Thinking…</p>
+      <p v-if="busy" class="text-sm text-muted-foreground">{{ t('assistant.thinking') }}</p>
       <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
     </div>
 
@@ -286,7 +293,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
         type="button"
         :disabled="busy"
         class="flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
-        title="Extract the terms this page defines into the project glossary"
+        :title="t('assistant.buildGlossaryHint')"
         @click="buildGlossary"
       >
         <BookMarked class="size-3" /> Build glossary
@@ -298,10 +305,10 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
         :ref="setInputEl"
         v-model="question"
         :disabled="busy"
-        placeholder="Ask about this page…"
+        :placeholder="t('assistant.askPlaceholder')"
         class="min-w-0 flex-1"
       />
-      <Button type="submit" size="icon-sm" :disabled="busy || !question.trim()" aria-label="Send">
+      <Button type="submit" size="icon-sm" :disabled="busy || !question.trim()" :aria-label="t('assistant.send')">
         <Send class="size-4" />
       </Button>
     </form>

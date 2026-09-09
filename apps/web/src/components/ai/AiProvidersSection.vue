@@ -4,6 +4,7 @@
 // A workspace with no profiles keeps the single default config below and this
 // section is just an invitation to add one — the whole feature is additive, so
 // the simple case must stay simple.
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -31,6 +32,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import AiSettingsSection from './AiSettingsSection.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{ canManage: boolean; routing: AiRouting; canStoreSecrets: boolean }>()
 
@@ -160,11 +163,11 @@ function purposesServedBy(id: string): string[] {
 
 <template>
   <AiSettingsSection
-    title="Providers"
+    :title="t('ai.providers')"
     :description="
       providers.length
-        ? 'Named configurations you can point each kind of work at. Anything left unrouted uses the default below.'
-        : 'Add a profile to run different work on different models — a cheap one for background review, a strong one for chat. Until then everything uses the default below.'
+        ? t('ai.providersDescRouted')
+        : t('ai.providersDescEmpty')
     "
   >
     <ul v-if="providers.length" class="divide-y rounded-lg border">
@@ -202,12 +205,12 @@ function purposesServedBy(id: string): string[] {
     </p>
 
     <Button v-if="canManage" type="button" variant="outline" size="sm" @click="openNew">
-      <Plus class="size-3.5" /> Add provider
+      <Plus class="size-3.5" /> {{ t('ai.addProvider') }}
     </Button>
 
     <!-- Routing only means anything once there is something to route to. -->
     <div v-if="providers.length" class="space-y-3 border-t pt-4">
-      <p class="text-xs font-medium">Routing</p>
+      <p class="text-xs font-medium">{{ t('ai.routing') }}</p>
       <label v-for="p in PURPOSES" :key="p.key" class="flex flex-wrap items-center justify-between gap-2">
         <span class="text-sm">
           {{ p.label }}
@@ -218,9 +221,9 @@ function purposesServedBy(id: string): string[] {
           :disabled="!canManage"
           @update:model-value="route(p.field, String($event ?? UNROUTED))"
         >
-          <SelectTrigger class="w-56"><SelectValue placeholder="Default" /></SelectTrigger>
+          <SelectTrigger class="w-56"><SelectValue :placeholder="t('ai.default')" /></SelectTrigger>
           <SelectContent>
-            <SelectItem :value="UNROUTED">Default (below)</SelectItem>
+            <SelectItem :value="UNROUTED">{{ t('ai.defaultBelow') }}</SelectItem>
             <SelectItem v-for="opt in providers.filter((x) => x.enabled)" :key="opt.id" :value="opt.id">
               {{ opt.name }}
             </SelectItem>
@@ -232,7 +235,7 @@ function purposesServedBy(id: string): string[] {
     <Dialog v-model:open="open">
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{{ editing ? 'Edit provider' : 'Add provider' }}</DialogTitle>
+          <DialogTitle>{{ editing ? t('ai.editProvider') : t('ai.addProvider') }}</DialogTitle>
           <DialogDescription>
             A named endpoint and model. Give it a name you will recognise in the routing list and the usage
             breakdown.
@@ -246,7 +249,7 @@ function purposesServedBy(id: string): string[] {
           </label>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class="block space-y-1.5">
-              <span class="text-muted-foreground text-xs font-medium">Provider</span>
+              <span class="text-muted-foreground text-xs font-medium">{{ t('ai.provider') }}</span>
               <Select v-model="form.provider">
                 <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -257,16 +260,16 @@ function purposesServedBy(id: string): string[] {
               </Select>
             </label>
             <label class="block space-y-1.5">
-              <span class="text-muted-foreground text-xs font-medium">Model</span>
+              <span class="text-muted-foreground text-xs font-medium">{{ t('ai.model') }}</span>
               <Input v-model="form.model" required placeholder="deepseek-chat" />
             </label>
           </div>
           <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">Base URL</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.baseUrl') }}</span>
             <Input v-model="form.baseUrl" placeholder="provider default" />
           </label>
           <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">API key</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.apiKey') }}</span>
             <Input
               v-model="form.apiKey"
               type="password"

@@ -13,6 +13,7 @@
  * table of contents).
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import type { Editor as CoreEditor } from '@tiptap/core'
@@ -87,6 +88,8 @@ export interface MentionablePerson {
   name: string
   hint?: string
 }
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -487,7 +490,8 @@ onMounted(() => {
       MentionCommand,
       DragHandleExtension,
       ListIndentKeymap.configure({ onLink: openLinkDialog }),
-      CommentAnchors,
+      // The extension builds aria-labels, so it needs this app's translator.
+      CommentAnchors.configure({ t }),
     ],
     editorProps: {
       attributes: { class: 'kn-prose', spellcheck: 'true' },

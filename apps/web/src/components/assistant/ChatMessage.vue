@@ -8,6 +8,7 @@
 // page with a marker in the left gutter instead. Wrapping that in a tinted
 // bubble would fight every block inside it, and a knowledge base's answers
 // deserve to look like the knowledge base.
+import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Check, Copy, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
@@ -17,6 +18,8 @@ import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
 import AssistantPrompt from './AssistantPrompt.vue'
 import { toolVocabulary } from './tool-vocabulary'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   message: AssistantMessageInfo
@@ -111,9 +114,9 @@ function saveEdit() {
         @keydown.enter.ctrl.prevent="saveEdit"
       />
       <div class="flex items-center justify-end gap-2">
-        <p class="mr-auto text-[11px] text-muted-foreground">Saving restarts the conversation from here.</p>
-        <Button variant="ghost" size="sm" @click="editing = false">Cancel</Button>
-        <Button size="sm" :disabled="!draft.trim()" @click="saveEdit">Save</Button>
+        <p class="mr-auto text-[11px] text-muted-foreground">{{ t('chat.savingRestarts') }}</p>
+        <Button variant="ghost" size="sm" @click="editing = false">{{ t('common.cancel') }}</Button>
+        <Button size="sm" :disabled="!draft.trim()" @click="saveEdit">{{ t('common.save') }}</Button>
       </div>
     </div>
 
@@ -129,14 +132,14 @@ function saveEdit() {
           <Check v-if="copied" class="size-3.5 text-emerald-500" />
           <Copy v-else class="size-3.5" />
         </button>
-        <button type="button" class="kn-msg-action" aria-label="Edit message" title="Edit" @click="startEdit">
+        <button type="button" class="kn-msg-action" :aria-label="t('chat.editMessage')" :title="t('chat.edit')" @click="startEdit">
           <Pencil class="size-3.5" />
         </button>
         <button
           type="button"
           class="kn-msg-action"
-          aria-label="Reset the conversation to before this message"
-          title="Reset to here"
+          :aria-label="t('chat.resetConversationTo')"
+          :title="t('chat.resetToHere')"
           @click="emit('reset', message)"
         >
           <RotateCcw class="size-3.5" />
@@ -181,7 +184,7 @@ function saveEdit() {
           :class="tc.ok ? 'text-muted-foreground' : 'text-destructive'"
         >
           <component :is="toolVocabulary(tc.tool).icon" class="size-3" />
-          {{ toolVocabulary(tc.tool).done }}
+          {{ t(toolVocabulary(tc.tool).done) }}
           <Check v-if="tc.ok" class="size-2.5" />
           <X v-else class="size-2.5" />
         </span>
@@ -209,8 +212,8 @@ function saveEdit() {
         <button
           type="button"
           class="kn-msg-action"
-          aria-label="Discard this reply and ask again"
-          title="Ask again"
+          :aria-label="t('chat.discardReply')"
+          :title="t('chat.askAgain')"
           @click="emit('reset', message)"
         >
           <RotateCcw class="size-3.5" />

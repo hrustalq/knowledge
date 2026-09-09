@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -23,6 +24,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import WorkflowRunCard from '@/components/workflows/WorkflowRunCard.vue'
+
+const { t } = useI18n()
 
 /**
  * Every run in the workspace (docs/features/17).
@@ -64,7 +67,7 @@ const runs = computed(() => data.value?.runs ?? [])
 const fields = computed<FilterField[]>(() => [
   {
     key: 'project',
-    label: 'Project',
+    label: t('filter.project'),
     // Pinned: it scopes the fetch, so it is never offered as an addable filter
     // and Clear does not remove it.
     pinned: true,
@@ -73,7 +76,7 @@ const fields = computed<FilterField[]>(() => [
   },
   {
     key: 'status',
-    label: 'Status',
+    label: t('filter.status'),
     type: 'select',
     multiple: true,
     options: WORKFLOW_RUN_STATUSES.map((s) => ({
@@ -84,12 +87,12 @@ const fields = computed<FilterField[]>(() => [
   },
   {
     key: 'workflow',
-    label: 'Workflow',
+    label: t('filter.workflow'),
     type: 'select',
     multiple: true,
     options: store.workflows.map((w) => ({ value: w.id, label: w.name })),
   },
-  { key: 'page', label: 'Source page', type: 'text' },
+  { key: 'page', label: t('filter.sourcePage'), type: 'text' },
 ])
 
 const accessors: FilterAccessors<(typeof runs.value)[number]> = {
@@ -166,23 +169,22 @@ watch(starting, (open) => {
   <div class="flex min-h-0 w-full flex-1 flex-col gap-4">
     <header class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 class="text-lg font-semibold">Workflow runs</h1>
+        <h1 class="text-lg font-semibold">{{ t('workflow.runs') }}</h1>
         <p class="text-muted-foreground mt-1 max-w-2xl text-sm">
-          Each run turns one page into the next level of detail, stopping for review before anything is
-          published. A run can sit here for as long as it takes — it resumes exactly where it parked.
+          {{ t('workflow.runsSubtitle') }}
         </p>
       </div>
       <div class="flex items-center gap-2">
         <RouterLink to="/settings/workflows">
-          <Button variant="outline" size="sm">Configure</Button>
+          <Button variant="outline" size="sm">{{ t('workflow.configure') }}</Button>
         </RouterLink>
         <Button v-if="auth.canEdit && store.runnable.length" size="sm" @click="starting = true">
-          <Play class="mr-1.5 size-4" /> Start a run
+          <Play class="mr-1.5 size-4" /> {{ t('workflow.startRunButton') }}
         </Button>
       </div>
     </header>
 
-    <FilterBar v-model="filters" :fields="fields" empty-label="Filter runs" />
+    <FilterBar v-model="filters" :fields="fields" :empty-label="t('workflow.filterRuns')" />
 
     <div v-if="query.isLoading.value" class="space-y-2">
       <Skeleton v-for="i in 4" :key="i" class="h-20 w-full" />
@@ -198,7 +200,7 @@ watch(starting, (open) => {
           {{ runs.length ? 'No runs match these filters' : 'No runs yet' }}
         </p>
         <p class="mx-auto mt-1 max-w-md text-sm">
-          <template v-if="runs.length">Clear a filter to see the rest.</template>
+          <template v-if="runs.length">{{ t('workflow.clearFilterToSeeRest') }}</template>
           <template v-else-if="store.runnable.length">
             Start one from here, or from the Workflows widget on any page.
           </template>
@@ -208,7 +210,7 @@ watch(starting, (open) => {
         </p>
       </div>
       <RouterLink v-if="!store.runnable.length" to="/settings/workflows">
-        <Button size="sm" variant="outline">Open workflow settings</Button>
+        <Button size="sm" variant="outline">{{ t('workflow.openSettings') }}</Button>
       </RouterLink>
     </div>
 
@@ -220,10 +222,10 @@ watch(starting, (open) => {
 
     <Dialog v-model:open="starting">
       <DialogContent class="max-w-lg">
-        <DialogHeader><DialogTitle>Start a workflow run</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{{ t('workflow.startRun') }}</DialogTitle></DialogHeader>
         <div class="space-y-4">
           <label class="block space-y-1.5">
-            <span class="text-muted-foreground text-xs font-medium">Workflow</span>
+            <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.workflow') }}</span>
             <select
               v-model="definitionId"
               class="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
@@ -234,11 +236,11 @@ watch(starting, (open) => {
 
           <Autocomplete
             v-model="documentIds"
-            label="Source page"
+            :label="t('workflow.sourcePage')"
             placeholder="Search pages…"
             :multiple="false"
             :load="loadDocuments"
-            empty-hint="The page the chain starts from — usually an entity or a spec."
+            :empty-hint="t('hints.chainStartPage')"
           />
 
           <label class="block space-y-1.5">

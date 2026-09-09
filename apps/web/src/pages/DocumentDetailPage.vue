@@ -12,6 +12,9 @@
  * The content itself is the editor in read mode (feature 15), so what you read
  * is what you would edit, and any passage in it can be commented on.
  */
+import { useI18n } from 'vue-i18n'
+import { formatDateTime } from '@/lib/format'
+import { labelFor } from '@/lib/labels'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -56,19 +59,21 @@ import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 
+const { t } = useI18n()
+
 const route = useRoute()
 const auth = useAuthStore()
 const store = useDocumentsStore()
 const events = useEventsStore()
 
 const RAIL_WIDGETS = [
-  { id: 'overview', label: 'Overview', icon: Info, expandable: false },
-  { id: 'frontmatter', label: 'Frontmatter', icon: Braces, expandable: false },
-  { id: 'revisions', label: 'History', icon: History, expandable: true },
-  { id: 'merge-requests', label: 'Changes', icon: GitMerge, expandable: true },
-  { id: 'graph', label: 'Graph', icon: Share2, expandable: true },
-  { id: 'workflows', label: 'Workflows', icon: WorkflowIcon, expandable: false },
-  { id: 'activity', label: 'Activity', icon: ActivityIcon, expandable: false },
+  { id: 'overview', label: t('rail.overview'), icon: Info, expandable: false },
+  { id: 'frontmatter', label: t('rail.frontmatter'), icon: Braces, expandable: false },
+  { id: 'revisions', label: t('rail.history'), icon: History, expandable: true },
+  { id: 'merge-requests', label: t('rail.changes'), icon: GitMerge, expandable: true },
+  { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
+  { id: 'workflows', label: t('rail.workflows'), icon: WorkflowIcon, expandable: false },
+  { id: 'activity', label: t('rail.activity'), icon: ActivityIcon, expandable: false },
 ] as const
 type RailWidget = (typeof RAIL_WIDGETS)[number]['id']
 
@@ -304,8 +309,8 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
 
   return {
     overview: detail.value ? `#${detail.value.revision.revisionNumber}` : null,
-    frontmatter: frontmatterKeys ? `${frontmatterKeys} field${frontmatterKeys === 1 ? '' : 's'}` : null,
-    revisions: revisions ? `${revisions.length} revision${revisions.length === 1 ? '' : 's'}` : null,
+    frontmatter: frontmatterKeys ? t('count.fields', { n: frontmatterKeys }, frontmatterKeys) : null,
+    revisions: revisions ? t('count.revisions', { n: revisions.length }, revisions.length) : null,
     'merge-requests': mrs
       ? openMrs
         ? `${openMrs} open`
@@ -315,14 +320,14 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
       : null,
     graph: relations.value
       ? relations.value.length
-        ? `${relations.value.length} relation${relations.value.length === 1 ? '' : 's'}`
+        ? t('count.relations', { n: relations.value.length }, relations.value.length)
         : 'no relations'
       : null,
     workflows: workflowRuns
       ? workflowsAwaiting
         ? `${workflowsAwaiting} to review`
         : workflowRuns.length
-          ? `${workflowRuns.length} run${workflowRuns.length === 1 ? '' : 's'}`
+          ? t('count.runs', { n: workflowRuns.length }, workflowRuns.length)
           : 'none'
       : null,
     activity: latest ? relativeTime(latest.createdAt) : null,
@@ -391,7 +396,7 @@ watch(
     <header class="space-y-2">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 class="font-display text-2xl font-bold tracking-tight">{{ detail.document.title }}</h1>
-        <Badge variant="outline">{{ detail.document.category }}</Badge>
+        <Badge variant="outline">{{ labelFor(t, 'category', detail.document.category) }}</Badge>
         <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
         <Button v-if="auth.canEdit" variant="outline" size="sm" class="ml-auto" as-child>
           <RouterLink :to="`/documents/${detail.document.documentId}/edit`">
@@ -404,7 +409,7 @@ watch(
         Revision #{{ detail.revision.revisionNumber }}
         <span class="font-mono">({{ detail.revision.revisionId.slice(0, 8) }})</span>
         <template v-if="detail.revision.finalizedAt">
-          · finalized {{ new Date(detail.revision.finalizedAt).toLocaleString() }}
+          · {{ t('documents.finalizedAt', { when: formatDateTime(detail.revision.finalizedAt) }) }}
         </template>
       </p>
     </header>
@@ -416,7 +421,7 @@ watch(
         <section class="space-y-2">
           <p v-if="viewingRevision" class="text-xs text-muted-foreground">
             Viewing revision {{ viewingRevision.slice(0, 8) }} — commenting is off while reading history.
-            <RouterLink :to="`/documents/${documentId}`" class="underline">Back to head</RouterLink>
+            <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
           </p>
           <p v-if="contentError" class="text-sm text-destructive">{{ contentError }}</p>
           <Skeleton v-else-if="!content" class="h-96 w-full" />
@@ -461,24 +466,24 @@ watch(
           <!-- What this page *is*: the facts a reader checks before trusting it. -->
           <template v-if="w.id === 'overview'">
             <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
-              <dt class="text-muted-foreground">Revision</dt>
+              <dt class="text-muted-foreground">{{ t('documents.revision') }}</dt>
               <dd class="text-right">
                 #{{ detail.revision.revisionNumber }}
                 <span class="font-mono text-xs">{{ detail.revision.revisionId.slice(0, 8) }}</span>
               </dd>
-              <dt class="text-muted-foreground">Status</dt>
+              <dt class="text-muted-foreground">{{ t('documents.status') }}</dt>
               <dd class="text-right">
                 <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
               </dd>
-              <dt class="text-muted-foreground">Category</dt>
-              <dd class="truncate text-right">{{ detail.document.category }}</dd>
-              <dt class="text-muted-foreground">Type</dt>
+              <dt class="text-muted-foreground">{{ t('documents.category') }}</dt>
+              <dd class="truncate text-right">{{ labelFor(t, 'category', detail.document.category) }}</dd>
+              <dt class="text-muted-foreground">{{ t('documents.type') }}</dt>
               <dd class="truncate text-right">{{ detail.revision.contentType }}</dd>
-              <dt class="text-muted-foreground">Finalized</dt>
+              <dt class="text-muted-foreground">{{ t('documents.finalized') }}</dt>
               <dd class="text-right">
-                {{ detail.revision.finalizedAt ? new Date(detail.revision.finalizedAt).toLocaleString() : '—' }}
+                {{ detail.revision.finalizedAt ? formatDateTime(detail.revision.finalizedAt) : '—' }}
               </dd>
-              <dt class="text-muted-foreground">Hash</dt>
+              <dt class="text-muted-foreground">{{ t('documents.hash') }}</dt>
               <dd class="truncate text-right font-mono text-xs" :title="detail.revision.contentHash ?? ''">
                 {{ detail.revision.contentHash?.slice(0, 12) ?? '—' }}
               </dd>
@@ -523,7 +528,7 @@ watch(
 
         <p v-if="jumpTarget" class="px-1 text-xs text-muted-foreground">
           <button class="underline underline-offset-2 hover:text-foreground" @click="jumpToComment">
-            {{ unresolvedCount }} open comment{{ unresolvedCount === 1 ? '' : 's' }}
+            {{ t('count.openComments', { n: unresolvedCount }, unresolvedCount) }}
           </button>
         </p>
       </aside>

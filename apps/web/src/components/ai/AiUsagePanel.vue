@@ -4,7 +4,9 @@
 // The chart is inline markup rather than a charting library: this repo ships
 // none, and one bar series does not justify adding one. Colours come from the
 // theme tokens so it follows light/dark like everything else.
+import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
+import { formatDayMonth, formatNumber } from '@/lib/format'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import type { AiBudgetInfo, AiUsageResponse, ListAiBudgetsResponse } from '@knowledge/contracts'
@@ -15,6 +17,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
+const { t } = useI18n()
 
 const props = defineProps<{ canManage: boolean }>()
 
@@ -62,7 +66,7 @@ function fmtCost(micros: number | null): string {
 }
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return formatDayMonth(iso)
 }
 
 function pct(used: number, budget: number | null): number {
@@ -181,24 +185,24 @@ function labelFor(userId: string): string {
              stopped reading as one summary. -->
         <dl class="flex flex-wrap gap-x-10 gap-y-4">
           <div>
-            <dt class="text-muted-foreground text-xs">Calls</dt>
-            <dd class="text-2xl font-semibold tabular-nums">{{ data.totals.calls.toLocaleString() }}</dd>
+            <dt class="text-muted-foreground text-xs">{{ t('ai.calls') }}</dt>
+            <dd class="text-2xl font-semibold tabular-nums">{{ formatNumber(data.totals.calls) }}</dd>
           </div>
           <div>
-            <dt class="text-muted-foreground text-xs">Tokens</dt>
+            <dt class="text-muted-foreground text-xs">{{ t('ai.tokens') }}</dt>
             <dd class="text-2xl font-semibold tabular-nums">{{ fmtTokens(data.totals.totalTokens) }}</dd>
           </div>
           <div>
-            <dt class="text-muted-foreground text-xs">Estimated cost</dt>
+            <dt class="text-muted-foreground text-xs">{{ t('ai.estimatedCost') }}</dt>
             <dd class="text-2xl font-semibold tabular-nums">{{ fmtCost(data.totals.costUsdMicros) }}</dd>
             <!-- Without this the total silently reads as the whole bill. -->
             <dd v-if="data.totals.unpricedCalls > 0" class="text-muted-foreground mt-0.5 text-xs">
-              excludes {{ data.totals.unpricedCalls }} call{{ data.totals.unpricedCalls === 1 ? '' : 's' }} with no
+              {{ t('ai.excludesCalls', { calls: t('count.calls', { n: data.totals.unpricedCalls }, data.totals.unpricedCalls) }) }}
               price set
             </dd>
           </div>
           <div v-if="data.totals.errors > 0">
-            <dt class="text-muted-foreground text-xs">Failed</dt>
+            <dt class="text-muted-foreground text-xs">{{ t('ai.failed') }}</dt>
             <dd class="text-destructive text-2xl font-semibold tabular-nums">{{ data.totals.errors }}</dd>
           </div>
         </dl>
@@ -206,7 +210,7 @@ function labelFor(userId: string): string {
         <!-- daily tokens -->
         <div v-if="chart.length > 0">
           <div class="mb-2 flex items-baseline justify-between">
-            <p class="text-muted-foreground text-xs font-medium">Tokens per day</p>
+            <p class="text-muted-foreground text-xs font-medium">{{ t('ai.tokensPerDay') }}</p>
             <p class="text-muted-foreground text-xs tabular-nums">peak {{ fmtTokens(chartMax) }}</p>
           </div>
           <div
@@ -221,7 +225,13 @@ function labelFor(userId: string): string {
               class="min-w-0 flex-1 rounded-t-[2px] transition-colors"
               :class="point.totalTokens > 0 ? 'bg-primary/60 hover:bg-primary' : 'bg-muted'"
               :style="{ height: point.totalTokens > 0 ? `${point.height}px` : '2px' }"
-              :title="`${point.date}: ${point.totalTokens.toLocaleString()} tokens, ${point.calls} call${point.calls === 1 ? '' : 's'}`"
+              :title="
+                t('ai.chartPoint', {
+                  date: point.date,
+                  tokens: formatNumber(point.totalTokens),
+                  calls: t('count.calls', { n: point.calls }, point.calls),
+                })
+              "
             />
           </div>
           <div class="text-muted-foreground mt-1.5 flex justify-between text-xs">
@@ -237,9 +247,9 @@ function labelFor(userId: string): string {
             <TableHeader>
               <TableRow>
                 <TableHead class="capitalize">{{ groupBy }}</TableHead>
-                <TableHead class="text-right">Calls</TableHead>
-                <TableHead class="text-right">Prompt</TableHead>
-                <TableHead class="text-right">Completion</TableHead>
+                <TableHead class="text-right">{{ t('ai.calls') }}</TableHead>
+                <TableHead class="text-right">{{ t('ai.prompt') }}</TableHead>
+                <TableHead class="text-right">{{ t('ai.completion') }}</TableHead>
                 <TableHead class="text-right">Total</TableHead>
                 <TableHead class="text-right">Est. cost</TableHead>
               </TableRow>

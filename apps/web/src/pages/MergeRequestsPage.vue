@@ -5,6 +5,7 @@
 // Every narrowing goes to the server. The list is cursor-paginated, so
 // filtering the loaded page in the browser would disagree with both the tab
 // counts and "Load more" — see mr-filters.ts.
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import type { ListWorkspaceMergeRequestsResponse, MergeRequestInfo } from '@knowledge/contracts'
@@ -15,6 +16,8 @@ import type { ActiveFilter } from '@/components/ui/filter-bar'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
 import MergeRequestSearchBar from '@/components/merge-requests/MergeRequestSearchBar.vue'
 import { mergeRequestFilterParams } from '@/components/merge-requests/mr-filters'
+
+const { t } = useI18n()
 
 const STATES = ['open', 'merged', 'closed', 'all'] as const
 type State = (typeof STATES)[number]
@@ -77,9 +80,9 @@ function clearNarrowing() {
 <template>
   <div class="space-y-4">
     <div>
-      <h1 class="font-display text-2xl font-bold tracking-tight">Merge requests</h1>
+      <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('nav.mergeRequests') }}</h1>
       <p class="mt-0.5 text-sm text-muted-foreground">
-        Review and merge proposed changes across this workspace.
+        {{ t('mr.listSubtitle') }}
       </p>
     </div>
 
@@ -90,13 +93,13 @@ function clearNarrowing() {
         :key="s"
         role="tab"
         :aria-selected="state === s"
-        class="flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm capitalize transition-colors"
+        class="flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors"
         :class="state === s
           ? 'border-primary font-medium text-primary'
           : 'border-transparent text-muted-foreground hover:text-foreground'"
         @click="setState(s)"
       >
-        {{ s }}
+        {{ t(`mr.state${s.charAt(0).toUpperCase()}${s.slice(1)}`) }}
         <span class="rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground">
           {{ countFor(s) }}
         </span>

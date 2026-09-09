@@ -17,6 +17,7 @@
  * Errors return to the form with the typed values intact: the most common one
  * is a name clash, and that is fixed in the field, not on a dead-end screen.
  */
+import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { Check, Folder, Library, Loader2 } from 'lucide-vue-next'
 import { ApiError, getWorkspaceId } from '@/lib/api'
@@ -41,6 +42,8 @@ import {
 } from '@/components/ui/dialog'
 import AddMembersStep from './AddMembersStep.vue'
 import CreateProjectStep from './CreateProjectStep.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{ kind: 'workspace' | 'project' | null; initialName?: string }>()
 const emit = defineEmits<{ 'update:kind': [null]; created: [ScopeCreated] }>()
@@ -101,7 +104,7 @@ const header = computed(() => {
     return {
       icon: Check,
       title: `${result.value?.name} created`,
-      body: 'A workspace keeps its pages in projects. Add the first one so there is somewhere to write.',
+      body: t('nav.firstProjectHint'),
     }
   }
   if (stage.value === 'members') {
@@ -114,19 +117,19 @@ const header = computed(() => {
   return isWorkspace.value
     ? {
         icon: Library,
-        title: 'New workspace',
-        body: 'Its own tenant — separate members, pages and graph.',
+        title: t('nav.workspaceOption'),
+        body: t('nav.workspaceOptionHint'),
       }
     : {
         icon: Folder,
-        title: 'New project',
-        body: 'Groups pages inside this workspace. Every page belongs to exactly one.',
+        title: t('nav.projectOption'),
+        body: t('nav.projectOptionHint'),
       }
 })
 
 const workspaceName = computed(
   () =>
-    workspaces.items.find((w) => w.workspaceId === getWorkspaceId())?.name ?? 'this workspace',
+    workspaces.items.find((w) => w.workspaceId === getWorkspaceId())?.name ?? t('nav.thisWorkspace'),
 )
 
 async function submit() {
@@ -253,7 +256,7 @@ async function finish() {
                 <Input
                   id="switcher-create-name"
                   v-model="name"
-                  :placeholder="isWorkspace ? 'Acme Engineering' : 'Platform docs'"
+                  :placeholder="isWorkspace ? t('nav.workspaceNamePlaceholder') : t('nav.projectNamePlaceholder')"
                   :aria-invalid="error !== null || undefined"
                   autocomplete="off"
                   required
@@ -265,12 +268,13 @@ async function finish() {
                   for="switcher-create-description"
                   class="text-muted-foreground block text-[11px] font-semibold tracking-wider uppercase"
                 >
-                  Description <span class="font-normal normal-case">— optional</span>
+                  {{ t('nav.description') }}
+                  <span class="font-normal normal-case">{{ t('nav.optionalSuffix') }}</span>
                 </label>
                 <Input
                   id="switcher-create-description"
                   v-model="description"
-                  placeholder="What lives in here?"
+                  :placeholder="t('nav.scopeDescriptionPlaceholder')"
                   autocomplete="off"
                 />
               </div>

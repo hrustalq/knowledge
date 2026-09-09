@@ -14,6 +14,7 @@
 // regions on one screen is how a page stops feeling like a page. The recipe
 // is @tanstack/vue-virtual's `scrollMargin`: the virtualizer measures against
 // <main>, offset by how far down <main> this list starts.
+import { useI18n } from 'vue-i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { useVirtualizer } from '@tanstack/vue-virtual'
@@ -33,6 +34,8 @@ import CommentComposer from './CommentComposer.vue'
 import { useMembers } from './use-members'
 import { systemNote } from './mr-activity'
 import { fullTime, timelineTime } from './mr-ui'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   mergeRequestId: string
@@ -218,7 +221,7 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
 <template>
   <section class="space-y-3">
     <div class="flex items-center gap-2">
-      <h2 class="text-sm font-medium">Activity</h2>
+      <h2 class="text-sm font-medium">{{ t('mr.activity') }}</h2>
       <Button
         v-if="activityPage?.nextCursor"
         variant="ghost"
@@ -322,8 +325,8 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
       >
         <CommentComposer
           offer-thread
-          placeholder="Add a comment to this merge request…"
-          submit-label="Comment"
+          :placeholder="t('mr.addComment')"
+          :submit-label="t('review.comment')"
           :busy="busy"
           :resolve-document-id="resolveDocumentId"
           @submit="(b: string, r: boolean) => emit('createThread', b, r)"

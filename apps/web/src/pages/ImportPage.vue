@@ -22,6 +22,7 @@
 //
 // The wizard holds an import id, not the work. The row on the server is the
 // truth, so closing the tab mid-parse loses nothing and coming back rejoins it.
+import { useI18n } from 'vue-i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -37,6 +38,8 @@ import ImportReview from '@/components/import/ImportReview.vue'
 import ImportStepper from '@/components/import/ImportStepper.vue'
 import ParseProgress from '@/components/import/ParseProgress.vue'
 import { useImport } from '@/components/import/use-import'
+
+const { t } = useI18n()
 
 /** Mirrors IMPORT_MAX_BYTES; the server enforces the real one on both ends. */
 const MAX_BYTES = 52_428_800
@@ -179,7 +182,7 @@ function tryAgain(): void {
   <div class="flex h-full flex-col">
     <!-- Fixed frame, part one: what this is and how far along you are. -->
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-x-8 gap-y-3 border-b px-4 py-4 lg:px-8">
-      <h1 class="text-xl font-semibold tracking-tight">Import a document</h1>
+      <h1 class="text-xl font-semibold tracking-tight">{{ t('import.title') }}</h1>
       <ImportStepper :current="step" />
     </header>
 
@@ -197,7 +200,7 @@ function tryAgain(): void {
           v-else-if="view === 'choose'"
           key="choose"
           class="flex h-full items-center overflow-y-auto px-4 py-6 lg:px-8"
-          aria-label="Choose a file and destination"
+          :aria-label="t('import.chooseFileAndDestination')"
         >
           <!-- One row, one height, so the target and the filing share a top
                edge. The row takes the height the viewport can spare, bounded at
@@ -217,7 +220,7 @@ function tryAgain(): void {
 
             <!-- Rail at the width every other rail in the product uses. -->
             <div class="shrink-0 lg:w-96 xl:w-[28rem]">
-              <h2 class="mb-4 text-sm font-medium text-muted-foreground">Where it goes</h2>
+              <h2 class="mb-4 text-sm font-medium text-muted-foreground">{{ t('import.whereItGoes') }}</h2>
               <DestinationFields
                 v-model:project-id="projectId"
                 v-model:category="category"
@@ -229,9 +232,9 @@ function tryAgain(): void {
         </section>
 
         <!-- Step 1 revisited from the review: only the filing is in question. -->
-        <section v-else-if="view === 'destination'" key="destination" class="h-full overflow-y-auto px-4 py-6 lg:px-8" aria-label="Change the destination">
+        <section v-else-if="view === 'destination'" key="destination" class="h-full overflow-y-auto px-4 py-6 lg:px-8" :aria-label="t('import.changeDestination')">
           <div class="mx-auto w-full max-w-lg">
-            <h2 class="mb-4 font-medium">Where this page goes</h2>
+            <h2 class="mb-4 font-medium">{{ t('import.whereThisPageGoes') }}</h2>
             <DestinationFields
               v-model:project-id="projectId"
               v-model:category="category"
@@ -242,12 +245,12 @@ function tryAgain(): void {
         </section>
 
         <!-- Step 2: the wait, with the worker narrating it. -->
-        <section v-else-if="view === 'working'" key="working" class="grid h-full place-items-center px-4 py-6 lg:px-8" aria-label="Parsing">
+        <section v-else-if="view === 'working'" key="working" class="grid h-full place-items-center px-4 py-6 lg:px-8" :aria-label="t('import.parsing')">
           <ParseProgress :progress="progress" :stage="stage" :filename="job?.sourceFilename ?? ''" />
         </section>
 
         <!-- Step 3: read it, fix it, commit it. -->
-        <section v-else-if="view === 'review' && job && content" key="review" class="flex h-full" aria-label="Review the result">
+        <section v-else-if="view === 'review' && job && content" key="review" class="flex h-full" :aria-label="t('import.reviewResult')">
           <ImportReview
             v-model:title="title"
             ref="reviewRef"
@@ -263,9 +266,9 @@ function tryAgain(): void {
         </section>
 
         <!-- Failure names what went wrong and offers the move that follows. -->
-        <section v-else key="failed" class="grid h-full place-items-center px-4 py-6 lg:px-8" aria-label="Import failed">
+        <section v-else key="failed" class="grid h-full place-items-center px-4 py-6 lg:px-8" :aria-label="t('import.importFailed')">
           <div class="space-y-2 text-center">
-            <h2 class="font-medium">This file could not be imported</h2>
+            <h2 class="font-medium">{{ t('import.couldNotImport') }}</h2>
             <p class="text-sm text-muted-foreground">{{ error }}</p>
           </div>
         </section>
@@ -280,15 +283,15 @@ function tryAgain(): void {
           <p v-if="file && !projectId" class="text-sm text-muted-foreground">
             Pick a project first — every page belongs to exactly one.
           </p>
-          <p v-else-if="!file" class="text-sm text-muted-foreground">Choose a file to continue.</p>
+          <p v-else-if="!file" class="text-sm text-muted-foreground">{{ t('import.chooseFileToContinue') }}</p>
         </template>
 
         <template v-else-if="view === 'destination'">
-          <Button @click="editingDestination = false">Back to the document</Button>
+          <Button @click="editingDestination = false">{{ t('import.backToDocument') }}</Button>
         </template>
 
         <template v-else-if="view === 'working'">
-          <Button variant="ghost" @click="throwAway">Cancel import</Button>
+          <Button variant="ghost" @click="throwAway">{{ t('import.cancelImport') }}</Button>
           <p class="text-sm text-muted-foreground">
             You can leave this page — the import keeps running.
           </p>
@@ -298,7 +301,7 @@ function tryAgain(): void {
           <Button :disabled="busy || !title.trim()" @click="create">
             {{ busy ? 'Creating the page…' : 'Create page' }}
           </Button>
-          <Button variant="ghost" :disabled="busy" @click="throwAway">Discard</Button>
+          <Button variant="ghost" :disabled="busy" @click="throwAway">{{ t('common.discard') }}</Button>
         </template>
 
         <template v-else>

@@ -3,6 +3,7 @@
 //
 // Hidden entirely when the workspace defines no profiles: a picker with one
 // option is noise, and most workspaces never leave the default.
+import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -18,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAssistantStore } from '@/stores/assistant'
+
+const { t } = useI18n()
 
 const assistant = useAssistantStore()
 
@@ -48,7 +51,7 @@ async function pick(providerId: string | null) {
 <template>
   <DropdownMenu v-if="choices.length > 0 && assistant.activeThread">
     <DropdownMenuTrigger as-child>
-      <Button variant="ghost" size="sm" type="button" class="gap-1 text-xs" aria-label="Model for this conversation">
+      <Button variant="ghost" size="sm" type="button" class="gap-1 text-xs" :aria-label="t('chat.modelForConversation')">
         {{ label }}
         <ChevronDown class="size-3" />
       </Button>

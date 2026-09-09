@@ -7,6 +7,8 @@
 // silently convert every inherited field into a workspace override the first
 // time anyone pressed Save. Fields the user did not touch are sent as null —
 // "keep inheriting" — and only edited fields become overrides.
+import { useI18n } from 'vue-i18n'
+import { formatDateTime } from '@/lib/format'
 import { computed, ref, watch } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
@@ -22,6 +24,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api } from '@/api/client'
 import AiSettingsSection from './AiSettingsSection.vue'
 import AiProvidersSection from './AiProvidersSection.vue'
+
+const { t } = useI18n()
 
 defineProps<{ canManage: boolean }>()
 
@@ -195,8 +199,8 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
     />
 
     <AiSettingsSection
-      title="Default provider"
-      description="Used for anything not routed at a named profile above. Blank fields inherit the server's ASSISTANT_* environment values; anything you set here overrides them for this workspace only."
+      :title="t('ai.defaultProvider')"
+      :description="t('ai.defaultProviderDesc')"
     >
       <label class="block space-y-1.5">
         <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
@@ -214,7 +218,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
-            Base URL
+            {{ t('ai.baseUrl') }}
             <span v-if="overridden('baseUrl')" class="text-primary/70">· overridden</span>
           </span>
           <Input v-model="form.baseUrl" :disabled="!canManage" placeholder="provider default" />
@@ -230,7 +234,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
 
       <div class="space-y-1.5">
         <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
-          API key
+          {{ t('ai.apiKey') }}
           <span v-if="overridden('apiKey')" class="text-primary/70">· overridden</span>
         </span>
         <div class="flex items-center gap-2">
@@ -242,7 +246,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
             :placeholder="
               clearKey
                 ? 'cleared on save — the environment key applies again'
-                : (settings?.apiKeyHint ?? (settings?.hasApiKey ? 'set in the environment' : 'not configured'))
+                : (settings?.apiKeyHint ?? (settings?.hasApiKey ? t('ai.setInEnvironment') : t('ai.notConfigured')))
             "
           />
           <Button
@@ -265,27 +269,27 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
             Keys can't be stored until SETTINGS_ENCRYPTION_KEY is set on the server. Until then, set ASSISTANT_API_KEY
             in the environment.
           </template>
-          <template v-else-if="settings?.apiKeyHint">Stored for this workspace. Leave empty to keep it.</template>
-          <template v-else>Saving a key here overrides the environment for this workspace.</template>
+          <template v-else-if="settings?.apiKeyHint">{{ t('ai.keyStored') }}</template>
+          <template v-else>{{ t('ai.keyOverridesEnv') }}</template>
         </p>
       </div>
     </AiSettingsSection>
 
     <AiSettingsSection
-      title="Behavior"
+      :title="t('ai.behavior')"
       description="How much freedom a single turn gets. The tool budget caps how many searches, reads and plugin calls the assistant may make before it has to answer."
     >
       <div class="grid gap-4 sm:grid-cols-3">
         <label class="block space-y-1.5">
-          <span class="text-muted-foreground text-xs font-medium">Temperature</span>
+          <span class="text-muted-foreground text-xs font-medium">{{ t('ai.temperature') }}</span>
           <Input v-model.number="form.temperature" type="number" min="0" max="2" step="0.1" :disabled="!canManage" />
         </label>
         <label class="block space-y-1.5">
-          <span class="text-muted-foreground text-xs font-medium">Tool budget</span>
+          <span class="text-muted-foreground text-xs font-medium">{{ t('ai.toolBudget') }}</span>
           <Input v-model.number="form.maxToolCalls" type="number" min="0" max="16" :disabled="!canManage" />
         </label>
         <label class="block space-y-1.5">
-          <span class="text-muted-foreground text-xs font-medium">Timeout (ms)</span>
+          <span class="text-muted-foreground text-xs font-medium">{{ t('ai.timeoutMs') }}</span>
           <Input v-model.number="form.timeoutMs" type="number" min="1000" max="600000" :disabled="!canManage" />
         </label>
       </div>
@@ -297,7 +301,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
           @update:model-value="form.agentModeEnabled = $event === true"
         />
         <span class="text-sm leading-snug">
-          Allow Agent mode
+          {{ t('ai.allowAgentMode') }}
           <span class="text-muted-foreground mt-0.5 block text-xs">
             Lets the chat create pages and open merge requests. Turning it off downgrades every turn to Ask mode.
           </span>
@@ -306,16 +310,16 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
     </AiSettingsSection>
 
     <AiSettingsSection
-      title="Budgets"
+      :title="t('ai.budgets')"
       description="Monthly token allowances, counted from the first of the month. Leave a field empty for unlimited."
     >
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="block space-y-1.5">
-          <span class="text-muted-foreground text-xs font-medium">Workspace tokens per month</span>
+          <span class="text-muted-foreground text-xs font-medium">{{ t('ai.workspaceTokensPerMonth') }}</span>
           <Input v-model="form.workspaceMonthlyTokenBudget" :disabled="!canManage" placeholder="unlimited" />
         </label>
         <label class="block space-y-1.5">
-          <span class="text-muted-foreground text-xs font-medium">Default per user</span>
+          <span class="text-muted-foreground text-xs font-medium">{{ t('ai.defaultPerUser') }}</span>
           <Input v-model="form.defaultUserMonthlyTokenBudget" :disabled="!canManage" placeholder="unlimited" />
         </label>
       </div>
@@ -336,7 +340,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
     </AiSettingsSection>
 
     <AiSettingsSection
-      title="Cost estimate"
+      :title="t('ai.costEstimate')"
       description="USD per million tokens, used only to put a number next to the usage figures. Leave empty to use the built-in list price for known models."
     >
       <div class="grid gap-4 sm:grid-cols-2">
@@ -360,11 +364,11 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
       class="bg-background/85 sticky bottom-0 -mx-4 -mb-6 mt-2 flex flex-wrap items-center gap-3 border-t px-4 py-3 backdrop-blur lg:-mx-8 lg:px-8"
     >
       <Button type="submit" size="sm" :disabled="!canManage || !dirty || save.isPending.value">
-        {{ save.isPending.value ? 'Saving…' : 'Save changes' }}
+        {{ save.isPending.value ? t('common.saving') : t('ai.saveChanges') }}
       </Button>
       <Button type="button" variant="outline" size="sm" :disabled="!canManage || testing" @click="onTest">
         <Loader2 v-if="testing" class="size-3.5 animate-spin" />
-        Test connection
+        {{ t('ai.testConnection') }}
       </Button>
 
       <p
@@ -376,9 +380,9 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
         <CircleX v-else class="size-3.5 shrink-0" />
         {{ testResult.ok ? `Reached ${settings?.model} in ${testResult.latencyMs} ms` : testResult.error }}
       </p>
-      <p v-else-if="dirty" class="text-muted-foreground text-xs">Unsaved changes</p>
+      <p v-else-if="dirty" class="text-muted-foreground text-xs">{{ t('ai.unsavedChanges') }}</p>
       <p v-else-if="settings?.updatedAt" class="text-muted-foreground text-xs">
-        Saved {{ new Date(settings.updatedAt).toLocaleString() }}
+        {{ t('ai.savedAt', { when: formatDateTime(settings.updatedAt) }) }}
       </p>
     </div>
   </form>

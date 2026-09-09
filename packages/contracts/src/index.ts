@@ -1018,13 +1018,40 @@ export interface UpdateDocumentRequest {
 
 // GET /v1/documents/tree?workspaceId=&projectId= (feature 08 + projects)
 export interface DocumentTreeNode extends DocumentSummary {
+  /**
+   * Loaded children. Empty is ambiguous on its own — a leaf and an unexpanded
+   * branch both have none — which is what `childCount` is for.
+   */
   children: DocumentTreeNode[];
+  /**
+   * How many children this node has, whether or not they were loaded. The
+   * disclosure chevron reads this, so a lazily-loaded tree can draw a correct
+   * row before it knows what is under it.
+   */
+  childCount: number;
 }
 export interface DocumentTreeResponse {
   workspaceId: string;
   /** null when the tree spans the whole workspace (no projectId filter). */
   projectId: string | null;
+  /** The node whose children these are; null for the top level. */
+  parentId: string | null;
   roots: DocumentTreeNode[];
+}
+
+// GET /v1/documents/:id/ancestors
+/**
+ * The chain from the top of the tree down to (but not including) a document.
+ *
+ * A lazily-loaded tree does not contain a page until someone has expanded their
+ * way to it, so "where does this page live" can no longer be answered by
+ * walking the client's copy. Breadcrumbs and the sidebar's active-trail
+ * expansion both ask this instead.
+ */
+export interface DocumentAncestorsResponse {
+  documentId: string;
+  /** Root first, nearest parent last. Empty when the document is a root. */
+  ancestors: DocumentSummary[];
 }
 
 // GET /v1/documents/:id/graph?depth= (feature 06)
@@ -1051,6 +1078,37 @@ export interface DocumentGraphResponse {
   depth: number;
   nodes: DocumentGraphNode[];
   edges: DocumentGraphEdge[];
+}
+
+// GET /v1/documents/graph?workspaceId=&projectId=
+/**
+ * The whole workspace (or project) projected as one graph, for the pages
+ * landing. Same node/edge vocabulary as the per-document neighbourhood, minus
+ * `distance` — there is no root here — plus the two facts a workspace-scale
+ * renderer needs and a neighbourhood does not: `degree`, because node size is
+ * how a reader finds the hubs, and `status`, because the lifecycle dot has to
+ * survive the trip out of the tree.
+ */
+export interface WorkspaceGraphNode {
+  /** documentId for documents, entity key for entities. */
+  id: string;
+  kind: 'document' | 'entity';
+  label: string;
+  category?: DocumentCategory | string;
+  entityType?: string;
+  /** Documents only: head-revision status, for the lifecycle dot. */
+  status?: RevisionStatus | null;
+  /** Incident edge count, after filtering. */
+  degree: number;
+}
+export interface WorkspaceGraphResponse {
+  workspaceId: string;
+  /** null when the graph spans the whole workspace (no projectId filter). */
+  projectId: string | null;
+  nodes: WorkspaceGraphNode[];
+  edges: DocumentGraphEdge[];
+  /** True when the workspace holds more edges than the render cap allows. */
+  truncated: boolean;
 }
 
 // GET /v1/activity?workspaceId=&documentId=&limit=&cursor= (feature 10)
@@ -1127,6 +1185,14 @@ export const KNOWN_EVENT_TYPES = [
   'workflow-node.awaiting-review',
   'workflow-node.materialized',
   'workflow-node.failed',
+  'connector.created',
+  'connector.updated',
+  'connector.deleted',
+  'connector.run.started',
+  'connector.run.succeeded',
+  'connector.run.failed',
+  'connector.link.created',
+  'connector.link.removed',
 ] as const;
 export type KnownEventType = (typeof KNOWN_EVENT_TYPES)[number];
 
@@ -2794,4 +2860,304 @@ export interface DocumentWorkflowRunsResponse {
   runs: WorkflowRunInfo[];
   /** Definitions that may be started against this page right now. */
   available: Array<{ id: string; name: string }>;
+}
+
+// ---------------------------------------------------------------------------
+// Connectors (docs/features/19) — external systems as first-class, workspace
+// configured sources and destinations. A connector is one configured
+// connection; a link is the recorded identity between an external item and a
+// page; a run is one sync execution, polled by the client.
+// ---------------------------------------------------------------------------
+
+/**
+ * The closed catalogue of adapters. Routed by `connectorKindInfo` below, which
+ * the settings UI, the create guard and the worker registry all read, so they
+ * cannot disagree about what exists.
+ */
+export const CONNECTOR_KINDS = ['confluence', 'jira', 'notion', 'markdown-git'] as const;
+export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
+
+/** 'pull' | 'push' | 'both' — what a connector is allowed to do. */
+export type ConnectorDirection = 'pull' | 'push' | 'both';
+/** One sync execution only ever moves one way. */
+export type ConnectorRunDirection = 'pull' | 'push';
+export type ConnectorTrigger = 'manual' | 'schedule' | 'webhook';
+/**
+ * What to do when the external item and the page both changed since the last
+ * sync. 'manual' overwrites nothing: it opens a merge request.
+ */
+export type ConnectorConflictPolicy = 'manual' | 'external-wins' | 'local-wins';
+export type ConnectorRunStatus = 'queued' | 'running' | 'succeeded' | 'partial' | 'failed';
+export type ConnectorHealth = 'ok' | 'error' | 'unknown';
+
+/** What an adapter can actually do. `push: false` is how Jira says it is pull-only. */
+export interface ConnectorCapabilities {
+  pull: boolean;
+  push: boolean;
+  webhook: boolean;
+}
+
+/** One configurable, non-secret setting an adapter needs (drives the settings form). */
+export interface ConnectorConfigField {
+  key: string;
+  label: string;
+  /** `text` renders an input, `select` a dropdown over `options`. */
+  kind: 'text' | 'select';
+  required: boolean;
+  placeholder?: string;
+  help?: string;
+  options?: ReadonlyArray<{ value: string; label: string }>;
+}
+
+export interface ConnectorKindInfo {
+  kind: ConnectorKind;
+  label: string;
+  capabilities: ConnectorCapabilities;
+  /** What to paste into the credential box, e.g. 'email:api-token'. */
+  credentialLabel: string;
+  fields: readonly ConnectorConfigField[];
+}
+
+/**
+ * Adapter catalogue. Kept in contracts rather than the API so the settings form
+ * can render a connector's fields without a round trip, exactly as
+ * `IMPORT_FORMATS` lets the drop zone and the reserve guard agree (feature 16).
+ */
+export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
+  {
+    kind: 'confluence',
+    label: 'Confluence',
+    capabilities: { pull: true, push: true, webhook: true },
+    credentialLabel: 'email:api-token',
+    fields: [
+      {
+        key: 'baseUrl',
+        label: 'Site URL',
+        kind: 'text',
+        required: true,
+        placeholder: 'https://your-team.atlassian.net/wiki',
+      },
+      { key: 'spaceKey', label: 'Space key', kind: 'text', required: true, placeholder: 'ENG' },
+    ],
+  },
+  {
+    kind: 'jira',
+    label: 'Jira',
+    capabilities: { pull: true, push: false, webhook: true },
+    credentialLabel: 'email:api-token',
+    fields: [
+      {
+        key: 'baseUrl',
+        label: 'Site URL',
+        kind: 'text',
+        required: true,
+        placeholder: 'https://your-team.atlassian.net',
+      },
+      {
+        key: 'jql',
+        label: 'JQL',
+        kind: 'text',
+        required: true,
+        placeholder: 'project = ENG AND issuetype = Epic',
+        help: 'Which issues become pages.',
+      },
+    ],
+  },
+  {
+    kind: 'notion',
+    label: 'Notion',
+    capabilities: { pull: true, push: true, webhook: true },
+    credentialLabel: 'Internal integration secret',
+    fields: [
+      {
+        key: 'databaseId',
+        label: 'Database or page id',
+        kind: 'text',
+        required: false,
+        help: 'Leave empty to sync everything the integration can see.',
+      },
+    ],
+  },
+  {
+    kind: 'markdown-git',
+    label: 'Markdown / Git',
+    capabilities: { pull: true, push: true, webhook: true },
+    credentialLabel: 'Personal access token',
+    fields: [
+      {
+        key: 'repoUrl',
+        label: 'Repository URL',
+        kind: 'text',
+        required: true,
+        placeholder: 'https://github.com/acme/runbooks',
+        help: 'GitHub and GitLab can be pushed to; other hosts are pull-only.',
+      },
+      { key: 'branch', label: 'Branch', kind: 'text', required: false, placeholder: 'main' },
+      {
+        key: 'subdir',
+        label: 'Subdirectory',
+        kind: 'text',
+        required: false,
+        placeholder: 'docs',
+        help: 'Only markdown under this path is synced. An Obsidian vault is just a folder.',
+      },
+    ],
+  },
+];
+
+export function connectorKindInfo(kind: string): ConnectorKindInfo | null {
+  return CONNECTOR_KIND_INFO.find((k) => k.kind === kind) ?? null;
+}
+
+// GET /v1/connectors?workspaceId=
+export interface ConnectorSummary {
+  id: string;
+  workspaceId: string;
+  kind: ConnectorKind;
+  name: string;
+  enabled: boolean;
+  config: Record<string, string>;
+  /** Secrets are write-only: the value never leaves the API. */
+  hasCredential: boolean;
+  credentialHint: string | null;
+  /** False when SETTINGS_ENCRYPTION_KEY is unset — the UI must disable credential entry. */
+  canStoreSecrets: boolean;
+  projectId: string;
+  parentId: string | null;
+  category: DocumentCategory;
+  direction: ConnectorDirection;
+  conflict: ConnectorConflictPolicy;
+  pushOnPublish: boolean;
+  /** null = manual only. */
+  syncIntervalMinutes: number | null;
+  hasWebhookSecret: boolean;
+  /** Absolute path to POST external events at; null when no secret is set. */
+  webhookPath: string | null;
+  capabilities: ConnectorCapabilities;
+  linkCount: number;
+  lastRun: ConnectorRunInfo | null;
+  lastSyncedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ListConnectorsResponse {
+  workspaceId: string;
+  connectors: ConnectorSummary[];
+}
+export interface ConnectorResponse {
+  connector: ConnectorSummary;
+}
+
+// POST /v1/connectors
+export interface CreateConnectorRequest {
+  workspaceId: string;
+  kind: ConnectorKind;
+  name: string;
+  projectId: string;
+  config?: Record<string, string>;
+  credential?: string;
+  parentId?: string | null;
+  category?: DocumentCategory;
+  direction?: ConnectorDirection;
+  conflict?: ConnectorConflictPolicy;
+  pushOnPublish?: boolean;
+  syncIntervalMinutes?: number | null;
+  /** Sent once; afterwards only `hasWebhookSecret` is readable. */
+  webhookSecret?: string | null;
+  enabled?: boolean;
+}
+
+// PATCH /v1/connectors/:id — every field optional; `null` clears, absent keeps.
+export type UpdateConnectorRequest = Partial<Omit<CreateConnectorRequest, 'workspaceId' | 'kind'>> & {
+  /** `null` clears the stored credential; absent keeps it. */
+  credential?: string | null;
+};
+
+// POST /v1/connectors/:id/test
+export interface ConnectorTestResponse {
+  ok: boolean;
+  /** Upstream's own message on failure, or a one-line summary of what was reached. */
+  detail: string | null;
+}
+
+// GET /v1/connectors/:id/links
+export interface ConnectorLinkSummary {
+  id: string;
+  connectorId: string;
+  documentId: string;
+  documentTitle: string | null;
+  externalId: string;
+  externalUrl: string | null;
+  externalTitle: string | null;
+  externalVersion: string | null;
+  lastPulledAt: string | null;
+  lastPushedAt: string | null;
+  createdAt: string;
+}
+export interface ListConnectorLinksResponse {
+  connectorId: string;
+  links: ConnectorLinkSummary[];
+}
+
+/** One thing a run could not carry — never swallowed, always surfaced. */
+export interface ConnectorRunWarning {
+  externalId: string | null;
+  title: string | null;
+  message: string;
+}
+
+// GET /v1/connectors/runs/:runId — the poll target.
+export interface ConnectorRunInfo {
+  id: string;
+  connectorId: string;
+  workspaceId: string;
+  direction: ConnectorRunDirection;
+  trigger: ConnectorTrigger;
+  status: ConnectorRunStatus;
+  /** Free-text act ("Fetching 48 pages"); null when the client's own phase shows. */
+  stage: string | null;
+  /** 0..1 when honest; null means indeterminate. */
+  progress: number | null;
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  conflicts: number;
+  warnings: ConnectorRunWarning[];
+  error: { message: string } | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+export interface ListConnectorRunsResponse {
+  connectorId: string;
+  runs: ConnectorRunInfo[];
+}
+export interface ConnectorRunResponse {
+  run: ConnectorRunInfo;
+}
+
+// POST /v1/connectors/:id/sync
+export interface StartConnectorSyncRequest {
+  direction?: ConnectorRunDirection;
+  /** Limit the run to these external items; absent = the connector's whole scope. */
+  externalIds?: string[];
+}
+
+// POST /v1/documents/:id/push — publish one page to the connector it is linked to.
+export interface PushDocumentResponse {
+  run: ConnectorRunInfo;
+}
+
+/** The connector attachment shown on a page, when one exists. */
+export interface DocumentConnectorLink {
+  connectorId: string;
+  connectorName: string;
+  kind: ConnectorKind;
+  canPush: boolean;
+  link: ConnectorLinkSummary;
+}
+export interface DocumentConnectorResponse {
+  documentId: string;
+  links: DocumentConnectorLink[];
 }

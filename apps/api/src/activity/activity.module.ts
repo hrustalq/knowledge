@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
-import { EventsModule } from '../events/events.module.js';
-import { ActivityService } from './activity.service.js';
+import { ActivityCoreModule } from './activity-core.module.js';
 import { ActivityController } from './activity.controller.js';
 
+/** API side: the feed endpoint on top of ActivityCoreModule's recorder. */
 @Module({
-  imports: [EventsModule],
+  imports: [ActivityCoreModule],
   controllers: [ActivityController],
-  providers: [ActivityService],
-  exports: [ActivityService],
+  exports: [ActivityCoreModule],
 })
 export class ActivityModule {}

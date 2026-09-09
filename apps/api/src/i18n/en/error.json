@@ -179,6 +179,28 @@
     "stepGone": "Step \"{stepId}\" is no longer part of this run",
     "invalidGraph": "The workflow graph is not valid"
   },
+  "connector": {
+    "notFound": "Connector {id} not found",
+    "runNotFound": "Connector run {id} not found",
+    "linkNotFound": "Connector link {id} not found",
+    "nameTaken": "A connector named \"{name}\" already exists in this workspace",
+    "unknownKind": "\"{kind}\" is not a connector type this workspace can use",
+    "missingField": "{kind} needs \"{field}\"",
+    "credentialRequired": "This connector needs a credential before it can be used",
+    "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY is not set, so credentials cannot be saved",
+    "urlInvalid": "That does not look like a URL",
+    "urlNotHttps": "Connector URLs must use https",
+    "urlPrivate": "{address} is on a private network; set CONNECTOR_ALLOW_PRIVATE_URLS to allow it",
+    "hostUnresolved": "{host} could not be resolved",
+    "disabled": "This connector is disabled",
+    "pullNotSupported": "{kind} connectors cannot pull",
+    "pushNotSupported": "{kind} connectors cannot push",
+    "directionNotAllowed": "This connector is not configured to {direction}",
+    "runInFlight": "A sync for this connector is already running",
+    "webhookNotConfigured": "This connector has no webhook secret",
+    "webhookInvalidSignature": "The webhook signature did not verify",
+    "notLinked": "This page is not linked to any connector"
+  },
   "routeNotFound": "Cannot {method} {path}",
   "validationFailed": "Validation failed"
 }

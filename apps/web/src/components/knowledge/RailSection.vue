@@ -9,7 +9,7 @@
  * always hidden behind a click.
  *
  * The body mounts only while open. Some of these panels are expensive (the
- * graph builds a Cytoscape instance), and a rail that instantiated all four on
+ * graph builds a force simulation and a canvas), and a rail that instantiated all four on
  * every page load would make the page slower to read for the sake of things
  * nobody asked to see.
  */

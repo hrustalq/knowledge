@@ -13,5 +13,7 @@
   "import": "import id",
   "workflow": "workflow id",
   "workflowRun": "workflow run id",
+  "connector": "connector id",
+  "connectorRun": "connector run id",
   "id": "identifier"
 }

@@ -183,6 +183,28 @@
     "stepGone": "Шаг «{stepId}» больше не входит в этот запуск",
     "invalidGraph": "Граф сценария некорректен"
   },
+  "connector": {
+    "notFound": "Коннектор {id} не найден",
+    "runNotFound": "Запуск синхронизации {id} не найден",
+    "linkNotFound": "Связь коннектора {id} не найдена",
+    "nameTaken": "Коннектор с именем «{name}» уже есть в этом рабочем пространстве",
+    "unknownKind": "«{kind}» — недоступный тип коннектора",
+    "missingField": "Для {kind} нужно указать «{field}»",
+    "credentialRequired": "Для работы коннектора нужны учётные данные",
+    "encryptionKeyMissing": "Переменная SETTINGS_ENCRYPTION_KEY не задана — сохранить учётные данные нельзя",
+    "urlInvalid": "Это не похоже на URL",
+    "urlNotHttps": "URL коннектора должен использовать https",
+    "urlPrivate": "Адрес {address} находится в частной сети; разрешите его через CONNECTOR_ALLOW_PRIVATE_URLS",
+    "hostUnresolved": "Не удалось разрешить хост {host}",
+    "disabled": "Коннектор отключён",
+    "pullNotSupported": "Коннекторы {kind} не умеют загружать",
+    "pushNotSupported": "Коннекторы {kind} не умеют выгружать",
+    "directionNotAllowed": "Коннектор не настроен на действие «{direction}»",
+    "runInFlight": "Синхронизация этого коннектора уже выполняется",
+    "webhookNotConfigured": "Для коннектора не задан секрет вебхука",
+    "webhookInvalidSignature": "Подпись вебхука не прошла проверку",
+    "notLinked": "Страница не связана ни с одним коннектором"
+  },
   "routeNotFound": "Маршрут {method} {path} не найден",
   "validationFailed": "Проверка данных не пройдена"
 }

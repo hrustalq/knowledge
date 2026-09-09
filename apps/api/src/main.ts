@@ -8,7 +8,9 @@ import { validationExceptionFactory } from './common/validation.js';
 import { createOpenApiDocument } from './config/swagger.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: connector webhooks (docs/features/19) verify an HMAC over the
+  // exact bytes sent; re-serialising the parsed body would not reproduce them.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   // Live tracked-entity updates: plain `ws` adapter for the /v1/events/ws gateway.
   app.useWebSocketAdapter(new WsAdapter(app));
   // exceptionFactory translates class-validator failures while keeping the

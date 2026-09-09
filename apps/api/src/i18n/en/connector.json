@@ -1,0 +1,23 @@
+{
+  "stage": {
+    "connecting": "Connecting",
+    "listing": "Listing items",
+    "fetching": "Fetching {title}",
+    "writing": "Writing {title}",
+    "pushing": "Publishing {title}",
+    "finishing": "Finishing up"
+  },
+  "branch": {
+    "conflict": "Incoming change from {name}"
+  },
+  "mr": {
+    "title": "{name}: incoming change to \"{title}\"",
+    "description": "This page and its counterpart in {name} both changed since the last sync, so nothing was overwritten. The external version is on this branch; review it against the current page and merge if it should win.\n\nSource: {url}"
+  },
+  "warning": {
+    "passthrough": "{text}",
+    "pushUnsupported": "{kind} cannot publish back, so this page was left alone.",
+    "documentMissing": "The linked page no longer exists; the link was removed.",
+    "conflict": "Both sides changed — a merge request was opened instead of overwriting."
+  }
+}

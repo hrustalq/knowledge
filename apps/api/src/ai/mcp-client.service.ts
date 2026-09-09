@@ -1,12 +1,10 @@
-import { BadRequestException, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { AiPlugin } from '@prisma/client';
 import type { AiPluginTool } from '@knowledge/contracts';
-import { t } from '../i18n/t.js';
+import { assertSafeExternalUrl } from '../common/safe-url.js';
 
 /** Namespace separator: `mcp__<plugin slug>__<tool>` stays inside `^[a-zA-Z0-9_-]+$`. */
 export const MCP_TOOL_PREFIX = 'mcp__';
@@ -162,52 +160,16 @@ export function slugFor(name: string): string {
 /**
  * Validates a plugin URL before anything connects to it.
  *
- * An admin typing a URL into a form is a legitimate way to reach an internal
- * service, and it is also the classic SSRF shape — so private and loopback
- * targets are refused unless AI_PLUGINS_ALLOW_PRIVATE_URLS says this is a
- * self-hosted deployment where that is the point. The DNS name is resolved
- * here rather than trusting the literal host, so `internal.example.com`
- * pointing at 127.0.0.1 is caught too.
+ * The check itself lives in common/safe-url.ts — connectors (docs/features/19)
+ * need the identical guard for their base URLs, and one implementation of an
+ * SSRF filter is the only safe number. This wrapper supplies the plugin-flavoured
+ * message keys and keeps the existing call sites unchanged.
  */
 export async function assertSafePluginUrl(raw: string, allowPrivate: boolean): Promise<void> {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new BadRequestException(t('error.ai.pluginUrlInvalid'));
-  }
-  if (url.protocol !== 'https:' && !(allowPrivate && url.protocol === 'http:')) {
-    throw new BadRequestException(t('error.ai.pluginUrlNotHttps'));
-  }
-  if (allowPrivate) return;
-
-  const host = url.hostname.replace(/^\[|\]$/g, '');
-  const addresses = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((a) => a.address);
-  if (addresses.length === 0) throw new BadRequestException(t('error.ai.pluginHostUnresolved', { host }));
-  for (const address of addresses) {
-    if (isPrivateAddress(address)) {
-      throw new BadRequestException(
-        t('error.ai.pluginUrlPrivate', { address }),
-      );
-    }
-  }
-}
-
-function isPrivateAddress(address: string): boolean {
-  if (isIP(address) === 6) {
-    const v6 = address.toLowerCase();
-    if (v6 === '::1' || v6 === '::') return true;
-    if (v6.startsWith('fe80') || v6.startsWith('fc') || v6.startsWith('fd')) return true;
-    // IPv4-mapped (::ffff:10.0.0.1) — fall through to the v4 checks.
-    const mapped = v6.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (!mapped) return false;
-    address = mapped[1];
-  }
-  const [a, b] = address.split('.').map(Number);
-  if (a === 10 || a === 127 || a === 0) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 169 && b === 254) return true; // link-local, incl. cloud metadata
-  if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
-  return false;
+  return assertSafeExternalUrl(raw, allowPrivate, {
+    invalid: 'error.ai.pluginUrlInvalid',
+    notHttps: 'error.ai.pluginUrlNotHttps',
+    unresolved: 'error.ai.pluginHostUnresolved',
+    private: 'error.ai.pluginUrlPrivate',
+  });
 }

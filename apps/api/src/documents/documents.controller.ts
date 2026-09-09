@@ -12,7 +12,10 @@ import {
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import type { CompareMode } from '@knowledge/contracts';
+import type { CompareMode, DocumentConnectorResponse, PushDocumentResponse } from '@knowledge/contracts';
+import { ConnectorLinksService } from '../connectors/connector-links.service.js';
+import { ConnectorProducer } from '../connectors/connector.producer.js';
+import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
@@ -31,11 +34,21 @@ import {
 import { CreateCommentDto, CreateThreadDto, ResolveThreadDto } from './dto/merge-requests.dto.js';
 import { t } from '../i18n/t.js';
 
+/** Query facets arrive comma-separated; a singular alias folds in beside them. */
+function csv(value?: string, single?: string): string[] {
+  const parts = (value ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+  if (single?.trim()) parts.push(single.trim());
+  return [...new Set(parts)];
+}
+
 @ApiTags('documents')
 @Controller('v1/documents')
 export class DocumentsController {
   constructor(
     private readonly documents: DocumentsService,
+    private readonly connectorLinks: ConnectorLinksService,
+    private readonly connectorsService: ConnectorsService,
+    private readonly connectorProducer: ConnectorProducer,
     private readonly compareService: CompareService,
     private readonly history: HistoryService,
     private readonly threads: DocumentThreadsService,
@@ -50,33 +63,65 @@ export class DocumentsController {
 
   @Get()
   @Access('viewer', 'query')
-  @ApiOperation({ summary: 'List documents in workspace' })
+  @ApiOperation({ summary: 'List documents in workspace, filtered by the search facets' })
   @ApiQuery({ name: 'projectId', required: false, description: 'Restrict to one project' })
+  @ApiQuery({ name: 'category', required: false, description: 'Restrict to one category' })
+  @ApiQuery({ name: 'projectIds', required: false, description: 'Comma-separated project ids' })
+  @ApiQuery({ name: 'categories', required: false, description: 'Comma-separated categories' })
+  @ApiQuery({
+    name: 'tags',
+    required: false,
+    description: 'Comma-separated frontmatter tags; bare name or `tag:` entity key',
+  })
   list(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
     @Query('category') category?: string,
     @Query('projectId') projectId?: string,
+    @Query('categories') categories?: string,
+    @Query('projectIds') projectIds?: string,
+    @Query('tags') tags?: string,
   ) {
-    return this.documents.listDocuments(
-      workspaceId,
-      limit ? Number(limit) : 20,
-      cursor,
-      category || undefined,
-      projectId || undefined,
-    );
+    // The singular params predate the facets and still work; each is folded
+    // into its plural so callers never have to know which one won.
+    return this.documents.listDocuments(workspaceId, limit ? Number(limit) : 20, cursor, {
+      categories: csv(categories, category),
+      projectIds: csv(projectIds, projectId),
+      tags: csv(tags),
+    });
   }
 
   @Get('tree')
   @Access('viewer', 'query')
-  @ApiOperation({ summary: 'Document tree (feature 08 nesting); scoped to one project when projectId is given' })
-  @ApiQuery({ name: 'projectId', required: false, description: 'Restrict the tree to one project' })
+  @ApiOperation({
+    summary: 'Document hierarchy (feature 08). Omit depth for the whole tree; pass depth=1 to walk it a level at a time',
+  })
+  @ApiQuery({ name: 'projectId', required: false, description: 'Restrict to one project' })
+  @ApiQuery({ name: 'parentId', required: false, description: 'Children of this node; omit for the top level' })
+  @ApiQuery({ name: 'depth', required: false, description: 'Levels to load below parentId; omit to load all of them' })
   tree(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('projectId') projectId?: string,
+    @Query('parentId') parentId?: string,
+    @Query('depth') depth?: string,
   ) {
-    return this.documents.getTree(workspaceId, projectId || undefined);
+    return this.documents.getTree(workspaceId, projectId || undefined, {
+      parentId: parentId || null,
+      ...(depth ? { depth: Number(depth) } : {}),
+    });
+  }
+
+  // Declared before @Get(':id') — 'graph' would otherwise parse as a document id.
+  @Get('graph')
+  @Access('viewer', 'query')
+  @ApiOperation({ summary: 'Whole-workspace relation graph for the pages landing; scoped to one project when projectId is given' })
+  @ApiQuery({ name: 'projectId', required: false, description: 'Restrict the graph to one project' })
+  workspaceGraph(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Query('projectId') projectId?: string,
+  ) {
+    return this.documents.getWorkspaceGraph(workspaceId, projectId || undefined);
   }
 
   @Get(':id')
@@ -103,6 +148,42 @@ export class DocumentsController {
   @ApiQuery({ name: 'revision', required: false })
   content(@Param('id', ParseUUIDPipe) id: string, @Query('revision') revision?: string) {
     return this.documents.getContent(id, revision);
+  }
+
+  @Get(':id/connectors')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'External systems this page is linked to (docs/features/19)' })
+  async connectors(@Param('id', ParseUUIDPipe) id: string): Promise<DocumentConnectorResponse> {
+    return { documentId: id, links: await this.connectorLinks.listForDocument(id) };
+  }
+
+  /**
+   * Publish this page to the connector it is linked to. Lives here rather than
+   * under /v1/connectors because the action belongs to the page: the reader is
+   * looking at a document, not administering a connection.
+   */
+  @Post(':id/push')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: 'Publish this page back to its connector (docs/features/19)' })
+  async push(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal?: Principal,
+  ): Promise<PushDocumentResponse> {
+    const link = await this.connectorLinks.pushTargetFor(id);
+    const connector = await this.connectorsService.require(link.connectorId);
+    const run = await this.connectorsService.createRun(connector, 'push', 'manual', {
+      externalIds: [link.externalId],
+      actorId: principal?.userId,
+    });
+    await this.connectorProducer.enqueue(run.id);
+    return { run: toRunInfo(run) };
+  }
+
+  @Get(':id/ancestors')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'Ancestor chain (root first) — for breadcrumbs and lazy tree expansion' })
+  ancestors(@Param('id', ParseUUIDPipe) id: string) {
+    return this.documents.getAncestors(id);
   }
 
   @Get(':id/graph')

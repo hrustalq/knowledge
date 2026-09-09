@@ -23,6 +23,7 @@ import {
   Braces,
   GitMerge,
   History,
+  Plug,
   Info,
   Pencil,
   Share2,
@@ -30,6 +31,7 @@ import {
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type {
+  DocumentConnectorResponse,
   DocumentContentResponse,
   DocumentDetailResponse,
   ListActivityResponse,
@@ -55,8 +57,10 @@ import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
 import RevisionsView from '@/components/knowledge/RevisionsView.vue'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
 import GraphView from '@/components/knowledge/GraphView.vue'
+import GraphLightbox from '@/components/graph/GraphLightbox.vue'
 import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
+import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 
 const { t } = useI18n()
@@ -73,6 +77,7 @@ const RAIL_WIDGETS = [
   { id: 'merge-requests', label: t('rail.changes'), icon: GitMerge, expandable: true },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
   { id: 'workflows', label: t('rail.workflows'), icon: WorkflowIcon, expandable: false },
+  { id: 'connectors', label: t('rail.connectors'), icon: Plug, expandable: false },
   { id: 'activity', label: t('rail.activity'), icon: ActivityIcon, expandable: false },
 ] as const
 type RailWidget = (typeof RAIL_WIDGETS)[number]['id']
@@ -294,6 +299,10 @@ const activityPreview = useQuery(
   ),
 )
 
+const connectorsPreview = useQuery(
+  computed(() => apiQueryOptions('/v1/documents/{id}/connectors', { path: { id: documentId.value } })),
+)
+
 const previewFor = computed<Record<RailWidget, string | null>>(() => {
   const revisions = (revisionsPreview.data.value as ListRevisionsResponse | undefined)?.revisions
   const mrs = (mergeRequestsPreview.data.value as ListMergeRequestsResponse | undefined)?.mergeRequests
@@ -307,8 +316,15 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
     ? Object.keys(content.value.frontmatter as Record<string, unknown>).length
     : 0
 
+  const connectorLinks = (connectorsPreview.data.value as DocumentConnectorResponse | undefined)?.links
+
   return {
     overview: detail.value ? `#${detail.value.revision.revisionNumber}` : null,
+    // The collapsed row carries the one fact that decides whether to open it:
+    // which system this page answers to, or nothing at all.
+    connectors: connectorLinks?.length
+      ? (connectorLinks[0].connectorName ?? null)
+      : null,
     frontmatter: frontmatterKeys ? t('count.fields', { n: frontmatterKeys }, frontmatterKeys) : null,
     revisions: revisions ? t('count.revisions', { n: revisions.length }, revisions.length) : null,
     'merge-requests': mrs
@@ -523,6 +539,7 @@ watch(
           <MergeRequestList v-else-if="w.id === 'merge-requests'" :document-id="documentId" />
           <GraphView v-else-if="w.id === 'graph'" :document-id="documentId" />
           <WorkflowRail v-else-if="w.id === 'workflows'" :document-id="documentId" />
+          <ConnectorRail v-else-if="w.id === 'connectors'" :document-id="documentId" />
           <ActivityFeed v-else :document-id="documentId" />
         </RailSection>
 
@@ -534,10 +551,13 @@ watch(
       </aside>
     </div>
 
-    <!-- A widget, given room. A graph or a revision table needs width the rail
-         does not have, and sending the reader to another page to get it loses
-         their place. -->
-    <Dialog :open="expanded !== null" @update:open="(v: boolean) => !v && (expanded = null)">
+    <!-- A widget, given room. A revision table or a change list needs width the
+         rail does not have, and sending the reader to another page to get it
+         loses their place. -->
+    <Dialog
+      :open="expanded !== null && expanded !== 'graph'"
+      @update:open="(v: boolean) => !v && (expanded = null)"
+    >
       <DialogContent class="max-w-5xl">
         <DialogHeader>
           <DialogTitle>{{ expandedWidget?.label }} — {{ detail.document.title }}</DialogTitle>
@@ -545,11 +565,22 @@ watch(
         <div class="max-h-[70vh] overflow-auto pr-1">
           <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" />
           <MergeRequestList v-else-if="expanded === 'merge-requests'" :document-id="documentId" />
-          <GraphView v-else-if="expanded === 'graph'" :document-id="documentId" />
           <ActivityFeed v-else-if="expanded === 'activity'" :document-id="documentId" />
         </div>
       </DialogContent>
     </Dialog>
+
+    <!-- The graph gets its own frame rather than the scrolling dialog above.
+         A force layout inside a 64rem box with the page still showing around it
+         is the rail's problem at a larger size; this is the gallery gesture —
+         everything else goes away and the graph fills the screen. -->
+    <GraphLightbox
+      :open="expanded === 'graph'"
+      :title="`${t('rail.graph')} — ${detail.document.title}`"
+      @update:open="(v: boolean) => !v && (expanded = null)"
+    >
+      <GraphView :document-id="documentId" variant="full" />
+    </GraphLightbox>
 
     <!-- Ask-AI chat about this page -->
     <AskAssistant :document-id="documentId" :title="detail.document.title" />

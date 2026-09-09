@@ -69,6 +69,20 @@ watch(activeDepth, (depth) => {
   if (depth !== null) focusDepth.value = depth
 })
 
+/**
+ * The tree loads a level at a time, so the page you just opened is very often
+ * not in it. Materializing its trail is what keeps the rail answering "where am
+ * I" — without it, navigating to a nested page would leave the rail showing
+ * roots with nothing highlighted.
+ */
+watch(
+  [activeDocId, () => store.treeLoaded],
+  ([id, loaded]) => {
+    if (id && loaded) void store.revealPath(id)
+  },
+  { immediate: true },
+)
+
 provide(TreeWindowKey, {
   reveal: (depth: number) => {
     focusDepth.value = depth

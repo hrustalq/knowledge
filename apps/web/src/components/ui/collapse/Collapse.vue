@@ -10,7 +10,7 @@
  *
  * The height comes from `grid-template-rows: 0fr -> 1fr`, which is the only
  * technique that animates an *unknown* height without measuring it first. A
- * rail widget's body is a revision table, a Cytoscape canvas or an activity
+ * rail widget's body is a revision table, a graph canvas or an activity
  * feed — nothing here can know how tall the slot is, and a JS measure pass
  * would have to run before every open and would be wrong the moment the
  * content loaded.
@@ -21,7 +21,7 @@
  * edge slicing across it.
  *
  * `unmount` (the default) is for bodies that cost something to keep alive —
- * the graph widget builds a Cytoscape instance, and a rail that kept all seven
+ * the graph widget builds a force simulation and a canvas, and a rail that kept all seven
  * mounted would make the page slower to read for the sake of panels nobody
  * opened. Pass `:unmount="false"` where unmounting would lose state that
  * cannot be rebuilt: the editor's expand block keeps its ProseMirror content

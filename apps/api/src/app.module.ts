@@ -18,6 +18,7 @@ import { EntitiesModule } from './entities/entities.module.js';
 import { ActivityModule } from './activity/activity.module.js';
 import { EventsApiModule } from './events/events-api.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
+import { ConnectorsModule } from './connectors/connectors.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
 import { ImportModule } from './import/import.module.js';
@@ -53,6 +54,7 @@ import { AppService } from './app.service.js';
     EventsApiModule,
     AssistantModule,
     AiModule,
+    ConnectorsModule,
     GlossaryModule,
     ImportModule,
     WorkflowsModule,

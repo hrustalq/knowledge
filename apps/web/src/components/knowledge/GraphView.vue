@@ -1,318 +1,140 @@
 <script setup lang="ts">
-// Feature 06 (docs/features/06): renders the document relation graph with
-// Cytoscape.js — a canvas-rendered, purpose-built graph library — instead of
-// the old hand-rolled SVG + manual force loop. This gets us a real
-// force-directed layout, smooth wheel/drag zoom & pan, and correct scaling
-// at any node count for free, and fixes the old version's crowding at
-// depth > 1 (nodes were clamped inside a fixed 860x560 viewBox with no way
-// to zoom in).
+/**
+ * One page's neighbourhood in the knowledge graph (docs/features/06).
+ *
+ * Two sizes of the same thing. In the rail it is a compact canvas with a depth
+ * selector — enough to answer "is this page connected, and to what". Maximized
+ * it becomes the full instrument: filters, legend, layout controls, framing.
+ * Both draw through `KnowledgeGraph`, so a passage the reader recognised in the
+ * widget is the same shape, colour and size once it fills the screen.
+ */
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useResizeObserver } from '@vueuse/core'
-import cytoscape from 'cytoscape'
-import type { Core, ElementDefinition, StylesheetJson } from 'cytoscape'
-import { Maximize2, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import type { DocumentGraphResponse } from '@knowledge/contracts'
 import { apiFetch } from '@/lib/api'
-import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import KnowledgeGraph from '@/components/graph/KnowledgeGraph.vue'
+import GraphCanvas from '@/components/graph/GraphCanvas.vue'
+import { DEFAULT_OPTIONS, type GraphNodeInput } from '@/components/graph/graph-model'
+
+const props = withDefaults(
+  defineProps<{ documentId: string; variant?: 'rail' | 'full' }>(),
+  { variant: 'rail' },
+)
 
 const { t } = useI18n()
-
-const props = defineProps<{ documentId: string }>()
 const router = useRouter()
 
-const depth = ref(1)
+const depth = ref(props.variant === 'full' ? 2 : 1)
 const graph = ref<DocumentGraphResponse | null>(null)
 const error = ref<string | null>(null)
-const containerEl = ref<HTMLElement | null>(null)
-const cy = shallowRef<Core | null>(null)
+const stats = ref({ nodes: 0, edges: 0 })
 
-// Entity nodes get a fixed amber accent — a decorative constant (matches the
-// old version's amber-500/600), not a theme token, so it stays legible
-// against both the light and dark background.
-const ENTITY_FILL = '#f59e0b'
-const ENTITY_STROKE = '#d97706'
+/**
+ * The widget's own options: no filter panel here, so entities are on and the
+ * label floor is dropped — at one hop there is room to name everything, and a
+ * graph of unnamed dots in a 20rem column tells the reader nothing.
+ */
+const railOptions = computed(() => ({ ...DEFAULT_OPTIONS, labelZoom: 0.35 }))
 
-/** Reads a design-token CSS variable so the graph always matches the current theme (light/dark). */
-function themeVar(name: string, fallback: string): string {
-  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-  return v || fallback
-}
-
-function buildStyle(): StylesheetJson {
-  const border = themeVar('--border', '#d9d9d9')
-  const background = themeVar('--background', '#ffffff')
-  const foreground = themeVar('--foreground', '#111111')
-  const primary = themeVar('--primary', '#3b3b8f')
-  const primaryForeground = themeVar('--primary-foreground', '#ffffff')
-  const muted = themeVar('--muted-foreground', '#777777')
-
-  return [
-    {
-      selector: 'node.document',
-      style: {
-        shape: 'round-rectangle',
-        width: 'label',
-        height: 32,
-        padding: '10px',
-        'background-color': background,
-        'border-color': border,
-        'border-width': 1.5,
-        label: 'data(label)',
-        'font-size': 11,
-        'font-weight': 500,
-        color: foreground,
-        'text-valign': 'center',
-        'text-halign': 'center',
-        'text-max-width': '140px',
-        'text-wrap': 'ellipsis',
-      },
-    },
-    {
-      selector: 'node.document.root',
-      style: {
-        'background-color': primary,
-        'border-color': primary,
-        color: primaryForeground,
-      },
-    },
-    {
-      selector: 'node.document.clickable',
-      style: { 'transition-property': 'border-width', 'transition-duration': 120 },
-    },
-    {
-      selector: 'node.document.clickable:active',
-      style: { 'overlay-opacity': 0.08, 'overlay-color': primary },
-    },
-    {
-      selector: 'node.entity',
-      style: {
-        shape: 'ellipse',
-        width: 14,
-        height: 14,
-        'background-color': ENTITY_FILL,
-        'border-color': ENTITY_STROKE,
-        'border-width': 1,
-        label: 'data(label)',
-        'font-size': 9,
-        color: muted,
-        'text-valign': 'bottom',
-        'text-margin-y': 6,
-        'text-max-width': '110px',
-        'text-wrap': 'ellipsis',
-      },
-    },
-    {
-      selector: 'edge',
-      style: {
-        width: 1.2,
-        'line-color': muted,
-        'target-arrow-color': muted,
-        'target-arrow-shape': 'triangle',
-        'arrow-scale': 0.7,
-        'curve-style': 'bezier',
-        label: 'data(label)',
-        'font-size': 8,
-        color: muted,
-        'text-rotation': 'autorotate',
-        'text-background-color': background,
-        'text-background-opacity': 0.85,
-        'text-background-padding': '2px',
-      },
-    },
-    {
-      selector: 'edge.inferred',
-      style: { 'line-style': 'dashed' },
-    },
-  ]
-}
-
-function toElements(g: DocumentGraphResponse): ElementDefinition[] {
-  const nodes: ElementDefinition[] = g.nodes.map((n) => ({
-    data: { id: n.id, label: n.label, kind: n.kind },
-    classes: [
-      n.kind === 'document' ? 'document' : 'entity',
-      n.id === props.documentId ? 'root' : '',
-      n.kind === 'document' && n.id !== props.documentId ? 'clickable' : '',
-    ]
-      .filter(Boolean)
-      .join(' '),
-  }))
-  const edges: ElementDefinition[] = g.edges.map((e, i) => ({
-    data: { id: `e${i}`, source: e.from, target: e.to, label: e.type },
-    classes: e.extractor === 'inferred' ? 'inferred' : '',
-  }))
-  return [...nodes, ...edges]
-}
-
-function destroyGraph() {
-  cy.value?.destroy()
-  cy.value = null
-}
-
-async function render() {
-  if (!graph.value || !containerEl.value) return
-  destroyGraph()
-  const instance = cytoscape({
-    container: containerEl.value,
-    elements: toElements(graph.value),
-    style: buildStyle(),
-    wheelSensitivity: 0.25,
-    minZoom: 0.2,
-    maxZoom: 2.5,
-    layout: {
-      name: 'cose',
-      animate: false,
-      nodeRepulsion: 9000,
-      idealEdgeLength: 90,
-      edgeElasticity: 120,
-      nodeOverlap: 16,
-      gravity: 40,
-      numIter: 1500,
-    },
-  })
-  instance.on('tap', 'node.document', (evt) => {
-    const id = evt.target.id()
-    if (id !== props.documentId) void router.push(`/documents/${id}`)
-  })
-  instance.on('mouseover', 'node.clickable', () => {
-    instance.container()!.style.cursor = 'pointer'
-  })
-  instance.on('mouseout', 'node.clickable', () => {
-    instance.container()!.style.cursor = ''
-  })
-  cy.value = instance
-  await nextTick()
-  instance.resize()
-  instance.fit(undefined, 32)
-}
+const nodes = computed<GraphNodeInput[]>(() =>
+  (graph.value?.nodes ?? []).map((n) => ({
+    id: n.id,
+    kind: n.kind,
+    label: n.label,
+    category: n.category,
+    entityType: n.entityType,
+    distance: n.distance,
+  })),
+)
+const edges = computed(() => graph.value?.edges ?? [])
+const hasRelations = computed(() => (graph.value?.edges.length ?? 0) > 0)
 
 async function load() {
   error.value = null
   graph.value = null
-  userFramed.value = false
-  destroyGraph()
   try {
-    const res = await apiFetch<DocumentGraphResponse>(
+    graph.value = await apiFetch<DocumentGraphResponse>(
       `/v1/documents/${props.documentId}/graph?depth=${depth.value}`,
     )
-    graph.value = res
-    await nextTick()
-    void render()
   } catch (e) {
-    error.value = (e as Error).message
+    error.value = e instanceof Error ? e.message : String(e)
   }
 }
 
-/**
- * Whether the reader has framed this graph themselves.
- *
- * It exists because of how the rail opens. A widget grows into place over the
- * collapse's travel, so the container `render()` fits against can still be a
- * few pixels tall — and fitting to a box that size leaves the root node
- * filling the frame once the box arrives. `resize()` does not undo that: it
- * gives the instance a new viewport and keeps the old zoom.
- *
- * So the graph refits itself while it is still being resized — but only up to
- * the moment someone pans or zooms. After that the framing is theirs, and
- * re-fitting on the next rail or window resize would throw away whatever they
- * had navigated to.
- */
-const userFramed = ref(false)
-
-function zoomBy(factor: number) {
-  const instance = cy.value
-  if (!instance) return
-  userFramed.value = true
-  const level = Math.min(Math.max(instance.zoom() * factor, instance.minZoom()), instance.maxZoom())
-  instance.zoom({ level, renderedPosition: { x: instance.width() / 2, y: instance.height() / 2 } })
+function open(id: string) {
+  if (id !== props.documentId) void router.push(`/documents/${id}`)
 }
-
-/** An explicit "fit" hands the framing back, so auto-fitting resumes. */
-function fitToView() {
-  userFramed.value = false
-  cy.value?.fit(undefined, 32)
-}
-
-// Re-applies the stylesheet (theme-derived colors) when the app's light/dark
-// class toggles, so the graph never goes stale against the current theme.
-let themeObserver: MutationObserver | null = null
-onMounted(() => {
-  themeObserver = new MutationObserver(() => cy.value?.style(buildStyle()))
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-})
-
-useResizeObserver(containerEl, () => {
-  const instance = cy.value
-  if (!instance) return
-  instance.resize()
-  if (!userFramed.value) instance.fit(undefined, 32)
-})
 
 onMounted(() => void load())
 watch(depth, () => void load())
 watch(() => props.documentId, () => void load())
-onBeforeUnmount(() => {
-  themeObserver?.disconnect()
-  destroyGraph()
-})
+onBeforeUnmount(() => { graph.value = null })
 </script>
 
 <template>
-  <div class="space-y-3">
-    <div class="flex items-center gap-3">
-      <Label for="graph-depth" class="text-sm font-normal text-muted-foreground">{{ t('graph.depth') }}</Label>
+  <!-- Maximized: the canvas owns the frame, and the depth selector rides in the
+       lightbox header rather than stealing a row from the graph. -->
+  <div v-if="variant === 'full'" class="flex size-full flex-col">
+    <div class="flex items-center gap-2 border-b px-3 py-2">
+      <Label for="graph-depth-full" class="text-xs font-normal text-muted-foreground">{{ t('graph.depth') }}</Label>
       <Select v-model="depth">
-        <SelectTrigger id="graph-depth" size="sm" class="text-sm">
-          <SelectValue />
-        </SelectTrigger>
+        <SelectTrigger id="graph-depth-full" size="sm" class="h-7 text-xs"><SelectValue /></SelectTrigger>
         <SelectContent>
-          <SelectItem :value="1">1 hop</SelectItem>
-          <SelectItem :value="2">2 hops</SelectItem>
-          <SelectItem :value="3">3 hops</SelectItem>
+          <SelectItem v-for="d in [1, 2, 3]" :key="d" :value="d">{{ t('graph.hops', { n: d }, d) }}</SelectItem>
         </SelectContent>
       </Select>
-      <span v-if="graph" class="text-xs text-muted-foreground">
-        {{ graph.nodes.length }} nodes · {{ graph.edges.length }} edges · dashed = inferred
+      <p v-if="error" class="truncate text-xs text-destructive">{{ error }}</p>
+    </div>
+    <div class="relative min-h-0 flex-1">
+      <GraphCanvas
+        v-if="graph"
+        :nodes="nodes"
+        :edges="edges"
+        :root-id="documentId"
+        storage-key="kn_graph_opts_page"
+        @open="open"
+      />
+      <div v-else class="grid size-full place-items-center">
+        <Skeleton class="size-full" />
+      </div>
+    </div>
+  </div>
+
+  <!-- In the rail: depth, a one-line count, and the graph. -->
+  <div v-else class="space-y-2.5">
+    <div class="flex items-center gap-2">
+      <Label for="graph-depth" class="text-xs font-normal text-muted-foreground">{{ t('graph.depth') }}</Label>
+      <Select v-model="depth">
+        <SelectTrigger id="graph-depth" size="sm" class="h-7 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem v-for="d in [1, 2, 3]" :key="d" :value="d">{{ t('graph.hops', { n: d }, d) }}</SelectItem>
+        </SelectContent>
+      </Select>
+      <span v-if="graph && hasRelations" class="ml-auto truncate text-xs text-muted-foreground">
+        {{ t('graph.countNodes', { n: stats.nodes }, stats.nodes) }} ·
+        {{ t('graph.countLinks', { n: stats.edges }, stats.edges) }}
       </span>
     </div>
 
     <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
-    <Skeleton v-else-if="!graph" class="h-[480px] w-full" />
-    <p v-else-if="graph.edges.length === 0" class="text-sm text-muted-foreground">
-      No relations yet — add frontmatter <code>relations:</code> or explicit relations, then index.
+    <Skeleton v-else-if="!graph" class="h-64 w-full rounded-lg" />
+    <p v-else-if="!hasRelations" class="rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
+      {{ t('graph.noRelations', { code: 'relations:' }) }}
     </p>
-
-    <div v-else class="relative h-[480px] w-full overflow-hidden rounded-lg border bg-background">
-      <!-- Cytoscape handles the gestures itself; these only record that the
-           framing is now the reader's, so an incoming resize leaves it alone. -->
-      <div
-        ref="containerEl"
-        class="h-full w-full"
-        @wheel="userFramed = true"
-        @pointerdown="userFramed = true"
+    <div v-else class="h-64 overflow-hidden rounded-lg border bg-background">
+      <KnowledgeGraph
+        :nodes="nodes"
+        :edges="edges"
+        :root-id="documentId"
+        :options="railOptions"
+        density="compact"
+        @open="open"
+        @stats="stats = { nodes: $event.nodes, edges: $event.edges }"
       />
-      <div class="absolute right-2 top-2 flex flex-col gap-1 rounded-md border bg-background/90 p-1 shadow-sm backdrop-blur-sm">
-        <Button variant="ghost" size="icon-sm" :title="t('graph.zoomIn')" @click="zoomBy(1.25)">
-          <ZoomIn class="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" :title="t('graph.zoomOut')" @click="zoomBy(0.8)">
-          <ZoomOut class="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" :title="t('graph.fitToView')" @click="fitToView">
-          <Maximize2 class="size-4" />
-        </Button>
-      </div>
     </div>
   </div>
 </template>

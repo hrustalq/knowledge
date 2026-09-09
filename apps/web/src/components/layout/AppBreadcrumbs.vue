@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Breadcrumb strip — its own header layer, stuck right below the topbar.
 // Document routes get the tree ancestry; other routes get their section label.
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
@@ -19,6 +19,20 @@ onMounted(() => {
   if (!store.treeLoaded) void store.fetchTree()
   if (!projects.loaded) void projects.fetchList().catch(() => undefined)
 })
+
+/**
+ * The tree arrives a level at a time, so a nested page is usually not in it and
+ * `pathTo` would answer with nothing. Asking for the trail fills it in, and the
+ * crumbs — computed off the tree — follow. The store de-duplicates this against
+ * the sidebar, which wants the same trail for the same reason.
+ */
+watch(
+  () => (route.path.startsWith('/documents/') ? (route.params.id as string) : null),
+  (id) => {
+    if (id) void store.revealPath(id)
+  },
+  { immediate: true },
+)
 
 interface Crumb { label: string; to?: string }
 

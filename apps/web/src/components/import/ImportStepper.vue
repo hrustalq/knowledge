@@ -14,12 +14,18 @@ import { Check } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
-const props = defineProps<{ current: 0 | 1 | 2 }>()
-
-const STEPS = ['Destination', 'Parse', 'Review'] as const
+/**
+ * `steps` carries already-translated labels — the caller owns the copy, which is
+ * what lets the connector setup wizard (docs/features/19) reuse this with a
+ * different, kind-dependent number of steps.
+ */
+const props = withDefaults(
+  defineProps<{ current: number; steps?: readonly string[]; label?: string }>(),
+  { steps: undefined, label: undefined },
+)
 
 const state = computed(() =>
-  STEPS.map((label, i) => ({
+  (props.steps ?? ['Destination', 'Parse', 'Review']).map((label, i) => ({
     label,
     index: i,
     done: i < props.current,
@@ -29,7 +35,7 @@ const state = computed(() =>
 </script>
 
 <template>
-  <ol class="flex items-center gap-1 text-sm" :aria-label="t('import.steps')">
+  <ol class="flex items-center gap-1 text-sm" :aria-label="label ?? t('import.steps')">
     <li
       v-for="(step, i) in state"
       :key="step.label"

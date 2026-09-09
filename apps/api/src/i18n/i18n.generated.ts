@@ -14,6 +14,29 @@ export type I18nTranslations = {
             "agentOffered": string;
         };
     };
+    "connector": {
+        "stage": {
+            "connecting": string;
+            "listing": string;
+            "fetching": string;
+            "writing": string;
+            "pushing": string;
+            "finishing": string;
+        };
+        "branch": {
+            "conflict": string;
+        };
+        "mr": {
+            "title": string;
+            "description": string;
+        };
+        "warning": {
+            "passthrough": string;
+            "pushUnsupported": string;
+            "documentMissing": string;
+            "conflict": string;
+        };
+    };
     "error": {
         "internal": string;
         "invalidUuid": string;
@@ -199,6 +222,28 @@ export type I18nTranslations = {
             "stepGone": string;
             "invalidGraph": string;
         };
+        "connector": {
+            "notFound": string;
+            "runNotFound": string;
+            "linkNotFound": string;
+            "nameTaken": string;
+            "unknownKind": string;
+            "missingField": string;
+            "credentialRequired": string;
+            "encryptionKeyMissing": string;
+            "urlInvalid": string;
+            "urlNotHttps": string;
+            "urlPrivate": string;
+            "hostUnresolved": string;
+            "disabled": string;
+            "pullNotSupported": string;
+            "pushNotSupported": string;
+            "directionNotAllowed": string;
+            "runInFlight": string;
+            "webhookNotConfigured": string;
+            "webhookInvalidSignature": string;
+            "notLinked": string;
+        };
         "routeNotFound": string;
         "validationFailed": string;
     };
@@ -328,6 +373,8 @@ export type I18nTranslations = {
         "import": string;
         "workflow": string;
         "workflowRun": string;
+        "connector": string;
+        "connectorRun": string;
         "id": string;
     };
     "validation": {

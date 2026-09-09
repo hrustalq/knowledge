@@ -348,6 +348,7 @@ model Project {
 
   documents     Document[]
   glossaryTerms GlossaryTerm[]
+  connectors    Connector[]
 
   @@index([workspaceId, createdAt])
   @@map("projects")
@@ -933,4 +934,175 @@ model WorkflowRunNode {
   @@index([runId, status])
   @@index([documentId])
   @@map("workflow_run_nodes")
+}
+
+// ---------------------------------------------------------------------------
+// Connectors (docs/features/19) — external systems as first-class, workspace
+// configured sources and destinations. Confluence, Jira, Notion, markdown/git.
+// ---------------------------------------------------------------------------
+
+/// One configured connection to an external system, owned by a workspace.
+model Connector {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// ConnectorKind — 'confluence' | 'jira' | 'notion' | 'markdown-git'.
+  kind        String
+  /// Display name, unique per workspace ("Product wiki", "Runbooks repo").
+  name        String
+  enabled     Boolean @default(true)
+
+  /// Kind-specific, non-secret settings: base URL, space key, JQL, database id,
+  /// repo/branch/subdir. Shape is validated per kind by the adapter.
+  config Json @default("{}")
+
+  /// AES-256-GCM envelope ("gcm$iv$tag$ct"); never leaves the API process.
+  credential     String?
+  /// Last-4 hint so the UI can show a credential is set without revealing it.
+  credentialHint String? @map("credential_hint")
+
+  /// Where pulled pages land. project_id carries a real FK like documents does;
+  /// parent_id does not, mirroring documents.parent_id.
+  projectId String  @map("project_id") @db.Uuid
+  parentId  String? @map("parent_id") @db.Uuid
+  category  String  @default("other")
+
+  /// 'pull' | 'push' | 'both'
+  direction     String  @default("pull")
+  /// 'manual' opens a merge request; 'external-wins' | 'local-wins' overwrite.
+  conflict      String  @default("manual")
+  /// Push a linked page back automatically when a new revision is indexed.
+  pushOnPublish Boolean @default(false) @map("push_on_publish")
+
+  /// null = manual only. The worker's schedule sweeper reads this.
+  syncIntervalMinutes Int?    @map("sync_interval_minutes")
+  /// AES-256-GCM envelope. null = inbound webhooks are refused for this connector.
+  webhookSecret       String? @map("webhook_secret")
+
+  lastRunId    String?   @map("last_run_id") @db.Uuid
+  lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz
+
+  /// Frozen at creation: worker-produced stages and warnings have no request to
+  /// read Accept-Language from (same reasoning as import_jobs.locale).
+  locale String @default("en")
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  project   Project             @relation(fields: [projectId], references: [id])
+  links     ConnectorLink[]
+  runs      ConnectorRun[]
+  conflicts ConnectorConflict[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, kind])
+  @@map("connectors")
+}
+
+/// The identity map between an external item and a page. Without it a second
+/// pull duplicates every page; with it, pull is idempotent and push knows what
+/// to send. content_hash/external_version are what the two sides last agreed
+/// on, which is how the pull -> push -> webhook -> pull echo loop is broken.
+model ConnectorLink {
+  id          String @id @default(uuid()) @db.Uuid
+  connectorId String @map("connector_id") @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  /// No FK: a deleted page leaves a tombstone the next sync prunes or re-creates.
+  documentId  String @map("document_id") @db.Uuid
+
+  externalId      String  @map("external_id")
+  externalUrl     String? @map("external_url")
+  externalTitle   String? @map("external_title")
+  /// Confluence version.number, Notion last_edited_time, git blob sha, ...
+  externalVersion String? @map("external_version")
+
+  /// sha256 of the markdown both sides last agreed on.
+  contentHash String? @map("content_hash")
+  /// The revision that hash came from.
+  revisionId  String? @map("revision_id") @db.Uuid
+
+  lastPulledAt DateTime? @map("last_pulled_at") @db.Timestamptz
+  lastPushedAt DateTime? @map("last_pushed_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@unique([connectorId, externalId])
+  @@index([documentId])
+  @@map("connector_links")
+}
+
+/// One sync execution. The row is the truth and the queue is only the
+/// scheduler: the client polls this, never the job (docs/features/16 contract).
+model ConnectorRun {
+  id          String @id @default(uuid()) @db.Uuid
+  connectorId String @map("connector_id") @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+
+  /// 'pull' | 'push'
+  direction String
+  /// 'manual' | 'schedule' | 'webhook'
+  trigger   String
+  /// queued -> running -> succeeded | partial | failed
+  status    String  @default("queued")
+  stage     String?
+  progress  Float?
+
+  created   Int @default(0)
+  updated   Int @default(0)
+  skipped   Int @default(0)
+  failed    Int @default(0)
+  conflicts Int @default(0)
+
+  /// Capped [{ externalId, title, message }] — a lossy sync that says nothing
+  /// is the failure this feature exists to prevent.
+  warnings Json?
+  error    Json?
+  /// External ids this run is limited to; absent = the connector's whole scope.
+  /// Webhooks send a handful, a full sync sends none.
+  scope    Json?
+
+  locale  String  @default("en")
+  actorId String? @map("actor_id") @db.Uuid
+
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@index([connectorId, createdAt])
+  @@index([status, createdAt])
+  @@map("connector_runs")
+}
+
+/// A pull where both sides had changed. The worker writes the external version
+/// to its own branch and records this row; the API-side sweeper turns it into a
+/// merge request, because MergeRequestsService needs AccessService and cannot be
+/// reached from the worker. Rare by nature, so a sweeper hop is the right cost.
+model ConnectorConflict {
+  id          String @id @default(uuid()) @db.Uuid
+  connectorId String @map("connector_id") @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  documentId  String @map("document_id") @db.Uuid
+  linkId      String @map("link_id") @db.Uuid
+
+  /// Branch holding the incoming external version.
+  branch      String
+  revisionId  String  @map("revision_id") @db.Uuid
+  externalUrl String? @map("external_url")
+  title       String
+
+  /// pending -> resolved. Set once the merge request exists.
+  status         String    @default("pending")
+  mergeRequestId String?   @map("merge_request_id") @db.Uuid
+  error          String?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([connectorId, createdAt])
+  @@map("connector_conflicts")
 }

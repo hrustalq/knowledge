@@ -101,6 +101,18 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     ],
   },
   {
+    // Connectors (docs/features/19). `subjectId` is the connector id on every
+    // connector event, so one rule refreshes the roster and that connector's
+    // runs and links without knowing which of them changed.
+    on: 'connector.*',
+    invalidate: (e) => [
+      ['/v1/connectors'],
+      ...(e.subjectId ? [['/v1/connectors/{id}/runs', { id: e.subjectId }]] : []),
+      ...(e.subjectId ? [['/v1/connectors/{id}/links', { id: e.subjectId }]] : []),
+      ...(e.documentId ? [['/v1/documents/{id}/connectors', { id: e.documentId }]] : []),
+    ],
+  },
+  {
     on: 'workflow-node.*',
     invalidate: (e) => [
       ['/v1/workflows/runs'],

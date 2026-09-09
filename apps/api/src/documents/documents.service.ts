@@ -16,6 +16,7 @@ import type {
   DocumentSummary,
   DocumentTreeNode,
   DocumentTreeResponse,
+  DocumentAncestorsResponse,
   FinalizeRevisionResponse,
   ListBranchesResponse,
   ListDocumentRelationsResponse,
@@ -23,6 +24,8 @@ import type {
   ListRevisionsResponse,
   RevisionInfo,
   RevisionStatus,
+  WorkspaceGraphNode,
+  WorkspaceGraphResponse,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -44,6 +47,14 @@ import { t } from '../i18n/t.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Edge cap for the workspace-wide graph. Chosen for legibility, not for speed:
+ * a canvas past a few thousand links is a grey haze whatever the frame rate.
+ * The response says when it bit so the UI can tell the reader to narrow scope
+ * rather than quietly showing them a partial graph.
+ */
+const WORKSPACE_GRAPH_MAX_EDGES = 4000;
 
 @Injectable()
 export class DocumentsService {
@@ -284,15 +295,42 @@ export class DocumentsService {
     return { revisionId: revision.id, status: 'finalized', ingestionJobId: job.id, deduplicated: false };
   }
 
+  /**
+   * The document list, filtered by the same facets the search sheet offers.
+   *
+   * Categories and projects are columns, so they filter in PG. Tags are not:
+   * frontmatter `tags:` become `tag:<name>` entities in the graph, so they are
+   * resolved to a document-id set first — exactly as SearchService does it, via
+   * the same GraphService call, so a tag means one thing in both surfaces.
+   */
   async listDocuments(
     workspaceId: string,
     limit = 20,
     cursor?: string,
-    category?: string,
-    projectId?: string,
+    filters: { categories?: string[]; projectIds?: string[]; tags?: string[] } = {},
   ): Promise<ListDocumentsResponse> {
+    const categories = filters.categories?.filter(Boolean) ?? [];
+    const projectIds = filters.projectIds?.filter(Boolean) ?? [];
+    const tags = filters.tags?.filter(Boolean) ?? [];
+
+    let taggedIds: string[] | null = null;
+    if (tags.length) {
+      // Accept the bare name or the entity key, like the search filters do.
+      const keys = [...new Set(tags.map((t) => (t.startsWith('tag:') ? t : `tag:${t}`)))];
+      const set = await this.graph.getDocumentIdsByTags(workspaceId, keys);
+      taggedIds = [...set];
+      // No document carries the tag: answer an empty page rather than dropping
+      // the filter and showing everything, which is the wrong kind of helpful.
+      if (taggedIds.length === 0) return { items: [], nextCursor: null };
+    }
+
     const docs = await this.prisma.document.findMany({
-      where: { workspaceId, ...(category ? { category } : {}), ...(projectId ? { projectId } : {}) },
+      where: {
+        workspaceId,
+        ...(categories.length ? { category: { in: categories } } : {}),
+        ...(projectIds.length ? { projectId: { in: projectIds } } : {}),
+        ...(taggedIds ? { id: { in: taggedIds } } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -622,43 +660,273 @@ export class DocumentsService {
    * when `projectId` is given; without it the tree spans the whole workspace,
    * which is what the web falls back to before its projects store resolves.
    */
-  async getTree(workspaceId: string, projectId?: string): Promise<DocumentTreeResponse> {
+  /**
+   * The page tree, either whole or one level at a time.
+   *
+   * `depth` is what makes the tree lazy: without it the entire hierarchy is
+   * built in memory as before, with it only `depth` levels below `parentId` are
+   * fetched. A project with several hundred pages was sending all of them to
+   * draw a rail showing six, and the cost fell on the first paint of every
+   * route, because the sidebar loads the tree everywhere.
+   *
+   * Every node carries `childCount` regardless, so a row can draw its
+   * disclosure chevron truthfully before anything under it exists.
+   */
+  async getTree(
+    workspaceId: string,
+    projectId?: string,
+    opts: { parentId?: string | null; depth?: number } = {},
+  ): Promise<DocumentTreeResponse> {
+    const scope = { workspaceId, ...(projectId ? { projectId } : {}) };
+    const lazy = typeof opts.depth === 'number';
+    const parentId = opts.parentId ?? null;
+
+    if (!lazy) {
+      const docs = await this.prisma.document.findMany({
+        where: scope,
+        include: { branches: true },
+        orderBy: { title: 'asc' },
+      });
+      const nodes = new Map<string, DocumentTreeNode>();
+      for (const d of docs) nodes.set(d.id, await Promise.resolve(this.toTreeNode(d, null)));
+      const heads = await this.headStatuses(docs);
+      for (const node of nodes.values()) node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
+
+      const roots: DocumentTreeNode[] = [];
+      for (const node of nodes.values()) {
+        const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+        // Missing/legacy parents surface the child as a root — nothing is hidden.
+        if (parent) parent.children.push(node);
+        else roots.push(node);
+      }
+      for (const node of nodes.values()) node.childCount = node.children.length;
+      return { workspaceId, projectId: projectId ?? null, parentId: null, roots };
+    }
+
+    const roots = await this.treeLevel(scope, parentId, Math.max(1, Math.floor(opts.depth!)));
+    return { workspaceId, projectId: projectId ?? null, parentId, roots };
+  }
+
+  /**
+   * One level of the tree, plus `depth - 1` levels beneath it.
+   *
+   * At the top level this also adopts orphans — children whose parent is not in
+   * scope, which legacy rows and cross-project moves can produce. The eager
+   * build has always surfaced those as roots, and a lazy walk that filtered on
+   * `parentId: null` alone would make them unreachable instead.
+   */
+  private async treeLevel(
+    scope: { workspaceId: string; projectId?: string },
+    parentId: string | null,
+    depth: number,
+  ): Promise<DocumentTreeNode[]> {
+    let where: Record<string, unknown> = { ...scope, parentId };
+    if (parentId === null) {
+      const referenced = await this.prisma.document.findMany({
+        where: { ...scope, parentId: { not: null } },
+        select: { parentId: true },
+        distinct: ['parentId'],
+      });
+      const parentIds = referenced.map((r) => r.parentId!).filter(Boolean);
+      const present = parentIds.length
+        ? await this.prisma.document.findMany({
+            where: { ...scope, id: { in: parentIds } },
+            select: { id: true },
+          })
+        : [];
+      const presentIds = new Set(present.map((p) => p.id));
+      const orphaned = parentIds.filter((id) => !presentIds.has(id));
+      where = orphaned.length
+        ? { ...scope, OR: [{ parentId: null }, { parentId: { in: orphaned } }] }
+        : { ...scope, parentId: null };
+    }
+
+    const docs = await this.prisma.document.findMany({
+      where,
+      include: { branches: true },
+      orderBy: { title: 'asc' },
+    });
+    if (docs.length === 0) return [];
+
+    const [heads, counts] = await Promise.all([
+      this.headStatuses(docs),
+      this.prisma.document.groupBy({
+        by: ['parentId'],
+        where: { ...scope, parentId: { in: docs.map((d) => d.id) } },
+        _count: { _all: true },
+      }),
+    ]);
+    const countByParent = new Map(counts.map((c) => [c.parentId!, c._count._all]));
+
+    const nodes = docs.map((d) => {
+      const node = this.toTreeNode(d, countByParent.get(d.id) ?? 0);
+      node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
+      return node;
+    });
+
+    if (depth > 1) {
+      await Promise.all(
+        nodes
+          .filter((n) => n.childCount > 0)
+          .map(async (n) => {
+            n.children = await this.treeLevel(scope, n.documentId, depth - 1);
+          }),
+      );
+    }
+    return nodes;
+  }
+
+  private toTreeNode(
+    d: { id: string; workspaceId: string; projectId: string; title: string; defaultBranch: string; category: string; parentId: string | null; createdAt: Date; branches: { name: string; headRevisionId: string | null }[] },
+    childCount: number | null,
+  ): DocumentTreeNode {
+    const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
+    return {
+      documentId: d.id,
+      workspaceId: d.workspaceId,
+      projectId: d.projectId,
+      title: d.title,
+      defaultBranch: d.defaultBranch,
+      category: d.category as DocumentCategory,
+      parentId: d.parentId,
+      headRevisionId: headId,
+      headRevisionStatus: null,
+      createdAt: d.createdAt.toISOString(),
+      children: [],
+      childCount: childCount ?? 0,
+    };
+  }
+
+  private async headStatuses(
+    docs: { defaultBranch: string; branches: { name: string; headRevisionId: string | null }[] }[],
+  ): Promise<Map<string, RevisionStatus>> {
+    const headIds = docs
+      .map((d) => d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId)
+      .filter((id): id is string => !!id);
+    if (headIds.length === 0) return new Map();
+    const heads = await this.prisma.documentRevision.findMany({
+      where: { id: { in: headIds } },
+      select: { id: true, status: true },
+    });
+    return new Map(heads.map((r) => [r.id, r.status as RevisionStatus]));
+  }
+
+  /**
+   * The ancestor chain of a document, root first.
+   *
+   * Walked up rather than down, and bounded: `parentId` carries no FK (so a
+   * legacy row can point at a deleted page) and moves are cycle-checked only on
+   * the way in, so a corrupt chain must terminate rather than spin.
+   */
+  async getAncestors(documentId: string): Promise<DocumentAncestorsResponse> {
+    const document = await this.getDocumentOrThrow(documentId);
+    const chain: DocumentSummary[] = [];
+    const seen = new Set<string>([documentId]);
+    let parentId = document.parentId;
+
+    while (parentId && !seen.has(parentId) && chain.length < 32) {
+      seen.add(parentId);
+      const parent = await this.prisma.document.findUnique({
+        where: { id: parentId },
+        include: { branches: true },
+      });
+      // A parent outside the workspace is not an ancestor anyone may see.
+      if (!parent || parent.workspaceId !== document.workspaceId) break;
+      const headId = parent.branches.find((b) => b.name === parent.defaultBranch)?.headRevisionId ?? null;
+      const head = headId
+        ? await this.prisma.documentRevision.findUnique({ where: { id: headId }, select: { status: true } })
+        : null;
+      chain.push({
+        documentId: parent.id,
+        workspaceId: parent.workspaceId,
+        projectId: parent.projectId,
+        title: parent.title,
+        defaultBranch: parent.defaultBranch,
+        category: parent.category as DocumentCategory,
+        parentId: parent.parentId,
+        headRevisionId: headId,
+        headRevisionStatus: (head?.status as RevisionStatus) ?? null,
+        createdAt: parent.createdAt.toISOString(),
+      });
+      parentId = parent.parentId;
+    }
+
+    return { documentId, ancestors: chain.reverse() };
+  }
+
+  /**
+   * The whole workspace projected as one graph, for the pages landing.
+   *
+   * `getDocumentGraph` answers "what surrounds this page"; this answers "what
+   * is in here at all", so there is no BFS and no root — every document in
+   * scope is a node whether or not anything links to it, because an orphan
+   * page the reader cannot see is a page they will never fix.
+   *
+   * Scoping to a project filters *documents*, then keeps only the entities
+   * those documents still reach: an entity whose every mention lives in
+   * another project is not part of this project's vocabulary.
+   */
+  async getWorkspaceGraph(workspaceId: string, projectId?: string): Promise<WorkspaceGraphResponse> {
     const docs = await this.prisma.document.findMany({
       where: { workspaceId, ...(projectId ? { projectId } : {}) },
       include: { branches: true },
       orderBy: { title: 'asc' },
     });
+    const inScope = new Set(docs.map((d) => d.id));
+
     const headIds = docs
       .map((d) => d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId)
       .filter((id): id is string => !!id);
-    const heads = await this.prisma.documentRevision.findMany({ where: { id: { in: headIds } } });
-    const headById = new Map(heads.map((r) => [r.id, r]));
+    const heads = await this.prisma.documentRevision.findMany({
+      where: { id: { in: headIds } },
+      select: { id: true, status: true },
+    });
+    const statusById = new Map(heads.map((r) => [r.id, r.status as RevisionStatus]));
 
-    const nodes = new Map<string, DocumentTreeNode>();
-    for (const d of docs) {
+    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+
+    // The renderer draws every edge each frame; past this the canvas stops
+    // being readable long before it stops being fast, so the cap is a
+    // legibility decision reported to the client rather than a silent slice.
+    const kept = g.edges.filter((e) => inScope.has(e.documentId));
+    const truncated = kept.length > WORKSPACE_GRAPH_MAX_EDGES;
+    const edges: DocumentGraphEdge[] = kept.slice(0, WORKSPACE_GRAPH_MAX_EDGES).map((e) => ({
+      from: e.documentId,
+      to: e.targetKey,
+      type: e.type,
+      extractor: e.extractor,
+      confidence: e.confidence,
+    }));
+
+    const degree = new Map<string, number>();
+    const bump = (id: string) => degree.set(id, (degree.get(id) ?? 0) + 1);
+    for (const e of edges) {
+      bump(e.from);
+      bump(e.to);
+    }
+
+    const nodes: WorkspaceGraphNode[] = docs.map((d) => {
       const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
-      nodes.set(d.id, {
-        documentId: d.id,
-        workspaceId: d.workspaceId,
-        projectId: d.projectId,
-        title: d.title,
-        defaultBranch: d.defaultBranch,
+      return {
+        id: d.id,
+        kind: 'document' as const,
+        label: d.title,
         category: d.category as DocumentCategory,
-        parentId: d.parentId,
-        headRevisionId: headId,
-        headRevisionStatus: headId ? ((headById.get(headId)?.status as RevisionStatus) ?? null) : null,
-        createdAt: d.createdAt.toISOString(),
-        children: [],
+        status: headId ? (statusById.get(headId) ?? null) : null,
+        degree: degree.get(d.id) ?? 0,
+      };
+    });
+    for (const key of new Set(edges.map((e) => e.to))) {
+      nodes.push({
+        id: key,
+        kind: 'entity',
+        label: g.entities[key]?.name ?? key,
+        entityType: g.entities[key]?.type ?? 'entity',
+        degree: degree.get(key) ?? 0,
       });
     }
-    const roots: DocumentTreeNode[] = [];
-    for (const node of nodes.values()) {
-      const parent = node.parentId ? nodes.get(node.parentId) : undefined;
-      // Missing/legacy parents surface the child as a root — nothing is hidden.
-      if (parent) parent.children.push(node);
-      else roots.push(node);
-    }
-    return { workspaceId, projectId: projectId ?? null, roots };
+
+    return { workspaceId, projectId: projectId ?? null, nodes, edges, truncated };
   }
 
   /**

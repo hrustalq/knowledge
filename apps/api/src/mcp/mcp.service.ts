@@ -15,6 +15,8 @@ import { AuditService } from '../auth/audit.service.js';
 import { HistoryService } from '../documents/history.service.js';
 import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
+import { ConnectorProducer } from '../connectors/connector.producer.js';
+import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AUTHOR_ID_STUB } from '../documents/merge-requests.service.js';
 
@@ -36,9 +38,13 @@ import { AUTHOR_ID_STUB } from '../documents/merge-requests.service.js';
  *   knowledge_get_historical_context → knowledge.get_historical_context (Phase 5)
  *   knowledge_ingest            → knowledge.ingest            (Phase 5)
  *   knowledge_list_projects     → knowledge.list_projects     (projects layer)
+ *   knowledge_get_workspace_graph → knowledge.get_workspace_graph
  *   knowledge_list_workflows    → knowledge.list_workflows    (workflows, feature 17)
  *   knowledge_start_workflow    → knowledge.start_workflow
  *   knowledge_get_workflow_run  → knowledge.get_workflow_run
+ *   knowledge_list_connectors   → knowledge.list_connectors   (connectors, feature 19)
+ *   knowledge_sync_connector    → knowledge.sync_connector
+ *   knowledge_get_connector_run → knowledge.get_connector_run
  *
  * Merge-request tools (create/list/get/approve/close/comment/merge) act as
  * the zeros AUTHOR_ID_STUB — stdio has no principal, so authorship/approvals
@@ -61,6 +67,8 @@ export class McpService {
     private readonly ingestionAdmin: IngestionAdminService,
     private readonly workflows: WorkflowsService,
     private readonly projects: ProjectsService,
+    private readonly connectors: ConnectorsService,
+    private readonly connectorProducer: ConnectorProducer,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -114,6 +122,66 @@ export class McpService {
         inputSchema: { workspaceId: z.string().uuid() },
       },
       async ({ workspaceId }) => this.json(await this.projects.list({ workspaceId })),
+    );
+
+    server.registerTool(
+      'knowledge_list_connectors',
+      {
+        description:
+          'List the external systems this workspace syncs with (Confluence, Jira, Notion, markdown/git). Each entry says which direction it moves content, how many pages it has claimed, and how its last sync went.',
+        inputSchema: { workspaceId: z.string().uuid() },
+      },
+      async ({ workspaceId }) => this.json(await this.connectors.list(workspaceId)),
+    );
+
+    server.registerTool(
+      'knowledge_sync_connector',
+      {
+        description:
+          'Start a sync run for one connector and return the run to poll with knowledge_get_connector_run. Pulling is idempotent: unchanged items are skipped, and an item changed on both sides opens a merge request rather than overwriting anything.',
+        inputSchema: {
+          connectorId: z.string().uuid(),
+          direction: z
+            .enum(['pull', 'push'])
+            .optional()
+            .describe("Defaults to 'pull' — bring external content in."),
+          externalIds: z
+            .array(z.string())
+            .max(500)
+            .optional()
+            .describe('Limit the run to these external items; omit to sync the whole scope.'),
+        },
+      },
+      async ({ connectorId, direction, externalIds }) => {
+        const row = await this.connectors.require(connectorId);
+        const run = await this.connectors.createRun(row, direction ?? 'pull', 'manual', { externalIds });
+        await this.connectorProducer.enqueue(run.id);
+        return this.json(toRunInfo(run));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_get_connector_run',
+      {
+        description:
+          'One sync run: status, current stage, and how many pages were created, updated, skipped, failed or left as conflicts. Warnings list what a run could not carry.',
+        inputSchema: { runId: z.string().uuid() },
+      },
+      async ({ runId }) => this.json(await this.connectors.getRun(runId)),
+    );
+
+    server.registerTool(
+      'knowledge_get_workspace_graph',
+      {
+        description:
+          'The whole workspace (or one project) as a single relation graph: every document as a node, every entity it references, and the typed edges between them with provenance. Use this for an overview of how a knowledge base hangs together — or to find orphan pages, which appear with degree 0. For one page\'s neighbourhood use knowledge_find_relations instead.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          projectId: z.string().uuid().optional().describe('Restrict the graph to one project'),
+        },
+      },
+      async ({ workspaceId, projectId }) =>
+        this.json(await this.documents.getWorkspaceGraph(workspaceId, projectId)),
     );
 
     // ------------------------------------------------------------ workflows

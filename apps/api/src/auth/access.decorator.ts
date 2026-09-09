@@ -21,6 +21,8 @@ export type WorkspaceSource =
   | 'import' // :id path param is an import job id (docs/features/16)
   | 'workflow-definition' // :id path param is a workflow definition id (docs/features/17)
   | 'workflow-run' // :id path param is a workflow run id (docs/features/17)
+  | 'connector' // :id path param is a connector id (docs/features/19)
+  | 'connector-run' // :runId path param is a connector run id (docs/features/19)
   | 'workspace'; // :id path param IS the workspace id (existence-checked)
 
 export interface AccessSpec {

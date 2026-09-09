@@ -21,7 +21,9 @@ export function createRouter() {
       { path: '/reset-password', component: () => import('@/pages/ResetPasswordPage.vue'), meta: { public: true } },
       { path: '/403', component: () => import('@/pages/ForbiddenPage.vue'), meta: { public: true } },
       // App (authenticated — guard redirects to /login when AUTH_MODE=api-key)
-      { path: '/documents', component: () => import('@/pages/DocumentsListPage.vue') },
+      // meta.fill: the pages landing leads with a graph canvas, which needs a
+      // definite height to resolve; the tree and list views scroll inside it.
+      { path: '/documents', component: () => import('@/pages/DocumentsListPage.vue'), meta: { fill: true } },
       { path: '/documents/:id', component: () => import('@/pages/DocumentDetailPage.vue') },
       // `fill`: the editor owns the viewport and scrolls its own prose column.
       // `bare`: no breadcrumbs — while writing, the only chrome is the page's own.
@@ -80,6 +82,9 @@ export function createRouter() {
           // Gated in the page on workspace admin rather than meta.platformAdmin —
           // these are workspace settings, not platform ones.
           { path: 'ai', component: () => import('@/pages/AiSettingsPage.vue') },
+          // Connectors (docs/features/19): workspace administration, so like AI
+          // settings it gates on auth.canAdminWorkspace rather than meta.platformAdmin.
+          { path: 'connectors', component: () => import('@/pages/ConnectorsPage.vue') },
           // Users management (platform admin only → /403 otherwise)
           { path: 'users', component: () => import('@/pages/AdminUsersPage.vue'), meta: { platformAdmin: true } },
         ],

@@ -123,6 +123,20 @@ export const envSchema = z.object({
   /** Vision-OCR page ceiling — bounds the spend a single scanned PDF can incur. */
   IMPORT_OCR_MAX_PAGES: z.coerce.number().int().positive().default(20),
 
+  /**
+   * Connectors (docs/features/19). Allow connector base URLs and git remotes on
+   * private/loopback ranges — an on-prem Confluence or a self-hosted GitLab is a
+   * legitimate target, but the default refuses them because a URL typed into a
+   * settings form is also the classic SSRF shape. Mirrors AI_PLUGINS_ALLOW_PRIVATE_URLS.
+   */
+  CONNECTOR_ALLOW_PRIVATE_URLS: z.coerce.boolean().default(false),
+  /** Items one sync run will touch, so a 50k-page space cannot pin a worker forever. */
+  CONNECTOR_SYNC_MAX_ITEMS: z.coerce.number().int().positive().default(1_000),
+  /** Wall-clock ceiling for one sync run. */
+  CONNECTOR_SYNC_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
+  /** Worker-side schedule sweeper for connectors with syncIntervalMinutes set. */
+  CONNECTOR_SCHEDULE_ENABLED: z.coerce.boolean().default(true),
+
   /** Live tracked-entity updates over WebSocket (/v1/events/ws). */
   LIVE_WS_ENABLED: z.coerce.boolean().default(true),
   /** Server-side tracking configuration: comma-separated event types (exact or 'prefix.*'); '*' broadcasts everything. */

@@ -182,6 +182,24 @@ export class AccessService {
     return job.workspaceId;
   }
 
+  async workspaceOfConnector(connectorId: string): Promise<string> {
+    const connector = await this.prisma.connector.findUnique({
+      where: { id: connectorId },
+      select: { workspaceId: true },
+    });
+    if (!connector) throw new NotFoundException(t('error.connector.notFound', { id: connectorId }));
+    return connector.workspaceId;
+  }
+
+  async workspaceOfConnectorRun(runId: string): Promise<string> {
+    const run = await this.prisma.connectorRun.findUnique({
+      where: { id: runId },
+      select: { workspaceId: true },
+    });
+    if (!run) throw new NotFoundException(t('error.connector.runNotFound', { id: runId }));
+    return run.workspaceId;
+  }
+
   async memberships(principal: Principal) {
     if (principal.mode === 'dev') return [];
     return this.prisma.workspaceMember.findMany({ where: { userId: principal.userId } });

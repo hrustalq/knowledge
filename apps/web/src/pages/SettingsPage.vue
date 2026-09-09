@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, type Component } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { Activity, BookMarked, FolderKanban, ShieldCheck, Sparkles, Users,
+  Plug,
   Workflow,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -25,6 +26,7 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/activity', label: t('nav.activity'), icon: Activity, hint: t('settings.activityHint') },
   { to: '/settings/ai', label: t('nav.ai'), icon: Sparkles, hint: t('settings.aiHint') },
   { to: '/settings/workflows', label: t('nav.workflows'), icon: Workflow, hint: t('settings.workflowsHint') },
+  { to: '/settings/connectors', label: t('nav.connectors'), icon: Plug, hint: t('settings.connectorsHint') },
 ])
 </script>
 

@@ -87,6 +87,9 @@ importers:
       mammoth:
         specifier: ^1.12.2
         version: 1.12.2
+      marked:
+        specifier: ^18.0.11
+        version: 18.0.11
       nestjs-i18n:
         specifier: ^10.8.5
         version: 10.8.5(@nestjs/common@12.0.1(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(class-validator@0.14.4)(rxjs@7.8.2)
@@ -256,9 +259,9 @@ importers:
       compression:
         specifier: ^1.8.1
         version: 1.8.1
-      cytoscape:
-        specifier: ^3.34.0
-        version: 3.34.2
+      d3-force:
+        specifier: ^3.0.0
+        version: 3.0.0
       dompurify:
         specifier: ^3.4.14
         version: 3.4.14
@@ -307,10 +310,16 @@ importers:
       vue-sonner:
         specifier: ^2.0.9
         version: 2.0.9
+      xstate:
+        specifier: ^5.32.6
+        version: 5.32.6
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.1.0
         version: 4.3.3(vite@8.2.2(@types/node@25.9.5)(jiti@2.7.0)(stylus@0.57.0)(yaml@2.9.0))
+      '@types/d3-force':
+        specifier: ^3.0.10
+        version: 3.0.10
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6

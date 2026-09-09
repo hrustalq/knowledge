@@ -181,6 +181,8 @@
  */
 :root {
   --rail-duration: 260ms;
+  /* The pages index's filter rail. Wide enough for a tag chip plus its count. */
+  --kn-filters-w: 17rem;
 }
 
 /*
@@ -700,5 +702,146 @@
   ::view-transition-new(kn-page),
   [data-nav-dir]::view-transition-new(kn-page) {
     animation: kn-page-in 100ms linear both;
+  }
+}
+
+/* ---------------------------------------------------------------- graph ---
+ * The relation graph's two bits of chrome. Both exist because the browser
+ * ships its own look for a range track and neither the OS slider nor an
+ * unstyled button belongs to a system built on hairlines and one accent.
+ */
+
+.kn-graph-btn {
+  display: grid;
+  place-items: center;
+  block-size: 1.9rem;
+  inline-size: 2.1rem;
+  color: var(--muted-foreground);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.kn-graph-btn:hover {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+.kn-graph-btn:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+/*
+ * A hairline track with a solid indigo thumb: the accent marks the value, the
+ * rule carries the extent, which is the same division of labour the rest of
+ * the system uses. Vendor pseudo-elements cannot be grouped in one selector —
+ * an unknown one invalidates the whole rule — so each is declared separately.
+ */
+.kn-range {
+  -webkit-appearance: none;
+  appearance: none;
+  inline-size: 100%;
+  block-size: 1rem;
+  background: transparent;
+  cursor: pointer;
+}
+.kn-range:focus-visible {
+  outline: none;
+}
+.kn-range::-webkit-slider-runnable-track {
+  block-size: 2px;
+  border-radius: 999px;
+  background: var(--border);
+}
+.kn-range::-moz-range-track {
+  block-size: 2px;
+  border-radius: 999px;
+  background: var(--border);
+}
+.kn-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-block-start: -5px;
+  block-size: 12px;
+  inline-size: 12px;
+  border-radius: 999px;
+  background: var(--primary);
+  border: 2px solid var(--card);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.18);
+  transition: transform 120ms ease;
+}
+.kn-range::-moz-range-thumb {
+  block-size: 12px;
+  inline-size: 12px;
+  border-radius: 999px;
+  background: var(--primary);
+  border: 2px solid var(--card);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.18);
+  transition: transform 120ms ease;
+}
+.kn-range:hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+.kn-range:hover::-moz-range-thumb {
+  transform: scale(1.12);
+}
+.kn-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+.kn-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-range::-webkit-slider-thumb,
+  .kn-range::-moz-range-thumb {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------- filters rail ---
+ * The pages index's filter rail, built the way the shell's navigation rail is
+ * built: a spacer whose *width* animates, beside a panel that is out of flow
+ * and *transforms* into the room the spacer opens.
+ *
+ * Two elements rather than one animated width, for two reasons. The panel keeps
+ * its width throughout, so the facets do not visibly squeeze on the way out.
+ * And a transform moves no layout: a panel left in flow would still occupy its
+ * column while translated off-screen, which is a permanent strip of empty page
+ * next to a closed rail.
+ *
+ * It is a right-hand rail, so the travel is mirrored. Below the shell's hinge
+ * the spacer stays closed and the panel simply floats over the content.
+ */
+.kn-filters-gap {
+  width: var(--kn-filters-w);
+  transition: width var(--rail-duration) var(--pane-ease);
+}
+.kn-filters {
+  width: var(--kn-filters-w);
+  transition: transform var(--rail-duration) var(--pane-ease);
+}
+[data-filters-open='false'] .kn-filters-gap {
+  width: 0;
+}
+[data-filters-open='false'] .kn-filters {
+  transform: translateX(100%);
+}
+
+/*
+ * Below the shell's one hinge the rail stops taking a column and floats over
+ * the content instead — the same trade the navigation rail makes, for the same
+ * reason: there is no room for two columns and the list is the one being read.
+ */
+@media (max-width: 1023px) {
+  .kn-filters-gap {
+    width: 0;
+  }
+  .kn-filters {
+    box-shadow: 0 16px 48px -12px rgb(0 0 0 / 0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-filters-gap,
+  .kn-filters {
+    transition-duration: 120ms;
   }
 }

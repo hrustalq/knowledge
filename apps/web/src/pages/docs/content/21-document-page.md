@@ -2,9 +2,8 @@
 title: The page view
 section: Using the app
 summary: The reading surface, the rail of widgets beside it, and how commenting on a passage works.
+route: /documents/:id
 ---
-
-# The page view — `/documents/:id`
 
 The main column is **only the page**. Everything *about* the page — history, relations,
 activity, open changes — lives in a rail of stacked widgets beside it, each collapsed to a

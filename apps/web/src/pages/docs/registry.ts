@@ -29,6 +29,13 @@ export interface DocArticle {
   section: string
   summary: string
   widget: DocWidget | null
+  /**
+   * The route this article documents, when it documents one. Structured rather
+   * than written into the prose: the header can show it beside the title, and
+   * an `# Editor — /create` heading under a header that already says "Editor"
+   * makes the reader read the same words twice to find the one new word.
+   */
+  route: string | null
   /** Markdown body, frontmatter removed. */
   body: string
 }
@@ -58,9 +65,9 @@ export interface DocMatch {
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
 
 /**
- * A four-key frontmatter block, parsed by hand. gray-matter is an API-side
- * dependency and these files are ours: keys are `key: value` on one line, and
- * anything more elaborate belongs in the body.
+ * The frontmatter block, parsed by hand. gray-matter is an API-side dependency
+ * and these files are ours: keys are `key: value` on one line, and anything
+ * more elaborate belongs in the body.
  */
 function parse(path: string, raw: string): DocArticle {
   const slug = path.replace(/^.*\/\d+-/, '').replace(/\.md$/, '')
@@ -81,6 +88,7 @@ function parse(path: string, raw: string): DocArticle {
     section: meta.section || 'Reference',
     summary: meta.summary || '',
     widget: (meta.widget as DocWidget) || null,
+    route: meta.route || null,
     body: stripLeadingTitle(match ? raw.slice(match[0].length) : raw, title),
   }
 }

@@ -2,9 +2,8 @@
 title: Glossary
 section: Administration
 summary: Project-scoped vocabulary, linked into pages at read time so no page is ever rewritten.
+route: /settings/glossary
 ---
-
-# Glossary — `/settings/glossary`
 
 Terms are **project-scoped**: unique per `(project, term)`, so the same word can mean
 different things in two projects — which is usually the actual situation.

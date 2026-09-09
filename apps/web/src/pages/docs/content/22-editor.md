@@ -2,9 +2,8 @@
 title: The editor
 section: Using the app
 summary: WYSIWYG that round-trips through markdown, and the rule every rich block obeys.
+route: /create · /documents/:id/edit
 ---
-
-# The editor — `/create`, `/documents/:id/edit`
 
 A rich editor whose document model is markdown. Everything you can insert serializes to
 markdown and parses back identically — that round trip is the contract, not a

@@ -2,9 +2,8 @@
 title: Connectors
 section: Administration
 summary: External systems as sources and destinations, the identity map that stops duplicates, and conflicts that become merge requests.
+route: /settings/connectors
 ---
-
-# Connectors — `/settings/connectors`
 
 Confluence, Jira (pull only), Notion, and a generic markdown/git remote — which is what
 covers an Obsidian vault, since a vault is a folder of markdown and Obsidian has no server

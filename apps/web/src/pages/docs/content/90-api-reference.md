@@ -2,10 +2,9 @@
 title: REST API
 section: Reference
 summary: Every endpoint, what it needs to call it, and the one error envelope they all share.
+route: /v1
 widget: api-reference
 ---
-
-# REST API
 
 Base path `/v1`. Interactive Swagger runs at **`http://localhost:3000/docs`**, and the
 generated OpenAPI document lives at `apps/api/openapi.json`.

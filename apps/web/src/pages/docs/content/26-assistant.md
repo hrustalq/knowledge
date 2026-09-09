@@ -2,9 +2,8 @@
 title: The assistant
 section: Using the app
 summary: A chat that answers out of the workspace, with tools bounded by the caller's own permissions.
+route: /assistant
 ---
-
-# The assistant — `/assistant`
 
 A chat grounded in the workspace. It answers from pages it actually read, and cites them.
 

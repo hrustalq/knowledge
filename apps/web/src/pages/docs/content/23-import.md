@@ -2,9 +2,8 @@
 title: Import
 section: Using the app
 summary: A three-step wizard over a real file, seven parsers, and why every one of them reports what it could not carry.
+route: /upload
 ---
-
-# Import — `/upload`
 
 Three steps: **Destination · Parse · Review**.
 

@@ -2,9 +2,8 @@
 title: The pages landing
 section: Using the app
 summary: Graph, tree and list views over the same set, and which question each one answers.
+route: /documents
 ---
-
-# The pages landing — `/documents`
 
 Three views over the same pages, because "show me the documentation" is three different
 questions.

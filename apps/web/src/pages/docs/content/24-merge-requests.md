@@ -2,9 +2,8 @@
 title: Merge requests and review
 section: Using the app
 summary: Branch, diff three ways, discuss on the rendered page, and the gates that stand between an MR and its merge.
+route: /merge-requests
 ---
-
-# Merge requests — `/merge-requests`
 
 ## The list
 

@@ -80,6 +80,7 @@ watch(
           </Button>
         </div>
         <p v-if="article.summary" class="mt-2 text-sm text-muted-foreground">{{ article.summary }}</p>
+        <p v-if="article.route" class="mt-2 font-mono text-xs text-muted-foreground">{{ article.route }}</p>
       </header>
 
       <MarkdownView

@@ -73,15 +73,47 @@ export function mcpToolsMarkdown(): string {
   return out.join('\n')
 }
 
-/** An article as markdown, with its generated table appended where it has one. */
+/**
+ * An article as markdown, with its route restated and its generated table
+ * appended where it has either. The route lives in frontmatter for the UI's
+ * benefit, so a copy that dropped it would lose the one fact an agent most
+ * needs from a page-tour article.
+ */
 export function articleMarkdown(article: DocArticle): string {
+  const route = article.route ? `\`${article.route}\`\n\n` : ''
   const table =
     article.widget === 'api-reference'
       ? `\n\n${endpointsMarkdown()}`
       : article.widget === 'mcp-tools'
         ? `\n\n${mcpToolsMarkdown()}`
         : ''
-  return `${article.body.trim()}${table}`
+  return `${route}${article.body.trim()}${table}`
+}
+
+/**
+ * Push an embedded article's headings down one level.
+ *
+ * An article is written to stand alone, so its sections start at `##`. Dropped
+ * under a `## Traps` heading unchanged, those sections become siblings of the
+ * thing that was supposed to contain them, and a reader skimming the outline —
+ * a person or a model chunking by heading — sees a flat list where there is a
+ * hierarchy.
+ *
+ * Fenced code is stepped over: a `# install deps` comment in a shell block is
+ * not a heading, and deepening it would corrupt the snippet.
+ */
+function demote(markdown: string): string {
+  let fenced = false
+  return markdown
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) {
+        fenced = !fenced
+        return line
+      }
+      return !fenced && /^#{1,5}\s/.test(line) ? `#${line}` : line
+    })
+    .join('\n')
 }
 
 export function buildBundle(): string {
@@ -99,7 +131,7 @@ export function buildBundle(): string {
     head +
     articles
       .filter((article) => article.widget !== 'agent-skill')
-      .map((article) => `## ${article.title}\n\n_${article.summary}_\n\n${articleMarkdown(article)}`)
+      .map((article) => `## ${article.title}\n\n_${article.summary}_\n\n${demote(articleMarkdown(article))}`)
       .join('\n\n---\n\n') +
     '\n'
   )
@@ -116,7 +148,7 @@ export function buildBundle(): string {
 export function buildSkill(): string {
   const pick = (slug: string): string => {
     const article = articles.find((a) => a.slug === slug)
-    return article ? articleMarkdown(article) : ''
+    return article ? demote(articleMarkdown(article)) : ''
   }
 
   return `---
@@ -126,9 +158,11 @@ description: Use when working on the Knowledge platform — its REST API (/v1/*)
 
 # Knowledge platform
 
+## Orientation
+
 ${pick('overview')}
 
-## The write path
+## Ingestion
 
 ${pick('ingestion')}
 

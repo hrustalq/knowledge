@@ -2,9 +2,8 @@
 title: The settings sections
 section: Using the app
 summary: What each section under Settings is for, and which role it needs.
+route: /settings
 ---
-
-# Settings
 
 | Section | For | Needs |
 | --- | --- | --- |

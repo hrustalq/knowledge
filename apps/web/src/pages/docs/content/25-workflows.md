@@ -2,9 +2,8 @@
 title: Workflows
 section: Using the app
 summary: A configurable chain of steps run against one page, with a human approving each published result.
+route: /workflows
 ---
-
-# Workflows — `/workflows`
 
 A workflow is a graph of steps a workspace admin defines once and runs against a page:
 *entity → use cases → API endpoints + frontend pages*, for example. Each step either

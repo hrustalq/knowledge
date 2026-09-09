@@ -1,19 +1,23 @@
 <script setup lang="ts">
-// "Apply documents" widget for the composer: lets you manually ground a turn
-// in one or more EXISTING workspace pages (distinct from the upload widget's
-// ad hoc pasted files) — a lightweight select, not a full search UI, backed
-// by the same GET /v1/documents list the sidebar tree already uses.
+// "Apply documents" widget for the composer: lets you ground a turn in one or
+// more EXISTING workspace pages (distinct from the upload widget's ad hoc
+// pasted files) — a lightweight select, not a full search UI, backed by the
+// same GET /v1/documents list the sidebar tree already uses.
 //
-// Recently-applied documents are remembered client-side (localStorage) so
-// the docs you keep coming back to surface at the top of the list on the
-// next open, across threads and page reloads.
-import { computed, nextTick, ref } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+// Recently-applied documents are remembered client-side (localStorage) so the
+// docs you keep coming back to surface at the top of the list on the next
+// open, across threads and page reloads.
+//
+// The panel is a ResponsivePopover: portalled and collision-aware on desktop
+// (it used to be an `absolute` box, which the chat page's `overflow-hidden`
+// cropped and a narrow viewport pushed off-screen), and a bottom sheet on a
+// phone, where a 288px panel hung off a toolbar button has nowhere to go.
+import { computed, nextTick, ref, watch } from 'vue'
 import { Check, FileText, FolderOpen } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { nativeEl } from '@/lib/utils'
+import { ResponsivePopover } from '@/components/ui/popover'
 
 export interface AppliedDocRef {
   documentId: string
@@ -28,11 +32,7 @@ const MAX_RECENT = 8
 const documents = useDocumentsStore()
 const isOpen = ref(false)
 const query = ref('')
-const rootEl = ref<HTMLElement | null>(null)
-const searchEl = ref<HTMLInputElement | null>(null)
-const setSearchEl = (c: unknown) => {
-  searchEl.value = nativeEl<HTMLInputElement>(c)
-}
+
 const recent = ref<AppliedDocRef[]>(loadRecent())
 
 function loadRecent(): AppliedDocRef[] {
@@ -58,17 +58,12 @@ function rememberRecent(doc: AppliedDocRef) {
   }
 }
 
-async function togglePanel() {
-  isOpen.value = !isOpen.value
-  if (isOpen.value) {
-    if (!documents.loaded) await documents.fetchList()
-    query.value = ''
-    void nextTick(() => searchEl.value?.focus())
-  }
-}
-
-onClickOutside(rootEl, () => {
-  isOpen.value = false
+// Opening is what loads the list, so the composer costs nothing until asked.
+watch(isOpen, (open) => {
+  if (!open) return
+  query.value = ''
+  if (!documents.loaded) void documents.fetchList()
+  void nextTick()
 })
 
 function isSelected(documentId: string): boolean {
@@ -102,65 +97,77 @@ const filteredAll = computed(() => {
 </script>
 
 <template>
-  <div ref="rootEl" class="relative">
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      type="button"
-      :class="selected.length > 0 ? 'text-primary' : ''"
-      aria-label="Apply documents"
-      title="Apply documents"
-      @click="togglePanel"
-    >
-      <FolderOpen class="size-4" />
-    </Button>
+  <ResponsivePopover
+    v-model:open="isOpen"
+    title="Apply documents"
+    description="Ground this message in pages that already exist in the workspace."
+    panel-class="w-80 p-2"
+  >
+    <template #trigger>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        type="button"
+        :class="selected.length > 0 ? 'text-primary' : ''"
+        aria-label="Apply documents"
+        title="Apply documents"
+      >
+        <FolderOpen class="size-4" />
+      </Button>
+    </template>
 
-    <div
-      v-if="isOpen"
-      class="absolute bottom-full left-0 z-20 mb-2 w-72 rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
-    >
+    <template #default="{ compact }">
       <Input
-        :ref="setSearchEl"
         v-model="query"
         type="text"
+        :autofocus="!compact"
         placeholder="Search pages by title…"
         class="mb-2 h-8 text-sm"
       />
 
-      <div class="max-h-64 overflow-y-auto">
-        <p v-if="!documents.loaded" class="px-2 py-1.5 text-xs text-muted-foreground">Loading pages…</p>
+      <!-- On the sheet the surface already scrolls, so a second capped
+           scroller here would trap the list in a box inside a box. -->
+      <div :class="compact ? '' : 'max-h-64 overflow-y-auto'">
+        <p v-if="!documents.loaded" class="text-muted-foreground px-2 py-1.5 text-xs">Loading pages…</p>
         <template v-else>
-          <p v-if="filteredRecent.length > 0" class="px-2 pb-0.5 pt-1 text-[11px] font-medium text-muted-foreground">Recent</p>
+          <p v-if="filteredRecent.length > 0" class="text-muted-foreground px-2 pt-1 pb-0.5 text-[11px] font-medium">
+            Recent
+          </p>
           <button
             v-for="d in filteredRecent"
             :key="d.documentId"
             type="button"
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+            class="hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors sm:py-1.5"
             @click="toggleDoc({ documentId: d.documentId, title: d.title })"
           >
-            <FileText class="size-3.5 shrink-0 text-muted-foreground" />
+            <FileText class="text-muted-foreground size-3.5 shrink-0" />
             <span class="min-w-0 flex-1 truncate">{{ d.title }}</span>
-            <Check v-if="isSelected(d.documentId)" class="size-3.5 shrink-0 text-primary" />
+            <Check v-if="isSelected(d.documentId)" class="text-primary size-3.5 shrink-0" />
           </button>
 
-          <p v-if="filteredAll.length > 0" class="px-2 pb-0.5 pt-2 text-[11px] font-medium text-muted-foreground">All pages</p>
+          <p v-if="filteredAll.length > 0" class="text-muted-foreground px-2 pt-2 pb-0.5 text-[11px] font-medium">
+            All pages
+          </p>
           <button
             v-for="d in filteredAll"
             :key="d.documentId"
             type="button"
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+            class="hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors sm:py-1.5"
             @click="toggleDoc({ documentId: d.documentId, title: d.title })"
           >
-            <FileText class="size-3.5 shrink-0 text-muted-foreground" />
+            <FileText class="text-muted-foreground size-3.5 shrink-0" />
             <span class="min-w-0 flex-1 truncate">{{ d.title }}</span>
-            <Check v-if="isSelected(d.documentId)" class="size-3.5 shrink-0 text-primary" />
+            <Check v-if="isSelected(d.documentId)" class="text-primary size-3.5 shrink-0" />
           </button>
 
-          <p v-if="filteredRecent.length === 0 && filteredAll.length === 0" class="px-2 py-1.5 text-xs text-muted-foreground">
-            No pages match "{{ query }}".
+          <p
+            v-if="filteredRecent.length === 0 && filteredAll.length === 0"
+            class="text-muted-foreground px-2 py-1.5 text-xs"
+          >
+            No pages match “{{ query }}”.
           </p>
         </template>
       </div>
-    </div>
-  </div>
+    </template>
+  </ResponsivePopover>
 </template>

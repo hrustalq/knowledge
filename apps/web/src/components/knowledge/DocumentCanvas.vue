@@ -41,6 +41,7 @@ import type { TextAnchor } from '@/lib/anchor-match'
 import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { useMembers } from '@/components/merge-requests/use-members'
+import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
 
 const props = withDefaults(
   defineProps<{
@@ -95,7 +96,7 @@ const page = ref<HTMLElement | null>(null)
 const editorEl = ref<InstanceType<typeof RichEditor> | null>(null)
 
 /** Where the "Comment" affordance sits while a selection is live. */
-const selectionAt = ref<Floater | null>(null)
+const selectionAt = ref<AnchorRect | null>(null)
 const pendingAnchor = ref<TextAnchor | null>(null)
 /** A composer is open for a new thread (anchored or not). */
 const composing = ref(false)
@@ -103,10 +104,27 @@ const composing = ref(false)
 const hoverAt = ref<Floater | null>(null)
 /** Bottom of that block, so a composer opens below it rather than across it. */
 const hoverBottom = ref(0)
+/** Same block, in viewport space, for the composer that opens off it. */
+const hoverRect = ref<AnchorRect | null>(null)
 const hoverQuote = ref<string | null>(null)
 /** The open discussion popover: which threads, and where. */
 const openThreadIds = ref<string[]>([])
-const popoverAt = ref<Floater | null>(null)
+const popoverAt = ref<AnchorRect | null>(null)
+
+/*
+ * Two anchored surfaces, both on Floating UI with the `absolute` strategy so
+ * they travel with the passage. `flip` turns the popover upwards when the
+ * passage sits near the foot of the window; `shift` keeps a wide one inside the
+ * page instead of running off its right edge.
+ */
+const { setFloating: setSelectionEl, floatingStyles: selectionStyles } = useAnchoredFloating(
+  selectionAt,
+  { placement: 'bottom-start', gap: 6, strategy: 'absolute' },
+)
+const { setFloating: setPopoverEl, floatingStyles: popoverStyles } = useAnchoredFloating(
+  popoverAt,
+  { placement: 'bottom-start', gap: 6, strategy: 'absolute' },
+)
 
 const byId = computed(() => new Map(props.threads.map((t) => [t.threadId, t])))
 const openThreads = computed(() =>
@@ -146,12 +164,18 @@ function authorsOf(thread: ReviewThread): AnchorAuthor[] {
   return out
 }
 
-/** Viewport rect → coordinates inside the (scrolling) canvas. */
-function toCanvas(rect: DOMRect): Floater | null {
-  const host = canvas.value
-  if (!host) return null
-  const base = host.getBoundingClientRect()
-  return { top: rect.bottom - base.top + 6, left: Math.max(0, rect.left - base.left) }
+/**
+ * Viewport rect → the shape Floating UI anchors to.
+ *
+ * This used to convert into canvas coordinates and clamp the left edge to zero
+ * by hand — which is not collision detection: a popover on a passage near the
+ * foot of the page still rendered below it and off screen, and one near the
+ * right edge still overflowed. `flip` and `shift` do that properly now, and
+ * because the strategy is `absolute` the panel still scrolls with the passage
+ * it annotates instead of detaching from it.
+ */
+function toRect(rect: DOMRect): AnchorRect {
+  return { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
 }
 
 /* ------------------------------------------------------ hover to comment */
@@ -196,6 +220,7 @@ function onPageMove(event: MouseEvent) {
   hoverQuote.value = text
   hoverAt.value = { top: rect.top - base.top, left: rect.left - base.left }
   hoverBottom.value = rect.bottom - base.top
+  hoverRect.value = toRect(rect)
 }
 
 /**
@@ -214,11 +239,10 @@ function quotableText(block: Element): string {
 
 function startBlockThread() {
   const doc = editorEl.value?.editor?.state.doc
-  const at = hoverAt.value
   if (!doc || !hoverQuote.value) return
   pendingAnchor.value = anchorFromQuote(doc, props.revisionId, hoverQuote.value)
   composing.value = true
-  popoverAt.value = at ? { top: hoverBottom.value + 8, left: at.left } : null
+  popoverAt.value = hoverRect.value
   hoverAt.value = null
 }
 
@@ -260,7 +284,7 @@ function readSelection() {
   // say — cannot be pinned. Offering the comment unanchored beats a Comment
   // button that silently refuses to appear.
   pendingAnchor.value = anchorFromDomSelection(doc, props.revisionId)
-  selectionAt.value = toCanvas(range.getBoundingClientRect())
+  selectionAt.value = toRect(range.getBoundingClientRect())
 }
 
 function startThread() {
@@ -278,7 +302,7 @@ function openAt(target: EventTarget | null): boolean {
   openThreadIds.value = ids
   pendingAnchor.value = null
   composing.value = false
-  popoverAt.value = mark ? toCanvas(mark.getBoundingClientRect()) : null
+  popoverAt.value = mark ? toRect(mark.getBoundingClientRect()) : null
   return true
 }
 
@@ -431,9 +455,10 @@ function onOutdated(ids: string[]) {
     <!-- Floating "comment on this", anchored to the live selection -->
     <div
       v-if="selectionAt && canComment"
+      :ref="setSelectionEl"
       data-kn-anno-ui
-      class="absolute z-20"
-      :style="{ top: `${selectionAt.top}px`, left: `${selectionAt.left}px` }"
+      class="z-20"
+      :style="selectionStyles"
     >
       <Button size="xs" class="shadow-md" @mousedown.prevent @click="startThread">
         <MessageSquarePlus class="size-3.5" />
@@ -444,9 +469,10 @@ function onOutdated(ids: string[]) {
     <!-- Discussion popover: the open threads, or a composer for a new one -->
     <div
       v-if="popoverAt && (openThreads.length || composing)"
+      :ref="setPopoverEl"
       data-kn-anno-ui
-      class="absolute z-30 w-[min(38rem,calc(100%-1rem))] space-y-2 rounded-lg border bg-popover p-2 shadow-lg"
-      :style="{ top: `${popoverAt.top}px`, left: `${popoverAt.left}px` }"
+      class="z-30 w-[38rem] space-y-2 overflow-y-auto rounded-lg border bg-popover p-2 shadow-lg"
+      :style="popoverStyles"
       @click.stop
       @mouseup.stop
       @keyup.stop

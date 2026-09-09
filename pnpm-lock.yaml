@@ -169,6 +169,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@floating-ui/vue':
+        specifier: ^1.1.11
+        version: 1.1.11(vue@3.5.42(typescript@6.0.3))
       '@knowledge/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

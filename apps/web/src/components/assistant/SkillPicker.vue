@@ -10,11 +10,7 @@ import { apiQueryOptions } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { ResponsivePopover } from '@/components/ui/popover'
 
 const selected = defineModel<string[]>({ default: () => [] })
 
@@ -30,8 +26,16 @@ function toggle(id: string, on: boolean) {
 </script>
 
 <template>
-  <DropdownMenu v-if="skills.length > 0">
-    <DropdownMenuTrigger as-child>
+  <!-- A popover, not a dropdown menu: this is a multi-select that stays open
+       while you tick rows, and a menu's items are meant to be chosen and
+       dismissed. On a phone the same list arrives as a bottom sheet. -->
+  <ResponsivePopover
+    v-if="skills.length > 0"
+    title="Apply skills"
+    description="Skills with matching trigger words apply on their own."
+    panel-class="w-72 p-2"
+  >
+    <template #trigger>
       <Button
         variant="ghost"
         size="sm"
@@ -43,13 +47,14 @@ function toggle(id: string, on: boolean) {
         <Sparkles class="size-4" />
         <span v-if="selected.length > 0" class="text-xs tabular-nums">{{ selected.length }}</span>
       </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="start" class="w-72 p-2">
-      <p class="text-muted-foreground px-1 pb-1.5 text-xs font-medium">Apply skills</p>
+    </template>
+
+    <template #default="{ compact }">
+      <p v-if="!compact" class="text-muted-foreground px-1 pb-1.5 text-xs font-medium">Apply skills</p>
       <label
         v-for="skill in skills"
         :key="skill.id"
-        class="hover:bg-accent flex cursor-pointer items-start gap-2 rounded-sm p-1.5"
+        class="hover:bg-accent flex cursor-pointer items-start gap-2 rounded-sm p-2 sm:p-1.5"
       >
         <Checkbox
           :model-value="selected.includes(skill.id)"
@@ -60,9 +65,9 @@ function toggle(id: string, on: boolean) {
           <span v-if="skill.description" class="text-muted-foreground block text-xs">{{ skill.description }}</span>
         </span>
       </label>
-      <p class="text-muted-foreground border-t px-1 pt-1.5 text-xs">
+      <p v-if="!compact" class="text-muted-foreground border-t px-1 pt-1.5 text-xs">
         Skills with matching trigger words apply on their own.
       </p>
-    </DropdownMenuContent>
-  </DropdownMenu>
+    </template>
+  </ResponsivePopover>
 </template>

@@ -739,9 +739,10 @@
 
 /* Bubble + table bars ------------------------------------------------------ */
 
+/* No position/top/left/transform here: Floating UI writes all four inline
+   (fixed strategy + a translate), and a stylesheet rule would fight it. */
 .kn-bubble,
 .kn-table-bar {
-  position: fixed;
   z-index: 40;
   display: flex;
   align-items: center;
@@ -752,7 +753,6 @@
   background: var(--popover);
   box-shadow: 0 12px 32px -12px oklch(0 0 0 / 0.45), 0 2px 6px -2px oklch(0 0 0 / 0.2);
 }
-.kn-bubble { transform: translate(-50%, -100%); }
 .kn-bubble button,
 .kn-table-bar button {
   display: inline-flex;

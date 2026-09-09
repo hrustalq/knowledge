@@ -109,12 +109,6 @@ const RUN_ACTION = {
     <template v-else-if="data">
       <header class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
-          <RouterLink
-            to="/workflows"
-            class="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
-          >
-            <ArrowLeft class="size-3" /> All runs
-          </RouterLink>
           <h1 class="mt-1 truncate text-lg font-semibold">{{ data.run.definitionName }}</h1>
           <p
             v-if="data.run.nodeStats.awaitingReview"

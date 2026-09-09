@@ -11,7 +11,8 @@
  * the unbounded one (tags, which are searched server-side).
  */
 import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
-import { refDebounced, useElementBounding, useVirtualList, useWindowSize } from '@vueuse/core'
+import { refDebounced, useVirtualList } from '@vueuse/core'
+import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
 import { Check, Loader2, Search, X } from 'lucide-vue-next'
 
 export interface AutocompleteOption {
@@ -243,62 +244,50 @@ function onBlur(e: FocusEvent) {
 }
 
 /**
- * The list is teleported to <body> and fixed-positioned against the field.
- * Rendering it in flow pushed the rest of the rail down on every open, and a
- * plain absolute list would be clipped by the rail's own overflow-y-auto.
- * useElementBounding re-measures on scroll and resize, so the panel tracks the
- * field instead of drifting away from it.
+ * The list is teleported to <body> and positioned by Floating UI against the
+ * field. Rendering it in flow pushed the rest of the rail down on every open,
+ * and a plain absolute list would be clipped by the rail's own overflow-y-auto.
+ *
+ * `flip` picks above/below, `shift` keeps it on screen horizontally, and `size`
+ * reports the room actually left so the scroller can cap itself — replacing
+ * three hand-written computeds that did the same arithmetic by hand.
+ *
+ * `animationFrame` is deliberate: this lives inside a Sheet that slides in on a
+ * CSS transform, and neither scroll nor resize observers fire during that. The
+ * old code chased it with a nextTick, a rAF and a 240ms timeout; tracking each
+ * frame while the list is open is both correct and cheaper to reason about.
  */
 const fieldEl = ref<HTMLElement | null>(null)
-const bounds = useElementBounding(fieldEl)
-const { height: viewportHeight } = useWindowSize()
-
-/**
- * Re-measure every time the list opens. useElementBounding tracks scroll and
- * resize, but not transforms — and this lives inside a sheet that slides in
- * from the right, so bounds captured at mount put the list where the panel
- * *started*, far from the field. rAF covers opening mid-animation.
- */
-watch(open, (isOpen) => {
-  if (!isOpen) return
-  bounds.update()
-  void nextTick(() => bounds.update())
-  requestAnimationFrame(() => bounds.update())
-  // The sheet's slide runs 200ms; catch the settled position too.
-  setTimeout(() => bounds.update(), 240)
-})
+const listEl = ref<HTMLElement | null>(null)
 
 const MAX_LIST_HEIGHT = 224
 const GAP = 4
 
-/** Flip above the field when there is not enough room beneath it. */
-const dropUp = computed(
-  () =>
-    bounds.bottom.value + GAP + MAX_LIST_HEIGHT > viewportHeight.value &&
-    bounds.top.value > viewportHeight.value - bounds.bottom.value,
-)
+const available = ref(MAX_LIST_HEIGHT)
 
-const listStyle = computed(() => ({
-  position: 'fixed' as const,
-  left: `${bounds.left.value}px`,
-  width: `${bounds.width.value}px`,
-  ...(dropUp.value
-    ? { bottom: `${viewportHeight.value - bounds.top.value + GAP}px` }
-    : { top: `${bounds.bottom.value + GAP}px` }),
-}))
+const { floatingStyles } = useFloating(fieldEl, listEl, {
+  placement: 'bottom-start',
+  strategy: 'fixed',
+  whileElementsMounted: (reference, floating, update) =>
+    autoUpdate(reference, floating, update, { animationFrame: true }),
+  middleware: [
+    offset(GAP),
+    flip({ padding: GAP * 2 }),
+    shift({ padding: GAP * 2 }),
+    size({
+      padding: GAP * 2,
+      apply({ availableHeight, rects, elements }) {
+        available.value = availableHeight
+        // Match the field's width, as a dropdown should.
+        elements.floating.style.width = `${rects.reference.width}px`
+      },
+    }),
+  ],
+})
 
 /** Applied to the scroll container, not the box, so the virtual list can size itself. */
 const listMaxHeight = computed(
-  () =>
-    `${Math.min(
-      MAX_LIST_HEIGHT,
-      Math.max(
-        120,
-        dropUp.value
-          ? bounds.top.value - GAP
-          : viewportHeight.value - bounds.bottom.value - GAP * 2,
-      ),
-    )}px`,
+  () => `${Math.min(MAX_LIST_HEIGHT, Math.max(120, available.value - GAP * 2))}px`,
 )
 
 /**
@@ -411,7 +400,8 @@ const listId = useId()
       -->
       <div
         v-if="open && !isEmptyRoster"
-        :style="listStyle"
+        ref="listEl"
+        :style="floatingStyles"
         @pointerdown.stop
         class="animate-in fade-in-0 pointer-events-auto z-[60] overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground shadow-md duration-100"
       >

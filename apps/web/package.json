@@ -14,6 +14,7 @@
     "generate:api": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
+    "@floating-ui/vue": "^1.1.11",
     "@knowledge/contracts": "workspace:*",
     "@knowledge/workflow": "workspace:*",
     "@lucide/vue": "^1.38.0",

@@ -3,7 +3,7 @@
  * Table row/column controls. Appear only while the caret is inside a table and
  * anchor to that table, so a page full of tables never shows more than one set.
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Editor } from '@tiptap/core'
 import {
   ArrowDownToLine,
@@ -12,12 +12,18 @@ import {
   Columns3,
   Trash2,
 } from 'lucide-vue-next'
+import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
 
 const props = defineProps<{ editor: Editor }>()
-const rect = ref<{ top: number; left: number } | null>(null)
 
-const BAR_HEIGHT = 34
-const GAP = 8
+/**
+ * The table's own box. Sitting above it is the default; dropping below when a
+ * table near the top of the page leaves no room — and sliding sideways when one
+ * near the right edge would push the bar off-screen — is Floating UI's `flip`
+ * and `shift`, which is why the hand-rolled ceiling check is gone.
+ */
+const rect = ref<AnchorRect | null>(null)
+const { setFloating, floatingStyles } = useAnchoredFloating(rect, { placement: 'top' })
 
 function update() {
   if (!props.editor.isActive('table')) {
@@ -32,13 +38,7 @@ function update() {
     return
   }
   const box = table.getBoundingClientRect()
-  // Above the table by default, but below it when that would put the bar over
-  // the sticky toolbar or off-screen — a table near the top of a page is the
-  // common case, not the edge case.
-  const surface = (view.dom as HTMLElement).closest('.kn-editor-surface')
-  const ceiling = (surface?.getBoundingClientRect().top ?? 0) + GAP
-  const above = box.top - BAR_HEIGHT - GAP
-  rect.value = { top: above < ceiling ? box.bottom + GAP : above, left: box.left }
+  rect.value = { top: box.top, left: box.left, width: box.width, height: box.height }
 }
 
 onMounted(() => {
@@ -49,14 +49,10 @@ onBeforeUnmount(() => {
   props.editor.off('selectionUpdate', update)
   props.editor.off('transaction', update)
 })
-
-const style = computed(() =>
-  rect.value ? { top: `${rect.value.top}px`, left: `${rect.value.left}px` } : { display: 'none' },
-)
 </script>
 
 <template>
-  <div class="kn-table-bar" :style="style" role="toolbar" aria-label="Table">
+  <div v-if="rect" :ref="setFloating" class="kn-table-bar" :style="floatingStyles" role="toolbar" aria-label="Table">
     <button type="button" title="Add row below" @mousedown.prevent="editor.chain().focus().addRowAfter().run()">
       <ArrowDownToLine class="size-3.5" /> Row
     </button>

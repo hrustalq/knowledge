@@ -5,15 +5,18 @@
  * suppress itself inside blocks where inline formatting is meaningless (code,
  * diagrams, whiteboards) instead of hovering uselessly over them.
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { Bold, Code, Highlighter, Italic, Link2, Strikethrough, Underline as UnderlineIcon } from 'lucide-vue-next'
 import { STATUS_COLORS, type StatusColor } from '@/lib/markdown/nodes'
+import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
 
 const props = defineProps<{ editor: Editor }>()
 const emit = defineEmits<{ link: [] }>()
 
-const position = ref<{ top: number; left: number } | null>(null)
+/** The selection's own box, in viewport coordinates; Floating UI hangs the bar off it. */
+const rect = ref<AnchorRect | null>(null)
+const { setFloating, floatingStyles } = useAnchoredFloating(rect, { placement: 'top' })
 
 const SUPPRESS_IN = ['codeBlock', 'knMermaid', 'knDrawing', 'knFile', 'knToc']
 
@@ -22,17 +25,22 @@ function update() {
   const { state, view } = editor
   const { from, to, empty } = state.selection
   if (empty || !view.hasFocus() || SUPPRESS_IN.some((name) => editor.isActive(name))) {
-    position.value = null
+    rect.value = null
     return
   }
   const start = view.coordsAtPos(from)
   const end = view.coordsAtPos(to, -1)
-  position.value = {
-    top: Math.min(start.top, end.top) - 8,
-    left: (Math.min(start.left, end.left) + Math.max(start.right, end.right)) / 2,
+  // Just the box: centring, the gap above it and staying on screen near the
+  // viewport edges are Floating UI's job now.
+  const left = Math.min(start.left, end.left)
+  const top = Math.min(start.top, end.top)
+  rect.value = {
+    top,
+    left,
+    width: Math.max(start.right, end.right) - left,
+    height: Math.max(start.bottom, end.bottom) - top,
   }
 }
-
 
 
 onMounted(() => {
@@ -45,7 +53,7 @@ onMounted(() => {
       // The box can be gone by now — an edit composer collapses on save, which
       // blurs and unmounts in the same tick — and reading `view` off a
       // destroyed editor throws.
-      if (props.editor.isDestroyed || !props.editor.view.hasFocus()) position.value = null
+      if (props.editor.isDestroyed || !props.editor.view.hasFocus()) rect.value = null
     }, 120)
   })
 })
@@ -54,16 +62,10 @@ onBeforeUnmount(() => {
   props.editor.off('selectionUpdate', update)
   props.editor.off('transaction', update)
 })
-
-const style = computed(() =>
-  position.value
-    ? { top: `${position.value.top}px`, left: `${position.value.left}px` }
-    : { display: 'none' },
-)
 </script>
 
 <template>
-  <div class="kn-bubble" :style="style" role="toolbar" aria-label="Selection formatting">
+  <div v-if="rect" :ref="setFloating" class="kn-bubble" :style="floatingStyles" role="toolbar" aria-label="Selection formatting">
     <button type="button" :aria-pressed="editor.isActive('bold')" title="Bold" @mousedown.prevent="editor.chain().focus().toggleBold().run()">
       <Bold class="size-4" />
     </button>

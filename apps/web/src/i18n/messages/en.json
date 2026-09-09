@@ -89,7 +89,9 @@
     "scopeDescriptionPlaceholder": "What lives in here?",
     "workspaceNamePlaceholder": "Acme Engineering",
     "name": "Name",
-    "description": "Description"
+    "description": "Description",
+    "resizeSidebar": "Resize navigation",
+    "resizeSidebarHint": "Drag to resize, double-click to reset"
   },
   "role": {
     "viewer": "Viewer",

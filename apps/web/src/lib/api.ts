@@ -12,6 +12,8 @@ const TOKEN_KEY = 'kn_token'
 const WS_KEY = 'kn_ws'
 const PROJECT_KEY = 'kn_proj'
 const PANE_KEY = 'kn_pane'
+const RAIL_KEY = 'kn_rail'
+const RAIL_OPEN_KEY = 'kn_railopen'
 const LANG_KEY = 'kn_lang'
 
 /** Which level of the sidebar's navigation stack is showing (see stores/sidebar-nav). */
@@ -37,6 +39,8 @@ interface SsrRequestContext {
   workspaceId: string | null
   projectId: string | null
   pane: string | null
+  rail: string | null
+  railOpen: string | null
   locale: Locale | null
 }
 function ssrContext(): SsrRequestContext | undefined {
@@ -49,6 +53,8 @@ let clientToken: string | null = null
 let clientWorkspaceId: string | null = null
 let clientProjectId: string | null = null
 let clientPane: string | null = null
+let clientRail: string | null = null
+let clientRailOpen: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
   try {
@@ -56,6 +62,8 @@ if (!import.meta.env.SSR) {
     clientWorkspaceId = localStorage.getItem(WS_KEY)
     clientProjectId = localStorage.getItem(PROJECT_KEY)
     clientPane = localStorage.getItem(PANE_KEY)
+    clientRail = localStorage.getItem(RAIL_KEY)
+    clientRailOpen = localStorage.getItem(RAIL_OPEN_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
     if (isLocale(storedLocale)) clientLocale = storedLocale
   } catch {
@@ -153,6 +161,56 @@ export function setSidebarPane(pane: SidebarPane): void {
   try {
     localStorage.setItem(PANE_KEY, pane)
     document.cookie = `${PANE_KEY}=${pane}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Rail geometry — how wide the navigation rail is, and whether it is open.
+ *
+ * Persisted the same way as the pane level, and for a sharper reason: these two
+ * are the only stored facts the *first painted frame* depends on. Read them
+ * client-side only and a rail someone widened to 22rem renders at 16rem and then
+ * jumps, while a rail they collapsed renders open and then animates shut on
+ * every single page load — the transition turning a one-frame flash into a
+ * visible, repeated mistake. The cookie is what lets the server draw it right.
+ *
+ * Width is stored raw and clamped on read by the store that owns the bounds; a
+ * cookie is user-editable, and a rail is not the place to trust one.
+ */
+export function getRailWidth(): number | null {
+  const raw = import.meta.env.SSR ? ssrContext()?.rail : clientRail
+  const px = Number(raw)
+  return raw !== null && raw !== undefined && raw !== '' && Number.isFinite(px) ? px : null
+}
+
+export function setRailWidth(px: number): void {
+  if (import.meta.env.SSR) return
+  const value = String(Math.round(px))
+  clientRail = value
+  try {
+    localStorage.setItem(RAIL_KEY, value)
+    document.cookie = `${RAIL_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getRailOpen(): boolean {
+  const raw = import.meta.env.SSR ? ssrContext()?.railOpen : clientRailOpen
+  // Unset means open: the rail is the default reading of this app, and a first
+  // visit should not inherit "collapsed" from a missing cookie.
+  return raw !== '0'
+}
+
+export function setRailOpen(open: boolean): void {
+  if (import.meta.env.SSR) return
+  const value = open ? '1' : '0'
+  clientRailOpen = value
+  try {
+    localStorage.setItem(RAIL_OPEN_KEY, value)
+    document.cookie = `${RAIL_OPEN_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
   } catch {
     /* ignore */
   }

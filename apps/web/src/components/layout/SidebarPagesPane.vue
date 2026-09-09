@@ -10,16 +10,21 @@
  * The whole title is the back target (a 256px rail has no room for a separate
  * back button *and* a location), with the chevron leaning left on hover to
  * name the direction, mirroring the roster's right-leaning row chevrons.
+ *
+ * This pane also owns the tree's horizontal window — see ./tree-window.
  */
 import { useI18n } from 'vue-i18n'
-import { computed } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ChevronLeft, FileUp, Plus } from 'lucide-vue-next'
+import type { DocumentTreeNode } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
+import { TREE_INDENT, useSidebarStore } from '@/stores/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 import SidebarTreeNode from './SidebarTreeNode.vue'
+import { TreeWindowKey } from './tree-window'
 
 const { t } = useI18n()
 
@@ -28,6 +33,7 @@ defineEmits<{ back: [] }>()
 const auth = useAuthStore()
 const projects = useProjectsStore()
 const store = useDocumentsStore()
+const sidebar = useSidebarStore()
 const route = useRoute()
 
 // No active project means the API is answering workspace-wide, so the title
@@ -38,6 +44,43 @@ const title = computed(() => projects.activeName ?? t('nav.allPages'))
 const activeDocId = computed(() =>
   route.path.startsWith('/documents/') ? ((route.params.id as string) ?? null) : null,
 )
+
+function depthOf(nodes: DocumentTreeNode[], id: string, depth = 0): number | null {
+  for (const node of nodes) {
+    if (node.documentId === id) return depth
+    const found = depthOf(node.children, id, depth + 1)
+    if (found !== null) return found
+  }
+  return null
+}
+
+/**
+ * The level the window is currently looking at. Navigation sets it outright
+ * rather than deepening it: opening a top-level page while parked eight levels
+ * in has to bring the window home, or you land on a row that is off its own
+ * left edge.
+ */
+const focusDepth = ref(0)
+const activeDepth = computed(() => {
+  const id = activeDocId.value
+  return id === null ? null : depthOf(store.tree, id)
+})
+watch(activeDepth, (depth) => {
+  if (depth !== null) focusDepth.value = depth
+})
+
+provide(TreeWindowKey, {
+  reveal: (depth: number) => {
+    focusDepth.value = depth
+  },
+  retreat: (depth: number) => {
+    focusDepth.value = Math.min(focusDepth.value, depth)
+  },
+})
+
+// Whatever depth exceeds the rail's budget is what the window has to travel.
+// The budget already reserves a readable title, so this needs no second cap.
+const shift = computed(() => Math.max(0, focusDepth.value - sidebar.treeDepthBudget) * TREE_INDENT)
 </script>
 
 <template>
@@ -86,7 +129,11 @@ const activeDocId = computed(() =>
       </div>
     </div>
 
-    <div class="sidebar-scroll mt-1 min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+    <div
+      class="sidebar-scroll kn-tree-window mt-1 min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4"
+      :style="{ '--kn-tree-shift': `${shift}px` }"
+      :data-windowed="shift > 0"
+    >
       <div v-if="!store.treeLoaded" class="space-y-1.5 px-1 pt-1">
         <Skeleton v-for="i in 6" :key="i" class="h-7 w-full" />
       </div>

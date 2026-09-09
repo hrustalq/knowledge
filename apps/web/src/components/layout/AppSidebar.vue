@@ -10,6 +10,7 @@ import { GitPullRequestArrow, House, Library, Settings, Sparkles,
 import type { ScopeCreated } from '@/lib/scopes'
 import ScopeSwitcher from './ScopeSwitcher.vue'
 import SidebarPanes from './SidebarPanes.vue'
+import SidebarResizeHandle from './SidebarResizeHandle.vue'
 import SwitcherCreateDialog from './SwitcherCreateDialog.vue'
 
 const { t } = useI18n()
@@ -53,7 +54,10 @@ function isCurrent(to: string): boolean {
 </script>
 
 <template>
-  <aside class="border-sidebar-border bg-sidebar text-sidebar-foreground flex h-full w-64 shrink-0 flex-col border-r">
+  <!-- Width comes from the shell (`--kn-rail-w`), not from here: the rail, the
+       spacer that closes beside it and the drawer that borrows it all have to
+       agree on one number, and the store is where that number is clamped. -->
+  <aside class="border-sidebar-border bg-sidebar text-sidebar-foreground relative flex h-full w-full shrink-0 flex-col border-r">
     <div class="pt-4 pb-3">
       <RouterLink to="/documents" class="flex items-center gap-2 px-4">
         <span class="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-md">
@@ -80,6 +84,8 @@ function isCurrent(to: string): boolean {
     </nav>
 
     <SidebarPanes @create="openCreate('project')" />
+
+    <SidebarResizeHandle />
 
     <SwitcherCreateDialog
       :kind="creating"

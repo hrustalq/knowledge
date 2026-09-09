@@ -11,11 +11,13 @@ import SearchSheet from '@/components/knowledge/SearchSheet.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useEventsStore } from '@/stores/events'
 import { useSearchUiStore } from '@/stores/search-ui'
+import { useSidebarStore } from '@/stores/sidebar'
 import { startLive } from '@/api'
 
 const auth = useAuthStore()
 const events = useEventsStore()
 const searchUi = useSearchUiStore()
+const sidebar = useSidebarStore()
 
 // A workspace switch from inside the search sheet reloads the app; pick the
 // query back up on the other side.
@@ -33,11 +35,14 @@ watchEffect(() => {
   }
 })
 
-/** Desktop: collapsible rail; mobile: off-canvas drawer. */
-const sidebarOpen = ref(true)
+/**
+ * Desktop: collapsible rail; mobile: off-canvas drawer. The desktop half of
+ * that lives in the sidebar store because its width and open state are drawn
+ * by the server on the first frame — see lib/api's rail accessors.
+ */
 const mobileOpen = ref(false)
 function toggleSidebar() {
-  if (window.matchMedia('(min-width: 1024px)').matches) sidebarOpen.value = !sidebarOpen.value
+  if (window.matchMedia('(min-width: 1024px)').matches) sidebar.toggle()
   else mobileOpen.value = !mobileOpen.value
 }
 watch(
@@ -67,18 +72,40 @@ watch(
   </div>
 
   <!-- App shell: sidebar + topbar + scrolling content column -->
-  <div v-else class="flex h-screen overflow-hidden bg-background text-foreground">
-    <div v-if="sidebarOpen" class="hidden h-full lg:block">
+  <div
+    v-else
+    class="relative flex h-screen overflow-hidden bg-background text-foreground"
+    :class="sidebar.resizing ? 'kn-resizing' : ''"
+    :style="{ '--kn-rail-w': sidebar.widthPx }"
+    :data-rail-open="sidebar.open"
+  >
+    <!--
+      The rail collapses as two elements moving on one curve: a flex spacer
+      that closes the column, and the rail itself sliding out to the left over
+      it. Animating the rail's own width instead would reflow every label
+      inside it for the whole travel — a 16rem column re-wrapping as it leaves,
+      which is exactly why an instant `v-if` used to look better than a
+      transition. Here nothing inside the rail moves relative to the rail; the
+      spacer's right edge and the rail's right edge sit at the same x on every
+      frame, so the content column reads as being uncovered rather than pushed.
+    -->
+    <div class="kn-rail-gap hidden shrink-0 lg:block" aria-hidden="true" />
+    <div class="kn-rail absolute inset-y-0 left-0 z-20 hidden lg:block" :inert="!sidebar.open || undefined">
       <AppSidebar />
     </div>
 
-    <!-- Mobile drawer -->
-    <div v-if="mobileOpen" class="fixed inset-0 z-40 lg:hidden">
-      <div class="absolute inset-0 bg-black/40" aria-hidden="true" @click="mobileOpen = false" />
-      <div class="absolute inset-y-0 left-0 h-full shadow-xl">
-        <AppSidebar />
+    <!-- Mobile drawer: the same rail, arriving as a drawer over a scrim. -->
+    <Transition name="drawer" :duration="260">
+      <div v-if="mobileOpen" class="fixed inset-0 z-40 lg:hidden">
+        <div class="kn-drawer-scrim absolute inset-0 bg-black/40" aria-hidden="true" @click="mobileOpen = false" />
+        <div
+          class="kn-drawer-panel absolute inset-y-0 left-0 h-full shadow-[0_16px_48px_-12px_rgb(0_0_0/0.45)]"
+          :style="{ width: 'min(var(--kn-rail-w), 88vw)' }"
+        >
+          <AppSidebar />
+        </div>
       </div>
-    </div>
+    </Transition>
 
     <div class="flex min-w-0 flex-1 flex-col">
       <AppTopbar @toggle-sidebar="toggleSidebar" />

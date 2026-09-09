@@ -8,6 +8,8 @@ interface SsrRequestContext {
   workspaceId: string | null
   projectId: string | null
   pane: string | null
+  rail: string | null
+  railOpen: string | null
   locale: Locale | null
 }
 
@@ -23,6 +25,8 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     workspaceId: ctx.workspaceId ?? null,
     projectId: ctx.projectId ?? null,
     pane: ctx.pane ?? null,
+    rail: ctx.rail ?? null,
+    railOpen: ctx.railOpen ?? null,
     locale: ctx.locale ?? null,
   }
   return ssrCtx.run(request, async () => {

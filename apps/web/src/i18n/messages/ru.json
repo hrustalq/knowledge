@@ -89,7 +89,9 @@
     "scopeDescriptionPlaceholder": "Что здесь находится?",
     "workspaceNamePlaceholder": "Acme Engineering",
     "name": "Название",
-    "description": "Описание"
+    "description": "Описание",
+    "resizeSidebar": "Изменить ширину панели",
+    "resizeSidebarHint": "Потяните, чтобы изменить ширину, двойной щелчок — сброс"
   },
   "role": {
     "viewer": "Читатель",

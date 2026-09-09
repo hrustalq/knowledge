@@ -1,13 +1,16 @@
 <script setup lang="ts">
 // Navigation tree node — the page tree drawn as a graph: indent rails,
 // live indexing-status dots, active-trail auto-expansion.
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { statusDot } from '@/lib/api'
+import { TreeWindowKey } from './tree-window'
 
 defineOptions({ name: 'SidebarTreeNode' })
+const { t } = useI18n()
 const props = defineProps<{ node: TreeNode; depth: number; activeId: string | null }>()
 
 const contains = (n: TreeNode): boolean =>
@@ -17,10 +20,26 @@ const open = ref(props.depth < 1 || contains(props.node))
 watch(
   () => props.activeId,
   () => {
+    // Auto-expansion along the active trail deliberately says nothing to the
+    // window: every ancestor of the target runs this, and the pane already
+    // knows the one depth that matters from the route.
     if (contains(props.node)) open.value = true
   },
 )
 const isActive = computed(() => props.node.documentId === props.activeId)
+
+const treeWindow = inject(TreeWindowKey, null)
+
+/**
+ * Opening a node is a request to read its children, so the window travels to
+ * their level rather than to this one — otherwise the row you just revealed is
+ * the first one squeezed.
+ */
+function toggle() {
+  open.value = !open.value
+  if (open.value) treeWindow?.reveal(props.depth + 1)
+  else treeWindow?.retreat(props.depth)
+}
 </script>
 
 <template>
@@ -34,9 +53,9 @@ const isActive = computed(() => props.node.documentId === props.activeId)
       <button
         v-if="node.children.length > 0"
         class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-sidebar-accent"
-        :aria-label="open ? 'Collapse' : 'Expand'"
+        :aria-label="open ? t('tree.collapse') : t('tree.expand')"
         :aria-expanded="open"
-        @click.prevent="open = !open"
+        @click.prevent="toggle"
       >
         <ChevronRight class="size-3.5 transition-transform" :class="open ? 'rotate-90' : ''" />
       </button>

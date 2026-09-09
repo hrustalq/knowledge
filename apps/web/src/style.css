@@ -149,6 +149,163 @@
   --pane-duration: 280ms;
 }
 
+/*
+ * The rail: collapse, drawer, resize.
+ *
+ * One curve for the whole shell. The pane push is this app's authored piece of
+ * motion, and the rail leaving is the same material moving on the same easing —
+ * a second idiom here would read as two apps sharing a window. Slightly quicker
+ * than a pane because the rail is chrome getting out of the way, not a place
+ * you navigated to.
+ */
+:root {
+  --rail-duration: 260ms;
+}
+
+/*
+ * The two halves of the collapse. The gap closes the column while the rail
+ * slides out over it, both on one curve, so the gap's right edge and the rail's
+ * right edge occupy the same x on every frame: the content is uncovered rather
+ * than shoved. The rail keeps its width throughout — nothing inside it reflows
+ * while it travels, which is the whole reason this is two elements and not one
+ * animated width.
+ */
+.kn-rail-gap {
+  width: var(--kn-rail-w);
+  transition: width var(--rail-duration) var(--pane-ease);
+}
+.kn-rail {
+  width: var(--kn-rail-w);
+  transition: transform var(--rail-duration) var(--pane-ease);
+}
+[data-rail-open='false'] .kn-rail-gap {
+  width: 0;
+}
+[data-rail-open='false'] .kn-rail {
+  transform: translateX(-100%);
+}
+
+/*
+ * A drag is direct manipulation: the rail belongs under the pointer on the
+ * frame the pointer is on, so every easing in the shell stands down. The cursor
+ * is forced globally because a drag that leaves the 8px handle — which is most
+ * of them — would otherwise pick up the cursor of whatever it crossed.
+ */
+.kn-resizing .kn-rail-gap,
+.kn-resizing .kn-rail,
+.kn-resizing .kn-tree-window > ul {
+  transition: none;
+}
+.kn-resizing,
+.kn-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/*
+ * The resize handle. Nothing at rest — the rail already draws a hairline there,
+ * and a permanent grip line would be one more piece of chrome competing with
+ * the page for a control most people touch twice a month. The delay on the way
+ * in is deliberate: without it the line flashes at anyone whose pointer merely
+ * crosses the rail's edge on the way to the document.
+ */
+.kn-rail-handle-line {
+  position: absolute;
+  inset-block: 0;
+  left: 3px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--primary);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.kn-rail-handle:hover .kn-rail-handle-line {
+  opacity: 0.45;
+  transition-delay: 90ms;
+}
+/* Focus and drag are commitments, not passes: full accent, no delay. */
+.kn-rail-handle:focus-visible {
+  outline: none;
+}
+.kn-rail-handle:focus-visible .kn-rail-handle-line,
+.kn-rail-handle:active .kn-rail-handle-line {
+  opacity: 1;
+  transition-delay: 0ms;
+}
+
+/*
+ * Mobile drawer. The scrim fades, the panel slides; the wrapper carries no
+ * transition of its own, so Vue is given an explicit duration on the component.
+ */
+.drawer-enter-active .kn-drawer-scrim,
+.drawer-leave-active .kn-drawer-scrim {
+  transition: opacity var(--rail-duration) var(--pane-ease);
+}
+.drawer-enter-active .kn-drawer-panel,
+.drawer-leave-active .kn-drawer-panel {
+  transition: transform var(--rail-duration) var(--pane-ease);
+}
+.drawer-enter-from .kn-drawer-scrim,
+.drawer-leave-to .kn-drawer-scrim {
+  opacity: 0;
+}
+.drawer-enter-from .kn-drawer-panel,
+.drawer-leave-to .kn-drawer-panel {
+  transform: translateX(-100%);
+}
+
+/*
+ * The page tree's horizontal window.
+ *
+ * Deep pages are reached by sliding the list, not by surrendering the indent:
+ * the indent is the containment path drawn, and a tree that flattens under
+ * pressure stops being a tree. A negative margin on an auto-width list moves
+ * the content left while the list's right edge stays put, so rows still fill
+ * the rail and an active row's tint still runs to its edge — a transform would
+ * drag that edge left with it and leave a gap.
+ *
+ * The left mask is the only thing announcing the window: rows pass under the
+ * rail's edge instead of being cut at it, which is how you can tell there is
+ * more tree to the left rather than a rendering fault. It is deliberately
+ * short — one step of travel leaves a root title starting about 7px in, and a
+ * generous fade there dims its first letter, which reads as a blur rather than
+ * as an edge. Eight pixels is enough to take the razor off a cut and to retire
+ * the sliver of a status dot, and not enough to reach a glyph.
+ */
+.kn-tree-window > ul {
+  margin-left: calc(var(--kn-tree-shift, 0px) * -1);
+  transition: margin-left var(--rail-duration) var(--pane-ease);
+}
+.kn-tree-window[data-windowed='true'] {
+  mask-image: linear-gradient(to right, transparent 0, #000 8px);
+}
+
+/*
+ * Reduced motion. The panes keep a crossfade because two lists swapping in the
+ * same box is otherwise a jump cut with nothing to read. The rail and the tree
+ * window need no substitute: both change the shape of the layout itself, which
+ * is perceptible standing still, and a 256px slide is exactly the travel this
+ * setting exists to refuse.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .kn-rail-gap,
+  .kn-rail,
+  .kn-tree-window > ul,
+  .drawer-enter-active .kn-drawer-panel,
+  .drawer-leave-active .kn-drawer-panel {
+    transition: none;
+  }
+  .drawer-enter-from .kn-drawer-panel,
+  .drawer-leave-to .kn-drawer-panel {
+    transform: none;
+  }
+  .drawer-enter-active .kn-drawer-scrim,
+  .drawer-leave-active .kn-drawer-scrim {
+    transition-duration: 120ms;
+    transition-timing-function: linear;
+  }
+}
+
 .pane-enter-active,
 .pane-leave-active {
   transition-property: transform, opacity;

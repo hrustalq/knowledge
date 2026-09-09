@@ -65,7 +65,11 @@ watch(
       </span>
       <span class="font-display text-[15px] font-bold tracking-tight">Knowledge</span>
     </div>
-    <main class="flex-1 px-4 pb-10">
+    <!-- Pane 1 for the signed-out shell, exactly as in the app shell below.
+         Only one of the two is ever mounted, so the level is never ambiguous;
+         the router re-applies the name after the DOM settles, which is what
+         lets a login-to-app navigation cross between the two. -->
+    <main data-kn-pane="1" class="flex-1 px-4 pb-10">
       <RouterView />
     </main>
     <Toaster />
@@ -127,7 +131,16 @@ watch(
         negative-margin bleed and any guess at how tall the chrome above them
         happens to be on a given route.
       -->
-      <main :class="['flex-1', route.meta.fill ? 'overflow-hidden' : 'overflow-y-auto']">
+      <!-- Pane 1: the outermost thing a route change can replace. The name is
+           put on the scroller rather than on the column inside it because
+           <main> is bounded by the viewport, so its snapshot is one screen —
+           the column grows with the document, and a long page would ask the
+           compositor for a texture several thousand pixels tall on every
+           navigation. See markChangedPane() in router/index.ts. -->
+      <main
+        data-kn-pane="1"
+        :class="['flex-1', route.meta.fill ? 'overflow-hidden' : 'overflow-y-auto']"
+      >
         <div :class="['flex w-full flex-col', route.meta.fill ? 'h-full' : 'min-h-full px-4 py-6 lg:px-8']">
           <RouterView />
         </div>

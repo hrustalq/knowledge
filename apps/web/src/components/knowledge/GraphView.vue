@@ -200,6 +200,7 @@ async function render() {
 async function load() {
   error.value = null
   graph.value = null
+  userFramed.value = false
   destroyGraph()
   try {
     const res = await apiFetch<DocumentGraphResponse>(
@@ -213,14 +214,33 @@ async function load() {
   }
 }
 
+/**
+ * Whether the reader has framed this graph themselves.
+ *
+ * It exists because of how the rail opens. A widget grows into place over the
+ * collapse's travel, so the container `render()` fits against can still be a
+ * few pixels tall — and fitting to a box that size leaves the root node
+ * filling the frame once the box arrives. `resize()` does not undo that: it
+ * gives the instance a new viewport and keeps the old zoom.
+ *
+ * So the graph refits itself while it is still being resized — but only up to
+ * the moment someone pans or zooms. After that the framing is theirs, and
+ * re-fitting on the next rail or window resize would throw away whatever they
+ * had navigated to.
+ */
+const userFramed = ref(false)
+
 function zoomBy(factor: number) {
   const instance = cy.value
   if (!instance) return
+  userFramed.value = true
   const level = Math.min(Math.max(instance.zoom() * factor, instance.minZoom()), instance.maxZoom())
   instance.zoom({ level, renderedPosition: { x: instance.width() / 2, y: instance.height() / 2 } })
 }
 
+/** An explicit "fit" hands the framing back, so auto-fitting resumes. */
 function fitToView() {
+  userFramed.value = false
   cy.value?.fit(undefined, 32)
 }
 
@@ -233,7 +253,10 @@ onMounted(() => {
 })
 
 useResizeObserver(containerEl, () => {
-  cy.value?.resize()
+  const instance = cy.value
+  if (!instance) return
+  instance.resize()
+  if (!userFramed.value) instance.fit(undefined, 32)
 })
 
 onMounted(() => void load())
@@ -271,7 +294,14 @@ onBeforeUnmount(() => {
     </p>
 
     <div v-else class="relative h-[480px] w-full overflow-hidden rounded-lg border bg-background">
-      <div ref="containerEl" class="h-full w-full" />
+      <!-- Cytoscape handles the gestures itself; these only record that the
+           framing is now the reader's, so an incoming resize leaves it alone. -->
+      <div
+        ref="containerEl"
+        class="h-full w-full"
+        @wheel="userFramed = true"
+        @pointerdown="userFramed = true"
+      />
       <div class="absolute right-2 top-2 flex flex-col gap-1 rounded-md border bg-background/90 p-1 shadow-sm backdrop-blur-sm">
         <Button variant="ghost" size="icon-sm" :title="t('graph.zoomIn')" @click="zoomBy(1.25)">
           <ZoomIn class="size-4" />

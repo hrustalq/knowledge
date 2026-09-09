@@ -5,6 +5,7 @@ import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
+import { Collapse } from '@/components/ui/collapse'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { statusDot } from '@/lib/api'
 import { TreeWindowKey } from './tree-window'
@@ -80,14 +81,19 @@ function toggle() {
         :title="node.headRevisionStatus ?? 'draft'"
       />
     </div>
-    <ul v-if="open && node.children.length > 0" class="ml-[13px] border-l border-sidebar-border pl-2">
-      <SidebarTreeNode
-        v-for="child in node.children"
-        :key="child.documentId"
-        :node="child"
-        :depth="depth + 1"
-        :active-id="activeId"
-      />
-    </ul>
+    <!-- The branch grows out of its parent row rather than appearing beneath
+         it: on a rail this dense, a subtree arriving in one frame shifts every
+         row below it and you lose the page you were aiming at. -->
+    <Collapse v-if="node.children.length > 0" :open="open">
+      <ul class="ml-[13px] border-l border-sidebar-border pl-2">
+        <SidebarTreeNode
+          v-for="child in node.children"
+          :key="child.documentId"
+          :node="child"
+          :depth="depth + 1"
+          :active-id="activeId"
+        />
+      </ul>
+    </Collapse>
   </li>
 </template>

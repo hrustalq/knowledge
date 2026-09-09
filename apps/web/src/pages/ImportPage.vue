@@ -98,6 +98,20 @@ const step = computed<0 | 1 | 2>(() =>
   view.value === 'review' || view.value === 'destination' ? 2 : view.value === 'choose' ? 0 : 1,
 )
 
+/**
+ * Which way the wizard is going, so the step travels sideways rather than up.
+ *
+ * The stepper above the body already draws these three as a row, and the review
+ * step can send you back to correct the filing — a step that always rose from
+ * below said "something new" on the way back just as loudly as on the way
+ * forward. Horizontal travel is the only kind that can tell those apart, and it
+ * is the same push the shell uses for a route.
+ */
+const stepDir = ref<'push' | 'pop'>('push')
+watch(step, (next, prev) => {
+  stepDir.value = next >= prev ? 'push' : 'pop'
+})
+
 const canStart = computed(() => Boolean(file.value && projectId.value) && !busy.value)
 
 onMounted(async () => {
@@ -189,7 +203,7 @@ function tryAgain(): void {
     <!-- The body owns whatever height is left. Padding and scrolling belong to
          each step: the review step is an editor shell that scrolls its own
          column, exactly as /documents/:id/edit does. -->
-    <div class="min-h-0 flex-1 overflow-hidden">
+    <div class="min-h-0 flex-1 overflow-hidden" :data-step-dir="stepDir">
       <Transition name="kn-step" mode="out-in" :duration="{ enter: 260, leave: 120 }">
         <!-- Step 1. The file is the decision, so it takes the room; the
              destination is confirmation and sits beside it, narrow. -->
@@ -336,7 +350,7 @@ function tryAgain(): void {
  * that a retarget can swallow.
  */
 .kn-step-enter-active {
-  animation: kn-step-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: kn-step-in-push 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .kn-step-leave-active {
@@ -345,25 +359,46 @@ function tryAgain(): void {
     transform 120ms ease-in;
 }
 
-.kn-step-leave-to {
+[data-step-dir='push'] .kn-step-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateX(-6px);
 }
 
-@keyframes kn-step-in {
+[data-step-dir='pop'] .kn-step-leave-to {
+  opacity: 0;
+  transform: translateX(6px);
+}
+
+[data-step-dir='push'] .kn-step-enter-active {
+  animation-name: kn-step-in-push;
+}
+
+[data-step-dir='pop'] .kn-step-enter-active {
+  animation-name: kn-step-in-pop;
+}
+
+@keyframes kn-step-in-push {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateX(28px);
+  }
+}
+
+@keyframes kn-step-in-pop {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
   }
 }
 
 /* Reduced motion keeps the fade — it is what tells you the step changed — and
    drops only the travel. */
 @media (prefers-reduced-motion: reduce) {
-  .kn-step-enter-active {
+  .kn-step-enter-active,
+  [data-step-dir] .kn-step-enter-active {
     animation: kn-step-fade 160ms ease;
   }
-  .kn-step-leave-to {
+  [data-step-dir] .kn-step-leave-to {
     transform: none;
   }
   @keyframes kn-step-fade {

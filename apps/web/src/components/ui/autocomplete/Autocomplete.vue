@@ -265,7 +265,7 @@ const GAP = 4
 
 const available = ref(MAX_LIST_HEIGHT)
 
-const { floatingStyles } = useFloating(fieldEl, listEl, {
+const { floatingStyles, placement } = useFloating(fieldEl, listEl, {
   placement: 'bottom-start',
   strategy: 'fixed',
   whileElementsMounted: (reference, floating, update) =>
@@ -284,6 +284,14 @@ const { floatingStyles } = useFloating(fieldEl, listEl, {
     }),
   ],
 })
+
+/**
+ * The side Floating UI actually resolved to — `flip` puts the list above the
+ * field near the bottom of the viewport, and a list that grows downward while
+ * hanging upward reads as a different control. Drives the entrance's origin
+ * and its 4px of travel, both in CSS.
+ */
+const side = computed(() => (placement.value.startsWith('top') ? 'top' : 'bottom'))
 
 /** Applied to the scroll container, not the box, so the virtual list can size itself. */
 const listMaxHeight = computed(
@@ -398,60 +406,85 @@ const listId = useId()
           on the document to detect an "outside" press, so a click in here would
           otherwise dismiss the sheet. Containing it also covers scrollbar drags.
       -->
-      <div
-        v-if="open && !isEmptyRoster"
-        ref="listEl"
-        :style="floatingStyles"
-        @pointerdown.stop
-        class="animate-in fade-in-0 pointer-events-auto z-[60] overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground shadow-md duration-100"
-      >
-        <!-- Vertical padding lives on the box, never on the scroll container:
-             useVirtualList maps scrollTop straight onto item offsets, so any
-             padding-top/bottom here desynchronises the rows from the scrollbar. -->
-        <div
-          v-show="matches.length > 0"
-          v-bind="containerProps"
-          :style="[containerProps.style, { maxHeight: listMaxHeight }]"
-          class="px-1"
-        >
-          <ul :id="listId" role="listbox" v-bind="wrapperProps">
-            <!-- Hover uses mousemove, not mouseenter: mouseenter also fires
-                 when the list scrolls under a stationary cursor, which would
-                 hand the keyboard cursor back to whichever row slid under the
-                 pointer (and, with a scroll-on-activate watcher, ran away). -->
-            <li
-              v-for="row in virtualRows"
-              :key="row.data.value"
-              role="option"
-              :aria-selected="isSelected(row.data.value)"
-              class="flex h-7 cursor-pointer items-center justify-between gap-2 rounded-sm px-2 text-xs transition-colors"
-              :class="
-                row.index === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
-              "
-              @mousemove="activeIndex = row.index"
-              @mousedown.prevent="pick(row.data)"
-            >
-              <span class="flex min-w-0 items-center gap-1.5">
-                <Check
-                  class="size-3 shrink-0"
-                  :class="isSelected(row.data.value) ? 'text-primary' : 'invisible'"
-                />
-                <span class="truncate">{{ row.data.label }}</span>
-              </span>
-              <span
-                v-if="row.data.meta !== undefined"
-                class="shrink-0 tabular-nums text-muted-foreground"
-              >
-                {{ row.data.meta }}
-              </span>
-            </li>
-          </ul>
-        </div>
+      <Transition name="kn-pop">
+        <!--
+          Two elements, and the split is load-bearing. Floating UI positions
+          with a `transform`, and tw-animate-css's `animate-in` writes
+          `transform` in its own keyframe — on one element the keyframe wins,
+          so the list interpolated *from* an untranslated `translate3d(0,0,0)`.
+          With `position:fixed; left:0; top:0` that is the top-left corner of
+          the window, and the list flew diagonally across the screen to reach
+          its field. It looked right on a phone only because the corner and the
+          field are a few pixels apart there.
 
-        <p v-if="matches.length === 0 && !loading" class="px-3 py-1.5 text-xs text-muted-foreground">
-          No match for “{{ query }}”.
-        </p>
-      </div>
+          So: the outer element is a positioner and owns nothing but Floating
+          UI's transform. The inner surface carries the border, the ground and
+          the motion, and grows out of whichever edge the list actually hangs
+          off (`data-side`, which `flip` can change).
+        -->
+        <div
+          v-if="open && !isEmptyRoster"
+          ref="listEl"
+          :style="floatingStyles"
+          :data-side="side"
+          @pointerdown.stop
+          class="kn-pop pointer-events-auto z-[60]"
+        >
+          <div
+            class="kn-pop-surface overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground shadow-md"
+          >
+            <!-- Vertical padding lives on the box, never on the scroll container:
+                 useVirtualList maps scrollTop straight onto item offsets, so any
+                 padding-top/bottom here desynchronises the rows from the scrollbar. -->
+            <div
+              v-show="matches.length > 0"
+              v-bind="containerProps"
+              :style="[containerProps.style, { maxHeight: listMaxHeight }]"
+              class="px-1"
+            >
+              <ul :id="listId" role="listbox" v-bind="wrapperProps">
+                <!-- Hover uses mousemove, not mouseenter: mouseenter also fires
+                     when the list scrolls under a stationary cursor, which would
+                     hand the keyboard cursor back to whichever row slid under the
+                     pointer (and, with a scroll-on-activate watcher, ran away). -->
+                <li
+                  v-for="row in virtualRows"
+                  :key="row.data.value"
+                  role="option"
+                  :aria-selected="isSelected(row.data.value)"
+                  class="flex h-7 cursor-pointer items-center justify-between gap-2 rounded-sm px-2 text-xs transition-colors"
+                  :class="
+                    row.index === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
+                  "
+                  @mousemove="activeIndex = row.index"
+                  @mousedown.prevent="pick(row.data)"
+                >
+                  <span class="flex min-w-0 items-center gap-1.5">
+                    <Check
+                      class="size-3 shrink-0"
+                      :class="isSelected(row.data.value) ? 'text-primary' : 'invisible'"
+                    />
+                    <span class="truncate">{{ row.data.label }}</span>
+                  </span>
+                  <span
+                    v-if="row.data.meta !== undefined"
+                    class="shrink-0 tabular-nums text-muted-foreground"
+                  >
+                    {{ row.data.meta }}
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <p
+              v-if="matches.length === 0 && !loading"
+              class="px-3 py-1.5 text-xs text-muted-foreground"
+            >
+              No match for “{{ query }}”.
+            </p>
+          </div>
+        </div>
+      </Transition>
     </Teleport>
 
     <p v-if="isEmptyRoster && emptyHint" class="text-[11px] leading-snug text-muted-foreground">

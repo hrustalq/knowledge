@@ -5,6 +5,7 @@
 import { ref } from 'vue'
 import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { ChevronRight } from 'lucide-vue-next'
+import { Collapse } from '@/components/ui/collapse'
 
 const props = defineProps(nodeViewProps)
 const open = ref<boolean>(props.node.attrs.open !== false)
@@ -41,8 +42,14 @@ function toggle() {
         >{{ node.attrs.summary }}</span
       >
     </div>
-    <!-- Kept mounted while collapsed: unmounting would drop ProseMirror's
-         content DOM and desync the document. -->
-    <NodeViewContent class="kn-expand-body" :class="open ? '' : 'hidden'" />
+    <!-- Kept mounted while collapsed — unmounting would drop ProseMirror's
+         content DOM and desync the document — so the collapse is a class here
+         rather than a `v-if`, and `hidden` gives way to a height that can be
+         travelled. The read-only renderer's <details> is animated to match in
+         editor.css: reading and writing open identically or they are not the
+         same surface. -->
+    <Collapse :open="open" :unmount="false">
+      <NodeViewContent class="kn-expand-body" />
+    </Collapse>
   </NodeViewWrapper>
 </template>

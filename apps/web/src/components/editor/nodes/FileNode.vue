@@ -5,6 +5,7 @@
 import { computed, ref } from 'vue'
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { Download, ExternalLink, File, FileText, Maximize2, Minimize2, Trash2 } from 'lucide-vue-next'
+import { Collapse } from '@/components/ui/collapse'
 import { resolveAssetUrl } from '@/lib/api'
 import { attachmentKind, formatBytes } from '@/lib/markdown/nodes'
 
@@ -47,17 +48,22 @@ const downloadHref = computed(() => {
       </div>
     </div>
 
-    <object
-      v-if="kind === 'pdf' && expanded"
-      class="kn-file-pdf"
-      :data="href"
-      type="application/pdf"
-      :aria-label="`Preview of ${node.attrs.filename}`"
-    >
-      <div class="kn-file-fallback">
-        This browser cannot display PDFs inline.
-        <a :href="downloadHref" :download="node.attrs.filename">Download {{ node.attrs.filename }}</a>
-      </div>
-    </object>
+    <!-- Unmounted while closed: an <object> left in the tree keeps a PDF
+         renderer alive behind a control that says the preview is collapsed. -->
+    <Collapse v-if="kind === 'pdf'" :open="expanded">
+      <object
+        class="kn-file-pdf"
+        :data="href"
+        type="application/pdf"
+        :aria-label="`Preview of ${node.attrs.filename}`"
+      >
+        <div class="kn-file-fallback">
+          This browser cannot display PDFs inline.
+          <a :href="downloadHref" :download="node.attrs.filename">
+            Download {{ node.attrs.filename }}
+          </a>
+        </div>
+      </object>
+    </Collapse>
   </NodeViewWrapper>
 </template>

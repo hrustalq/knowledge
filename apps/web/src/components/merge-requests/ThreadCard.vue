@@ -24,7 +24,6 @@ import { computed, nextTick, ref, useId, watch } from 'vue'
 import {
   Bot,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CornerUpLeft,
   History,
@@ -37,6 +36,7 @@ import {
 } from 'lucide-vue-next'
 import type { ReviewComment, ReviewThread } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
+import { Collapse } from '@/components/ui/collapse'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -203,9 +203,12 @@ const replyTarget = computed(() =>
         :aria-controls="panelId"
         @click="expanded = !expanded"
       >
-        <component
-          :is="expanded ? ChevronDown : ChevronRight"
-          class="size-3.5 shrink-0 text-muted-foreground"
+        <!-- Rotates rather than swapping glyphs: a swap is a jump cut sitting
+             next to a body that opens smoothly, and every other disclosure in
+             the app turns the same chevron. -->
+        <ChevronRight
+          class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150"
+          :class="expanded ? 'rotate-90' : ''"
         />
         <!-- The assistant posts under the identity of whoever ran it, so
              without this the finding reads as that person's own remark. -->
@@ -270,147 +273,149 @@ const replyTarget = computed(() =>
       </Button>
     </div>
 
-    <div v-if="expanded" :id="panelId">
-      <ol class="kn-thread px-3 py-3">
-        <li
-          v-for="(comment, i) in thread.comments"
-          :key="comment.commentId"
-          :ref="(el) => registerItem(comment.commentId, el)"
-          class="kn-thread-item"
-          :data-reply="i > 0"
-          :data-linked="linked === comment.commentId"
-          :data-flash="flashed === comment.commentId"
-        >
-          <div class="kn-thread-rail">
-            <UserAvatar
-              :user-id="comment.authorId"
-              :name="nameOf(comment.authorId)"
-              :ai="thread.source === 'ai' && i === 0"
-              :size="i === 0 ? 'md' : 'sm'"
-            />
-          </div>
-
-          <div class="kn-comment-surface min-w-0 flex-1">
-            <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span class="truncate font-medium text-foreground">
-                {{ thread.source === 'ai' && i === 0 ? 'Assistant' : nameOf(comment.authorId) }}
-              </span>
-              <span class="shrink-0" :title="fullTime(comment.createdAt)">
-                · {{ timelineTime(comment.createdAt) }}
-              </span>
-              <span
-                v-if="comment.updatedAt"
-                class="shrink-0 italic"
-                :title="`Edited ${fullTime(comment.updatedAt)}`"
-              >
-                · edited
-              </span>
-              <!-- Actions ride the row rather than a menu: three of them, and
-                   a discussion is read far more often than it is corrected. -->
-              <span
-                v-if="!readonly && !thread.resolved && editing !== comment.commentId"
-                class="kn-comment-actions ml-auto flex shrink-0 items-center gap-0.5"
-              >
-                <button
-                  type="button"
-                  class="rounded p-1 hover:bg-accent hover:text-foreground"
-                  :title="`Reply to ${nameOf(comment.authorId)}`"
-                  :aria-label="`Reply to ${nameOf(comment.authorId)}`"
-                  @click="focusReply(comment.commentId)"
-                >
-                  <Reply class="size-3.5" />
-                </button>
-                <button
-                  v-if="isMine(comment.authorId)"
-                  type="button"
-                  class="rounded p-1 hover:bg-accent hover:text-foreground"
-                  :title="t('mr.editComment')"
-                  :aria-label="t('mr.editComment')"
-                  @click="startEdit(comment.commentId)"
-                >
-                  <Pencil class="size-3.5" />
-                </button>
-                <button
-                  v-if="isMine(comment.authorId)"
-                  type="button"
-                  class="rounded p-1 hover:bg-destructive/10 hover:text-destructive"
-                  :title="t('mr.deleteComment')"
-                  :aria-label="t('mr.deleteComment')"
-                  @click="deleting = comment.commentId"
-                >
-                  <Trash2 class="size-3.5" />
-                </button>
-              </span>
-            </p>
-
-            <!-- What this reply is a reply to. -->
-            <button
-              v-if="parentOf(comment)"
-              type="button"
-              class="kn-reply-ref"
-              :title="`Go to ${nameOf(parentOf(comment)!.authorId)}’s comment`"
-              @click="jumpTo(parentOf(comment)!.commentId)"
-              @mouseenter="linked = parentOf(comment)!.commentId"
-              @mouseleave="linked = null"
-              @focus="linked = parentOf(comment)!.commentId"
-              @blur="linked = null"
-            >
-              <CornerUpLeft class="size-3 shrink-0" aria-hidden="true" />
-              <span class="kn-reply-ref-author">{{ nameOf(parentOf(comment)!.authorId) }}</span>
-              <span class="kn-reply-ref-quote">{{ excerpt(parentOf(comment)!.body, 90) }}</span>
-            </button>
-
-            <CommentComposer
-              v-if="editing === comment.commentId"
-              auto-expand
-              cancellable
-              :initial-body="editingBody"
-              :placeholder="t('mr.editYourComment')"
-              :submit-label="t('common.save')"
-              :busy="busy"
-              :resolve-document-id="resolveDocumentId"
-              @submit="submitEdit"
-              @cancel="editing = null"
-            />
-            <MarkdownView v-else :markdown="comment.body" />
-          </div>
-        </li>
-      </ol>
-
-      <div v-if="!readonly && !thread.resolved" class="border-t bg-muted/20 px-3 py-2">
-        <!-- Aim shown before sending, and droppable: a reply attributed to the
-             wrong comment is worse than one attributed to none. -->
-        <div
-          v-if="replyTarget"
-          class="mb-1.5 flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground"
-        >
-          <CornerUpLeft class="size-3 shrink-0" aria-hidden="true" />
-          <span class="shrink-0">{{ t('mr.replyingTo') }}</span>
-          <span class="shrink-0 font-medium text-foreground">
-            {{ nameOf(replyTarget.authorId) }}
-          </span>
-          <span class="min-w-0 flex-1 truncate opacity-85">{{ excerpt(replyTarget.body, 70) }}</span>
-          <button
-            type="button"
-            class="shrink-0 rounded p-0.5 hover:bg-accent hover:text-foreground"
-            :title="t('mr.replyToThread')"
-            :aria-label="t('mr.replyToThread')"
-            @click="replyTo = null"
+    <Collapse :open="expanded">
+      <div :id="panelId">
+        <ol class="kn-thread px-3 py-3">
+          <li
+            v-for="(comment, i) in thread.comments"
+            :key="comment.commentId"
+            :ref="(el) => registerItem(comment.commentId, el)"
+            class="kn-thread-item"
+            :data-reply="i > 0"
+            :data-linked="linked === comment.commentId"
+            :data-flash="flashed === comment.commentId"
           >
-            <X class="size-3" />
-          </button>
+            <div class="kn-thread-rail">
+              <UserAvatar
+                :user-id="comment.authorId"
+                :name="nameOf(comment.authorId)"
+                :ai="thread.source === 'ai' && i === 0"
+                :size="i === 0 ? 'md' : 'sm'"
+              />
+            </div>
+
+            <div class="kn-comment-surface min-w-0 flex-1">
+              <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span class="truncate font-medium text-foreground">
+                  {{ thread.source === 'ai' && i === 0 ? 'Assistant' : nameOf(comment.authorId) }}
+                </span>
+                <span class="shrink-0" :title="fullTime(comment.createdAt)">
+                  · {{ timelineTime(comment.createdAt) }}
+                </span>
+                <span
+                  v-if="comment.updatedAt"
+                  class="shrink-0 italic"
+                  :title="`Edited ${fullTime(comment.updatedAt)}`"
+                >
+                  · edited
+                </span>
+                <!-- Actions ride the row rather than a menu: three of them, and
+                     a discussion is read far more often than it is corrected. -->
+                <span
+                  v-if="!readonly && !thread.resolved && editing !== comment.commentId"
+                  class="kn-comment-actions ml-auto flex shrink-0 items-center gap-0.5"
+                >
+                  <button
+                    type="button"
+                    class="rounded p-1 hover:bg-accent hover:text-foreground"
+                    :title="`Reply to ${nameOf(comment.authorId)}`"
+                    :aria-label="`Reply to ${nameOf(comment.authorId)}`"
+                    @click="focusReply(comment.commentId)"
+                  >
+                    <Reply class="size-3.5" />
+                  </button>
+                  <button
+                    v-if="isMine(comment.authorId)"
+                    type="button"
+                    class="rounded p-1 hover:bg-accent hover:text-foreground"
+                    :title="t('mr.editComment')"
+                    :aria-label="t('mr.editComment')"
+                    @click="startEdit(comment.commentId)"
+                  >
+                    <Pencil class="size-3.5" />
+                  </button>
+                  <button
+                    v-if="isMine(comment.authorId)"
+                    type="button"
+                    class="rounded p-1 hover:bg-destructive/10 hover:text-destructive"
+                    :title="t('mr.deleteComment')"
+                    :aria-label="t('mr.deleteComment')"
+                    @click="deleting = comment.commentId"
+                  >
+                    <Trash2 class="size-3.5" />
+                  </button>
+                </span>
+              </p>
+
+              <!-- What this reply is a reply to. -->
+              <button
+                v-if="parentOf(comment)"
+                type="button"
+                class="kn-reply-ref"
+                :title="`Go to ${nameOf(parentOf(comment)!.authorId)}’s comment`"
+                @click="jumpTo(parentOf(comment)!.commentId)"
+                @mouseenter="linked = parentOf(comment)!.commentId"
+                @mouseleave="linked = null"
+                @focus="linked = parentOf(comment)!.commentId"
+                @blur="linked = null"
+              >
+                <CornerUpLeft class="size-3 shrink-0" aria-hidden="true" />
+                <span class="kn-reply-ref-author">{{ nameOf(parentOf(comment)!.authorId) }}</span>
+                <span class="kn-reply-ref-quote">{{ excerpt(parentOf(comment)!.body, 90) }}</span>
+              </button>
+
+              <CommentComposer
+                v-if="editing === comment.commentId"
+                auto-expand
+                cancellable
+                :initial-body="editingBody"
+                :placeholder="t('mr.editYourComment')"
+                :submit-label="t('common.save')"
+                :busy="busy"
+                :resolve-document-id="resolveDocumentId"
+                @submit="submitEdit"
+                @cancel="editing = null"
+              />
+              <MarkdownView v-else :markdown="comment.body" />
+            </div>
+          </li>
+        </ol>
+
+        <div v-if="!readonly && !thread.resolved" class="border-t bg-muted/20 px-3 py-2">
+          <!-- Aim shown before sending, and droppable: a reply attributed to the
+               wrong comment is worse than one attributed to none. -->
+          <div
+            v-if="replyTarget"
+            class="mb-1.5 flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground"
+          >
+            <CornerUpLeft class="size-3 shrink-0" aria-hidden="true" />
+            <span class="shrink-0">{{ t('mr.replyingTo') }}</span>
+            <span class="shrink-0 font-medium text-foreground">
+              {{ nameOf(replyTarget.authorId) }}
+            </span>
+            <span class="min-w-0 flex-1 truncate opacity-85">{{ excerpt(replyTarget.body, 70) }}</span>
+            <button
+              type="button"
+              class="shrink-0 rounded p-0.5 hover:bg-accent hover:text-foreground"
+              :title="t('mr.replyToThread')"
+              :aria-label="t('mr.replyToThread')"
+              @click="replyTo = null"
+            >
+              <X class="size-3" />
+            </button>
+          </div>
+          <CommentComposer
+            ref="replyBox"
+            :placeholder="replyTarget ? `Reply to ${nameOf(replyTarget.authorId)}…` : 'Reply…'"
+            :submit-label="t('mr.reply')"
+            :busy="busy"
+            :resolve-document-id="resolveDocumentId"
+            @submit="submitReply"
+            @cancel="replyTo = null"
+          />
         </div>
-        <CommentComposer
-          ref="replyBox"
-          :placeholder="replyTarget ? `Reply to ${nameOf(replyTarget.authorId)}…` : 'Reply…'"
-          :submit-label="t('mr.reply')"
-          :busy="busy"
-          :resolve-document-id="resolveDocumentId"
-          @submit="submitReply"
-          @cancel="replyTo = null"
-        />
       </div>
-    </div>
+    </Collapse>
 
     <AlertDialog :open="deleting !== null" @update:open="(o: boolean) => !o && (deleting = null)">
       <AlertDialogContent>

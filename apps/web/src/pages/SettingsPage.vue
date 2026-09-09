@@ -56,7 +56,11 @@ const links = computed<SettingsLink[]>(() => [
       </ul>
     </nav>
 
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
+    <!-- Pane 2: moving between settings sections replaces this column and
+         nothing else. The nav beside it is the same nav afterwards, so it must
+         not travel — which is exactly what naming the pane instead of <main>
+         buys. -->
+    <div data-kn-pane="2" class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
       <RouterView />
     </div>
   </div>

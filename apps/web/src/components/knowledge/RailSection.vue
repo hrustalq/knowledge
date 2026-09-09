@@ -15,6 +15,7 @@
  */
 import type { Component } from 'vue'
 import { ChevronRight, Maximize2 } from 'lucide-vue-next'
+import { Collapse } from '@/components/ui/collapse'
 
 defineProps<{
   icon: Component
@@ -46,21 +47,30 @@ const emit = defineEmits<{ 'update:open': [boolean]; expand: [] }>()
           {{ preview }}
         </span>
       </button>
-      <button
-        v-if="open && expandable"
-        class="mr-1.5 shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        :title="`Open ${title} in a larger view`"
-        :aria-label="`Open ${title} in a larger view`"
-        @click="emit('expand')"
-      >
-        <Maximize2 class="size-3.5" />
-      </button>
+      <!-- Fades with the body rather than switching on the frame the click
+           lands: a control that blinks into an otherwise-moving row is read as
+           a glitch, not as an affordance arriving. -->
+      <Transition name="kn-fade">
+        <button
+          v-if="open && expandable"
+          class="mr-1.5 shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          :title="`Open ${title} in a larger view`"
+          :aria-label="`Open ${title} in a larger view`"
+          @click="emit('expand')"
+        >
+          <Maximize2 class="size-3.5" />
+        </button>
+      </Transition>
     </div>
 
     <!-- Scrolls in both directions: a panel built for a full-width page (the
-         revision table) belongs inside the card, not spilling out of it. -->
-    <div v-if="open" class="max-h-[26rem] overflow-auto border-t p-3 lg:max-h-[32rem]">
-      <slot />
-    </div>
+         revision table) belongs inside the card, not spilling out of it.
+         The rule and the padding sit *inside* the collapse, so a closed widget
+         is one row and not one row plus a stray hairline. -->
+    <Collapse :open="open">
+      <div class="max-h-[26rem] overflow-auto border-t p-3 lg:max-h-[32rem]">
+        <slot />
+      </div>
+    </Collapse>
   </section>
 </template>

@@ -152,7 +152,9 @@ async function onCreated(created: ScopeCreated) {
       </div>
     </div>
 
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
+    <!-- Pane 3: picking another project replaces only the detail column; the
+         roster it was picked from stays put. -->
+    <div data-kn-pane="3" class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
       <RouterView @changed="reload" />
     </div>
 

@@ -150,6 +150,27 @@
 }
 
 /*
+ * The second curve, and the only other one.
+ *
+ * `--pane-ease` belongs to the shell: a rail, a drawer, a column of panes —
+ * things that travel a screen's width and want a long, confident settle. Small
+ * arrivals do not read the same on it. A popover 4px from its field or an
+ * accordion opening 80px spends the whole of a 280ms shell curve barely
+ * moving, which reads as lag rather than as ease. So the small stuff decays
+ * fast and stops: an entrance you notice finishing, not one you wait out.
+ *
+ * These are the durations for everything that is not the shell. Anything
+ * outside this file that wants motion takes one of them rather than inventing
+ * a third.
+ */
+:root {
+  --snap-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --pop-duration: 140ms;
+  --pop-exit-duration: 100ms;
+  --collapse-duration: 220ms;
+}
+
+/*
  * The rail: collapse, drawer, resize.
  *
  * One curve for the whole shell. The pane push is this app's authored piece of
@@ -378,13 +399,15 @@
     opacity 140ms ease-out,
     transform 140ms ease-out;
 }
+/* Horizontal, like every other stage-to-stage move in the app: these three are
+   a sequence you advance through, not a box whose contents were swapped. */
 .stage-enter-from {
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateX(12px);
 }
 .stage-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translateX(-12px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -395,5 +418,287 @@
   .stage-enter-from,
   .stage-leave-to {
     transform: none;
+  }
+}
+
+/*
+ * Floating lists anchored by Floating UI — currently the autocomplete roster.
+ *
+ * The markup is two elements and the split is the whole fix. Floating UI's
+ * default strategy positions with a `transform`, and tw-animate-css's
+ * `animate-in` writes `transform` in its own keyframe. Put both on one element
+ * and the keyframe wins: the list interpolates *from* an untranslated
+ * `translate3d(0,0,0)`, which under `position:fixed; left:0; top:0` is the
+ * top-left corner of the window. The list flew in diagonally across the whole
+ * screen — invisible on a phone, where the corner and the field are a few
+ * pixels apart, and unmissable at 1440px.
+ *
+ * So `.kn-pop` positions and nothing else; `.kn-pop-surface` inside it draws
+ * and moves. A dropped list belongs to the field it dropped out of, so it
+ * grows from the edge nearest that field and travels the 4px it is offset by —
+ * both read off `data-side`, because `flip` puts the list above the field near
+ * the bottom of the viewport and an upward list must grow upward.
+ */
+.kn-pop[data-side='bottom'] {
+  --pop-origin: top left;
+  --pop-rise: -4px;
+}
+.kn-pop[data-side='top'] {
+  --pop-origin: bottom left;
+  --pop-rise: 4px;
+}
+
+.kn-pop-surface {
+  transform-origin: var(--pop-origin, top left);
+}
+
+.kn-pop-enter-active .kn-pop-surface {
+  transition:
+    opacity var(--pop-duration) ease-out,
+    transform var(--pop-duration) var(--snap-ease);
+}
+/* Leaving is faster than arriving: a list you have dismissed is in the way. */
+.kn-pop-leave-active .kn-pop-surface {
+  transition:
+    opacity var(--pop-exit-duration) ease-in,
+    transform var(--pop-exit-duration) ease-in;
+}
+/* A list mid-dismissal must not eat the click that dismissed it. */
+.kn-pop-leave-active {
+  pointer-events: none;
+}
+
+.kn-pop-enter-from .kn-pop-surface,
+.kn-pop-leave-to .kn-pop-surface {
+  opacity: 0;
+  transform: translateY(var(--pop-rise, -4px)) scale(0.98);
+}
+
+/*
+ * Reduced motion: the list still has to announce itself — appearing with no
+ * transition at all under a typing cursor is the jump cut this setting is not
+ * asking for. Keep the fade, drop the travel and the scale.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .kn-pop-enter-from .kn-pop-surface,
+  .kn-pop-leave-to .kn-pop-surface {
+    transform: none;
+  }
+  .kn-pop-enter-active .kn-pop-surface,
+  .kn-pop-leave-active .kn-pop-surface {
+    transition-property: opacity;
+    transition-duration: 100ms;
+    transition-timing-function: linear;
+  }
+}
+
+/*
+ * Collapsibles — see components/ui/collapse/Collapse.vue for why the height is
+ * a grid row and not a measured pixel value.
+ *
+ * Two ways to be closed, because two things need collapsing. A rail widget
+ * unmounts its body and gets Vue's transition classes; the editor's expand
+ * block must keep its ProseMirror content mounted and gets a static class.
+ * Both resolve to the same two declarations, so the two never drift apart.
+ */
+.kn-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--collapse-duration) var(--snap-ease);
+}
+.kn-collapse-inner {
+  /* A grid item will not shrink below its content without both of these. */
+  overflow: hidden;
+  min-height: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.kn-collapse-closed,
+.kn-collapse-enter-from,
+.kn-collapse-leave-to {
+  grid-template-rows: 0fr;
+}
+/* Shorter than the height, so the content is there as the box arrives rather
+   than being uncovered by an edge travelling across it. */
+.kn-collapse-closed > .kn-collapse-inner,
+.kn-collapse-enter-from > .kn-collapse-inner,
+.kn-collapse-leave-to > .kn-collapse-inner {
+  opacity: 0;
+}
+
+/*
+ * Reduced motion: no substitute needed. The change here *is* the shape of the
+ * layout, which is perceptible standing still — the same reason the rail and
+ * the tree window take no fallback above.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .kn-collapse,
+  .kn-collapse-inner {
+    transition: none;
+  }
+}
+
+/*
+ * The plain fade. For a control that belongs to a section being opened or
+ * closed — it should arrive with the section, not switch on the frame the
+ * click lands, which reads as a glitch next to something already moving.
+ */
+.kn-fade-enter-active,
+.kn-fade-leave-active {
+  transition: opacity var(--pop-duration) ease-out;
+}
+.kn-fade-enter-from,
+.kn-fade-leave-to {
+  opacity: 0;
+}
+
+/*
+ * Route changes.
+ *
+ * Only the content column moves. The rail, the topbar and the breadcrumb trail
+ * are still there after the navigation, and animating them would claim they had
+ * been replaced — the shell's whole job on a route change is to be the part that
+ * does not move. So `root` swaps with no animation (its new snapshot simply
+ * paints over the old one) and `kn-page` — whichever pane was replaced — does
+ * the work.
+ *
+ * The travel is horizontal and it is unequal, which is the sidebar's push
+ * repeated at page scale: the arriving page comes in from the side, the leaving
+ * page recedes about a seventh as far. That ratio is the effect. Equal travel
+ * reads as a carousel — two slides of a deck — while unequal travel reads as one
+ * page moving in front of another, which is what actually happened. `pop` is the
+ * exact inverse, on the same curve and the same duration: a quicker return would
+ * read as a mismatch rather than as intent.
+ *
+ * Every navigation travels, including two routes at the same depth: a pane that
+ * only cross-fades reads as a redraw rather than as a move. Depth decides the
+ * direction where there is one, and Back decides it where there is not.
+ *
+ * See installViewTransitions() in router/index.ts for why this starts only after
+ * the route's chunk has loaded, and how the direction is decided.
+ */
+/* The `kn-page` name is not declared here: the router hands it to whichever
+   pane a navigation actually replaces, so exactly one element carries it at a
+   time. See namePane() in router/index.ts. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/*
+ * Replacement, not morph — and this is the part that has to be spelled out,
+ * because the default is the opposite.
+ *
+ * A named element is treated as the *same* element on both sides, so the group
+ * interpolates its box from the old geometry to the new one, and the browser
+ * rescales both snapshots to fit that travelling box. The panes here are not the
+ * same thing on both sides, and their boxes genuinely differ: the breadcrumb
+ * strip is `v-if="crumbs.length > 0"`, so a route with no trail (the assistant)
+ * gives <main> 36px more height and starts it 36px higher than a route with one.
+ * Interpolated, that is a diagonal drift with a zoom laid over it — which is
+ * what the horizontal push had underneath it the whole time.
+ *
+ * So: the group takes the new box immediately and never animates, and each
+ * snapshot is drawn at its natural size pinned to the top-left rather than
+ * stretched to fit. The 36px the old snapshot does not cover goes unpainted for
+ * ~200ms while it is fading out, which is not perceptible; a zoom is.
+ *
+ * `mix-blend-mode: normal` and `isolation: auto` undo the UA's cross-fade
+ * blending. It exists so two dissolving snapshots do not darken where they
+ * overlap, but these two also *slide* past each other, and plus-lighter over a
+ * moving offset reads as a bright smear.
+ */
+::view-transition-group(kn-page) {
+  animation: none;
+}
+::view-transition-image-pair(kn-page) {
+  isolation: auto;
+}
+::view-transition-old(kn-page),
+::view-transition-new(kn-page) {
+  width: 100%;
+  height: 100%;
+  object-fit: none;
+  object-position: top left;
+  mix-blend-mode: normal;
+}
+
+/* The leaving page is on its way out; it should not still be travelling while
+   the arriving one settles. */
+::view-transition-old(kn-page) {
+  animation: kn-page-out 140ms ease-in both;
+}
+::view-transition-new(kn-page) {
+  animation: kn-page-in var(--pane-duration) var(--pane-ease) both;
+}
+
+@keyframes kn-page-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes kn-page-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Deeper: the new page arrives from the right, the old one recedes left a
+   seventh as far. */
+[data-nav-dir='push']::view-transition-old(kn-page) {
+  animation-name: kn-page-recede-left;
+}
+[data-nav-dir='push']::view-transition-new(kn-page) {
+  animation-name: kn-page-arrive-right;
+}
+
+/* Back out: the child leaves the way it came, the parent returns from the left. */
+[data-nav-dir='pop']::view-transition-old(kn-page) {
+  animation-name: kn-page-recede-right;
+}
+[data-nav-dir='pop']::view-transition-new(kn-page) {
+  animation-name: kn-page-arrive-left;
+}
+
+@keyframes kn-page-arrive-right {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes kn-page-recede-left {
+  to {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+@keyframes kn-page-arrive-left {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+@keyframes kn-page-recede-right {
+  to {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+}
+
+/*
+ * Reduced motion keeps the crossfade and drops the travel — the same trade the
+ * sidebar panes make. A navigation that cuts with nothing at all is the jump cut
+ * this setting is not asking for, and on a shell where most of the screen is
+ * unchanged the fade is the only thing saying the middle of the page is now
+ * something else.
+ */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(kn-page),
+  [data-nav-dir]::view-transition-old(kn-page) {
+    animation: kn-page-out 100ms linear both;
+  }
+  ::view-transition-new(kn-page),
+  [data-nav-dir]::view-transition-new(kn-page) {
+    animation: kn-page-in 100ms linear both;
   }
 }

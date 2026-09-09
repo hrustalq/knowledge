@@ -366,6 +366,41 @@
 .markdown-body details > :not(summary) { padding: 0.15rem 0.95rem 0.75rem; }
 .kn-expand-body > :first-child { margin-top: 0.5rem; }
 
+/*
+ * The read-only counterpart of the editor's expand block.
+ *
+ * The One Surface Rule says the two are pixel-identical, and that has to
+ * include how they open — an expand that travels while writing and snaps while
+ * reading is two components wearing one style. A native <details> cannot be
+ * transitioned to `auto` without `interpolate-size`, so this is gated on it and
+ * degrades to the instant open every browser gave it before. `content-visibility`
+ * rides along discretely, or the content is hidden for the whole travel and the
+ * block opens onto nothing.
+ */
+@supports (interpolate-size: allow-keywords) {
+  .markdown-body details {
+    interpolate-size: allow-keywords;
+  }
+  .markdown-body details::details-content {
+    block-size: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition:
+      block-size var(--collapse-duration) var(--snap-ease),
+      content-visibility var(--collapse-duration) allow-discrete,
+      opacity 160ms ease-out;
+  }
+  .markdown-body details[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .markdown-body details::details-content {
+      transition: none;
+    }
+  }
+}
+
 /* Layout sections --------------------------------------------------------- */
 
 .kn-layout,

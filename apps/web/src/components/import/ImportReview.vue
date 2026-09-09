@@ -21,6 +21,7 @@ import { computed, ref } from 'vue'
 import { AlertTriangle, ChevronDown, FolderTree, ScanText } from 'lucide-vue-next'
 import type { ImportJobInfo, ImportMeta } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
+import { Collapse } from '@/components/ui/collapse'
 import RichEditor from '@/components/editor/RichEditor.vue'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
@@ -145,16 +146,17 @@ const empty = computed(() => markdown.value.trim().length === 0)
           </li>
         </ul>
         <!-- The rest expand rather than appear: a list that jumps to full
-             height makes you re-find the line you were reading. The 0fr→1fr
-             grid row animates an unknown height without measuring it. -->
-        <div class="kn-warn-more grid" :class="warningsOpen && 'kn-warn-open'">
-          <ul class="space-y-1.5 overflow-hidden text-amber-900/90 dark:text-amber-100/80">
+             height makes you re-find the line you were reading. This is where
+             that idiom was first written; it now lives in ui/collapse so every
+             disclosure in the app opens the same way. -->
+        <Collapse :open="warningsOpen" :unmount="false">
+          <ul class="space-y-1.5 text-amber-900/90 dark:text-amber-100/80">
             <li v-for="w in warnings.slice(2)" :key="w" class="flex gap-2 pt-1.5">
               <span class="mt-2 size-1 shrink-0 rounded-full bg-current opacity-60" aria-hidden="true" />
               <span>{{ w }}</span>
             </li>
           </ul>
-        </div>
+        </Collapse>
         <button
           v-if="warnings.length > 2"
           type="button"
@@ -239,18 +241,4 @@ const empty = computed(() => markdown.value.trim().length === 0)
   }
 }
 
-.kn-warn-more {
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.kn-warn-open {
-  grid-template-rows: 1fr;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .kn-warn-more {
-    transition-duration: 0ms;
-  }
-}
 </style>

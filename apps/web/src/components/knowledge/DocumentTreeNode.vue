@@ -6,6 +6,7 @@ import { labelFor } from '@/lib/labels'
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ChevronRight, FileText } from 'lucide-vue-next'
+import { Collapse } from '@/components/ui/collapse'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { Badge } from '@/components/ui/badge'
 import { statusDot } from '@/lib/api'
@@ -51,13 +52,15 @@ const open = ref(props.depth < 2)
         {{ formatDate(node.createdAt) }}
       </span>
     </div>
-    <template v-if="open">
-      <DocumentTreeNode
-        v-for="child in node.children"
-        :key="child.documentId"
-        :node="child"
-        :depth="depth + 1"
-      />
-    </template>
+    <Collapse v-if="node.children.length > 0" :open="open">
+      <div>
+        <DocumentTreeNode
+          v-for="child in node.children"
+          :key="child.documentId"
+          :node="child"
+          :depth="depth + 1"
+        />
+      </div>
+    </Collapse>
   </div>
 </template>

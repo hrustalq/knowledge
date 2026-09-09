@@ -2,7 +2,7 @@ import { createSSRApp } from 'vue'
 import { createPinia } from 'pinia'
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import App from './App.vue'
-import { createRouter, installAuthGuard } from './router'
+import { createRouter, installAuthGuard, installViewTransitions } from './router'
 import { createQueryClient } from './api/queries'
 import { createI18nFor } from './i18n'
 import { getLocale } from './lib/api'
@@ -20,5 +20,6 @@ export function createApp() {
   app.use(router)
   app.use(VueQueryPlugin, { queryClient: createQueryClient() })
   installAuthGuard(router, pinia)
+  installViewTransitions(router)
   return { app, router, pinia }
 }

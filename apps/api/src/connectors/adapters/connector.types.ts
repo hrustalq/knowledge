@@ -124,12 +124,55 @@ export class ConnectorRequestError extends Error {
   }
 }
 
-/** `fetch` with the error shape above; every adapter goes through it. */
+/**
+ * The reason underneath a `fetch` rejection.
+ *
+ * undici reports every network-level failure as the bare words "fetch failed"
+ * and puts the actual reason — TLS chain, DNS, refused connection — on `cause`,
+ * occasionally one level deeper again. Unwrapping it is the difference between
+ * a run that says `fetch failed` and one that names the certificate.
+ */
+function causeOf(err: unknown): string {
+  const seen = new Set<unknown>();
+  let code: string | undefined;
+  let message: string | undefined;
+  for (let cur: unknown = err; cur && typeof cur === 'object' && !seen.has(cur); ) {
+    seen.add(cur);
+    const e = cur as { code?: unknown; message?: unknown; cause?: unknown };
+    if (typeof e.code === 'string') code = e.code;
+    if (typeof e.message === 'string' && e.message !== 'fetch failed') message = e.message;
+    cur = e.cause;
+  }
+  return [code, message].filter(Boolean).join(': ') || 'fetch failed';
+}
+
+/** The far side was never reached — as opposed to reached and refusing. */
+export class ConnectorNetworkError extends Error {
+  constructor(
+    readonly url: string,
+    cause: unknown,
+  ) {
+    // The query string is dropped: it is the one part of a URL that can carry a
+    // token, and this message is written to a run row anyone may read.
+    super(`could not reach ${url.split('?')[0]}: ${causeOf(cause)}`);
+    this.name = 'ConnectorNetworkError';
+    this.cause = cause;
+  }
+}
+
+/** `fetch` with the error shapes above; every adapter goes through it. */
 export async function connectorFetch(
   url: string,
   init: RequestInit & { signal?: AbortSignal },
 ): Promise<Response> {
-  const res = await fetch(url, init);
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (err) {
+    // An abort is the caller's own timeout, which carries its own message.
+    if (init.signal?.aborted) throw err;
+    throw new ConnectorNetworkError(url, err);
+  }
   if (!res.ok) {
     throw new ConnectorRequestError(res.status, url, await res.text().catch(() => ''));
   }

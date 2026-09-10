@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import AiEmptyState from './AiEmptyState.vue'
+import AiWebAccessSection from './AiWebAccessSection.vue'
 
 const { t } = useI18n()
 
@@ -166,8 +167,15 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-8">
+    <!-- Two rosters of external reach, on one page (docs/features/25). The web
+         leads because it is the broader of the two: a plugin is one server an
+         admin chose, the open web is everything nobody chose. -->
+    <AiWebAccessSection :can-manage="canManage" />
+
+    <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+      <h3 class="w-full text-sm font-semibold">{{ t('ai.plugins.rosterTitle') }}</h3>
       <p class="text-muted-foreground text-sm">
         <template v-if="plugins.length">
           {{ t('ai.enabledOfTotal', { enabled: plugins.filter((p) => p.enabled).length, total: plugins.length }) }}
@@ -329,5 +337,6 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </div>
   </div>
 </template>

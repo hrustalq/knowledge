@@ -1,0 +1,32 @@
+# SearXNG for the assistant's web_search tool (docs/features/25).
+#
+# The one setting that matters: `formats` must include `json`. It is off by
+# default upstream, and an instance without it answers 403 to every API query —
+# which looks exactly like a broken integration rather than a missing option.
+use_default_settings: true
+
+server:
+  # Dev-only value. Generate a real one for any shared deployment:
+  #   openssl rand -hex 32
+  secret_key: "knowledge-dev-only-change-me"
+  limiter: false
+  image_proxy: false
+
+search:
+  safe_search: 1
+  formats:
+    - html
+    - json
+
+# Text engines only. The assistant reads pages; image, video and file-sharing
+# results are noise it cannot use, and each disabled engine is one fewer
+# upstream that can rate-limit the instance.
+engines:
+  - name: google
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: wikipedia
+    disabled: false
+  - name: stackexchange
+    disabled: false

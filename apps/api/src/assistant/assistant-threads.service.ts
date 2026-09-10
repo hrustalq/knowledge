@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
-  AssistantAskSource,
+  AssistantSource,
   AssistantMessageInfo,
   AssistantMessageRole,
   AssistantPrompt,
@@ -226,7 +226,7 @@ export class AssistantThreadsService {
     content: string,
     opts: {
       toolCalls?: AssistantToolCall[];
-      sources?: AssistantAskSource[];
+      sources?: AssistantSource[];
       uiBlocks?: AssistantUiBlock[];
       prompt?: AssistantPrompt | null;
     } = {},
@@ -273,7 +273,7 @@ export class AssistantThreadsService {
       role: m.role as AssistantMessageRole,
       content: m.content,
       toolCalls: (m.toolCalls ?? []) as unknown as AssistantToolCall[],
-      sources: (m.sources ?? []) as unknown as AssistantAskSource[],
+      sources: (m.sources ?? []) as unknown as AssistantSource[],
       uiBlocks: (m.uiBlocks ?? []) as unknown as AssistantUiBlock[],
       prompt: (m.prompt ?? null) as unknown as AssistantPrompt | null,
       createdAt: m.createdAt.toISOString(),

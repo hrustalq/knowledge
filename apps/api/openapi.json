@@ -10105,6 +10105,301 @@
         ]
       }
     },
+    "/v1/ai/source-policies": {
+      "get": {
+        "operationId": "AiController_listSourcePolicies",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Domains this workspace may or may not fetch, and the access mode they are read under",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "operationId": "AiController_createSourcePolicy",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSourcePolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Add a domain exception",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/source-policies/check": {
+      "post": {
+        "operationId": "AiController_checkSourcePolicy",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckSourcePolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Dry-run one URL against this workspace’s source policy",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/source-policies/{id}": {
+      "patch": {
+        "operationId": "AiController_updateSourcePolicy",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSourcePolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a domain exception",
+        "tags": [
+          "ai"
+        ]
+      },
+      "delete": {
+        "operationId": "AiController_deleteSourcePolicy",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a domain exception",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/usage": {
       "get": {
         "operationId": "AiUsageController_summarize",
@@ -14261,6 +14556,16 @@
             "type": "boolean",
             "description": "Refuse assistant requests once a budget is spent (429)"
           },
+          "webAccessMode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "allowlist",
+              "open"
+            ],
+            "nullable": true,
+            "description": "How much of the open web the assistant may reach. Clamped by the WEB_ACCESS_MODE ceiling — a value wider than the ceiling is accepted and stored, but the effective mode stays the ceiling and the response reports source=clamped. null = inherit the ceiling."
+          },
           "chatProviderId": {
             "type": "string",
             "format": "uuid",
@@ -14775,6 +15080,68 @@
           }
         }
       },
+      "CheckSourcePolicyDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://docs.example.com/guide",
+            "description": "A URL, or a bare host"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "url"
+        ]
+      },
+      "CreateSourcePolicyDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pattern": {
+            "type": "string",
+            "example": "docs.example.com",
+            "description": "Host pattern; a bare domain also covers its subdomains"
+          },
+          "allow": {
+            "type": "boolean",
+            "description": "True = may be fetched, false = may not. Read against the mode."
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Why this row exists"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "pattern",
+          "allow"
+        ]
+      },
+      "UpdateSourcePolicyDto": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "example": "docs.example.com"
+          },
+          "allow": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "SetAiBudgetDto": {
         "type": "object",
         "properties": {
@@ -14803,6 +15170,7 @@
             "type": "string",
             "enum": [
               "confluence",
+              "confluence-server",
               "jira",
               "notion",
               "markdown-git"

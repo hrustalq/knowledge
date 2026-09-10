@@ -1753,10 +1753,61 @@ export interface AssistantAskRequest {
   /** Prior turns of this conversation (most recent last). */
   history?: AssistantAskTurn[];
 }
+/**
+ * A page in this workspace, cited by an answer.
+ *
+ * The name is historical — before web research (docs/features/25) this was the
+ * only kind of source there was, and it is referenced by that name in enough
+ * places that renaming it would be churn for its own sake. `kind` is optional
+ * because rows persisted before feature 25 do not carry it; absent reads as
+ * `'document'`, which `assistantSourceKey` and every consumer rely on.
+ */
 export interface AssistantAskSource {
+  kind?: 'document';
   documentId: string;
   title: string;
   snippet?: string;
+}
+
+/**
+ * A page on the open web, cited by an answer (docs/features/25).
+ *
+ * A separate interface rather than optional fields on the one above, because
+ * the two are read differently at every single site: one is a RouterLink into
+ * the workspace, the other leaves the product. A union makes TypeScript point
+ * at each of those sites instead of letting `documentId` be silently undefined.
+ *
+ * Nothing here is a document — the page was fetched to settle one question and
+ * left nothing behind. `fetchedAt` is what lets a citation say how old the
+ * reading is, which is the whole difference between a live tool call and an
+ * indexed page.
+ */
+export interface AssistantWebSource {
+  kind: 'web';
+  url: string;
+  /** Host as it is shown to the reader — `docs.example.com`. */
+  site: string;
+  title: string;
+  snippet?: string;
+  /** ISO timestamp of the fetch or search that produced this citation. */
+  fetchedAt?: string;
+}
+
+/** Anything an answer can cite. Discriminated by `kind`; absent means a document. */
+export type AssistantSource = AssistantAskSource | AssistantWebSource;
+
+/** True for a web citation — the one narrowing every consumer needs. */
+export function isWebSource(source: AssistantSource): source is AssistantWebSource {
+  return source.kind === 'web';
+}
+
+/**
+ * Identity of a source, for de-duplicating a turn's citations. A document is
+ * its id, a web page its URL; the two can never collide because a URL is not a
+ * uuid, so one map holds both.
+ */
+export function assistantSourceKey(source: AssistantSource): string {
+  return isWebSource(source) ? source.url : source.documentId;
 }
 /** One tool execution the model performed while answering (transparency + debugging). */
 export interface AssistantToolCall {
@@ -1771,6 +1822,13 @@ export interface AssistantAskResponse {
   /** False when ASSISTANT_PROVIDER=none — UI degrades instead of erroring. */
   enabled: boolean;
   answer: string;
+  /**
+   * Always documents, never web pages: this endpoint is the one model call
+   * site with no agent behind it, so nothing can narrow what it is handed —
+   * which is exactly why `definitions()` withholds the web tools from it
+   * (docs/features/25). Typed narrowly so callers are not asked to handle a
+   * case that cannot arise.
+   */
   sources: AssistantAskSource[];
   /** Tool calls made by the harness, in order. */
   toolCalls?: AssistantToolCall[];
@@ -1882,7 +1940,7 @@ export interface AssistantMessageInfo {
   role: AssistantMessageRole;
   content: string;
   toolCalls: AssistantToolCall[];
-  sources: AssistantAskSource[];
+  sources: AssistantSource[];
   uiBlocks: AssistantUiBlock[];
   /** Set when the turn ended by asking the user something. At most one per turn. */
   prompt: AssistantPrompt | null;
@@ -2033,7 +2091,7 @@ export type AssistantStreamFrame =
   /** The turn is ending in a question for the user; `done` carries it too. */
   | { type: 'prompt'; prompt: AssistantPrompt }
   /** Grounding documents accumulated so far — the sidebar can fill in mid-turn. */
-  | { type: 'sources'; sources: AssistantAskSource[] }
+  | { type: 'sources'; sources: AssistantSource[] }
   /** Terminal success: the persisted assistant message, authoritative over every delta. */
   | { type: 'done'; message: AssistantMessageInfo }
   /** Terminal failure. The user message is already persisted; the turn is not. */
@@ -2728,8 +2786,15 @@ export interface AssistantApiAskResponse {
 // workspace: provider config, skills, MCP plugins, token accounting, call log.
 // ---------------------------------------------------------------------------
 
-/** Which layer an effective config field came from. */
-export type AiSettingsSource = 'db' | 'env';
+/**
+ * Which layer an effective config field came from.
+ *
+ * `clamped` (docs/features/25) is neither: the workspace asked for one thing
+ * and the deployment ceiling gave it another. It exists because a silent clamp
+ * is a lie about what the workspace is configured to do — the badge has to be
+ * able to say "you asked for open; this deployment allows allowlist".
+ */
+export type AiSettingsSource = 'db' | 'env' | 'clamped';
 export interface AiSettingsSourceMap {
   provider: AiSettingsSource;
   baseUrl: AiSettingsSource;
@@ -2738,6 +2803,113 @@ export interface AiSettingsSourceMap {
   temperature: AiSettingsSource;
   maxToolCalls: AiSettingsSource;
   timeoutMs: AiSettingsSource;
+  /** docs/features/25 — 'clamped' when the ceiling overrode the workspace. */
+  webAccessMode: AiSettingsSource;
+}
+
+// ---- Web research: access mode and source policies (docs/features/25) ------
+
+/**
+ * How much of the open web this workspace may reach.
+ *
+ * - `off` — the two web tools are not offered to the model at all. The default,
+ *   and what every deployment that never sets WEB_ACCESS_MODE keeps.
+ * - `allowlist` — an unlisted domain is refused; policy rows say what may be
+ *   fetched.
+ * - `open` — an unlisted domain is fetched; policy rows say what may not be.
+ *
+ * The same value is both the env ceiling and the workspace setting, and the
+ * effective one is the *narrower* of the two: a settings row must never widen
+ * what the model reaches (the rule feature 20 committed to for tool
+ * allowlists).
+ */
+export type WebAccessMode = 'off' | 'allowlist' | 'open';
+
+/** Narrowness order — index 0 is the narrowest. Exported so the clamp is one comparison. */
+export const WEB_ACCESS_MODES: readonly WebAccessMode[] = ['off', 'allowlist', 'open'];
+
+/** The effective web-access configuration, with the ceiling shown beside it. */
+export interface WebAccessSettings {
+  /** What the workspace asked for. Null = inherit the ceiling. */
+  requested: WebAccessMode | null;
+  /** The deployment ceiling (WEB_ACCESS_MODE). */
+  ceiling: WebAccessMode;
+  /** What actually applies: the narrower of `requested` and `ceiling`. */
+  effective: WebAccessMode;
+  /** 'clamped' when `requested` was wider than `ceiling` — the page must say so. */
+  source: AiSettingsSource;
+  /** False when WEB_SEARCH_URL is unset: fetching works, searching cannot. */
+  searchConfigured: boolean;
+}
+
+/**
+ * One exception to whatever the mode's default reading is.
+ *
+ * `allow` is the only enforceable field, so it is the only field there is — a
+ * tier ladder (trusted/untrusted) reduces to instructions in a prompt, and a
+ * prompt rule is advisory. Under `allowlist`, rows with `allow: true` are what
+ * may be fetched; under `open`, rows with `allow: false` are what may not be.
+ * The boolean exists for the exception inside either reading: `open` with
+ * `example.com` denied and `docs.example.com` allowed.
+ */
+export interface SourcePolicy {
+  id: string;
+  workspaceId: string;
+  /** Host pattern: `example.com` (matches subdomains) or `docs.example.com`. */
+  pattern: string;
+  allow: boolean;
+  /** Why this row exists, for whoever inherits the list. */
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string | null;
+}
+
+export interface ListSourcePoliciesResponse {
+  policies: SourcePolicy[];
+  /** The access configuration these rows are read under — the list means nothing without it. */
+  webAccess: WebAccessSettings;
+}
+
+export interface CreateSourcePolicyRequest {
+  workspaceId: string;
+  pattern: string;
+  allow: boolean;
+  note?: string | null;
+}
+
+export interface UpdateSourcePolicyRequest {
+  pattern?: string;
+  allow?: boolean;
+  note?: string | null;
+}
+
+/** Why a URL was refused — the reason a refusal message names. */
+export type WebAccessDenial = 'mode-off' | 'not-allowlisted' | 'blocked' | 'unsafe';
+
+/**
+ * Try a URL against the list without spending a turn to find out.
+ *
+ * A policy list is a rule set whose only observable effect is a tool call
+ * failing inside somebody's chat. Without this, the only way to learn what a
+ * list does is to ask the assistant and read the refusal — so the answer comes
+ * back with the row that decided it, which is also the only place the
+ * longest-match rule is visible rather than merely documented.
+ */
+export interface CheckSourcePolicyRequest {
+  workspaceId: string;
+  url: string;
+}
+
+export interface CheckSourcePolicyResponse {
+  allowed: boolean;
+  /** Absent when allowed. */
+  reason?: WebAccessDenial;
+  /** The host the decision was made about. */
+  host: string;
+  /** The row that decided it, when a row did. Null means the mode's own default. */
+  matchedPattern: string | null;
+  effective: WebAccessMode;
 }
 
 export type AiProvider = 'none' | 'openai-compatible' | 'deepseek' | 'gen-api';
@@ -2763,6 +2935,8 @@ export interface AiSettingsResponse {
   defaultUserMonthlyTokenBudget: number | null;
   enforceBudget: boolean;
   sources: AiSettingsSourceMap;
+  /** How much of the open web the assistant may reach (docs/features/25). */
+  webAccess: WebAccessSettings;
   /** Per-purpose routing into the workspace's provider profiles. */
   routing: AiRouting;
   /** False when SETTINGS_ENCRYPTION_KEY is unset — the UI must disable key entry. */
@@ -4121,7 +4295,7 @@ export interface DocumentWorkflowRunsResponse {
  * the settings UI, the create guard and the worker registry all read, so they
  * cannot disagree about what exists.
  */
-export const CONNECTOR_KINDS = ['confluence', 'jira', 'notion', 'markdown-git'] as const;
+export const CONNECTOR_KINDS = ['confluence', 'confluence-server', 'jira', 'notion', 'markdown-git'] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
 /** 'pull' | 'push' | 'both' — what a connector is allowed to do. */
@@ -4183,6 +4357,30 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         kind: 'text',
         required: true,
         placeholder: 'https://your-team.atlassian.net/wiki',
+      },
+      { key: 'spaceKey', label: 'Space key', kind: 'text', required: true, placeholder: 'ENG' },
+    ],
+  },
+  {
+    // Confluence Server / Data Center is a different product behind the same
+    // name: no /api/v2 at all, a PAT over Bearer instead of `email:api-token`
+    // over Basic, and spaces addressed by key rather than by a numeric id. A
+    // second kind rather than a variant flag on the first, because the
+    // credential hint and the setup questions both differ — and a variant would
+    // be enforced by nothing, where a kind is checked against every
+    // Record<ConnectorKind, ...> in the API and the web.
+    kind: 'confluence-server',
+    label: 'Confluence (Server / Data Center)',
+    capabilities: { pull: true, push: true, webhook: true },
+    credentialLabel: 'Personal access token',
+    fields: [
+      {
+        key: 'baseUrl',
+        label: 'Base URL',
+        kind: 'text',
+        required: true,
+        placeholder: 'https://confluence.example.com',
+        help: 'Self-hosted Confluence. Cloud sites (*.atlassian.net) use the Confluence connector instead.',
       },
       { key: 'spaceKey', label: 'Space key', kind: 'text', required: true, placeholder: 'ENG' },
     ],

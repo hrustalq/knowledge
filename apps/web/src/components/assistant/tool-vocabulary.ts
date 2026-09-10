@@ -1,7 +1,7 @@
 // One place that decides how a tool call looks and reads, so the live trail
 // and the finished transcript can never label the same call differently.
 import {
-  FilePlus2, FileText, LayoutTemplate, MessageCircleQuestion, Network, Search, SquarePen, Wand2, Wrench,
+  FilePlus2, FileText, Globe, LayoutTemplate, Link, MessageCircleQuestion, Network, Search, SquarePen, Wand2, Wrench,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -22,6 +22,11 @@ const TOOLS: Record<string, ToolVocabulary> = {
   propose_update: { icon: SquarePen, running: 'tool.propose_update.running', done: 'tool.propose_update.done' },
   ask_user: { icon: MessageCircleQuestion, running: 'tool.ask_user.running', done: 'tool.ask_user.done' },
   request_agent_mode: { icon: Wand2, running: 'tool.request_agent_mode.running', done: 'tool.request_agent_mode.done' },
+  // docs/features/25. Two verbs, not one: "searched the web" and "read a page"
+  // are different amounts of trust to have spent, and the trail is the only
+  // place a reader sees which happened.
+  web_search: { icon: Globe, running: 'tool.web_search.running', done: 'tool.web_search.done' },
+  web_fetch: { icon: Link, running: 'tool.web_fetch.running', done: 'tool.web_fetch.done' },
 }
 
 /**

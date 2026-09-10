@@ -342,6 +342,46 @@
     },
     {
       "method": "GET",
+      "path": "/v1/ai/source-policies",
+      "tag": "ai",
+      "summary": "Domains this workspace may or may not fetch, and the access mode they are read under",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/source-policies",
+      "tag": "ai",
+      "summary": "Add a domain exception",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/source-policies/{id}",
+      "tag": "ai",
+      "summary": "Remove a domain exception",
+      "role": "admin",
+      "source": "source-policy",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/source-policies/{id}",
+      "tag": "ai",
+      "summary": "Edit a domain exception",
+      "role": "admin",
+      "source": "source-policy",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/ai/usage",
       "tag": "ai",
       "summary": "Token usage totals, per-bucket breakdown and a daily series",

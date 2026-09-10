@@ -593,10 +593,44 @@ model AiSettings {
   reviewProviderId     String? @map("review_provider_id") @db.Uuid
   extractionProviderId String? @map("extraction_provider_id") @db.Uuid
 
+  /// docs/features/25 — 'off' | 'allowlist' | 'open'. Null inherits the
+  /// WEB_ACCESS_MODE env ceiling, and the effective value is the NARROWER of
+  /// the two: a settings row must never widen what the model can reach.
+  webAccessMode String? @map("web_access_mode")
+
   updatedBy String?  @map("updated_by") @db.Uuid
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("ai_settings")
+}
+
+/// One exception to whatever the workspace's web access mode reads by default
+/// (docs/features/25). Under `allowlist`, allow=true rows are what may be
+/// fetched; under `open`, allow=false rows are what may not be. Longest
+/// pattern match wins, so `open` + `example.com` denied + `docs.example.com`
+/// allowed is expressible in one list.
+///
+/// One boolean, because only one thing is enforceable. A trust tier would
+/// reduce to a sentence in a prompt, and a prompt rule is advisory — a field
+/// that cannot be enforced is a field that lies.
+///
+/// No FK on workspace_id, matching every other workspace-scoped table here.
+model SourcePolicy {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// Host pattern, lowercased: `example.com` also matches its subdomains.
+  pattern     String
+  allow       Boolean
+  /// Why this row exists, for whoever inherits the list.
+  note        String?
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([workspaceId, pattern])
+  @@index([workspaceId])
+  @@map("source_policies")
 }
 
 /// A named provider profile. Several can exist per workspace; ai_settings

@@ -11,11 +11,11 @@
 import { markRaw } from 'vue'
 import { defineStore } from 'pinia'
 import type {
-  AssistantAskSource,
   AssistantChatAttachment,
   AssistantChatMode,
   AssistantMessageInfo,
   AssistantPrompt,
+  AssistantSource,
   AssistantThreadSummary,
   AssistantToolCall,
   AssistantUiBlock,
@@ -25,6 +25,7 @@ import type {
   TruncateAssistantThreadResponse,
   UpdateAssistantThreadResponse,
 } from '@knowledge/contracts'
+import { assistantSourceKey } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { streamAssistantTurn } from '@/lib/assistant-stream'
 
@@ -51,7 +52,7 @@ export interface LiveTurn {
   /** Tools that have finished in the current leg. */
   finished: AssistantToolCall[]
   uiBlocks: AssistantUiBlock[]
-  sources: AssistantAskSource[]
+  sources: AssistantSource[]
   /** A question the turn is ending on — rendered as soon as it lands, answerable once the turn is done. */
   prompt: AssistantPrompt | null
   /** Stopped by the reader. The text so far stays on screen, frozen, until the
@@ -95,15 +96,18 @@ export const useAssistantStore = defineStore('assistant', {
   }),
   getters: {
     /** Documents referenced or written to in this thread, most recent first, deduped. */
-    documentsTouched(state): AssistantAskSource[] {
-      const byId = new Map<string, AssistantAskSource>()
+    documentsTouched(state): AssistantSource[] {
+      // Keyed by source identity — a document by its id, a web page by its URL
+      // (docs/features/25). Keying by `documentId` alone collapsed every web
+      // citation in a thread into a single `undefined` slot.
+      const byKey = new Map<string, AssistantSource>()
       for (const m of state.messages) {
-        for (const s of m.sources) byId.set(s.documentId, s)
+        for (const s of m.sources) byKey.set(assistantSourceKey(s), s)
       }
       // Mid-turn citations belong here too, otherwise the pane sits empty
       // through the exact moment the assistant is finding things.
-      for (const s of state.live?.sources ?? []) byId.set(s.documentId, s)
-      return [...byId.values()].reverse()
+      for (const s of state.live?.sources ?? []) byKey.set(assistantSourceKey(s), s)
+      return [...byKey.values()].reverse()
     },
     /** This thread's own sent messages, oldest first — the composer walks this backwards on ArrowUp
      * (shell-style recall), so a stale placeholder from a failed send never shows up in the list. */

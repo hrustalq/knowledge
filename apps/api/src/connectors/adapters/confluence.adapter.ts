@@ -221,7 +221,7 @@ function nextCursor(body: ConfluenceList<unknown>): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-function countMacros(storage: string): string[] {
+export function countMacros(storage: string): string[] {
   const names = new Set<string>();
   for (const m of storage.matchAll(/<ac:structured-macro[^>]*ac:name="([^"]+)"/g)) names.add(m[1]);
   return [...names].slice(0, 10);

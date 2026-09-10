@@ -1082,7 +1082,10 @@
     "stopDictation": "Stop dictation",
     "dictate": "Dictate",
     "canAlsoWrite": "Can also write: new pages go live, edits open a merge request.",
-    "deleteChatBody": "“{name}” and its whole message history will be removed, and this cannot be undone. Pages the assistant created and merge requests it opened are not affected."
+    "deleteChatBody": "“{name}” and its whole message history will be removed, and this cannot be undone. Pages the assistant created and merge requests it opened are not affected.",
+    "sourcesTitle": "Sources",
+    "fromTheWeb": "From the web",
+    "webNotSaved": "Web pages were read for this answer only. Nothing here was added to the workspace."
   },
   "ai": {
     "excludesUnpriced": "excludes {calls} with no",
@@ -1266,7 +1269,8 @@
       "exampleAuth": "auth       Authorization: Bearer …",
       "toolsOffered": "Tools offered to the assistant ({on} of {total})",
       "dialogDesc": "The server must speak MCP over HTTP. Streamable HTTP is the current transport; SSE is for older servers that have not migrated yet.",
-      "authConfigured": "configured — leave empty to keep"
+      "authConfigured": "configured — leave empty to keep",
+      "rosterTitle": "MCP servers"
     },
     "range": {
       "d7": "7 days",
@@ -1322,7 +1326,54 @@
     "skillCreated": "Skill created",
     "budgetMustBeNumber": "Budget must be a number of tokens, or empty for unlimited",
     "budgetUpdated": "Budget updated",
-    "configuredInSettings": "configured in settings"
+    "configuredInSettings": "configured in settings",
+    "web": {
+      "title": "Web access",
+      "subtitle": "Whether the assistant may search the open web and read pages from it.",
+      "searchUnconfigured": "search backend not configured",
+      "fromEnv": "from env",
+      "cappedTo": "capped to {mode}",
+      "clampExplained": "This workspace asks for {requested}. The deployment allows {ceiling}, so that is what applies. The setting is kept, and takes effect if the deployment is widened.",
+      "mode": {
+        "off": {
+          "label": "Off",
+          "body": "The web tools are not offered to the model at all. Answers come only from this workspace."
+        },
+        "allowlist": {
+          "label": "Allowlist",
+          "body": "Only the domains listed below may be read. Everything else is refused before the request is made."
+        },
+        "open": {
+          "label": "Open web",
+          "body": "Anything may be read except the domains listed below."
+        }
+      },
+      "listAllowlist": "Domains that may be read",
+      "listOpen": "Exceptions to the open web",
+      "emptyAllowlist": "Nothing is allowed yet, so the assistant can search the web and read none of it. Add a domain below.",
+      "emptyOpen": "No exceptions. Every domain may be read.",
+      "refines": "more specific than {pattern}",
+      "allowed": "Allow",
+      "denied": "Deny",
+      "removePattern": "Remove {pattern}",
+      "patternLabel": "Domain",
+      "effectLabel": "Effect",
+      "patternHint": "A bare domain also covers its subdomains. When two rows match, the more specific one wins — so example.com denied and docs.example.com allowed reads exactly as it looks.",
+      "try": "Check",
+      "tryLabel": "URL to check",
+      "tryHint": "Try a URL against these rules without asking the assistant.",
+      "verdictAllowed": "{host} would be read.",
+      "verdictBy": "Decided by {pattern}.",
+      "verdictByMode": "Decided by the mode, not by a listed domain.",
+      "verdict": {
+        "mode-off": "{host} would not be read: web access is off.",
+        "not-allowlisted": "{host} would be refused: it is not on the allowlist.",
+        "blocked": "{host} would be refused.",
+        "unsafe": "{host} cannot be requested from here."
+      },
+      "inForce": "in force",
+      "addLabel": "Add a domain"
+    }
   },
   "search": {
     "activeFilters": "{n} filter | {n} filters",
@@ -1813,6 +1864,14 @@
     "request_agent_mode": {
       "running": "Requesting Agent mode",
       "done": "Requested Agent mode"
+    },
+    "web_search": {
+      "running": "Searching the web",
+      "done": "Searched the web"
+    },
+    "web_fetch": {
+      "running": "Reading a web page",
+      "done": "Read a web page"
     }
   },
   "entityType": {

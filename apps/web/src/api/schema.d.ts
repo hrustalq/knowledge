@@ -1967,6 +1967,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/source-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Domains this workspace may or may not fetch, and the access mode they are read under */
+        get: operations["AiController_listSourcePolicies"];
+        put?: never;
+        /** Add a domain exception */
+        post: operations["AiController_createSourcePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/source-policies/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dry-run one URL against this workspace’s source policy */
+        post: operations["AiController_checkSourcePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/source-policies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a domain exception */
+        delete: operations["AiController_deleteSourcePolicy"];
+        options?: never;
+        head?: never;
+        /** Edit a domain exception */
+        patch: operations["AiController_updateSourcePolicy"];
+        trace?: never;
+    };
     "/v1/ai/usage": {
         parameters: {
             query?: never;
@@ -3012,6 +3065,11 @@ export interface components {
             /** @description Refuse assistant requests once a budget is spent (429) */
             enforceBudget?: boolean;
             /**
+             * @description How much of the open web the assistant may reach. Clamped by the WEB_ACCESS_MODE ceiling — a value wider than the ceiling is accepted and stored, but the effective mode stays the ceiling and the response reports source=clamped. null = inherit the ceiling.
+             * @enum {string|null}
+             */
+            webAccessMode?: "off" | "allowlist" | "open" | null;
+            /**
              * Format: uuid
              * @description Provider profile serving chat and agent turns
              */
@@ -3198,6 +3256,34 @@ export interface components {
             enabled?: boolean;
             enabledTools?: string[];
         };
+        CheckSourcePolicyDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * @description A URL, or a bare host
+             * @example https://docs.example.com/guide
+             */
+            url: string;
+        };
+        CreateSourcePolicyDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * @description Host pattern; a bare domain also covers its subdomains
+             * @example docs.example.com
+             */
+            pattern: string;
+            /** @description True = may be fetched, false = may not. Read against the mode. */
+            allow: boolean;
+            /** @description Why this row exists */
+            note?: string | null;
+        };
+        UpdateSourcePolicyDto: {
+            /** @example docs.example.com */
+            pattern?: string;
+            allow?: boolean;
+            note?: string | null;
+        };
         SetAiBudgetDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -3208,7 +3294,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "confluence" | "jira" | "notion" | "markdown-git";
+            kind: "confluence" | "confluence-server" | "jira" | "notion" | "markdown-git";
             /** @example Product wiki */
             name: string;
             /**
@@ -10069,6 +10155,214 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_listSourcePolicies: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_createSourcePolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSourcePolicyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_checkSourcePolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckSourcePolicyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_deleteSourcePolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_updateSourcePolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSourcePolicyDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -96,6 +96,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfSavedFilter(intId(req.params?.filterId, 'savedFilter'));
       case 'glossary-term':
         return this.access.workspaceOfGlossaryTerm(uuid(req.params?.id, 'glossaryTerm'));
+      case 'source-policy':
+        return this.access.workspaceOfSourcePolicy(uuid(req.params?.id, 'sourcePolicy'));
       case 'import':
         return this.access.workspaceOfImport(uuid(req.params?.id, 'import'));
       case 'workflow-definition':

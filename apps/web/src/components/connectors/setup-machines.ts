@@ -148,6 +148,14 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
     { name: 'site', meta: { labelKey: 'connectors.step.site', fields: ['baseUrl'], credential: true } },
     { name: 'space', meta: { labelKey: 'connectors.step.space', fields: ['spaceKey'] } },
   ],
+  // Identical questions to Cloud — the difference is what the answers mean: a
+  // self-hosted base URL with no /wiki suffix, and a PAT rather than email:token.
+  // CONNECTOR_KIND_INFO carries both of those as the field help and the
+  // credential label, so the steps themselves are the same two.
+  'confluence-server': [
+    { name: 'site', meta: { labelKey: 'connectors.step.site', fields: ['baseUrl'], credential: true } },
+    { name: 'space', meta: { labelKey: 'connectors.step.space', fields: ['spaceKey'] } },
+  ],
   // The site and token, then the JQL that decides which issues become pages.
   jira: [
     { name: 'site', meta: { labelKey: 'connectors.step.site', fields: ['baseUrl'], credential: true } },
@@ -169,12 +177,14 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)
+export const confluenceServerSetup = kindMachine('confluenceServerSetup', KIND_STEPS['confluence-server'])
 export const jiraSetup = kindMachine('jiraSetup', KIND_STEPS.jira)
 export const notionSetup = kindMachine('notionSetup', KIND_STEPS.notion)
 export const markdownGitSetup = kindMachine('markdownGitSetup', KIND_STEPS['markdown-git'])
 
 export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   confluence: confluenceSetup,
+  'confluence-server': confluenceServerSetup,
   jira: jiraSetup,
   notion: notionSetup,
   'markdown-git': markdownGitSetup,

@@ -16,5 +16,6 @@
   "connector": "connector id",
   "connectorRun": "connector run id",
   "id": "identifier",
-  "savedFilter": "saved filter id"
+  "savedFilter": "saved filter id",
+  "sourcePolicy": "source policy id"
 }

@@ -94,6 +94,14 @@ const READ_TOOLS = ['search_knowledge', 'read_document', 'explore_document_graph
 const WRITE_TOOLS = ['create_document', 'propose_update'];
 /** Asking the user a question, and rendering a real component inline. */
 const UI_TOOLS = ['ask_user', 'render_component'];
+/**
+ * The open web (docs/features/25). Named in the two conversational lists only —
+ * allowlists intersect rather than union, so listing a tool here cannot hand it
+ * to the other nine agents, and a workspace on WEB_ACCESS_MODE=off is offered
+ * neither of them by `definitions()` regardless of what this list says. Adding
+ * them is therefore inert until a deployment opts in.
+ */
+const WEB_TOOLS = ['web_search', 'web_fetch'];
 
 export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefault> = {
   router: {
@@ -123,8 +131,9 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     description: 'agent.researcherDesc',
     instructions: CHAT_PREAMBLE + ASK_CLAUSE + FORM_CLAUSE + CHAT_RULES,
     // Exactly what definitions('ask', { ui: true }) offers today: read tools,
-    // the form, the offer to switch modes, and inline components.
-    tools: [...READ_TOOLS, ...UI_TOOLS, 'request_agent_mode'],
+    // the form, the offer to switch modes, and inline components — plus the two
+    // web tools, which `definitions` withholds unless the deployment allows them.
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, 'request_agent_mode'],
     skillIds: [],
     purpose: 'chat',
     // Interactive only. A researcher with nobody to answer has no job: every
@@ -143,7 +152,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     instructions: CHAT_PREAMBLE + AGENT_CLAUSE + FORM_CLAUSE + CHAT_RULES,
     // definitions('agent', { ui: true }) drops request_agent_mode — offering
     // the switch when the write tools are already on the table is confusing.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WRITE_TOOLS],
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...WRITE_TOOLS],
     skillIds: [],
     purpose: 'chat',
     surfaces: ['interactive'],

@@ -87,6 +87,44 @@ export const envSchema = z.object({
   /** Feature 12 plugins: allow MCP server URLs on private/loopback ranges (self-hosted). */
   AI_PLUGINS_ALLOW_PRIVATE_URLS: z.coerce.boolean().default(false),
 
+  /**
+   * Web research (docs/features/25): the CEILING on how much of the open web
+   * the assistant may reach, not a default.
+   *
+   * `ai_settings.web_access_mode` is clamped to this rather than inheriting it,
+   * because a workspace admin must not be able to switch on the open web in a
+   * deployment where that was decided against. Feature 20 already committed to
+   * the rule: settings intersect, never union.
+   *
+   * `off` keeps every existing deployment byte-identical — the two web tools
+   * are not offered to the model at all.
+   */
+  WEB_ACCESS_MODE: z.enum(['off', 'allowlist', 'open']).default('off'),
+
+  /**
+   * SearXNG JSON endpoint, e.g. `http://searxng:8080`. Unset means fetching a
+   * named URL still works and searching does not.
+   *
+   * Deliberately a URL rather than a `WEB_SEARCH_PROVIDER` enum: there is one
+   * backend, and an enum's `none` would mean "the tools do not exist", which
+   * WEB_ACCESS_MODE=off already says in the setting that also says it to the
+   * workspace. The interface arrives with the second backend, shaped by what
+   * the two actually differ on.
+   *
+   * NOTE: SearXNG's JSON API is off by default — `formats: [json]` has to be
+   * set in its settings.yml or every query comes back as HTML.
+   */
+  WEB_SEARCH_URL: z.string().optional().default(''),
+
+  /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
+  WEB_ALLOW_PRIVATE_URLS: z.coerce.boolean().default(false),
+
+  /** Hard cap on a fetched page before extraction, so one huge URL cannot exhaust the process. */
+  WEB_FETCH_MAX_BYTES: z.coerce.number().int().positive().default(2_000_000),
+
+  /** Upstream timeout for one search or one page fetch. */
+  WEB_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+
   /** Feature 04: max dependent documents re-indexed per indexed revision (0 disables). */
   DEPENDENT_REINDEX_MAX: z.coerce.number().int().min(0).default(20),
 

@@ -340,6 +340,24 @@ export type I18nTranslations = {
             "subjectNotInWorkspace": string;
             "nothingToMark": string;
         };
+        "web": {
+            "notFound": string;
+            "invalidPattern": string;
+            "allowlistEmpty": string;
+            "searchUnconfigured": string;
+            "searchFailed": string;
+            "fetchStatus": string;
+            "fetchType": string;
+            "fetchFailed": string;
+            "fetchEmpty": string;
+            "remedy": string;
+            "denied": {
+                "mode-off": string;
+                "not-allowlisted": string;
+                "blocked": string;
+                "unsafe": string;
+            };
+        };
     };
     "import": {
         "stage": {
@@ -480,6 +498,7 @@ export type I18nTranslations = {
         "connectorRun": string;
         "id": string;
         "savedFilter": string;
+        "sourcePolicy": string;
     };
     "validation": {
         "isDefined": string;

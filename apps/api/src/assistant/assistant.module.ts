@@ -1,11 +1,13 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { AiCoreModule } from '../ai/ai-core.module.js';
 import { SearchModule } from '../search/search.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { AssistantClientModule } from './assistant-client.module.js';
 import { AssistantToolsService } from './assistant.tools.js';
+import { WebResearchService } from './web-research.service.js';
 import { AssistantService } from './assistant.service.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
 import { AssistantController } from './assistant.controller.js';
@@ -18,6 +20,11 @@ import { AiModule } from '../ai/ai.module.js';
 @Module({
   imports: [
     AgentCoreModule,
+    // Imported directly rather than reached through the AiModule forwardRef:
+    // the web tools need AiConfigService and SourcePolicyService, both
+    // controller-free, and a forwardRef'd dependency would need @Inject at
+    // every injection site for no gain (docs/features/25).
+    AiCoreModule,
     AssistantClientModule,
     SearchModule,
     DocumentsModule,
@@ -26,7 +33,7 @@ import { AiModule } from '../ai/ai.module.js';
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],
-  providers: [AssistantToolsService, AssistantService, AssistantThreadsService],
+  providers: [AssistantToolsService, WebResearchService, AssistantService, AssistantThreadsService],
   // Re-exported rather than re-provided, so the API and the worker share one
   // client with one SDK cache.
   exports: [AssistantClientModule],

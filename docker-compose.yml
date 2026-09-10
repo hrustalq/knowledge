@@ -83,6 +83,29 @@ services:
       timeout: 5s
       retries: 12
 
+  # Feature 25 optional web-search node (docs/features/25). Not started by
+  # default:  make infra-up-searxng  (+ WEB_SEARCH_URL + WEB_ACCESS_MODE in
+  # apps/api/.env). SearXNG metasearches the engines it is pointed at: no API
+  # key, no per-query cost, and — the reason it is the first backend — it
+  # returns URLs and snippets and fetches nothing, so the platform holds the
+  # candidate list and can filter by source policy BEFORE any page is retrieved.
+  #
+  # Its JSON API is off by default; searxng/settings.yml turns it on. Without
+  # `formats: [json]` every query answers HTML and the provider looks broken.
+  searxng:
+    image: searxng/searxng:latest
+    profiles: ["searxng"]
+    ports: ["8888:8080"]
+    environment:
+      SEARXNG_BASE_URL: "http://localhost:8888/"
+    volumes:
+      - ./searxng:/etc/searxng:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
 volumes:
   pgdata:
   miniodata:

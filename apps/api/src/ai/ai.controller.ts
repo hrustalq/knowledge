@@ -27,8 +27,11 @@ import type {
   ListAiPluginsResponse,
   ListAiProviderChoicesResponse,
   ListAiProvidersResponse,
+  CheckSourcePolicyResponse,
   ListAiSkillsResponse,
+  ListSourcePoliciesResponse,
   ProposeAgentFindingResponse,
+  SourcePolicy,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
@@ -38,6 +41,7 @@ import { AiProvidersService } from './ai-providers.service.js';
 import { AiConfigService } from './ai-config.service.js';
 import { AiSettingsService } from './ai-settings.service.js';
 import { AiSkillsService } from './ai-skills.service.js';
+import { SourcePolicyService } from './source-policy.service.js';
 import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
 import { AgentFindingsService } from './agent-findings.service.js';
 import { AgentRouterService } from '../agents/agent-router.service.js';
@@ -45,6 +49,9 @@ import { AgentTiebreakService } from './agent-tiebreak.service.js';
 import {
   CreateAiAgentDto,
   CreateAiPluginDto,
+  CheckSourcePolicyDto,
+  CreateSourcePolicyDto,
+  UpdateSourcePolicyDto,
   CreateAiProviderDto,
   CreateAiSkillDto,
   TestAiConnectionDto,
@@ -76,6 +83,7 @@ export class AiController {
     private readonly plugins: AiPluginsService,
     private readonly providers: AiProvidersService,
     private readonly aiConfig: AiConfigService,
+    private readonly sourcePolicies: SourcePolicyService,
     private readonly activity: ActivityService,
   ) {}
 
@@ -535,5 +543,98 @@ export class AiController {
   @ApiOperation({ summary: 'Reconnect and re-discover the plugin tool list' })
   testPlugin(@Param('id', ParseUUIDPipe) id: string): Promise<AiPluginTestResponse> {
     return this.plugins.test(id);
+  }
+
+  // ---- Source policies (docs/features/25) ----------------------------------
+  //
+  // Reading the list is 'viewer': the roster is not a secret, and a member
+  // whose fetch was refused should be able to see the rule that refused it
+  // rather than only being told an admin exists. Writing is 'admin', like every
+  // other reach the model has.
+
+  @Get('source-policies')
+  @Access('viewer', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: 'Domains this workspace may or may not fetch, and the access mode they are read under' })
+  async listSourcePolicies(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<ListSourcePoliciesResponse> {
+    const [policies, config] = await Promise.all([
+      this.sourcePolicies.list(workspaceId),
+      this.aiConfig.resolve(workspaceId),
+    ]);
+    // The mode travels with the list because the list means nothing without
+    // it: the same rows are an allowlist under one mode and a blocklist under
+    // the other.
+    return { policies, webAccess: config.webAccess };
+  }
+
+  // Declared before the :id routes, and 'viewer' for the same reason the list
+  // is: whoever hit a refusal should be able to find out which rule refused
+  // them without asking an admin to read the table for them.
+  @Post('source-policies/check')
+  @Access('viewer', 'body')
+  @ApiOperation({ summary: 'Dry-run one URL against this workspace’s source policy' })
+  checkSourcePolicy(@Body() dto: CheckSourcePolicyDto): Promise<CheckSourcePolicyResponse> {
+    return this.sourcePolicies.check(dto.workspaceId, dto.url);
+  }
+
+  @Post('source-policies')
+  @Access('admin', 'body')
+  @ApiOperation({ summary: 'Add a domain exception' })
+  async createSourcePolicy(
+    @Body() dto: CreateSourcePolicyDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<SourcePolicy> {
+    const policy = await this.sourcePolicies.create(dto, principal?.userId);
+    this.aiConfig.invalidate(dto.workspaceId);
+    await this.activity.record({
+      workspaceId: dto.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.sourcePolicy.created',
+      subjectId: policy.id,
+      metadata: { pattern: policy.pattern, allow: policy.allow },
+    });
+    return policy;
+  }
+
+  @Patch('source-policies/:id')
+  @Access('admin', 'source-policy')
+  @ApiOperation({ summary: 'Edit a domain exception' })
+  async updateSourcePolicy(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateSourcePolicyDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<SourcePolicy> {
+    const policy = await this.sourcePolicies.update(id, dto);
+    this.aiConfig.invalidate(policy.workspaceId);
+    await this.activity.record({
+      workspaceId: policy.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.sourcePolicy.updated',
+      subjectId: policy.id,
+      metadata: { pattern: policy.pattern, allow: policy.allow },
+    });
+    return policy;
+  }
+
+  @Delete('source-policies/:id')
+  @Access('admin', 'source-policy')
+  @ApiOperation({ summary: 'Remove a domain exception' })
+  async deleteSourcePolicy(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<{ ok: true }> {
+    const policy = await this.sourcePolicies.get(id);
+    await this.sourcePolicies.remove(id);
+    this.aiConfig.invalidate(policy.workspaceId);
+    await this.activity.record({
+      workspaceId: policy.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.sourcePolicy.deleted',
+      subjectId: id,
+      metadata: { pattern: policy.pattern },
+    });
+    return { ok: true };
   }
 }

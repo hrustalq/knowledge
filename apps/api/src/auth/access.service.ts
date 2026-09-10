@@ -183,6 +183,15 @@ export class AccessService {
     return term.workspaceId;
   }
 
+  async workspaceOfSourcePolicy(policyId: string): Promise<string> {
+    const policy = await this.prisma.sourcePolicy.findUnique({
+      where: { id: policyId },
+      select: { workspaceId: true },
+    });
+    if (!policy) throw new NotFoundException(t('error.web.notFound', { id: policyId }));
+    return policy.workspaceId;
+  }
+
   /**
    * An import job carries its own workspaceId and exists before any document
    * does, so this is the only thing standing between one tenant's import id and

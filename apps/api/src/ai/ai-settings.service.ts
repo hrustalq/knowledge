@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import type { AiConnectionTestResponse, AiProvider, AiSettingsResponse } from '@knowledge/contracts';
+import type { AiConnectionTestResponse, AiProvider, AiSettingsResponse, WebAccessMode } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AiConfigService } from './ai-config.service.js';
+import { SourcePolicyService } from './source-policy.service.js';
 import { encryptSecret, maskSecret, MissingEncryptionKeyError } from './secret-box.js';
 import { t } from '../i18n/t.js';
 import { currentLocale } from '../i18n/locale.js';
@@ -21,6 +22,8 @@ export interface UpdateAiSettingsInput {
   maxToolCalls?: number | null;
   timeoutMs?: number | null;
   agentModeEnabled?: boolean;
+  /** docs/features/25 — null clears the override and inherits the env ceiling. */
+  webAccessMode?: WebAccessMode | null;
   pricePromptPerMTok?: number | null;
   priceCompletionPerMTok?: number | null;
   workspaceMonthlyTokenBudget?: number | null;
@@ -42,6 +45,7 @@ export class AiSettingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiConfig: AiConfigService,
+    private readonly sourcePolicies: SourcePolicyService,
     private readonly client: AssistantClient,
   ) {}
 
@@ -61,6 +65,7 @@ export class AiSettingsService {
       maxToolCalls: effective.maxToolCalls,
       timeoutMs: effective.timeoutMs,
       agentModeEnabled: effective.agentModeEnabled,
+      webAccess: effective.webAccess,
       pricePromptPerMTok: effective.pricePromptPerMTok,
       priceCompletionPerMTok: effective.priceCompletionPerMTok,
       workspaceMonthlyTokenBudget:
@@ -81,6 +86,13 @@ export class AiSettingsService {
   }
 
   async update(workspaceId: string, input: UpdateAiSettingsInput, actorId?: string): Promise<AiSettingsResponse> {
+    // `allowlist` with nothing on the list is a web search that silently
+    // returns nothing, which reads as broken rather than as configured — so it
+    // is refused at the save, the shape of the agent scheduler refusing to
+    // enable without an owner and an interval.
+    if (input.webAccessMode !== undefined) {
+      await this.sourcePolicies.assertModeSavable(workspaceId, input.webAccessMode);
+    }
     const data = {
       ...pick(input, 'provider'),
       ...pick(input, 'baseUrl'),
@@ -96,6 +108,7 @@ export class AiSettingsService {
       ...pick(input, 'reviewProviderId'),
       ...pick(input, 'extractionProviderId'),
       ...(input.agentModeEnabled === undefined ? {} : { agentModeEnabled: input.agentModeEnabled }),
+      ...pick(input, 'webAccessMode'),
       ...(input.enforceBudget === undefined ? {} : { enforceBudget: input.enforceBudget }),
       ...(input.apiKey === undefined ? {} : { apiKeyCipher: this.encryptKey(input.apiKey) }),
       updatedBy: actorId ?? null,

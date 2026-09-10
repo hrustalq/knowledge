@@ -15,7 +15,14 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
-import { AGENT_CAPABILITIES, AGENT_SURFACES, type AgentCapability, type AgentSurface } from '@knowledge/contracts';
+import {
+  AGENT_CAPABILITIES,
+  AGENT_SURFACES,
+  WEB_ACCESS_MODES,
+  type AgentCapability,
+  type AgentSurface,
+  type WebAccessMode,
+} from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 /**
@@ -129,6 +136,20 @@ export class UpdateAiSettingsDto {
   @IsOptional()
   @IsBoolean()
   enforceBudget?: boolean;
+
+  @ApiPropertyOptional({
+    enum: WEB_ACCESS_MODES,
+    type: String,
+    nullable: true,
+    description:
+      'How much of the open web the assistant may reach. Clamped by the WEB_ACCESS_MODE ceiling — ' +
+      'a value wider than the ceiling is accepted and stored, but the effective mode stays the ' +
+      'ceiling and the response reports source=clamped. null = inherit the ceiling.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('webAccessMode')
+  @IsIn(WEB_ACCESS_MODES)
+  webAccessMode?: WebAccessMode | null;
 
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Provider profile serving chat and agent turns' })
   @IsOptional()
@@ -729,4 +750,72 @@ export class StartAgentRunDto {
   @IsString()
   @MaxLength(2_000, { message: vmsg('maxLength') })
   note?: string;
+}
+
+// ---- Source policies (docs/features/25) ------------------------------------
+
+/**
+ * One exception to the workspace's web access mode.
+ *
+ * `pattern` is validated loosely on purpose: `SourcePolicyService.normalizePattern`
+ * accepts what an admin actually types — a full URL, a `*.example.com` glob —
+ * and reduces it to the bare host, rather than answering a paste with a format
+ * lecture. What it cannot reduce, it refuses there with the offending value in
+ * the message.
+ */
+export class CreateSourcePolicyDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ example: 'docs.example.com', description: 'Host pattern; a bare domain also covers its subdomains' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(253, { message: vmsg('maxLength') })
+  pattern!: string;
+
+  @ApiProperty({ description: 'True = may be fetched, false = may not. Read against the mode.' })
+  @IsBoolean()
+  allow!: boolean;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Why this row exists' })
+  @IsOptional()
+  @NULLABLE<CreateSourcePolicyDto>('note')
+  @IsString()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  note?: string | null;
+}
+
+export class UpdateSourcePolicyDto {
+  @ApiPropertyOptional({ example: 'docs.example.com' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(253, { message: vmsg('maxLength') })
+  pattern?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  allow?: boolean;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  @IsOptional()
+  @NULLABLE<UpdateSourcePolicyDto>('note')
+  @IsString()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  note?: string | null;
+}
+
+/** Dry-run one URL against the workspace's list, without spending a chat turn. */
+export class CheckSourcePolicyDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ example: 'https://docs.example.com/guide', description: 'A URL, or a bare host' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2_000, { message: vmsg('maxLength') })
+  url!: string;
 }

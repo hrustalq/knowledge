@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { AiPurpose, AiSettingsSourceMap } from '@knowledge/contracts';
+import type { AiPurpose, AiSettingsSourceMap, WebAccessSettings } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiProvidersService } from './ai-providers.service.js';
+import { SourcePolicyService } from './source-policy.service.js';
 import { decryptSecret, parseKey } from './secret-box.js';
 
 /**
@@ -59,6 +60,11 @@ export interface ResolvedAiConfig {
   agentModeEnabled: boolean;
   pricePromptPerMTok: number | null;
   priceCompletionPerMTok: number | null;
+  /**
+   * How much of the open web this workspace may reach (docs/features/25).
+   * Clamped by the env ceiling, never inherited from it.
+   */
+  webAccess: WebAccessSettings;
   /** The named profile serving this call, when one is routed. */
   providerId: string | null;
   providerName: string | null;
@@ -92,6 +98,7 @@ export class AiConfigService {
     private readonly config: ConfigService<Env, true>,
     private readonly prisma: PrismaService,
     private readonly providers: AiProvidersService,
+    private readonly sourcePolicies: SourcePolicyService,
   ) {
     this.key = parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     if (!this.key) {
@@ -139,6 +146,7 @@ export class AiConfigService {
       maxToolCalls: row?.maxToolCalls ?? this.config.get('ASSISTANT_MAX_TOOL_CALLS', { infer: true }),
       timeoutMs: row?.timeoutMs ?? this.config.get('ASSISTANT_TIMEOUT_MS', { infer: true }),
       agentModeEnabled: row?.agentModeEnabled ?? true,
+      webAccess: this.sourcePolicies.webAccess(row?.webAccessMode),
       pricePromptPerMTok: row?.pricePromptPerMTok ? Number(row.pricePromptPerMTok) : null,
       priceCompletionPerMTok: row?.priceCompletionPerMTok ? Number(row.priceCompletionPerMTok) : null,
       providerId: null,
@@ -151,6 +159,10 @@ export class AiConfigService {
         temperature: row?.temperature != null ? 'db' : 'env',
         maxToolCalls: row?.maxToolCalls != null ? 'db' : 'env',
         timeoutMs: row?.timeoutMs != null ? 'db' : 'env',
+        // Not `row ? 'db' : 'env'`: a workspace can ask for a mode the
+        // deployment refuses, and the third value is the only honest report of
+        // that. `webAccess()` works it out; the map just mirrors it.
+        webAccessMode: this.sourcePolicies.webAccess(row?.webAccessMode).source,
       },
     };
 

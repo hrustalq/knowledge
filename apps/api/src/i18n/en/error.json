@@ -252,5 +252,23 @@
   "notification": {
     "subjectNotInWorkspace": "A subject can only be watched from the workspace it belongs to.",
     "nothingToMark": "Nothing to mark read: pass `ids` or `all`."
+  },
+  "web": {
+    "notFound": "Source policy {id} not found",
+    "invalidPattern": "“{pattern}” is not a domain — write a host such as docs.example.com",
+    "allowlistEmpty": "Allowlist mode needs at least one allowed domain, or the assistant can search the web and read none of it. Add a domain first.",
+    "searchUnconfigured": "Web search is not configured on this deployment (WEB_SEARCH_URL is unset). Fetching a named URL still works.",
+    "searchFailed": "The search backend did not answer. Fall back to the workspace rather than guessing.",
+    "fetchStatus": "The page answered HTTP {status}.",
+    "fetchType": "That address returned {type}, not a readable page.",
+    "fetchFailed": "The page could not be retrieved: {error}",
+    "fetchEmpty": "The page was retrieved but had no readable text — it may be rendered entirely by scripts.",
+    "remedy": "A workspace admin can change this under AI settings → Plugins → Web access.",
+    "denied": {
+      "mode-off": "Web access is switched off for this workspace.",
+      "not-allowlisted": "{detail} is not on this workspace's allowlist.",
+      "blocked": "{detail} is blocked by this workspace's source policy.",
+      "unsafe": "{detail} is not an address that may be requested from here."
+    }
   }
 }

@@ -118,6 +118,11 @@ infra-up-opensearch: ## Start infra INCLUDING the optional OpenSearch BM25 node 
 	$(COMPOSE) --profile opensearch up -d
 	$(COMPOSE) --profile opensearch ps
 
+.PHONY: infra-up-searxng
+infra-up-searxng: ## Start infra INCLUDING the optional SearXNG web-search node (set WEB_SEARCH_URL + WEB_ACCESS_MODE)
+	$(COMPOSE) --profile searxng up -d
+	$(COMPOSE) --profile searxng ps
+
 .PHONY: infra-down
 infra-down: ## Stop infra containers (volumes kept)
 	$(COMPOSE) down

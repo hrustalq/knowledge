@@ -10,13 +10,14 @@
 // deserve to look like the knowledge base.
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import { Check, Copy, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
 import type { AssistantMessageInfo, AssistantUiBlock } from '@knowledge/contracts'
+import { assistantSourceKey } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
 import AssistantPrompt from './AssistantPrompt.vue'
+import SourceChip from './SourceChip.vue'
 import { toolVocabulary } from './tool-vocabulary'
 
 const { t } = useI18n()
@@ -190,15 +191,9 @@ function saveEdit() {
         </span>
 
         <div v-if="message.sources.length > 0" class="flex flex-wrap gap-1.5">
-          <RouterLink
-            v-for="s in message.sources"
-            :key="s.documentId"
-            :to="`/documents/${s.documentId}`"
-            :title="s.snippet"
-            class="max-w-[16rem] truncate rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
-          >
-            {{ s.title }}
-          </RouterLink>
+          <!-- Keyed by identity, not by document id: a web citation has none,
+               and two of them would share one `undefined` key. -->
+          <SourceChip v-for="s in message.sources" :key="assistantSourceKey(s)" :source="s" />
         </div>
       </footer>
 

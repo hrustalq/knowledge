@@ -199,13 +199,18 @@ async function copyKey() {
             <!-- Saves on its own, like every row here: an upload has already
                  happened by the time it returns, so pairing it with the name's
                  Save button would claim otherwise. -->
+            <!-- Its own line, both branches. As a flex sibling of the name it
+                 competed for the same row: in English everything fit, so the
+                 name column lost the width instead of wrapping, and the person
+                 whose account this is rendered as "D…". -->
             <AvatarPicker
               v-if="!auth.isDev"
+              class="w-full"
               base="/v1/me"
               :has-image="auth.me.avatarUrl !== null"
               @changed="auth.reload()"
             />
-            <p v-else class="text-xs text-muted-foreground">{{ t('avatar.hint') }}</p>
+            <p v-else class="w-full text-xs text-muted-foreground">{{ t('avatar.hint') }}</p>
           </li>
 
           <li class="px-5 py-4">

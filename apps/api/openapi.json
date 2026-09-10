@@ -1571,6 +1571,38 @@
             }
           },
           {
+            "name": "mode",
+            "required": false,
+            "in": "query",
+            "description": "Defaults to move",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "move",
+                "cascade"
+              ]
+            }
+          },
+          {
+            "name": "moveContentsTo",
+            "required": false,
+            "in": "query",
+            "description": "Sibling project to move contents into",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "confirm",
+            "required": false,
+            "in": "query",
+            "description": "Required for mode=cascade: the project name, verbatim",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -1609,7 +1641,7 @@
             }
           }
         },
-        "summary": "Delete an empty project (409 when it still holds documents)",
+        "summary": "Delete a project: move its contents to another, or cascade-delete them",
         "tags": [
           "projects"
         ]
@@ -1667,6 +1699,73 @@
           }
         },
         "summary": "Project overview: counts, contributors, recent pages",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/v1/projects/{id}/deletion-preview": {
+      "get": {
+        "operationId": "ProjectsController_deletionPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target",
+            "required": false,
+            "in": "query",
+            "description": "Prospective destination project",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What deleting this project would relocate (pass ?target= for glossary conflicts)",
         "tags": [
           "projects"
         ]

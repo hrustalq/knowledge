@@ -1694,7 +1694,7 @@
       "method": "DELETE",
       "path": "/v1/projects/{id}",
       "tag": "projects",
-      "summary": "Delete an empty project (409 when it still holds documents)",
+      "summary": "Delete a project: move its contents to another, or cascade-delete them",
       "role": "admin",
       "source": "project",
       "public": false,
@@ -1716,6 +1716,16 @@
       "tag": "projects",
       "summary": "Rename a project / edit its description",
       "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/deletion-preview",
+      "tag": "projects",
+      "summary": "What deleting this project would relocate (pass ?target= for glossary conflicts)",
+      "role": "admin",
       "source": "project",
       "public": false,
       "platformAdmin": false

@@ -1,36 +1,53 @@
 <script setup lang="ts">
 /**
- * The workflow builder: one workflow, the whole viewport (docs/features/17).
+ * One workflow, beside the roster it was picked from (docs/features/17).
  *
- * The canvas used to live in a 19rem column inside the settings shell, beside a
- * roster and under a page header — which is why it read as a diagram attached
- * to a form rather than as the thing being edited. Here the chain is the page:
- * a palette of the four steps on the left, the canvas in the middle, the
- * selected step's behaviour on the right, and what is wrong with the graph
- * along the bottom.
+ * This is the third pane of the settings shell — the position
+ * `/settings/projects/:id` holds — so the chain arrives the way every other
+ * page in this product does: with the app trail above it saying where it sits,
+ * and the list it came from still on screen. It spent a release as a
+ * full-viewport surface with a back arrow and a toolbar of its own, which is
+ * the shape an editor takes when it cannot afford the chrome; a canvas is not
+ * a writing surface, and the trail it dropped was the only thing telling you
+ * this was workspace administration rather than somewhere you had navigated to.
  *
- * Deliberately not a child route of `/settings`: it keeps the settings URL so
- * every link still reads as workspace administration, but rendering inside that
- * shell would put a second navigation rail beside the palette and box the
- * canvas again. `meta.fill` gives it the viewport; `meta.bare` drops the app
- * trail, because the header here already says where you are and offers the way
- * back.
+ * What made the viewport necessary was the column count: a palette rail, the
+ * canvas, and an inspector rail, which left nothing for the canvas once a
+ * settings nav and a roster stood to their left. Both side rails were already
+ * built to collapse — the palette into a strip, the inspector into a drawer —
+ * for narrow screens. Here they simply always are: the palette is the strip
+ * above the canvas and the inspector the drawer behind Configure, so the canvas
+ * keeps the whole pane rather than a third of it.
+ *
+ * Reading a chain is `/settings/workflows/:id`, a different page; this route is
+ * only reached by pressing Edit. That split is what lets the canvas keep a
+ * dirty draft and an unsaved-changes guard without arming a confirm dialog
+ * every time somebody glances at a workflow.
+ *
+ * The architect sits beside the canvas rather than only at creation. It is the
+ * wizard's own conversation — `POST /v1/workflows/draft`, the `architect`
+ * agent, compiled server-side before it answers — given the draft graph as
+ * context, so a follow-up is "make it three steps" rather than a description of
+ * the chain from scratch. What it returns lands on the canvas as an unsaved
+ * edit: the operator reviews and saves, the same as any other change made here.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import {
-  ArrowLeft,
   Check,
   CircleAlert,
   MoreHorizontal,
   PanelRight,
   Play,
+  Sparkles,
   Trash2,
   TriangleAlert,
   Undo2,
+  X,
 } from 'lucide-vue-next'
 import type {
   ValidateWorkflowResponse,
@@ -72,6 +89,8 @@ import WorkflowGraphEditor from '@/components/workflows/WorkflowGraphEditor.vue'
 import WorkflowStepForm from '@/components/workflows/WorkflowStepForm.vue'
 import WorkflowStepPalette from '@/components/workflows/WorkflowStepPalette.vue'
 import WorkflowSettingsForm from '@/components/workflows/WorkflowSettingsForm.vue'
+import WorkflowArchitectChat from '@/components/workflows/WorkflowArchitectChat.vue'
+import type { WizardTurn } from '@/components/workflows/wizard-machine'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -273,33 +292,84 @@ function addStep(kind: WorkflowStepKind) {
   canvas.value?.addStep(kind)
 }
 
-// On a narrow screen the inspector is a sheet, so selecting a step has to open
-// it — otherwise the step is selected and its settings are nowhere.
+// The inspector is a drawer at every width now, so selecting a step has to open
+// it — otherwise the step is selected and its settings are nowhere. Clicking
+// the canvas clears the selection, which is what closes it again.
 watch(selectedStepId, (value) => {
-  if (value && typeof window !== 'undefined' && !window.matchMedia('(min-width: 1024px)').matches) {
-    inspectorOpen.value = true
-  }
+  if (value) inspectorOpen.value = true
 })
+
+// Leaving a workflow drops its selection; the drawer must not survive into the
+// next one, where it would open onto a step that no longer exists.
+watch(id, () => {
+  selectedStepId.value = null
+  inspectorOpen.value = false
+  chatTurns.value = []
+  chatOpen.value = false
+})
+
+/* ---------------------------------------------------------------- architect */
+
+/**
+ * The conversation is local and unsaved, exactly as it is in the wizard: it
+ * exists to change this graph and ends when it has. Persisting it would file a
+ * chat next to the workflow it edited — the same fact in two places, and the
+ * copy nobody maintains.
+ */
+const chatTurns = ref<WizardTurn[]>([])
+const chatOpen = ref(false)
+const chatUnavailable = ref(false)
+
+/**
+ * Which of the two homes the conversation gets — an inline column, or a sheet.
+ *
+ * Decided in script rather than by a `lg:hidden` on the sheet: that would hide
+ * the panel but keep its scrim, which would sit over the canvas at exactly the
+ * widths where the column is the one being used. SSR answers false, and the
+ * chat starts closed, so neither renders on the first frame either way.
+ */
+const wideEnoughForColumn = useMediaQuery('(min-width: 1024px)')
+
+/**
+ * A proposal replaces the graph and leaves the draft dirty on purpose. The
+ * architect compiles what it returns before answering, so this cannot put an
+ * unsaveable graph on the canvas — but "compiles" is not "is what you meant",
+ * and Save is the operator's word for that.
+ *
+ * The name and description are only taken when the operator has not written
+ * their own: overwriting a deliberate name with a generated one is the kind of
+ * loss an undo stack would have to exist to fix.
+ */
+function applyProposal(proposal: { graph: WorkflowGraph; name: string | null; description: string | null }) {
+  if (!draft.value) return
+  draft.value.graph = detach(proposal.graph)
+  if (proposal.description && !draft.value.description.trim()) draft.value.description = proposal.description
+  selectedStepId.value = null
+  toast.success(t('workflow.architectApplied'))
+}
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col">
-    <!-- Header: where you are, what state it is in, and the two verbs. -->
-    <header class="flex h-14 shrink-0 items-center gap-2 border-b px-3 lg:px-4">
-      <RouterLink to="/settings/workflows">
-        <Button variant="ghost" size="sm" class="gap-1.5 px-2">
-          <ArrowLeft class="size-4" />
-          <span class="hidden sm:inline">{{ t('nav.workflows') }}</span>
-        </Button>
-      </RouterLink>
-      <span class="bg-border h-5 w-px" aria-hidden="true" />
+  <!--
+    A definite height, not `flex-1`.
 
+    The settings shell is a document column: <main> scrolls and the column
+    inside it is `min-h-full`, so a flex child's height resolves from its
+    content — and the canvas has none of its own to resolve from. The settings
+    nav and the workflow rail already state the same number for the same
+    reason: the viewport, less the topbar (h-14) and the breadcrumb strip (h-9).
+  -->
+  <div class="flex h-[32rem] min-h-0 flex-col lg:h-[calc(100vh-5.75rem)]">
+    <!-- Header: what this is, what state it is in, and the verbs. No back
+         arrow — the trail above and the roster beside it are both the way
+         back, and a third one inside the pane would only be in the way. -->
+    <header class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-2 lg:px-4">
       <template v-if="draft">
         <Input
           v-model="draft.name"
           :disabled="!canManage"
           :aria-label="t('workflow.name')"
-          class="focus-visible:border-input h-8 min-w-0 max-w-64 border-transparent bg-transparent px-1 text-[15px] font-semibold shadow-none focus-visible:px-2"
+          class="focus-visible:border-input h-8 min-w-0 max-w-64 flex-1 border-transparent bg-transparent px-1 text-[15px] font-semibold shadow-none focus-visible:px-2"
         />
 
         <label class="text-muted-foreground hidden items-center gap-1.5 text-xs sm:flex">
@@ -318,38 +388,40 @@ watch(selectedStepId, (value) => {
         </p>
 
         <div class="flex shrink-0 items-center gap-1.5">
-          <Button
-            v-if="dirty"
-            variant="ghost"
-            size="sm"
-            class="hidden sm:inline-flex"
-            @click="discard"
-          >
+          <Button v-if="dirty" variant="ghost" size="sm" class="hidden sm:inline-flex" @click="discard">
             {{ t('common.discard') }}
           </Button>
-          <Button
-            v-if="canManage"
-            size="sm"
-            :disabled="!dirty || saving || errors.length > 0"
-            @click="save"
-          >
+          <Button v-if="canManage" size="sm" :disabled="!dirty || saving || errors.length > 0" @click="save">
             {{ saving ? t('workflow.settings.saving') : t('common.save') }}
           </Button>
+
+          <!-- The architect. Beside Configure because it is the other way to
+               change this graph, and it is a toggle rather than a launcher:
+               pressing it again puts the canvas back to full width. -->
           <Button
-            variant="ghost"
+            v-if="canManage && !chatUnavailable"
+            :variant="chatOpen ? 'secondary' : 'outline'"
             size="sm"
-            class="size-8 p-0 xl:hidden"
-            :aria-label="t('workflow.builder.openInspector')"
-            @click="inspectorOpen = true"
+            class="gap-1.5"
+            :aria-pressed="chatOpen"
+            @click="chatOpen = !chatOpen"
           >
-            <PanelRight class="size-4" />
+            <Sparkles class="size-3.5" />
+            <span class="hidden sm:inline">{{ t('workflow.askArchitect') }}</span>
           </Button>
 
-          <!-- Deleting the workflow belongs here rather than in the inspector:
+          <!-- Configure carries a label rather than an icon alone: the drawer
+               behind it is the only way to the description and the triggers,
+               and an unlabelled panel glyph does not say that. -->
+          <Button variant="outline" size="sm" class="gap-1.5" @click="inspectorOpen = true">
+            <PanelRight class="size-3.5" />
+            <span class="hidden sm:inline">{{ t('workflow.configure') }}</span>
+          </Button>
+
+          <!-- Deleting the workflow belongs here rather than in the drawer:
                that panel is replaced by the step form the moment a step is
-               selected, and it does not exist at all below xl — so delete kept
-               disappearing depending on what you had clicked and how wide the
-               window was. -->
+               selected, so delete kept disappearing depending on what you had
+               last clicked. -->
           <DropdownMenu v-if="canManage">
             <DropdownMenuTrigger as-child>
               <Button
@@ -366,6 +438,12 @@ watch(selectedStepId, (value) => {
                 <Check class="size-3.5" />
                 {{ t('workflow.settings.checkOnServer') }}
               </DropdownMenuItem>
+              <DropdownMenuItem v-if="workflow?.enabled" as-child>
+                <RouterLink to="/workflows">
+                  <Play class="size-3.5" />
+                  {{ t('workflow.builder.seeRuns') }}
+                </RouterLink>
+              </DropdownMenuItem>
               <DropdownMenuItem v-if="dirty" @select="discard">
                 <Undo2 class="size-3.5" />
                 {{ t('common.discard') }}
@@ -381,94 +459,116 @@ watch(selectedStepId, (value) => {
       </template>
     </header>
 
-    <div v-if="query.isLoading.value" class="flex min-h-0 flex-1 gap-3 p-3">
-      <Skeleton class="hidden h-full w-56 lg:block" />
-      <Skeleton class="h-full flex-1" />
+    <div v-if="query.isLoading.value" class="flex min-h-0 flex-1 flex-col gap-2 p-3">
+      <Skeleton class="h-8 w-full shrink-0" />
+      <Skeleton class="min-h-0 flex-1" />
     </div>
 
-    <div v-else-if="draft" class="flex min-h-0 flex-1">
-      <!-- Palette. The whole vocabulary, always visible: four kinds is a list
-           you can learn, not a menu you have to search. -->
-      <aside class="hidden w-56 shrink-0 border-r lg:flex lg:flex-col">
-        <WorkflowStepPalette :can-manage="canManage" @add="addStep" />
-      </aside>
+    <p v-else-if="!draft" class="text-muted-foreground p-4 text-sm">{{ t('workflow.notFound') }}</p>
 
-      <div class="flex min-w-0 flex-1 flex-col">
-        <!-- Below lg the palette is a strip: the same four, one row, still
-             reachable without a menu. -->
-        <div class="shrink-0 border-b px-2 py-1.5 lg:hidden">
-          <WorkflowStepPalette orientation="strip" :can-manage="canManage" @add="addStep" />
-        </div>
-
-        <WorkflowGraphEditor
-          ref="canvas"
-          v-model:selected-id="selectedStepId"
-          :graph="draft.graph"
-          :issues="issues"
-          :can-manage="canManage"
-          @update:graph="(g) => (draft!.graph = g)"
-        />
-
-        <!-- Problems, along the bottom where a builder puts them. Each row is a
-             shortcut into the step it is about, so a message is never a hunt. -->
-        <footer
-          v-if="issues.length"
-          class="max-h-28 shrink-0 space-y-1 overflow-y-auto border-t px-3 py-2"
-        >
-          <button
-            v-for="(issue, i) in [...errors, ...warnings]"
-            :key="i"
-            type="button"
-            class="hover:bg-muted/50 focus-visible:ring-ring flex w-full items-start gap-1.5 rounded px-1.5 py-1 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
-            :disabled="!issue.stepId"
-            @click="issue.stepId && (selectedStepId = issue.stepId)"
-          >
-            <component
-              :is="issue.severity === 'error' ? CircleAlert : TriangleAlert"
-              class="mt-px size-3.5 shrink-0"
-              :class="issue.severity === 'error' ? 'text-destructive' : 'text-amber-600 dark:text-amber-500'"
-            />
-            <span class="min-w-0 flex-1 leading-snug">{{ issue.message }}</span>
-          </button>
-        </footer>
+    <div v-else class="flex min-h-0 min-w-0 flex-1">
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+      <!-- The palette, as a strip. The whole vocabulary is still visible at
+           once — four kinds is a list you can learn, not a menu you have to
+           search — and a row of them costs the canvas no width. Drag onto the
+           canvas or click to add, exactly as in the rail it replaces. -->
+      <div class="shrink-0 border-b px-2 py-1.5">
+        <WorkflowStepPalette orientation="strip" :can-manage="canManage" @add="addStep" />
       </div>
 
-      <!-- Inspector: the step if one is selected, the workflow otherwise. -->
-      <aside class="hidden w-80 shrink-0 flex-col overflow-hidden border-l xl:flex">
-        <WorkflowStepForm
-          v-if="step"
-          :step="step"
-          :graph="draft.graph"
-          :issues="issues"
-          :can-manage="canManage"
-          @update="updateStep"
-          @remove="removeStep"
-          @select="(sid) => (selectedStepId = sid)"
-        />
-        <WorkflowSettingsForm
-          v-else
-          v-model:description="draft.description"
-          v-model:trigger="draft.trigger"
-          :can-manage="canManage"
+      <WorkflowGraphEditor
+        ref="canvas"
+        v-model:selected-id="selectedStepId"
+        :graph="draft.graph"
+        :issues="issues"
+        :can-manage="canManage"
+        @update:graph="(g) => (draft!.graph = g)"
+      />
+
+      <!-- Problems, along the bottom where a builder puts them. Each row is a
+           shortcut into the step it is about, so a message is never a hunt. -->
+      <footer v-if="issues.length" class="max-h-28 shrink-0 space-y-1 overflow-y-auto border-t px-3 py-2">
+        <button
+          v-for="(issue, i) in [...errors, ...warnings]"
+          :key="i"
+          type="button"
+          class="hover:bg-muted/50 focus-visible:ring-ring flex w-full items-start gap-1.5 rounded px-1.5 py-1 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
+          :disabled="!issue.stepId"
+          @click="issue.stepId && (selectedStepId = issue.stepId)"
         >
-          <template #footer>
-            <div class="space-y-0.5 border-t pt-3">
-              <RouterLink v-if="workflow?.enabled" to="/workflows" class="block">
-                <Button variant="ghost" size="sm" class="text-muted-foreground w-full justify-start">
-                  <Play class="mr-1.5 size-3.5" /> {{ t('workflow.builder.seeRuns') }}
-                </Button>
-              </RouterLink>
-            </div>
-          </template>
-        </WorkflowSettingsForm>
+          <component
+            :is="issue.severity === 'error' ? CircleAlert : TriangleAlert"
+            class="mt-px size-3.5 shrink-0"
+            :class="issue.severity === 'error' ? 'text-destructive' : 'text-amber-600 dark:text-amber-500'"
+          />
+          <span class="min-w-0 flex-1 leading-snug">{{ issue.message }}</span>
+        </button>
+      </footer>
+      </div>
+
+      <!--
+        The architect, beside the canvas rather than over it.
+
+        A drawer would be wrong here for one reason: what this conversation
+        produces is a change to the thing the drawer would be covering. The
+        answer to "make it three steps" is the canvas redrawing, and you have to
+        be looking at it. Below `lg` there is no room for both, so it moves into
+        a sheet — the same split the assistant page makes with its chat rail.
+      -->
+      <aside
+        v-if="chatOpen && wideEnoughForColumn"
+        class="flex w-80 shrink-0 flex-col border-l"
+        :aria-label="t('workflow.askArchitect')"
+      >
+        <div class="flex h-9 shrink-0 items-center gap-2 border-b px-3">
+          <Sparkles class="text-primary size-3.5 shrink-0" />
+          <p class="min-w-0 flex-1 truncate text-xs font-medium">{{ t('workflow.askArchitect') }}</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-muted-foreground -mr-1 size-6 p-0"
+            :aria-label="t('common.close')"
+            @click="chatOpen = false"
+          >
+            <X class="size-3.5" />
+          </Button>
+        </div>
+        <WorkflowArchitectChat
+          class="min-h-0 flex-1"
+          :turns="chatTurns"
+          :graph="draft.graph"
+          :disabled="!canManage"
+          @say="(turn) => chatTurns.push(turn)"
+          @propose="applyProposal"
+          @unavailable="chatUnavailable = true"
+        />
       </aside>
     </div>
 
-    <!-- Narrow screens: the same inspector, as a sheet. -->
+    <Sheet :open="chatOpen && !wideEnoughForColumn" @update:open="(open: boolean) => (chatOpen = open)">
+      <SheetContent side="right" class="flex w-full max-w-sm flex-col p-0">
+        <SheetHeader class="shrink-0 border-b px-4 py-3">
+          <SheetTitle class="text-sm">{{ t('workflow.askArchitect') }}</SheetTitle>
+        </SheetHeader>
+        <WorkflowArchitectChat
+          v-if="draft"
+          class="min-h-0 flex-1"
+          :turns="chatTurns"
+          :graph="draft.graph"
+          :disabled="!canManage"
+          @say="(turn) => chatTurns.push(turn)"
+          @propose="applyProposal"
+          @unavailable="chatUnavailable = true"
+        />
+      </SheetContent>
+    </Sheet>
+
+    <!-- The inspector: the selected step, or the workflow itself. A drawer at
+         every width — the pane it would otherwise take is the canvas. -->
     <Sheet v-model:open="inspectorOpen">
       <SheetContent side="right" class="w-full max-w-sm overflow-y-auto p-0">
         <SheetHeader class="sr-only">
-          <SheetTitle>{{ t('workflow.builder.openInspector') }}</SheetTitle>
+          <SheetTitle>{{ step ? t('workflow.builder.openInspector') : t('workflow.configure') }}</SheetTitle>
         </SheetHeader>
         <WorkflowStepForm
           v-if="draft && step"
@@ -485,7 +585,23 @@ watch(selectedStepId, (value) => {
           v-model:description="draft.description"
           v-model:trigger="draft.trigger"
           :can-manage="canManage"
-        />
+        >
+          <template #footer>
+            <!-- The enabled toggle has no room in the header below `sm`, so the
+                 drawer carries it too rather than leaving it unreachable. -->
+            <div class="space-y-2 border-t pt-3">
+              <label class="flex items-center gap-2 px-1 text-xs sm:hidden">
+                <Checkbox v-model="draft.enabled" :disabled="!canManage" />
+                {{ t('workflow.settings.availableToRun') }}
+              </label>
+              <RouterLink v-if="workflow?.enabled" to="/workflows" class="block">
+                <Button variant="ghost" size="sm" class="text-muted-foreground w-full justify-start">
+                  <Play class="mr-1.5 size-3.5" /> {{ t('workflow.builder.seeRuns') }}
+                </Button>
+              </RouterLink>
+            </div>
+          </template>
+        </WorkflowSettingsForm>
       </SheetContent>
     </Sheet>
 

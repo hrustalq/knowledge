@@ -3,8 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectVersionsCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -130,6 +132,49 @@ export class StorageService {
 
   async deleteObject(objectKey: string): Promise<void> {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: objectKey }));
+  }
+
+  /**
+   * Delete a key *and every version of it*.
+   *
+   * The bucket is versioned (`mc version enable` in docker-compose), which
+   * makes an ordinary DeleteObject write a delete marker: the key stops
+   * resolving, and every byte it ever held stays in the bucket. That is the
+   * right default — it is what makes a revision's `s3VersionId` meaningful and
+   * an accidental overwrite recoverable — but it is not a deletion, and a
+   * cascade that reported "340 files deleted" while leaving all 340 on disk
+   * would be reporting something untrue.
+   *
+   * So this lists the key's versions (delete markers included, or the marker
+   * from a previous pass would be left behind) and removes them by id. Paged,
+   * because ListObjectVersions caps at 1000 and a heavily revised page can
+   * exceed that.
+   */
+  async purgeObjectVersions(objectKey: string): Promise<void> {
+    let keyMarker: string | undefined;
+    let versionIdMarker: string | undefined;
+    do {
+      const listed = await this.s3.send(
+        new ListObjectVersionsCommand({
+          Bucket: this.bucket,
+          Prefix: objectKey,
+          KeyMarker: keyMarker,
+          VersionIdMarker: versionIdMarker,
+        }),
+      );
+      const objects = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])]
+        // Prefix is a prefix, not an exact match: a sibling key that merely
+        // starts with this one must not be swept up with it.
+        .filter((v) => v.Key === objectKey && v.VersionId)
+        .map((v) => ({ Key: v.Key!, VersionId: v.VersionId! }));
+      if (objects.length > 0) {
+        await this.s3.send(
+          new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: objects, Quiet: true } }),
+        );
+      }
+      keyMarker = listed.IsTruncated ? listed.NextKeyMarker : undefined;
+      versionIdMarker = listed.IsTruncated ? listed.NextVersionIdMarker : undefined;
+    } while (keyMarker || versionIdMarker);
   }
 
   async headObject(objectKey: string): Promise<HeadResult | null> {

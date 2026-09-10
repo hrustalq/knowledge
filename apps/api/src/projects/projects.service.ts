@@ -1,7 +1,11 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
   CreateProjectResponse,
+  DeleteProjectResponse,
   ListProjectsResponse,
+  ProjectCascadeCounts,
+  ProjectDeletionCounts,
+  ProjectDeletionPreview,
   ProjectSummary,
 } from '@knowledge/contracts';
 import type { Project } from '@prisma/client';
@@ -12,12 +16,55 @@ import type { CreateProjectDto, ListProjectsQueryDto, UpdateProjectDto } from '.
 import { t } from '../i18n/t.js';
 
 /**
+ * Runs the destructive teardown. Passed in rather than injected: the machinery
+ * needs object storage, the graph and the fulltext index, and this service
+ * lives in `ProjectsCoreModule` so the worker can resolve projects while
+ * writing pages. A seam keeps every invariant — the last-project rule, the
+ * activity entry, the project row itself — in one place without dragging any
+ * of that into the worker's module graph.
+ */
+export type CascadeRunner = (projectId: string, workspaceId: string) => Promise<ProjectCascadeCounts>;
+
+/** The read-only half of the same seam: what a cascade *would* destroy. */
+export type CascadeCounter = (projectId: string) => Promise<ProjectCascadeCounts>;
+
+export interface RemoveOptions {
+  /** Sibling project the contents move into. Required unless the project is empty. */
+  moveContentsTo?: string;
+  /** Present only for `mode=cascade`: supplied by the API-side controller. */
+  cascade?: CascadeRunner;
+  /** The project's name, echoed back. Required by a cascade, ignored by a move. */
+  confirm?: string;
+}
+
+/** Nothing was destroyed, but the mode says a cascade ran. */
+const ZERO_CASCADE: ProjectCascadeCounts = {
+  documents: 0,
+  revisions: 0,
+  attachments: 0,
+  mergeRequests: 0,
+  discussions: 0,
+  workflowRuns: 0,
+  storedFiles: 0,
+};
+
+const ZERO_COUNTS: ProjectDeletionCounts = {
+  documents: 0,
+  glossaryTerms: 0,
+  connectors: 0,
+  workflowDefinitions: 0,
+  activeWorkflowRuns: 0,
+  pendingImports: 0,
+  watchers: 0,
+};
+
+/**
  * Projects are the organizational layer between a workspace and its documents
  * (Workspace > Project > Document). They carry no ACLs of their own — role
  * checks happen in AclGuard via @Access(role, 'project' | 'body' | 'query').
- * What lives here are the invariants ACLs cannot express: a project holding
- * documents cannot be deleted, and a workspace always keeps at least one
- * project so there is somewhere to put a page.
+ * What lives here are the invariants ACLs cannot express: a workspace always
+ * keeps at least one project so there is somewhere to put a page, and a project
+ * holding anything cannot simply vanish — its contents move first.
  */
 @Injectable()
 export class ProjectsService {
@@ -128,18 +175,69 @@ export class ProjectsService {
     return toSummary(updated, updated._count.documents);
   }
 
-  async remove(projectId: string, actorId?: string): Promise<{ deleted: true }> {
+  /**
+   * What a deletion would have to relocate, so the warning can name it before
+   * anything moves.
+   *
+   * Derived on every request with no stored table, exactly as
+   * `ProjectOverviewService` is: every number is a count over rows that already
+   * exist, and a cached copy would only be a second answer to the same question.
+   *
+   * `target` is optional because the destination is chosen *in* the dialog: the
+   * first call answers "what is in here", the second "and what does moving it
+   * into that one cost" — which is the only way the glossary conflicts can be
+   * known at all, since they are a property of the pair.
+   */
+  async deletionPreview(
+    projectId: string,
+    options: { target?: string; cascadeCounts: CascadeCounter },
+  ): Promise<ProjectDeletionPreview> {
+    const project = await this.requireProject(projectId);
+    const [counts, siblings, glossaryConflicts, cascade] = await Promise.all([
+      this.holdingsOf(projectId),
+      this.prisma.project.count({
+        where: { workspaceId: project.workspaceId, id: { not: projectId } },
+      }),
+      this.glossaryConflicts(projectId, options.target),
+      options.cascadeCounts(projectId),
+    ]);
+    return {
+      projectId,
+      name: project.name,
+      empty: isEmpty(counts),
+      lastInWorkspace: siblings === 0,
+      counts,
+      glossaryConflicts,
+      cascade,
+    };
+  }
+
+  /**
+   * Remove a project by moving its contents into a sibling, then deleting it.
+   *
+   * A cascade was never available: documents are not deletable anywhere in this
+   * product (revisions are immutable, and the S3 keys, graph vertices, chunks
+   * and merge requests all hang off them), so "delete the project and its
+   * pages" would mean inventing a destruction path for everything downstream.
+   * Moving is also the truthful operation — the pages are still wanted, it is
+   * the folder that is not.
+   *
+   * Six tables key off a project and only two of them announce it. `documents`,
+   * `glossary_terms` and `connectors` carry real FKs, so PostgreSQL refuses;
+   * `workflow_definitions`, `workflow_runs` and `import_jobs` carry none and
+   * would silently be left pointing at an id that no longer resolves. All six
+   * move together in one transaction, or none does.
+   */
+  async remove(
+    projectId: string,
+    actorId?: string,
+    options: RemoveOptions = {},
+  ): Promise<DeleteProjectResponse> {
+    const { moveContentsTo, cascade, confirm } = options;
     const project = await this.requireProject(projectId);
 
-    const documentCount = await this.prisma.document.count({ where: { projectId } });
-    if (documentCount > 0) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.project.notEmpty', { count: documentCount }),
-        reason: 'not-empty',
-        documentCount,
-      });
-    }
+    // Checked before anything else: this one has no remedy, so offering a
+    // destination for it would be offering a button that cannot work.
     const siblings = await this.prisma.project.count({
       where: { workspaceId: project.workspaceId, id: { not: projectId } },
     });
@@ -147,15 +245,199 @@ export class ProjectsService {
       throw new BadRequestException(t('error.project.lastInWorkspace'));
     }
 
-    await this.prisma.project.delete({ where: { id: projectId } });
+    const counts = await this.holdingsOf(projectId);
+    // "Empty" means holds nothing at all — not "holds no documents", which is
+    // what the old check meant and why a project holding only a glossary term
+    // reached PostgreSQL and came back as a 500.
+    if (isEmpty(counts)) {
+      // No confirmation gate here even when `cascade` was asked for: that gate
+      // protects content, and there is none. Both modes do the same thing to an
+      // empty project, so the answer just reports which one was asked for
+      // rather than rewriting the caller's intent.
+      await this.prisma.project.delete({ where: { id: projectId } });
+      await this.recordDeletion(project, actorId, null, counts, []);
+      return {
+        deleted: true,
+        mode: cascade ? 'cascade' : 'move',
+        movedTo: null,
+        moved: counts,
+        destroyed: cascade ? ZERO_CASCADE : null,
+        droppedGlossaryTerms: [],
+      };
+    }
+
+    /**
+     * Destroy instead of relocate.
+     *
+     * Gated on echoing the project's name back, checked here rather than only
+     * in the dialog: this is the one call in the product that removes a page,
+     * it has no undo, and a client is not where an irreversible act should be
+     * confirmed. The same reason the last-project rule lives in this service
+     * and not in a guard.
+     */
+    if (cascade) {
+      if (confirm?.trim() !== project.name) {
+        throw new BadRequestException(t('error.project.confirmName', { name: project.name }));
+      }
+      const destroyed = await cascade(projectId, project.workspaceId);
+      await this.prisma.$transaction(async (tx) => {
+        // Whatever the cascade does not own: the project-scoped rows that
+        // outlive its documents.
+        await tx.glossaryTerm.deleteMany({ where: { projectId } });
+        await tx.connector.deleteMany({ where: { projectId } });
+        await tx.workflowRunNode.deleteMany({ where: { run: { projectId } } });
+        await tx.workflowRun.deleteMany({ where: { projectId } });
+        await tx.workflowDefinition.deleteMany({ where: { projectId } });
+        await tx.importJob.deleteMany({ where: { projectId } });
+        await tx.notificationSubscription.deleteMany({
+          where: { subjectType: 'project', subjectId: projectId },
+        });
+        await tx.project.delete({ where: { id: projectId } });
+      });
+      await this.recordDeletion(project, actorId, null, counts, [], destroyed);
+      return { deleted: true, mode: 'cascade', movedTo: null, moved: ZERO_COUNTS, destroyed, droppedGlossaryTerms: [] };
+    }
+
+    if (!moveContentsTo) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.project.notEmpty'),
+        reason: 'not-empty',
+        // Kept beside the fuller `counts` so anything already reading it keeps working.
+        documentCount: counts.documents,
+        counts,
+      });
+    }
+    if (moveContentsTo === projectId) {
+      throw new BadRequestException(t('error.project.moveToSelf'));
+    }
+    await this.requireProjectInWorkspace(moveContentsTo, project.workspaceId);
+
+    const droppedGlossaryTerms = await this.glossaryConflicts(projectId, moveContentsTo);
+
+    await this.prisma.$transaction(async (tx) => {
+      // glossary_terms is unique on (project_id, term), so a term both projects
+      // define cannot survive the move. The destination's definition wins —
+      // it is the one still in use tomorrow — and the dialog says so before the
+      // press rather than leaving it to be discovered afterwards.
+      if (droppedGlossaryTerms.length > 0) {
+        await tx.glossaryTerm.deleteMany({
+          where: { projectId, term: { in: droppedGlossaryTerms } },
+        });
+      }
+      await tx.glossaryTerm.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
+
+      // No re-rooting here, unlike DocumentsService.updateDocument's single-page
+      // move: the whole forest travels at once, so every parent_id still points
+      // at a document inside the same project.
+      await tx.document.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
+
+      await tx.connector.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
+      await tx.workflowDefinition.updateMany({
+        where: { projectId },
+        data: { projectId: moveContentsTo },
+      });
+      await tx.workflowRun.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
+      await tx.importJob.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
+
+      // The subject is going away, so its watches go with it. Watches on the
+      // *documents* are untouched: those pages survive, in a new project.
+      await tx.notificationSubscription.deleteMany({
+        where: { subjectType: 'project', subjectId: projectId },
+      });
+
+      await tx.project.delete({ where: { id: projectId } });
+    });
+
+    await this.recordDeletion(project, actorId, moveContentsTo, counts, droppedGlossaryTerms);
+    return {
+      deleted: true,
+      mode: 'move',
+      movedTo: moveContentsTo,
+      moved: counts,
+      destroyed: null,
+      droppedGlossaryTerms,
+    };
+  }
+
+  /**
+   * Everything that keys off a project, counted in one round trip.
+   *
+   * The three FK-bearing tables are what PostgreSQL would refuse on; the other
+   * three carry no FK and would dangle instead, which is worse for being quiet.
+   * Watchers neither block nor move, but losing a subscription without pressing
+   * anything is worth being told about.
+   */
+  private async holdingsOf(projectId: string): Promise<ProjectDeletionCounts> {
+    const [
+      documents,
+      glossaryTerms,
+      connectors,
+      workflowDefinitions,
+      activeWorkflowRuns,
+      pendingImports,
+      watchers,
+    ] = await Promise.all([
+      this.prisma.document.count({ where: { projectId } }),
+      this.prisma.glossaryTerm.count({ where: { projectId } }),
+      this.prisma.connector.count({ where: { projectId } }),
+      this.prisma.workflowDefinition.count({ where: { projectId } }),
+      this.prisma.workflowRun.count({
+        where: { projectId, status: { in: ['pending', 'running', 'awaiting-review', 'paused'] } },
+      }),
+      this.prisma.importJob.count({
+        where: { projectId, status: { in: ['awaiting-upload', 'queued', 'running'] } },
+      }),
+      this.prisma.notificationSubscription.count({
+        where: { subjectType: 'project', subjectId: projectId, muted: false },
+      }),
+    ]);
+    return {
+      documents,
+      glossaryTerms,
+      connectors,
+      workflowDefinitions,
+      activeWorkflowRuns,
+      pendingImports,
+      watchers,
+    };
+  }
+
+  /** Terms both projects define. A property of the pair, so it needs the target. */
+  private async glossaryConflicts(projectId: string, target?: string): Promise<string[]> {
+    if (!target || target === projectId) return [];
+    const source = await this.prisma.glossaryTerm.findMany({
+      where: { projectId },
+      select: { term: true },
+    });
+    if (source.length === 0) return [];
+    const clashes = await this.prisma.glossaryTerm.findMany({
+      where: { projectId: target, term: { in: source.map((r) => r.term) } },
+      select: { term: true },
+    });
+    return clashes.map((r) => r.term).sort();
+  }
+
+  private async recordDeletion(
+    project: Project,
+    actorId: string | undefined,
+    movedTo: string | null,
+    moved: ProjectDeletionCounts,
+    droppedGlossaryTerms: string[],
+    destroyed?: ProjectCascadeCounts,
+  ): Promise<void> {
     await this.activity.record({
       workspaceId: project.workspaceId,
       actor: actorId,
       action: 'project.deleted',
-      subjectId: projectId,
-      metadata: { name: project.name },
+      subjectId: project.id,
+      // Where things went belongs in the feed: without it the entry reads as a
+      // destruction, and the pages it names are still there under another
+      // project. activity_log rows *inside* the project deliberately keep
+      // pointing at it — rewriting them to claim those events happened in the
+      // destination would be inventing history.
+      metadata: { name: project.name, movedTo, moved, droppedGlossaryTerms, destroyed: destroyed ?? null },
     });
-    return { deleted: true };
   }
 
   /**
@@ -190,4 +472,15 @@ function toSummary(project: Project, documentCount: number): ProjectSummary {
     documentCount,
     createdAt: project.createdAt.toISOString(),
   };
+}
+
+/**
+ * Holds nothing at all.
+ *
+ * Spelled as "every count is zero" rather than a list of the ones that matter,
+ * so a table added to `ProjectDeletionCounts` later cannot quietly stop being
+ * checked — a new field defaults to blocking, which is the safe direction.
+ */
+function isEmpty(counts: ProjectDeletionCounts): boolean {
+  return Object.values(counts).every((n) => n === 0);
 }

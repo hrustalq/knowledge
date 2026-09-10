@@ -76,10 +76,15 @@ function open() {
           <template v-if="entry.actor">{{ nameOf(entry.actor) || actorLabel(entry.actor) }} · </template>{{ message }}
         </span>
       </span>
+    </span>
 
-      <span v-if="!compact" class="mt-0.5 block text-[11px] text-muted-foreground/80">
-        {{ formatRelative(entry.createdAt) }}
-      </span>
+    <!-- On the page the row is as wide as the content column, so the time goes
+         to the right edge rather than onto a third line: a column of times is
+         what makes an inbox scannable, and stacking it would leave that width
+         empty. The popover keeps it off the row entirely (`compact`) — there is
+         no room there for a second column. -->
+    <span v-if="!compact" class="mt-0.5 shrink-0 text-[11px] text-muted-foreground/80 tabular-nums">
+      {{ formatRelative(entry.createdAt) }}
     </span>
 
     <span

@@ -2290,6 +2290,129 @@ export interface UpdateProjectRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Deleting a project — GET /v1/projects/:id/deletion-preview,
+// DELETE /v1/projects/:id?moveContentsTo=
+//
+// Removal is *move-then-delete*, not a cascade. Documents are never deleted
+// anywhere in this product — revisions are immutable and the S3 keys, graph
+// vertices, chunks and merge requests all hang off them — so a project's
+// contents are reassigned to a sibling project and the emptied project is then
+// dropped. Since a workspace always keeps at least one project, a non-empty
+// project always has somewhere to move to.
+//
+// The preview exists so the warning can name what is about to move before it
+// moves. It is derived on every request with no stored table, exactly as
+// ProjectOverviewResponse is.
+// ---------------------------------------------------------------------------
+
+/** What a project holds, and therefore what a deletion has to relocate. */
+export interface ProjectDeletionCounts {
+  documents: number;
+  glossaryTerms: number;
+  connectors: number;
+  workflowDefinitions: number;
+  /**
+   * Runs that are `pending | running | awaiting-review | paused` — work a move
+   * relocates mid-flight, which is worth saying out loud before it happens.
+   */
+  activeWorkflowRuns: number;
+  /** Imports still `awaiting-upload | queued | running`: their destination changes under them. */
+  pendingImports: number;
+  /**
+   * People watching the project itself. Not moved and not blocking — the
+   * subscriptions go away with their subject — but disclosed, because those
+   * people stop hearing about this work without ever pressing anything.
+   */
+  watchers: number;
+}
+
+/**
+ * How a project's contents are dealt with.
+ *
+ * `move` is the safe default and the shape the product is built for: pages are
+ * never deleted, so they are reassigned to a sibling project. `cascade`
+ * destroys them along with everything downstream — revisions, stored files,
+ * merge requests, discussions, workflow runs, graph vertices and search index
+ * entries — and is the only operation in the product that removes a page at
+ * all. It is irreversible and there is no undo, so it is gated on echoing the
+ * project's name back (`confirm`), server-side, not only in the dialog.
+ */
+export const PROJECT_DELETION_MODES = ['move', 'cascade'] as const;
+export type ProjectDeletionMode = (typeof PROJECT_DELETION_MODES)[number];
+
+/**
+ * What a cascade destroys, beyond the holdings a move would relocate.
+ *
+ * Reported separately from `ProjectDeletionCounts` because these are the
+ * numbers that make the difference between the two modes legible: a project
+ * with 12 pages is also 300 revisions and 340 files in object storage, and the
+ * second number is the one that says what "delete everything" costs.
+ */
+export interface ProjectCascadeCounts {
+  documents: number;
+  revisions: number;
+  attachments: number;
+  mergeRequests: number;
+  /** Review threads and page comment threads together — every discussion lost. */
+  discussions: number;
+  workflowRuns: number;
+  /** Objects in storage: each revision's source and normalized JSON, plus attachments. */
+  storedFiles: number;
+}
+
+export interface ProjectDeletionPreview {
+  projectId: string;
+  name: string;
+  /** Holds nothing at all, so it can be deleted outright with no destination. */
+  empty: boolean;
+  /**
+   * The workspace's only project. Nothing can be done about this one: the next
+   * page created would have nowhere to go, so the delete is refused whatever
+   * the project holds.
+   */
+  lastInWorkspace: boolean;
+  counts: ProjectDeletionCounts;
+  /**
+   * Terms this project defines that the destination already defines.
+   * `glossary_terms` is unique on `(project_id, term)`, so both cannot survive
+   * the move: the destination's definition wins and these rows are dropped.
+   * Empty unless the request named a `target`.
+   */
+  glossaryConflicts: string[];
+  /**
+   * What choosing `cascade` would destroy. Always present, so the dialog can
+   * show the price of the destructive option without a second round trip —
+   * the point of the preview is that both choices are legible before either is
+   * taken.
+   */
+  cascade: ProjectCascadeCounts;
+}
+
+/**
+ * The 409 shape when a non-empty project is deleted without a destination.
+ * Carries the whole holding, not just the document count, so a caller never has
+ * to guess which of six tables refused.
+ */
+export interface ProjectNotEmptyDetails {
+  reason: 'not-empty';
+  documentCount: number;
+  counts: ProjectDeletionCounts;
+}
+
+export interface DeleteProjectResponse {
+  deleted: true;
+  mode: ProjectDeletionMode;
+  /** The project its contents were moved into. Null on a cascade, or when empty. */
+  movedTo: string | null;
+  /** What actually moved. Zeroes throughout on a cascade, or when empty. */
+  moved: ProjectDeletionCounts;
+  /** What was destroyed. Null unless the mode was `cascade`. */
+  destroyed: ProjectCascadeCounts | null;
+  /** Terms dropped in favour of the destination's own definition. */
+  droppedGlossaryTerms: string[];
+}
+
+// ---------------------------------------------------------------------------
 // GET /v1/projects/:id/overview — what a project *is*, for the page you read
 // rather than the form you edit it in.
 //

@@ -57,23 +57,17 @@ export function createRouter() {
       { path: '/u/:userId', component: () => import('@/pages/ProfilePage.vue') },
       { path: '/merge-requests', component: () => import('@/pages/MergeRequestsPage.vue') },
       { path: '/merge-requests/:id', component: () => import('@/pages/MergeRequestDetailPage.vue') },
-      // Creating and editing a workflow (docs/features/17).
+      // Creating a workflow (docs/features/17).
       //
-      // Declared at the top level while keeping the `/settings/workflows/…`
-      // path: the URL still reads as workspace administration, but rendering
-      // inside the settings shell would put a second navigation rail beside the
-      // builder's step palette and box the canvas into a column again — which
-      // is exactly what this rebuild was for. `meta.fill` gives each the
-      // viewport; `meta.bare` drops the app trail, because both carry a header
-      // that already says where you are and offers the way back.
+      // The wizard stays at the top level, full-viewport and trail-less: it is
+      // a three-step conversation that ends by handing you the builder, not a
+      // settings form you land on and leave. The builder itself is a child of
+      // `/settings/workflows` — see there. A static segment outranks a param in
+      // vue-router's scoring, so `new` beats the sibling `:id?` regardless of
+      // declaration order.
       {
         path: '/settings/workflows/new',
         component: () => import('@/pages/WorkflowWizardPage.vue'),
-        meta: { fill: true, bare: true },
-      },
-      {
-        path: '/settings/workflows/:id/edit',
-        component: () => import('@/pages/WorkflowBuilderPage.vue'),
         meta: { fill: true, bare: true },
       },
 
@@ -107,9 +101,27 @@ export function createRouter() {
           // this is workspace administration, so the page gates on
           // auth.canAdminWorkspace and the API enforces the admin role.
           // Deliberately not meta.fill: that drops <main>'s padding, which the
-          // settings shell's negative-margin bleed depends on. The workbench
+          // settings shell's negative-margin bleed depends on. The builder
           // bounds its own panes instead.
-          { path: 'workflows', component: () => import('@/pages/WorkflowSettingsPage.vue') },
+          {
+            path: 'workflows',
+            component: () => import('@/pages/WorkflowSettingsPage.vue'),
+            // Third rail, exactly as projects: the roster lives in the shell,
+            // the selection here. The builder gave up the viewport to get the
+            // app trail and the roster back — a chain you navigate to like
+            // anything else, rather than a place you enter.
+            //
+            // Reading and editing are two routes, not one page with a toggle.
+            // The canvas is a working surface: it holds a dirty draft and arms
+            // an unsaved-changes guard on the way out, so opening it to glance
+            // at a chain armed a confirm dialog for nothing. `/edit` is more
+            // segments than `:id?`, so vue-router scores it first regardless of
+            // declaration order — and Vue Flow only loads on that route.
+            children: [
+              { path: ':id/edit', component: () => import('@/pages/WorkflowBuilderPage.vue') },
+              { path: ':id?', component: () => import('@/pages/WorkflowDetailPage.vue') },
+            ],
+          },
           // Access control (page gates mutations by workspace role)
           { path: 'access', component: () => import('@/pages/AccessControlPage.vue') },
           { path: 'activity', component: () => import('@/pages/ActivityPage.vue') },

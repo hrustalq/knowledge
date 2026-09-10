@@ -588,7 +588,17 @@
         "summary": "An empty chain with a single step, for building up from scratch.",
         "firstTitle": "First step"
       }
-    }
+    },
+    "searchWorkflows": "Search workflows…",
+    "noneMatch": "No workflow matches that.",
+    "rosterHint": "Pick one from the list to see its chain, or start another.",
+    "notFound": "That workflow no longer exists.",
+    "askArchitect": "Ask the architect",
+    "architectApplied": "Chain updated — review it and save",
+    "whatItDoes": "What it does",
+    "doesNotAutoStart": "It never starts on its own.",
+    "version": "version {n}",
+    "updated": "updated {when}"
   },
   "activity": {
     "action": {
@@ -1401,6 +1411,50 @@
     "rosterHint": "Every page belongs to exactly one project. Pick one from the list to rename it, or switch the active project to re-scope the page tree.",
     "updated": "Project updated",
     "deleted": "Project “{name}” deleted",
+    "deletedMoved": "Project “{name}” deleted — its contents moved to “{target}”",
+    "deletedCascade": "Project “{name}” and its {n} pages were permanently deleted",
+    "delete": {
+      "title": "Delete “{name}”?",
+      "emptyBody": "This project holds nothing, so deleting it takes nothing with it.",
+      "movingBody": "Nothing here is deleted. Pages are never deleted in this workspace — they move to the project you pick, along with everything else below, and then this project is removed.",
+      "cascadeBody": "This deletes the project and everything in it. Pages here are not moved anywhere — they are destroyed, along with their full history. There is no undo and no way to recover them.",
+      "blockedTitle": "This project can’t be deleted",
+      "blockedBody": "It is the workspace’s only project. Every page belongs to exactly one project, so the next page created would have nowhere to go. Create another project first.",
+      "destinationPlaceholder": "Pick a project",
+      "pickFirst": "Pick where this project’s contents should go.",
+      "inFlight": "Work that is running right now moves with it and carries on in the new project.",
+      "conflictsTitle": "{n} term is already defined there | {n} terms are already defined there",
+      "conflictsBody": "A project defines each term once, so the destination keeps its own definition and this project’s is dropped: {terms}",
+      "confirm": "Move & delete",
+      "confirmEmpty": "Delete project",
+      "working": "Moving…",
+      "count": {
+        "documents": "{n} page | {n} pages",
+        "glossaryTerms": "{n} glossary term | {n} glossary terms",
+        "connectors": "{n} connector | {n} connectors",
+        "workflowDefinitions": "{n} workflow | {n} workflows",
+        "activeWorkflowRuns": "{n} run in flight | {n} runs in flight",
+        "pendingImports": "{n} import in progress | {n} imports in progress",
+        "watchers": "{n} watcher | {n} watchers"
+      },
+      "modeMove": "Move the contents to another project",
+      "modeMoveHint": "Nothing is lost. Everything below is reassigned, then this project is removed.",
+      "modeCascade": "Delete the project and everything in it",
+      "modeCascadeHint": "Permanently destroys the pages, their history and their files.",
+      "irreversible": "This cannot be undone.",
+      "typeName": "Type {name} to confirm",
+      "confirmCascade": "Delete everything",
+      "deleting": "Deleting…",
+      "destroyed": {
+        "documents": "{n} page | {n} pages",
+        "revisions": "{n} revision | {n} revisions",
+        "storedFiles": "{n} stored file | {n} stored files",
+        "attachments": "{n} attachment | {n} attachments",
+        "mergeRequests": "{n} merge request | {n} merge requests",
+        "discussions": "{n} discussion | {n} discussions",
+        "workflowRuns": "{n} workflow run | {n} workflow runs"
+      }
+    },
     "notFound": "Project not found in this workspace.",
     "appearance": "Appearance",
     "openOverview": "Open overview",
@@ -1949,6 +2003,10 @@
   "profileSettings": {
     "title": "Your account",
     "subtitle": "Everything here applies to you. Renaming or disabling somebody else is done in Users.",
+    "groups": {
+      "profile": "Profile",
+      "signIn": "Signing in"
+    },
     "name": {
       "title": "Display name",
       "hint": "Shown wherever you act — revisions, review threads, this workspace's member list.",

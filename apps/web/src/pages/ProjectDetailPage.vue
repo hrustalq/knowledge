@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
+import type { DeleteProjectResponse } from '@knowledge/contracts'
 import { apiFetch, relativeTime } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
@@ -12,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import AvatarPicker from '@/components/people/AvatarPicker.vue'
+import DeleteProjectDialog from '@/components/projects/DeleteProjectDialog.vue'
 import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
 
 const { t } = useI18n()
@@ -86,18 +88,39 @@ async function setEmoji(emoji: string | null) {
   }
 }
 
-async function remove() {
+const confirmDelete = ref(false)
+
+/** Candidate destinations: every project in the workspace except this one. */
+const siblings = computed(() =>
+  store.items.filter((p) => p.projectId !== project.value?.projectId),
+)
+
+/**
+ * Deleting moved the contents somewhere; the app has to end up somewhere valid
+ * too. If the project just removed was the active one, the `kn_proj` cookie now
+ * points at an id that no longer resolves, so the scope follows the contents to
+ * where they went (or to whatever the roster falls back to).
+ */
+async function onDeleted(result: DeleteProjectResponse) {
   const p = project.value
-  if (!p) return
-  if (!confirm(`Delete project "${p.name}"? This cannot be undone.`)) return
-  try {
-    await apiFetch(`/v1/projects/${p.projectId}`, { method: 'DELETE' })
-    toast.success(t('project.deleted', { name: p.name }))
-    emit('changed')
-    void router.push('/settings/projects')
-  } catch (e) {
-    toast.error((e as Error).message)
-  }
+  const name = p?.name ?? ''
+  toast.success(
+    result.movedTo
+      ? t('project.deletedMoved', {
+          name,
+          target: store.items.find((s) => s.projectId === result.movedTo)?.name ?? '',
+        })
+      : result.mode === 'cascade'
+        ? t('project.deletedCascade', { name, n: result.destroyed?.documents ?? 0 })
+        : t('project.deleted', { name }),
+  )
+  const wasActive = p?.projectId === store.activeId
+  emit('changed')
+  // Re-resolves a stale active id against the new roster on its own, which is
+  // what covers a cascade — there is nowhere for the scope to follow.
+  await store.fetchList()
+  if (wasActive && result.movedTo) await store.switchProject(result.movedTo)
+  void router.push('/settings/projects')
 }
 </script>
 
@@ -204,11 +227,19 @@ async function remove() {
           v-if="auth.canAdminWorkspace"
           variant="ghost"
           class="ml-auto text-destructive"
-          @click="remove"
+          @click="confirmDelete = true"
         >
           {{ t('common.delete') }}
         </Button>
       </div>
     </div>
+
+    <DeleteProjectDialog
+      v-if="auth.canAdminWorkspace"
+      v-model:open="confirmDelete"
+      :project="project"
+      :siblings="siblings"
+      @deleted="onDeleted"
+    />
   </div>
 </template>

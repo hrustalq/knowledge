@@ -326,7 +326,7 @@ export interface paths {
         get: operations["ProjectsController_get"];
         put?: never;
         post?: never;
-        /** Delete an empty project (409 when it still holds documents) */
+        /** Delete a project: move its contents to another, or cascade-delete them */
         delete: operations["ProjectsController_remove"];
         options?: never;
         head?: never;
@@ -343,6 +343,23 @@ export interface paths {
         };
         /** Project overview: counts, contributors, recent pages */
         get: operations["ProjectsController_overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{id}/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What deleting this project would relocate (pass ?target= for glossary conflicts) */
+        get: operations["ProjectsController_deletionPreview"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4511,7 +4528,14 @@ export interface operations {
     };
     ProjectsController_remove: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Defaults to move */
+                mode?: "move" | "cascade";
+                /** @description Sibling project to move contents into */
+                moveContentsTo?: string;
+                /** @description Required for mode=cascade: the project name, verbatim */
+                confirm?: string;
+            };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
                 "Accept-Language"?: "en" | "ru";
@@ -4596,6 +4620,49 @@ export interface operations {
     ProjectsController_overview: {
         parameters: {
             query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsController_deletionPreview: {
+        parameters: {
+            query?: {
+                /** @description Prospective destination project */
+                target?: string;
+            };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
                 "Accept-Language"?: "en" | "ru";

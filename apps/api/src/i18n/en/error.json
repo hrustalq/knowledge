@@ -35,10 +35,9 @@
     "notFound": "Project {id} not found",
     "notInWorkspace": "Project {id} not found in this workspace",
     "nothingToUpdate": "Nothing to update",
-    "notEmpty": {
-      "one": "Project still holds {count} document — move or delete it first",
-      "other": "Project still holds {count} documents — move or delete them first"
-    },
+    "notEmpty": "Project is not empty — pass moveContentsTo naming the project its contents should move into",
+    "moveToSelf": "A project cannot be moved into itself",
+    "confirmName": "Deleting everything in this project is irreversible — repeat its name ({name}) in `confirm` to proceed",
     "lastInWorkspace": "Cannot delete the last project of the workspace"
   },
   "document": {

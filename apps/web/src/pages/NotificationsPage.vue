@@ -69,7 +69,7 @@ watch(tab, () => {
 </script>
 
 <template>
-  <div class="flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4">
+  <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4">
     <header class="flex flex-wrap items-center gap-3">
       <div>
         <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('notifications.title') }}</h1>
@@ -112,14 +112,20 @@ watch(tab, () => {
       </button>
     </div>
 
-    <NotificationList
-      :entries="visible"
-      :loading="!store.loaded && store.entries.length === 0"
-      :has-more="!!store.nextCursor"
-      :loading-more="loadingMore"
-      :empty-text="tab === 'unread' ? t('notifications.emptyUnread') : t('notifications.empty')"
-      @read="store.markRead([$event])"
-      @load-more="loadMore"
-    />
+    <!-- The rows sit in a card rather than loose on the page: at the width of
+         the content column an unframed list has no left or right edge to read
+         against, which is the one thing the bell panel got for free from being
+         a popover. -->
+    <div class="min-w-0 rounded-xl border bg-card p-1.5">
+      <NotificationList
+        :entries="visible"
+        :loading="!store.loaded && store.entries.length === 0"
+        :has-more="!!store.nextCursor"
+        :loading-more="loadingMore"
+        :empty-text="tab === 'unread' ? t('notifications.emptyUnread') : t('notifications.empty')"
+        @read="store.markRead([$event])"
+        @load-more="loadMore"
+      />
+    </div>
   </div>
 </template>

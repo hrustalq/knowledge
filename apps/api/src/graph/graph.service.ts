@@ -220,6 +220,29 @@ export class GraphService {
   }
 
   /**
+   * Erase a document from the graph: its chunks, its revision vertices and the
+   * document vertex itself.
+   *
+   * Deleting a vertex in ArcadeDB removes the edges attached to it, so the
+   * document's relation edges (DESCRIBES, DEPENDS_ON, …) go with the Document
+   * vertex and need no separate pass — the same reason `upsertRevisionChunks`
+   * can re-index by deleting a revision's vertices outright.
+   *
+   * Carries the mandatory workspace predicate like every other query here
+   * (plan.md §6): a document id is not a capability, and a delete is the last
+   * place to start trusting one.
+   */
+  async deleteDocumentGraph(workspaceId: string, documentId: string): Promise<void> {
+    for (const type of ['Chunk', 'DocumentRevision', 'Document']) {
+      await this.arcade.command(
+        'sql',
+        `DELETE FROM ${type} WHERE documentId = :documentId AND workspaceId = :workspaceId`,
+        { documentId, workspaceId },
+      );
+    }
+  }
+
+  /**
    * Idempotent replace of a revision's frontmatter-derived relation edges
    * (deterministic facts, plan.md §5). Explicit/curated edges are untouched.
    */

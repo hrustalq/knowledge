@@ -120,12 +120,9 @@ export type I18nTranslations = {
             "notFound": string;
             "notInWorkspace": string;
             "nothingToUpdate": string;
-            "notEmpty": {
-                "one": string;
-                "other": string;
-                "few": string;
-                "many": string;
-            };
+            "notEmpty": string;
+            "moveToSelf": string;
+            "confirmName": string;
             "lastInWorkspace": string;
         };
         "document": {

@@ -7,17 +7,23 @@ import { RouterLink, useRoute } from 'vue-router'
 import { ChevronRight } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
+import { useWorkflowsStore } from '@/stores/workflows'
 
 const { t } = useI18n()
 
 const route = useRoute()
 const store = useDocumentsStore()
 const projects = useProjectsStore()
+const workflows = useWorkflowsStore()
 
 // The sidebar may be collapsed (and unmounted), so make sure the tree loads.
 onMounted(() => {
   if (!store.treeLoaded) void store.fetchTree()
   if (!projects.loaded) void projects.fetchList().catch(() => undefined)
+  // The last crumb on a builder URL is the workflow's name. The store already
+  // de-duplicates this against the document rail's Run button, which wants the
+  // same roster.
+  if (route.path.startsWith('/settings/workflows/')) void workflows.ensureLoaded()
 })
 
 /**
@@ -100,6 +106,23 @@ const crumbs = computed<Crumb[]>(() => {
       const id = route.params.id as string
       const name = projects.items.find((p) => p.projectId === id)?.name ?? id.slice(0, 8)
       return [{ label: t('nav.settings'), to: '/settings' }, { label: t('nav.projects'), to: '/settings/projects' }, { label: name }]
+    }
+    // The workflow builder is the third pane of the settings shell, so it takes
+    // the same three-step trail as a project. `/new` is the wizard, which is
+    // `meta.bare` and never reaches here.
+    if (path.startsWith('/settings/workflows/')) {
+      const id = route.params.id as string
+      const name = workflows.byId(id)?.name ?? id.slice(0, 8)
+      const list: Crumb[] = [
+        { label: t('nav.settings'), to: '/settings' },
+        { label: t('nav.workflows'), to: '/settings/workflows' },
+        { label: name, to: `/settings/workflows/${id}` },
+      ]
+      // Editing is its own route, so it is its own crumb — and the workflow's
+      // name above it becomes the way back to reading it, exactly as a page's
+      // does under /documents/:id/edit.
+      if (path.endsWith('/edit')) list.push({ label: t('nav.edit') })
+      return list
     }
     const key = SETTINGS[path]
     return key

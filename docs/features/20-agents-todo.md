@@ -79,6 +79,17 @@ where per-agent overrides are already badged.
 See item 1 above for the shape and the guards. The gate is a real trigger to
 hang it on, not the code.
 
+**Still open, and docs/features/21 is deliberately not it.** Tagging `@reviewer`
+in a discussion does start an agent from something that happened, but it is a
+person addressing an agent in a conversation, not an event trigger: it produces a
+comment rather than an `agent_runs` row with findings, and it has an owner by
+construction — the person who typed the mention — which is the property
+`agent_runs.created_by NOT NULL` exists to guarantee and the thing an
+event-triggered run has to invent. Feature 21 needed none of the five
+`WorkflowTriggerService` guards, because a mention is rate-limited by somebody
+typing it. So this item still wants a genuinely unattended workload, and the
+guards remain the interesting part.
+
 ### B. `AgentTiebreakService` has no background counterpart — S
 
 `AgentRouterService.route()` takes the tiebreak as a call argument precisely so

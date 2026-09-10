@@ -4,6 +4,7 @@ import {
   IsString,
   IsNotEmpty,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -76,4 +77,27 @@ export class UpdateProjectDto {
   @IsString()
   @MaxLength(2000, { message: vmsg('maxLength') })
   description?: string | null;
+
+  /**
+   * An emoji to use instead of a picture. `null` clears it and falls back to
+   * the monogram; setting one retires any uploaded picture, since a project has
+   * one face.
+   *
+   * Capped generously rather than at 1: a single emoji can be several code
+   * points (a skin tone, a ZWJ sequence), so counting characters would refuse
+   * perfectly ordinary ones.
+   */
+  @ApiPropertyOptional({ type: String, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: UpdateProjectDto) => o.avatarEmoji !== null)
+  @IsString()
+  @MaxLength(16, { message: vmsg('maxLength') })
+  avatarEmoji?: string | null;
+
+  /** Hex colour behind the emoji, e.g. `#3b82f6`. Ignored without one. */
+  @ApiPropertyOptional({ type: String, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: UpdateProjectDto) => o.avatarColor !== null)
+  @Matches(/^#[0-9a-fA-F]{6}$/, { message: vmsg('hexColor') })
+  avatarColor?: string | null;
 }

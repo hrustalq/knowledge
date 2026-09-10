@@ -62,6 +62,7 @@ import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
+import WatchButton from '@/components/notifications/WatchButton.vue'
 
 const { t } = useI18n()
 
@@ -414,12 +415,18 @@ watch(
         <h1 class="font-display text-2xl font-bold tracking-tight">{{ detail.document.title }}</h1>
         <Badge variant="outline">{{ labelFor(t, 'category', detail.document.category) }}</Badge>
         <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
-        <Button v-if="auth.canEdit" variant="outline" size="sm" class="ml-auto" as-child>
-          <RouterLink :to="`/documents/${detail.document.documentId}/edit`">
-            <Pencil class="size-3.5" />
-            {{ t('common.edit') }}
-          </RouterLink>
-        </Button>
+        <!-- Watch sits before Edit and carries the auto-margin: following a
+             page is open to every reader, while editing is not, so hanging the
+             margin off Edit would leave the row unbalanced for a viewer. -->
+        <div class="ml-auto flex items-center gap-1.5">
+          <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
+          <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
+            <RouterLink :to="`/documents/${detail.document.documentId}/edit`">
+              <Pencil class="size-3.5" />
+              {{ t('common.edit') }}
+            </RouterLink>
+          </Button>
+        </div>
       </div>
       <p class="text-xs text-muted-foreground">
         Revision #{{ detail.revision.revisionNumber }}

@@ -195,6 +195,10 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     for (const [socket, st] of this.state) {
       const tracking = st.subscriptions.get(event.workspaceId);
       if (!tracking) continue; // not subscribed to this workspace → never delivered
+      // An addressed frame (notification.created) belongs to one person; on a
+      // workspace-wide bus, delivering it to the rest would broadcast who is
+      // being notified about what (docs/features/22).
+      if (event.userId && event.userId !== st.principal.userId) continue;
       if (tracking.events?.length && !tracking.events.some((p) => matchesType(p, event.type))) continue;
       if (tracking.documents?.length && (!event.documentId || !tracking.documents.includes(event.documentId))) continue;
       this.send(socket, { type: 'event', event });

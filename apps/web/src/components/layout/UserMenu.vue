@@ -45,7 +45,7 @@ async function logout() {
       class="flex items-center gap-2 rounded-md py-1 pl-1 pr-1.5 transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring data-[state=open]:bg-accent"
       :aria-label="t('nav.accountMenu')"
     >
-      <UserAvatar :user-id="auth.me.userId" :name="auth.me.displayName" />
+      <UserAvatar :user-id="auth.me.userId" :name="auth.me.displayName" :src="auth.me.avatarUrl" />
       <span class="hidden text-left leading-tight sm:block">
         <span class="block max-w-32 truncate text-xs font-medium">{{ auth.me.displayName }}</span>
         <span class="block text-[10px] text-muted-foreground">{{ roleLabel }}</span>
@@ -58,7 +58,7 @@ async function logout() {
            trigger shows only the avatar and this is the only place the name
            and the account it belongs to appear at all. -->
       <DropdownMenuLabel class="flex items-center gap-2.5 py-2 font-normal">
-        <UserAvatar :user-id="auth.me.userId" :name="auth.me.displayName" />
+        <UserAvatar :user-id="auth.me.userId" :name="auth.me.displayName" :src="auth.me.avatarUrl" />
         <span class="min-w-0">
           <span class="block truncate text-sm font-medium">{{ auth.me.displayName }}</span>
           <span class="block truncate text-xs text-muted-foreground">{{ auth.me.email }}</span>

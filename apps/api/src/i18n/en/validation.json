@@ -21,5 +21,6 @@
   "arrayMinSize": "{property} must contain at least {n} elements",
   "arrayMaxSize": "{property} must contain at most {n} elements",
   "arrayNotEmpty": "{property} must not be empty",
-  "matches": "{property} has an invalid format"
+  "matches": "{property} has an invalid format",
+  "hexColor": "must be a hex colour like #3b82f6"
 }

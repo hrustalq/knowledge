@@ -33,6 +33,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { IngestionProducer } from '../ingestion/ingestion.producer.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { bfs, buildAdjacency, docIdOf, docNode, isDocNode } from '../graph/graph-walk.js';
 import type {
   CreateBranchDto,
@@ -65,6 +66,7 @@ export class DocumentsService {
     private readonly ingestion: IngestionProducer,
     private readonly activity: ActivityService,
     private readonly projects: ProjectsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async createDocument(dto: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -136,6 +138,16 @@ export class DocumentsService {
       documentId: document.id,
       metadata: { title: dto.title, category: dto.category ?? 'other', projectId: dto.projectId },
     });
+    // Writing a page is watching it (docs/features/22). A subscription row
+    // rather than an implicit rule at fan-out time, so that an author who
+    // unwatches their own page stays unwatched.
+    await this.notifications.ensureSubscription(
+      dto.workspaceId,
+      authorId,
+      'document',
+      document.id,
+      'author',
+    );
 
     return { documentId: document.id, revisionId: revision.id, branch: 'main', status };
   }

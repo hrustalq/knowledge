@@ -7,6 +7,7 @@ import { useSearchUiStore } from '@/stores/search-ui'
 import { toggleTheme } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 import LocaleSwitcher from './LocaleSwitcher.vue'
+import NotificationBell from '@/components/notifications/NotificationBell.vue'
 import UserMenu from './UserMenu.vue'
 
 defineEmits<{ 'toggle-sidebar': [] }>()
@@ -65,6 +66,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     </button>
 
     <div class="ml-auto flex items-center gap-1.5">
+      <NotificationBell />
       <LocaleSwitcher />
       <Button variant="ghost" size="icon-sm" :aria-label="t('nav.toggleTheme')" @click="toggleTheme">
         <Sun class="hidden size-4 dark:block" />

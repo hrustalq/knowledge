@@ -6,6 +6,7 @@ import { computed, type Component } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   Activity,
+  Bell,
   BookMarked,
   BookOpen,
   FolderKanban,
@@ -28,6 +29,7 @@ const links = computed<SettingsLink[]>(() => [
   // First, and open to every role: the only section that acts on you rather
   // than on the workspace.
   { to: '/settings/profile', label: t('nav.profile'), icon: UserRound, hint: t('settings.profileHint') },
+  { to: '/settings/notifications', label: t('nav.notifications'), icon: Bell, hint: t('settings.notificationsHint') },
   { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
   { to: '/settings/glossary', label: t('nav.glossary'), icon: BookMarked, hint: t('settings.glossaryHint') },
   ...(auth.isAdmin || auth.isDev

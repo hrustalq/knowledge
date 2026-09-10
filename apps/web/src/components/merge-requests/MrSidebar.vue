@@ -30,6 +30,8 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import UserAvatar from './UserAvatar.vue'
+import WatchButton from '@/components/notifications/WatchButton.vue'
+import UserChip from '@/components/people/UserChip.vue'
 import AiCheckPane from './AiCheckPane.vue'
 import { useMembers } from './use-members'
 
@@ -45,7 +47,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ changed: []; comment: [body: string] }>()
 
-const { members, nameOf } = useMembers()
+const { members } = useMembers()
 const mr = computed(() => props.mergeRequest)
 
 const invalidates = () => [
@@ -232,8 +234,7 @@ const revisionRows = computed(() =>
 
           <div v-if="!editingAssignee" class="mt-2 flex items-center gap-2 text-sm">
             <template v-if="mr.assigneeId">
-              <UserAvatar :user-id="mr.assigneeId" :name="nameOf(mr.assigneeId)" size="sm" />
-              <span class="truncate">{{ nameOf(mr.assigneeId) }}</span>
+              <UserChip :user-id="mr.assigneeId" size="sm" class="min-w-0" />
             </template>
             <span v-else class="text-xs text-muted-foreground">{{ t('mr.unassigned') }}</span>
           </div>
@@ -287,8 +288,7 @@ const revisionRows = computed(() =>
               {{ t('mr.noReviewers') }}
             </p>
             <div v-for="id in mr.reviewers" :key="id" class="flex items-center gap-2 text-sm">
-              <UserAvatar :user-id="id" :name="nameOf(id)" size="sm" />
-              <span class="truncate">{{ nameOf(id) }}</span>
+              <UserChip :user-id="id" size="sm" class="min-w-0" />
               <span
                 v-if="mr.approvedBy.includes(id)"
                 class="ml-auto flex items-center gap-0.5 text-[11px] text-emerald-600"
@@ -343,6 +343,16 @@ const revisionRows = computed(() =>
               </dd>
             </div>
           </dl>
+        </section>
+
+        <!-- notifications (docs/features/22) -->
+        <section class="flex items-center gap-2 px-3 py-3">
+          <h3 class="text-xs font-medium text-muted-foreground">{{ t('notifications.watch.label') }}</h3>
+          <!-- Not gated on `readonly`: following a merge request is a private
+               act, and a reader of a merged one may still want its replies. -->
+          <div class="ml-auto">
+            <WatchButton subject-type="merge-request" :subject-id="mr.mergeRequestId" />
+          </div>
         </section>
       </div>
 

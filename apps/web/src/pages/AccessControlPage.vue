@@ -18,6 +18,7 @@ import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import { Badge } from '@/components/ui/badge'
+import UserChip from '@/components/people/UserChip.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -301,11 +302,11 @@ async function removeMember(member: WorkspaceMemberEntry) {
       <TableBody>
         <TableRow v-for="member in visibleMembers" :key="member.userId">
           <TableCell>
-            <div class="font-medium">
-              {{ member.displayName }}
-              <Badge v-if="member.disabled" variant="destructive" class="ml-1">{{ t('access.disabled') }}</Badge>
+            <div class="flex items-center gap-1.5">
+              <UserChip :user-id="member.userId" :name="member.displayName" class="font-medium" />
+              <Badge v-if="member.disabled" variant="destructive">{{ t('access.disabled') }}</Badge>
             </div>
-            <div class="text-muted-foreground text-xs">{{ member.email }}</div>
+            <div class="text-muted-foreground pl-[1.875rem] text-xs">{{ member.email }}</div>
           </TableCell>
           <TableCell>
             <Select

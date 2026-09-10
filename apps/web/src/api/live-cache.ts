@@ -59,6 +59,16 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     patch: patchDocumentQueries,
     invalidate: () => [['/v1/documents'], ['/v1/documents/tree']],
   },
+  {
+    // Page comments (docs/features/15) and the agent replies that land in them
+    // (docs/features/21). The generic document.* rule below refreshes the
+    // roster and the tree, neither of which is where a discussion lives — and
+    // `.updated` is what carries an agent's answer into a comment that was
+    // posted empty, so a reader watching a placeholder needs this to arrive.
+    on: 'document.comment.*',
+    invalidate: (e) =>
+      e.documentId ? [['/v1/documents/{id}/threads', { id: e.documentId }]] : [],
+  },
   { on: 'document.*', invalidate: () => [['/v1/documents'], ['/v1/documents/tree']] },
   {
     on: 'revision.*',
@@ -134,6 +144,13 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
   { on: 'project.*', invalidate: () => [['/v1/projects'], ['/v1/documents'], ['/v1/documents/tree']] },
   { on: 'relations.*', invalidate: (e) => [['/v1/entities'], ...(e.documentId ? [['/v1/documents/{id}/graph', { id: e.documentId }]] : [])] },
   { on: 'branch.created', invalidate: (e) => (e.documentId ? [['/v1/documents/{id}', { id: e.documentId }]] : []) },
+  // The inbox. Addressed frames only ever reach their recipient (the server
+  // filters on `event.userId`), so this fires on somebody's own notification
+  // and never on a peer's.
+  {
+    on: 'notification.created',
+    invalidate: () => [['/v1/notifications'], ['/v1/notifications/unread-count']],
+  },
   { on: '*', invalidate: () => [['/v1/activity']] },
 ]
 

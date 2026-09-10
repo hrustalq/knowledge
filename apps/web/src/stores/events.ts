@@ -7,6 +7,7 @@ import type { KnowledgeEvent } from '@knowledge/contracts'
 import { getToken, getWorkspaceId } from '@/lib/api'
 import { useAssistantStore } from '@/stores/assistant'
 import { useDocumentsStore } from '@/stores/documents'
+import { useNotificationsStore } from '@/stores/notifications'
 
 export const useEventsStore = defineStore('events', {
   state: () => ({
@@ -41,6 +42,15 @@ export const useEventsStore = defineStore('events', {
           toast.error(t('activity.indexingFailed', { name: event.title ?? event.documentId }))
         } else if (event.type === 'revision.dependent-reindex') {
           toast.info(t('activity.reindexingDependent', { name: event.title ?? event.documentId }))
+        } else if (event.type === 'notification.created') {
+          // The badge is the only thing that always needs updating; the panel
+          // and the page refetch through the live-cache rule when they are open.
+          // Toasted only for a mention: everything else is news you will read
+          // when you look, while being named is somebody waiting on you.
+          void useNotificationsStore().refreshCount()
+          if (event.reason === 'mention') {
+            toast.info(t('notifications.toastMention', { name: event.title ?? t('notifications.untitled') }))
+          }
         } else if (event.type === 'assistant.turn.finished' && event.subjectId) {
           // Reconciles a chat this tab stopped watching (Stop, or a dropped
           // connection) and mirrors turns taken in another tab.

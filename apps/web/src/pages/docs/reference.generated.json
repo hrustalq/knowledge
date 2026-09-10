@@ -641,6 +641,86 @@
       "platformAdmin": false
     },
     {
+      "method": "DELETE",
+      "path": "/v1/me/avatar",
+      "tag": "avatars",
+      "summary": "Remove the caller’s avatar and fall back to initials",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/me/avatar",
+      "tag": "avatars",
+      "summary": "Reserve a presigned upload for the caller's own avatar",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/me/avatar/complete",
+      "tag": "avatars",
+      "summary": "Confirm the upload and make it the caller's avatar",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/projects/{id}/avatar",
+      "tag": "avatars",
+      "summary": "Remove a project’s picture and fall back to the monogram",
+      "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/avatar",
+      "tag": "avatars",
+      "summary": "Redirect to a short-lived signed URL for a project’s avatar",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{id}/avatar",
+      "tag": "avatars",
+      "summary": "Reserve a presigned upload for a project avatar",
+      "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{id}/avatar/complete",
+      "tag": "avatars",
+      "summary": "Confirm the upload and make it the project’s avatar",
+      "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/users/{userId}/avatar",
+      "tag": "avatars",
+      "summary": "Redirect to a short-lived signed URL for a user’s avatar",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": true
+    },
+    {
       "method": "GET",
       "path": "/v1/connectors",
       "tag": "connectors",
@@ -1482,6 +1562,76 @@
     },
     {
       "method": "GET",
+      "path": "/v1/notifications",
+      "tag": "notifications",
+      "summary": "The caller's inbox, newest first. Coalesced rows carry metadata.count (docs/features/22)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/notifications/preferences",
+      "tag": "notifications",
+      "summary": "The caller's notification preferences, with the code defaults folded in",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/notifications/preferences",
+      "tag": "notifications",
+      "summary": "Mute categories, or stop auto-watching what the caller comments on",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/notifications/read",
+      "tag": "notifications",
+      "summary": "Mark rows read — `ids` for a set, `all` for the workspace, optionally narrowed to one category (400 when neither is given)",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/notifications/subscriptions",
+      "tag": "notifications",
+      "summary": "What the caller watches. Pass subjectType+subjectId to ask about one thing (the Watch button's state)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/notifications/subscriptions",
+      "tag": "notifications",
+      "summary": "Watch, mute or forget one subject. 'muted' is stored so involvement cannot re-subscribe you; 'default' removes the row (400 when the subject belongs to another workspace)",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/notifications/unread-count",
+      "tag": "notifications",
+      "summary": "Unread totals for the caller, overall and per category — the bell's badge",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/profiles/{userId}",
       "tag": "profiles",
       "summary": "A workspace member's identity, membership, open work and pages",
@@ -1536,6 +1686,16 @@
       "tag": "projects",
       "summary": "Rename a project / edit its description",
       "role": "editor",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/overview",
+      "tag": "projects",
+      "summary": "Project overview: counts, contributors, recent pages",
+      "role": "viewer",
       "source": "project",
       "public": false,
       "platformAdmin": false

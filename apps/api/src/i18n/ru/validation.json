@@ -21,5 +21,6 @@
   "arrayMinSize": "Поле {property} должно содержать не меньше {n} элементов",
   "arrayMaxSize": "Поле {property} должно содержать не больше {n} элементов",
   "arrayNotEmpty": "Поле {property} не должно быть пустым",
-  "matches": "Поле {property} имеет недопустимый формат"
+  "matches": "Поле {property} имеет недопустимый формат",
+  "hexColor": "должно быть HEX-цветом, например #3b82f6"
 }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ProjectsCoreModule } from './projects-core.module.js';
 import { ProjectsController } from './projects.controller.js';
+import { ProjectOverviewService } from './project-overview.service.js';
 
 /**
  * Workspace > Project > Document — the organizational layer above pages.
@@ -13,6 +14,7 @@ import { ProjectsController } from './projects.controller.js';
 @Module({
   imports: [ProjectsCoreModule],
   controllers: [ProjectsController],
+  providers: [ProjectOverviewService],
   exports: [ProjectsCoreModule],
 })
 export class ProjectsModule {}

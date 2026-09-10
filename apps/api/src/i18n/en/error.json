@@ -241,5 +241,17 @@
     "actorRequired": "An actor is required: a contribution calendar belongs to one person.",
     "rangeInverted": "The start of the range must not come after its end.",
     "rangeTooWide": "A contribution calendar covers at most {max} days in one request."
+  },
+  "avatar": {
+    "unsupportedType": "That file type cannot be used as a picture. Allowed: {types}.",
+    "tooLarge": "That picture is too large. The limit is {limit} bytes.",
+    "notUploaded": "The upload did not arrive. Try choosing the picture again.",
+    "none": "There is no picture to show.",
+    "forbidden": "You do not share a workspace with this person.",
+    "noDevAvatar": "Pictures cannot be set in AUTH_MODE=none — the dev principal has no account to attach one to."
+  },
+  "notification": {
+    "subjectNotInWorkspace": "A subject can only be watched from the workspace it belongs to.",
+    "nothingToMark": "Nothing to mark read: pass `ids` or `all`."
   }
 }

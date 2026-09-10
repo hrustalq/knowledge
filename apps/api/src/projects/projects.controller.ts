@@ -13,12 +13,14 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   CreateProjectResponse,
   ListProjectsResponse,
+  ProjectOverviewResponse,
   ProjectSummary,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CreateProjectDto, ListProjectsQueryDto, UpdateProjectDto } from './projects.dto.js';
 import { ProjectsService } from './projects.service.js';
+import { ProjectOverviewService } from './project-overview.service.js';
 
 /**
  * Workspace > Project > Document. Projects are organizational only: the ACL
@@ -28,7 +30,10 @@ import { ProjectsService } from './projects.service.js';
 @ApiTags('projects')
 @Controller('v1/projects')
 export class ProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    private readonly overviewService: ProjectOverviewService,
+  ) {}
 
   @Get()
   @Access('viewer', 'query')
@@ -52,6 +57,20 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Project detail' })
   get(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectSummary> {
     return this.projects.get(id);
+  }
+
+  /**
+   * Everything the project page reads (docs/features/24) — counts, derived
+   * contributors, recently updated pages.
+   *
+   * Declared after `:id` but on a longer path, so Nest's declaration-order
+   * matching is not a hazard here the way it is for a bare literal segment.
+   */
+  @Get(':id/overview')
+  @Access('viewer', 'project')
+  @ApiOperation({ summary: 'Project overview: counts, contributors, recent pages' })
+  overview(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectOverviewResponse> {
+    return this.overviewService.get(id);
   }
 
   @Patch(':id')

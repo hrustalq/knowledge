@@ -29,6 +29,7 @@ import { getWorkspaceId } from '@/lib/api'
 import { useEventsStore } from '@/stores/events'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import UserChip from '@/components/people/UserChip.vue'
 import ThreadCard from './ThreadCard.vue'
 import CommentComposer from './CommentComposer.vue'
 import { useMembers } from './use-members'
@@ -266,7 +267,11 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
                 <component :is="noteAt(item.index)!.icon" class="size-3.5" :class="noteAt(item.index)!.tone" />
               </span>
               <p class="min-w-0 flex-1 text-sm leading-6 text-muted-foreground">
-                <span class="font-medium text-foreground">{{ nameOf(noteAt(item.index)!.entry.actor) }}</span>
+                <UserChip
+                  :user-id="noteAt(item.index)!.entry.actor"
+                  size="sm"
+                  class="font-medium text-foreground"
+                />
                 {{ ' ' }}{{ noteAt(item.index)!.text }}
                 <RouterLink
                   v-if="noteAt(item.index)!.code"

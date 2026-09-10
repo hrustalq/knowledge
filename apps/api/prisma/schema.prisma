@@ -353,10 +353,10 @@ model Workspace {
 // to its workspace. No FK on workspace_id, mirroring documents.workspace_id:
 // in AUTH_MODE=none the demo workspace row need not exist.
 model Project {
-  id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
-  name        String
-  description String?
+  id              String    @id @default(uuid()) @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
+  name            String
+  description     String?
   // A project's face, in one of three states. An uploaded picture (avatarKey),
   // a chosen emoji, or neither — in which case the monogram tile from
   // apps/web/src/lib/monogram.ts is drawn from the name and id. Never both:
@@ -366,7 +366,7 @@ model Project {
   avatarEmoji     String?   @map("avatar_emoji")
   avatarColor     String?   @map("avatar_color")
   avatarUpdatedAt DateTime? @map("avatar_updated_at") @db.Timestamptz
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]
   glossaryTerms GlossaryTerm[]
@@ -377,20 +377,20 @@ model Project {
 }
 
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  email        String    @unique
-  displayName  String    @map("display_name")
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique
+  displayName     String    @map("display_name")
   // SHA-256 hex of the API key; the plaintext key is printed once at creation.
-  apiKeyHash   String?   @unique @map("api_key_hash")
+  apiKeyHash      String?   @unique @map("api_key_hash")
   // Auth flow: scrypt hash ("scrypt$N$r$p$salt$hash"); null until the user sets one.
-  passwordHash String?   @map("password_hash")
+  passwordHash    String?   @map("password_hash")
   // Platform admin: user management + implicit admin in every workspace.
-  isAdmin      Boolean   @default(false) @map("is_admin")
+  isAdmin         Boolean   @default(false) @map("is_admin")
   // Soft disable: authentication (sessions AND api keys) is refused while set.
-  disabledAt   DateTime? @map("disabled_at") @db.Timestamptz
+  disabledAt      DateTime? @map("disabled_at") @db.Timestamptz
   // UI + API language (docs/features/18). Mirrored into the kn_lang cookie so
   // the SSR pass renders in it; the cookie alone would not follow a browser change.
-  locale       String    @default("en")
+  locale          String    @default("en")
   // S3 key of an uploaded picture, null while the face is drawn from initials
   // (apps/web/src/lib/avatar.ts). The bytes never pass through the API: the
   // browser PUTs them to a presigned URL, exactly as page attachments do.
@@ -398,7 +398,7 @@ model User {
   // Cache-buster for the avatar URL. The key can be reused on replace, so
   // without this every reader keeps the picture they already fetched.
   avatarUpdatedAt DateTime? @map("avatar_updated_at") @db.Timestamptz
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   memberships    WorkspaceMember[]
   sessions       Session[]
@@ -626,7 +626,7 @@ model AiProvider {
   /// AgentCapability[] declared by an admin, overriding the MODEL_CAPABILITIES
   /// code table the router filters on. Same shape as the price overrides above:
   /// a code table that will go stale, plus a per-profile escape hatch.
-  capabilities  Json?
+  capabilities Json?
 
   enabled       Boolean   @default(true)
   lastStatus    String?   @map("last_status")
@@ -705,13 +705,13 @@ model AiAgent {
   /// ai_providers profile pinned to this agent. Null falls through to the
   /// purpose route, then the inline config, then env (feature 12's chain).
   /// No FK, matching the other routing columns (house style).
-  providerId   String? @map("provider_id") @db.Uuid
+  providerId String? @map("provider_id") @db.Uuid
 
   temperature  Float?
-  maxToolCalls Int?    @map("max_tool_calls")
-  timeoutMs    Int?    @map("timeout_ms")
+  maxToolCalls Int?   @map("max_tool_calls")
+  timeoutMs    Int?   @map("timeout_ms")
 
-  enabled   Boolean  @default(true)
+  enabled Boolean @default(true)
 
   /// Background schedule (docs/features/20). Off by default — the failure mode
   /// of unattended AI is an avalanche, not a slow queue. A due check inside a
@@ -745,10 +745,10 @@ model AiAgent {
 /// non-UUID and the usage insert is silently dropped. A run with nobody to bill
 /// or authorise as is not a run this feature will start.
 model AgentRun {
-  id          String @id @default(uuid()) @db.Uuid
-  workspaceId String @map("workspace_id") @db.Uuid
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
   /// ai_agents.key — resolved through the registry at execution time.
-  agentKey    String @map("agent_key")
+  agentKey    String  @map("agent_key")
   /// The override row, when one exists. Null for an untouched built-in.
   agentId     String? @map("agent_id") @db.Uuid
 
@@ -772,12 +772,12 @@ model AgentRun {
   summary  String?
   error    String?
   /// Incremented by the sweeper when a run is re-queued after going stale.
-  attempt  Int @default(0)
+  attempt  Int     @default(0)
 
-  startedAt   DateTime? @map("started_at") @db.Timestamptz
-  finishedAt  DateTime? @map("finished_at") @db.Timestamptz
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  startedAt  DateTime? @map("started_at") @db.Timestamptz
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   agent AiAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
 
@@ -1267,12 +1267,10 @@ model ConnectorConflict {
 
 /**
  * A named narrowing of the workspace merge-request list, private to its owner.
- *
  * The integer id is the one deliberate departure from the uuid convention: a
  * saved view is addressed by the person who saved it (`#7`) and by the URL
  * (`/merge-requests?view=7`), and a uuid is unusable in both places. Nothing
  * else keys off it, so the sequence leaking a rough global count is harmless.
- *
  * No FK on workspaceId/ownerId, mirroring documents.workspace_id and
  * merge_requests.author_id — the workspace is a scope here, enforced by the
  * ACL (AccessService.workspaceOfSavedFilter) rather than by the column.
@@ -1293,4 +1291,101 @@ model SavedFilter {
   @@unique([ownerId, workspaceId, name])
   @@index([workspaceId, ownerId])
   @@map("saved_filters")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (docs/features/22): the per-person layer over the
+// workspace-wide event bus and activity feed.
+//
+// No FK on workspace_id or user_id anywhere below, mirroring
+// documents.workspace_id and saved_filters.owner_id — the workspace is a scope
+// enforced by the ACL, not by the column. That is also what lets the
+// AUTH_MODE=none dev principal, which has no users row at all, own an inbox.
+// ---------------------------------------------------------------------------
+
+/**
+ * Who watches what.
+ * `muted` is a stored row rather than the absence of one. Involvement
+ * auto-subscribes — commenting on a page starts watching it — so a person who
+ * unwatched would be re-added by their next comment, and "stop telling me
+ * about this" has to be recorded as a fact that survives.
+ */
+model NotificationSubscription {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  userId      String  @map("user_id") @db.Uuid
+  /// 'document' | 'merge-request' | 'project' (NOTIFICATION_SUBJECT_TYPES).
+  subjectType String  @map("subject_type")
+  subjectId   String  @map("subject_id") @db.Uuid
+  /// true = never notify me about this subject, and never re-subscribe me.
+  muted       Boolean @default(false)
+  /// How the row appeared: 'manual' when somebody pressed Watch, otherwise the
+  /// involvement that added it ('author' | 'participant' | 'assigned' | ...).
+  reason      String  @default("manual")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([userId, subjectType, subjectId])
+  // The fan-out's only query: everybody watching this subject.
+  @@index([subjectType, subjectId])
+  @@index([workspaceId, userId])
+  @@map("notification_subscriptions")
+}
+
+/**
+ * One inbox row for one person.
+ * `title` is denormalized deliberately: an inbox that rewrote itself when a
+ * page was renamed would answer a different question than "what happened while
+ * I was away". There is no stored link either — the web derives one from
+ * (type, documentId, subjectId), so a route rename cannot rot the archive.
+ * No `category` column: the type is the durable fact and the category is a
+ * reading of it (notificationCategoryFor), re-cuttable without a migration.
+ */
+model Notification {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  userId      String  @map("user_id") @db.Uuid
+  /// The KnowledgeEvent type that produced this row.
+  type        String
+  /// NOTIFICATION_REASONS — why this reached this person. Not derivable from
+  /// the type: it is a fact about the fan-out decision.
+  reason      String
+  /// users.id or 'dev'; null for work no person triggered.
+  actor       String?
+  documentId  String? @map("document_id") @db.Uuid
+  subjectType String? @map("subject_type")
+  subjectId   String? @map("subject_id") @db.Uuid
+  title       String?
+  /// Render extras — `count` once a row has coalesced, error text, branch names.
+  metadata    Json    @default("{}")
+
+  readAt    DateTime? @map("read_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // The badge and the unread-first list; also the coalescing lookup, which
+  // matches (user_id, type, subject_id) among unread rows.
+  @@index([userId, readAt, createdAt])
+  @@index([workspaceId, userId, createdAt])
+  @@map("notifications")
+}
+
+/**
+ * Per-person, per-workspace preferences — a sparse override of the code
+ * defaults, the same relationship ai_settings has to the ASSISTANT_* env vars.
+ * An empty table means everybody gets everything, so the feature ships
+ * switched on without a migration writing a row per member.
+ */
+model NotificationPreference {
+  userId             String  @map("user_id") @db.Uuid
+  workspaceId        String  @map("workspace_id") @db.Uuid
+  /// NotificationCategory[] switched off. A muted category suppresses even a
+  /// directed notification — muting 'mention' means muting mentions.
+  mutedCategories    Json    @default("[]") @map("muted_categories")
+  /// Commenting on something subscribes you to it (GitHub's default).
+  autoWatchOnComment Boolean @default(true) @map("auto_watch_on_comment")
+
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@id([userId, workspaceId])
+  @@map("notification_preferences")
 }

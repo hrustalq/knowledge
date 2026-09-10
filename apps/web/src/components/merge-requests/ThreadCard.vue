@@ -51,7 +51,7 @@ import {
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import { excerpt } from '@/lib/markdown/plain'
 import CommentComposer from './CommentComposer.vue'
-import UserAvatar from './UserAvatar.vue'
+import UserChip from '@/components/people/UserChip.vue'
 import { useMembers } from './use-members'
 import { useAgentNames } from './use-agent-names'
 import { fullTime, timelineTime } from './mr-ui'
@@ -124,20 +124,24 @@ function isMine(authorId: string): boolean {
 /**
  * Whether a machine wrote this comment.
  *
- * Per comment, not per thread. `thread.source` says who *opened* a discussion,
- * which was enough while the only AI remark was a posted review finding — but an
- * agent tagged with `@` replies inside somebody else's thread, and `authorId` is
- * the person who tagged it. Reading the thread's source here would put a
- * colleague's name and face on a model's words.
+ * Two signals, because there are two ways an AI remark gets here and neither
+ * subsumes the other:
+ *
+ * - `comment.agentKey` — an agent tagged with `@` (docs/features/21). It replies
+ *   inside somebody else's thread, and `authorId` is the person who tagged it,
+ *   so only the comment can answer this.
+ * - `thread.source === 'ai'` on the opening comment — a review posted whole from
+ *   the AI check pane. That path writes no `agentKey`, so dropping it here would
+ *   put a colleague's name and face on a model's findings.
  */
-function isAgent(comment: ReviewComment): boolean {
-  return comment.agentKey !== null
+function isAgent(comment: ReviewComment, index: number): boolean {
+  return comment.agentKey !== null || (props.thread.source === 'ai' && index === 0)
 }
 
-function authorLabel(comment: ReviewComment): string {
-  return comment.agentKey
-    ? t('mention.agentLabel', { agent: agentName(comment.agentKey) })
-    : nameOf(comment.authorId)
+function authorLabel(comment: ReviewComment, index: number): string {
+  if (comment.agentKey) return t('mention.agentLabel', { agent: agentName(comment.agentKey) })
+  if (props.thread.source === 'ai' && index === 0) return t('mention.assistant')
+  return nameOf(comment.authorId)
 }
 
 /** Falls back to the key: a workspace may rename an agent, or drop a custom one. */
@@ -313,18 +317,24 @@ const replyTarget = computed(() =>
             :data-flash="flashed === comment.commentId"
           >
             <div class="kn-thread-rail">
-              <UserAvatar
+              <!-- The rail's face is the hover target for the whole byline: one
+                   affordance per comment, on the thing a reader is already
+                   looking at to see who spoke. The name beside it stays plain
+                   text so there is no second card on the same person. -->
+              <UserChip
                 :user-id="comment.authorId"
                 :name="nameOf(comment.authorId)"
-                :ai="isAgent(comment)"
+                :ai="isAgent(comment, i)"
+                :agent-name="comment.agentKey ? agentName(comment.agentKey) : undefined"
                 :size="i === 0 ? 'md' : 'sm'"
+                avatar-only
               />
             </div>
 
             <div class="kn-comment-surface min-w-0 flex-1">
               <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span class="truncate font-medium text-foreground">
-                  {{ authorLabel(comment) }}
+                  {{ authorLabel(comment, i) }}
                 </span>
                 <!-- An agent replies under the identity of whoever tagged it —
                      it has no account — so the person is named here rather than

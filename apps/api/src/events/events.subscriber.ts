@@ -46,9 +46,18 @@ export class EventsSubscriber implements OnModuleInit, OnModuleDestroy {
     return this.subject.asObservable();
   }
 
-  stream(workspaceId: string): Observable<SseMessage> {
+  /**
+   * One client's feed.
+   *
+   * `userId` is what makes per-person events safe on a shared bus: a frame
+   * carrying `event.userId` is addressed, and delivering it to the rest of the
+   * workspace would broadcast who is being notified about what
+   * (docs/features/22). A frame without one stays a workspace broadcast.
+   */
+  stream(workspaceId: string, userId?: string): Observable<SseMessage> {
     const events = this.subject.pipe(
       filter((e) => e.workspaceId === workspaceId),
+      filter((e) => !e.userId || e.userId === userId),
       map((e) => ({ data: e })),
     );
     // Heartbeat keeps proxies from closing idle SSE connections.

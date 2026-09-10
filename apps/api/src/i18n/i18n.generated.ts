@@ -331,6 +331,18 @@ export type I18nTranslations = {
             "rangeInverted": string;
             "rangeTooWide": string;
         };
+        "avatar": {
+            "unsupportedType": string;
+            "tooLarge": string;
+            "notUploaded": string;
+            "none": string;
+            "forbidden": string;
+            "noDevAvatar": string;
+        };
+        "notification": {
+            "subjectNotInWorkspace": string;
+            "nothingToMark": string;
+        };
     };
     "import": {
         "stage": {
@@ -386,6 +398,15 @@ export type I18nTranslations = {
             "rowsTruncated": string;
             "wideTable": string;
         };
+    };
+    "mention": {
+        "failed": string;
+        "timedOut": string;
+        "unknownAgent": string;
+        "agentDisabled": string;
+        "providerDisabled": string;
+        "notConversational": string;
+        "modelMissing": string;
     };
     "notification": {
         "passwordReset": {
@@ -487,6 +508,7 @@ export type I18nTranslations = {
         "arrayMaxSize": string;
         "arrayNotEmpty": string;
         "matches": string;
+        "hexColor": string;
     };
     "workflow": {
         "issue": {

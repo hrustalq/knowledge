@@ -5,6 +5,7 @@ import { IngestionModule } from '../ingestion/ingestion.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ProjectsCoreModule } from '../projects/projects-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
+import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 import { DocumentsService } from './documents.service.js';
 
 /**
@@ -23,7 +24,17 @@ import { DocumentsService } from './documents.service.js';
  * keeps resolving DocumentsService unchanged.
  */
 @Module({
-  imports: [PrismaModule, StorageModule, GraphModule, IngestionModule, ActivityCoreModule, ProjectsCoreModule],
+  imports: [
+    PrismaModule,
+    StorageModule,
+    GraphModule,
+    IngestionModule,
+    ActivityCoreModule,
+    ProjectsCoreModule,
+    // Writing a page subscribes its author to it (docs/features/22). Core, so
+    // this stays worker-loadable.
+    NotificationsCoreModule,
+  ],
   providers: [DocumentsService],
   exports: [DocumentsService],
 })

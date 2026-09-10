@@ -8,6 +8,7 @@ import type {
 } from '@knowledge/contracts';
 import { ACTIVITY_KINDS, activityKindFor } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { actorIdentities, DEV_ACTOR } from './actor.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 
 export interface ActivityRecordInput {
@@ -17,6 +18,11 @@ export interface ActivityRecordInput {
   /** e.g. 'document.created', 'revision.finalized', 'merge-request.merged'. */
   action: string;
   documentId?: string;
+  /**
+   * The project this happened in. Optional because most callers already hold
+   * the document and `record` can resolve it — pass it to skip that read.
+   */
+  projectId?: string;
   subjectId?: string;
   metadata?: Record<string, unknown>;
   /** Live data patching: changed entity fields, forwarded verbatim on the event bus (never persisted to the feed). */
@@ -40,12 +46,14 @@ export class ActivityService {
 
   async record(input: ActivityRecordInput): Promise<void> {
     try {
+      const projectId = input.projectId ?? (await this.projectOf(input));
       await this.prisma.activityLog.create({
         data: {
           workspaceId: input.workspaceId,
-          actor: input.actor ?? 'dev',
+          actor: input.actor ?? DEV_ACTOR,
           action: input.action,
           documentId: input.documentId ?? null,
+          projectId,
           subjectId: input.subjectId ?? null,
           metadata: (input.metadata ?? {}) as object,
         },
@@ -55,13 +63,42 @@ export class ActivityService {
         workspaceId: input.workspaceId,
         documentId: input.documentId,
         subjectId: input.subjectId,
-        actor: input.actor ?? 'dev',
+        actor: input.actor ?? DEV_ACTOR,
         title: typeof input.metadata?.title === 'string' ? input.metadata.title : undefined,
         ...(input.patch ? { patch: input.patch } : {}),
       });
     } catch (e) {
       this.logger.warn(`Activity record failed (non-fatal): ${(e as Error).message}`);
     }
+  }
+
+  /**
+   * Which project a row belongs to, when the caller did not say.
+   *
+   * Denormalized at write time rather than joined at read time, because the
+   * question a project page asks — "what happened here, newest first, paged" —
+   * is an index scan with the column and a join through every page the project
+   * owns without it.
+   *
+   * One indexed point-select on a path that is already fire-and-forget and
+   * already writing a row. Callers that hold the document pass `projectId` and
+   * skip even that. Resolving here rather than at ~30 call sites also means a
+   * new one cannot forget: a row filed under no project is invisible on the page
+   * that exists to show it.
+   *
+   * `project.*` actions carry the project in `subjectId` and have no document,
+   * which is the second branch.
+   */
+  private async projectOf(input: ActivityRecordInput): Promise<string | null> {
+    if (input.documentId) {
+      const doc = await this.prisma.document.findUnique({
+        where: { id: input.documentId },
+        select: { projectId: true },
+      });
+      return doc?.projectId ?? null;
+    }
+    if (input.subjectId && input.action.startsWith('project.')) return input.subjectId;
+    return null;
   }
 
   async list(
@@ -161,6 +198,7 @@ export class ActivityService {
     return {
       workspaceId,
       ...(opts.documentId ? { documentId: opts.documentId } : {}),
+      ...(opts.projectId ? { projectId: opts.projectId } : {}),
       ...(opts.subjectId ? { subjectId: opts.subjectId } : {}),
       ...(opts.actor ? { actor: { in: actorIdentities(opts.actor) } } : {}),
       ...(opts.from || opts.to
@@ -172,6 +210,7 @@ export class ActivityService {
 
 export interface ActivityFilter {
   documentId?: string;
+  projectId?: string;
   subjectId?: string;
   /** users.id, or 'dev'. Exact match, widened only by `actorIdentities`. */
   actor?: string;
@@ -179,26 +218,9 @@ export interface ActivityFilter {
   to?: Date;
 }
 
-/**
- * The AUTH_MODE=none actor has two spellings in this table and always has:
- * `ActivityService.record` falls back to the literal 'dev' when a call site
- * passes no actor, while the call sites that DO pass one hand over
- * `principal.userId`, which for the dev principal is the zeros stub. Both are
- * the same person, so a profile that picked one would silently under-report —
- * measurably: a real workspace here holds 270 rows under the stub and 23 under
- * 'dev'.
- *
- * Widening is deliberately limited to this one pair. Every other actor
- * resolves to itself, so no real user's rows can ever be folded into another's.
- */
-export function actorIdentities(actor: string): string[] {
-  return actor === DEV_ACTOR || actor === DEV_ACTOR_ID ? [DEV_ACTOR, DEV_ACTOR_ID] : [actor];
-}
-
-/** The literal `ActivityService.record` writes when a call site passes no actor. */
-export const DEV_ACTOR = 'dev';
-/** DEV_PRINCIPAL.userId — the same person, as an id. */
-export const DEV_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
+// Re-exported from a leaf module so `EventsPublisher`'s notification fan-out
+// can share them without closing an import cycle back through this file.
+export { actorIdentities, DEV_ACTOR, DEV_ACTOR_ID, isDevActor } from './actor.js';
 
 function emptyKindTally(): Record<ActivityKind, number> {
   return Object.fromEntries(ACTIVITY_KINDS.map((k) => [k, 0])) as Record<ActivityKind, number>;

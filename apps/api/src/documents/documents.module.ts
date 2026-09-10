@@ -3,6 +3,7 @@ import { StorageModule } from '../storage/storage.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { IngestionModule } from '../ingestion/ingestion.module.js';
 import { DocumentsCoreModule } from './documents-core.module.js';
+import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 import { DocumentsController } from './documents.controller.js';
 import { CompareService } from './compare.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
@@ -15,6 +16,7 @@ import { ActivityModule } from '../activity/activity.module.js';
 import { ProjectsModule } from '../projects/projects.module.js';
 import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
+import { EventsModule } from '../events/events.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
@@ -43,7 +45,10 @@ import { MentionReplySweeper } from './mention-reply.sweeper.js';
     // reply live here instead of behind a forwardRef.
     AgentCoreModule,
     AiCoreModule,
+    EventsModule,
     AssistantClientModule,
+    // Review notifications: mentions, assignee, review requests (docs/features/22).
+    NotificationsCoreModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [

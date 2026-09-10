@@ -48,6 +48,7 @@ export class ActivityController {
   @ApiOperation({ summary: 'Workspace activity feed, newest first (docs/features/10)' })
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'documentId', required: false })
+  @ApiQuery({ name: 'projectId', required: false, description: 'One project’s feed (docs/features/23) — everything that happened to its pages' })
   @ApiQuery({ name: 'subjectId', required: false, description: 'Secondary subject id — e.g. a merge request id, for its own timeline' })
   @ApiQuery({ name: 'actor', required: false, description: "users.id (or 'dev') — exact match, for one person's feed" })
   @ApiQuery({ name: 'from', required: false, description: 'Inclusive YYYY-MM-DD lower bound' })
@@ -57,6 +58,7 @@ export class ActivityController {
   list(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('documentId') documentId?: string,
+    @Query('projectId') projectId?: string,
     @Query('subjectId') subjectId?: string,
     @Query('actor') actor?: string,
     @Query('from') from?: string,
@@ -68,6 +70,7 @@ export class ActivityController {
     const toDate = parseDay(to);
     return this.activity.list(workspaceId, {
       documentId: documentId || undefined,
+      projectId: projectId || undefined,
       subjectId: subjectId || undefined,
       actor: actor || undefined,
       from: fromDate ? startOfDay(fromDate) : undefined,

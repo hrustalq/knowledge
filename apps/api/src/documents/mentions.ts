@@ -1,4 +1,4 @@
-import { AGENT_MENTION_ATTR } from '@knowledge/contracts';
+import { AGENT_MENTION_ATTR, USER_MENTION_ATTR } from '@knowledge/contracts';
 
 /**
  * Reading agent mentions back out of a comment body.
@@ -28,6 +28,33 @@ export function parseAgentMentions(body: string): string[] {
   for (const match of body.matchAll(MENTION_RE)) {
     const key = match[1]?.toLowerCase();
     if (key) seen.add(key);
+  }
+  return [...seen];
+}
+
+/** Person mentions are uuids; agent keys are slugs, hence two patterns. */
+const USER_MENTION_RE = new RegExp(
+  `${USER_MENTION_ATTR}="([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"`,
+  'gi',
+);
+
+/**
+ * Every person mentioned in `body`, deduped, in the order they first appear.
+ *
+ * Deduped for the reason agent mentions are: naming somebody twice in one
+ * comment is a way of writing, not a request for two notifications — and the
+ * inbox would coalesce them anyway.
+ *
+ * A uuid here is only a claim. The caller resolves it against
+ * `workspace_members` before anything is written, because the attribute is
+ * machine-written but the body is user-supplied: a hand-typed id from another
+ * tenant must notify nobody.
+ */
+export function parseUserMentions(body: string): string[] {
+  const seen = new Set<string>();
+  for (const match of body.matchAll(USER_MENTION_RE)) {
+    const id = match[1]?.toLowerCase();
+    if (id) seen.add(id);
   }
   return [...seen];
 }

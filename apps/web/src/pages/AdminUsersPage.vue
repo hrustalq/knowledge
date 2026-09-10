@@ -17,6 +17,7 @@ import type {
 import { apiFetch } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/components/ui/badge'
+import UserChip from '@/components/people/UserChip.vue'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -207,8 +208,8 @@ function setPassword(user: UserSummary) {
       <TableBody>
         <TableRow v-for="user in visibleUsers" :key="user.userId">
           <TableCell>
-            <div class="font-medium">{{ user.displayName }}</div>
-            <div class="text-muted-foreground text-xs">{{ user.email }}</div>
+            <UserChip :user-id="user.userId" :name="user.displayName" class="font-medium" />
+            <div class="text-muted-foreground pl-[1.875rem] text-xs">{{ user.email }}</div>
           </TableCell>
           <TableCell>
             <div class="flex flex-wrap gap-1">

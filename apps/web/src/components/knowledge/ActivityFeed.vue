@@ -27,12 +27,18 @@ import { apiFetch, getWorkspaceId, relativeTime } from '@/lib/api'
 import { useEventsStore } from '@/stores/events'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import UserChip from '@/components/people/UserChip.vue'
+import { useMembers } from '@/components/merge-requests/use-members'
+import { isRealAccount } from '@/components/merge-requests/mr-ui'
 
 const { t } = useI18n()
+const { nameOf } = useMembers()
 
 const props = withDefaults(
   defineProps<{
     documentId?: string
+    /** One project's feed (docs/features/24): everything that touched its pages. */
+    projectId?: string
     pageSize?: number
     height?: string
     /** Cap the feed at N entries in one query: no paging, no scroller of its own. */
@@ -79,9 +85,25 @@ function label(e: ActivityEntry): string {
   return text === key ? e.action : text
 }
 
-/** Stub/zeros ids read as "dev" everywhere else in the UI. */
+/**
+ * The actor's name.
+ *
+ * This used to be `e.actor.slice(0, 8)` — eight characters of a UUID, printed
+ * where a person's name belongs. `nameOf` resolves it against the member roster
+ * the app already has cached, and still falls back to `actorLabel` for actors
+ * who are not members: the dev stub, and agents, which write activity under
+ * their own key rather than a user id.
+ */
 function actor(e: ActivityEntry): string {
-  return e.actor === 'dev' || e.actor === '00000000-0000-0000-0000-000000000000' ? 'dev' : e.actor.slice(0, 8)
+  return nameOf(e.actor)
+}
+
+/**
+ * Only a real account gets a chip. The dev principal has no `users` row and an
+ * agent writes under a slug key — neither has a profile to open.
+ */
+function isPerson(e: ActivityEntry): boolean {
+  return isRealAccount(e.actor)
 }
 
 function title(e: ActivityEntry): string {
@@ -99,6 +121,7 @@ async function fetchPage(cursor?: string): Promise<ListActivityResponse> {
     limit: String(props.limit ?? props.pageSize),
   })
   if (props.documentId) params.set('documentId', props.documentId)
+  if (props.projectId) params.set('projectId', props.projectId)
   if (cursor) params.set('cursor', cursor)
   return apiFetch<ListActivityResponse>(`/v1/activity?${params}`)
 }
@@ -150,7 +173,7 @@ useInfiniteScroll(containerProps.ref, () => loadMore(), {
 })
 
 onMounted(() => void reload())
-watch(() => props.documentId, () => void reload())
+watch([() => props.documentId, () => props.projectId], () => void reload())
 watch(() => events.revision, () => void refreshHead())
 </script>
 
@@ -199,7 +222,13 @@ watch(() => events.revision, () => void refreshHead())
               class="flex items-baseline gap-2 rounded-md px-2 text-sm hover:bg-muted/50"
               :style="{ height: `${ROW_HEIGHT}px` }"
             >
-              <span class="shrink-0 font-medium">{{ actor(e) }}</span>
+              <UserChip
+                v-if="isPerson(e)"
+                :user-id="e.actor"
+                size="sm"
+                class="max-w-[9rem] shrink-0 font-medium"
+              />
+              <span v-else class="shrink-0 font-medium">{{ actor(e) }}</span>
               <span class="shrink-0 text-muted-foreground">{{ label(e) }}</span>
               <RouterLink
                 v-if="e.documentId"

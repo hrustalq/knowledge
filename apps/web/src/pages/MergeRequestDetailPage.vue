@@ -41,7 +41,8 @@ import MrActivityFeed from '@/components/merge-requests/MrActivityFeed.vue'
 import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { matchAnchoredThreads } from '@/components/merge-requests/thread-anchors'
-import { actorLabel, mrIcon } from '@/components/merge-requests/mr-ui'
+import { mrIcon } from '@/components/merge-requests/mr-ui'
+import UserChip from '@/components/people/UserChip.vue'
 
 const { t } = useI18n()
 
@@ -334,7 +335,7 @@ function refresh() {
       </div>
 
       <p class="text-xs text-muted-foreground">
-        <span class="font-medium text-foreground">{{ actorLabel(mr.authorId) }}</span>
+        <UserChip :user-id="mr.authorId" size="sm" class="font-medium text-foreground" />
         {{ t('mr.requestedToMerge') }}
         <RouterLink
           :to="`/documents/${mr.documentId}?tab=revisions`"

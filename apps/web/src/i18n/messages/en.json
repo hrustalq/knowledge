@@ -112,7 +112,8 @@
     "profile": "Profile",
     "yourProfile": "Your profile",
     "accountSettings": "Account settings",
-    "accountMenu": "Account menu"
+    "accountMenu": "Account menu",
+    "notifications": "Notifications"
   },
   "role": {
     "viewer": "Viewer",
@@ -205,7 +206,8 @@
     "workflowsHint": "Document step chains",
     "connectorsHint": "Bring pages in from other systems, and publish them back.",
     "docsHint": "How all of this works",
-    "profileHint": "Name, language, password"
+    "profileHint": "Name, language, password",
+    "notificationsHint": "Mentions, reviews, what you follow"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -971,7 +973,7 @@
     "threads": "{n} thread | {n} threads",
     "filters": "{n} filter | {n} filters",
     "hops": "{n} hop | {n} hops",
-    "terms": "{n} term | {n} terms",
+    "terms": "no terms | {n} term | {n} terms",
     "events": "{n} recent event | {n} recent events",
     "calls": "{n} call | {n} calls",
     "unresolvedThreads": "{n} unresolved thread | {n} unresolved threads",
@@ -987,7 +989,12 @@
     "members": "{n} member | {n} members",
     "accounts": "{n} account | {n} accounts",
     "runs": "{n} run | {n} runs",
-    "openComments": "{n} open comment | {n} open comments"
+    "openComments": "{n} open comment | {n} open comments",
+    "pages": "no pages | {n} page | {n} pages",
+    "people": "nobody | {n} person | {n} people",
+    "open": "{n} open | {n} open",
+    "connected": "{n} connected | {n} connected",
+    "workflows": "no workflows | {n} workflow | {n} workflows"
   },
   "chat": {
     "willBeRemovedFrom": "will be removed from this chat, and the",
@@ -1394,7 +1401,17 @@
     "rosterHint": "Every page belongs to exactly one project. Pick one from the list to rename it, or switch the active project to re-scope the page tree.",
     "updated": "Project updated",
     "deleted": "Project “{name}” deleted",
-    "notFound": "Project not found in this workspace."
+    "notFound": "Project not found in this workspace.",
+    "appearance": "Appearance",
+    "openOverview": "Open overview",
+    "createdAt": "Created {when}",
+    "noDescription": "No description yet.",
+    "addOne": "Add one",
+    "recentPages": "Recently updated",
+    "noPages": "No pages in this project yet.",
+    "noContributors": "Nobody has written anything here yet.",
+    "contributorsHint": "Derived from who has revised a page here — not an access list.",
+    "railElsewhere": "Managed in settings."
   },
   "rail": {
     "overview": "Overview",
@@ -1404,7 +1421,10 @@
     "graph": "Graph",
     "workflows": "Workflows",
     "activity": "Activity",
-    "connectors": "Connected to"
+    "connectors": "Connected to",
+    "people": "People",
+    "pages": "Pages",
+    "glossary": "Glossary"
   },
   "access": {
     "title": "Access control",
@@ -1956,6 +1976,118 @@
     "thinking": "{agent} is reading the discussion…",
     "agentLabel": "{agent} (AI)",
     "viaActor": "tagged by {actor}",
-    "hint": "Type @ to mention someone, link a page, or tag an AI agent"
+    "assistant": "Assistant"
+  },
+  "people": {
+    "pages": "no pages | {n} page | {n} pages",
+    "openMrs": "no open merge requests | {n} open merge request | {n} open merge requests",
+    "unresolved": "no unresolved comments | {n} unresolved comment | {n} unresolved comments",
+    "memberSince": "Member since {when}",
+    "platformAdmin": "Platform admin",
+    "disabled": "Disabled"
+  },
+  "avatar": {
+    "upload": "Upload a picture",
+    "replace": "Replace picture",
+    "uploading": "Uploading… {pct}%",
+    "updated": "Picture updated",
+    "removed": "Picture removed",
+    "failed": "Could not save the picture: {error}",
+    "badType": "Pictures must be PNG, JPEG, WebP or GIF.",
+    "tooLarge": "That picture is too large — the limit is {limit} MB.",
+    "emojiClear": "No emoji",
+    "hint": "Shown wherever you appear — comments, reviews, activity.",
+    "projectHint": "Shown in the sidebar and on the project page. An emoji stays legible at small sizes."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "pageSubtitle": "What happened to the pages, reviews and runs you follow.",
+    "settings": "Notification settings",
+    "settingsSubtitle": "What you hear about in this workspace, and what you follow.",
+    "seeAll": "See all notifications",
+    "empty": "Nothing yet. Watch a page or a project and changes to it will land here.",
+    "emptyUnread": "Nothing unread.",
+    "untitled": "Untitled",
+    "unreadMarker": "Unread",
+    "unreadCount": "{n} unread",
+    "markAllRead": "Mark all read",
+    "toastMention": "You were mentioned in {name}",
+    "on": "On",
+    "off": "Off",
+    "forget": "Forget",
+    "settingsLoadFailed": "Could not load your notification settings.",
+    "settingsSaveFailed": "Could not save your notification settings.",
+    "categoriesTitle": "What to notify me about",
+    "categoriesHint": "Switching a category off applies to this workspace only. Muting mentions means you will not be told when somebody names you.",
+    "autoWatchTitle": "Follow what I comment on",
+    "autoWatchHint": "Commenting on a page or a review starts watching it, so you hear the replies. Unwatching something is remembered either way.",
+    "watchingTitle": "What I follow",
+    "watchingHint": "Pages, projects and reviews you watch, plus anything you have muted.",
+    "watchingEmpty": "You are not following anything yet.",
+    "tab": {
+      "all": "All",
+      "unread": "Unread"
+    },
+    "category": {
+      "mention": "Mentions",
+      "review": "Reviews",
+      "comment": "Comments",
+      "document": "Page changes",
+      "job": "Runs"
+    },
+    "categoryHint": {
+      "mention": "Somebody named you in a comment.",
+      "review": "Merge requests you author, are assigned, or are asked to review.",
+      "comment": "New discussion on something you follow.",
+      "document": "A page you follow was edited, renamed or moved.",
+      "job": "A workflow, agent, import or sync you started finished."
+    },
+    "reason": {
+      "mention": "Mentioned you",
+      "assigned": "Assigned to you",
+      "review-requested": "Review requested",
+      "author": "You created this",
+      "participant": "You took part",
+      "watching": "You follow this"
+    },
+    "subject": {
+      "document": "Page",
+      "merge-request": "Merge request",
+      "project": "Project"
+    },
+    "watch": {
+      "label": "Notifications",
+      "watching": "Watching",
+      "watchingHint": "Tell me about every change to this.",
+      "notWatching": "Not watching",
+      "notWatchingHint": "Only tell me if I am named, assigned or asked to review.",
+      "muted": "Muted",
+      "mutedHint": "Never tell me about this, even if I comment on it."
+    },
+    "event": {
+      "revision.finalized": "edited this page",
+      "document.updated": "updated this page",
+      "document.comment.created": "commented",
+      "document.comment.updated": "answered a comment",
+      "merge-request.created": "opened a merge request",
+      "merge-request.approved": "approved",
+      "merge-request.merged": "merged",
+      "merge-request.closed": "closed",
+      "merge-request.reopened": "reopened",
+      "merge-request.review-requested": "asked for a review",
+      "merge-request.comment.created": "commented on a review",
+      "merge-request.comment.updated": "answered a review comment",
+      "mention": "mentioned you",
+      "assigned": "assigned this to you",
+      "reviewRequested": "asked you to review",
+      "workflow-run.completed": "a workflow run finished",
+      "workflow-run.failed": "a workflow run failed",
+      "workflow-node.awaiting-review": "a workflow step needs review",
+      "agent.run.succeeded": "an agent run finished",
+      "agent.run.failed": "an agent run failed",
+      "import.parsed": "an import is ready to review",
+      "import.failed": "an import failed",
+      "connector.run.failed": "a sync failed"
+    }
   }
 }

@@ -10,7 +10,7 @@
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
-import { hueOf, initialsOf } from '@/lib/monogram'
+import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
 import { ChevronRight, Plus } from 'lucide-vue-next'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -64,11 +64,14 @@ const projects = useProjectsStore()
             :aria-current="p.projectId === projects.activeId ? 'true' : undefined"
             @click="$emit('open', p.projectId)"
           >
-            <span
-              class="grid size-5 shrink-0 place-items-center rounded-[6px] text-[9px] font-semibold text-white"
-              :style="{ backgroundColor: `hsl(${hueOf(p.projectId)} 55% 45%)` }"
-              aria-hidden="true"
-            >{{ initialsOf(p.name) }}</span>
+            <ProjectAvatar
+              :project-id="p.projectId"
+              :name="p.name"
+              :avatar-url="p.avatarUrl"
+              :avatar-emoji="p.avatarEmoji"
+              :avatar-color="p.avatarColor"
+              size="xs"
+            />
 
             <span class="min-w-0 flex-1 truncate">{{ p.name }}</span>
 

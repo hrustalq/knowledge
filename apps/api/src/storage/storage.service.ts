@@ -54,6 +54,22 @@ export class StorageService {
     return `workspaces/${workspaceId}/imports/${importId}/${safeSegment(filename)}`;
   }
 
+  /**
+   * Avatars (docs/features/23). Deliberately outside the `workspaces/` tree
+   * that every other key sits under: a user belongs to several workspaces and a
+   * face does not change between them, so filing it under one would make the
+   * others read a foreign tenant's prefix. Projects follow the same layout for
+   * symmetry — one place to look for a picture of a thing.
+   *
+   * The upload id is a path segment, so replacing an avatar writes a new object
+   * rather than overwriting a live one. That matters because the old URL may be
+   * mid-flight in a browser; the row moves to the new key and the old object is
+   * deleted after, not under, whoever is still reading it.
+   */
+  avatarObjectKey(kind: 'users' | 'projects', ownerId: string, uploadId: string, filename: string): string {
+    return `avatars/${kind}/${ownerId}/${uploadId}/${safeSegment(filename)}`;
+  }
+
   /** Object key layout per plan.md §4. */
   revisionObjectKey(workspaceId: string, documentId: string, revisionId: string, filename: string): string {
     return `workspaces/${workspaceId}/documents/${documentId}/revisions/${revisionId}/${filename}`;

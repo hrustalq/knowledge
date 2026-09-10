@@ -667,6 +667,17 @@ export interface ReviewComment {
 export const AGENT_MENTION_ATTR = 'data-kn-agent';
 
 /**
+ * The attribute a person's mention is written as — the same contract as
+ * `AGENT_MENTION_ATTR`, for the same reason: the editor node that creates it,
+ * the turndown rule that stores it and the API scanner that reads it out of a
+ * comment body must not be able to drift apart.
+ *
+ * The value is a `users.id`, so a mention resolves against `workspace_members`
+ * and a hand-typed uuid from another tenant notifies nobody.
+ */
+export const USER_MENTION_ATTR = 'data-kn-user';
+
+/**
  * PATCH .../threads/:threadId/comments/:commentId — only the comment's own
  * author may rewrite it (403 otherwise); resolving a thread never locks it.
  */
@@ -1315,6 +1326,25 @@ export interface KnowledgeEvent {
   actor?: string;
   /** Live data patching: changed fields of the tracked entity, mergeable into cached copies (present on document.updated & co). */
   patch?: Record<string, unknown>;
+  /**
+   * Deliver only to this user (docs/features/22).
+   *
+   * The bus is workspace-wide, so a notification published without this would
+   * tell every peer in the workspace who is watching what. Both fan-out sites
+   * — the SSE stream and the WS gateway — drop an event whose `userId` names
+   * somebody else; an event without one stays a workspace broadcast.
+   */
+  userId?: string;
+  /**
+   * Why an addressed frame reached its recipient — a `NotificationReason`
+   * (docs/features/22).
+   *
+   * Present only on `notification.created`, and only so a client can tell the
+   * one reason worth interrupting somebody for (being named) from the rest,
+   * which are news they will read when they next look at the bell. Without it
+   * the client either toasts every watched-page edit or none of them.
+   */
+  reason?: string;
   at: string;
 }
 
@@ -1373,8 +1403,270 @@ export const KNOWN_EVENT_TYPES = [
   'connector.run.failed',
   'connector.link.created',
   'connector.link.removed',
+  // Carries a `userId` and reaches only that person (docs/features/22).
+  // Deliberately outside every notification category, which is what stops a
+  // notification from fanning out into another notification.
+  'notification.created',
 ] as const;
 export type KnownEventType = (typeof KNOWN_EVENT_TYPES)[number];
+
+// ---------------------------------------------------------------------------
+// Notifications (docs/features/22)
+//
+// The event bus and the activity feed are both workspace-wide broadcasts: they
+// answer "what happened here", never "what happened that concerns me". These
+// types are the per-person layer — a durable inbox, plus a `watch` relationship
+// so a page or a whole project can be followed.
+// ---------------------------------------------------------------------------
+
+/** What a person can watch. A project subscription catches every page inside it. */
+export const NOTIFICATION_SUBJECT_TYPES = ['document', 'merge-request', 'project'] as const;
+export type NotificationSubjectType = (typeof NOTIFICATION_SUBJECT_TYPES)[number];
+
+/**
+ * Why a row reached this person — the inbox's second line, and the thing that
+ * decides which notification survives coalescing.
+ *
+ * Ordered weakest to strongest on purpose: `notificationReasonRank` reads this
+ * array, so inserting a reason in the right place is all it takes to rank it.
+ */
+export const NOTIFICATION_REASONS = [
+  'watching',
+  'participant',
+  'author',
+  'assigned',
+  'review-requested',
+  'mention',
+] as const;
+export type NotificationReason = (typeof NOTIFICATION_REASONS)[number];
+
+/** How strongly a reason claims a coalesced row. Higher wins. */
+export function notificationReasonRank(reason: string): number {
+  const i = (NOTIFICATION_REASONS as readonly string[]).indexOf(reason);
+  // An unknown reason ranks below every known one rather than above: a future
+  // reason must not silently outrank `mention`, the one a person must not miss.
+  return i < 0 ? -1 : i;
+}
+
+/**
+ * The inbox's grouping, and the unit a person can switch off.
+ *
+ * Cut by what somebody would actually mute rather than by which subsystem
+ * emitted the event: `job` covers a workflow run, an agent run, an import and a
+ * connector sync because they are one thing to the reader — background work
+ * they started, now finished.
+ */
+export const NOTIFICATION_CATEGORIES = ['mention', 'review', 'comment', 'document', 'job'] as const;
+export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
+
+/**
+ * Which category an event type belongs to, or `null` when it is not worth an
+ * inbox row.
+ *
+ * This is the gate that runs before any database work, so the great majority of
+ * events (every revision lifecycle step, every settings write, every
+ * `connector.link.*`) cost one array lookup and nothing else.
+ *
+ * Deliberately NOT stored on `notifications`, for the reason `activityKindFor`
+ * is not stored on `activity_log`: the event type is the durable fact and the
+ * category is a reading of it, which may be re-cut later without a migration.
+ * Category filtering still happens in SQL — see `typesForCategory`.
+ *
+ * `mention` is absent here because a mention is not a type: it is the same
+ * `*.comment.created` event, addressed to a named person rather than broadcast
+ * to a subject's watchers, so it is carried by the row's `reason`.
+ */
+export function notificationCategoryFor(type: string): NotificationCategory | null {
+  // Comments before the merge-request prefix: a remark on an MR is discussion,
+  // not review — the split `activityKindFor` already makes.
+  if (type.endsWith('.comment.created') || type.endsWith('.comment.updated')) return 'comment';
+  if (NOTIFIED_REVIEW_TYPES.includes(type)) return 'review';
+  if (NOTIFIED_DOCUMENT_TYPES.includes(type)) return 'document';
+  if (NOTIFIED_JOB_TYPES.includes(type)) return 'job';
+  return null;
+}
+
+/**
+ * `revision.finalized`, not `revision.indexed`, is what "the page changed"
+ * means here: finalizing carries the author as its actor, while the worker's
+ * indexing events carry none — so notifying on those would tell authors about
+ * their own edits, which is the one thing an inbox must not do.
+ */
+const NOTIFIED_DOCUMENT_TYPES: readonly string[] = ['revision.finalized', 'document.updated'];
+
+const NOTIFIED_REVIEW_TYPES: readonly string[] = [
+  'merge-request.created',
+  'merge-request.approved',
+  'merge-request.merged',
+  'merge-request.closed',
+  'merge-request.reopened',
+  'merge-request.review-requested',
+];
+
+/** Work somebody started that has now finished — or failed, which matters more. */
+const NOTIFIED_JOB_TYPES: readonly string[] = [
+  'workflow-run.completed',
+  'workflow-run.failed',
+  'workflow-node.awaiting-review',
+  'agent.run.succeeded',
+  'agent.run.failed',
+  'import.parsed',
+  'import.failed',
+  'connector.run.failed',
+];
+
+/**
+ * The event types a category covers, for filtering in SQL.
+ *
+ * The inverse of `notificationCategoryFor` over the closed `KNOWN_EVENT_TYPES`
+ * vocabulary, which is what lets the list endpoint push a category filter into
+ * `WHERE type IN (…)` instead of over-fetching and classifying in Node. A type
+ * that ships later without joining that list simply will not match a category
+ * filter — the same forward-compatibility trade the open `event.type` makes.
+ */
+export function typesForCategory(category: NotificationCategory): string[] {
+  return KNOWN_EVENT_TYPES.filter((type) => notificationCategoryFor(type) === category);
+}
+
+/**
+ * The category a *stored row* belongs to, which is not always the category its
+ * event type belongs to.
+ *
+ * A directed notification is filed by its reason, because the event it rode in
+ * on does not describe it: a mention arrives as an ordinary
+ * `*.comment.created`, and being handed a merge request arrives as
+ * `merge-request.updated` — a type that is deliberately not notifiable at all,
+ * since a title edit is not news. Only the reason knows which of those was
+ * addressed to somebody.
+ *
+ * Without this split, muting `comment` would silently mute mentions — the one
+ * notification a person must not lose — an assignment would fall out of every
+ * category badge while still counting toward the total, and the tab a row is
+ * filed under would disagree with the tab that counted it.
+ */
+export function notificationRowCategory(type: string, reason: string): NotificationCategory | null {
+  const directed = DIRECTED_REASON_CATEGORY[reason];
+  return directed ?? notificationCategoryFor(type);
+}
+
+/** Reasons that carry their own category, overriding the event type's. */
+const DIRECTED_REASON_CATEGORY: Record<string, NotificationCategory | undefined> = {
+  mention: 'mention',
+  assigned: 'review',
+  'review-requested': 'review',
+};
+
+/** One inbox row. */
+export interface NotificationEntry {
+  id: string;
+  workspaceId: string;
+  /** The KnowledgeEvent type that produced this row. */
+  type: string;
+  /** Derived from `type`, never stored — see `notificationCategoryFor`. */
+  category: NotificationCategory | null;
+  reason: NotificationReason | string;
+  /** users.id, or 'dev'. Null for work no person triggered. */
+  actor: string | null;
+  documentId: string | null;
+  subjectType: NotificationSubjectType | null;
+  subjectId: string | null;
+  /**
+   * The page or merge request title as it read when this happened. Denormalized
+   * on purpose: an inbox that rewrote itself when a page was renamed would be
+   * answering a different question than "what happened while I was away".
+   */
+  title: string | null;
+  /** Render extras — `count` for a coalesced row, branch names, error text. */
+  metadata: Record<string, unknown>;
+  /** ISO timestamp, or null while unread. */
+  readAt: string | null;
+  createdAt: string;
+}
+
+// GET /v1/notifications?workspaceId=&unread=&category=&limit=&cursor=
+export interface ListNotificationsResponse {
+  workspaceId: string;
+  entries: NotificationEntry[];
+  nextCursor: string | null;
+  /** Unread rows in this workspace, ignoring the current filters — the bell's badge. */
+  unreadCount: number;
+  /** Unread per category under the same scope, for the tab badges (the MR-list precedent). */
+  counts: Record<NotificationCategory, number>;
+}
+
+// GET /v1/notifications/unread-count?workspaceId=
+export interface NotificationUnreadCountResponse {
+  workspaceId: string;
+  count: number;
+  counts: Record<NotificationCategory, number>;
+}
+
+/** POST /v1/notifications/read — `ids` for a specific set, `all` for the workspace. */
+export interface MarkNotificationsReadRequest {
+  workspaceId: string;
+  ids?: string[];
+  all?: boolean;
+  /** Narrows `all` to one category, so "clear my comments" need not clear reviews. */
+  category?: NotificationCategory;
+}
+export interface MarkNotificationsReadResponse {
+  updated: number;
+  unreadCount: number;
+}
+
+/**
+ * Watch state for one subject.
+ *
+ * `muted` is a stored row rather than the absence of one: auto-subscription
+ * would otherwise re-add a person the moment they commented again, so an
+ * explicit "stop telling me about this" has to be recorded as a fact.
+ * `default` is the absence — no row, so involvement may subscribe you later.
+ */
+export const SUBSCRIPTION_STATES = ['watching', 'muted', 'default'] as const;
+export type SubscriptionState = (typeof SUBSCRIPTION_STATES)[number];
+
+export interface NotificationSubscriptionEntry {
+  subjectType: NotificationSubjectType;
+  subjectId: string;
+  state: Exclude<SubscriptionState, 'default'>;
+  /** How the row appeared: 'manual' when a person pressed Watch, else the involvement that added it. */
+  reason: string;
+  createdAt: string;
+}
+
+// GET /v1/notifications/subscriptions?workspaceId=&subjectType=&subjectId=
+export interface ListNotificationSubscriptionsResponse {
+  workspaceId: string;
+  subscriptions: NotificationSubscriptionEntry[];
+}
+
+// PUT /v1/notifications/subscriptions
+export interface SetNotificationSubscriptionRequest {
+  workspaceId: string;
+  subjectType: NotificationSubjectType;
+  subjectId: string;
+  state: SubscriptionState;
+}
+
+/**
+ * Per-person, per-workspace preferences — a sparse override of the code
+ * defaults (the `ai_settings` relationship to the `ASSISTANT_*` env vars): an
+ * empty table means everybody gets everything, so the feature ships switched on
+ * without a migration having to write a row per member.
+ */
+export interface NotificationPreferences {
+  workspaceId: string;
+  /** Categories switched off. A muted category suppresses even a directed notification. */
+  mutedCategories: NotificationCategory[];
+  /** Commenting on something subscribes you to it (GitHub's default). */
+  autoWatchOnComment: boolean;
+}
+
+export interface UpdateNotificationPreferencesRequest {
+  workspaceId: string;
+  mutedCategories?: NotificationCategory[];
+  autoWatchOnComment?: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // Live tracked-entity updates over WebSocket (/v1/events/ws)
@@ -2065,10 +2357,21 @@ export interface CreateAvatarUploadRequest {
   sizeBytes: number;
 }
 export interface CreateAvatarUploadResponse {
+  /**
+   * Names this attempt. Echoed back on complete, so the API can rebuild the
+   * object key it signed rather than trusting a key from the client — the same
+   * reason attachments reserve a row before the bytes exist.
+   */
+  uploadId: string;
   upload: { url: string; method: 'PUT'; headers: Record<string, string>; expiresAt: string };
 }
 
 // POST /v1/me/avatar/complete · POST /v1/projects/:id/avatar/complete
+export interface CompleteAvatarUploadRequest {
+  uploadId: string;
+  /** The filename from the reserve step: it is part of the key that was signed. */
+  filename: string;
+}
 export interface CompleteAvatarUploadResponse {
   avatarUrl: AvatarUrl;
 }

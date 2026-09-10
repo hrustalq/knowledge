@@ -14,9 +14,11 @@ import { GraphQueryModule } from './graph/graph-query.module.js';
 import { IngestionAdminModule } from './ingestion/ingestion-admin.module.js';
 import { DocumentsModule } from './documents/documents.module.js';
 import { AttachmentsModule } from './attachments/attachments.module.js';
+import { AvatarsModule } from './avatars/avatars.module.js';
 import { SearchModule } from './search/search.module.js';
 import { EntitiesModule } from './entities/entities.module.js';
 import { ActivityModule } from './activity/activity.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { EventsApiModule } from './events/events-api.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { ConnectorsModule } from './connectors/connectors.module.js';
@@ -48,11 +50,13 @@ import { AppService } from './app.service.js';
     ProjectsModule,
     DocumentsModule,
     AttachmentsModule,
+    AvatarsModule,
     SearchModule,
     EntitiesModule,
     GraphQueryModule,
     IngestionAdminModule,
     ActivityModule,
+    NotificationsModule,
     EventsApiModule,
     AssistantModule,
     AiModule,

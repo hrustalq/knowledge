@@ -74,6 +74,14 @@ const crumbs = computed<Crumb[]>(() => {
     if (path.endsWith('/edit')) list.push({ label: t('nav.edit') })
     return list
   }
+  // A project's own page (docs/features/24). Leads with the roster, then the
+  // project — the same two-step trail /settings/projects/:id makes, pointed at
+  // the read side rather than the form.
+  if (path.startsWith('/projects/')) {
+    const id = route.params.id as string
+    const name = projects.items.find((p) => p.projectId === id)?.name ?? id.slice(0, 8)
+    return [{ label: t('nav.projects'), to: '/settings/projects' }, { label: name }]
+  }
   if (path.startsWith('/merge-requests/')) {
     return [
       { label: t('nav.mergeRequests'), to: '/merge-requests' },

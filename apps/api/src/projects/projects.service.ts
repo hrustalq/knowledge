@@ -87,9 +87,29 @@ export class ProjectsService {
   async update(projectId: string, dto: UpdateProjectDto, actorId?: string): Promise<ProjectSummary> {
     const project = await this.requireProject(projectId);
 
-    const data: { name?: string; description?: string | null } = {};
+    const data: {
+      name?: string;
+      description?: string | null;
+      avatarEmoji?: string | null;
+      avatarColor?: string | null;
+      avatarKey?: null;
+      avatarUpdatedAt?: Date;
+    } = {};
     if (dto.name !== undefined) data.name = dto.name.trim();
     if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+    if (dto.avatarEmoji !== undefined) {
+      data.avatarEmoji = dto.avatarEmoji?.trim() || null;
+      data.avatarUpdatedAt = new Date();
+      // A project has one face. Choosing an emoji retires an uploaded picture,
+      // the mirror of what AvatarsService does when a picture is uploaded.
+      //
+      // The S3 object is deliberately left behind rather than deleted here: this
+      // service has no StorageService, and importing one so a rename can tidy a
+      // bucket would put object storage on the path of every project edit. An
+      // orphan costs a few kilobytes; DELETE .../avatar removes it properly.
+      if (data.avatarEmoji) data.avatarKey = null;
+    }
+    if (dto.avatarColor !== undefined) data.avatarColor = dto.avatarColor?.trim() || null;
     if (Object.keys(data).length === 0) throw new BadRequestException(t('error.project.nothingToUpdate'));
 
     const updated = await this.prisma.project.update({

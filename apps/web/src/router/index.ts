@@ -46,6 +46,10 @@ export function createRouter() {
         meta: { fill: true },
       },
       { path: '/search', component: () => import('@/pages/SearchPage.vue') },
+      // The inbox (docs/features/22). Top-level rather than under /settings:
+      // it is a place you read, not a thing you configure — the preferences
+      // that shape it live at /settings/notifications.
+      { path: '/notifications', component: () => import('@/pages/NotificationsPage.vue') },
 
       // A person, inside this workspace. `/u` with no id is your own — the
       // avatar menu's target, and a link that stays right after a rename.
@@ -87,6 +91,9 @@ export function createRouter() {
           // Your own account: name, language, password, API key. Open to every
           // role — it takes no user id, so there is nobody else to act on.
           { path: 'profile', component: () => import('@/pages/ProfileSettingsPage.vue') },
+          // Also yours rather than the workspace's, though scoped to one
+          // workspace: what you want to hear about here.
+          { path: 'notifications', component: () => import('@/pages/NotificationSettingsPage.vue') },
           {
             path: 'projects',
             component: () => import('@/pages/ProjectsPage.vue'),
@@ -126,6 +133,11 @@ export function createRouter() {
           },
         ],
       },
+      // A project as something you read (docs/features/24) — the counterpart to
+      // /settings/projects/:id, which is the form you edit it in. Declared
+      // before the redirect below so the bare roster path still lands in
+      // settings while an id opens the overview.
+      { path: '/projects/:id', component: () => import('@/pages/ProjectOverviewPage.vue') },
       // Legacy top-level paths → their settings home
       { path: '/projects', redirect: '/settings/projects' },
       { path: '/glossary', redirect: '/settings/glossary' },

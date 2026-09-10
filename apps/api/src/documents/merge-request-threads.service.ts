@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AUTHOR_ID_STUB, MergeRequestsService } from './merge-requests.service.js';
 import type { CreateThreadDto } from './dto/merge-requests.dto.js';
 import { MentionRepliesService } from './mention-replies.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { validateThreadAnchor } from './review-anchor.js';
 import { currentLocale, t } from '../i18n/t.js';
 
@@ -40,6 +41,7 @@ export class MergeRequestThreadsService {
     private readonly prisma: PrismaService,
     private readonly mergeRequests: MergeRequestsService,
     private readonly mentions: MentionRepliesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Threads are readable on merged/closed MRs too — only writes require `open`. */
@@ -80,11 +82,13 @@ export class MergeRequestThreadsService {
       });
     });
 
-    await this.mergeRequests.recordActivity(mr.documentId, 'merge-request.comment.created', mr.id, authorId, {
-      title: mr.title,
-      threadId: thread.id,
-      anchored: anchor !== null,
-    });
+    const page = await this.mergeRequests.recordActivity(
+      mr.documentId,
+      'merge-request.comment.created',
+      mr.id,
+      authorId,
+      { title: mr.title, threadId: thread.id, anchored: anchor !== null },
+    );
     await this.mentions.handleMention({
       subject: { kind: 'merge-request', mergeRequestId: mr.id, documentId: mr.documentId },
       threadId: thread.id,
@@ -93,6 +97,19 @@ export class MergeRequestThreadsService {
       actorId: authorId,
       locale: currentLocale(),
     });
+    if (page) {
+      await this.notifications.onCommentPosted({
+        workspaceId: page.workspaceId,
+        subjectType: 'merge-request',
+        subjectId: mr.id,
+        documentId: mr.documentId,
+        title: mr.title,
+        body: dto.body,
+        actorId: authorId,
+        type: 'merge-request.comment.created',
+        metadata: { threadId: thread.id },
+      });
+    }
     return { thread: await this.reload(thread.id) };
   }
 
@@ -110,11 +127,13 @@ export class MergeRequestThreadsService {
     await this.prisma.mergeRequestComment.create({
       data: { threadId: thread.id, authorId, body, replyToId: replyTo?.id ?? null },
     });
-    await this.mergeRequests.recordActivity(mr.documentId, 'merge-request.comment.created', mr.id, authorId, {
-      title: mr.title,
-      threadId: thread.id,
-      anchored: thread.anchorType !== null,
-    });
+    const page = await this.mergeRequests.recordActivity(
+      mr.documentId,
+      'merge-request.comment.created',
+      mr.id,
+      authorId,
+      { title: mr.title, threadId: thread.id, anchored: thread.anchorType !== null },
+    );
     await this.mentions.handleMention({
       subject: { kind: 'merge-request', mergeRequestId: mr.id, documentId: mr.documentId },
       threadId: thread.id,
@@ -123,6 +142,19 @@ export class MergeRequestThreadsService {
       actorId: authorId,
       locale: currentLocale(),
     });
+    if (page) {
+      await this.notifications.onCommentPosted({
+        workspaceId: page.workspaceId,
+        subjectType: 'merge-request',
+        subjectId: mr.id,
+        documentId: mr.documentId,
+        title: mr.title,
+        body: body,
+        actorId: authorId,
+        type: 'merge-request.comment.created',
+        metadata: { threadId: thread.id },
+      });
+    }
     return { thread: await this.reload(thread.id) };
   }
 

@@ -167,6 +167,7 @@ const rail = ref<Record<string, boolean>>({ pages: true, open: false, access: fa
         <UserAvatar
           :user-id="profile.userId"
           :name="profile.displayName"
+          :src="profile.avatarUrl"
           class="!size-14 !text-lg"
         />
         <div class="min-w-0 flex-1">

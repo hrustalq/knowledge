@@ -18,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { AccessService } from '../auth/access.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
@@ -61,6 +62,7 @@ export class MergeRequestsService {
     private readonly activity: ActivityService,
     private readonly access: AccessService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(
@@ -97,11 +99,23 @@ export class MergeRequestsService {
       },
       include: MR_INCLUDE,
     });
-    await this.recordActivity(mr.documentId, 'merge-request.created', mr.id, authorId, {
+    const page = await this.recordActivity(mr.documentId, 'merge-request.created', mr.id, authorId, {
       title: dto.title,
       sourceBranch: source.name,
       targetBranch: target.name,
     });
+    // Opening a merge request is watching it. Recorded as a subscription rather
+    // than inferred from `authorId` at fan-out time so that unwatching your own
+    // merge request actually works.
+    if (page) {
+      await this.notifications.ensureSubscription(
+        page.workspaceId,
+        authorId,
+        'merge-request',
+        mr.id,
+        'author',
+      );
+    }
     return { mergeRequest: await this.toDetail(mr) };
   }
 
@@ -199,7 +213,7 @@ export class MergeRequestsService {
       },
       include: MR_INCLUDE,
     });
-    await this.recordActivity(mr.documentId, 'merge-request.updated', mr.id, actorId, {
+    const page = await this.recordActivity(mr.documentId, 'merge-request.updated', mr.id, actorId, {
       title: updated.title,
       changed,
       // The activity timeline renders draft and assignee edits as their own
@@ -208,6 +222,28 @@ export class MergeRequestsService {
       ...(changed.includes('isDraft') ? { isDraft: updated.isDraft } : {}),
       ...(changed.includes('assigneeId') ? { assigneeId: updated.assigneeId } : {}),
     });
+    // Being handed a merge request is addressed to one person, so it is told
+    // directly rather than left to the subject's watchers: `merge-request.updated`
+    // is not notifiable at all (a title edit is not news), and an assignee who
+    // never watched the MR would otherwise hear nothing.
+    if (page && updated.assigneeId && changed.includes('assigneeId')) {
+      await this.notifications.notify({
+        workspaceId: page.workspaceId,
+        userIds: [updated.assigneeId],
+        // The event that actually happened. It is not notifiable on its own —
+        // `notificationRowCategory` files this row under `review` from the
+        // reason instead.
+        type: 'merge-request.updated',
+        reason: 'assigned',
+        actor: actorId ?? null,
+        documentId: mr.documentId,
+        subjectType: 'merge-request',
+        subjectId: mr.id,
+        title: updated.title,
+        metadata: { assigned: true },
+        subscribe: true,
+      });
+    }
     return { mergeRequest: await this.toDetail(updated) };
   }
 
@@ -259,10 +295,30 @@ export class MergeRequestsService {
       ]);
     }
     if (added.length > 0) {
-      await this.recordActivity(mr.documentId, 'merge-request.review-requested', mr.id, actorId, {
-        title: mr.title,
-        reviewerIds: added,
-      });
+      const page = await this.recordActivity(
+        mr.documentId,
+        'merge-request.review-requested',
+        mr.id,
+        actorId,
+        { title: mr.title, reviewerIds: added },
+      );
+      // Directed for the same reason as the assignee above: the reviewer ids
+      // live in the activity metadata, which never reaches the event bus, so
+      // the fan-out could not find these people even in principle.
+      if (page) {
+        await this.notifications.notify({
+          workspaceId: page.workspaceId,
+          userIds: added,
+          type: 'merge-request.review-requested',
+          reason: 'review-requested',
+          actor: actorId ?? null,
+          documentId: mr.documentId,
+          subjectType: 'merge-request',
+          subjectId: mr.id,
+          title: mr.title,
+          subscribe: true,
+        });
+      }
     }
     const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
     return { mergeRequest: await this.toDetail(updated) };
@@ -575,18 +631,25 @@ export class MergeRequestsService {
     };
   }
 
+  /**
+   * Public so MergeRequestThreadsService can record against the same funnel.
+   *
+   * Returns the page it resolved (or null when the page is gone) because the
+   * workspace lives on the document, not on the merge request — callers that
+   * need it for a notification would otherwise repeat this exact lookup.
+   */
   async recordActivity(
     documentId: string,
     action: string,
     subjectId: string,
     actor?: string,
     metadata?: Record<string, unknown>,
-  ): Promise<void> {
+  ): Promise<{ workspaceId: string; title: string } | null> {
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
       select: { workspaceId: true, title: true },
     });
-    if (!doc) return;
+    if (!doc) return null;
     await this.activity.record({
       workspaceId: doc.workspaceId,
       actor,
@@ -595,6 +658,7 @@ export class MergeRequestsService {
       subjectId,
       metadata: { documentTitle: doc.title, ...metadata },
     });
+    return doc;
   }
 
   private async getMrOrThrow(mergeRequestId: string): Promise<MrWithBranches> {

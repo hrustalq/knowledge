@@ -7,7 +7,7 @@ import { MessageSquare, ThumbsUp } from 'lucide-vue-next'
 import type { MergeRequestInfo } from '@knowledge/contracts'
 import { relativeTime } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
-import UserAvatar from './UserAvatar.vue'
+import UserChip from '@/components/people/UserChip.vue'
 import { mrIcon } from './mr-ui'
 import { useMembers } from './use-members'
 
@@ -60,21 +60,17 @@ const state = computed(() => mrIcon(mr.value))
 
         <!-- people -->
         <span class="flex items-center -space-x-1.5" :title="mr.reviewers.map((r) => nameOf(r)).join(', ')">
-          <UserAvatar
+          <UserChip
             v-for="id in mr.reviewers.slice(0, 3)"
             :key="id"
             :user-id="id"
-            :name="nameOf(id)"
             size="sm"
+            avatar-only
             class="ring-2 ring-card"
           />
           <span v-if="mr.reviewers.length > 3" class="pl-2.5 text-[10px]">+{{ mr.reviewers.length - 3 }}</span>
         </span>
-        <UserAvatar
-          v-if="mr.assigneeId"
-          :user-id="mr.assigneeId"
-          :name="`${nameOf(mr.assigneeId)} (assignee)`"
-        />
+        <UserChip v-if="mr.assigneeId" :user-id="mr.assigneeId" avatar-only />
       </div>
     </div>
   </div>

@@ -20,6 +20,7 @@ import { ActivityService } from '../activity/activity.service.js';
 import { AUTHOR_ID_STUB } from './merge-requests.service.js';
 import type { CreateThreadDto } from './dto/merge-requests.dto.js';
 import { MentionRepliesService } from './mention-replies.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { validateThreadAnchor } from './review-anchor.js';
 import { currentLocale, t } from '../i18n/t.js';
 
@@ -46,6 +47,7 @@ export class DocumentThreadsService {
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
     private readonly mentions: MentionRepliesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(documentId: string): Promise<ListDocumentThreadsResponse> {
@@ -98,6 +100,17 @@ export class DocumentThreadsService {
       actorId: authorId,
       locale: currentLocale(),
     });
+    await this.notifications.onCommentPosted({
+      workspaceId: doc.workspaceId,
+      subjectType: 'document',
+      subjectId: documentId,
+      documentId,
+      title: doc.title,
+      body: dto.body,
+      actorId: authorId,
+      type: 'document.comment.created',
+      metadata: { threadId: thread.id },
+    });
     return { thread: await this.reload(thread.id) };
   }
 
@@ -125,6 +138,17 @@ export class DocumentThreadsService {
       documentId,
       actorId: authorId,
       locale: currentLocale(),
+    });
+    await this.notifications.onCommentPosted({
+      workspaceId: doc.workspaceId,
+      subjectType: 'document',
+      subjectId: documentId,
+      documentId,
+      title: doc.title,
+      body: body,
+      actorId: authorId,
+      type: 'document.comment.created',
+      metadata: { threadId: thread.id },
     });
     return { thread: await this.reload(thread.id) };
   }

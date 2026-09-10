@@ -11,6 +11,8 @@ import { useProjectsStore } from '@/stores/projects'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import AvatarPicker from '@/components/people/AvatarPicker.vue'
+import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
 
 const { t } = useI18n()
 
@@ -60,6 +62,30 @@ async function save() {
   }
 }
 
+/**
+ * A short, opinionated set rather than a full emoji picker.
+ *
+ * A picker is a searchable grid of two thousand glyphs, and the decision here is
+ * "which of these reads as my project at 20px" — a question a dozen legible,
+ * domain-shaped options answer faster than a search box. Anything else is still
+ * reachable: the field accepts any emoji the API validates.
+ */
+const EMOJI_CHOICES = ['📘', '🧭', '🛠️', '🚀', '🔐', '📊', '🧩', '⚙️', '🗂️', '💡', '🧪', '🌍']
+
+async function setEmoji(emoji: string | null) {
+  const p = project.value
+  if (!p) return
+  try {
+    await apiFetch(`/v1/projects/${p.projectId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ avatarEmoji: emoji }),
+    })
+    emit('changed')
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
 async function remove() {
   const p = project.value
   if (!p) return
@@ -88,12 +114,34 @@ async function remove() {
   </p>
 
   <div v-else class="space-y-6">
-    <header class="space-y-2">
-      <h1 class="font-display text-2xl font-bold tracking-tight">{{ project.name }}</h1>
-      <div class="flex flex-wrap items-center gap-2">
-        <Badge v-if="project.projectId === store.activeId" variant="secondary">{{ t('project.active') }}</Badge>
-        <Badge variant="outline">{{ project.documentCount }} pages</Badge>
-        <span class="text-xs text-muted-foreground">Created {{ relativeTime(project.createdAt) }}</span>
+    <header class="flex items-start gap-3">
+      <ProjectAvatar
+        :project-id="project.projectId"
+        :name="project.name"
+        :avatar-url="project.avatarUrl"
+        :avatar-emoji="project.avatarEmoji"
+        :avatar-color="project.avatarColor"
+        size="md"
+      />
+      <div class="min-w-0 flex-1 space-y-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="font-display truncate text-2xl font-bold tracking-tight">{{ project.name }}</h1>
+          <!-- The read side of the same project. This page is the form; the
+               overview is where you go to find out what is in it. -->
+          <RouterLink
+            :to="`/projects/${project.projectId}`"
+            class="text-primary text-xs hover:underline"
+          >
+            {{ t('project.openOverview') }}
+          </RouterLink>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <Badge v-if="project.projectId === store.activeId" variant="secondary">{{ t('project.active') }}</Badge>
+          <Badge variant="outline">{{ t('people.pages', project.documentCount) }}</Badge>
+          <span class="text-xs text-muted-foreground">
+            {{ t('project.createdAt', { when: relativeTime(project.createdAt) }) }}
+          </span>
+        </div>
       </div>
     </header>
 
@@ -106,6 +154,41 @@ async function remove() {
         <span class="text-xs font-medium text-muted-foreground">{{ t('project.description') }}</span>
         <Input v-model="description" :disabled="!auth.canEdit" :placeholder="t('project.optional')" />
       </label>
+
+      <!-- The face. Separate from the name/description Save because an upload
+           has already happened by the time it returns, and an emoji is one
+           click — pairing either with a Save button would claim otherwise. -->
+      <div v-if="auth.canEdit" class="space-y-2 border-t pt-3">
+        <span class="text-xs font-medium text-muted-foreground">{{ t('project.appearance') }}</span>
+        <p class="text-xs text-muted-foreground">{{ t('avatar.projectHint') }}</p>
+        <AvatarPicker
+          :base="`/v1/projects/${project.projectId}`"
+          :has-image="project.avatarUrl !== null"
+          @changed="emit('changed')"
+        />
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button
+            v-for="choice in EMOJI_CHOICES"
+            :key="choice"
+            type="button"
+            class="grid size-8 place-items-center rounded-md border text-base transition-colors hover:bg-muted"
+            :class="project.avatarEmoji === choice ? 'border-primary bg-muted' : 'border-transparent'"
+            :title="choice"
+            @click="setEmoji(choice)"
+          >
+            {{ choice }}
+          </button>
+          <Button
+            v-if="project.avatarEmoji"
+            variant="ghost"
+            size="sm"
+            class="text-muted-foreground"
+            @click="setEmoji(null)"
+          >
+            {{ t('avatar.emojiClear') }}
+          </Button>
+        </div>
+      </div>
       <div class="flex flex-wrap gap-2 pt-1">
         <Button v-if="auth.canEdit" :disabled="!dirty || saving || !name.trim()" @click="save">
           {{ saving ? t('project.saving') : t('common.save') }}

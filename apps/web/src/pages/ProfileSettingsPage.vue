@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import UserAvatar from '@/components/merge-requests/UserAvatar.vue'
+import AvatarPicker from '@/components/people/AvatarPicker.vue'
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
@@ -153,7 +154,15 @@ async function copyKey() {
       <!-- Identity -->
       <section class="rounded-xl border bg-card p-5">
         <div class="flex items-start gap-4">
-          <UserAvatar :user-id="auth.me.userId" :name="name || auth.me.displayName" class="!size-12 !text-base" />
+          <!-- The face sits beside the name because they are one thing: what
+               other people see of you. Two separate cards for a picture and a
+               display name would split the same question in half. -->
+          <UserAvatar
+            :user-id="auth.me.userId"
+            :name="name || auth.me.displayName"
+            :src="auth.me.avatarUrl"
+            class="!size-12 !text-base"
+          />
           <div class="min-w-0 flex-1">
             <h2 class="font-display text-[15px] font-semibold tracking-tight">
               {{ t('profileSettings.name.title') }}
@@ -161,6 +170,17 @@ async function copyKey() {
             <p class="mt-0.5 text-xs text-muted-foreground">
               {{ t('profileSettings.name.hint') }}
             </p>
+            <!-- Saves on its own, like the three sections around it: an upload
+                 has already happened by the time it returns, so pairing it with
+                 the name's Save button would claim otherwise. -->
+            <AvatarPicker
+              v-if="!auth.isDev"
+              class="mt-3"
+              base="/v1/me"
+              :has-image="auth.me.avatarUrl !== null"
+              @changed="auth.reload()"
+            />
+            <p v-else class="mt-3 text-xs text-muted-foreground">{{ t('avatar.hint') }}</p>
             <div class="mt-3 flex flex-wrap items-end gap-2">
               <div class="min-w-48 flex-1">
                 <Label for="kn-display-name" class="sr-only">{{ t('profileSettings.name.label') }}</Label>

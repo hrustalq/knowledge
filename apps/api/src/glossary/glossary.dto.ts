@@ -4,13 +4,18 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
+  Max,
+  ValidateNested,
   MaxLength,
+  Min,
   ValidateIf,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { vmsg } from '../common/validation.js';
 
 /** Mirrors UUID_RE in acl.guard.ts (any version digit, nil allowed). */
@@ -22,6 +27,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 const MAX_TERM_CHARS = 80;
 const MAX_DEFINITION_CHARS = 2_000;
+/** Mirrors MAX_QUOTE_CHARS in ThreadAnchorDto and lib/anchor-match. */
+const MAX_QUOTE_CHARS = 1_000;
 
 export class ListGlossaryQueryDto {
   // Field name must stay `workspaceId`: @Access('viewer','query') resolves it.
@@ -90,6 +97,31 @@ export class CreateGlossaryTermDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  // Matching rules. No `default:` in any decorator, for the reason spelled out
+  // on `source` above: openapi-typescript promotes a property that declares one
+  // to *required* in the generated client.
+  @ApiPropertyOptional({ description: 'Link the aliases too, not just the term. Defaults to true' })
+  @IsOptional()
+  @IsBoolean()
+  matchAliases?: boolean;
+
+  @ApiPropertyOptional({ description: 'Match only this exact casing. Defaults to false' })
+  @IsOptional()
+  @IsBoolean()
+  caseSensitive?: boolean;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Occurrences linked per page; null uses the shared default',
+  })
+  @IsOptional()
+  @ValidateIf((o: { maxLinksPerPage?: number | null }) => o.maxLinksPerPage !== null)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  maxLinksPerPage?: number | null;
 }
 
 export class UpdateGlossaryTermDto {
@@ -125,6 +157,31 @@ export class UpdateGlossaryTermDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+
+  // Matching rules. No `default:` in any decorator, for the reason spelled out
+  // on `source` above: openapi-typescript promotes a property that declares one
+  // to *required* in the generated client.
+  @ApiPropertyOptional({ description: 'Link the aliases too, not just the term. Defaults to true' })
+  @IsOptional()
+  @IsBoolean()
+  matchAliases?: boolean;
+
+  @ApiPropertyOptional({ description: 'Match only this exact casing. Defaults to false' })
+  @IsOptional()
+  @IsBoolean()
+  caseSensitive?: boolean;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Occurrences linked per page; null uses the shared default',
+  })
+  @IsOptional()
+  @ValidateIf((o: { maxLinksPerPage?: number | null }) => o.maxLinksPerPage !== null)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  maxLinksPerPage?: number | null;
 }
 
 export class SuggestGlossaryTermsDto {
@@ -154,4 +211,36 @@ export class SuggestGlossaryTermsDto {
   @IsOptional()
   @IsString()
   title?: string;
+}
+
+/** The passage an exclusion pins to. Mirrors ThreadAnchorDto's text shape. */
+export class GlossaryExclusionAnchorDto {
+  @ApiProperty({ description: 'The occurrence, with its surrounding words collapsed' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(MAX_QUOTE_CHARS, { message: vmsg('maxLength') })
+  quote!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_QUOTE_CHARS, { message: vmsg('maxLength') })
+  prefix?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_QUOTE_CHARS, { message: vmsg('maxLength') })
+  suffix?: string;
+}
+
+export class CreateGlossaryExclusionDto {
+  @ApiProperty()
+  @Matches(UUID_RE)
+  termId!: string;
+
+  @ApiProperty({ type: GlossaryExclusionAnchorDto })
+  @ValidateNested()
+  @Type(() => GlossaryExclusionAnchorDto)
+  anchor!: GlossaryExclusionAnchorDto;
 }

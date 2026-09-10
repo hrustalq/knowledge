@@ -21,6 +21,8 @@ import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
 import { HistoryService } from './history.service.js';
 import { DocumentThreadsService } from './document-threads.service.js';
+import { GlossaryService } from '../glossary/glossary.service.js';
+import { CreateGlossaryExclusionDto } from '../glossary/glossary.dto.js';
 import { CompareService } from './compare.service.js';
 import {
   AddRelationsDto,
@@ -52,6 +54,7 @@ export class DocumentsController {
     private readonly compareService: CompareService,
     private readonly history: HistoryService,
     private readonly threads: DocumentThreadsService,
+    private readonly glossary: GlossaryService,
   ) {}
 
   @Post()
@@ -338,6 +341,39 @@ export class DocumentsController {
   // reader who may read a page may annotate it; changing the page still needs
   // `editor`.
   // -------------------------------------------------------------------------
+
+  /* ----------------------------------------- glossary exclusions (feature 14) */
+
+  // Hung off the document, not the term: `@Access(…, 'document')` then resolves
+  // the workspace from `:id` for free, and reading is `viewer` because whoever
+  // may read a page may see which of its words are not vocabulary.
+  @Get(':id/glossary-exclusions')
+  @Access('viewer', 'document')
+  @ApiOperation({ summary: 'Occurrences on this page that are not mentions of a glossary term' })
+  listGlossaryExclusions(@Param('id', ParseUUIDPipe) id: string) {
+    return this.glossary.listExclusions(id);
+  }
+
+  @Post(':id/glossary-exclusions')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: 'Stop linking one occurrence of a term on this page' })
+  createGlossaryExclusion(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateGlossaryExclusionDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.glossary.addExclusion(id, dto, principal?.userId);
+  }
+
+  @Delete(':id/glossary-exclusions/:exclusionId')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: 'Link this occurrence again' })
+  deleteGlossaryExclusion(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('exclusionId', ParseUUIDPipe) exclusionId: string,
+  ) {
+    return this.glossary.removeExclusion(id, exclusionId);
+  }
 
   @Get(':id/threads')
   @Access('viewer', 'document')

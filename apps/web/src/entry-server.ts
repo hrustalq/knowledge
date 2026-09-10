@@ -11,6 +11,8 @@ interface SsrRequestContext {
   rail: string | null
   railOpen: string | null
   filterRail: string | null
+  glossary: string | null
+  treeOpen: string | null
   locale: Locale | null
 }
 
@@ -29,6 +31,8 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     rail: ctx.rail ?? null,
     railOpen: ctx.railOpen ?? null,
     filterRail: ctx.filterRail ?? null,
+    glossary: ctx.glossary ?? null,
+    treeOpen: ctx.treeOpen ?? null,
     locale: ctx.locale ?? null,
   }
   return ssrCtx.run(request, async () => {

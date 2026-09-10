@@ -1,10 +1,15 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { GlossaryTerm as TermRow } from '@prisma/client';
-import type {
-  GlossaryTerm,
-  GlossaryTermSuggestion,
-  ListGlossaryResponse,
-  SuggestGlossaryTermsResponse,
+import {
+  GLOSSARY_BOUNDARY_AFTER,
+  GLOSSARY_BOUNDARY_BEFORE,
+  type GlossaryExclusion,
+  type GlossaryExclusionAnchor,
+  type GlossaryTerm,
+  type GlossaryTermSuggestion,
+  type ListGlossaryExclusionsResponse,
+  type ListGlossaryResponse,
+  type SuggestGlossaryTermsResponse,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
@@ -107,6 +112,9 @@ export class GlossaryService {
         documentId: dto.documentId ?? null,
         source: dto.source ?? 'manual',
         enabled: dto.enabled ?? true,
+        matchAliases: dto.matchAliases ?? true,
+        caseSensitive: dto.caseSensitive ?? false,
+        maxLinksPerPage: dto.maxLinksPerPage ?? null,
         createdBy: actorId ?? null,
       },
     });
@@ -139,6 +147,9 @@ export class GlossaryService {
         ...(dto.aliases === undefined ? {} : { aliases: normalizeAliases(dto.aliases, term ?? current.term) }),
         ...(dto.documentId === undefined ? {} : { documentId: dto.documentId }),
         ...(dto.enabled === undefined ? {} : { enabled: dto.enabled }),
+        ...(dto.matchAliases === undefined ? {} : { matchAliases: dto.matchAliases }),
+        ...(dto.caseSensitive === undefined ? {} : { caseSensitive: dto.caseSensitive }),
+        ...(dto.maxLinksPerPage === undefined ? {} : { maxLinksPerPage: dto.maxLinksPerPage }),
       },
     });
     await this.activity.record({
@@ -155,7 +166,12 @@ export class GlossaryService {
   async remove(termId: string, actorId?: string): Promise<{ deleted: true }> {
     const row = await this.prisma.glossaryTerm.findUnique({ where: { id: termId } });
     if (!row) throw new NotFoundException(t('error.glossary.notFound', { id: termId }));
-    await this.prisma.glossaryTerm.delete({ where: { id: termId } });
+    // The exclusions go with it: no FK (house style), so nothing else would
+    // remove rows that are invisible and unfixable once their term is gone.
+    await this.prisma.$transaction([
+      this.prisma.glossaryExclusion.deleteMany({ where: { termId } }),
+      this.prisma.glossaryTerm.delete({ where: { id: termId } }),
+    ]);
     await this.activity.record({
       workspaceId: row.workspaceId,
       actor: actorId,
@@ -304,6 +320,56 @@ export class GlossaryService {
    * Defining pages are a soft link (no FK), so the title is resolved here and
    * a deleted page simply reads as an unlinked term rather than a broken one.
    */
+  /* ------------------------------------------------- per-occurrence exclusions */
+
+  async listExclusions(documentId: string): Promise<ListGlossaryExclusionsResponse> {
+    const rows = await this.prisma.glossaryExclusion.findMany({
+      where: { documentId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return { documentId, exclusions: rows.map(toExclusion) };
+  }
+
+  async addExclusion(
+    documentId: string,
+    dto: { termId: string; anchor: GlossaryExclusionAnchor },
+    actorId?: string,
+  ): Promise<GlossaryExclusion> {
+    const term = await this.prisma.glossaryTerm.findUnique({ where: { id: dto.termId } });
+    if (!term) throw new NotFoundException(t('error.glossary.notFound', { id: dto.termId }));
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { workspaceId: true },
+    });
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
+    // The route's ACL already proved the caller may write this document; this
+    // proves the *term* belongs to the same tenant, which the route cannot.
+    if (term.workspaceId !== document.workspaceId) {
+      throw new NotFoundException(t('error.glossary.notFound', { id: dto.termId }));
+    }
+
+    const row = await this.prisma.glossaryExclusion.create({
+      data: {
+        workspaceId: document.workspaceId,
+        documentId,
+        termId: dto.termId,
+        anchor: { quote: dto.anchor.quote.replace(/\s+/g, ' ').trim(), ...pickContext(dto.anchor) },
+        createdBy: actorId ?? null,
+      },
+    });
+    return toExclusion(row);
+  }
+
+  async removeExclusion(documentId: string, exclusionId: string): Promise<{ deleted: true }> {
+    // Scoped by document as well as id: the route's ACL is about the document,
+    // so an id from another page must not be deletable through this one.
+    const { count } = await this.prisma.glossaryExclusion.deleteMany({
+      where: { id: exclusionId, documentId },
+    });
+    if (count === 0) throw new NotFoundException(t('error.glossary.notFound', { id: exclusionId }));
+    return { deleted: true };
+  }
+
   private async withDocumentTitles(rows: TermRow[]): Promise<GlossaryTerm[]> {
     const ids = [...new Set(rows.map((r) => r.documentId).filter((id): id is string => !!id))];
     const titles = new Map<string, string>();
@@ -325,6 +391,9 @@ export class GlossaryService {
       documentTitle: row.documentId ? (titles.get(row.documentId) ?? null) : null,
       source: row.source === 'ai' ? 'ai' : 'manual',
       enabled: row.enabled,
+      matchAliases: row.matchAliases,
+      caseSensitive: row.caseSensitive,
+      maxLinksPerPage: row.maxLinksPerPage,
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -358,9 +427,9 @@ function normalizeAliases(aliases: string[] | undefined, term: string): string[]
 /** Whole-word, case-insensitive count — the same shape the read-side linker matches on. */
 function countOccurrences(haystack: string, term: string): number {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // \b fails on terms that start or end with punctuation ("C++", ".env"), so
-  // the boundaries are spelled out as "not a word character".
-  const re = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'giu');
+  // Shared with the read-side linker: what a reader sees linked and what counts
+  // as grounding for an AI proposal must be the same rule, and once was not.
+  const re = new RegExp(`${GLOSSARY_BOUNDARY_BEFORE}${escaped}${GLOSSARY_BOUNDARY_AFTER}`, 'giu');
   return (haystack.match(re) ?? []).length;
 }
 
@@ -371,4 +440,35 @@ function safeJson(raw: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/** Row -> contract. `anchor` is Json, so it is read defensively. */
+function toExclusion(row: {
+  id: string;
+  documentId: string;
+  termId: string;
+  anchor: unknown;
+  createdBy: string | null;
+  createdAt: Date;
+}): GlossaryExclusion {
+  const raw = (row.anchor ?? {}) as Record<string, unknown>;
+  return {
+    exclusionId: row.id,
+    documentId: row.documentId,
+    termId: row.termId,
+    anchor: {
+      quote: typeof raw.quote === 'string' ? raw.quote : '',
+      ...(typeof raw.prefix === 'string' ? { prefix: raw.prefix } : {}),
+      ...(typeof raw.suffix === 'string' ? { suffix: raw.suffix } : {}),
+    },
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function pickContext(anchor: GlossaryExclusionAnchor): Record<string, string> {
+  return {
+    ...(anchor.prefix ? { prefix: anchor.prefix } : {}),
+    ...(anchor.suffix ? { suffix: anchor.suffix } : {}),
+  };
 }

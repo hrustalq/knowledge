@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "apps/web/src/styles/editor.css"
+        ],
+        "createdAt": "2026-09-10T07:32:01.793Z",
+        "reason": "user confirmed: L105 is a blockquote left rule and L233 is the [data-kn-panel] callout bar that round-trips to GitHub alerts (rich-editor markdown contract) \u2014 both are the typographic form for the element, not a card accent tab"
+      }
+    ]
+  }
+}

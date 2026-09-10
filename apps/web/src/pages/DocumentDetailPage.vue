@@ -20,6 +20,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import {
   Activity as ActivityIcon,
+  BookA,
   Braces,
   GitMerge,
   History,
@@ -419,6 +420,20 @@ watch(
              page is open to every reader, while editing is not, so hanging the
              margin off Edit would leave the row unbalanced for a viewer. -->
         <div class="ml-auto flex items-center gap-1.5">
+          <!-- Only on pages that actually have vocabulary in them: a switch for
+               something the page does not do is noise. -->
+          <Button
+            v-if="canvasEl?.hasGlossary"
+            variant="ghost"
+            size="sm"
+            class="text-muted-foreground"
+            :aria-pressed="canvasEl?.glossaryOn"
+            :title="canvasEl?.glossaryOn ? t('glossary.linksOn') : t('glossary.linksOff')"
+            @click="canvasEl?.toggleGlossaryLinks()"
+          >
+            <BookA class="size-3.5" :class="canvasEl?.glossaryOn ? 'text-primary' : 'opacity-60'" />
+            {{ t('glossary.toggleLinks') }}
+          </Button>
           <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
           <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
             <RouterLink :to="`/documents/${detail.document.documentId}/edit`">
@@ -452,6 +467,8 @@ watch(
             <DocumentCanvas
               ref="canvasEl"
               :markdown="content.markdown"
+              :document-id="documentId"
+              :frontmatter="content.frontmatter"
               :title="detail.document.title"
               :revision-id="content.revisionId"
               :threads="threads"

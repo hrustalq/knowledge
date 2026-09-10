@@ -3338,6 +3338,193 @@
         ]
       }
     },
+    "/v1/documents/{id}/glossary-exclusions": {
+      "get": {
+        "operationId": "DocumentsController_listGlossaryExclusions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Occurrences on this page that are not mentions of a glossary term",
+        "tags": [
+          "documents"
+        ]
+      },
+      "post": {
+        "operationId": "DocumentsController_createGlossaryExclusion",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGlossaryExclusionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stop linking one occurrence of a term on this page",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/glossary-exclusions/{exclusionId}": {
+      "delete": {
+        "operationId": "DocumentsController_deleteGlossaryExclusion",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclusionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Link this occurrence again",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/v1/documents/{id}/threads": {
       "get": {
         "operationId": "DocumentsController_listThreads",
@@ -13046,6 +13233,39 @@
           }
         }
       },
+      "GlossaryExclusionAnchorDto": {
+        "type": "object",
+        "properties": {
+          "quote": {
+            "type": "string",
+            "description": "The occurrence, with its surrounding words collapsed"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "suffix": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quote"
+        ]
+      },
+      "CreateGlossaryExclusionDto": {
+        "type": "object",
+        "properties": {
+          "termId": {
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/components/schemas/GlossaryExclusionAnchorDto"
+          }
+        },
+        "required": [
+          "termId",
+          "anchor"
+        ]
+      },
       "ThreadAnchorDto": {
         "type": "object",
         "properties": {
@@ -14710,6 +14930,19 @@
           "enabled": {
             "type": "boolean",
             "description": "Defaults to true"
+          },
+          "matchAliases": {
+            "type": "boolean",
+            "description": "Link the aliases too, not just the term. Defaults to true"
+          },
+          "caseSensitive": {
+            "type": "boolean",
+            "description": "Match only this exact casing. Defaults to false"
+          },
+          "maxLinksPerPage": {
+            "type": "number",
+            "nullable": true,
+            "description": "Occurrences linked per page; null uses the shared default"
           }
         },
         "required": [
@@ -14767,6 +15000,19 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "matchAliases": {
+            "type": "boolean",
+            "description": "Link the aliases too, not just the term. Defaults to true"
+          },
+          "caseSensitive": {
+            "type": "boolean",
+            "description": "Match only this exact casing. Defaults to false"
+          },
+          "maxLinksPerPage": {
+            "type": "number",
+            "nullable": true,
+            "description": "Occurrences linked per page; null uses the shared default"
           }
         }
       },

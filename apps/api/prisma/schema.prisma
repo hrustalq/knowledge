@@ -860,6 +860,33 @@ model AiUsage {
 /// linked into rendered documents deterministically at read time, so nothing
 /// here ever rewrites a page — an entry can be renamed or retired and every
 /// document follows on the next render.
+/**
+ * One occurrence of one term, on one page, that is not a mention of it.
+ *
+ * The linker is deterministic and conservative, but it matches words, and a
+ * word can be the term everywhere on a page except in the one sentence that
+ * uses it as an ordinary word. Per-term rules cannot express that; this can.
+ *
+ * The anchor is the TextQuoteSelector shape `document_threads` uses, minus the
+ * revisionId: an exclusion is about the words, not about a version of them, so
+ * it survives every edit that leaves the sentence recognisable — and stops
+ * applying when the sentence is gone, which is the correct outcome.
+ */
+model GlossaryExclusion {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  termId      String   @map("term_id") @db.Uuid
+  /// {quote, prefix?, suffix?}
+  anchor      Json
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([documentId])
+  @@index([termId])
+  @@map("glossary_exclusions")
+}
+
 model GlossaryTerm {
   id          String  @id @default(uuid()) @db.Uuid
   workspaceId String  @map("workspace_id") @db.Uuid
@@ -880,6 +907,17 @@ model GlossaryTerm {
   source      String  @default("manual")
   /// Retired terms stay readable in the glossary but stop being auto-linked.
   enabled     Boolean @default(true)
+
+  // --- matching rules (all three are overrides of the shared default) ---
+  /// false = link the headword only, never the aliases. The escape hatch for
+  /// an alias that is also an ordinary word — "Заказ", "Order" — which links
+  /// in every sentence that happens to use it.
+  matchAliases    Boolean @default(true) @map("match_aliases")
+  /// For terms that are only terms in one casing: "IT" against "it".
+  caseSensitive   Boolean @default(false) @map("case_sensitive")
+  /// null = the shared MAX_LINKS_PER_TERM. A page where every instance of a
+  /// word is a link is unreadable, so there is always a cap; this moves it.
+  maxLinksPerPage Int?    @map("max_links_per_page")
 
   createdBy String?  @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz

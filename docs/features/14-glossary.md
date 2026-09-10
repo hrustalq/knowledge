@@ -52,8 +52,14 @@ because a page where every instance of a word is a link is unreadable.
 **Word boundaries are spelled out, not `\b`.** The terms most in need of
 defining are the ones `\b` breaks on — `.env`, `C++`, `@Access`. Both the
 read-side linker and the server's occurrence counter use
-`(?<![\p{L}\p{N}])…(?![\p{L}\p{N}])`, and the alternation is sorted
-longest-first so "merge base" wins over "merge" when both are defined.
+`(?<![\p{L}\p{N}_])…(?![\p{L}\p{N}_])`, and the alternation is sorted
+longest-first so "merge base" wins over "merge" when both are defined. The
+underscore counts as a word character even though it is neither letter nor
+digit: it joins words into one identifier, so `customer_id` is not a mention of
+*Customer* — and a page documenting a data model is mostly such identifiers,
+which is where it showed. The two lookarounds live in `@knowledge/contracts` as
+`GLOSSARY_BOUNDARY_BEFORE`/`AFTER`, because "both sides use the same rule" was
+prose until one of them was fixed alone.
 
 **A suggestion is a proposal, never a fact.** `POST /v1/glossary/suggest`
 persists nothing. Proposals whose term does not literally appear in the source
@@ -62,6 +68,48 @@ rather than taken from the model — "how often does this appear" is a fact
 about the document, and models are bad at it. Accepted entries are stored with
 `source: 'ai'` and badged as such in the UI, mirroring the `extractor`
 provenance on graph edges.
+
+**Linking is drawn as ProseMirror decorations, not as injected markup.** The
+original pass walked the rendered DOM, which worked while the read view was
+`MarkdownView`. Feature 15 made the read view the *editor* (`editable: false`),
+and ProseMirror reconciles away anything written into its DOM from outside — so
+that pass silently stopped reaching page content altogether, and the `glossary`
+prop it hung off had no caller for several features. The links are now inline
+decorations over document positions, exactly as `comment-anchors.ts` draws
+commented passages and for exactly the same reason. The invariant is unchanged
+and is what makes the move safe: a decoration is not content, so still nothing
+is written to the page.
+
+**An ambiguous spelling links to nothing.** Two entries can claim one word — a
+headword here, an alias there. The old matcher kept whichever it saw first,
+which made the answer depend on API ordering. Now an exact headword beats an
+alias, and a spelling still contested after that links to **neither**: sending a
+reader to a plausible wrong definition is worse than leaving the word plain.
+Contested spellings are listed on the glossary page, because it is a data
+problem and belongs where the data is edited.
+
+**A term never links on the page that defines it.** The link would go where the
+reader already is, and on a glossary page it turned every entry into a link to
+itself.
+
+**Four ways to say "not here", each at the scope the problem has.** Per-term
+rules (`match_aliases`, `case_sensitive`, `max_links_per_page`) are for a term
+that is wrong *everywhere* — an alias that is also an ordinary word. Page
+frontmatter `glossary: false` is for a page that is all identifiers. The
+`kn_glossary` cookie is the reader's own preference and beats the page, because
+a preference someone set should survive a page that merely has a default. And a
+`glossary_exclusions` row is for the one sentence where a term is not the term —
+what none of the others can express. All four gate the same thing (the roster
+passed to the decoration pass), so they compose without special cases.
+
+**An exclusion is anchored on the decoration's own range, not on its words.**
+`anchorFromQuote` searches for the text it is given, which is right for a
+browser selection and wrong here: the first "Order" on a page is usually inside
+"OrderHub". The decoration knows precisely which characters it drew, so it
+publishes them (`data-kn-glossary-at`) and `anchorFromRange` builds the anchor
+from the document projection. The anchor carries no `revisionId` — an exclusion
+is about the words, not a version of them — so it survives every edit that
+leaves the sentence recognisable and stops applying when the sentence is gone.
 
 **Vocabulary is scoped to the project, not the workspace.** The same word
 routinely means different things in two bodies of work, and a glossary that
@@ -92,7 +140,12 @@ failed page: the prose is already on screen by then.
   `documents.parent_id`: deleting a page must not delete the vocabulary that
   referenced it, so the title is resolved at read time and a dangling link
   reads as an unlinked term. Migration `20260908120000_glossary_terms` —
-  a new table, so no backfill.
+  a new table, so no backfill. `20260910091047_glossary_matching_rules` adds
+  the three per-term rules, all additive with defaults, so every existing row
+  keeps exactly the behaviour it had. `20260910092203_glossary_exclusions` adds
+  `glossary_exclusions` (`document_id`, `term_id`, `anchor` Json) — no FKs, so
+  `GlossaryService.remove` deletes a term's exclusions in the same transaction:
+  a row whose term is gone is invisible and unfixable.
 - **Auth** — `WorkspaceSource` gains `'glossary-term'`; the ACL for
   `/:id` routes comes from the term's own row, so an editor of workspace A
   cannot rewrite the definitions workspace B's pages render.
@@ -108,12 +161,24 @@ failed page: the prose is already on screen by then.
   than an error when the provider is `none`. `AiUsageOperation` gains
   `'glossary'`, so the spend shows up in Settings → AI → Usage like every other
   call. `GlossaryModule` is API-only (its controller needs the global guards).
-- **Web** — `lib/glossary.ts` (the linker), `stores/glossary.ts` (the roster),
-  a `glossary` prop on `MarkdownView` that runs the linker as its last pass
-  (on for page content and review mode; off for comment bodies and assistant
-  replies — vocabulary links belong in documentation, not in a chat log),
-  `/settings/glossary` (`GlossaryPage.vue`), and the **Build glossary** quick
-  action in `AskAssistant.vue`.
+  Exclusions hang off the **document** instead —
+  `GET/POST /v1/documents/:id/glossary-exclusions` and `DELETE /…/:exclusionId`
+  — so `@Access(…, 'document')` resolves the workspace from `:id` and no new
+  `WorkspaceSource` was needed. Reading is `viewer`: whoever may read a page may
+  see which of its words are not vocabulary.
+- **Web** — `lib/glossary.ts` (the matcher only — the DOM-walking pass and the
+  `MarkdownView` prop that was its only entry point are deleted),
+  `components/editor/extensions/glossary-terms.ts` (the decorations),
+  `stores/glossary.ts` (the roster), `components/knowledge/GlossaryCard.vue`
+  (the definition), `/settings/glossary` (`GlossaryPage.vue`), and the
+  **Build glossary** quick action in `AskAssistant.vue`.
+  The card is a canvas-owned floating layer, not a `HoverCard`: that component
+  wraps its trigger, and a ProseMirror decoration is not a component and cannot
+  be wrapped. `DocumentCanvas` already solves this for comment threads, so the
+  card reuses `useAnchoredFloating` and copies `HoverCard`'s delays (220 ms
+  open, 120 ms close) so a pointer crossing a paragraph does not strobe. On a
+  coarse pointer it opens on tap instead — the `UserChip` split, hand-rolled
+  for the same reason.
   The page is built from the app's existing controls rather than new ones:
   `FilterBar` scopes and narrows the roster (project is a **pinned** field —
   it decides what is fetched, not what is hidden, the same pattern as the
@@ -121,7 +186,7 @@ failed page: the prose is already on screen by then.
   the defining page, and the definition is written in `RichEditor` in compact
   mode — the same editor a comment uses, so a definition can carry a code span
   or a link. Definitions are therefore markdown; the table renders them through
-  `MarkdownView`, and the linker strips the markers for the `title` tooltip.
+  `MarkdownView`, and the card renders them the same way.
 
 ## Limits
 
@@ -134,3 +199,8 @@ failed page: the prose is already on screen by then.
   has to be defined in each. A workspace-wide tier (`project_id NULL` meaning
   "everywhere") is the obvious extension and is deliberately not built yet.
 - Suggestions read one page at a time. There is no corpus-wide sweep yet.
+- An exclusion is per page. The same false positive on twenty pages is twenty
+  rows; a per-project exclusion would be the obvious extension.
+- `max_links_per_page` is a per-term override of a shared default, but there is
+  no per-page or per-project budget: a page with forty distinct terms still
+  links all forty.

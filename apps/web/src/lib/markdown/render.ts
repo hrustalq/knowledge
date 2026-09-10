@@ -6,6 +6,27 @@
  */
 import { Marked, type Tokens } from 'marked';
 import { KN, escapeHtml, isPanelType } from './nodes.js';
+import { pageTitleHref, type PageRefResolver } from '../page-refs.js';
+
+export type { PageRefResolver };
+
+export interface RenderOptions {
+  /**
+   * Turn `[text](Exact Page Title)` into a link to that page.
+   *
+   * Authors — the assistant especially — reach for a page by the name they see
+   * in the sidebar, and CommonMark refuses it: an unescaped space ends a link
+   * destination, so `[Модель данных](OrderHub — Модель данных)` is not a link
+   * at all, it is literal text with brackets in it. Resolving those titles here
+   * makes the reference work without any page being rewritten, exactly as
+   * glossary terms are linked at read time and never stored (docs/features/14).
+   *
+   * Read surfaces only. Leave it off in an editor: the round trip back through
+   * the serializer would rewrite the destination to `/documents/<id>`, turning
+   * "someone opened the page" into a content change nobody asked for.
+   */
+  resolvePage?: PageRefResolver;
+}
 
 /** `> [!NOTE]` on the blockquote's first line, GitHub alert syntax. */
 const ALERT_RE = /^\s*\[!([A-Za-z]+)\]\s*\n?/;
@@ -77,6 +98,19 @@ marked.use({
       if (/^\/documents\/[0-9a-fA-F-]{36}$/.test(href)) {
         return `<a href="${escapeHtml(href)}" ${KN.mention}="1"${title}>${text}</a>`;
       }
+      // The other half of the page-title reference (see RenderOptions): a model
+      // that percent-encodes the title writes a destination with no spaces in
+      // it, so CommonMark *accepts* it — and the reader gets a relative link to
+      // `OrderHub%20%E2%80%94%20...` that 404s. Same authored intent as the
+      // unencoded form, so it resolves the same way, and stays exactly as it
+      // is when the title names no page.
+      const asTitle = pageTitleHref(href);
+      if (asTitle) {
+        const documentId = resolvePage?.(asTitle);
+        if (documentId) {
+          return `<a href="/documents/${encodeURIComponent(documentId)}" ${KN.mention}="1"${title}>${text}</a>`;
+        }
+      }
       const external = /^https?:\/\//i.test(href);
       const rel = external ? ' rel="noopener noreferrer nofollow" target="_blank"' : '';
       return `<a href="${escapeHtml(href)}"${title}${rel}>${text}</a>`;
@@ -84,8 +118,86 @@ marked.use({
   },
 });
 
-export function markdownToHtml(md: string): string {
-  return marked.parse(md ?? '', { async: false }) as string;
+/* --------------------------------------------------- page-title references */
+
+/** `[text](anything but a newline or a paren)`, before CommonMark judges it. */
+const PAGE_REF_RE = /^\[((?:\\.|[^[\]\\\n])+)\]\(([^()\n]+)\)/;
+
+/** A CommonMark link title: `"…"`, `'…'` or `(…)`. */
+const LINK_TITLE_RE = /^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\((?:[^()\\]|\\.)*\))$/;
+
+/**
+ * True when CommonMark would *not* read this as a link, so claiming it steals
+ * nothing. A bare destination runs to the first space; what follows may only be
+ * a title. `OrderHub — Модель данных` leaves `— Модель данных` after the first
+ * space, which is no title, so the construct fails and marked emits the whole
+ * thing as text — which is the only case this extension exists to catch.
+ */
+function commonMarkRefuses(inner: string): boolean {
+  if (inner.startsWith('<')) return false; // `<a b>` is a legal destination
+  const split = /^(\S+)\s+([\s\S]+)$/.exec(inner);
+  if (!split) return false; // no space: an ordinary link, leave it alone
+  return !LINK_TITLE_RE.test(split[2].trim());
+}
+
+interface PageRefToken extends Tokens.Generic {
+  type: 'pageRef';
+  documentId: string;
+  tokens: Tokens.Generic[];
+}
+
+/**
+ * Set for the duration of one `markdownToHtml` call. A module-level slot rather
+ * than an option threaded through marked because `parse` is synchronous — no
+ * two renders can be in flight at once — and marked gives an extension no other
+ * channel to per-call state.
+ */
+let resolvePage: PageRefResolver | null = null;
+
+marked.use({
+  extensions: [
+    {
+      name: 'pageRef',
+      level: 'inline',
+      // `start` decides where marked cuts a plain-text run short to give this
+      // extension a look. With no resolver there is nothing to look for, and
+      // returning -1 keeps text tokens whole — so a render without the option
+      // is byte-for-byte the render this file did before the extension existed.
+      start: (src: string) => (resolvePage ? src.indexOf('[') : -1),
+      tokenizer(src: string): PageRefToken | undefined {
+        if (!resolvePage) return undefined;
+        const match = PAGE_REF_RE.exec(src);
+        if (!match) return undefined;
+        if (!commonMarkRefuses(match[2])) return undefined;
+        // Unresolvable titles are deliberately left as the literal text they
+        // are today. Inventing a link to a page that does not exist would be
+        // worse than the brackets: it reads as a promise the workspace cannot
+        // keep, and this corpus is full of references to pages never created.
+        const documentId = resolvePage(match[2]);
+        if (!documentId) return undefined;
+        return {
+          type: 'pageRef',
+          raw: match[0],
+          documentId,
+          tokens: this.lexer.inlineTokens(match[1]),
+        };
+      },
+      renderer(token) {
+        const ref = token as PageRefToken;
+        const text = this.parser.parseInline(ref.tokens);
+        return `<a href="/documents/${encodeURIComponent(ref.documentId)}" ${KN.mention}="1">${text}</a>`;
+      },
+    },
+  ],
+});
+
+export function markdownToHtml(md: string, options: RenderOptions = {}): string {
+  resolvePage = options.resolvePage ?? null;
+  try {
+    return marked.parse(md ?? '', { async: false }) as string;
+  } finally {
+    resolvePage = null;
+  }
 }
 
 /**

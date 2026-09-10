@@ -25,15 +25,23 @@
  * `data-kn-anno-ui` so its own text can never end up inside an anchor quote.
  */
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MessageSquarePlus, X } from 'lucide-vue-next'
-import type { ReviewThread, ReviewThreadAnchor } from '@knowledge/contracts'
+import type {
+  GlossaryExclusion,
+  GlossaryTerm,
+  ListGlossaryExclusionsResponse,
+  ReviewThread,
+  ReviewThreadAnchor,
+} from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import RichEditor from '@/components/editor/RichEditor.vue'
 import {
   ANCHOR_ATTR,
   anchorFromDomSelection,
   anchorFromQuote,
+  anchorFromRange,
   anchorsAtEvent,
   type AnchorAuthor,
   type CommentAnchor,
@@ -44,12 +52,21 @@ import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { useMembers } from '@/components/merge-requests/use-members'
 import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
+import { mayContainPageRef } from '@/lib/page-refs'
+import { usePageRefsStore } from '@/stores/page-refs'
+import { useGlossaryStore } from '@/stores/glossary'
+import { apiFetch, getGlossaryLinks, setGlossaryLinks } from '@/lib/api'
+import { GLOSSARY_AT_ATTR, GLOSSARY_ATTR } from '@/lib/glossary'
+import GlossaryCard from './GlossaryCard.vue'
+import { useMediaQuery } from '@vueuse/core'
 
 const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
     markdown: string
+    /** The page being read. Needed so a term cannot link to its own page. */
+    documentId: string
     /** The document's title, so the body does not repeat it. */
     title?: string
     /** Revision the anchors are recorded against (the head being read). */
@@ -58,8 +75,16 @@ const props = withDefaults(
     canComment?: boolean
     busy?: boolean
     resolveDocumentId?: () => Promise<string | null>
+    /** The page's own frontmatter — read for `glossary: false` (feature 14). */
+    frontmatter?: Record<string, unknown> | null
   }>(),
-  { title: '', canComment: false, busy: false, resolveDocumentId: undefined },
+  {
+    title: '',
+    canComment: false,
+    busy: false,
+    resolveDocumentId: undefined,
+    frontmatter: null,
+  },
 )
 const emit = defineEmits<{
   'create-thread': [body: string, anchor: ReviewThreadAnchor | undefined, resolvable: boolean]
@@ -86,6 +111,43 @@ interface Floater {
  * dropped only when it actually matches; a first heading that says something
  * else is a real section and stays.
  */
+/**
+ * The roster behind `[text](Exact Page Title)` references (lib/page-refs).
+ * Fetched only when this page actually contains a candidate, so an ordinary
+ * page costs nothing; RichEditor re-parses when it lands.
+ */
+const pageRefs = usePageRefsStore()
+/**
+ * Vocabulary linking (docs/features/14). The roster is workspace/project-wide
+ * and shared with the glossary page, so this only has to ask for it.
+ */
+const glossary = useGlossaryStore()
+onMounted(() => void glossary.ensureLoaded())
+
+
+/**
+ * The vocabulary this page links, after three gates.
+ *
+ * A term defined *by this page* is dropped: the link would go where the reader
+ * already is, and on a glossary page it turns every entry into a link to
+ * itself. The page can opt out wholesale with `glossary: false` in its
+ * frontmatter, and the reader can turn linking off for themselves — the reader
+ * wins, because a preference someone set should survive a page that merely has
+ * a default.
+ */
+const glossaryTerms = computed(() => {
+  if (!linksOn.value) return []
+  if (props.frontmatter?.glossary === false) return []
+  return glossary.linkable.filter((term) => term.documentId !== props.documentId)
+})
+watch(
+  () => props.markdown,
+  (markdown) => {
+    if (mayContainPageRef(markdown ?? '')) void pageRefs.ensureLoaded()
+  },
+  { immediate: true },
+)
+
 const body = computed(() => {
   const raw = props.markdown ?? ''
   const title = props.title?.trim().toLowerCase()
@@ -98,6 +160,188 @@ const body = computed(() => {
 const canvas = ref<HTMLElement | null>(null)
 const page = ref<HTMLElement | null>(null)
 const editorEl = ref<InstanceType<typeof RichEditor> | null>(null)
+
+/* ------------------------------------------------------ glossary linking */
+
+/** The reader's own preference, from `kn_glossary`. */
+const linksOn = ref(getGlossaryLinks())
+function toggleGlossaryLinks() {
+  linksOn.value = !linksOn.value
+  setGlossaryLinks(linksOn.value)
+}
+
+/**
+ * Whether this page has any vocabulary in it, so the control can stay hidden
+ * on pages that have none — a switch for something the page does not do is
+ * noise. Once linking is off there is nothing to count, so the flag is left
+ * standing rather than recomputed, or the control would remove itself and
+ * leave no way back.
+ */
+
+/* --- per-occurrence exclusions ------------------------------------------ */
+
+/**
+ * Loaded per page, and only for a page that has vocabulary in it at all — the
+ * roster is workspace-wide and cached, but exclusions are about *this* page, so
+ * they cannot ride it. A page with no glossary matches should cost no request.
+ */
+const exclusions = ref<GlossaryExclusion[]>([])
+
+async function loadExclusions() {
+  if (!props.documentId) return
+  try {
+    const res = await apiFetch<ListGlossaryExclusionsResponse>(
+      `/v1/documents/${props.documentId}/glossary-exclusions`,
+    )
+    exclusions.value = res.exclusions
+  } catch {
+    // Linking is an enhancement and the prose is already on screen — the same
+    // reason the glossary store swallows its own failures.
+    exclusions.value = []
+  }
+}
+watch(() => props.documentId, () => void loadExclusions(), { immediate: true })
+
+/**
+ * Record the occurrence under the card as "not this term".
+ *
+ * The quote and its context come from the *document projection*, not from the
+ * DOM: text the document has no record of could never be found again, so an
+ * anchor built from it would be recorded and never resolve.
+ */
+async function excludeHovered() {
+  const term = hoveredTerm.value
+  const doc = editorEl.value?.editor?.state.doc
+  const el = hoveredEl.value
+  if (!term || !doc || !el) return
+  const at = el.getAttribute(GLOSSARY_AT_ATTR)
+  const from = at === null ? Number.NaN : Number(at)
+  const anchor = Number.isFinite(from)
+    ? anchorFromRange(doc, from, from + (el.textContent ?? '').length)
+    : null
+  if (!anchor) {
+    // The occurrence could not be located in the document projection, so an
+    // exclusion recorded for it would never resolve again. Better to say so.
+    toast.error(t('glossary.cannotExclude'))
+    return
+  }
+  hideGlossary()
+  try {
+    const created = await apiFetch<GlossaryExclusion>(
+      `/v1/documents/${props.documentId}/glossary-exclusions`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          termId: term.termId,
+          anchor,
+        }),
+      },
+    )
+    exclusions.value = [...exclusions.value, created]
+  } catch (error) {
+    // Unlike loading, this is something someone just asked for: a link that
+    // silently stays looks like the button does nothing.
+    toast.error((error as Error).message)
+  }
+}
+
+/* --- the definition card ----------------------------------------------- */
+
+/**
+ * Hover on a pointer device, tap otherwise — the `UserChip` split. It cannot
+ * reuse `HoverCard` itself: that wraps its trigger, and the trigger here is a
+ * ProseMirror decoration, which is not a component and cannot be wrapped. So
+ * the card is a canvas-owned floating layer, positioned the same way the
+ * discussion popover above it is.
+ */
+const canHover = useMediaQuery('(hover: hover)')
+const hoveredTerm = ref<GlossaryTerm | null>(null)
+/** The `<a>` the card hangs off, so an exclusion can quote exactly it. */
+const hoveredEl = ref<Element | null>(null)
+const glossaryAt = ref<AnchorRect | null>(null)
+const { setFloating: setGlossaryEl, floatingStyles: glossaryStyles } = useAnchoredFloating(
+  glossaryAt,
+  { placement: 'bottom-start' },
+)
+
+/**
+ * HoverCard's own delays, copied deliberately: a pointer crossing a paragraph
+ * passes over several terms on its way somewhere, and a card that opened
+ * instantly would strobe. The close delay is what lets the pointer travel from
+ * the word into the card without it dissolving on the way.
+ */
+let openTimer: ReturnType<typeof setTimeout> | undefined
+let closeTimer: ReturnType<typeof setTimeout> | undefined
+
+function termAt(target: EventTarget | null): { term: GlossaryTerm; el: Element } | null {
+  const el = target instanceof Element ? target.closest(`[${GLOSSARY_ATTR}]`) : null
+  if (!el) return null
+  const termId = el.getAttribute(GLOSSARY_ATTR)
+  const term = glossary.terms.find((x) => x.termId === termId)
+  return term ? { term, el } : null
+}
+
+function showGlossary(hit: { term: GlossaryTerm; el: Element }) {
+  clearTimeout(closeTimer)
+  hoveredTerm.value = hit.term
+  hoveredEl.value = hit.el
+  glossaryAt.value = toRect(hit.el.getBoundingClientRect())
+}
+
+function hideGlossary() {
+  clearTimeout(openTimer)
+  hoveredTerm.value = null
+  hoveredEl.value = null
+  glossaryAt.value = null
+}
+
+function onGlossaryOver(event: PointerEvent) {
+  if (!canHover.value) return
+  const hit = termAt(event.target)
+  if (!hit) return
+  clearTimeout(openTimer)
+  clearTimeout(closeTimer)
+  openTimer = setTimeout(() => showGlossary(hit), 220)
+}
+
+function onGlossaryOut(event: PointerEvent) {
+  if (!canHover.value) return
+  if (!termAt(event.target)) return
+  clearTimeout(openTimer)
+  closeTimer = setTimeout(hideGlossary, 120)
+}
+
+/**
+ * On a touch device the term is a link, so opening the card has to take the
+ * tap away from it — the definition is what someone reaching for a dotted word
+ * on a phone is after, and the card carries the link onward anyway.
+ */
+function onGlossaryClick(event: MouseEvent): boolean {
+  if (canHover.value) return false
+  const hit = termAt(event.target)
+  if (!hit) return false
+  event.preventDefault()
+  if (hoveredTerm.value?.termId === hit.term.termId) hideGlossary()
+  else showGlossary(hit)
+  return true
+}
+
+onBeforeUnmount(() => {
+  clearTimeout(openTimer)
+  clearTimeout(closeTimer)
+})
+
+const hasGlossary = ref(false)
+watch(
+  [() => props.markdown, glossaryTerms],
+  () => {
+    if (!linksOn.value) return
+    void nextTick(() => {
+      hasGlossary.value = !!page.value?.querySelector(`[${GLOSSARY_ATTR}]`)
+    })
+  },
+  { immediate: true },
+)
 
 /** Where the "Comment" affordance sits while a selection is live. */
 const selectionAt = ref<AnchorRect | null>(null)
@@ -264,7 +508,7 @@ function flashThread(threadId: string) {
   el.classList.add('kn-anchor-flash')
   window.setTimeout(() => el.classList.remove('kn-anchor-flash'), 1400)
 }
-defineExpose({ flashThread })
+defineExpose({ flashThread, toggleGlossaryLinks, hasGlossary, glossaryOn: linksOn })
 
 function readSelection() {
   if (!props.canComment) return
@@ -314,6 +558,7 @@ function onPageClick(event: MouseEvent) {
   // A highlight is a control, not a link: clicking one opens the discussion
   // rather than the surrounding prose's link, if any.
   if (openAt(event.target)) event.preventDefault()
+  else onGlossaryClick(event)
 }
 
 function onPageKeydown(event: KeyboardEvent) {
@@ -351,7 +596,7 @@ function onDocumentPointerDown(event: PointerEvent) {
   if (!target) return
   if (
     target.closest(
-      '[data-kn-anno-ui], [data-kn-thread], [role="dialog"], [role="menu"], [data-reka-popper-content-wrapper]',
+      `[data-kn-anno-ui], [data-kn-editor-ui], [data-kn-thread], [${GLOSSARY_ATTR}], [role="dialog"], [role="menu"], [data-reka-popper-content-wrapper]`,
     )
   ) {
     return
@@ -423,11 +668,21 @@ function onOutdated(ids: string[]) {
     @mousemove="onPageMove"
     @mouseleave="hoverAt = null"
   >
-    <div ref="page" class="kn-read-surface" @click="onPageClick" @keydown="onPageKeydown">
+    <div
+      ref="page"
+      class="kn-read-surface"
+      @click="onPageClick"
+      @keydown="onPageKeydown"
+      @pointerover="onGlossaryOver"
+      @pointerout="onGlossaryOut"
+    >
       <RichEditor
         ref="editorEl"
         :model-value="body"
         :editable="false"
+        :resolve-page="pageRefs.resolve"
+        :glossary-terms="glossaryTerms"
+        :glossary-exclusions="exclusions"
         :comment-anchors="anchors"
         @outdated-anchors="onOutdated"
       />
@@ -459,6 +714,23 @@ function onOutdated(ids: string[]) {
         <MessageSquarePlus class="size-3.5" />
         {{ t('review.comment') }}
       </Button>
+    </div>
+
+    <!--
+      Definition card. `data-kn-anno-ui` keeps its own text out of comment
+      anchor quotes, and the pointer handlers keep it open while the reader
+      travels from the word into it.
+    -->
+    <div
+      v-if="hoveredTerm && glossaryAt"
+      :ref="setGlossaryEl"
+      data-kn-anno-ui
+      class="z-30 w-72 rounded-lg border bg-popover p-3 shadow-lg"
+      :style="glossaryStyles"
+      @pointerenter="hoveredEl && showGlossary({ term: hoveredTerm, el: hoveredEl })"
+      @pointerleave="hideGlossary"
+    >
+      <GlossaryCard :term="hoveredTerm" :can-exclude="canComment" @exclude="excludeHovered" />
     </div>
 
     <!-- Discussion popover: the open threads, or a composer for a new one -->

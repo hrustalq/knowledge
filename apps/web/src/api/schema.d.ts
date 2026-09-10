@@ -663,6 +663,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/glossary-exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Occurrences on this page that are not mentions of a glossary term */
+        get: operations["DocumentsController_listGlossaryExclusions"];
+        put?: never;
+        /** Stop linking one occurrence of a term on this page */
+        post: operations["DocumentsController_createGlossaryExclusion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/glossary-exclusions/{exclusionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Link this occurrence again */
+        delete: operations["DocumentsController_deleteGlossaryExclusion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/threads": {
         parameters: {
             query?: never;
@@ -2629,6 +2664,16 @@ export interface components {
             /** @example text/markdown */
             contentType?: string;
         };
+        GlossaryExclusionAnchorDto: {
+            /** @description The occurrence, with its surrounding words collapsed */
+            quote: string;
+            prefix?: string;
+            suffix?: string;
+        };
+        CreateGlossaryExclusionDto: {
+            termId: string;
+            anchor: components["schemas"]["GlossaryExclusionAnchorDto"];
+        };
         ThreadAnchorDto: {
             /** @enum {string} */
             type: "line" | "text" | "section" | "entity";
@@ -3240,6 +3285,12 @@ export interface components {
             source?: "manual" | "ai";
             /** @description Defaults to true */
             enabled?: boolean;
+            /** @description Link the aliases too, not just the term. Defaults to true */
+            matchAliases?: boolean;
+            /** @description Match only this exact casing. Defaults to false */
+            caseSensitive?: boolean;
+            /** @description Occurrences linked per page; null uses the shared default */
+            maxLinksPerPage?: number | null;
         };
         SuggestGlossaryTermsDto: {
             workspaceId: string;
@@ -3258,6 +3309,12 @@ export interface components {
             /** @description null unlinks the defining page */
             documentId?: string | null;
             enabled?: boolean;
+            /** @description Link the aliases too, not just the term. Defaults to true */
+            matchAliases?: boolean;
+            /** @description Match only this exact casing. Defaults to false */
+            caseSensitive?: boolean;
+            /** @description Occurrences linked per page; null uses the shared default */
+            maxLinksPerPage?: number | null;
         };
         CreateImportDto: {
             /** Format: uuid */
@@ -5581,6 +5638,131 @@ export interface operations {
             };
             path: {
                 id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_listGlossaryExclusions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_createGlossaryExclusion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGlossaryExclusionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_deleteGlossaryExclusion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                exclusionId: string;
             };
             cookie?: never;
         };

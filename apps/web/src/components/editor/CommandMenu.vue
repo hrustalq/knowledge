@@ -99,7 +99,20 @@ defineExpose({ onKeyDown })
 </script>
 
 <template>
-  <div class="kn-cmd" :style="position" role="listbox" :aria-label="t('toolbar.insertMenu')">
+  <!--
+    `data-kn-editor-ui`: this teleports to `<body>`, so every "pressed outside
+    the editor" guard sees a press on it as a press somewhere else and tears
+    down the thing being written in — the composer collapsed the instant you
+    picked an item. The marker is how those guards recognise editor chrome that
+    is no longer an editor descendant. Grep it before removing.
+  -->
+  <div
+    class="kn-cmd"
+    data-kn-editor-ui
+    :style="position"
+    role="listbox"
+    :aria-label="t('toolbar.insertMenu')"
+  >
     <div ref="listEl" class="kn-cmd-scroll quiet-scroll">
       <template v-for="group in groups" :key="group.name">
         <div class="kn-cmd-group">{{ group.name }}</div>

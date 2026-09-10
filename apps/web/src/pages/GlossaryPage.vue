@@ -33,6 +33,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useGlossaryStore } from '@/stores/glossary'
+import { MAX_LINKS_PER_TERM, buildMatcher } from '@/lib/glossary'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -159,7 +160,15 @@ const pageLabel = (id: string) =>
 // --- editor dialog -----------------------------------------------------------
 const open = ref(false)
 const editing = ref<GlossaryTerm | null>(null)
-const form = ref({ term: '', definition: '', aliases: '', enabled: true })
+const form = ref({
+  term: '',
+  definition: '',
+  aliases: '',
+  enabled: true,
+  matchAliases: true,
+  caseSensitive: false,
+  maxLinksPerPage: '' as string,
+})
 /** Autocomplete carries 0-or-1 entry in single-select mode. */
 const formDocument = ref<string[]>([])
 
@@ -170,6 +179,9 @@ function openNew(seed?: Partial<GlossaryTermSuggestion>) {
     definition: seed?.definition ?? '',
     aliases: (seed?.aliases ?? []).join(', '),
     enabled: true,
+    matchAliases: true,
+    caseSensitive: false,
+    maxLinksPerPage: '',
   }
   formDocument.value = sourceDocument.value.length ? [...sourceDocument.value] : []
   open.value = true
@@ -183,12 +195,25 @@ function openEdit(term: GlossaryTerm) {
     definition: term.definition,
     aliases: term.aliases.join(', '),
     enabled: term.enabled,
+    matchAliases: term.matchAliases,
+    caseSensitive: term.caseSensitive,
+    maxLinksPerPage: term.maxLinksPerPage === null ? '' : String(term.maxLinksPerPage),
   }
   formDocument.value = term.documentId ? [term.documentId] : []
   open.value = true
 }
 
 /** New terms land in the scoped project; edits never move an existing one. */
+/**
+ * Spellings two entries both claim, which therefore link to neither.
+ *
+ * Surfaced here because it is a data problem, and a data problem should be
+ * visible where the data is edited rather than silently absorbed by the
+ * matcher. The demo workspace has exactly this: `Order` and `Заказ (Order)`
+ * both list "Order" and "Заказ".
+ */
+const contested = computed(() => buildMatcher(terms.value)?.ambiguous ?? [])
+
 const targetProjectId = computed(() => scopedProjectId.value ?? projects.activeId)
 
 async function submit() {
@@ -201,6 +226,11 @@ async function submit() {
     aliases: f.aliases.split(',').map((a) => a.trim()).filter(Boolean),
     documentId: formDocument.value[0] ?? null,
     enabled: f.enabled,
+    matchAliases: f.matchAliases,
+    caseSensitive: f.caseSensitive,
+    // Blank means "use the shared default", which is what null encodes — an
+    // empty box must not become 0, i.e. "never link this".
+    maxLinksPerPage: f.maxLinksPerPage.trim() ? Number(f.maxLinksPerPage) : null,
   }
   try {
     if (editing.value) {
@@ -378,6 +408,19 @@ watch(highlighted, (id) => {
 
     <FilterBar v-model="filters" :fields="filterFields" :empty-label="t('glossary.filterTerms')" />
 
+    <!-- Contested spellings: two entries claiming one word, which therefore
+         links to neither. Shown here so it can be fixed, not just endured. -->
+    <div
+      v-if="contested.length"
+      class="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+    >
+      <p class="font-medium">{{ t('glossary.ambiguousTitle') }}</p>
+      <p v-for="clash in contested" :key="clash.spelling" class="text-muted-foreground">
+        {{ t('glossary.ambiguous', { spelling: clash.spelling, n: clash.terms.length }) }}
+        <span class="text-foreground">{{ clash.terms.map((x) => x.term).join(' · ') }}</span>
+      </p>
+    </div>
+
     <div v-if="query.isPending.value" class="space-y-2">
       <Skeleton v-for="i in 4" :key="i" class="h-10 w-full" />
     </div>
@@ -493,6 +536,41 @@ watch(highlighted, (id) => {
             <Checkbox :model-value="form.enabled" @update:model-value="form.enabled = $event === true" />
             <span class="text-sm">{{ t('glossary.linkInDocuments') }}</span>
           </label>
+
+          <!--
+            Matching rules. Grouped under the master switch and disabled with
+            it: they only describe *how* a term is linked, so offering them for
+            a term that is not linked at all would be a control with no effect.
+          -->
+          <fieldset :disabled="!form.enabled" class="space-y-2 border-t pt-3 disabled:opacity-50">
+            <legend class="sr-only">{{ t('glossary.matching') }}</legend>
+            <p class="text-xs font-medium text-muted-foreground">{{ t('glossary.matching') }}</p>
+            <label class="flex items-center gap-2">
+              <Checkbox
+                :model-value="form.matchAliases"
+                @update:model-value="form.matchAliases = $event === true"
+              />
+              <span class="text-sm">{{ t('glossary.matchAliases') }}</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <Checkbox
+                :model-value="form.caseSensitive"
+                @update:model-value="form.caseSensitive = $event === true"
+              />
+              <span class="text-sm">{{ t('glossary.caseSensitive') }}</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <span class="text-sm">{{ t('glossary.maxLinksPerPage') }}</span>
+              <Input
+                v-model="form.maxLinksPerPage"
+                type="number"
+                min="1"
+                max="50"
+                class="h-8 w-20"
+                :placeholder="String(MAX_LINKS_PER_TERM)"
+              />
+            </label>
+          </fieldset>
         </form>
 
         <DialogFooter>

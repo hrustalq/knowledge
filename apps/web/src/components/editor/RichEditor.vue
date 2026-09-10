@@ -54,6 +54,8 @@ import {
   Workflow,
 } from 'lucide-vue-next'
 import { markdownToHtml } from '@/lib/markdown/render'
+import type { GlossaryExclusion, GlossaryTerm } from '@knowledge/contracts'
+import type { PageRefResolver } from '@/lib/page-refs'
 import { htmlToMarkdown } from '@/lib/markdown/serialize'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
 import { Layout, LayoutColumn, Expand, Panel, TableOfContents } from './extensions/blocks'
@@ -69,6 +71,7 @@ import {
 } from './extensions/drag-handle'
 import { ListIndentKeymap } from './extensions/list-indent'
 import { CommentAnchors, type CommentAnchor } from './extensions/comment-anchors'
+import { GlossaryTerms } from './extensions/glossary-terms'
 import { useAttachments } from './use-attachments'
 import CommandMenu, { type CommandItem } from './CommandMenu.vue'
 import PagePickerDialog from './PagePickerDialog.vue'
@@ -139,6 +142,23 @@ const props = withDefaults(
      * The host owns the discussion UI; this component only marks the text.
      */
     commentAnchors?: CommentAnchor[]
+    /**
+     * Resolves a page reference written as a title (`lib/page-refs`). Supplied
+     * by read surfaces only — `toHtml` explains why an editor must not have it.
+     * Separate from `pages`, which is the `@` menu's roster: that one is a list
+     * to choose from, this one is an index, and the read view needs the index
+     * without offering the menu.
+     */
+    resolvePage?: PageRefResolver
+    /**
+     * Vocabulary to link (docs/features/14). Read surfaces only — while a page
+     * is being written, a definition link under every third word fights the
+     * text selection it sits in, and the affordance is for readers anyway.
+     * Decorations, so nothing is written to the document either way.
+     */
+    glossaryTerms?: GlossaryTerm[]
+    /** Occurrences on this page that are not mentions, despite matching. */
+    glossaryExclusions?: GlossaryExclusion[]
   }>(),
   {
     pages: () => [],
@@ -148,6 +168,8 @@ const props = withDefaults(
     compact: false,
     placeholder: '',
     commentAnchors: () => [],
+    glossaryTerms: () => [],
+    glossaryExclusions: () => [],
   },
 )
 const emit = defineEmits<{
@@ -185,7 +207,7 @@ function onPointerDownOutside(event: PointerEvent) {
   const host = rootEl.value
   const target = event.target instanceof Element ? event.target : null
   if (!host || !target) return
-  if (target.closest('[role="dialog"], [role="menu"], [data-reka-popper-content-wrapper]')) return
+  if (target.closest('[data-kn-editor-ui], [role="dialog"], [role="menu"], [data-reka-popper-content-wrapper]')) return
   const within = target.closest('.kn-editor, [data-kn-editor-shell]')
   if (within && (within === host || within.contains(host) || host.contains(within))) return
   active.value = false
@@ -484,13 +506,29 @@ function syncOut(instance: CoreEditor) {
   }, 200)
 }
 
+/**
+ * Read surfaces resolve `[text](Exact Page Title)` to a link; the authoring
+ * view deliberately does not.
+ *
+ * This component is both reader and editor since docs/features/15, and the
+ * asymmetry is the point: what it parses is what `serialize` writes back, so
+ * resolving a title while editing would rewrite the destination to
+ * `/documents/<id>` on the next keystroke — a content change nobody asked for,
+ * triggered by opening the page. An author sees the reference exactly as it is
+ * stored, and can fix it deliberately.
+ */
+function toHtml(markdown: string): string {
+  if (props.editable) return markdownToHtml(markdown)
+  return markdownToHtml(markdown, { resolvePage: props.resolvePage })
+}
+
 onMounted(() => document.addEventListener('pointerdown', onPointerDownOutside))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDownOutside))
 
 onMounted(() => {
   const instance = new Editor({
     editable: props.editable,
-    content: markdownToHtml(props.modelValue),
+    content: toHtml(props.modelValue),
     extensions: [
       StarterKit.configure({
         codeBlock: false,
@@ -528,6 +566,7 @@ onMounted(() => {
       ListIndentKeymap.configure({ onLink: openLinkDialog }),
       // The extension builds aria-labels, so it needs this app's translator.
       CommentAnchors.configure({ t }),
+      GlossaryTerms,
     ],
     editorProps: {
       attributes: { class: 'kn-prose', spellcheck: 'true' },
@@ -556,6 +595,7 @@ onMounted(() => {
   })
   editor.value = instance
   syncCommentAnchors()
+  syncGlossary()
 })
 
 /**
@@ -576,20 +616,55 @@ function syncCommentAnchors() {
 
 watch(() => props.commentAnchors, syncCommentAnchors, { deep: true })
 
+/**
+ * The roster arrives after the first paint (it is a request) and changes when
+ * someone edits the glossary, so the decorations are redrawn on both. Skipped
+ * while editable for the reason the prop gives.
+ */
+function syncGlossary() {
+  const instance = editor.value
+  if (!instance) return
+  instance.commands.setGlossaryTerms(
+    props.editable ? [] : props.glossaryTerms,
+    props.editable ? [] : props.glossaryExclusions,
+  )
+}
+watch(() => props.glossaryTerms, syncGlossary)
+watch(() => props.glossaryExclusions, syncGlossary)
+watch(() => props.editable, syncGlossary)
+
 watch(
   () => props.modelValue,
   (next) => {
     const instance = editor.value
     if (!instance || next === lastEmitted) return
     // External change (loaded a document, AI appended a suggestion): re-parse.
-    instance.commands.setContent(markdownToHtml(next), { emitUpdate: false })
+    instance.commands.setContent(toHtml(next), { emitUpdate: false })
     syncCommentAnchors()
+    syncGlossary()
   },
 )
 
 watch(
   () => props.editable,
   (editable) => editor.value?.setEditable(editable),
+)
+
+/**
+ * The resolver usually lands after the first paint — its roster is a request —
+ * and title references cannot resolve without it, so re-parse once it arrives.
+ * Read view only, for the reason `toHtml` gives, which also makes this cheap:
+ * it fires at most once per page, and never while anyone is typing.
+ */
+watch(
+  () => props.resolvePage,
+  () => {
+    const instance = editor.value
+    if (!instance || props.editable) return
+    instance.commands.setContent(toHtml(props.modelValue), { emitUpdate: false })
+    syncCommentAnchors()
+    syncGlossary()
+  },
 )
 
 onBeforeUnmount(() => {
@@ -713,20 +788,34 @@ defineExpose({
       @remove="editor.chain().focus().extendMarkRange('link').unsetLink().run()"
     />
 
-    <CommandMenu
-      v-if="menu"
-      ref="menuRef"
-      :items="menuItems"
-      :rect="menu.rect"
-      :empty-label="menu.kind === 'mention' ? 'No one and no page matches' : 'No blocks match'"
-      @pick="pick"
-    />
+    <!--
+      Teleported, and it has to be. The menu carries *viewport* coordinates in
+      a `position: fixed` box, which only means the viewport while no ancestor
+      establishes a containing block. In a comment composer one does: the
+      annotation popover is `transform`ed + `will-change: transform`, so the
+      menu was laid out against the popover instead — and then clipped away
+      entirely by the composer's own `overflow-hidden`. Present in the DOM,
+      correct content, invisible: typing `@` looked like it did nothing.
+      (`EditorBubble` escapes this on its own — Floating UI subtracts the
+      offset parent — but this menu positions itself.)
+    -->
+    <Teleport v-if="menu" to="body">
+      <CommandMenu
+        ref="menuRef"
+        :items="menuItems"
+        :rect="menu.rect"
+        :empty-label="menu.kind === 'mention' ? t('editor.noMentionMatches') : t('editor.noBlockMatches')"
+        @pick="pick"
+      />
+    </Teleport>
 
     <!-- Upload progress: inline, near the work, not a corner toast stack. -->
     <div v-if="uploads.length" class="kn-uploads" aria-live="polite">
       <div v-for="task in uploads" :key="task.id" class="kn-upload">
         <span class="kn-upload-name">{{ task.filename }}</span>
-        <span class="kn-upload-track"><span class="kn-upload-fill" :style="{ width: `${task.progress}%` }" /></span>
+        <span class="kn-upload-track"
+          ><span class="kn-upload-fill" :style="{ transform: `scaleX(${task.progress / 100})` }"
+        /></span>
       </div>
     </div>
   </div>

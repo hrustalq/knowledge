@@ -33,13 +33,34 @@ export const EMPTY_FILTERS: DocumentFilters = { categories: [], projectIds: [], 
 export const LIST_PAGE = 50
 
 /**
- * In-flight trail resolutions, keyed by document id.
+ * In-flight requests, per store instance and keyed by what they are fetching.
  *
- * Both the sidebar pane and the breadcrumbs want the trail for the page you
- * just opened, and they mount together. Without this they would each fetch the
- * ancestor chain for the same document on every navigation.
+ * Several components want the same thing on the same tick — the sidebar pane
+ * and the breadcrumbs both want the trail for the page you just opened, and the
+ * sidebar, the breadcrumbs and the page all want the tree — so the request is
+ * shared rather than repeated, and callers that arrive late await the answer
+ * that is already on its way.
+ *
+ * WeakMaps keyed by the store, not plain module-level maps: this module is
+ * shared by every concurrent SSR render, and a bare map would hand one render a
+ * promise that resolves into another request's store. They are not state,
+ * because an in-flight request is a fact about this process — the server
+ * serializes its store into the page, so a marker for a fetch the SSR render
+ * started would otherwise reach the browser describing a request that is
+ * already over and will never land.
  */
-const revealing = new Map<string, Promise<DocumentTreeNode[]>>()
+const revealing = new WeakMap<object, Map<string, Promise<DocumentTreeNode[]>>>()
+const childFetches = new WeakMap<object, Map<string, Promise<void>>>()
+const treeFetches = new WeakMap<object, Promise<void>>()
+
+function inFlight<T>(registry: WeakMap<object, Map<string, T>>, store: object): Map<string, T> {
+  let map = registry.get(store)
+  if (!map) {
+    map = new Map<string, T>()
+    registry.set(store, map)
+  }
+  return map
+}
 
 function walk(nodes: DocumentTreeNode[], id: string): DocumentTreeNode | null {
   for (const node of nodes) {
@@ -48,6 +69,18 @@ function walk(nodes: DocumentTreeNode[], id: string): DocumentTreeNode | null {
     if (hit) return hit
   }
   return null
+}
+
+/**
+ * Whether our copy of the tree actually holds this node's children. `expanded`
+ * alone cannot answer that: anything that replaces `tree` (a refetch, a scope
+ * change) drops the children while rows that are open stay open, and a row
+ * whose children were dropped has to be allowed to ask for them again.
+ */
+function childrenLoaded(nodes: DocumentTreeNode[], id: string): boolean {
+  const node = walk(nodes, id)
+  if (!node) return false
+  return node.children.length > 0 || node.childCount === 0
 }
 
 export const useDocumentsStore = defineStore('documents', {
@@ -150,14 +183,29 @@ export const useDocumentsStore = defineStore('documents', {
      * because the sidebar mounts everywhere — a few hundred rows to draw the
      * six that are visible.
      */
-    async fetchTree() {
-      const res = await apiFetch<DocumentTreeResponse>(
-        `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1${projectParam()}`,
-      )
-      this.tree = res.roots
-      this.expanded = []
-      this.expanding = []
-      this.treeLoaded = true
+    async fetchTree(): Promise<void> {
+      // The sidebar, the breadcrumbs and the page all ask for the tree, and on
+      // a cold load they ask in the same tick — each seeing `treeLoaded` still
+      // false. Without sharing the request the later answers land last and
+      // reset `tree`/`expanded` *after* the open rows have already fetched
+      // their children, stranding them open and empty.
+      const pending = treeFetches.get(this)
+      if (pending) return pending
+
+      const job = (async () => {
+        const res = await apiFetch<DocumentTreeResponse>(
+          `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1${projectParam()}`,
+        )
+        this.tree = res.roots
+        this.expanded = []
+        this.expanding = []
+        this.treeLoaded = true
+      })().finally(() => {
+        treeFetches.delete(this)
+      })
+
+      treeFetches.set(this, job)
+      return job
     },
 
     /**
@@ -166,22 +214,36 @@ export const useDocumentsStore = defineStore('documents', {
      * cheap thing to do rather than something you learn to avoid.
      */
     async fetchChildren(parentId: string): Promise<void> {
-      if (this.expanded.includes(parentId) || this.expanding.includes(parentId)) return
-      this.expanding = [...this.expanding, parentId]
-      try {
-        const res = await apiFetch<DocumentTreeResponse>(
-          `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1&parentId=${parentId}${projectParam()}`,
-        )
-        const node = walk(this.tree, parentId)
-        if (node) {
-          node.children = res.roots
-          // The server just counted them; trust that over a stale count.
-          node.childCount = res.roots.length
+      const pending = inFlight(childFetches, this)
+      const running = pending.get(parentId)
+      if (running) return running
+      // Fetched *and* still here is what makes re-expanding free. Fetched but
+      // gone — the tree was replaced under an open row — is a reason to ask
+      // again, not a reason to sit on empty placeholders.
+      if (this.expanded.includes(parentId) && childrenLoaded(this.tree, parentId)) return
+
+      const job = (async () => {
+        this.expanding = [...new Set([...this.expanding, parentId])]
+        try {
+          const res = await apiFetch<DocumentTreeResponse>(
+            `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1&parentId=${parentId}${projectParam()}`,
+          )
+          const node = walk(this.tree, parentId)
+          if (node) {
+            node.children = res.roots
+            // The server just counted them; trust that over a stale count.
+            node.childCount = res.roots.length
+          }
+          this.expanded = [...new Set([...this.expanded, parentId])]
+        } finally {
+          this.expanding = this.expanding.filter((id) => id !== parentId)
         }
-        this.expanded = [...this.expanded, parentId]
-      } finally {
-        this.expanding = this.expanding.filter((id) => id !== parentId)
-      }
+      })().finally(() => {
+        pending.delete(parentId)
+      })
+
+      pending.set(parentId, job)
+      return job
     },
 
     /**
@@ -191,8 +253,9 @@ export const useDocumentsStore = defineStore('documents', {
      * tree the page may not be in our copy at all.
      */
     async revealPath(documentId: string): Promise<DocumentTreeNode[]> {
-      const inFlight = revealing.get(documentId)
-      if (inFlight) return inFlight
+      const pending = inFlight(revealing, this)
+      const running = pending.get(documentId)
+      if (running) return running
 
       const job = (async () => {
         if (!this.treeLoaded) await this.fetchTree()
@@ -202,9 +265,9 @@ export const useDocumentsStore = defineStore('documents', {
         // Top-down: each level has to exist before the next can be found in it.
         for (const ancestor of res.ancestors) await this.fetchChildren(ancestor.documentId)
         return this.pathTo(documentId)
-      })().finally(() => revealing.delete(documentId))
+      })().finally(() => pending.delete(documentId))
 
-      revealing.set(documentId, job)
+      pending.set(documentId, job)
       return job
     },
 

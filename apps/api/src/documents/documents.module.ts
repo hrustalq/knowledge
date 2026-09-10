@@ -4,6 +4,7 @@ import { GraphModule } from '../graph/graph.module.js';
 import { IngestionModule } from '../ingestion/ingestion.module.js';
 import { DocumentsCoreModule } from './documents-core.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
+import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { DocumentsController } from './documents.controller.js';
 import { CompareService } from './compare.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
@@ -49,6 +50,11 @@ import { MentionReplySweeper } from './mention-reply.sweeper.js';
     AssistantClientModule,
     // Review notifications: mentions, assignee, review requests (docs/features/22).
     NotificationsCoreModule,
+    // Per-occurrence glossary exclusions (docs/features/14) hang off the
+    // document routes, so the controller needs GlossaryService. Core-only, and
+    // GlossaryCoreModule reaches for DocumentsCoreModule rather than this
+    // module, so there is no cycle.
+    GlossaryCoreModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [

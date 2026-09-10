@@ -8,7 +8,7 @@
  * is the same one, and it lives in the store so it cannot diverge.
  */
 import { useI18n } from 'vue-i18n'
-import { computed, ref } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ChevronRight, FileText, Loader2 } from 'lucide-vue-next'
 import { Collapse } from '@/components/ui/collapse'
@@ -18,24 +18,45 @@ import { statusDot } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import { labelFor } from '@/lib/labels'
 import { useDocumentsStore } from '@/stores/documents'
+import { useSidebarStore } from '@/stores/sidebar'
 
 const { t } = useI18n()
 defineOptions({ name: 'DocumentTreeNode' })
 const props = defineProps<{ node: TreeNode; depth: number }>()
 
 const store = useDocumentsStore()
+const sidebar = useSidebarStore()
 
 /** `childCount`, not `children.length` — an unexpanded branch has neither yet. */
 const hasChildren = computed(() => props.node.childCount > 0)
 const loading = computed(() => store.expanding.includes(props.node.documentId))
 
-// The first two levels start open, as before. They still have to be fetched.
-const open = ref(props.depth < 2)
-if (open.value && hasChildren.value) void store.fetchChildren(props.node.documentId)
+/**
+ * The same remembered set as the rail's tree, so the two cannot show one page
+ * as open and closed at once — which is also why the cold-start default is the
+ * store's and not this surface's own (it used to open two levels here).
+ */
+const open = ref(sidebar.isNodeOpen(props.node.documentId, props.depth))
+watch(open, (v) => sidebar.setNodeOpen(props.node.documentId, v), { immediate: true })
+// Both trees can be on screen at once, and one memory has to mean one state:
+// a branch opened in the rail opens on the index without waiting for a remount.
+watch(
+  () => sidebar.isNodeOpen(props.node.documentId, props.depth),
+  (v) => {
+    open.value = v
+  },
+)
+
+// Open and childless is a request for children, whenever it happens to be true
+// — see the sidebar row, which carries the same effect for the same reason.
+watchEffect(() => {
+  if (open.value && hasChildren.value && props.node.children.length === 0) {
+    void store.fetchChildren(props.node.documentId)
+  }
+})
 
 function toggle() {
   open.value = !open.value
-  if (open.value) void store.fetchChildren(props.node.documentId)
 }
 </script>
 

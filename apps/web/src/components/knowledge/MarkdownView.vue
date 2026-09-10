@@ -16,8 +16,8 @@ import DOMPurify from 'dompurify'
 import { markdownToHtml, SANITIZE_CONFIG, slugifyHeading } from '@/lib/markdown/render'
 import { parseScene, renderSceneToSvg } from '@/lib/markdown/drawing'
 import { KN, attachmentKind, escapeHtml, formatBytes } from '@/lib/markdown/nodes'
-import { linkGlossaryTerms } from '@/lib/glossary'
-import { useGlossaryStore } from '@/stores/glossary'
+import { mayContainPageRef } from '@/lib/page-refs'
+import { usePageRefsStore } from '@/stores/page-refs'
 import { resolveAssetUrl } from '@/lib/api'
 import { useTheme } from '@/lib/theme'
 
@@ -33,14 +33,8 @@ const props = withDefaults(
      * that has not closed yet just flashes an error at the reader.
      */
     streaming?: boolean
-    /**
-     * Link glossary terms (docs/features/14). On for page content; off for the
-     * places where the text is not a page — comment bodies, assistant replies —
-     * because vocabulary links belong in the documentation, not in a chat log.
-     */
-    glossary?: boolean
   }>(),
-  { streaming: false, glossary: false },
+  { streaming: false },
 )
 const emit = defineEmits<{
   headings: [MarkdownHeading[]]
@@ -48,7 +42,7 @@ const emit = defineEmits<{
   rendered: [root: HTMLElement]
 }>()
 
-const glossaryStore = useGlossaryStore()
+const pageRefsStore = usePageRefsStore()
 
 const host = ref<HTMLElement | null>(null)
 const html = ref('')
@@ -56,8 +50,22 @@ const theme = useTheme()
 
 let mermaidSeq = 0
 
+/**
+ * Page references by title need the roster, and the roster costs a request —
+ * so it is fetched only for text that actually contains a candidate. Most of
+ * what this component renders is a comment or a chat reply with none, and those
+ * must not each pull the workspace's page list.
+ */
+async function pageRefResolver(markdown: string) {
+  if (!mayContainPageRef(markdown)) return undefined
+  await pageRefsStore.ensureLoaded()
+  return pageRefsStore.resolve
+}
+
 async function render() {
-  html.value = DOMPurify.sanitize(markdownToHtml(props.markdown ?? ''), { ...SANITIZE_CONFIG })
+  const markdown = props.markdown ?? ''
+  const resolvePage = await pageRefResolver(markdown)
+  html.value = DOMPurify.sanitize(markdownToHtml(markdown, { resolvePage }), { ...SANITIZE_CONFIG })
   await nextTick()
   if (props.streaming) return
   const headings = collectHeadings()
@@ -67,21 +75,7 @@ async function render() {
   renderFiles()
   renderToc(headings)
   await renderMermaid()
-  await linkGlossary()
   if (host.value) emit('rendered', host.value)
-}
-
-/**
- * Glossary linking is the last pass on purpose: it walks text nodes, so it has
- * to see the final tree — after mermaid became an SVG, after file cards
- * replaced their placeholders — or it would decorate markup that is about to
- * be thrown away.
- */
-async function linkGlossary() {
-  if (!props.glossary || !host.value) return
-  await glossaryStore.ensureLoaded()
-  if (!host.value) return // unmounted while the roster was loading
-  linkGlossaryTerms(host.value, glossaryStore.linkable)
 }
 
 function collectHeadings(): MarkdownHeading[] {
@@ -129,7 +123,10 @@ function resolveAssets() {
   const root = host.value
   if (!root) return
   for (const img of root.querySelectorAll<HTMLImageElement>('img[src^="/v1/"]')) {
-    img.src = resolveAssetUrl(img.getAttribute('src') ?? '')
+    // The selector guarantees a `/v1/…` src, so read it straight: an `?? ''`
+    // fallback here was unreachable, and an empty src is exactly the bug it
+    // looked like it was guarding against.
+    img.src = resolveAssetUrl(img.getAttribute('src')!)
     img.loading = 'lazy'
     img.decoding = 'async'
   }
@@ -236,14 +233,6 @@ onMounted(render)
 // more pass to pick up headings and diagrams that were deferred. Theme is
 // watched because mermaid bakes its colors into the SVG it emits.
 watch([() => props.markdown, () => props.streaming, theme.isDark], () => void render())
-// A term added or edited on the glossary page changes what every open page
-// should link, and the markdown did not change — so the roster is watched too.
-watch(
-  () => glossaryStore.terms,
-  () => {
-    if (props.glossary) void render()
-  },
-)
 </script>
 
 <template>

@@ -3280,6 +3280,23 @@ export interface ListAiAgentChoicesResponse {
 // Glossary (docs/features/14): workspace vocabulary + automatic term linking
 // ---------------------------------------------------------------------------
 
+/**
+ * Word boundaries for term matching, as lookaround sources.
+ *
+ * Shared because two implementations must agree: the read-side linker in
+ * `apps/web/src/lib/glossary.ts` decides what a reader sees, and
+ * `countOccurrences` in the API's glossary service decides which AI proposals
+ * are grounded enough to offer. They drifted the moment one was fixed alone.
+ *
+ * `\b` is wrong here — the terms most in need of defining are the ones it
+ * breaks on (`.env`, `C++`, `@Access`). Underscore counts as a word character
+ * even though it is neither letter nor digit, because it joins words into one
+ * identifier: `customer_id` is not a mention of *Customer*, and a page
+ * documenting a data model is mostly such identifiers.
+ */
+export const GLOSSARY_BOUNDARY_BEFORE = '(?<![\\p{L}\\p{N}_])';
+export const GLOSSARY_BOUNDARY_AFTER = '(?![\\p{L}\\p{N}_])';
+
 /** Where a term came from: hand-written, or accepted from an AI suggestion. */
 export type GlossaryTermSource = 'manual' | 'ai';
 
@@ -3300,6 +3317,16 @@ export interface GlossaryTerm {
   source: GlossaryTermSource;
   /** Disabled terms stay in the glossary but stop being linked in documents. */
   enabled: boolean;
+  /**
+   * Link the aliases too, or the headword only. False is the escape hatch for
+   * an alias that is also an ordinary word: «Заказ» would otherwise link in
+   * every sentence that happens to use it.
+   */
+  matchAliases: boolean;
+  /** For terms that are only terms in one casing — "IT" against "it". */
+  caseSensitive: boolean;
+  /** Occurrences linked per page; null = the shared default. */
+  maxLinksPerPage: number | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -3328,6 +3355,9 @@ export interface CreateGlossaryTermRequest {
   documentId?: string | null;
   source?: GlossaryTermSource;
   enabled?: boolean;
+  matchAliases?: boolean;
+  caseSensitive?: boolean;
+  maxLinksPerPage?: number | null;
 }
 
 // PATCH /v1/glossary/:id
@@ -3337,6 +3367,44 @@ export interface UpdateGlossaryTermRequest {
   aliases?: string[];
   documentId?: string | null;
   enabled?: boolean;
+  matchAliases?: boolean;
+  caseSensitive?: boolean;
+  maxLinksPerPage?: number | null;
+}
+
+/**
+ * Where an excluded occurrence sits, as a quote plus a little context.
+ *
+ * The `ReviewThreadAnchor` text shape minus `revisionId`: an exclusion is about
+ * the words, not about a version of them, so it keeps applying across edits
+ * that leave the sentence recognisable and stops applying when it is gone.
+ */
+export interface GlossaryExclusionAnchor {
+  quote: string;
+  prefix?: string;
+  suffix?: string;
+}
+
+/** One occurrence of one term, on one page, that is not a mention of it. */
+export interface GlossaryExclusion {
+  exclusionId: string;
+  documentId: string;
+  termId: string;
+  anchor: GlossaryExclusionAnchor;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+// GET /v1/documents/:id/glossary-exclusions
+export interface ListGlossaryExclusionsResponse {
+  documentId: string;
+  exclusions: GlossaryExclusion[];
+}
+
+// POST /v1/documents/:id/glossary-exclusions
+export interface CreateGlossaryExclusionRequest {
+  termId: string;
+  anchor: GlossaryExclusionAnchor;
 }
 
 // POST /v1/glossary/suggest — LLM term extraction over a page or a draft

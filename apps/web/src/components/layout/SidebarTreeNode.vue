@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Navigation tree node — the page tree drawn as a graph: indent rails,
 // live indexing-status dots, active-trail auto-expansion.
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { ChevronRight, Loader2 } from 'lucide-vue-next'
@@ -9,6 +9,7 @@ import { Collapse } from '@/components/ui/collapse'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { statusDot } from '@/lib/api'
 import { useDocumentsStore } from '@/stores/documents'
+import { useSidebarStore } from '@/stores/sidebar'
 import { TreeWindowKey } from './tree-window'
 
 defineOptions({ name: 'SidebarTreeNode' })
@@ -16,6 +17,7 @@ const { t } = useI18n()
 const props = defineProps<{ node: TreeNode; depth: number; activeId: string | null }>()
 
 const store = useDocumentsStore()
+const sidebar = useSidebarStore()
 
 /**
  * `childCount` rather than `children.length`: the tree loads a level at a time,
@@ -28,7 +30,23 @@ const loading = computed(() => store.expanding.includes(props.node.documentId))
 const contains = (n: TreeNode): boolean =>
   n.documentId === props.activeId || n.children.some(contains)
 
-const open = ref(props.depth < 1 || contains(props.node))
+/**
+ * Restored from the remembered set the rail shares with the pages index, which
+ * the row then keeps up to date — including its initial state, so the set is
+ * complete rather than only holding branches someone has clicked. Depth is what
+ * the store falls back to when nothing has been remembered yet.
+ */
+const open = ref(sidebar.isNodeOpen(props.node.documentId, props.depth) || contains(props.node))
+watch(open, (v) => sidebar.setNodeOpen(props.node.documentId, v), { immediate: true })
+// Both trees can be on screen at once, and one memory has to mean one state:
+// a branch opened in the rail opens on the index without waiting for a remount.
+watch(
+  () => sidebar.isNodeOpen(props.node.documentId, props.depth),
+  (v) => {
+    open.value = v
+  },
+)
+
 watch(
   () => props.activeId,
   () => {
@@ -48,22 +66,28 @@ const treeWindow = inject(TreeWindowKey, null)
  * their level rather than to this one — otherwise the row you just revealed is
  * the first one squeezed.
  *
- * It is also literally a request: the children are fetched on first open. The
- * row opens immediately either way, so the disclosure never waits on a network
- * round-trip to acknowledge the click.
+ * The row opens immediately and the effect below asks for the children, so the
+ * disclosure never waits on a network round-trip to acknowledge the click.
  */
 function toggle() {
   open.value = !open.value
-  if (open.value) {
-    void store.fetchChildren(props.node.documentId)
-    treeWindow?.reveal(props.depth + 1)
-  } else {
-    treeWindow?.retreat(props.depth)
-  }
+  if (open.value) treeWindow?.reveal(props.depth + 1)
+  else treeWindow?.retreat(props.depth)
 }
 
-// A branch that opens itself along the active trail still has to load.
-if (open.value && hasChildren.value) void store.fetchChildren(props.node.documentId)
+/**
+ * An open row and its children are one fact, not two: whenever this row is open
+ * and its children are not in the tree, they are fetched — on first open, along
+ * the active trail, and again if anything replaces the tree underneath us (a
+ * refetch, a scope change, a live invalidation). Fetching once from setup meant
+ * a row that outlived its children stayed open over empty placeholders until
+ * someone collapsed and reopened it.
+ */
+watchEffect(() => {
+  if (open.value && hasChildren.value && props.node.children.length === 0) {
+    void store.fetchChildren(props.node.documentId)
+  }
+})
 </script>
 
 <template>

@@ -482,7 +482,13 @@
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E");
 }
 .kn-mention[data-selected='true'] { outline: 2px solid var(--ring); outline-offset: 1px; }
-.markdown-body a[data-kn-mention]:hover { background: color-mix(in oklch, var(--primary) 18%, transparent); }
+/* The chip is the target, so the anchor inside it is invisible: the whole chip
+   lights up and the label carries no rule of its own. Read view only — an
+   editable chip has no anchor, so `:has()` leaves it alone. */
+.kn-mention a { color: inherit; text-decoration: none; }
+.kn-mention:has(a) { cursor: pointer; }
+.markdown-body a[data-kn-mention]:hover,
+.kn-mention:has(a):hover { background: color-mix(in oklch, var(--primary) 18%, transparent); }
 
 /* Block chrome (mermaid, drawing, file, toc) ------------------------------- */
 
@@ -853,8 +859,20 @@
   flex: none;
 }
 .kn-cmd-item[data-active='true'] .kn-cmd-icon { color: var(--primary); border-color: color-mix(in oklch, var(--primary) 35%, transparent); }
-.kn-cmd-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kn-cmd-hint { font-size: 0.7rem; color: var(--muted-foreground); }
+/* The label is the thing being chosen, so it never yields to the hint. Both
+   can ellipsize, but the hint gives up its width first: an agent's one-line
+   description is long enough that, left unshrinkable, it crushed the name it
+   describes to zero and the row read as a description with no subject. */
+.kn-cmd-label { flex: 1 1 auto; min-width: 5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kn-cmd-hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+}
 .kn-cmd-empty { padding: 0.9rem 0.6rem; font-size: 0.82rem; color: var(--muted-foreground); text-align: center; }
 
 /* Uploads ----------------------------------------------------------------- */
@@ -872,7 +890,17 @@
 .kn-upload { display: flex; align-items: center; gap: 0.6rem; font-size: 0.78rem; }
 .kn-upload-name { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kn-upload-track { flex: 1; height: 0.3rem; border-radius: 999px; background: var(--muted); overflow: hidden; }
-.kn-upload-fill { display: block; height: 100%; background: var(--primary); transition: width 180ms ease; }
+/* Scaled, not resized: `width` is a layout property, so animating it reflowed
+   the row on every progress event. The fill is a solid block, so a horizontal
+   scale from the left edge is pixel-identical and stays on the compositor. */
+.kn-upload-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary);
+  transform-origin: left center;
+  transition: transform 180ms ease;
+}
 
 /* ------------------------------------------------------------- whiteboard */
 
@@ -1373,13 +1401,18 @@
  * unreadable. The dotted underline is the long-standing convention for "there
  * is a definition here", and the browser's own tooltip carries it.
  */
-.markdown-body a[data-kn-glossary] {
+/* Two selectors, one treatment: the static renderer builds real anchors, the
+   editor draws the same thing as a ProseMirror decoration (glossary-terms.ts).
+   A reader must not be able to tell which surface they are on. */
+.markdown-body a[data-kn-glossary],
+.kn-prose a[data-kn-glossary] {
   color: inherit;
   text-decoration: none;
   border-bottom: 1px dashed color-mix(in oklch, var(--primary) 55%, transparent);
   cursor: help;
 }
-.markdown-body a[data-kn-glossary]:hover {
+.markdown-body a[data-kn-glossary]:hover,
+.kn-prose a[data-kn-glossary]:hover {
   color: var(--primary);
   border-bottom-color: var(--primary);
   background: color-mix(in oklch, var(--primary) 8%, transparent);
@@ -1482,6 +1515,12 @@
   position: relative;
   display: flex;
   flex: none;
+  /* The face belongs beside the byline, not in the middle of the remark. The
+     chip is a flex item with no height of its own, so the default `stretch`
+     ran it the full height of the comment and its own `items-center` then
+     parked the avatar halfway down a long one — which also broke the
+     connector below, whose top is measured from an avatar sitting up here. */
+  align-items: flex-start;
   justify-content: center;
   width: 1.75rem;
 }
@@ -1557,6 +1596,26 @@
   padding: 0.25rem 0.5rem;
   border-radius: 8px;
   transition: background-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+/* A comment is rendered by the same pipeline as a page (that is the point —
+   what you write is what everyone reads), but a page's paragraph rhythm is
+   wrong here: the leading margin opened a gap between the byline and the first
+   line, so the name floated free of the remark it belongs to. Trim the outer
+   margins and close the internal rhythm; a comment is a few lines, not an
+   article. */
+.kn-comment-surface .markdown-body {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.kn-comment-surface .markdown-body > :first-child {
+  margin-top: 0;
+}
+.kn-comment-surface .markdown-body > :last-child {
+  margin-bottom: 0;
+}
+.kn-comment-surface .markdown-body :is(p, ul, ol) {
+  margin: 0.5em 0;
 }
 
 /* The one authored moment in the card: jumping to a quoted comment. It has to

@@ -421,6 +421,8 @@ function refresh() {
           <DocumentCanvas
             v-else
             :markdown="reviewContent.markdown"
+            :document-id="reviewContent.documentId"
+            :frontmatter="reviewContent.frontmatter"
             :revision-id="reviewContent.revisionId"
             :threads="threads"
             :can-comment="canComment"

@@ -16,6 +16,16 @@ const RAIL_KEY = 'kn_rail'
 const RAIL_OPEN_KEY = 'kn_railopen'
 /** The merge-request page's filter rail — its own state, not the app rail's. */
 const FILTER_RAIL_KEY = 'kn_filterrail'
+/** Whether glossary terms are linked in page content (docs/features/14). */
+const GLOSSARY_KEY = 'kn_glossary'
+/** Which branches of the sidebar page tree are open. */
+const TREE_OPEN_KEY = 'kn_tree'
+/**
+ * How many open branches are remembered. This one rides on every request, and
+ * a page tree with forty branches open is not a tree anyone is reading — the
+ * oldest are dropped rather than letting the cookie grow without a bound.
+ */
+const TREE_OPEN_MAX = 40
 const LANG_KEY = 'kn_lang'
 
 /** Which level of the sidebar's navigation stack is showing (see stores/sidebar-nav). */
@@ -44,6 +54,8 @@ interface SsrRequestContext {
   rail: string | null
   railOpen: string | null
   filterRail: string | null
+  glossary: string | null
+  treeOpen: string | null
   locale: Locale | null
 }
 function ssrContext(): SsrRequestContext | undefined {
@@ -59,6 +71,8 @@ let clientPane: string | null = null
 let clientRail: string | null = null
 let clientRailOpen: string | null = null
 let clientFilterRail: string | null = null
+let clientGlossary: string | null = null
+let clientTreeOpen: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
   try {
@@ -69,6 +83,8 @@ if (!import.meta.env.SSR) {
     clientRail = localStorage.getItem(RAIL_KEY)
     clientRailOpen = localStorage.getItem(RAIL_OPEN_KEY)
     clientFilterRail = localStorage.getItem(FILTER_RAIL_KEY)
+    clientGlossary = localStorage.getItem(GLOSSARY_KEY)
+    clientTreeOpen = localStorage.getItem(TREE_OPEN_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
     if (isLocale(storedLocale)) clientLocale = storedLocale
   } catch {
@@ -216,6 +232,64 @@ export function getRailOpen(): boolean {
  * Unset means closed, the opposite of the app rail: that one is how you get
  * anywhere, while this is a tool you reach for. The list is the page.
  */
+/**
+ * Glossary linking, as this reader wants it.
+ *
+ * **Unset means on** — the `kn_rail` polarity, not `kn_filterrail`'s: linking
+ * is what the feature does, so someone who has never chosen should see it. It
+ * earns a cookie rather than localStorage because it decides the first painted
+ * frame; read after hydration, every definition link on the page would pop in.
+ */
+export function getGlossaryLinks(): boolean {
+  const raw = import.meta.env.SSR ? ssrContext()?.glossary : clientGlossary
+  return raw !== '0'
+}
+
+export function setGlossaryLinks(on: boolean): void {
+  if (import.meta.env.SSR) return
+  const value = on ? '1' : '0'
+  clientGlossary = value
+  try {
+    localStorage.setItem(GLOSSARY_KEY, value)
+    document.cookie = `${GLOSSARY_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Which branches of the page tree are open, oldest first — or null when nobody
+ * has ever opened or closed one, which is what lets a first visit fall back to
+ * "the top level, expanded" instead of to a tree with every branch shut.
+ *
+ * A cookie for the rail's reason: the tree is drawn server-side wherever the
+ * page has the tree already, so reading this after hydration would open the
+ * remembered branches a frame late, one row jumping down the rail per branch.
+ *
+ * Ids are joined with `.` — a comma is not legal unencoded in a cookie value,
+ * and a UUID already spends `-`.
+ */
+export function getOpenTreeNodes(): string[] | null {
+  const raw = import.meta.env.SSR ? ssrContext()?.treeOpen : clientTreeOpen
+  if (raw === null || raw === undefined) return null
+  return raw.split('.').filter(Boolean)
+}
+
+/** Persists what it kept, so the caller's copy and the cookie cannot diverge. */
+export function persistOpenTreeNodes(ids: string[]): string[] {
+  const kept = ids.slice(-TREE_OPEN_MAX)
+  if (import.meta.env.SSR) return kept
+  const value = kept.join('.')
+  clientTreeOpen = value
+  try {
+    localStorage.setItem(TREE_OPEN_KEY, value)
+    document.cookie = `${TREE_OPEN_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
+  return kept
+}
+
 export function getFilterRailOpen(): boolean {
   const raw = import.meta.env.SSR ? ssrContext()?.filterRail : clientFilterRail
   return raw === '1'

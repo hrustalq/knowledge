@@ -1,5 +1,12 @@
 import { defineStore } from 'pinia'
-import { getRailOpen, getRailWidth, setRailOpen, setRailWidth } from '@/lib/api'
+import {
+  getOpenTreeNodes,
+  getRailOpen,
+  getRailWidth,
+  persistOpenTreeNodes,
+  setRailOpen,
+  setRailWidth,
+} from '@/lib/api'
 
 /**
  * The rail's geometry: how wide it is, whether it is open, and — derived from
@@ -26,6 +33,17 @@ const SNAP = 14
  */
 const COLLAPSE_AT = RAIL_MIN - 44
 
+/**
+ * How much of the page tree is open before anyone has opened or closed a
+ * branch. It lives here rather than in either tree because the rail and the
+ * pages index share one remembered set, and two surfaces reading one memory
+ * through two different defaults would disagree about a first visit.
+ *
+ * One level: the rail is 256px wide, and opening a second level on a cold start
+ * would also mean a request per root before the reader has asked for anything.
+ */
+const DEFAULT_OPEN_DEPTH = 1
+
 /** One tree level: `ml-[13px]` plus the list's `pl-2`. */
 export const TREE_INDENT = 21
 /** Rail chrome before a title starts: 8px list padding either side, the 20px disclosure slot, the 8px trailing gutter. */
@@ -41,9 +59,32 @@ export const useSidebarStore = defineStore('sidebar', {
     open: getRailOpen(),
     /** True only while a pointer is on the handle: every rail transition steps aside for direct manipulation. */
     resizing: false,
+    /**
+     * Which branches of the page tree are open — one set, shared by the rail
+     * and the pages index, so a branch you open in one is open in the other.
+     *
+     * The rows report their state into this rather than each keeping its own —
+     * a row's `open` ref dies with the row, and every branch above the one you
+     * opened is unmounted the moment you navigate elsewhere.
+     */
+    openNodes: getOpenTreeNodes() ?? [],
+    /**
+     * Whether that set came from storage, frozen at load. It is the difference
+     * between "all closed" and "nobody has ever opened or closed a branch",
+     * which is what lets a first visit fall back to the top level, expanded.
+     *
+     * Frozen rather than derived from `openNodes` being non-empty, because the
+     * rows fill that set as they render: read live, the first root to register
+     * would make the set look authoritative and every root after it would come
+     * up closed.
+     */
+    openRestored: getOpenTreeNodes() !== null,
   }),
   getters: {
     widthPx: (s) => `${s.width}px`,
+    /** Whether a branch is open — from the remembered set, or from its depth. */
+    isNodeOpen: (s) => (documentId: string, depth: number) =>
+      s.openRestored ? s.openNodes.includes(documentId) : depth < DEFAULT_OPEN_DEPTH,
     /**
      * How many levels of indent this width can spend and still leave a readable
      * title. Everything deeper is what the tree window slides to reach.
@@ -52,6 +93,20 @@ export const useSidebarStore = defineStore('sidebar', {
       clamp(Math.floor((s.width - TREE_CHROME - TREE_MIN_TITLE) / TREE_INDENT), 1, 12),
   },
   actions: {
+    /**
+     * Record a branch's state. Rows call this for their initial state too, so
+     * the remembered set is complete from the first render — otherwise opening
+     * one deep branch would be saved as "only this one is open", and the reload
+     * would come back with the top level shut.
+     */
+    setNodeOpen(documentId: string, open: boolean) {
+      if (this.openNodes.includes(documentId) === open) return
+      const next = open
+        ? [...this.openNodes, documentId]
+        : this.openNodes.filter((id) => id !== documentId)
+      this.openNodes = persistOpenTreeNodes(next)
+    },
+
     toggle() {
       this.setOpen(!this.open)
     },

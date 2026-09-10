@@ -1522,7 +1522,20 @@
     "termAdded": "“{term}” added to the glossary",
     "termRemoved": "Removed “{term}”",
     "nothingNew": "Nothing new — every term on that page is already defined.",
-    "suggestionAdded": "“{term}” added"
+    "suggestionAdded": "“{term}” added",
+    "openPage": "Open page",
+    "openEntry": "Open glossary entry",
+    "linksOn": "Glossary links on",
+    "linksOff": "Glossary links off",
+    "toggleLinks": "Glossary",
+    "ambiguous": "«{spelling}» is claimed by {n} entries, so it links to none of them.",
+    "ambiguousTitle": "Contested spellings",
+    "matching": "Matching",
+    "matchAliases": "Also link the aliases",
+    "caseSensitive": "Match this exact casing",
+    "maxLinksPerPage": "Max links per page",
+    "notATermHere": "Not a term here",
+    "cannotExclude": "Could not locate that occurrence in the page."
   },
   "editor": {
     "pickProjectForFiles": "Pick a project in page settings before attaching files",
@@ -1598,7 +1611,9 @@
     "showFewer": "Show fewer",
     "showAll": "Show all {n}",
     "attachmentTypeRejected": "{name}: {type} is not an accepted attachment",
-    "thisFileType": "this file type"
+    "thisFileType": "this file type",
+    "noMentionMatches": "No one and no page matches",
+    "noBlockMatches": "No blocks match"
   },
   "toolbar": {
     "formatting": "Formatting",
@@ -1668,7 +1683,7 @@
     "image": "Image",
     "fileOrPdf": "File or PDF",
     "linkToPage": "Link to a page",
-    "linkToPageHint": "Link to a page (@)",
+    "linkToPageHint": "Link to a page ({'@'})",
     "normalText": "Normal text",
     "center": "Center",
     "insertMenu": "Insert",

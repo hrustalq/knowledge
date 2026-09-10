@@ -180,6 +180,36 @@ export function anchorFromQuote(doc: PMNode, revisionId: string, raw: string): T
 }
 
 /**
+ * An anchor for a range the caller already knows exactly.
+ *
+ * `anchorFromQuote` searches for its text, which is right when the text is all
+ * you have (a browser selection) and wrong when it is not: the first "Order" in
+ * a page is usually inside "OrderHub". A glossary decoration knows precisely
+ * which characters it drew, so it hands the range over instead of the words.
+ */
+export function anchorFromRange(
+  doc: PMNode,
+  from: number,
+  to: number,
+): { quote: string; prefix?: string; suffix?: string } | null {
+  const projection = projectDoc(doc)
+  // `lastIndexOf`, not `indexOf`: positions are not unique. A block boundary
+  // contributes a synthetic space carrying the *same* document position as the
+  // character that follows it, and the space is pushed first — so the first
+  // match is the padding and the last is the real character. Anchoring on the
+  // space shifts the quote one to the left and drops the space out of the
+  // prefix, which then resolves to nothing.
+  const start = projection.positions.lastIndexOf(from)
+  const end = projection.positions.lastIndexOf(to - 1)
+  if (start < 0 || end < start) return null
+
+  const quote = projection.text.slice(start, end + 1)
+  if (!quote) return null
+  const { prefix, suffix } = contextAround(projection.text, start, quote.length)
+  return { quote, ...(prefix ? { prefix } : {}), ...(suffix ? { suffix } : {}) }
+}
+
+/**
  * The same, from whatever the reader has selected. The quote comes from the
  * browser selection because a read-only editor keeps no ProseMirror selection
  * to read.

@@ -44,8 +44,13 @@ const url = computed(() =>
 </script>
 
 <template>
+  <!-- `leading-none` is load-bearing: the initials are an anonymous grid item,
+       so they inherit the *caller's* line-height. Next to a `leading-6`
+       paragraph — the merge request activity feed — that line box is taller
+       than the disc, and an overflowing item is start-aligned rather than
+       centred, which left the letter riding high in the circle. -->
   <span
-    class="grid shrink-0 select-none place-items-center overflow-hidden rounded-full font-medium text-white"
+    class="grid shrink-0 select-none place-items-center overflow-hidden rounded-full leading-none font-medium text-white"
     :class="size === 'sm' ? 'size-5 text-[9px]' : 'size-7 text-[11px]'"
     :style="{
       backgroundColor: ai ? 'var(--kn-panel-important)' : url ? 'transparent' : avatarColor(userId),

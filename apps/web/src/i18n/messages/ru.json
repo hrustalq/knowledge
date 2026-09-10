@@ -1522,7 +1522,20 @@
     "termAdded": "«{term}» добавлен в глоссарий",
     "termRemoved": "Удалён: «{term}»",
     "nothingNew": "Ничего нового — все термины с этой страницы уже определены.",
-    "suggestionAdded": "«{term}» добавлен"
+    "suggestionAdded": "«{term}» добавлен",
+    "openPage": "Открыть страницу",
+    "openEntry": "Открыть запись глоссария",
+    "linksOn": "Ссылки глоссария включены",
+    "linksOff": "Ссылки глоссария выключены",
+    "toggleLinks": "Глоссарий",
+    "ambiguous": "«{spelling}» заявлено в {n} записях, поэтому не ссылается ни на одну.",
+    "ambiguousTitle": "Спорные написания",
+    "matching": "Сопоставление",
+    "matchAliases": "Связывать и синонимы",
+    "caseSensitive": "Учитывать регистр",
+    "maxLinksPerPage": "Ссылок на страницу",
+    "notATermHere": "Здесь не термин",
+    "cannotExclude": "Не удалось найти это вхождение на странице."
   },
   "editor": {
     "pickProjectForFiles": "Выберите проект в настройках страницы, прежде чем прикреплять файлы",
@@ -1598,7 +1611,9 @@
     "showFewer": "Свернуть",
     "showAll": "Показать все ({n})",
     "attachmentTypeRejected": "{name}: тип {type} нельзя приложить",
-    "thisFileType": "этот тип файла"
+    "thisFileType": "этот тип файла",
+    "noMentionMatches": "Нет подходящих людей и страниц",
+    "noBlockMatches": "Нет подходящих блоков"
   },
   "toolbar": {
     "formatting": "Форматирование",
@@ -1668,7 +1683,7 @@
     "image": "Изображение",
     "fileOrPdf": "Файл или PDF",
     "linkToPage": "Ссылка на страницу",
-    "linkToPageHint": "Ссылка на страницу (@)",
+    "linkToPageHint": "Ссылка на страницу ({'@'})",
     "normalText": "Обычный текст",
     "center": "По центру",
     "insertMenu": "Вставка",

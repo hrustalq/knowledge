@@ -9,6 +9,24 @@ export interface ChunkDraft {
   headingPath: string[];
 }
 
+/**
+ * The text a chunk is embedded *as*, which is not the text it is stored as.
+ *
+ * A chunk body alone is missing the two things that most often say what it is
+ * about: the page it belongs to and the section it sits under. Both are known
+ * here for free, and a body three headings deep ("set it to 30s") is otherwise
+ * unfindable by the words a reader would actually search for. Prepending them
+ * is provider-independent — it helps a real embedding model as much as the
+ * stub — so it belongs at the embed call, not in the stored `text`, which
+ * stays verbatim for snippets and the fulltext index.
+ */
+export function chunkEmbedText(chunk: ChunkDraft, documentTitle: string): string {
+  return [documentTitle, chunk.headingPath.join(' > '), chunk.text]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
 /** Heading-aware split of a markdown body into sections. */
 export function splitMarkdown(markdown: string): MarkdownSection[] {
   const sections: MarkdownSection[] = [];

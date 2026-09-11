@@ -10,7 +10,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, embeddingSignature, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { INGESTION_QUEUE } from './ingestion.constants.js';
-import { chunkSections, splitMarkdown } from './markdown.js';
+import { chunkEmbedText, chunkSections, splitMarkdown } from './markdown.js';
 import { extractFrontmatterFacts } from './relations.js';
 import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
@@ -92,11 +92,16 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       // 4. Chunk
       const drafts = chunkSections(sections);
 
-      // 5. Embed
+      // 5. Embed — as title + heading breadcrumb + body, never the bare body
+      //    (chunkEmbedText). The stored `text` below stays verbatim.
       const embeddingsOut: number[][] = [];
       for (let i = 0; i < drafts.length; i += 32) {
         const batch = drafts.slice(i, i + 32);
-        embeddingsOut.push(...(await this.embeddings.embedBatch(batch.map((c) => c.text))));
+        embeddingsOut.push(
+          ...(await this.embeddings.embedBatch(
+            batch.map((c) => chunkEmbedText(c, revision.document.title)),
+          )),
+        );
       }
 
       // 6. Index into graph store (idempotent per revision)

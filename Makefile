@@ -63,9 +63,13 @@ ca-add: ## Add a host's missing TLS intermediate to certs/extra-ca.pem: make ca-
 	@node scripts/ca-add.mjs $(host)
 
 .PHONY: kill
+# The `(\.js)?` groups are load-bearing: nest is invoked as `nest.js start` and
+# its --entryFile children run as `dist/worker.main` with no suffix, so the
+# stricter patterns matched only turbo and left every watcher and worker alive.
+# Survivors kept serving stale code and silently re-indexed under an old recipe.
 kill: ## Kill all dev processes of this repo (api, web, worker, mcp, turbo, prisma studio)
 	@killed=0; \
-	for pid in $$(pgrep -f 'nest start|turbo|dist/main\.js|dist/worker\.main\.js|dist/mcp\.main\.js|node server|prisma studio' 2>/dev/null); do \
+	for pid in $$(pgrep -f 'nest(\.js)? start|turbo|dist/main(\.js)?|dist/worker\.main(\.js)?|dist/mcp\.main(\.js)?|node server|prisma studio' 2>/dev/null); do \
 	    [ "$$pid" = "$$$$" ] && continue; \
 	    cwd=$$(lsof -a -p $$pid -d cwd -Fn 2>/dev/null | sed -n 's/^n//p'); \
 	    case "$$cwd" in \

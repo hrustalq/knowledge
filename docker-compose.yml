@@ -59,7 +59,10 @@ services:
     volumes:
       - arcadedata:/home/arcadedb/databases
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:2480/api/v1/ready || exit 1"]
+      # The image ships no curl — with it the probe failed on a healthy server
+      # ("curl: not found"), so the container sat `unhealthy` forever and could
+      # not mask a real outage. wget is present; --spider still checks HTTP.
+      test: ["CMD-SHELL", "wget -q --spider -T 3 http://localhost:2480/api/v1/ready || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12

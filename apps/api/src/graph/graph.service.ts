@@ -20,6 +20,13 @@ export interface ChunkHit {
 }
 
 /**
+ * Phase 1 ranks by cosine in Node, so every candidate chunk crosses the wire.
+ * This caps that fan-out. It is a correctness ceiling, not a tuning knob: past
+ * it the ranking is over an arbitrary subset (see `searchChunks`).
+ */
+const CHUNK_SCAN_LIMIT = 5000;
+
+/**
  * Relation edge types allowed in the graph (plan.md §6). Edge type names are
  * interpolated into SQL, so everything MUST be validated against this list.
  */
@@ -517,9 +524,20 @@ export class GraphService {
       embedding: number[];
     }>(
       'sql',
-      'SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId LIMIT 5000',
+      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId LIMIT ${CHUNK_SCAN_LIMIT}`,
       { workspaceId },
     );
+
+    // Ranking is exhaustive-scan, so hitting the cap does not degrade results
+    // gracefully — it ranks an arbitrary subset and returns it as if it were
+    // the best match. Say so loudly; the fix is a native vector index.
+    if (rows.length >= CHUNK_SCAN_LIMIT) {
+      this.logger.error(
+        `Workspace ${workspaceId} has at least ${CHUNK_SCAN_LIMIT} chunks — the scan cap. ` +
+          'Vector search is now ranking an arbitrary subset and silently missing matches. ' +
+          'Move to an ArcadeDB HNSW index before trusting these results.',
+      );
+    }
 
     return rows
       .filter((r) => Array.isArray(r.embedding) && r.embedding.length === queryEmbedding.length)

@@ -1,5 +1,27 @@
 import { z } from 'zod';
 
+/**
+ * An env flag, spelled out.
+ *
+ * NOT `z.coerce.boolean()`: that is `Boolean(input)`, and every value here
+ * arrives from a .env file as a string, so `FLAG=false` coerced to **true**.
+ * The three `*_ALLOW_PRIVATE_URLS` SSRF guards and `AGENT_SCHEDULE_ENABLED`
+ * all ship `=false` in .env.example, so copying it armed exactly what it
+ * looked like it was disarming.
+ *
+ * An unrecognised spelling fails boot rather than picking a side — the same
+ * fail-fast contract as the rest of this schema. Guessing is how the bug got
+ * here in the first place.
+ */
+const boolish = (fallback: boolean) =>
+  z
+    .union([
+      z.boolean(),
+      z.enum(['true', '1', 'yes', 'on']).transform(() => true),
+      z.enum(['false', '0', 'no', 'off']).transform(() => false),
+    ])
+    .default(fallback);
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
@@ -12,7 +34,7 @@ export const envSchema = z.object({
   S3_ACCESS_KEY: z.string().min(1),
   S3_SECRET_KEY: z.string().min(1),
   S3_BUCKET: z.string().min(1),
-  S3_FORCE_PATH_STYLE: z.coerce.boolean().default(true),
+  S3_FORCE_PATH_STYLE: boolish(true),
 
   ARCADE_URL: z.string().min(1),
   ARCADE_DB: z.string().min(1),
@@ -40,7 +62,7 @@ export const envSchema = z.object({
   /** Auth flow: password-reset token lifetime. */
   AUTH_RESET_TTL_MIN: z.coerce.number().int().positive().default(30),
   /** Auth flow: allow self-service POST /v1/auth/signup. */
-  AUTH_SIGNUP_ENABLED: z.coerce.boolean().default(true),
+  AUTH_SIGNUP_ENABLED: boolish(true),
   /** Workspace new signups auto-join (empty disables). Defaults to the demo workspace. */
   AUTH_DEFAULT_WORKSPACE_ID: z.string().default('11111111-1111-4111-8111-111111111111'),
   AUTH_DEFAULT_ROLE: z.enum(['viewer', 'editor', 'admin']).default('viewer'),
@@ -53,10 +75,10 @@ export const envSchema = z.object({
   OPENSEARCH_INDEX: z.string().optional().default('knowledge-chunks'),
 
   /** Phase 5 stale-doc detection & reindex scheduling (worker sweeper). */
-  STALE_SWEEP_ENABLED: z.coerce.boolean().default(true),
+  STALE_SWEEP_ENABLED: boolish(true),
   // Background agent schedules (docs/features/20). Off by default: the failure
   // mode of unattended AI is an avalanche, not a slow queue.
-  AGENT_SCHEDULE_ENABLED: z.coerce.boolean().default(false),
+  AGENT_SCHEDULE_ENABLED: boolish(false),
   STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
   STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 
@@ -85,7 +107,7 @@ export const envSchema = z.object({
    */
   SETTINGS_ENCRYPTION_KEY: z.string().optional().default(''),
   /** Feature 12 plugins: allow MCP server URLs on private/loopback ranges (self-hosted). */
-  AI_PLUGINS_ALLOW_PRIVATE_URLS: z.coerce.boolean().default(false),
+  AI_PLUGINS_ALLOW_PRIVATE_URLS: boolish(false),
 
   /**
    * Web research (docs/features/25): the CEILING on how much of the open web
@@ -117,7 +139,7 @@ export const envSchema = z.object({
   WEB_SEARCH_URL: z.string().optional().default(''),
 
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
-  WEB_ALLOW_PRIVATE_URLS: z.coerce.boolean().default(false),
+  WEB_ALLOW_PRIVATE_URLS: boolish(false),
 
   /** Hard cap on a fetched page before extraction, so one huge URL cannot exhaust the process. */
   WEB_FETCH_MAX_BYTES: z.coerce.number().int().positive().default(2_000_000),
@@ -170,16 +192,16 @@ export const envSchema = z.object({
    * legitimate target, but the default refuses them because a URL typed into a
    * settings form is also the classic SSRF shape. Mirrors AI_PLUGINS_ALLOW_PRIVATE_URLS.
    */
-  CONNECTOR_ALLOW_PRIVATE_URLS: z.coerce.boolean().default(false),
+  CONNECTOR_ALLOW_PRIVATE_URLS: boolish(false),
   /** Items one sync run will touch, so a 50k-page space cannot pin a worker forever. */
   CONNECTOR_SYNC_MAX_ITEMS: z.coerce.number().int().positive().default(1_000),
   /** Wall-clock ceiling for one sync run. */
   CONNECTOR_SYNC_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
   /** Worker-side schedule sweeper for connectors with syncIntervalMinutes set. */
-  CONNECTOR_SCHEDULE_ENABLED: z.coerce.boolean().default(true),
+  CONNECTOR_SCHEDULE_ENABLED: boolish(true),
 
   /** Live tracked-entity updates over WebSocket (/v1/events/ws). */
-  LIVE_WS_ENABLED: z.coerce.boolean().default(true),
+  LIVE_WS_ENABLED: boolish(true),
   /** Server-side tracking configuration: comma-separated event types (exact or 'prefix.*'); '*' broadcasts everything. */
   LIVE_TRACKED_EVENTS: z.string().default('*'),
   /** Max concurrent workspace subscriptions per socket. */

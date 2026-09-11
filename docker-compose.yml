@@ -98,7 +98,11 @@ services:
   searxng:
     image: searxng/searxng:latest
     profiles: ["searxng"]
-    ports: ["8888:8080"]
+    # Loopback only. Its settings.yml runs with `limiter: false` (the API is
+    # called by this platform, not by browsers), so a 0.0.0.0 bind would put an
+    # unthrottled open metasearch proxy on the network — which gets abused, and
+    # then gets the instance blocked by the very upstreams it scrapes.
+    ports: ["127.0.0.1:8888:8080"]
     environment:
       SEARXNG_BASE_URL: "http://localhost:8888/"
     volumes:

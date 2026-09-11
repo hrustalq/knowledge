@@ -260,6 +260,7 @@
     "searchUnconfigured": "Web search is not configured on this deployment (WEB_SEARCH_URL is unset). Fetching a named URL still works.",
     "searchFailed": "The search backend did not answer. Fall back to the workspace rather than guessing.",
     "fetchStatus": "The page answered HTTP {status}.",
+    "fetchRedirects": "That address redirected too many times.",
     "fetchType": "That address returned {type}, not a readable page.",
     "fetchFailed": "The page could not be retrieved: {error}",
     "fetchEmpty": "The page was retrieved but had no readable text — it may be rendered entirely by scripts.",

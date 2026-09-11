@@ -347,6 +347,7 @@ export type I18nTranslations = {
             "searchUnconfigured": string;
             "searchFailed": string;
             "fetchStatus": string;
+            "fetchRedirects": string;
             "fetchType": string;
             "fetchFailed": string;
             "fetchEmpty": string;

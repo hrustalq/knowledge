@@ -3,7 +3,22 @@
 # The one setting that matters: `formats` must include `json`. It is off by
 # default upstream, and an instance without it answers 403 to every API query —
 # which looks exactly like a broken integration rather than a missing option.
-use_default_settings: true
+
+# Text engines only. The assistant reads pages; image, video and file-sharing
+# results are noise it cannot use, and each engine not queried is one fewer
+# upstream that can rate-limit the instance.
+#
+# This has to be `keep_only`, NOT a top-level `engines:` list. With
+# `use_default_settings: true`, a top-level list only *modifies* the engines it
+# names — it does not narrow the set, so every one of the ~80 defaults stays
+# live. The list below is the whole roster.
+use_default_settings:
+  engines:
+    keep_only:
+      - google
+      - duckduckgo
+      - wikipedia
+      - stackexchange
 
 server:
   # Dev-only value. Generate a real one for any shared deployment:
@@ -17,16 +32,3 @@ search:
   formats:
     - html
     - json
-
-# Text engines only. The assistant reads pages; image, video and file-sharing
-# results are noise it cannot use, and each disabled engine is one fewer
-# upstream that can rate-limit the instance.
-engines:
-  - name: google
-    disabled: false
-  - name: duckduckgo
-    disabled: false
-  - name: wikipedia
-    disabled: false
-  - name: stackexchange
-    disabled: false

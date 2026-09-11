@@ -25,6 +25,12 @@ export interface SafeUrlMessageKeys {
   private: string;
 }
 
+// ponytail: same TOCTOU as SourcePolicyService.resolvesPrivate — the name is
+// resolved here and again by whatever client dials it, so DNS rebinding slips
+// between the two. ceiling: catches a static record pointing inward, not a
+// record that changes between the check and the call. upgrade: fix both callers
+// at once with a shared IP-pinning dispatcher; see the marker in
+// source-policy.service.ts.
 export async function assertSafeExternalUrl(
   raw: string,
   allowPrivate: boolean,

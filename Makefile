@@ -266,10 +266,13 @@ env-validate: ## Validate apps/api/.env against the API's zod schema (fail-fast 
 # ---------------------------------------------------------------- smoke / e2e
 
 .PHONY: smoke
-smoke: ## Quick health check: api /docs, web /, arcadedb, minio, postgres, redis
+smoke: ## Quick health check: api /docs, web /, arcadedb, minio, postgres, redis, searxng
 	@curl -sfo /dev/null http://localhost:3000/docs   && echo "✔ api      :3000/docs"   || echo "✖ api      :3000 (make dev-api)"
 	@curl -sfo /dev/null http://localhost:5173/       && echo "✔ web      :5173"        || echo "✖ web      :5173 (make dev-web)"
 	@curl -sfo /dev/null http://localhost:2480/api/v1/ready && echo "✔ arcadedb :2480" || echo "✖ arcadedb :2480 (make infra-up)"
 	@curl -sfo /dev/null http://localhost:9000/minio/health/ready && echo "✔ minio    :9000" || echo "✖ minio    :9000 (make infra-up)"
 	@$(COMPOSE) exec -T postgres pg_isready -U knowledge >/dev/null 2>&1 && echo "✔ postgres :5432" || echo "✖ postgres :5432 (make infra-up)"
 	@$(COMPOSE) exec -T redis redis-cli ping >/dev/null 2>&1 && echo "✔ redis    :6379" || echo "✖ redis    :6379 (make infra-up)"
+	@# Queries the JSON API, not just the port: SearXNG ships with json off, and an
+	@# instance answering HTML to every API call looks exactly like a broken integration.
+	@curl -sf "http://localhost:8888/search?q=ping&format=json" >/dev/null 2>&1 && echo "✔ searxng  :8888 (json)" || echo "- searxng  :8888 optional (make infra-up-searxng)"

@@ -24,6 +24,8 @@ export interface WebToolResult {
 const MAX_PAGE_CHARS = 20_000;
 /** SearXNG returns dozens; the model needs a shortlist, not a results page. */
 const MAX_RESULTS = 8;
+/** Redirect hops followed by hand, each one policy-checked. */
+const MAX_REDIRECTS = 5;
 
 /**
  * The two web tools (docs/features/25).
@@ -129,27 +131,54 @@ export class WebResearchService {
     let html: string;
     let finalUrl: URL;
     try {
-      const response = await fetch(rawUrl, {
-        redirect: 'follow',
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: { accept: 'text/html,text/plain;q=0.9,*/*;q=0.1', 'user-agent': USER_AGENT },
-      });
-      if (!response.ok) return fail(t('error.web.fetchStatus', { status: response.status }));
+      // Every hop is decided, not just the last one. `redirect: 'follow'` lets
+      // undici connect to each intermediate itself, so a chain from an allowed
+      // domain to 169.254.169.254 issues that internal request and is refused
+      // only afterwards: the body is withheld, but the GET already happened,
+      // and a GET is not always free of consequence. Following by hand is what
+      // makes the policy a gate rather than a filter on the way out.
+      // One deadline for the whole chain, not one per hop: WEB_TIMEOUT_MS is
+      // the budget for retrieving *a page*, and a per-hop signal would let five
+      // redirects quietly spend five times it.
+      const deadline = AbortSignal.timeout(timeoutMs);
 
-      // A redirect can land somewhere the policy refuses, so the *final* URL is
-      // decided again rather than the original trusted — an allowed domain
-      // redirecting to a blocked one is the obvious way around one check.
-      finalUrl = new URL(response.url || rawUrl);
-      if (finalUrl.href !== rawUrl) {
-        const after = await this.policies.decide(workspaceId, finalUrl.href, mode);
-        if (!after.ok) return deny(after.reason, after.detail);
+      let target = rawUrl;
+      let response: Response;
+      for (let hop = 0; ; hop += 1) {
+        response = await fetch(target, {
+          redirect: 'manual',
+          signal: deadline,
+          headers: { accept: 'text/html,text/plain;q=0.9,*/*;q=0.1', 'user-agent': USER_AGENT },
+        });
+
+        const location = response.headers.get('location');
+        if (response.status < 300 || response.status >= 400 || !location) break;
+
+        // An unread body holds its connection open until GC; we are about to
+        // abandon this one for the next hop.
+        await response.body?.cancel().catch(() => {});
+        if (hop >= MAX_REDIRECTS) return fail(t('error.web.fetchRedirects'));
+
+        // Relative Location headers are legal and common.
+        target = new URL(location, target).href;
+        const next = await this.policies.decide(workspaceId, target, mode);
+        if (!next.ok) return deny(next.reason, next.detail);
       }
+
+      // Both of these abandon the body, so both release it first — readCapped
+      // is the only path below that reads one, and it cancels its own.
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        return fail(t('error.web.fetchStatus', { status: response.status }));
+      }
+      finalUrl = new URL(target);
 
       const type = response.headers.get('content-type') ?? '';
       if (!/text\/html|text\/plain|application\/xhtml/i.test(type)) {
+        await response.body?.cancel().catch(() => {});
         return fail(t('error.web.fetchType', { type: type.split(';')[0] || 'unknown' }));
       }
-      html = (await response.text()).slice(0, maxBytes);
+      html = await readCapped(response, maxBytes);
     } catch (err) {
       return fail(t('error.web.fetchFailed', { error: err instanceof Error ? err.message : String(err) }));
     }
@@ -226,6 +255,37 @@ export class WebResearchService {
 }
 
 const USER_AGENT = 'knowledge-platform/1.0 (+web research; docs/features/25)';
+
+/**
+ * Read at most `maxBytes` off the body, then drop the connection.
+ *
+ * `response.text()` buffers the whole body and only then slices, so the cap
+ * bounded nothing that mattered: a server streaming without end was limited
+ * only by the request timeout, which is fifteen seconds of whatever it cares
+ * to send. Counting bytes off the stream is what the setting's name already
+ * claims — and it counts *bytes*, where slicing the decoded string counted
+ * UTF-16 units and so let a Cyrillic page through at roughly twice the cap.
+ *
+ * A cut mid-sequence leaves one replacement char at the end; TextDecoder is
+ * non-fatal by default and the extraction step never sees the difference.
+ */
+async function readCapped(response: Response, maxBytes: number): Promise<string> {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks, Math.min(total, maxBytes)));
+}
 
 /** The host as a reader recognises it — `docs.example.com`, never `www.`. */
 export function displayHost(url: URL): string {

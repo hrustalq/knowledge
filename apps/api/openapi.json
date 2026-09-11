@@ -15722,6 +15722,7 @@
           "type": {
             "type": "string",
             "enum": [
+              "FETCH",
               "APPROVE",
               "SKIP",
               "REJECT",
@@ -15746,6 +15747,7 @@
             "enum": [
               "PAUSE",
               "RESUME",
+              "FILL",
               "NEXT",
               "CANCEL",
               "APPROVE_ALL"

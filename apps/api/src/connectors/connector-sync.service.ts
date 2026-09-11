@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, type Connector, type ConnectorLink, type ConnectorRun } from '@prisma/client';
+import { Prisma, type Connector, type ConnectorLink, type ConnectorRun, type ConnectorRunItem } from '@prisma/client';
 import type { ConnectorRunPhase } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -11,6 +11,7 @@ import { ConnectorsService, MAX_WARNINGS } from './connectors.service.js';
 import { ConnectorDiscoveryService } from './connector-discovery.service.js';
 import { sha256 } from './connector-markdown.js';
 import { ConnectorStagingService } from './connector-staging.service.js';
+import type { ConnectorTask } from './connector.producer.js';
 import type { ConnectorAdapter, ConnectorContext } from './adapters/connector.types.js';
 
 /** Stage writes are throttled the way ImportProcessor throttles its own. */
@@ -174,32 +175,7 @@ export class ConnectorSyncService {
       });
 
       if (pending.length > 0) {
-        const links = await this.linksByExternalId(row.id);
-        const total = Math.max(runRow.discovered, 1);
-
-        for (const item of pending) {
-          const claimed = await this.prisma.connectorRunItem.updateMany({
-            where: { id: item.id, status: 'discovered' },
-            data: { status: 'fetching' },
-          });
-          if (claimed.count !== 1) continue;
-
-          const done = await this.prisma.connectorRunItem.count({
-            where: { runId: runRow.id, status: { notIn: ['discovered', 'fetching'] } },
-          });
-          await onStage(t('connector.stage.fetching', { title: item.title }), done / total);
-
-          try {
-            const outcome = await this.staging.stage(row, runRow, adapter, ctx, item, links.get(item.externalId) ?? null);
-            if (outcome.unchanged) totals.skipped += 1;
-          } catch (err) {
-            totals.failed += 1;
-            pushWarning(warnings, item.externalId, item.title, (err as Error).message.slice(0, 500));
-            await this.failItem(item.id, (err as Error).message);
-            ctx.debug('item: failed', { id: item.externalId, error: (err as Error).message });
-          }
-        }
-
+        await this.stageBatch(row, runRow, adapter, ctx, onStage, pending, totals, warnings);
         await this.checkpoint(runRow.id, totals, warnings);
         // A stepping run hands control back after each page.
         if (runRow.mode === 'step') return this.parkForReview(row, runRow, totals, warnings);
@@ -229,28 +205,7 @@ export class ConnectorSyncService {
       });
 
       if (approved.length > 0) {
-        for (const item of approved) {
-          const claimed = await this.prisma.connectorRunItem.updateMany({
-            where: { id: item.id, status: 'approved' },
-            data: { status: 'applying' },
-          });
-          if (claimed.count !== 1) continue;
-
-          await onStage(t('connector.stage.writing', { title: item.title }), null);
-          try {
-            await this.staging.apply(row, runRow, item);
-            if (item.action === 'create') totals.created += 1;
-            else if (item.action === 'conflict') totals.conflicts += 1;
-            else if (item.action === 'update') totals.updated += 1;
-            if (item.action !== 'unchanged') totals.applied += 1;
-          } catch (err) {
-            totals.failed += 1;
-            pushWarning(warnings, item.externalId, item.title, (err as Error).message.slice(0, 500));
-            await this.failItem(item.id, (err as Error).message);
-            ctx.debug('item: apply failed', { id: item.externalId, error: (err as Error).message });
-          }
-        }
-
+        await this.applyBatch(row, runRow, ctx, onStage, approved, totals, warnings);
         await this.checkpoint(runRow.id, totals, warnings);
         return { done: false };
       }
@@ -268,6 +223,201 @@ export class ConnectorSyncService {
 
     // 'awaiting-review' / 'reverting' are not the worker's to advance.
     return { done: true };
+  }
+
+  // --- the two units of work ---
+
+  /**
+   * Fetch a batch of discovered items and decide what each would do.
+   *
+   * Shared by the `fetching` phase and by a scoped `fill` task, so filling a
+   * chosen branch is the same code as filling the whole tree — the feature's own
+   * rule that a reviewed import must not become a second implementation.
+   */
+  private async stageBatch(
+    row: Connector,
+    runRow: ConnectorRun,
+    adapter: ConnectorAdapter,
+    ctx: ConnectorContext,
+    onStage: (stage: string, progress?: number | null) => Promise<void>,
+    items: ConnectorRunItem[],
+    totals: RunTotals,
+    warnings: RunWarning[],
+  ): Promise<void> {
+    const links = await this.linksByExternalId(row.id);
+    const total = Math.max(runRow.discovered, 1);
+
+    for (const item of items) {
+      // The per-item claim is the mutex: a scoped fill racing the walk (or
+      // another fill) loses the row rather than fetching it twice.
+      const claimed = await this.prisma.connectorRunItem.updateMany({
+        where: { id: item.id, status: 'discovered' },
+        data: { status: 'fetching' },
+      });
+      if (claimed.count !== 1) continue;
+
+      const done = await this.prisma.connectorRunItem.count({
+        where: { runId: runRow.id, status: { notIn: ['discovered', 'fetching'] } },
+      });
+      await onStage(t('connector.stage.fetching', { title: item.title }), done / total);
+
+      try {
+        const outcome = await this.staging.stage(row, runRow, adapter, ctx, item, links.get(item.externalId) ?? null);
+        if (outcome.unchanged) totals.skipped += 1;
+      } catch (err) {
+        totals.failed += 1;
+        pushWarning(warnings, item.externalId, item.title, (err as Error).message.slice(0, 500));
+        await this.failItem(item.id, (err as Error).message);
+        ctx.debug('item: failed', { id: item.externalId, error: (err as Error).message });
+      }
+    }
+  }
+
+  /** Write a batch of approved items. Shared by the `applying` phase and a scoped `apply` task. */
+  private async applyBatch(
+    row: Connector,
+    runRow: ConnectorRun,
+    ctx: ConnectorContext,
+    onStage: (stage: string, progress?: number | null) => Promise<void>,
+    items: ConnectorRunItem[],
+    totals: RunTotals,
+    warnings: RunWarning[],
+  ): Promise<void> {
+    for (const item of items) {
+      const claimed = await this.prisma.connectorRunItem.updateMany({
+        where: { id: item.id, status: 'approved' },
+        data: { status: 'applying' },
+      });
+      if (claimed.count !== 1) continue;
+
+      await onStage(t('connector.stage.writing', { title: item.title }), null);
+      try {
+        await this.staging.apply(row, runRow, item);
+        if (item.action === 'create') totals.created += 1;
+        else if (item.action === 'conflict') totals.conflicts += 1;
+        else if (item.action === 'update') totals.updated += 1;
+        if (item.action !== 'unchanged') totals.applied += 1;
+      } catch (err) {
+        totals.failed += 1;
+        pushWarning(warnings, item.externalId, item.title, (err as Error).message.slice(0, 500));
+        await this.failItem(item.id, (err as Error).message);
+        ctx.debug('item: apply failed', { id: item.externalId, error: (err as Error).message });
+      }
+    }
+  }
+
+  /**
+   * One scoped pass over a run, asked for by a person (docs/features/26).
+   *
+   * `fill` reads the named items; `apply` writes whatever is already approved.
+   * Deliberately writes no `status`, no `phase` and no `cursor`, and calls
+   * neither `finish()` nor `parkForReview()` — a paused run must come out of
+   * this still paused, with its discovery frontier exactly where it was. That is
+   * the whole point: the walk is stopped, but the pages it already found are
+   * not held hostage to it.
+   *
+   * Returns the task still to do when the time budget runs out, so the processor
+   * can re-enqueue the remainder, or `null` when there is nothing left.
+   */
+  async runTask(
+    row: Connector,
+    runRow: ConnectorRun,
+    task: ConnectorTask,
+    deadline: number,
+    signal?: AbortSignal,
+  ): Promise<ConnectorTask | null> {
+    const warnings = readWarnings(runRow);
+    const totals: RunTotals = {
+      created: runRow.created,
+      updated: runRow.updated,
+      skipped: runRow.skipped,
+      failed: runRow.failed,
+      conflicts: runRow.conflicts,
+      applied: runRow.applied,
+    };
+
+    let lastStageWrite = 0;
+    const onStage = async (stage: string, progress?: number | null): Promise<void> => {
+      const now = Date.now();
+      if (now - lastStageWrite < STAGE_THROTTLE_MS) return;
+      lastStageWrite = now;
+      await this.prisma.connectorRun
+        .update({ where: { id: runRow.id }, data: { stage, progress: progress ?? null } })
+        .catch(() => undefined);
+    };
+
+    const adapter = this.connectors.adapterFor(row);
+    const ctx = await this.connectors.contextFor(row, onStage, signal);
+
+    try {
+      return task.kind === 'fill'
+        ? await this.fillTask(row, runRow, adapter, ctx, onStage, task.itemIds, totals, warnings, deadline)
+        : await this.applyTask(row, runRow, ctx, onStage, totals, warnings, deadline);
+    } finally {
+      await this.checkpoint(runRow.id, totals, warnings);
+      // The stage line described this pass, not the run. Leaving it behind would
+      // have a paused run permanently claiming to be fetching something.
+      await this.prisma.connectorRun
+        .update({ where: { id: runRow.id }, data: { stage: null, progress: null } })
+        .catch(() => undefined);
+    }
+  }
+
+  private async fillTask(
+    row: Connector,
+    runRow: ConnectorRun,
+    adapter: ConnectorAdapter,
+    ctx: ConnectorContext,
+    onStage: (stage: string, progress?: number | null) => Promise<void>,
+    itemIds: string[],
+    totals: RunTotals,
+    warnings: RunWarning[],
+    deadline: number,
+  ): Promise<ConnectorTask | null> {
+    let rest = itemIds;
+    while (rest.length > 0) {
+      const slice = rest.slice(0, this.batchSize);
+      rest = rest.slice(this.batchSize);
+
+      // Re-read rather than trusting the ids: a row the walk reached first is no
+      // longer `discovered`, and `stageBatch`'s claim would skip it anyway.
+      const items = await this.prisma.connectorRunItem.findMany({
+        where: { id: { in: slice }, runId: runRow.id, status: 'discovered' },
+        orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+      });
+      if (items.length > 0) {
+        await this.stageBatch(row, runRow, adapter, ctx, onStage, items, totals, warnings);
+        await this.checkpoint(runRow.id, totals, warnings);
+      }
+
+      if (rest.length > 0 && Date.now() > deadline) return { kind: 'fill', itemIds: rest };
+    }
+    return null;
+  }
+
+  private async applyTask(
+    row: Connector,
+    runRow: ConnectorRun,
+    ctx: ConnectorContext,
+    onStage: (stage: string, progress?: number | null) => Promise<void>,
+    totals: RunTotals,
+    warnings: RunWarning[],
+    deadline: number,
+  ): Promise<ConnectorTask | null> {
+    for (;;) {
+      const approved = await this.prisma.connectorRunItem.findMany({
+        where: { runId: runRow.id, status: 'approved' },
+        // Parents first: a child needs its parent's document id to nest under.
+        orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+        take: this.batchSize,
+      });
+      if (approved.length === 0) return null;
+
+      await this.applyBatch(row, runRow, ctx, onStage, approved, totals, warnings);
+      await this.checkpoint(runRow.id, totals, warnings);
+
+      if (Date.now() > deadline) return { kind: 'apply' };
+    }
   }
 
   /** Hand the run to a person and stop asking for slices. */

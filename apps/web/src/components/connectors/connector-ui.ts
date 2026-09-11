@@ -151,6 +151,7 @@ export const PHASE_LABEL: Record<ConnectorRunPhase, string> = {
 
 /** The per-item buttons. Which ones are *legal* comes from `allowedItemEvents`. */
 export const ITEM_EVENT_LABEL: Record<ConnectorItemEventType, string> = {
+  FETCH: 'connectors.event.fetch',
   APPROVE: 'connectors.event.approve',
   SKIP: 'connectors.event.skip',
   REJECT: 'connectors.event.reject',
@@ -159,13 +160,28 @@ export const ITEM_EVENT_LABEL: Record<ConnectorItemEventType, string> = {
 }
 
 /**
- * The same two verbs, said of a whole branch.
+ * The one per-item verb that renders as a glyph alone.
+ *
+ * Every other verb is read in a row of verbs, where a word is faster than a
+ * symbol nobody has learned yet. Revert is never in that row: it is the only
+ * thing offered on an `applied` item, so there is no vocabulary to tell it
+ * apart from — and it is the widest word in the set in Russian, on a column
+ * that has no width to spare. The label stays as its tooltip and its
+ * accessible name, so nothing is actually lost.
+ */
+export const ITEM_EVENT_ICON: Partial<Record<ConnectorItemEventType, Component>> = {
+  REVERT: Undo2,
+}
+
+/**
+ * The same three verbs, said of a whole branch.
  *
  * Separate messages rather than a label plus an appended "(subtree)": Russian
  * needs a case the English fragment does not carry, and a composed sentence is
  * translated whole (docs/features/18).
  */
 export const SUBTREE_EVENT_LABEL = {
+  FETCH: 'connectors.event.fetchSubtree',
   APPROVE: 'connectors.event.approveSubtree',
   SKIP: 'connectors.event.skipSubtree',
 } as const
@@ -173,6 +189,7 @@ export const SUBTREE_EVENT_LABEL = {
 export const RUN_EVENT_LABEL = {
   PAUSE: 'connectors.event.pause',
   RESUME: 'connectors.event.resume',
+  FILL: 'connectors.event.fill',
   NEXT: 'connectors.event.next',
   CANCEL: 'connectors.event.cancel',
   APPROVE_ALL: 'connectors.event.approveAll',

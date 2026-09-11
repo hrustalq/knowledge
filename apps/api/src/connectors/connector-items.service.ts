@@ -18,9 +18,10 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectCascadeService } from '../projects/project-cascade.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { ConnectorProducer } from './connector.producer.js';
+import type { RunWarning } from './connector-sync.service.js';
 import type { ItemDraft } from './connector-staging.service.js';
 import { sha256 } from './connector-markdown.js';
-import { toRunInfo } from './connectors.service.js';
+import { MAX_WARNINGS, toRunInfo } from './connectors.service.js';
 
 /**
  * Everything a person does to a staged import (docs/features/26).
@@ -70,7 +71,10 @@ export class ConnectorItemsService {
     const incoming = incomingRaw !== null && incomingRaw !== markdown ? incomingRaw : null;
 
     let localHead: string | null = null;
-    if (item.documentId && (item.action === 'conflict' || item.action === 'update')) {
+    // `unchanged` is included deliberately. It writes no staged copy at all —
+    // the two sides already agree — so without the page itself the review pane
+    // has nothing to show, and on a second sync almost every row is `unchanged`.
+    if (item.documentId && (item.action === 'conflict' || item.action === 'update' || item.action === 'unchanged')) {
       localHead = await this.documents
         .getContent(item.documentId)
         .then((c) => c.markdown)
@@ -123,6 +127,24 @@ export class ConnectorItemsService {
     const root = await this.requireItem(runId, itemId);
     const targets = subtree ? await this.subtreeOf(runId, root) : [root];
 
+    // Filling is the one event the API does not perform: it needs the adapter,
+    // and a branch can be hundreds of pages. The rows are left exactly as they
+    // are and a scoped `fill` task claims them one at a time, so this works on a
+    // paused run without disturbing the walk it was paused in.
+    if (type === 'FETCH') {
+      const fillable = targets.filter((i) => i.status === 'discovered');
+      if (fillable.length === 0) {
+        if (subtree) return { items: [], run: await this.runInfo(runId) };
+        throw new ConflictException(t('error.connector.itemEvent', { status: root.status }));
+      }
+      await this.producer.enqueueTask(
+        runId,
+        { kind: 'fill', itemIds: fillable.map((i) => i.id) },
+        String(Date.now()),
+      );
+      return { items: fillable.map(toItemInfo), run: await this.runInfo(runId) };
+    }
+
     const touched: ConnectorRunItem[] = [];
     // Deepest first: a revert must remove children before their parent, and for
     // every other event the order is harmless.
@@ -145,6 +167,9 @@ export class ConnectorItemsService {
 
   private async applyItemEvent(item: ConnectorRunItem, type: ConnectorItemEventType): Promise<ConnectorRunItem> {
     switch (type) {
+      case 'FETCH':
+        // Handled before the loop: it enqueues rather than writing a row.
+        return item;
       case 'APPROVE':
         // Marked only: the worker writes. One apply path for reviewed and
         // unattended runs alike, so the reviewed one is not a second
@@ -242,6 +267,8 @@ export class ConnectorItemsService {
       status: run.status as never,
       mode: run.mode as ConnectorSyncMode,
       awaitingReview: awaiting,
+      phase: run.phase as never,
+      discovered: run.discovered,
     });
     if (!legal.includes(type)) {
       throw new ConflictException(t('error.connector.runEvent', { status: run.status }));
@@ -266,6 +293,40 @@ export class ConnectorItemsService {
         await this.producer.enqueueRetry(runId, String(run.discovered + run.applied + 1));
         await this.publishRun(run, 'connector.run.resumed');
         break;
+      case 'FILL': {
+        // Stop walking and work with what the walk found. Moving the phase
+        // pointer past `discovering` is what ends the walk: it is only ever read
+        // forwards, so discovery never resumes. The frontier is deliberately
+        // left in `cursor` — unused, but it is the record of what went unread,
+        // and `finish()` clears it.
+        const unwalked = Array.isArray(run.cursor) ? (run.cursor as unknown[]).length : 0;
+        const warnings = readWarnings(run);
+        if (unwalked > 0 && warnings.length < MAX_WARNINGS) {
+          // A lossy import that says nothing is the failure this feature exists
+          // to prevent, and stopping the walk is exactly that kind of loss.
+          warnings.push({
+            externalId: null,
+            title: null,
+            message: t('connector.warning.discoveryStopped', { count: unwalked }),
+          });
+        }
+        await this.prisma.connectorRun.update({
+          where: { id: runId },
+          data: {
+            status: 'queued',
+            phase: 'fetching',
+            warnings: warnings as unknown as Prisma.InputJsonValue,
+          },
+        });
+        // Salted by clock rather than by the run's counters, which every other
+        // event uses to collapse a double-click. Those counters do not move when
+        // the phase does, so a FILL issued just after a RESUME would carry that
+        // job's id, be dropped as a duplicate, and leave the run `queued` with
+        // nothing coming for it.
+        await this.producer.enqueueRetry(runId, `fill-${Date.now()}`);
+        await this.publishRun(run, 'connector.run.resumed');
+        break;
+      }
       case 'NEXT':
         await this.prisma.connectorRun.update({
           where: { id: runId },
@@ -291,21 +352,36 @@ export class ConnectorItemsService {
     return this.runInfo(runId);
   }
 
-  /** An approval on a parked run is what sets it going again. */
-  private async resume(runId: string, type: ConnectorItemEventType): Promise<ConnectorRunInfo> {
-    if (type === 'APPROVE') {
-      const run = await this.requireRun(runId);
-      if (run.status === 'awaiting-review') await this.startApplying(runId, run);
-    }
-    return this.runInfo(runId);
-  }
-
+  /**
+   * Write what is approved.
+   *
+   * A paused run gets a scoped `apply` task instead of the phase flip: it must
+   * come out of this still paused, with its discovery frontier where it was.
+   * Approval is a person's decision about one page, not an instruction to
+   * restart the walk they stopped.
+   */
   private async startApplying(runId: string, run: ConnectorRun): Promise<void> {
+    if (run.status === 'paused') {
+      await this.producer.enqueueTask(runId, { kind: 'apply' }, String(Date.now()));
+      return;
+    }
     await this.prisma.connectorRun.update({
       where: { id: runId },
       data: { status: 'queued', phase: 'applying' },
     });
     await this.producer.enqueueRetry(runId, String(run.discovered + run.applied + 1));
+  }
+
+  /**
+   * An approval is what sets a parked run going again — and now a paused one
+   * too, where `startApplying` writes without lifting the pause.
+   */
+  private async resume(runId: string, type: ConnectorItemEventType): Promise<ConnectorRunInfo> {
+    if (type === 'APPROVE') {
+      const run = await this.requireRun(runId);
+      if (run.status === 'awaiting-review' || run.status === 'paused') await this.startApplying(runId, run);
+    }
+    return this.runInfo(runId);
   }
 
   // --- helpers ---
@@ -397,6 +473,6 @@ export function toItemInfo(row: ConnectorRunItem): ConnectorRunItemInfo {
   };
 }
 
-function readWarnings(run: ConnectorRun): Array<{ externalId: string | null; message: string }> {
-  return Array.isArray(run.warnings) ? (run.warnings as unknown as Array<{ externalId: string | null; message: string }>) : [];
+function readWarnings(run: ConnectorRun): RunWarning[] {
+  return Array.isArray(run.warnings) ? (run.warnings as unknown as RunWarning[]) : [];
 }

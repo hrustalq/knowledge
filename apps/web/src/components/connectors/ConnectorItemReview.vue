@@ -23,6 +23,7 @@ import { useI18n } from 'vue-i18n'
 import {
   AlertTriangle,
   ChevronDown,
+  CloudDownload,
   ExternalLink,
   FileText,
   GitMerge,
@@ -50,7 +51,7 @@ const props = defineProps<{
   aiBusy: 'cleanup' | 'merge' | null
 }>()
 
-const emit = defineEmits<{ ai: ['cleanup' | 'merge'] }>()
+const emit = defineEmits<{ ai: ['cleanup' | 'merge']; fetch: [] }>()
 
 const title = defineModel<string>('title', { required: true })
 const markdown = defineModel<string>('markdown', { required: true })
@@ -60,6 +61,20 @@ const documents = useDocumentsStore()
 
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
 const warningsOpen = ref(false)
+
+/**
+ * The two states that have no staged copy at all, and so have nothing for the
+ * editor to show.
+ *
+ * `discovered` is the walk having found this page without reading it — which is
+ * the normal state of most of the tree while a run is discovering, and of all of
+ * it on a paused walk. `unchanged` is the two sides already agreeing, so nothing
+ * was ever staged; on a second sync that is nearly every row. Both used to land
+ * on an empty editor captioned "the conversion produced no text", which is false
+ * in the first case and misleading in the second.
+ */
+const notFetched = computed(() => props.item.status === 'discovered')
+const agreed = computed(() => props.item.status === 'unchanged')
 
 const isConflict = computed(() => props.item.action === 'conflict')
 /** Only a conflict has a second side worth reading first. */
@@ -83,7 +98,10 @@ const editable = computed(() => props.canManage && props.item.status === 'staged
  */
 const compare = computed<CompareResponse | null>(() => {
   const left = props.localHead
-  if (left === null) return null
+  // Nothing staged means there is no second side. Diffing the page against an
+  // empty string would report every line deleted, which is the opposite of what
+  // these two states mean.
+  if (left === null || notFetched.value || agreed.value) return null
   const { hunks, additions, deletions } = lineDiff(left, markdown.value)
   return {
     documentId: props.item.documentId ?? '',
@@ -142,6 +160,36 @@ defineExpose({
             <p class="text-muted-foreground text-sm">{{ t('connectors.diffCaption') }}</p>
           </header>
           <DiffView :compare="compare" />
+        </div>
+      </div>
+
+      <!-- The walk found this page but has not read it. Filling one page (or one
+           branch, from the tree) is what makes a stopped walk workable, so the
+           way out of this state is offered here rather than only in the tree. -->
+      <div v-else-if="notFetched" class="grid h-full place-items-center px-6">
+        <div class="max-w-sm space-y-3 text-center">
+          <CloudDownload class="text-muted-foreground mx-auto size-8" aria-hidden="true" />
+          <h2 class="font-medium">{{ t('connectors.notFetchedTitle') }}</h2>
+          <p class="text-muted-foreground text-sm">{{ t('connectors.notFetchedBody') }}</p>
+          <Button v-if="canManage" variant="outline" size="sm" @click="emit('fetch')">
+            {{ t('connectors.event.fetch') }}
+          </Button>
+        </div>
+      </div>
+
+      <!-- Both sides already agree, so nothing was staged and nothing would be
+           written. The page itself is what there is to show — an empty pane here
+           reads as a failed conversion, which is the opposite of the truth. -->
+      <div v-else-if="agreed" class="flex h-full min-h-0 flex-col">
+        <p class="text-muted-foreground shrink-0 border-b px-6 py-2 text-xs lg:px-10">
+          {{ t('connectors.agreedNote') }}
+        </p>
+        <div class="min-h-0 flex-1">
+          <RichEditor :model-value="localHead ?? ''" :editable="false" :pages="mentionablePages">
+            <template #lede>
+              <h1 class="kn-title-input">{{ title }}</h1>
+            </template>
+          </RichEditor>
         </div>
       </div>
 

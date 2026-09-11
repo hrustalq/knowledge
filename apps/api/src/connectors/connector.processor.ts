@@ -9,9 +9,9 @@ import { asLocale } from '../i18n/locale.js';
 import { withLocale } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CONNECTOR_QUEUE } from './connector.constants.js';
-import { ConnectorProducer, type ConnectorJobData } from './connector.producer.js';
+import { ConnectorProducer, type ConnectorJobData, type ConnectorTask } from './connector.producer.js';
 import { ConnectorSyncService } from './connector-sync.service.js';
-import { ConnectorsService } from './connectors.service.js';
+import { ConnectorsService, MAX_WARNINGS } from './connectors.service.js';
 
 /**
  * Runs one sync (docs/features/19, sliced by 26).
@@ -50,8 +50,71 @@ export class ConnectorProcessor extends WorkerHost {
       this.logger.warn(`Connector run ${job.data.runId} not found — skipping`);
       return;
     }
+    const task = job.data.task;
     // Everything below runs in the language the connector was configured in.
-    return withLocale(asLocale(run.locale), () => this.execute(run.id));
+    return withLocale(asLocale(run.locale), () =>
+      task ? this.executeTask(run.id, task) : this.execute(run.id),
+    );
+  }
+
+  /**
+   * A scoped pass somebody asked for: fill these items, or write what is
+   * approved (docs/features/26).
+   *
+   * Deliberately skips the `status: 'queued'` claim the run's own slices take.
+   * A task does not advance the run and must be able to act on a *paused* one —
+   * claiming it would un-pause the very walk the person stopped. Concurrency is
+   * still safe: the per-item claim inside the batch helpers is the mutex.
+   */
+  private async executeTask(runId: string, task: ConnectorTask): Promise<void> {
+    const run = await this.prisma.connectorRun.findUniqueOrThrow({ where: { id: runId } });
+    if (run.status === 'cancelled' || run.completedAt !== null) {
+      this.logger.log(`Connector run ${runId} is finished — dropping ${task.kind} task`);
+      return;
+    }
+
+    const connector = await this.prisma.connector.findUnique({ where: { id: run.connectorId } });
+    if (!connector) return;
+
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), this.timeoutMs);
+    const yieldAt = Date.now() + this.timeoutMs * 0.9;
+
+    try {
+      const next = await this.sync.runTask(connector, run, task, yieldAt, abort.signal);
+      if (next) {
+        await this.producer.enqueueTask(runId, next, String(Date.now()));
+        this.logger.log(`Connector run ${runId} ${task.kind} task checkpointed and re-enqueued`);
+      }
+    } catch (err) {
+      // Written to the run's warnings rather than failing it: a task is work
+      // beside the run, and losing a fill must not mark a paused walk failed.
+      const message = abort.signal.aborted
+        ? `the ${task.kind} pass exceeded ${Math.round(this.timeoutMs / 1000)}s and was stopped`
+        : (err as Error).message;
+      this.logger.error(`Connector run ${runId} ${task.kind} task failed: ${message}`);
+      await this.warn(runId, message);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Append one warning to the run, leaving its status alone. */
+  private async warn(runId: string, message: string): Promise<void> {
+    const run = await this.prisma.connectorRun.findUnique({ where: { id: runId } });
+    if (!run) return;
+    const warnings = Array.isArray(run.warnings) ? (run.warnings as unknown[]) : [];
+    await this.prisma.connectorRun
+      .update({
+        where: { id: runId },
+        data: {
+          warnings: [...warnings, { externalId: null, title: null, message: message.slice(0, 500) }].slice(
+            0,
+            MAX_WARNINGS,
+          ) as unknown as Prisma.InputJsonValue,
+        },
+      })
+      .catch(() => undefined);
   }
 
   private async execute(runId: string): Promise<void> {

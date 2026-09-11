@@ -20,7 +20,9 @@
     "documentMissing": "The linked page no longer exists; the link was removed.",
     "conflict": "Both sides changed — a merge request was opened instead of overwriting.",
     "orphan": "Reached by listing the space, not by walking the tree - its parent may not be visible to this connector.",
-    "orphansFound": "{count} page(s) were not reachable through the page tree and were added at the top level."
+    "orphansFound": "{count} page(s) were not reachable through the page tree and were added at the top level.",
+    "discoveryStopped": "The page tree walk was stopped by request; {count} branch(es) were left unread.",
+    "reRooted": "Filed at the connector's destination: the page above this one has not been imported."
   },
   "pushVersionMessage": "Updated from the knowledge base",
   "syncRevisionMessage": "Synced from a connector",

@@ -27,7 +27,7 @@
  * poll is the floor rather than the mechanism, and it stops the moment the run
  * reaches a terminal state.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -124,7 +124,10 @@ const selectedId = ref<string | null>(null)
  */
 watch(items, (list) => {
   if (selectedId.value && list.some((i) => i.id === selectedId.value)) return
-  selectedId.value = list.find((i) => i.status === 'staged')?.id ?? null
+  // Falling back to the first row matters for a stopped walk: nothing is staged
+  // yet, and landing on nothing would say the run has nothing in it when it has
+  // a whole tree waiting to be filled.
+  selectedId.value = (list.find((i) => i.status === 'staged') ?? list[0])?.id ?? null
 })
 
 const selected = computed(() => items.value.find((i) => i.id === selectedId.value) ?? null)
@@ -151,17 +154,28 @@ const dirty = ref(false)
  * Seed the fields from the server copy exactly once per item — a late poll must
  * not overwrite what the reviewer is typing. The same rule as the import
  * wizard's, and for the same reason, except that here the polling is constant.
+ *
+ * `seeding` is what keeps that rule from eating itself: the seed assigns to the
+ * very refs the dirty-watcher watches, so without the flag, opening a page
+ * marked it unsaved before anyone had touched it — which then made the `dirty`
+ * guard permanent, and no later poll could ever re-seed the pane.
  */
+let seeding = false
 watch(detail, (d) => {
   if (!d || d.item.id !== selectedId.value) return
   if (dirty.value) return
+  seeding = true
   title.value = d.item.title
   markdown.value = d.markdown
+  void nextTick(() => {
+    seeding = false
+  })
 })
 watch(selectedId, () => {
   dirty.value = false
 })
 watch([title, markdown], () => {
+  if (seeding) return
   if (detail.value && detail.value.item.id === selectedId.value) dirty.value = true
 })
 
@@ -224,7 +238,13 @@ async function itemEvent(payload: { itemId: string; type: ConnectorItemEventType
       path: { runId: runId.value, itemId: payload.itemId },
       body: { type: payload.type, subtree: payload.subtree },
     })
-    if (payload.subtree) {
+    // A fill is queued rather than performed, so the rows do not move until the
+    // worker claims them — without a word here the click looks like it missed.
+    // It deliberately carries no count: only the rows still unread are filled,
+    // which is not the size of the branch that was clicked.
+    if (payload.type === 'FETCH') {
+      toast.success(t('connectors.fetchQueued'))
+    } else if (payload.subtree) {
       const n = descendantsOf(items.value, payload.itemId).length + 1
       toast.success(t('connectors.subtreeDone', { count: n }, n))
     }
@@ -371,7 +391,13 @@ const showRing = computed(() => items.value.length === 0 && run.value !== null &
           />
         </div>
 
-        <div class="min-w-0 flex-1">
+        <!-- A flex column, not a plain block: `.kn-page-body` sizes itself with
+             `flex: 1; min-height: 0`, which does nothing under a block parent —
+             the editor then grew to its content's height and its scroll
+             container was never constrained, so a long page could not be
+             scrolled at all. `ImportPage` hosts the same shell in `flex h-full`
+             for this reason. -->
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
           <ConnectorItemReview
             v-if="selected && detail && detail.item.id === selected.id"
             ref="reviewRef"
@@ -383,6 +409,7 @@ const showRing = computed(() => items.value.length === 0 && run.value !== null &
             :can-manage="canManage"
             :ai-busy="aiBusy"
             @ai="runAi"
+            @fetch="itemEvent({ itemId: selected.id, type: 'FETCH', subtree: false })"
           />
           <div v-else-if="selected && detailQuery.isPending.value" class="space-y-2 p-6">
             <Skeleton class="h-8 w-2/3" />

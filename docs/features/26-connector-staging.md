@@ -16,6 +16,7 @@ than in degree:
 | A run was counters on a row           | **Every page is a row** — `connector_run_items`, self-FK `parent_item_id`    |
 | Pages were written as they were read  | `sync_mode` `auto` \| `review` \| `step`, with a real **pause**              |
 | A bad import was somebody's afternoon | **Revert**, per page or per branch                                           |
+| A stopped walk was a dead run         | **Fill** what it found — all of it, or one node or branch — while paused    |
 
 The backend shipped first; this feature is the surface over it. Nothing about
 `auto` mode changed, and `preserve_hierarchy` defaults to **false**, so a
@@ -87,6 +88,38 @@ while an updated one is restored by writing a **new** revision. Revisions are
 immutable; undoing an edit by deleting one would be the first place in the
 product that violated it. The link's hashes roll back too, or the next sync would
 immediately redo the undo.
+
+**A pause stops the walk, not the review.** Content is read in a phase that
+begins only once the whole tree is walked, so a run paused during discovery used
+to be hundreds of rows with no content and nothing anyone could do — and
+approving a page while paused marked it `approved` and never wrote it, because
+applying started only from `awaiting-review`. Two verbs fix that, and both are
+about *not* being held hostage to the rest of the space: **`FILL`** ends the
+walk and reads what it found (the phase pointer moves past `discovering`, which
+is only ever read forwards, so discovery cannot resume), and item **`FETCH`**
+reads one node, or one branch through the existing `subtree` flag.
+
+**Work asked for by a person rides on the job payload, never on the run row.**
+`phase` is the checkpoint and `cursor` is the discovery frontier; filling a
+branch or writing an approval must not be able to move either, or a paused walk
+loses its place. So `ConnectorJobData.task` carries `fill` / `apply` — the
+`payload.reason='dependent-reindex'` precedent — and a task job skips the
+`status: 'queued'` claim the run's own slices take, because claiming would
+un-pause the very walk somebody stopped. Concurrency is still safe without it:
+the per-item `updateMany … where status:'discovered'` claim is the mutex, and it
+already existed. `stageBatch()`/`applyBatch()` are shared by both paths, so
+filling a chosen branch is the same code as filling the whole tree.
+
+**Nothing staged is two different facts, and neither is an empty conversion.**
+A `discovered` item has not been read; an `unchanged` one agreed with the page
+and so was never staged at all. Both landed on an empty editor captioned *"the
+conversion produced no text"* — false in the first case, misleading in the
+second, and on a second sync *almost every row is `unchanged`*, so that caption
+was what the whole run looked like. `discovered` now says so and offers the
+fetch; `unchanged` renders the page as it stands, which is the only thing there
+is to show. `getItem` loads `localHead` for it for that reason, and `compare`
+returns null in both states — diffing a page against an empty string reports
+every line deleted, the opposite of what either means.
 
 ### Surface decisions
 
@@ -195,14 +228,23 @@ End-to-end, against a Confluence Server space with at least three levels and
 1. A `review` pull fills the tree branch by branch, matching the real hierarchy.
 2. **Pause** mid-discovery stops within one item; **Resume** continues rather
    than restarting. Same with **Next** in `step` mode.
-3. Editing a staged item and running **cleanup** shows the AI badge, and
+3. While paused mid-discovery: **Fetch** on one node, and **Fetch branch** on a
+   section, fill only those — siblings stay `discovered`, the run row still
+   reads `paused`, and `cursor` is untouched, so a later **Resume** continues
+   the walk from the frontier. Approving one of them writes the page and leaves
+   the run paused.
+4. **Stop walking, fetch what was found** ends discovery for good, fills every
+   row it had, and records how many branches went unread.
+5. Editing a staged item and running **cleanup** shows the AI badge, and
    `incoming` still holds the original.
-4. Approving a subtree nests pages as Confluence has them, and a **skipped
-   parent leaves its children re-rooted, not stranded**.
-5. **Revert** deletes a created page with its link, and gives an updated page a
+6. Approving a subtree nests pages as Confluence has them, and a **skipped
+   parent leaves its children re-rooted, not stranded** — a page re-rooted
+   because its parent is merely *unread* says so in its warnings.
+7. **Revert** deletes a created page with its link, and gives an updated page a
    new revision restoring the old content.
-6. **Syncing twice** reports every item `unchanged`, creates nothing, and
+8. **Syncing twice** reports every item `unchanged`, creates nothing, and
    produces no duplicate pages, item rows or parent changes. This is the single
-   most important check, and the tree's count line is where it is read.
-7. A connector left at `preserveHierarchy=false, syncMode='auto'` pulls exactly
+   most important check, and the tree's count line is where it is read. Every
+   one of those rows shows the page as it stands, not a blank editor.
+9. A connector left at `preserveHierarchy=false, syncMode='auto'` pulls exactly
    as it did before the feature.

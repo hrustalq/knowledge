@@ -3445,13 +3445,13 @@ export interface components {
         };
         ConnectorItemEventDto: {
             /** @enum {string} */
-            type: "APPROVE" | "SKIP" | "REJECT" | "RETRY" | "REVERT";
+            type: "FETCH" | "APPROVE" | "SKIP" | "REJECT" | "RETRY" | "REVERT";
             /** @description Apply to every item below this one as well. Defaults to false. */
             subtree?: boolean;
         };
         ConnectorRunEventDto: {
             /** @enum {string} */
-            type: "PAUSE" | "RESUME" | "NEXT" | "CANCEL" | "APPROVE_ALL";
+            type: "PAUSE" | "RESUME" | "FILL" | "NEXT" | "CANCEL" | "APPROVE_ALL";
         };
         UpdateConnectorDto: {
             name?: string;

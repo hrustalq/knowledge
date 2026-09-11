@@ -251,6 +251,7 @@ export class ConnectorStagingService {
     hash: string,
   ): Promise<void> {
     const parentId = await this.resolveParent(row, item);
+    const reRooted = row.preserveHierarchy && item.parentItemId !== null && parentId === row.parentId;
 
     // Created without inline content and written once afterwards, the way import
     // submit does: one revision, whose content was never half-written.
@@ -282,6 +283,16 @@ export class ConnectorStagingService {
       },
     });
 
+    // The page above this one has not been imported, so it was filed at the
+    // connector's destination instead. That is the defined behaviour — a parent
+    // nobody approved must not strand its children — but a page that quietly
+    // lands somewhere other than where the external tree puts it is exactly the
+    // silent move this feature exists to prevent, so it is said out loud.
+    const draft: ItemDraft = (item.draft as ItemDraft | null) ?? {};
+    const warnings = reRooted
+      ? [...(draft.warnings ?? []), t('connector.warning.reRooted')]
+      : draft.warnings;
+
     await this.prisma.connectorRunItem.update({
       where: { id: item.id },
       data: {
@@ -292,6 +303,7 @@ export class ConnectorStagingService {
         previousRevisionId: null,
         createdDocument: true,
         error: null,
+        ...(warnings ? { draft: { ...draft, warnings } as unknown as Prisma.InputJsonValue } : {}),
       },
     });
   }

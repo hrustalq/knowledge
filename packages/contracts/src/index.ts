@@ -4705,8 +4705,8 @@ export type ConnectorItemAction = 'create' | 'update' | 'unchanged' | 'conflict'
  * the values the server accepts and the ones the web offers cannot drift.
  */
 export const CONNECTOR_SYNC_MODES = ['auto', 'review', 'step'] as const;
-export const CONNECTOR_ITEM_EVENTS = ['APPROVE', 'SKIP', 'REJECT', 'RETRY', 'REVERT'] as const;
-export const CONNECTOR_RUN_EVENTS = ['PAUSE', 'RESUME', 'NEXT', 'CANCEL', 'APPROVE_ALL'] as const;
+export const CONNECTOR_ITEM_EVENTS = ['FETCH', 'APPROVE', 'SKIP', 'REJECT', 'RETRY', 'REVERT'] as const;
+export const CONNECTOR_RUN_EVENTS = ['PAUSE', 'RESUME', 'FILL', 'NEXT', 'CANCEL', 'APPROVE_ALL'] as const;
 export const CONNECTOR_ITEM_AI_OPS = ['cleanup', 'merge'] as const;
 
 export type ConnectorItemEventType = (typeof CONNECTOR_ITEM_EVENTS)[number];
@@ -4801,15 +4801,34 @@ export interface ConnectorItemEventResponse {
  * the same — the buttons the web offers and the transitions the API accepts are
  * one list, so they cannot drift.
  */
-export function allowedRunEvents(run: Pick<ConnectorRunInfo, 'status' | 'mode' | 'awaitingReview'>): ConnectorRunEventType[] {
+export function allowedRunEvents(
+  run: Pick<ConnectorRunInfo, 'status' | 'mode' | 'awaitingReview' | 'phase' | 'discovered'>,
+): ConnectorRunEventType[] {
+  // Built in the order the controls are read, with `CANCEL` last: it is the one
+  // that throws the run away, and it should not sit between two verbs that do
+  // not.
   const events: ConnectorRunEventType[] = [];
-  if (run.status === 'running' || run.status === 'queued') events.push('PAUSE', 'CANCEL');
-  if (run.status === 'paused') events.push('RESUME', 'CANCEL');
-  if (run.status === 'awaiting-review') {
+  if (run.status === 'running' || run.status === 'queued') events.push('PAUSE');
+  if (run.status === 'paused') events.push('RESUME');
+  // Stop walking and work with what the walk found. Offered only while there is
+  // still tree to walk — once fetching has begun, filling is what the run is
+  // already doing — and only once it has found something to fill.
+  if (
+    run.phase === 'discovering' &&
+    run.discovered > 0 &&
+    (run.status === 'running' || run.status === 'queued' || run.status === 'paused')
+  ) {
+    events.push('FILL');
+  }
+  // `NEXT` releases one more item; only a stepping run has one held back.
+  if (run.status === 'awaiting-review' && run.mode === 'step') events.push('NEXT');
+  // A paused run is a reviewable one too: its approved items are written by a
+  // scoped apply pass that leaves the pause and the discovery frontier alone.
+  if ((run.status === 'awaiting-review' || run.status === 'paused') && run.awaitingReview > 0) {
+    events.push('APPROVE_ALL');
+  }
+  if (run.status === 'running' || run.status === 'queued' || run.status === 'paused' || run.status === 'awaiting-review') {
     events.push('CANCEL');
-    // `NEXT` releases one more item; only a stepping run has one held back.
-    if (run.mode === 'step') events.push('NEXT');
-    if (run.awaitingReview > 0) events.push('APPROVE_ALL');
   }
   return events;
 }
@@ -4829,9 +4848,14 @@ export function allowedItemEvents(item: Pick<ConnectorRunItemInfo, 'status'>): C
       return ['RETRY'];
     case 'unchanged':
       return ['RETRY'];
+    case 'discovered':
+      // The walk found this page but has not read it. `FETCH` fills this one
+      // (or, with `subtree`, this branch) without waiting for the rest of the
+      // tree — and `SKIP` drops a page nobody wants without fetching it first.
+      return ['FETCH', 'SKIP'];
     default:
-      // discovered / fetching / approved / applying are the machine's own; a
-      // person interrupts the run, not an item mid-flight.
+      // fetching / approved / applying are the machine's own; a person
+      // interrupts the run, not an item mid-flight.
       return [];
   }
 }

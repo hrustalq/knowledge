@@ -28,6 +28,7 @@ import {
   ACTION_CLASS,
   ACTION_ICON,
   ACTION_LABEL,
+  ITEM_EVENT_ICON,
   ITEM_EVENT_LABEL,
   ITEM_STATUS_CLASS,
   ITEM_STATUS_ICON,
@@ -72,13 +73,16 @@ const events = computed(() => (props.canManage ? allowedItemEvents(item.value) :
 
 /**
  * Subtree actions belong only on a row that *has* a subtree, and only for the
- * two verbs where "and everything under it" is a thing someone means. Retrying
- * or reverting a whole branch is a different, riskier gesture and is left to
- * the rows themselves.
+ * three verbs where "and everything under it" is a thing someone means. Fetch
+ * is the one people reach for most on a paused walk — read this section, leave
+ * the rest of the space alone. Retrying or reverting a whole branch is a
+ * different, riskier gesture and is left to the rows themselves.
  */
 const subtreeEvents = computed(() =>
   children.value.length
-    ? events.value.filter((e): e is 'APPROVE' | 'SKIP' => e === 'APPROVE' || e === 'SKIP')
+    ? events.value.filter(
+        (e): e is 'FETCH' | 'APPROVE' | 'SKIP' => e === 'FETCH' || e === 'APPROVE' || e === 'SKIP',
+      )
     : [],
 )
 
@@ -161,27 +165,48 @@ const indent = computed(() => `${0.5 + props.depth * 0.85}rem`)
 
       <!-- Actions appear on hover and on keyboard focus, and stay put for the
            row being reviewed — a control that vanishes when the pointer leaves
-           is unreachable from the pane you just walked over to. -->
+           is unreachable from the pane you just walked over to.
+
+           They are *laid over* the row rather than sitting beside it. In flow
+           they were `shrink-0` while the title was `truncate`, so four Russian
+           verbs — none of them visible until hover — permanently took the whole
+           width of a 24rem column and squeezed every page title to nothing. What
+           a tree of 468 pages showed was 468 rows with no names on them.
+           Covering the row being pointed at is the right trade: that is the one
+           row whose title you are not reading, and the selected row's title is
+           set in 2.5rem type in the pane beside it.
+
+           The row's own verbs come first and the branch verbs after, because an
+           overlay capped at the row's width clips its tail: on a deeply indented
+           row it is "Approve branch" that goes, never "Approve". -->
       <span
         v-if="events.length"
-        class="flex shrink-0 items-center gap-0.5 self-center opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100"
-        :class="selectedId === item.id && 'opacity-100'"
+        class="absolute inset-y-px right-px flex max-w-full items-center gap-0.5 overflow-hidden rounded-md pr-1 pl-3 opacity-0 transition-opacity group-hover/row:opacity-100"
+        :class="
+          selectedId === item.id
+            ? 'opacity-100'
+            : 'pointer-events-none group-hover/row:pointer-events-auto focus-within:pointer-events-auto'
+        "
       >
         <button
           v-for="type in events"
           :key="type"
           type="button"
-          class="text-muted-foreground hover:bg-background hover:text-foreground rounded px-1.5 py-0.5 text-[11px] font-medium disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
+          class="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded text-[11px] font-medium disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
+          :class="ITEM_EVENT_ICON[type] ? 'grid size-6 place-items-center' : 'px-1.5 py-0.5'"
           :disabled="busy"
+          :title="ITEM_EVENT_ICON[type] ? t(ITEM_EVENT_LABEL[type]) : undefined"
+          :aria-label="ITEM_EVENT_ICON[type] ? t(ITEM_EVENT_LABEL[type]) : undefined"
           @click="emit('event', { itemId: item.id, type, subtree: false })"
         >
-          {{ t(ITEM_EVENT_LABEL[type]) }}
+          <component :is="ITEM_EVENT_ICON[type]" v-if="ITEM_EVENT_ICON[type]" class="size-3.5" aria-hidden="true" />
+          <template v-else>{{ t(ITEM_EVENT_LABEL[type]) }}</template>
         </button>
         <button
           v-for="type in subtreeEvents"
           :key="`sub-${type}`"
           type="button"
-          class="text-muted-foreground hover:bg-background hover:text-foreground rounded px-1.5 py-0.5 text-[11px] disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
+          class="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 rounded px-1.5 py-0.5 text-[11px] disabled:opacity-50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
           :disabled="busy"
           :title="t('connectors.applyToBranch')"
           @click="emit('event', { itemId: item.id, type, subtree: true })"

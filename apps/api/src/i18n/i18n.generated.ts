@@ -80,6 +80,8 @@ export type I18nTranslations = {
             "conflict": string;
             "orphan": string;
             "orphansFound": string;
+            "discoveryStopped": string;
+            "reRooted": string;
         };
         "pushVersionMessage": string;
         "syncRevisionMessage": string;

@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": ["NODE_ENV", "NODE_TLS_REJECT_UNAUTHORIZED"],
+  "globalPassThroughEnv": ["NODE_OPTIONS", "NODE_EXTRA_CA_CERTS"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

@@ -7,3 +7,4 @@ dist/
 *.tsbuildinfo
 graphify-out/
 .vscode/
+certs/

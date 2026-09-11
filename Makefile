@@ -25,25 +25,42 @@ setup: env-init ## First-time setup: env files, deps, infra, migrations, build
 
 # ---------------------------------------------------------------- dev
 
+# Dev talks to intranet services (Confluence/Jira connectors) whose TLS chain is signed by a
+# corporate CA that lives in the OS keychain and not in Node's bundled root store, which shows
+# up as UNABLE_TO_VERIFY_LEAF_SIGNATURE. --use-system-ca adds the system trust store on top of
+# the bundled roots — unlike NODE_TLS_REJECT_UNAUTHORIZED=0 it still verifies the chain.
+# Node < 22.15 aborts on an unknown NODE_OPTIONS flag, so probe once and add nothing if absent.
+DEV_NODE_OPTIONS := $(NODE_OPTIONS) $(shell node -e 'process.exit(process.allowedNodeEnvironmentFlags.has("--use-system-ca") ? 0 : 1)' 2>/dev/null && echo --use-system-ca)
+# The system store does not help when a server sends only its leaf certificate and leaves the
+# intermediate to AIA fetching (confluence.rolf.ru does exactly that): nothing is missing from
+# the roots, the chain to them is just unbuildable. certs/extra-ca.pem carries those issuers.
+CA_BUNDLE := $(wildcard certs/extra-ca.pem)
+DEV_ENV := NODE_OPTIONS="$(strip $(DEV_NODE_OPTIONS))" $(if $(CA_BUNDLE),NODE_EXTRA_CA_CERTS="$(CURDIR)/$(CA_BUNDLE)")
+
 .PHONY: dev
 dev: infra-up ## Start EVERYTHING for dev: infra containers + api (:3000) + web (:5173) + worker, watch mode
-	pnpm exec turbo run dev dev:worker
+	$(DEV_ENV) pnpm exec turbo run dev dev:worker
 
 .PHONY: dev-api
 dev-api: ## Run only the NestJS API in watch mode
-	$(API) run dev
+	$(DEV_ENV) $(API) run dev
 
 .PHONY: dev-web
 dev-web: ## Run only the SSR frontend in dev mode
-	$(WEB) run dev
+	$(DEV_ENV) $(WEB) run dev
 
 .PHONY: dev-worker
 dev-worker: ## Run only the ingestion worker in watch mode (already part of 'make dev')
-	$(API) run dev:worker
+	$(DEV_ENV) $(API) run dev:worker
 
 .PHONY: dev-mcp
 dev-mcp: ## Run the MCP server (stdio) in watch mode (needs infra up)
-	$(API) run dev:mcp
+	$(DEV_ENV) $(API) run dev:mcp
+
+.PHONY: ca-add
+ca-add: ## Add a host's missing TLS intermediate to certs/extra-ca.pem: make ca-add host=confluence.rolf.ru
+	@[ -n "$(host)" ] || { echo "Usage: make ca-add host=<hostname>"; exit 1; }
+	@node scripts/ca-add.mjs $(host)
 
 .PHONY: kill
 kill: ## Kill all dev processes of this repo (api, web, worker, mcp, turbo, prisma studio)

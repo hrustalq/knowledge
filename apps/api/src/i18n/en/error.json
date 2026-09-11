@@ -227,7 +227,16 @@
     "runInFlight": "A sync for this connector is already running",
     "webhookNotConfigured": "This connector has no webhook secret",
     "webhookInvalidSignature": "The webhook signature did not verify",
-    "notLinked": "This page is not linked to any connector"
+    "notLinked": "This page is not linked to any connector",
+    "itemNotFound": "That item is not part of this run",
+    "itemNotEditable": "Only a staged item can be edited",
+    "itemNotApplied": "This item did not write anything, so there is nothing to undo",
+    "itemEvent": "An item that is {status} cannot take that action",
+    "runEvent": "A run that is {status} cannot take that action",
+    "revertHasChildren": "This page now has {count} child page(s) that this import did not create. Move or delete them first.",
+    "revertNoPrevious": "The revision this import replaced is no longer available, so it cannot be restored",
+    "aiEmpty": "The model returned nothing, so the staged document was left as it was",
+    "mergeNotAConflict": "Merging is only offered when both sides changed"
   },
   "routeNotFound": "Cannot {method} {path}",
   "validationFailed": "Validation failed",

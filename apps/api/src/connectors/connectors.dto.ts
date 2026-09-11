@@ -16,12 +16,23 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
-import { CONNECTOR_KINDS, DOCUMENT_CATEGORIES } from '@knowledge/contracts';
+import {
+  CONNECTOR_ITEM_AI_OPS,
+  CONNECTOR_ITEM_EVENTS,
+  CONNECTOR_KINDS,
+  CONNECTOR_RUN_EVENTS,
+  CONNECTOR_SYNC_MODES,
+  DOCUMENT_CATEGORIES,
+} from '@knowledge/contracts';
 import type {
   ConnectorConflictPolicy,
   ConnectorDirection,
+  ConnectorItemAiOp,
+  ConnectorItemEventType,
   ConnectorKind,
   ConnectorRunDirection,
+  ConnectorRunEventType,
+  ConnectorSyncMode,
   DocumentCategory,
 } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
@@ -101,6 +112,25 @@ export class CreateConnectorDto {
   @IsBoolean()
   pushOnPublish?: boolean;
 
+  @ApiPropertyOptional({
+    enum: CONNECTOR_SYNC_MODES,
+    description:
+      "How much of a run happens unattended. 'auto' applies as it goes and is the default; " +
+      "'review' stages everything for approval; 'step' releases one page at a time.",
+  })
+  @IsOptional()
+  @IsIn(CONNECTOR_SYNC_MODES)
+  syncMode?: ConnectorSyncMode;
+
+  @ApiPropertyOptional({
+    description:
+      'Recreate the source hierarchy under the destination page. Defaults to false; ' +
+      'turning it on never moves pages already imported.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  preserveHierarchy?: boolean;
+
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 5, maximum: 10080, description: 'null = manual only' })
   @IsOptional()
   @NULLABLE<CreateConnectorDto>('syncIntervalMinutes')
@@ -174,6 +204,16 @@ export class UpdateConnectorDto {
   @IsBoolean()
   pushOnPublish?: boolean;
 
+  @ApiPropertyOptional({ enum: CONNECTOR_SYNC_MODES })
+  @IsOptional()
+  @IsIn(CONNECTOR_SYNC_MODES)
+  syncMode?: ConnectorSyncMode;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  preserveHierarchy?: boolean;
+
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 5, maximum: 10080 })
   @IsOptional()
   @NULLABLE<UpdateConnectorDto>('syncIntervalMinutes')
@@ -207,4 +247,56 @@ export class StartConnectorSyncDto {
   @ArrayMaxSize(500, { message: vmsg('arrayMaxSize') })
   @IsString({ each: true })
   externalIds?: string[];
+
+  @ApiPropertyOptional({
+    enum: CONNECTOR_SYNC_MODES,
+    description: "Override the connector's own mode for this run only. Defaults to the connector's setting.",
+  })
+  @IsOptional()
+  @IsIn(CONNECTOR_SYNC_MODES)
+  mode?: ConnectorSyncMode;
+}
+
+// --- staged items (docs/features/26) ---
+
+export class UpdateConnectorRunItemDto {
+  @ApiPropertyOptional({ description: 'The title the page will be created with' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  title?: string;
+
+  @ApiPropertyOptional({ description: 'The prepared document, corrected' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2_000_000)
+  markdown?: string;
+}
+
+export class ConnectorItemAiDto {
+  @ApiProperty({
+    enum: CONNECTOR_ITEM_AI_OPS,
+    description: "'cleanup' repairs the conversion; 'merge' reconciles it with the current page (conflicts only)",
+  })
+  @IsIn(CONNECTOR_ITEM_AI_OPS)
+  op!: ConnectorItemAiOp;
+}
+
+export class ConnectorItemEventDto {
+  @ApiProperty({ enum: CONNECTOR_ITEM_EVENTS })
+  @IsIn(CONNECTOR_ITEM_EVENTS)
+  type!: ConnectorItemEventType;
+
+  @ApiPropertyOptional({
+    description: 'Apply to every item below this one as well. Defaults to false.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  subtree?: boolean;
+}
+
+export class ConnectorRunEventDto {
+  @ApiProperty({ enum: CONNECTOR_RUN_EVENTS })
+  @IsIn(CONNECTOR_RUN_EVENTS)
+  type!: ConnectorRunEventType;
 }

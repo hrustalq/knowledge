@@ -8,9 +8,11 @@ import {
   type ConnectorKind,
   type ConnectorRunDirection,
   type ConnectorRunInfo,
+  type ConnectorRunPhase,
   type ConnectorRunStatus,
   type ConnectorRunWarning,
   type ConnectorSummary,
+  type ConnectorSyncMode,
   type ConnectorTrigger,
   type DocumentCategory,
 } from '@knowledge/contracts';
@@ -39,6 +41,8 @@ export interface CreateConnectorInput {
   direction?: ConnectorDirection;
   conflict?: ConnectorConflictPolicy;
   pushOnPublish?: boolean;
+  syncMode?: ConnectorSyncMode;
+  preserveHierarchy?: boolean;
   syncIntervalMinutes?: number | null;
   webhookSecret?: string | null;
   enabled?: boolean;
@@ -128,6 +132,8 @@ export class ConnectorsService {
         direction: this.checkDirection(info.kind, input.direction ?? 'pull'),
         conflict: input.conflict ?? 'manual',
         pushOnPublish: input.pushOnPublish ?? false,
+        syncMode: input.syncMode ?? 'auto',
+        preserveHierarchy: input.preserveHierarchy ?? false,
         syncIntervalMinutes: input.syncIntervalMinutes ?? null,
         webhookSecret: this.encrypt(input.webhookSecret ?? null),
         enabled: input.enabled ?? true,
@@ -166,6 +172,8 @@ export class ConnectorsService {
         ...keep('category'),
         ...keep('conflict'),
         ...keep('pushOnPublish'),
+        ...keep('syncMode'),
+        ...keep('preserveHierarchy'),
         ...keep('syncIntervalMinutes'),
         ...keep('enabled'),
         ...(input.config === undefined ? {} : { config: input.config as Prisma.InputJsonValue }),
@@ -218,6 +226,23 @@ export class ConnectorsService {
     onStage: (stage: string, progress?: number | null) => Promise<void>,
     signal?: AbortSignal,
   ): Promise<ConnectorContext> {
+    // Resolved once per context rather than per call: the flag cannot change
+    // mid-run, and an adapter calling `debug` in a tight pagination loop should
+    // not pay a ConfigService lookup each time.
+    const enabled = this.config.get('CONNECTOR_DEBUG', { infer: true });
+    const logger = this.logger;
+    const debug: ConnectorContext['debug'] = enabled
+      ? (message, fields) => {
+          const detail = fields
+            ? ' ' +
+              Object.entries(fields)
+                .map(([k, v]) => `${k}=${String(v)}`)
+                .join(' ')
+            : '';
+          logger.log(`[${row.kind} ${row.id}] ${message}${detail}`);
+        }
+      : () => undefined;
+
     return {
       connectorId: row.id,
       workspaceId: row.workspaceId,
@@ -225,6 +250,7 @@ export class ConnectorsService {
       credential: decryptSecret(row.credential, this.key),
       webhookSecret: decryptSecret(row.webhookSecret, this.key),
       onStage,
+      debug,
       signal,
     };
   }
@@ -235,7 +261,7 @@ export class ConnectorsService {
     row: Connector,
     direction: ConnectorRunDirection,
     trigger: ConnectorTrigger,
-    options: { externalIds?: string[]; actorId?: string } = {},
+    options: { externalIds?: string[]; actorId?: string; mode?: ConnectorSyncMode } = {},
   ): Promise<ConnectorRun> {
     if (!row.enabled) throw new BadRequestException(t('error.connector.disabled'));
 
@@ -251,12 +277,19 @@ export class ConnectorsService {
     }
 
     // One run at a time per connector: two concurrent pulls would race on the
-    // same links and could both create the same page.
+    // same links and could both create the same page. `paused` and
+    // `awaiting-review` count as in flight — a parked run still owns its items,
+    // and starting a second pull behind it would stage the same pages twice.
     const inFlight = await this.prisma.connectorRun.findFirst({
-      where: { connectorId: row.id, status: { in: ['queued', 'running'] } },
+      where: { connectorId: row.id, status: { in: ['queued', 'running', 'paused', 'awaiting-review'] } },
       select: { id: true },
     });
     if (inFlight) throw new ConflictException(t('error.connector.runInFlight'));
+
+    // A push is a write-out, not an import: there is nothing to stage or review,
+    // so it always runs straight through whatever the connector's mode says.
+    const mode: ConnectorSyncMode =
+      direction === 'push' ? 'auto' : (options.mode ?? (row.syncMode as ConnectorSyncMode));
 
     return this.prisma.connectorRun.create({
       data: {
@@ -265,6 +298,9 @@ export class ConnectorsService {
         direction,
         trigger,
         status: 'queued',
+        // Frozen here, not read from the connector at execution time: editing the
+        // connector must not change a run already under way.
+        mode,
         scope: options.externalIds?.length ? (options.externalIds as Prisma.InputJsonValue) : Prisma.DbNull,
         locale: row.locale,
         actorId: options.actorId ?? null,
@@ -398,10 +434,12 @@ export class ConnectorsService {
       direction: row.direction as ConnectorDirection,
       conflict: row.conflict as ConnectorConflictPolicy,
       pushOnPublish: row.pushOnPublish,
+      syncMode: row.syncMode as ConnectorSyncMode,
+      preserveHierarchy: row.preserveHierarchy,
       syncIntervalMinutes: row.syncIntervalMinutes,
       hasWebhookSecret: row.webhookSecret !== null,
       webhookPath: row.webhookSecret ? `/v1/connectors/${row.id}/webhook` : null,
-      capabilities: info?.capabilities ?? { pull: false, push: false, webhook: false },
+      capabilities: info?.capabilities ?? { pull: false, push: false, webhook: false, tree: false },
       linkCount,
       lastRun: lastRun ? toRunInfo(lastRun) : null,
       lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
@@ -411,7 +449,13 @@ export class ConnectorsService {
   }
 }
 
-export function toRunInfo(row: ConnectorRun): ConnectorRunInfo {
+/**
+ * `awaitingReview` is not a column: it is counted from the item rows by the
+ * caller that has them, exactly as `MergeRequestsService.statsFor` batches
+ * thread counts rather than denormalising them. Callers without the count pass
+ * nothing and get 0, which is right for a push run and for a list row.
+ */
+export function toRunInfo(row: ConnectorRun, awaitingReview = 0): ConnectorRunInfo {
   return {
     id: row.id,
     connectorId: row.connectorId,
@@ -419,6 +463,8 @@ export function toRunInfo(row: ConnectorRun): ConnectorRunInfo {
     direction: row.direction as ConnectorRunDirection,
     trigger: row.trigger as ConnectorTrigger,
     status: row.status as ConnectorRunStatus,
+    mode: row.mode as ConnectorSyncMode,
+    phase: (row.phase as ConnectorRunPhase | null) ?? null,
     stage: row.stage,
     progress: row.progress,
     created: row.created,
@@ -426,6 +472,10 @@ export function toRunInfo(row: ConnectorRun): ConnectorRunInfo {
     skipped: row.skipped,
     failed: row.failed,
     conflicts: row.conflicts,
+    discovered: row.discovered,
+    applied: row.applied,
+    reverted: row.reverted,
+    awaitingReview,
     warnings: Array.isArray(row.warnings) ? (row.warnings as unknown as ConnectorRunWarning[]) : [],
     error: (row.error as { message: string } | null) ?? null,
     startedAt: row.startedAt?.toISOString() ?? null,

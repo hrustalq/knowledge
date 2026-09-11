@@ -22,6 +22,8 @@ import { FulltextModule } from '../fulltext/fulltext.module.js';
   imports: [ProjectsCoreModule, StorageModule, GraphModule, FulltextModule],
   controllers: [ProjectsController],
   providers: [ProjectOverviewService, ProjectCascadeService],
-  exports: [ProjectsCoreModule],
+  // The cascade is exported because connector revert reuses it to undo a page
+  // this product otherwise has no way to delete (docs/features/26).
+  exports: [ProjectsCoreModule, ProjectCascadeService],
 })
 export class ProjectsModule {}

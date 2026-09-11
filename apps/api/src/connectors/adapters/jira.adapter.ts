@@ -28,7 +28,7 @@ const PAGE_SIZE = 50;
 @Injectable()
 export class JiraAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'jira';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: false, webhook: true };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: false, webhook: true, tree: false };
 
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
     const page = await this.search(ctx, 0, 1);

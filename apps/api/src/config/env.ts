@@ -199,6 +199,19 @@ export const envSchema = z.object({
   CONNECTOR_SYNC_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
   /** Worker-side schedule sweeper for connectors with syncIntervalMinutes set. */
   CONNECTOR_SCHEDULE_ENABLED: boolish(true),
+  /**
+   * Trace the sync (docs/features/26): every upstream request, every level of
+   * the tree walk, and the decision taken for each item. Off by default — it is
+   * verbose enough to be useless in production, and its whole point is
+   * diagnosing "the connector pulled nothing and said nothing".
+   */
+  CONNECTOR_DEBUG: z.coerce.boolean().default(false),
+  /**
+   * Items processed before the run checkpoints and re-enqueues itself. This is
+   * what keeps a large space from dying on CONNECTOR_SYNC_TIMEOUT_MS, and it is
+   * also how often a pause is noticed.
+   */
+  CONNECTOR_SYNC_BATCH: z.coerce.number().int().positive().default(25),
 
   /** Live tracked-entity updates over WebSocket (/v1/events/ws). */
   LIVE_WS_ENABLED: boolish(true),

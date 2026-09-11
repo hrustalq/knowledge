@@ -1,58 +1,101 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash } from 'node:crypto';
-import matter from 'gray-matter';
 import { Prisma, type Connector, type ConnectorLink, type ConnectorRun } from '@prisma/client';
-import type { DocumentCategory } from '@knowledge/contracts';
+import type { ConnectorRunPhase } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { StorageService } from '../storage/storage.service.js';
 import { ConnectorsService, MAX_WARNINGS } from './connectors.service.js';
-import type { ConnectorAdapter, ConnectorContext, ExternalDocument, ExternalRef } from './adapters/connector.types.js';
+import { ConnectorDiscoveryService } from './connector-discovery.service.js';
+import { sha256 } from './connector-markdown.js';
+import { ConnectorStagingService } from './connector-staging.service.js';
+import type { ConnectorAdapter, ConnectorContext } from './adapters/connector.types.js';
 
 /** Stage writes are throttled the way ImportProcessor throttles its own. */
 const STAGE_THROTTLE_MS = 400;
 
-interface RunTotals {
+export interface RunTotals {
   created: number;
   updated: number;
   skipped: number;
   failed: number;
   conflicts: number;
+  applied: number;
+}
+
+export interface RunWarning {
+  externalId: string | null;
+  title: string | null;
+  message: string;
+}
+
+/** What the processor does next: ask for another slice, or stop. */
+export interface RunStep {
+  done: boolean;
 }
 
 /**
- * The sync engine (docs/features/19).
+ * The sync engine (docs/features/19, reshaped by 26).
  *
  * Everything here is driven by one idea: `connector_links` records the content
  * hash and external version the two sides last agreed on, so both directions
  * can ask "did anything actually change?" before writing. That is what makes a
  * re-sync idempotent, and it is what breaks the pull -> push -> webhook -> pull
  * echo loop, because a pull leaves the link agreeing with what it just wrote.
+ *
+ * Feature 26 turned the pull inside out. It used to drain the whole scope into
+ * an array and write pages as it went; now discovery, staging and applying are
+ * separate budgeted phases over `connector_run_items` rows, so the work can be
+ * watched, paused, reviewed and undone. Push is untouched — there is nothing to
+ * stage on the way out.
  */
 @Injectable()
 export class ConnectorSyncService {
   private readonly logger = new Logger(ConnectorSyncService.name);
   private readonly maxItems: number;
+  private readonly batchSize: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<Env, true>,
     private readonly connectors: ConnectorsService,
+    private readonly discovery: ConnectorDiscoveryService,
+    private readonly staging: ConnectorStagingService,
+    // Push still reads page content directly; the pull path goes through the
+    // staging service instead.
     private readonly documents: DocumentsService,
-    private readonly storage: StorageService,
     private readonly events: EventsPublisher,
   ) {
     this.maxItems = this.config.get('CONNECTOR_SYNC_MAX_ITEMS', { infer: true });
+    this.batchSize = this.config.get('CONNECTOR_SYNC_BATCH', { infer: true });
   }
 
-  async run(row: Connector, runRow: ConnectorRun, signal?: AbortSignal): Promise<void> {
-    const adapter = this.connectors.adapterFor(row);
-    const warnings: Array<{ externalId: string | null; title: string | null; message: string }> = [];
-    const totals: RunTotals = { created: 0, updated: 0, skipped: 0, failed: 0, conflicts: 0 };
+  /** Links for this connector, keyed the way the staging loop looks them up. */
+  private async linksByExternalId(connectorId: string): Promise<Map<string, ConnectorLink>> {
+    const links = await this.prisma.connectorLink.findMany({ where: { connectorId } });
+    return new Map(links.map((l) => [l.externalId, l]));
+  }
+
+  /**
+   * One slice of a run's work, then return (docs/features/26).
+   *
+   * `RunStep.continue` means "there is more, enqueue me again" — the processor
+   * re-enqueues rather than looping here, so a large space cannot die on
+   * `CONNECTOR_SYNC_TIMEOUT_MS` and a pause is noticed within one batch instead
+   * of at the end of a thousand pages.
+   */
+  async run(row: Connector, runRow: ConnectorRun, signal?: AbortSignal): Promise<RunStep> {
+    const warnings = readWarnings(runRow);
+    const totals: RunTotals = {
+      created: runRow.created,
+      updated: runRow.updated,
+      skipped: runRow.skipped,
+      failed: runRow.failed,
+      conflicts: runRow.conflicts,
+      applied: runRow.applied,
+    };
 
     let lastStageWrite = 0;
     const onStage = async (stage: string, progress?: number | null): Promise<void> => {
@@ -64,27 +107,230 @@ export class ConnectorSyncService {
         .catch(() => undefined);
     };
 
+    const adapter = this.connectors.adapterFor(row);
     const ctx = await this.connectors.contextFor(row, onStage, signal);
-    const scope = Array.isArray(runRow.scope) ? (runRow.scope as unknown as string[]) : null;
 
-    await onStage(t('connector.stage.connecting'), null);
-
-    if (runRow.direction === 'pull') {
-      await this.pull(row, adapter, ctx, scope, totals, warnings);
-    } else {
+    // Push has nothing to stage or review; it keeps the pre-feature shape whole.
+    if (runRow.direction === 'push') {
+      const scope = Array.isArray(runRow.scope) ? (runRow.scope as unknown as string[]) : null;
+      await onStage(t('connector.stage.connecting'), null);
       await this.push(row, adapter, ctx, scope, totals, warnings);
+      await this.finish(row, runRow, totals, warnings);
+      return { done: true };
     }
 
-    await onStage(t('connector.stage.finishing'), 1);
-    lastStageWrite = 0;
+    return this.pullStep(row, runRow, adapter, ctx, onStage, totals, warnings);
+  }
 
+  /**
+   * Discover → stage → (park for review) → apply, one budgeted slice at a time.
+   *
+   * The phases are checked in order on every call rather than held in a local
+   * variable, because the run row is the only thing that survives between
+   * slices — the same reason the item tree is rows and not a snapshot.
+   */
+  private async pullStep(
+    row: Connector,
+    runRow: ConnectorRun,
+    adapter: ConnectorAdapter,
+    ctx: ConnectorContext,
+    onStage: (stage: string, progress?: number | null) => Promise<void>,
+    totals: RunTotals,
+    warnings: RunWarning[],
+  ): Promise<RunStep> {
+    const budget = this.batchSize;
+
+    // --- discovery ---
+    if (runRow.phase === null || runRow.phase === 'discovering') {
+      await this.setPhase(runRow.id, 'discovering');
+      await onStage(t('connector.stage.listing'), null);
+
+      const outcome = await this.discovery.step(row, runRow, adapter, ctx, budget);
+      if (outcome.truncated) {
+        pushWarning(warnings, null, null, t('connector.stoppedAtMax', { max: this.maxItems }));
+      }
+      if (!outcome.done) {
+        await this.checkpoint(runRow.id, totals, warnings);
+        return { done: false };
+      }
+
+      const orphans = await this.discovery.repairOrphans(runRow, adapter, ctx);
+      if (orphans > 0) pushWarning(warnings, null, null, t('connector.warning.orphansFound', { count: orphans }));
+
+      await this.setPhase(runRow.id, 'fetching');
+      await this.checkpoint(runRow.id, totals, warnings);
+      return { done: false };
+    }
+
+    // --- staging ---
+    if (runRow.phase === 'fetching') {
+      // `step` mode releases exactly one page at a time, which is what makes a
+      // misbehaving space debuggable without pulling all of it.
+      const take = runRow.mode === 'step' ? 1 : budget;
+      const pending = await this.prisma.connectorRunItem.findMany({
+        where: { runId: runRow.id, status: 'discovered' },
+        orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+        take,
+      });
+
+      if (pending.length > 0) {
+        const links = await this.linksByExternalId(row.id);
+        const total = Math.max(runRow.discovered, 1);
+
+        for (const item of pending) {
+          const claimed = await this.prisma.connectorRunItem.updateMany({
+            where: { id: item.id, status: 'discovered' },
+            data: { status: 'fetching' },
+          });
+          if (claimed.count !== 1) continue;
+
+          const done = await this.prisma.connectorRunItem.count({
+            where: { runId: runRow.id, status: { notIn: ['discovered', 'fetching'] } },
+          });
+          await onStage(t('connector.stage.fetching', { title: item.title }), done / total);
+
+          try {
+            const outcome = await this.staging.stage(row, runRow, adapter, ctx, item, links.get(item.externalId) ?? null);
+            if (outcome.unchanged) totals.skipped += 1;
+          } catch (err) {
+            totals.failed += 1;
+            pushWarning(warnings, item.externalId, item.title, (err as Error).message.slice(0, 500));
+            await this.failItem(item.id, (err as Error).message);
+            ctx.debug('item: failed', { id: item.externalId, error: (err as Error).message });
+          }
+        }
+
+        await this.checkpoint(runRow.id, totals, warnings);
+        // A stepping run hands control back after each page.
+        if (runRow.mode === 'step') return this.parkForReview(row, runRow, totals, warnings);
+        return { done: false };
+      }
+
+      // Everything fetched. An unattended run applies; anything else waits.
+      if (runRow.mode === 'auto') {
+        await this.prisma.connectorRunItem.updateMany({
+          where: { runId: runRow.id, status: 'staged' },
+          data: { status: 'approved' },
+        });
+        await this.setPhase(runRow.id, 'applying');
+        await this.checkpoint(runRow.id, totals, warnings);
+        return { done: false };
+      }
+      return this.parkForReview(row, runRow, totals, warnings);
+    }
+
+    // --- applying ---
+    if (runRow.phase === 'applying') {
+      const approved = await this.prisma.connectorRunItem.findMany({
+        where: { runId: runRow.id, status: 'approved' },
+        // Parents first: a child needs its parent's document id to nest under.
+        orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+        take: budget,
+      });
+
+      if (approved.length > 0) {
+        for (const item of approved) {
+          const claimed = await this.prisma.connectorRunItem.updateMany({
+            where: { id: item.id, status: 'approved' },
+            data: { status: 'applying' },
+          });
+          if (claimed.count !== 1) continue;
+
+          await onStage(t('connector.stage.writing', { title: item.title }), null);
+          try {
+            await this.staging.apply(row, runRow, item);
+            if (item.action === 'create') totals.created += 1;
+            else if (item.action === 'conflict') totals.conflicts += 1;
+            else if (item.action === 'update') totals.updated += 1;
+            if (item.action !== 'unchanged') totals.applied += 1;
+          } catch (err) {
+            totals.failed += 1;
+            pushWarning(warnings, item.externalId, item.title, (err as Error).message.slice(0, 500));
+            await this.failItem(item.id, (err as Error).message);
+            ctx.debug('item: apply failed', { id: item.externalId, error: (err as Error).message });
+          }
+        }
+
+        await this.checkpoint(runRow.id, totals, warnings);
+        return { done: false };
+      }
+
+      // Nothing approved is left. A reviewed run may still hold staged items a
+      // person has not decided on, so it goes back to waiting rather than ending.
+      const staged = await this.prisma.connectorRunItem.count({
+        where: { runId: runRow.id, status: 'staged' },
+      });
+      if (staged > 0 && runRow.mode !== 'auto') return this.parkForReview(row, runRow, totals, warnings);
+
+      await this.finish(row, runRow, totals, warnings);
+      return { done: true };
+    }
+
+    // 'awaiting-review' / 'reverting' are not the worker's to advance.
+    return { done: true };
+  }
+
+  /** Hand the run to a person and stop asking for slices. */
+  private async parkForReview(
+    row: Connector,
+    runRow: ConnectorRun,
+    totals: RunTotals,
+    warnings: RunWarning[],
+  ): Promise<RunStep> {
+    await this.prisma.connectorRun.update({
+      where: { id: runRow.id },
+      data: {
+        status: 'awaiting-review',
+        phase: 'awaiting-review',
+        stage: null,
+        ...totals,
+        warnings: warnings.slice(0, MAX_WARNINGS) as unknown as Prisma.InputJsonValue,
+      },
+    });
+    await this.events.publish({
+      workspaceId: row.workspaceId,
+      type: 'connector.run.awaiting-review',
+      subjectId: runRow.id,
+      title: row.name,
+    });
+    return { done: true };
+  }
+
+  /**
+   * Write what is known so far.
+   *
+   * Counters used to be written once at the very end, which meant a run that hit
+   * the timeout lost every count and every warning it had gathered — the run
+   * that most needed to explain itself was the one that said nothing.
+   */
+  private async checkpoint(runId: string, totals: RunTotals, warnings: RunWarning[]): Promise<void> {
+    await this.prisma.connectorRun.update({
+      where: { id: runId },
+      data: { ...totals, warnings: warnings.slice(0, MAX_WARNINGS) as unknown as Prisma.InputJsonValue },
+    });
+  }
+
+  private async setPhase(runId: string, phase: ConnectorRunPhase): Promise<void> {
+    await this.prisma.connectorRun.update({ where: { id: runId }, data: { phase } });
+  }
+
+  private async failItem(itemId: string, message: string): Promise<void> {
+    await this.prisma.connectorRunItem
+      .update({ where: { id: itemId }, data: { status: 'failed', error: message.slice(0, 1000) } })
+      .catch(() => undefined);
+  }
+
+  /** Terminal bookkeeping, shared by the pull and push paths. */
+  async finish(row: Connector, runRow: ConnectorRun, totals: RunTotals, warnings: RunWarning[]): Promise<void> {
     const status = totals.failed > 0 ? 'partial' : 'succeeded';
     await this.prisma.connectorRun.update({
       where: { id: runRow.id },
       data: {
         status,
+        phase: null,
         stage: null,
         progress: 1,
+        cursor: Prisma.DbNull,
         ...totals,
         warnings: warnings.slice(0, MAX_WARNINGS) as unknown as Prisma.InputJsonValue,
         completedAt: new Date(),
@@ -101,142 +347,6 @@ export class ConnectorSyncService {
       title: row.name,
     });
   }
-
-  // --- pull ---
-
-  private async pull(
-    row: Connector,
-    adapter: ConnectorAdapter,
-    ctx: ConnectorContext,
-    scope: string[] | null,
-    totals: RunTotals,
-    warnings: Array<{ externalId: string | null; title: string | null; message: string }>,
-  ): Promise<void> {
-    await ctx.onStage(t('connector.stage.listing'), null);
-
-    const refs: ExternalRef[] = [];
-    if (scope) {
-      // A webhook already told us what changed; listing the whole space to find
-      // three pages would be absurd, so the refs are synthesised and `fetch`
-      // fills in the real title and version.
-      refs.push(...scope.map((externalId) => ({ externalId, title: externalId })));
-    } else {
-      for await (const ref of adapter.list(ctx)) {
-        refs.push(ref);
-        if (refs.length >= this.maxItems) {
-          warnings.push({
-            externalId: null,
-            title: null,
-            message: t('connector.stoppedAtMax', { max: this.maxItems }),
-          });
-          break;
-        }
-      }
-    }
-
-    const links = await this.linksByExternalId(row.id);
-    let done = 0;
-
-    for (const ref of refs) {
-      done += 1;
-      const progress = refs.length ? done / refs.length : null;
-      const link = links.get(ref.externalId);
-
-      try {
-        // Cheapest possible skip: the far side says nothing changed.
-        if (link && ref.version && link.externalVersion === ref.version) {
-          totals.skipped += 1;
-          continue;
-        }
-
-        await ctx.onStage(t('connector.stage.fetching', { title: ref.title || ref.externalId }), progress);
-        const doc = await adapter.fetch(ctx, ref);
-        for (const message of doc.warnings) {
-          warnings.push({ externalId: ref.externalId, title: doc.title, message });
-        }
-
-        const markdown = composeMarkdown(doc);
-        const hash = sha256(markdown);
-
-        // The far side changed but produced identical content (a Confluence
-        // version bump from a label edit, say). Record the version and move on.
-        if (link && link.contentHash === hash) {
-          await this.prisma.connectorLink.update({
-            where: { id: link.id },
-            data: { externalVersion: doc.ref.version ?? null, lastPulledAt: new Date() },
-          });
-          totals.skipped += 1;
-          continue;
-        }
-
-        await ctx.onStage(t('connector.stage.writing', { title: doc.title }), progress);
-
-        if (!link) {
-          await this.createPage(row, doc, markdown, hash);
-          totals.created += 1;
-          continue;
-        }
-
-        const document = await this.prisma.document.findUnique({ where: { id: link.documentId } });
-        if (!document) {
-          // The page was deleted here. The link is stale; drop it and let the
-          // next run re-create the page from scratch.
-          await this.prisma.connectorLink.delete({ where: { id: link.id } });
-          warnings.push({
-            externalId: ref.externalId,
-            title: doc.title,
-            message: t('connector.warning.documentMissing'),
-          });
-          totals.skipped += 1;
-          continue;
-        }
-
-        const localHash = await this.headContentHash(link.documentId);
-        const localChanged = localHash !== null && link.contentHash !== null && localHash !== link.contentHash;
-
-        if (!localChanged || row.conflict === 'external-wins') {
-          await this.writeRevision(link.documentId, markdown);
-          await this.prisma.connectorLink.update({
-            where: { id: link.id },
-            data: {
-              contentHash: hash,
-              externalVersion: doc.ref.version ?? null,
-              externalTitle: doc.title,
-              externalUrl: doc.ref.url ?? link.externalUrl,
-              lastPulledAt: new Date(),
-            },
-          });
-          totals.updated += 1;
-        } else if (row.conflict === 'local-wins') {
-          // Ours stands; record that we have seen this external version so the
-          // same conflict is not re-detected on every subsequent run.
-          await this.prisma.connectorLink.update({
-            where: { id: link.id },
-            data: { externalVersion: doc.ref.version ?? null, lastPulledAt: new Date() },
-          });
-          totals.skipped += 1;
-        } else {
-          await this.openConflictBranch(row, link, doc, markdown);
-          totals.conflicts += 1;
-          warnings.push({
-            externalId: ref.externalId,
-            title: doc.title,
-            message: t('connector.warning.conflict'),
-          });
-        }
-      } catch (err) {
-        totals.failed += 1;
-        warnings.push({
-          externalId: ref.externalId,
-          title: ref.title || null,
-          message: (err as Error).message.slice(0, 500),
-        });
-        this.logger.warn(`connector ${row.id}: ${ref.externalId} failed — ${(err as Error).message}`);
-      }
-    }
-  }
-
-  // --- push ---
 
   private async push(
     row: Connector,
@@ -321,135 +431,18 @@ export class ConnectorSyncService {
       }
     }
   }
-
-  // --- document writes ---
-
-  private async createPage(
-    row: Connector,
-    doc: ExternalDocument,
-    markdown: string,
-    hash: string,
-  ): Promise<void> {
-    // Created without inline content and written once afterwards, the way
-    // import's submit does: one revision whose content was never half-written.
-    const created = await this.documents.createDocument({
-      workspaceId: row.workspaceId,
-      projectId: row.projectId,
-      title: doc.title || 'Untitled',
-      category: row.category as DocumentCategory,
-      ...(row.parentId ? { parentId: row.parentId } : {}),
-    });
-
-    const revision = await this.prisma.documentRevision.findUnique({ where: { id: created.revisionId } });
-    if (!revision) throw new Error('revision vanished between create and write');
-    await this.storage.putObjectText(revision.s3Key, markdown, 'text/markdown');
-    await this.documents.finalizeRevision(created.documentId, created.revisionId);
-
-    await this.prisma.connectorLink.create({
-      data: {
-        connectorId: row.id,
-        workspaceId: row.workspaceId,
-        documentId: created.documentId,
-        externalId: doc.ref.externalId,
-        externalUrl: doc.ref.url ?? null,
-        externalTitle: doc.title,
-        externalVersion: doc.ref.version ?? null,
-        contentHash: hash,
-        revisionId: created.revisionId,
-        lastPulledAt: new Date(),
-      },
-    });
-    await this.events.publish({
-      workspaceId: row.workspaceId,
-      type: 'connector.link.created',
-      documentId: created.documentId,
-      subjectId: row.id,
-      title: doc.title,
-    });
-  }
-
-  /** A new revision on the document's default branch, through the normal pipeline. */
-  private async writeRevision(documentId: string, markdown: string, branch?: string): Promise<string> {
-    const revision = await this.documents.createRevision(documentId, {
-      branch,
-      message: t('connector.syncRevisionMessage'),
-      contentType: 'text/markdown',
-    });
-    const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
-    if (!row) throw new Error('revision vanished between create and write');
-    await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
-    await this.documents.finalizeRevision(documentId, revision.revisionId);
-    return revision.revisionId;
-  }
-
-  /**
-   * Both sides changed. Nothing is overwritten: the external version goes onto
-   * its own branch and the conflict is recorded for the API-side sweeper to
-   * open a merge request from. Phase 3 already renders structural and semantic
-   * diffs over exactly this shape, so two-way conflict resolution costs a
-   * branch rather than a new UI.
-   */
-  private async openConflictBranch(
-    row: Connector,
-    link: ConnectorLink,
-    doc: ExternalDocument,
-    markdown: string,
-  ): Promise<void> {
-    const branch = `connector/${row.kind}-${Date.now().toString(36)}`;
-    await this.documents.createBranch(link.documentId, { name: branch });
-    const revisionId = await this.writeRevision(link.documentId, markdown, branch);
-
-    await this.prisma.connectorLink.update({
-      where: { id: link.id },
-      data: {
-        // The external version is recorded so the same conflict is not raised
-        // again on every run, but contentHash deliberately is not: the two sides
-        // have not agreed on anything yet.
-        externalVersion: doc.ref.version ?? null,
-        externalTitle: doc.title,
-        lastPulledAt: new Date(),
-      },
-    });
-
-    await this.prisma.connectorConflict.create({
-      data: {
-        connectorId: row.id,
-        workspaceId: row.workspaceId,
-        documentId: link.documentId,
-        linkId: link.id,
-        branch,
-        revisionId,
-        externalUrl: doc.ref.url ?? null,
-        title: doc.title,
-      },
-    });
-  }
-
-  // --- helpers ---
-
-  private async linksByExternalId(connectorId: string): Promise<Map<string, ConnectorLink>> {
-    const rows = await this.prisma.connectorLink.findMany({ where: { connectorId } });
-    return new Map(rows.map((row) => [row.externalId, row]));
-  }
-
-  /** sha256 of the branch head's markdown, or null when it cannot be read. */
-  private async headContentHash(documentId: string): Promise<string | null> {
-    try {
-      const content = await this.documents.getContent(documentId);
-      return sha256(content.markdown);
-    } catch {
-      return null;
-    }
-  }
 }
 
-/** Frontmatter is re-attached so the deterministic relation extractor sees it. */
-export function composeMarkdown(doc: ExternalDocument): string {
-  const data = doc.frontmatter ?? {};
-  const body = doc.markdown.trim();
-  return Object.keys(data).length > 0 ? matter.stringify(body, data) : body;
+/**
+ * Warnings now survive between slices, so they are read back off the row rather
+ * than starting empty — a run that reports only what its last batch noticed is
+ * worse than one that reports nothing, because it looks complete.
+ */
+function readWarnings(run: ConnectorRun): RunWarning[] {
+  return Array.isArray(run.warnings) ? (run.warnings as unknown as RunWarning[]) : [];
 }
 
-export function sha256(text: string): string {
-  return createHash('sha256').update(text, 'utf8').digest('hex');
+function pushWarning(warnings: RunWarning[], externalId: string | null, title: string | null, message: string): void {
+  if (warnings.length >= MAX_WARNINGS) return;
+  warnings.push({ externalId, title, message });
 }

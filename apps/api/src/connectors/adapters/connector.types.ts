@@ -17,6 +17,19 @@ export interface ExternalRef {
   url?: string;
   /** Confluence version.number, Notion last_edited_time, git blob sha, ... */
   version?: string;
+  /**
+   * The item this one hangs under on the far side; absent means a root of the
+   * connector's scope (docs/features/26). Without this field hierarchy is not
+   * merely unimplemented but unrepresentable, which is why every pulled page
+   * used to land as a sibling of every other.
+   */
+  parentExternalId?: string;
+  /**
+   * The adapter knows the branch continues but has not walked it. Lets the tree
+   * draw a collapsed branch honestly instead of as a leaf — the one thing a
+   * lazily discovered tree must never do.
+   */
+  hasChildren?: boolean;
 }
 
 export interface ExternalAttachment {
@@ -56,6 +69,12 @@ export interface ConnectorContext {
   webhookSecret?: string | null;
   /** Throttled by the caller — adapters may call it freely. */
   onStage(stage: string, progress?: number | null): Promise<void>;
+  /**
+   * Developer trace, a no-op unless CONNECTOR_DEBUG is on — so adapters may call
+   * it as freely as `onStage` (docs/features/26). Never pass a credential or a
+   * full URL with a query string; `connectorFetch` traces the HTTP layer itself.
+   */
+  debug(message: string, fields?: Record<string, unknown>): void;
   signal?: AbortSignal;
 }
 
@@ -73,6 +92,18 @@ export interface ConnectorAdapter {
 
   /** Enumerate the connector's scope. Paginates internally; the caller bounds it. */
   list(ctx: ConnectorContext): AsyncIterable<ExternalRef>;
+
+  /**
+   * Direct children of `parent`, or the roots of the scope when it is null
+   * (docs/features/26). Optional in the `push?` sense: an adapter that cannot
+   * express hierarchy simply does not have it, and the caller falls back to the
+   * flat `list()` — which is what Jira, Notion and markdown-git still do.
+   *
+   * Implementations must yield refs carrying `parentExternalId` and, where the
+   * upstream says so, `hasChildren`, so the walk knows where to go next without
+   * a second request per page.
+   */
+  children?(ctx: ConnectorContext, parent: ExternalRef | null): AsyncIterable<ExternalRef>;
 
   fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument>;
 
@@ -160,19 +191,38 @@ export class ConnectorNetworkError extends Error {
   }
 }
 
-/** `fetch` with the error shapes above; every adapter goes through it. */
+/**
+ * `fetch` with the error shapes above; every adapter goes through it.
+ *
+ * Passing `debug` traces the HTTP layer (docs/features/26) — the one place a
+ * "the space looks empty" bug is actually visible, since a wrong token gets an
+ * anonymous 200 from Confluence rather than a 401. The query string is stripped
+ * from the trace for the same reason `ConnectorNetworkError` strips it: it is
+ * the one part of a URL that can carry a token.
+ */
 export async function connectorFetch(
   url: string,
   init: RequestInit & { signal?: AbortSignal },
+  debug?: ConnectorContext['debug'],
 ): Promise<Response> {
+  const started = Date.now();
+  const method = init.method ?? 'GET';
   let res: Response;
   try {
     res = await fetch(url, init);
   } catch (err) {
     // An abort is the caller's own timeout, which carries its own message.
     if (init.signal?.aborted) throw err;
+    debug?.('http failed', { method, url: url.split('?')[0], ms: Date.now() - started });
     throw new ConnectorNetworkError(url, err);
   }
+  debug?.('http', {
+    method,
+    url: url.split('?')[0],
+    status: res.status,
+    ms: Date.now() - started,
+    bytes: res.headers.get('content-length') ?? '?',
+  });
   if (!res.ok) {
     throw new ConnectorRequestError(res.status, url, await res.text().catch(() => ''));
   }

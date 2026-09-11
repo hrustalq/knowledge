@@ -31,7 +31,7 @@ const MAX_DEPTH = 3;
 @Injectable()
 export class NotionAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'notion';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: false };
 
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
     const me = (await (

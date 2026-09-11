@@ -35,7 +35,7 @@ import {
 @Injectable()
 export class MarkdownGitAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'markdown-git';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: false };
 
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
     const files = await this.download(ctx);

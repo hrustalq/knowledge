@@ -94,6 +94,25 @@ export class ProjectCascadeService {
     const documentIds = documents.map((d) => d.id);
     if (documentIds.length === 0) return counts;
 
+    await this.cascadeDocuments(documentIds, workspaceId);
+    return counts;
+  }
+
+  /**
+   * Destroy these documents and everything hanging off them.
+   *
+   * Split out of `cascade` for connector revert (docs/features/26), which has to
+   * undo a single imported page. Reusing this rather than writing a second
+   * teardown is the point: the ordering above is the whole correctness story,
+   * and a second implementation of it would be a second chance to get it wrong.
+   *
+   * The caller is responsible for deciding that these documents *should* go —
+   * this method asks nothing about children, so pass a subtree's ids together
+   * or leave orphans behind.
+   */
+  async cascadeDocuments(documentIds: string[], workspaceId: string): Promise<void> {
+    if (documentIds.length === 0) return;
+
     const revisions = await this.prisma.documentRevision.findMany({
       where: { documentId: { in: documentIds } },
       select: { id: true, s3Key: true },
@@ -117,8 +136,6 @@ export class ProjectCascadeService {
       ...revisions.map((r) => r.s3Key.replace(/source\.md$/, 'normalized.json')),
       ...attachments.map((a) => a.s3Key),
     ]);
-
-    return counts;
   }
 
   /**
@@ -176,6 +193,13 @@ export class ProjectCascadeService {
     // were about, so they are detached rather than deleted.
     await tx.assistantThread.updateMany({ where: docs, data: { documentId: null } });
     await tx.glossaryTerm.updateMany({ where: docs, data: { documentId: null } });
+    // An import item is a record of what a sync did, which stays true after the
+    // page goes; but it must stop claiming to have produced something, or the
+    // run page would offer to revert a page that is already gone.
+    await tx.connectorRunItem.updateMany({
+      where: docs,
+      data: { documentId: null, linkId: null, createdDocument: false },
+    });
 
     await tx.document.deleteMany({ where: { id: { in: documentIds } } });
   }

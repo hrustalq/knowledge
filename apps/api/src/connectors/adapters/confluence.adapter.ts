@@ -6,6 +6,7 @@ import { t } from '../../i18n/t.js';
 import { markdownToStorageFormat } from './markdown-to-html.js';
 import {
   connectorFetch,
+  optionalConfig,
   requireConfig,
   trimBaseUrl,
   type ConnectorAdapter,
@@ -31,7 +32,7 @@ const PAGE_SIZE = 50;
 @Injectable()
 export class ConfluenceAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'confluence';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: true };
 
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
     const spaceKey = requireConfig(ctx.config, 'spaceKey');
@@ -48,22 +49,86 @@ export class ConfluenceAdapter implements ConnectorAdapter {
       const url = new URL(`${base}/api/v2/spaces/${space.id}/pages`);
       url.searchParams.set('limit', String(PAGE_SIZE));
       url.searchParams.set('status', 'current');
+      // Without this the list omits `version`, so the "far side says nothing
+      // changed" skip can never fire and every page is re-fetched on every run.
+      url.searchParams.set('body-format', 'none');
       if (cursor) url.searchParams.set('cursor', cursor);
 
       const body = (await (
-        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal })
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
       ).json()) as ConfluenceList<ConfluencePage>;
 
-      for (const page of body.results ?? []) {
+      const results = body.results ?? [];
+      ctx.debug('list page', { count: results.length, cursor: cursor ? 'yes' : 'first' });
+      for (const page of results) yield this.toRef(base, page);
+      cursor = nextCursor(body);
+    } while (cursor);
+  }
+
+  /**
+   * One level of the page tree (docs/features/26).
+   *
+   * v2 carries `parentId` on every page, so roots are found by listing the space
+   * once and keeping the pages that have none — cheaper and more honest than
+   * assuming the space homepage is the only root, which is untrue of any space
+   * someone has reorganised.
+   */
+  async *children(ctx: ConnectorContext, parent: ExternalRef | null): AsyncIterable<ExternalRef> {
+    const base = this.base(ctx);
+
+    const rootId = optionalConfig(ctx.config, 'rootPageId');
+    if (!parent && rootId) {
+      const url = `${base}/api/v2/pages/${encodeURIComponent(rootId)}?body-format=none`;
+      const page = (await (
+        await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+      ).json()) as ConfluencePage;
+      yield { ...this.toRef(base, page), parentExternalId: undefined, hasChildren: true };
+      return;
+    }
+
+    if (!parent) {
+      for await (const ref of this.list(ctx)) {
+        if (!ref.parentExternalId) yield { ...ref, hasChildren: true };
+      }
+      return;
+    }
+
+    let cursor: string | null = null;
+    do {
+      const url = new URL(`${base}/api/v2/pages/${encodeURIComponent(parent.externalId)}/children`);
+      url.searchParams.set('limit', String(PAGE_SIZE));
+      if (cursor) url.searchParams.set('cursor', cursor);
+
+      const body = (await (
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+      ).json()) as ConfluenceList<ConfluencePage>;
+
+      const results = body.results ?? [];
+      ctx.debug('children', { parent: parent.externalId, count: results.length });
+      for (const page of results) {
         yield {
           externalId: page.id,
           title: page.title,
           url: this.pageUrl(base, page.id),
           version: page.version ? String(page.version.number) : undefined,
+          parentExternalId: parent.externalId,
+          // The children endpoint does not say, so the walk probes: one empty
+          // request for a leaf is cheaper than missing a branch.
+          hasChildren: true,
         };
       }
       cursor = nextCursor(body);
     } while (cursor);
+  }
+
+  private toRef(base: string, page: ConfluencePage): ExternalRef {
+    return {
+      externalId: page.id,
+      title: page.title,
+      url: this.pageUrl(base, page.id),
+      version: page.version ? String(page.version.number) : undefined,
+      ...(page.parentId ? { parentExternalId: String(page.parentId) } : {}),
+    };
   }
 
   async fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument> {
@@ -211,6 +276,8 @@ interface ConfluencePage {
   title: string;
   version?: { number: number };
   body?: { storage?: { value?: string } };
+  /** v2 carries the parent inline — this is what makes the tree walk possible. */
+  parentId?: string | number | null;
 }
 
 /** v2 paginates with an opaque cursor buried in `_links.next`. */

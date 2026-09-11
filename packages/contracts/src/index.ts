@@ -1401,6 +1401,16 @@ export const KNOWN_EVENT_TYPES = [
   'connector.run.started',
   'connector.run.succeeded',
   'connector.run.failed',
+  // Staged tree import (docs/features/26). These carry the RUN id in
+  // `subjectId`, unlike the four above, which carry the connector id — an item
+  // event is only ever interesting against the run page it belongs to.
+  'connector.run.paused',
+  'connector.run.resumed',
+  'connector.run.awaiting-review',
+  'connector.item.staged',
+  'connector.item.applied',
+  'connector.item.reverted',
+  'connector.item.failed',
   'connector.link.created',
   'connector.link.removed',
   // Carries a `userId` and reaches only that person (docs/features/22).
@@ -1513,6 +1523,10 @@ const NOTIFIED_JOB_TYPES: readonly string[] = [
   'import.parsed',
   'import.failed',
   'connector.run.failed',
+  // "Your pull is staged and waiting on you" — the `workflow-node.awaiting-review`
+  // role. The per-item events are deliberately absent: a 500-page space would
+  // otherwise be 500 inbox rows for one act.
+  'connector.run.awaiting-review',
 ];
 
 /**
@@ -3097,7 +3111,9 @@ export type AiUsageOperation =
   /** The router's classifier call (docs/features/20). */
   | 'route'
   /** A background agent run (docs/features/20). */
-  | 'agent';
+  | 'agent'
+  /** Cleaning up or merging a staged connector item (docs/features/26). */
+  | 'connector';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {
@@ -4308,14 +4324,39 @@ export type ConnectorTrigger = 'manual' | 'schedule' | 'webhook';
  * sync. 'manual' overwrites nothing: it opens a merge request.
  */
 export type ConnectorConflictPolicy = 'manual' | 'external-wins' | 'local-wins';
-export type ConnectorRunStatus = 'queued' | 'running' | 'succeeded' | 'partial' | 'failed';
+export type ConnectorRunStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'awaiting-review'
+  | 'succeeded'
+  | 'partial'
+  | 'failed'
+  | 'cancelled';
 export type ConnectorHealth = 'ok' | 'error' | 'unknown';
+
+/**
+ * How much of a run happens without a person (docs/features/26).
+ *
+ * `auto` is the default and reproduces the pre-feature behaviour exactly: items
+ * are staged and applied in the same pass. The other two exist because a pull
+ * from a wiki is not a transfer, it is an edit to somebody's knowledge base.
+ */
+export type ConnectorSyncMode = (typeof CONNECTOR_SYNC_MODES)[number];
+
+/** Which part of its work a run is in. Distinct from `status`: a run can be paused while discovering. */
+export type ConnectorRunPhase = 'discovering' | 'fetching' | 'awaiting-review' | 'applying' | 'reverting';
 
 /** What an adapter can actually do. `push: false` is how Jira says it is pull-only. */
 export interface ConnectorCapabilities {
   pull: boolean;
   push: boolean;
   webhook: boolean;
+  /**
+   * The adapter implements `children()` and can reproduce the external
+   * hierarchy. False adapters take the flat `list()` path, unchanged.
+   */
+  tree: boolean;
 }
 
 /** One configurable, non-secret setting an adapter needs (drives the settings form). */
@@ -4348,7 +4389,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
   {
     kind: 'confluence',
     label: 'Confluence',
-    capabilities: { pull: true, push: true, webhook: true },
+    capabilities: { pull: true, push: true, webhook: true, tree: true },
     credentialLabel: 'email:api-token',
     fields: [
       {
@@ -4359,6 +4400,14 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         placeholder: 'https://your-team.atlassian.net/wiki',
       },
       { key: 'spaceKey', label: 'Space key', kind: 'text', required: true, placeholder: 'ENG' },
+      {
+        key: 'rootPageId',
+        label: 'Root page ID',
+        kind: 'text',
+        required: false,
+        placeholder: '123456',
+        help: 'Sync only this page and everything under it. Leave empty for the whole space.',
+      },
     ],
   },
   {
@@ -4371,7 +4420,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
     // Record<ConnectorKind, ...> in the API and the web.
     kind: 'confluence-server',
     label: 'Confluence (Server / Data Center)',
-    capabilities: { pull: true, push: true, webhook: true },
+    capabilities: { pull: true, push: true, webhook: true, tree: true },
     credentialLabel: 'Personal access token',
     fields: [
       {
@@ -4383,12 +4432,20 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         help: 'Self-hosted Confluence. Cloud sites (*.atlassian.net) use the Confluence connector instead.',
       },
       { key: 'spaceKey', label: 'Space key', kind: 'text', required: true, placeholder: 'ENG' },
+      {
+        key: 'rootPageId',
+        label: 'Root page ID',
+        kind: 'text',
+        required: false,
+        placeholder: '123456',
+        help: 'Sync only this page and everything under it. Leave empty for the whole space.',
+      },
     ],
   },
   {
     kind: 'jira',
     label: 'Jira',
-    capabilities: { pull: true, push: false, webhook: true },
+    capabilities: { pull: true, push: false, webhook: true, tree: false },
     credentialLabel: 'email:api-token',
     fields: [
       {
@@ -4411,7 +4468,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
   {
     kind: 'notion',
     label: 'Notion',
-    capabilities: { pull: true, push: true, webhook: true },
+    capabilities: { pull: true, push: true, webhook: true, tree: false },
     credentialLabel: 'Internal integration secret',
     fields: [
       {
@@ -4426,7 +4483,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
   {
     kind: 'markdown-git',
     label: 'Markdown / Git',
-    capabilities: { pull: true, push: true, webhook: true },
+    capabilities: { pull: true, push: true, webhook: true, tree: false },
     credentialLabel: 'Personal access token',
     fields: [
       {
@@ -4473,6 +4530,14 @@ export interface ConnectorSummary {
   direction: ConnectorDirection;
   conflict: ConnectorConflictPolicy;
   pushOnPublish: boolean;
+  /** Default mode for runs this connector starts. */
+  syncMode: ConnectorSyncMode;
+  /**
+   * Recreate the external tree under `parentId`. Default false, so an existing
+   * connector keeps landing pages exactly where it does today — turning it on
+   * moves nothing already imported.
+   */
+  preserveHierarchy: boolean;
   /** null = manual only. */
   syncIntervalMinutes: number | null;
   hasWebhookSecret: boolean;
@@ -4506,6 +4571,8 @@ export interface CreateConnectorRequest {
   direction?: ConnectorDirection;
   conflict?: ConnectorConflictPolicy;
   pushOnPublish?: boolean;
+  syncMode?: ConnectorSyncMode;
+  preserveHierarchy?: boolean;
   syncIntervalMinutes?: number | null;
   /** Sent once; afterwards only `hasWebhookSecret` is readable. */
   webhookSecret?: string | null;
@@ -4559,6 +4626,10 @@ export interface ConnectorRunInfo {
   direction: ConnectorRunDirection;
   trigger: ConnectorTrigger;
   status: ConnectorRunStatus;
+  /** Frozen from the connector when the run was created. */
+  mode: ConnectorSyncMode;
+  /** Which part of the work this run is in; null before it starts and once it ends. */
+  phase: ConnectorRunPhase | null;
   /** Free-text act ("Fetching 48 pages"); null when the client's own phase shows. */
   stage: string | null;
   /** 0..1 when honest; null means indeterminate. */
@@ -4568,6 +4639,12 @@ export interface ConnectorRunInfo {
   skipped: number;
   failed: number;
   conflicts: number;
+  /** Items the tree walk has found so far. Grows while `phase` is 'discovering'. */
+  discovered: number;
+  applied: number;
+  reverted: number;
+  /** Items staged and waiting on a person. Drives the review badge. */
+  awaitingReview: number;
   warnings: ConnectorRunWarning[];
   error: { message: string } | null;
   startedAt: string | null;
@@ -4587,6 +4664,176 @@ export interface StartConnectorSyncRequest {
   direction?: ConnectorRunDirection;
   /** Limit the run to these external items; absent = the connector's whole scope. */
   externalIds?: string[];
+  /** Override the connector's default for this run only. */
+  mode?: ConnectorSyncMode;
+}
+
+// ---------------------------------------------------------------------------
+// Run items (docs/features/26) — one row per external page, which is what makes
+// a pull watchable, pausable, reviewable and revertable. The tree lives as rows
+// rather than inside the run, for the reason `workflow_run_nodes` does: "every
+// item awaiting review in this connector" has to be a query.
+// ---------------------------------------------------------------------------
+
+/**
+ * discovered → fetching → staged → approved → applying → applied,
+ * or unchanged | skipped | rejected | failed | reverted.
+ *
+ * `unchanged` is not `skipped`: the first means the two sides already agree, the
+ * second means a person declined it. Collapsing them would make "what did this
+ * run actually leave alone" unanswerable.
+ */
+export type ConnectorRunItemStatus =
+  | 'discovered'
+  | 'fetching'
+  | 'staged'
+  | 'approved'
+  | 'applying'
+  | 'applied'
+  | 'unchanged'
+  | 'skipped'
+  | 'rejected'
+  | 'failed'
+  | 'reverted';
+
+/** What applying this item would do to the knowledge base. */
+export type ConnectorItemAction = 'create' | 'update' | 'unchanged' | 'conflict';
+
+/**
+ * These four are `as const` arrays rather than bare unions because the API's
+ * DTOs validate against them at runtime — the `CONNECTOR_KINDS` precedent, so
+ * the values the server accepts and the ones the web offers cannot drift.
+ */
+export const CONNECTOR_SYNC_MODES = ['auto', 'review', 'step'] as const;
+export const CONNECTOR_ITEM_EVENTS = ['APPROVE', 'SKIP', 'REJECT', 'RETRY', 'REVERT'] as const;
+export const CONNECTOR_RUN_EVENTS = ['PAUSE', 'RESUME', 'NEXT', 'CANCEL', 'APPROVE_ALL'] as const;
+export const CONNECTOR_ITEM_AI_OPS = ['cleanup', 'merge'] as const;
+
+export type ConnectorItemEventType = (typeof CONNECTOR_ITEM_EVENTS)[number];
+export type ConnectorRunEventType = (typeof CONNECTOR_RUN_EVENTS)[number];
+
+/** Which AI assist to run over a staged item. Never automatic; always asked for. */
+export type ConnectorItemAiOp = (typeof CONNECTOR_ITEM_AI_OPS)[number];
+
+export interface ConnectorRunItemInfo {
+  id: string;
+  runId: string;
+  parentItemId: string | null;
+  externalId: string;
+  externalUrl: string | null;
+  externalVersion: string | null;
+  title: string;
+  depth: number;
+  position: number;
+  /** The adapter said this branch continues. False once its children are rows. */
+  hasChildren: boolean;
+  status: ConnectorRunItemStatus;
+  action: ConnectorItemAction | null;
+  /** What the conversion could not carry, plus 'orphan' when the walk never reached it. */
+  warnings: string[];
+  /** Set when a model wrote the staged markdown, so a rewritten page is never mistaken for a sent one. */
+  aiOp: ConnectorItemAiOp | null;
+  /** True once someone edited the staged markdown by hand. */
+  edited: boolean;
+  documentId: string | null;
+  error: string | null;
+  updatedAt: string;
+}
+
+// GET /v1/connectors/runs/:runId/items
+export interface ListConnectorRunItemsResponse {
+  runId: string;
+  /** Flat rows; the client assembles the tree from `parentItemId`. */
+  items: ConnectorRunItemInfo[];
+  /** True when the walk stopped at CONNECTOR_SYNC_MAX_ITEMS. */
+  truncated: boolean;
+}
+
+// GET /v1/connectors/runs/:runId/items/:itemId
+export interface ConnectorRunItemResponse {
+  item: ConnectorRunItemInfo;
+  /** The prepared document, as it would be written. */
+  markdown: string;
+  /** The unedited conversion, when the staged copy has diverged from it. */
+  incoming: string | null;
+  /** The page's current content, for a 'conflict' or 'update' item. */
+  localHead: string | null;
+}
+
+// PATCH /v1/connectors/runs/:runId/items/:itemId
+export interface UpdateConnectorRunItemRequest {
+  title?: string;
+  markdown?: string;
+}
+
+// POST /v1/connectors/runs/:runId/items/:itemId/ai
+export interface ConnectorItemAiRequest {
+  op: ConnectorItemAiOp;
+}
+
+// POST /v1/connectors/runs/:runId/items/:itemId/events
+export interface ConnectorItemEventRequest {
+  type: ConnectorItemEventType;
+  /** Apply the same event to everything below this item. */
+  subtree?: boolean;
+}
+
+// POST /v1/connectors/runs/:runId/events
+export interface ConnectorRunEventRequest {
+  type: ConnectorRunEventType;
+}
+
+export interface ConnectorRunEventResponse {
+  run: ConnectorRunInfo;
+}
+export interface ConnectorItemEventResponse {
+  /** Every row the event touched — one, or a whole subtree. */
+  items: ConnectorRunItemInfo[];
+  run: ConnectorRunInfo;
+}
+
+/**
+ * Which run events are legal right now.
+ *
+ * This pair is the `allowedNodeEvents` idea from `@knowledge/workflow` without
+ * the machine: the connector's transitions are few enough that a table states
+ * them more clearly than a state chart would, and the point of sharing them is
+ * the same — the buttons the web offers and the transitions the API accepts are
+ * one list, so they cannot drift.
+ */
+export function allowedRunEvents(run: Pick<ConnectorRunInfo, 'status' | 'mode' | 'awaitingReview'>): ConnectorRunEventType[] {
+  const events: ConnectorRunEventType[] = [];
+  if (run.status === 'running' || run.status === 'queued') events.push('PAUSE', 'CANCEL');
+  if (run.status === 'paused') events.push('RESUME', 'CANCEL');
+  if (run.status === 'awaiting-review') {
+    events.push('CANCEL');
+    // `NEXT` releases one more item; only a stepping run has one held back.
+    if (run.mode === 'step') events.push('NEXT');
+    if (run.awaitingReview > 0) events.push('APPROVE_ALL');
+  }
+  return events;
+}
+
+export function allowedItemEvents(item: Pick<ConnectorRunItemInfo, 'status'>): ConnectorItemEventType[] {
+  switch (item.status) {
+    case 'staged':
+      return ['APPROVE', 'SKIP', 'REJECT', 'RETRY'];
+    case 'failed':
+      return ['RETRY', 'SKIP'];
+    case 'applied':
+      // Revert is the whole reason the item keeps `previousRevisionId`.
+      return ['REVERT'];
+    case 'skipped':
+    case 'rejected':
+    case 'reverted':
+      return ['RETRY'];
+    case 'unchanged':
+      return ['RETRY'];
+    default:
+      // discovered / fetching / approved / applying are the machine's own; a
+      // person interrupts the run, not an item mid-flight.
+      return [];
+  }
 }
 
 // POST /v1/documents/:id/push — publish one page to the connector it is linked to.

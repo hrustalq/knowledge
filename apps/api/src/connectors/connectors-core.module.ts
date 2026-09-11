@@ -5,7 +5,9 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { ProjectsCoreModule } from '../projects/projects-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ConnectorAdaptersModule } from './adapters/adapters.module.js';
+import { ConnectorDiscoveryService } from './connector-discovery.service.js';
 import { ConnectorLinksService } from './connector-links.service.js';
+import { ConnectorStagingService } from './connector-staging.service.js';
 import { ConnectorSyncService } from './connector-sync.service.js';
 import { ConnectorsService } from './connectors.service.js';
 
@@ -19,7 +21,19 @@ import { ConnectorsService } from './connectors.service.js';
  */
 @Module({
   imports: [PrismaModule, StorageModule, EventsModule, ProjectsCoreModule, DocumentsCoreModule, ConnectorAdaptersModule],
-  providers: [ConnectorsService, ConnectorLinksService, ConnectorSyncService],
-  exports: [ConnectorsService, ConnectorLinksService, ConnectorSyncService],
+  providers: [
+    ConnectorsService,
+    ConnectorLinksService,
+    ConnectorDiscoveryService,
+    ConnectorStagingService,
+    ConnectorSyncService,
+  ],
+  exports: [
+    ConnectorsService,
+    ConnectorLinksService,
+    ConnectorDiscoveryService,
+    ConnectorStagingService,
+    ConnectorSyncService,
+  ],
 })
 export class ConnectorsCoreModule {}

@@ -1,10 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type {
+  ConnectorItemEventResponse,
   ConnectorResponse,
+  ConnectorRunEventResponse,
+  ConnectorRunItemInfo,
+  ConnectorRunItemResponse,
   ConnectorRunResponse,
   ConnectorTestResponse,
   ListConnectorLinksResponse,
+  ListConnectorRunItemsResponse,
   ListConnectorRunsResponse,
   ListConnectorsResponse,
 } from '@knowledge/contracts';
@@ -13,9 +18,19 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ConnectorLinksService } from './connector-links.service.js';
+import { ConnectorItemAiService } from './connector-item-ai.service.js';
+import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService, toRunInfo } from './connectors.service.js';
-import { CreateConnectorDto, StartConnectorSyncDto, UpdateConnectorDto } from './connectors.dto.js';
+import {
+  ConnectorItemAiDto,
+  ConnectorItemEventDto,
+  ConnectorRunEventDto,
+  CreateConnectorDto,
+  StartConnectorSyncDto,
+  UpdateConnectorDto,
+  UpdateConnectorRunItemDto,
+} from './connectors.dto.js';
 
 /**
  * Connector administration (docs/features/19).
@@ -30,6 +45,8 @@ export class ConnectorsController {
   constructor(
     private readonly connectors: ConnectorsService,
     private readonly links: ConnectorLinksService,
+    private readonly items: ConnectorItemsService,
+    private readonly ai: ConnectorItemAiService,
     private readonly producer: ConnectorProducer,
     private readonly activity: ActivityService,
   ) {}
@@ -69,7 +86,75 @@ export class ConnectorsController {
   @Access('viewer', 'connector-run')
   @ApiOperation({ summary: 'One sync run — the poll target' })
   async run(@Param('runId', ParseUUIDPipe) runId: string): Promise<ConnectorRunResponse> {
-    return { run: await this.connectors.getRun(runId) };
+    return { run: await this.items.runInfo(runId) };
+  }
+
+  // --- staged items (docs/features/26) ---
+  //
+  // All under `runs/:runId`, and all declared before `@Get(':id')` for the same
+  // reason that route is: Nest matches in declaration order, so `:id` would
+  // otherwise swallow the literal "runs".
+
+  @Get('runs/:runId/items')
+  @Access('viewer', 'connector-run')
+  @ApiOperation({ summary: 'The tree of items this run found — flat rows joined by parentItemId' })
+  async listItems(@Param('runId', ParseUUIDPipe) runId: string): Promise<ListConnectorRunItemsResponse> {
+    const { items, truncated } = await this.items.listItems(runId);
+    return { runId, items, truncated };
+  }
+
+  @Get('runs/:runId/items/:itemId')
+  @Access('viewer', 'connector-run')
+  @ApiOperation({ summary: 'One item with the document it would write, before it writes it' })
+  async getItem(
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+  ): Promise<ConnectorRunItemResponse> {
+    return this.items.getItem(runId, itemId);
+  }
+
+  @Patch('runs/:runId/items/:itemId')
+  @Access('editor', 'connector-run')
+  @ApiOperation({ summary: 'Correct a staged item before approving it' })
+  async updateItem(
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: UpdateConnectorRunItemDto,
+  ): Promise<{ item: ConnectorRunItemInfo }> {
+    return { item: await this.items.updateItem(runId, itemId, dto) };
+  }
+
+  @Post('runs/:runId/items/:itemId/ai')
+  @Access('editor', 'connector-run')
+  @ApiOperation({ summary: 'Ask the drafter to clean up the conversion, or merge it with the current page' })
+  async itemAi(
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: ConnectorItemAiDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<{ item: ConnectorRunItemInfo }> {
+    return { item: await this.ai.run(runId, itemId, dto.op, principal) };
+  }
+
+  @Post('runs/:runId/items/:itemId/events')
+  @Access('editor', 'connector-run')
+  @ApiOperation({ summary: 'Approve, skip, reject, retry or revert an item — optionally its whole subtree' })
+  async itemEvent(
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: ConnectorItemEventDto,
+  ): Promise<ConnectorItemEventResponse> {
+    return this.items.sendItemEvent(runId, itemId, dto.type, dto.subtree ?? false);
+  }
+
+  @Post('runs/:runId/events')
+  @Access('editor', 'connector-run')
+  @ApiOperation({ summary: 'Pause, resume, step, cancel, or approve everything staged' })
+  async runEvent(
+    @Param('runId', ParseUUIDPipe) runId: string,
+    @Body() dto: ConnectorRunEventDto,
+  ): Promise<ConnectorRunEventResponse> {
+    return { run: await this.items.sendRunEvent(runId, dto.type) };
   }
 
   @Get(':id')

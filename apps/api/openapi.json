@@ -11009,6 +11009,418 @@
         ]
       }
     },
+    "/v1/connectors/runs/{runId}/items": {
+      "get": {
+        "operationId": "ConnectorsController_listItems",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The tree of items this run found — flat rows joined by parentItemId",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/v1/connectors/runs/{runId}/items/{itemId}": {
+      "get": {
+        "operationId": "ConnectorsController_getItem",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One item with the document it would write, before it writes it",
+        "tags": [
+          "connectors"
+        ]
+      },
+      "patch": {
+        "operationId": "ConnectorsController_updateItem",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConnectorRunItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Correct a staged item before approving it",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/v1/connectors/runs/{runId}/items/{itemId}/ai": {
+      "post": {
+        "operationId": "ConnectorsController_itemAi",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorItemAiDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ask the drafter to clean up the conversion, or merge it with the current page",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/v1/connectors/runs/{runId}/items/{itemId}/events": {
+      "post": {
+        "operationId": "ConnectorsController_itemEvent",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorItemEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Approve, skip, reject, retry or revert an item — optionally its whole subtree",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/v1/connectors/runs/{runId}/events": {
+      "post": {
+        "operationId": "ConnectorsController_runEvent",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorRunEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pause, resume, step, cancel, or approve everything staged",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
     "/v1/connectors/{id}": {
       "get": {
         "operationId": "ConnectorsController_get",
@@ -15238,6 +15650,19 @@
             "type": "boolean",
             "description": "Defaults to false"
           },
+          "syncMode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "review",
+              "step"
+            ],
+            "description": "How much of a run happens unattended. 'auto' applies as it goes and is the default; 'review' stages everything for approval; 'step' releases one page at a time."
+          },
+          "preserveHierarchy": {
+            "type": "boolean",
+            "description": "Recreate the source hierarchy under the destination page. Defaults to false; turning it on never moves pages already imported."
+          },
           "syncIntervalMinutes": {
             "type": "number",
             "nullable": true,
@@ -15260,6 +15685,75 @@
           "kind",
           "name",
           "projectId"
+        ]
+      },
+      "UpdateConnectorRunItemDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title the page will be created with"
+          },
+          "markdown": {
+            "type": "string",
+            "description": "The prepared document, corrected"
+          }
+        }
+      },
+      "ConnectorItemAiDto": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "cleanup",
+              "merge"
+            ],
+            "description": "'cleanup' repairs the conversion; 'merge' reconciles it with the current page (conflicts only)"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "ConnectorItemEventDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "SKIP",
+              "REJECT",
+              "RETRY",
+              "REVERT"
+            ]
+          },
+          "subtree": {
+            "type": "boolean",
+            "description": "Apply to every item below this one as well. Defaults to false."
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ConnectorRunEventDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PAUSE",
+              "RESUME",
+              "NEXT",
+              "CANCEL",
+              "APPROVE_ALL"
+            ]
+          }
+        },
+        "required": [
+          "type"
         ]
       },
       "UpdateConnectorDto": {
@@ -15320,6 +15814,17 @@
           "pushOnPublish": {
             "type": "boolean"
           },
+          "syncMode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "review",
+              "step"
+            ]
+          },
+          "preserveHierarchy": {
+            "type": "boolean"
+          },
           "syncIntervalMinutes": {
             "type": "number",
             "nullable": true,
@@ -15353,6 +15858,15 @@
             "items": {
               "type": "string"
             }
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "review",
+              "step"
+            ],
+            "description": "Override the connector's own mode for this run only. Defaults to the connector's setting."
           }
         }
       },

@@ -1203,6 +1203,15 @@ model Connector {
   /// Push a linked page back automatically when a new revision is indexed.
   pushOnPublish Boolean @default(false) @map("push_on_publish")
 
+  /// 'auto' | 'review' | 'step' — default mode for runs this connector starts
+  /// (docs/features/26). 'auto' is the pre-feature behaviour, so every existing
+  /// row keeps it.
+  syncMode          String  @default("auto") @map("sync_mode")
+  /// Recreate the external tree under parent_id. Default false: turning it on is
+  /// a visible change to somebody's page tree and has to be asked for, and it
+  /// never moves pages already imported.
+  preserveHierarchy Boolean @default(false) @map("preserve_hierarchy")
+
   /// null = manual only. The worker's schedule sweeper reads this.
   syncIntervalMinutes Int?    @map("sync_interval_minutes")
   /// AES-256-GCM envelope. null = inbound webhooks are refused for this connector.
@@ -1273,16 +1282,32 @@ model ConnectorRun {
   direction String
   /// 'manual' | 'schedule' | 'webhook'
   trigger   String
-  /// queued -> running -> succeeded | partial | failed
+  /// queued -> running -> succeeded | partial | failed,
+  /// plus paused | awaiting-review | cancelled (docs/features/26).
   status    String  @default("queued")
+  /// 'auto' | 'review' | 'step', frozen from the connector at creation — editing
+  /// the connector must not change a run already in flight, the
+  /// `definition_snapshot` rule.
+  mode      String  @default("auto")
+  /// discovering | fetching | awaiting-review | applying | reverting. Distinct
+  /// from status: a run can be paused while discovering.
+  phase     String?
   stage     String?
   progress  Float?
 
-  created   Int @default(0)
-  updated   Int @default(0)
-  skipped   Int @default(0)
-  failed    Int @default(0)
-  conflicts Int @default(0)
+  /// Discovery frontier — item ids whose children are still unwalked. This is
+  /// the checkpoint that makes a paused or timed-out tree walk resumable
+  /// instead of restarting from the first page.
+  cursor Json?
+
+  created    Int @default(0)
+  updated    Int @default(0)
+  skipped    Int @default(0)
+  failed     Int @default(0)
+  conflicts  Int @default(0)
+  discovered Int @default(0)
+  applied    Int @default(0)
+  reverted   Int @default(0)
 
   /// Capped [{ externalId, title, message }] — a lossy sync that says nothing
   /// is the failure this feature exists to prevent.
@@ -1299,11 +1324,81 @@ model ConnectorRun {
   completedAt DateTime? @map("completed_at") @db.Timestamptz
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  connector Connector          @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  items     ConnectorRunItem[]
 
   @@index([connectorId, createdAt])
   @@index([status, createdAt])
   @@map("connector_runs")
+}
+
+/// One external page, as one row (docs/features/26).
+///
+/// The tree lives here rather than inside the run for the reason
+/// `workflow_run_nodes` gives: the feature has to answer "every item awaiting
+/// review in this connector", and an opaque blob cannot be queried. It is also
+/// what makes a pull revertable — nothing else records which revision an import
+/// replaced.
+model ConnectorRunItem {
+  id    String @id @default(uuid()) @db.Uuid
+  runId String @map("run_id") @db.Uuid
+  /// Self-FK: the external hierarchy as discovered. Cascades with the run.
+  parentItemId String? @map("parent_item_id") @db.Uuid
+
+  externalId       String  @map("external_id")
+  externalParentId String? @map("external_parent_id")
+  externalUrl      String? @map("external_url")
+  externalVersion  String? @map("external_version")
+  title            String
+  depth            Int     @default(0)
+  position         Int     @default(0)
+  /// The adapter said this branch continues; discovery has not reached it yet.
+  hasChildren      Boolean @default(false) @map("has_children")
+
+  /// discovered -> fetching -> staged -> approved -> applying -> applied,
+  /// or unchanged | skipped | rejected | failed | reverted.
+  status String  @default("discovered")
+  /// What applying would do: create | update | unchanged | conflict.
+  action String?
+
+  /// Small metadata only — { frontmatter?, warnings[], aiOp?, edited?, orphan? }.
+  /// The markdown is an object, not a column: a 500-page space would otherwise
+  /// be tens of megabytes of JSONB in a row the UI polls.
+  draft Json?
+
+  contentHash String? @map("content_hash")
+  /// workspaces/{ws}/connector-runs/{runId}/items/{itemId}/staged.md
+  stagedKey   String? @map("staged_key")
+  /// .../incoming.md — the unedited conversion. Never rewritten, so "what did
+  /// the far side actually send" survives every edit and every AI pass.
+  incomingKey String? @map("incoming_key")
+
+  documentId String? @map("document_id") @db.Uuid
+  linkId     String? @map("link_id") @db.Uuid
+  /// The revision applying wrote, and the one it replaced. Together these are
+  /// what let revert be a forward write rather than a deletion — the revision
+  /// DAG is immutable.
+  revisionId         String? @map("revision_id") @db.Uuid
+  previousRevisionId String? @map("previous_revision_id") @db.Uuid
+  createdDocument    Boolean @default(false) @map("created_document")
+
+  error   String?
+  attempt Int     @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  run      ConnectorRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  parent   ConnectorRunItem?  @relation("ConnectorItemTree", fields: [parentItemId], references: [id], onDelete: Cascade)
+  children ConnectorRunItem[] @relation("ConnectorItemTree")
+
+  /// Discovery idempotence: a resumed walk re-yielding a branch is a no-op
+  /// rather than a duplicate row.
+  @@unique([runId, externalId])
+  @@index([runId, status])
+  @@index([runId, parentItemId])
+  @@index([documentId])
+  @@map("connector_run_items")
 }
 
 /// A pull where both sides had changed. The worker writes the external version

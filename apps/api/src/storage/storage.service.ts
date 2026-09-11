@@ -57,6 +57,16 @@ export class StorageService {
   }
 
   /**
+   * Staged connector items (docs/features/26). Same reasoning as imports: the
+   * markdown exists before any document does, and for a skipped item there will
+   * never be one. Keeping it here rather than in the row is what stops a
+   * 500-page space turning the row the UI polls into tens of megabytes.
+   */
+  connectorItemObjectKey(workspaceId: string, runId: string, itemId: string, filename: string): string {
+    return `workspaces/${workspaceId}/connector-runs/${runId}/items/${itemId}/${safeSegment(filename)}`;
+  }
+
+  /**
    * Avatars (docs/features/23). Deliberately outside the `workspaces/` tree
    * that every other key sits under: a user belongs to several workspaces and a
    * face does not change between them, so filing it under one would make the

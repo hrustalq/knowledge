@@ -18,9 +18,12 @@
     "passthrough": "{text}",
     "pushUnsupported": "{kind} cannot publish back, so this page was left alone.",
     "documentMissing": "The linked page no longer exists; the link was removed.",
-    "conflict": "Both sides changed — a merge request was opened instead of overwriting."
+    "conflict": "Both sides changed — a merge request was opened instead of overwriting.",
+    "orphan": "Reached by listing the space, not by walking the tree - its parent may not be visible to this connector.",
+    "orphansFound": "{count} page(s) were not reachable through the page tree and were added at the top level."
   },
   "pushVersionMessage": "Updated from the knowledge base",
   "syncRevisionMessage": "Synced from a connector",
-  "stoppedAtMax": "Stopped after {max} items (CONNECTOR_SYNC_MAX_ITEMS)."
+  "stoppedAtMax": "Stopped after {max} items (CONNECTOR_SYNC_MAX_ITEMS).",
+  "revertRevisionMessage": "Reverted a connector import"
 }

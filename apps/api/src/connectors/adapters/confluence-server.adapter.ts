@@ -5,7 +5,9 @@ import { t } from '../../i18n/t.js';
 import { countMacros, safeJson, verifyHubSignature } from './confluence.adapter.js';
 import { markdownToStorageFormat } from './markdown-to-html.js';
 import {
+  ConnectorRequestError,
   connectorFetch,
+  optionalConfig,
   requireConfig,
   trimBaseUrl,
   type ConnectorAdapter,
@@ -44,7 +46,15 @@ const PAGE_SIZE = 50;
 @Injectable()
 export class ConfluenceServerAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'confluence-server';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: true };
+
+  /**
+   * Whether this instance answers the bulk page endpoints, decided once per
+   * context by the first call that needs them. Older Server builds 404 them, and
+   * Forge/OAuth2 apps are barred from the group outright — neither is an error
+   * worth surfacing when a universally available fallback exists.
+   */
+  private readonly bulk = new WeakMap<ConnectorContext, boolean>();
 
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
     const space = await this.space(ctx);
@@ -61,22 +71,21 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
       url.searchParams.set('spaceKey', key);
       url.searchParams.set('type', 'page');
       url.searchParams.set('status', 'current');
-      url.searchParams.set('expand', 'version');
+      // `ancestors` costs nothing extra here and is what lets the flat path
+      // still report hierarchy — both for adapters falling back from the bulk
+      // endpoints and for the orphan repair pass after a tree walk.
+      url.searchParams.set('expand', 'version,ancestors');
       url.searchParams.set('limit', String(PAGE_SIZE));
       url.searchParams.set('start', String(start));
 
       const body = (await (
-        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal })
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
       ).json()) as ServerList<ServerContent>;
 
       const results = body.results ?? [];
+      ctx.debug('list page', { start, count: results.length });
       for (const page of results) {
-        yield {
-          externalId: page.id,
-          title: page.title,
-          url: this.pageUrl(base, page.id),
-          version: page.version ? String(page.version.number) : undefined,
-        };
+        yield this.toRef(base, page);
       }
 
       // v1 offers `_links.next`, but only sometimes and relative to a separate
@@ -84,6 +93,145 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
       if (results.length < PAGE_SIZE) return;
       start += results.length;
     }
+  }
+
+  /**
+   * One level of the page tree (docs/features/26).
+   *
+   * Two routes to the same answer. The bulk group (Confluence 9.3+) is
+   * preferred: it is cursor-paginated and returns `hasChildren`, so the walk
+   * knows which branches continue without probing each page. Everything else
+   * falls back to `child/page`, which has existed since 5.x — and since that
+   * route cannot enumerate a space's roots, roots there come from one
+   * `expand=ancestors` pass, where a root is a page with no ancestors.
+   */
+  async *children(ctx: ConnectorContext, parent: ExternalRef | null): AsyncIterable<ExternalRef> {
+    const base = this.base(ctx);
+
+    // A configured root page turns the whole space into one subtree.
+    const rootId = optionalConfig(ctx.config, 'rootPageId');
+    if (!parent && rootId) {
+      const url = `${base}/rest/api/content/${encodeURIComponent(rootId)}?expand=version,ancestors`;
+      const page = (await (
+        await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+      ).json()) as ServerContent;
+      yield { ...this.toRef(base, page), parentExternalId: undefined, hasChildren: true };
+      return;
+    }
+
+    if (this.bulk.get(ctx) !== false) {
+      try {
+        yield* this.bulkChildren(ctx, base, parent);
+        return;
+      } catch (err) {
+        // Only a 404/403 means "this instance does not have the bulk group".
+        // A timeout or a real upstream failure must still surface.
+        const status = err instanceof ConnectorRequestError ? err.status : 0;
+        if (status !== 404 && status !== 403) throw err;
+        ctx.debug('bulk page endpoints unavailable, falling back', { status });
+        this.bulk.set(ctx, false);
+      }
+    }
+
+    yield* this.legacyChildren(ctx, base, parent);
+  }
+
+  /** Confluence 9.3+ — cursor paginated, carries `hasChildren`. */
+  private async *bulkChildren(
+    ctx: ConnectorContext,
+    base: string,
+    parent: ExternalRef | null,
+  ): AsyncIterable<ExternalRef> {
+    const key = requireConfig(ctx.config, 'spaceKey');
+    let cursor: string | null = null;
+
+    do {
+      const url = new URL(
+        parent
+          ? `${base}/rest/api/content/bulk/page/${encodeURIComponent(parent.externalId)}/children`
+          : `${base}/rest/api/content/bulk/page/space/${encodeURIComponent(key)}/root`,
+      );
+      url.searchParams.set('limit', String(PAGE_SIZE));
+      if (cursor) url.searchParams.set('cursor', cursor);
+
+      const body = (await (
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+      ).json()) as ServerBulkList;
+
+      const results = body.results ?? [];
+      ctx.debug('children (bulk)', { parent: parent?.externalId ?? 'root', count: results.length });
+      for (const page of results) {
+        yield {
+          externalId: String(page.id),
+          title: page.title,
+          url: this.pageUrl(base, String(page.id)),
+          version: page.version ? String(page.version.number) : undefined,
+          ...(parent ? { parentExternalId: parent.externalId } : {}),
+          hasChildren: page.hasChildren ?? false,
+        };
+      }
+      cursor = body.nextCursor ?? null;
+    } while (cursor);
+
+    this.bulk.set(ctx, true);
+  }
+
+  /** Confluence 5.x onwards. No root endpoint, so roots are derived from ancestors. */
+  private async *legacyChildren(
+    ctx: ConnectorContext,
+    base: string,
+    parent: ExternalRef | null,
+  ): AsyncIterable<ExternalRef> {
+    if (!parent) {
+      for await (const ref of this.list(ctx)) {
+        // A page with no ancestors sits at the top of the space.
+        if (!ref.parentExternalId) yield { ...ref, hasChildren: true };
+      }
+      return;
+    }
+
+    let start = 0;
+    for (;;) {
+      const url = new URL(`${base}/rest/api/content/${encodeURIComponent(parent.externalId)}/child/page`);
+      url.searchParams.set('expand', 'version');
+      url.searchParams.set('limit', String(PAGE_SIZE));
+      url.searchParams.set('start', String(start));
+
+      const body = (await (
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+      ).json()) as ServerList<ServerContent>;
+
+      const results = body.results ?? [];
+      ctx.debug('children (legacy)', { parent: parent.externalId, start, count: results.length });
+      for (const page of results) {
+        yield {
+          externalId: page.id,
+          title: page.title,
+          url: this.pageUrl(base, page.id),
+          version: page.version ? String(page.version.number) : undefined,
+          parentExternalId: parent.externalId,
+          // v1 will not say, so the walk probes: a childless page costs one
+          // empty request, which is cheaper than missing a branch.
+          hasChildren: true,
+        };
+      }
+
+      if (results.length < PAGE_SIZE) return;
+      start += results.length;
+    }
+  }
+
+  /** A content row as a ref, with its immediate ancestor as the parent. */
+  private toRef(base: string, page: ServerContent): ExternalRef {
+    const ancestors = page.ancestors ?? [];
+    const parent = ancestors.length > 0 ? ancestors[ancestors.length - 1] : null;
+    return {
+      externalId: page.id,
+      title: page.title,
+      url: this.pageUrl(base, page.id),
+      version: page.version ? String(page.version.number) : undefined,
+      ...(parent ? { parentExternalId: String(parent.id) } : {}),
+    };
   }
 
   async fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument> {
@@ -241,4 +389,16 @@ interface ServerContent {
   title: string;
   version?: { number: number };
   body?: { storage?: { value?: string } };
+  /** Root first, immediate parent last — only present under `expand=ancestors`. */
+  ancestors?: Array<{ id: string | number }>;
+}
+/** The bulk page group (Confluence 9.3+) — keyset paginated, unlike everything else in v1. */
+interface ServerBulkList {
+  results?: Array<{
+    id: string | number;
+    title: string;
+    version?: { number: number };
+    hasChildren?: boolean;
+  }>;
+  nextCursor?: string | null;
 }

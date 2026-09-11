@@ -287,7 +287,10 @@
       "running": "Running",
       "succeeded": "Done",
       "partial": "Done with errors",
-      "failed": "Failed"
+      "failed": "Failed",
+      "paused": "Paused",
+      "awaiting-review": "Waiting for review",
+      "cancelled": "Cancelled"
     },
     "trigger": {
       "manual": "manual",
@@ -318,7 +321,104 @@
     "continueAnyway": "Continue anyway",
     "finish": "Add connector",
     "startOver": "Start over",
-    "resumed": "Picked up where you left off."
+    "resumed": "Picked up where you left off.",
+    "syncMode": "Before pages are written",
+    "syncModeAuto": "Write them straight away",
+    "syncModeReview": "Stage them for review",
+    "syncModeStep": "Stage them one at a time",
+    "syncModeHint": "Staging lets you read, correct and approve each page before it reaches the knowledge base. The first pull from a large space is the one nobody can predict the shape of.",
+    "preserveHierarchy": "Keep the external page tree",
+    "preserveHierarchyHint": "Recreate the nesting the source has, under the destination page. Pages already imported are never moved.",
+    "runTitle": "Sync run",
+    "backToRuns": "Runs",
+    "openRun": "Open",
+    "reviewRun": "Review",
+    "awaitingReview": "{count} waiting on you | {count} waiting on you",
+    "discoveredCount": "{count} page found | {count} pages found",
+    "itemCount": "Nothing found | {count} page | {count} pages",
+    "unsavedEdits": "Unsaved changes",
+    "itemsTruncated": "This run reached its page limit; some pages were not read.",
+    "noItemsTitle": "Nothing to review",
+    "noItemsBody": "This run wrote no pages. Anything it could not carry is listed on the Runs tab.",
+    "pickItemTitle": "Pick a page",
+    "pickItemBody": "Choose a page on the left to read what this run would write, and fix it before it does.",
+    "expandBranch": "Show pages under this one",
+    "collapseBranch": "Hide pages under this one",
+    "branchPending": "more below, not read yet",
+    "edited": "edited",
+    "aiWrote": "Rewritten by the assistant",
+    "applyToBranch": "Apply to this page and everything under it",
+    "subtreeDone": "Applied to {count} page | Applied to {count} pages",
+    "itemTitle": "Page title",
+    "conversionEmpty": "The conversion produced no text. Check the source page before approving.",
+    "itemProvenance": "Where this came from",
+    "itemState": "State",
+    "externalVersion": "Source version",
+    "treeDepth": "Depth",
+    "openInSource": "Open in the source system",
+    "viewChanges": "Changes",
+    "viewPage": "Page",
+    "diffCaption": "What approving this would change on the existing page.",
+    "thingsToCheck": "One thing to check | {count} things to check",
+    "editedByHand": "Edited here since it was converted.",
+    "showOriginalConversion": "Show the original conversion",
+    "aiAssist": "Assistant",
+    "aiAssistHint": "Never run on its own — a page a model rewrote is always marked as one.",
+    "aiCleanup": "Clean up",
+    "aiMerge": "Merge with this page",
+    "mode": {
+      "auto": "writes straight away",
+      "review": "staged for review",
+      "step": "one at a time"
+    },
+    "phase": {
+      "discovering": "Finding pages",
+      "fetching": "Reading pages",
+      "awaiting-review": "Waiting for review",
+      "applying": "Writing pages",
+      "reverting": "Undoing"
+    },
+    "itemStatus": {
+      "discovered": "Found",
+      "fetching": "Reading",
+      "staged": "Ready to review",
+      "approved": "Approved",
+      "applying": "Writing",
+      "applied": "Written",
+      "unchanged": "Unchanged",
+      "skipped": "Skipped",
+      "rejected": "Rejected",
+      "failed": "Failed",
+      "reverted": "Undone"
+    },
+    "action": {
+      "create": "New page",
+      "update": "Update",
+      "unchanged": "No change",
+      "conflict": "Both sides changed"
+    },
+    "event": {
+      "approve": "Approve",
+      "skip": "Skip",
+      "reject": "Reject",
+      "retry": "Retry",
+      "revert": "Undo",
+      "approveSubtree": "Approve branch",
+      "skipSubtree": "Skip branch",
+      "pause": "Pause",
+      "resume": "Resume",
+      "next": "Next page",
+      "cancel": "Cancel run",
+      "approveAll": "Approve all"
+    },
+    "aiBadge": {
+      "cleanup": "The assistant tidied this conversion. The original is still available below.",
+      "merge": "The assistant merged the incoming version with this page. Read it before approving."
+    },
+    "aiDone": {
+      "cleanup": "Conversion tidied",
+      "merge": "Versions merged"
+    }
   },
   "workflow": {
     "nodeStatus": {

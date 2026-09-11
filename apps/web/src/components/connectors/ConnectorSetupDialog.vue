@@ -25,6 +25,7 @@ import type {
   ConnectorDirection,
   ConnectorKind,
   ConnectorSummary,
+  ConnectorSyncMode,
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -107,6 +108,8 @@ async function saveConnector(ctx: SetupContext, draft = false): Promise<string> 
           direction: ctx.direction,
           conflict: ctx.conflict,
           pushOnPublish: ctx.pushOnPublish,
+          syncMode: ctx.syncMode,
+          preserveHierarchy: ctx.preserveHierarchy,
           syncIntervalMinutes: ctx.syncIntervalMinutes,
           category: ctx.category,
           ...(ctx.webhookSecret ? { webhookSecret: ctx.webhookSecret } : {}),
@@ -162,6 +165,8 @@ function boot(resume: boolean) {
             conflict: editing.conflict,
             syncIntervalMinutes: editing.syncIntervalMinutes,
             pushOnPublish: editing.pushOnPublish,
+            syncMode: editing.syncMode,
+            preserveHierarchy: editing.preserveHierarchy,
             editingId: editing.id,
           }
         : {}),
@@ -403,6 +408,36 @@ function startOver() {
                 <SelectItem v-if="info?.capabilities.push" value="both">{{ t('connectors.directionBoth') }}</SelectItem>
               </SelectContent>
             </Select>
+          </label>
+
+          <!-- How much of a run happens without a person (docs/features/26).
+               Offered to every kind: items are rows whether or not the adapter
+               walks a tree, so review and step work on a flat list too. -->
+          <label class="block space-y-1.5">
+            <span class="text-sm font-medium">{{ t('connectors.syncMode') }}</span>
+            <Select :model-value="context?.syncMode ?? 'auto'" @update:model-value="patch({ syncMode: $event as ConnectorSyncMode })">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">{{ t('connectors.syncModeAuto') }}</SelectItem>
+                <SelectItem value="review">{{ t('connectors.syncModeReview') }}</SelectItem>
+                <SelectItem value="step">{{ t('connectors.syncModeStep') }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <span class="text-muted-foreground block text-xs">{{ t('connectors.syncModeHint') }}</span>
+          </label>
+
+          <!-- Only meaningful where the adapter can reproduce a hierarchy; the
+               flat-list kinds have no tree to preserve. -->
+          <label v-if="info?.capabilities.tree" class="flex items-start gap-2">
+            <Checkbox
+              :model-value="context?.preserveHierarchy ?? false"
+              class="mt-0.5"
+              @update:model-value="patch({ preserveHierarchy: !!$event })"
+            />
+            <span class="text-sm">
+              {{ t('connectors.preserveHierarchy') }}
+              <span class="text-muted-foreground block text-xs">{{ t('connectors.preserveHierarchyHint') }}</span>
+            </span>
           </label>
 
           <label class="block space-y-1.5">

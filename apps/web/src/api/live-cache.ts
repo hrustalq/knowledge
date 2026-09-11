@@ -111,9 +111,6 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     ],
   },
   {
-    // Connectors (docs/features/19). `subjectId` is the connector id on every
-    // connector event, so one rule refreshes the roster and that connector's
-    // runs and links without knowing which of them changed.
     // Background agent runs (docs/features/20). `subjectId` is the run id on
     // every agent event, so one rule refreshes the list and that run's detail.
     on: 'agent.run.*',
@@ -123,11 +120,30 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     ],
   },
   {
+    // Connectors (docs/features/19, extended by 26).
+    //
+    // `subjectId` means two different things on this prefix, and the asymmetry
+    // is load-bearing rather than an oversight: `connector.run.started`,
+    // `.succeeded` and `.failed` are *about a connector* and carry its id,
+    // while the staging events — `connector.run.paused|resumed|awaiting-review`
+    // and every `connector.item.*` — are about one run and carry the run id.
+    // A key built from the wrong one silently never matches, so both readings
+    // are invalidated: the id is a uuid either way, and a miss costs nothing
+    // beyond a query key nobody is holding.
     on: 'connector.*',
     invalidate: (e) => [
       ['/v1/connectors'],
-      ...(e.subjectId ? [['/v1/connectors/{id}/runs', { id: e.subjectId }]] : []),
-      ...(e.subjectId ? [['/v1/connectors/{id}/links', { id: e.subjectId }]] : []),
+      ...(e.subjectId
+        ? [
+            // subjectId as a connector id.
+            ['/v1/connectors/{id}/runs', { id: e.subjectId }],
+            ['/v1/connectors/{id}/links', { id: e.subjectId }],
+            // subjectId as a run id. The item tree changes far more often than
+            // the run row, exactly as a workflow run's nodes do.
+            ['/v1/connectors/runs/{runId}', { runId: e.subjectId }],
+            ['/v1/connectors/runs/{runId}/items', { runId: e.subjectId }],
+          ]
+        : []),
       ...(e.documentId ? [['/v1/documents/{id}/connectors', { id: e.documentId }]] : []),
     ],
   },

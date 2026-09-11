@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import AiEmptyState from '@/components/ai/AiEmptyState.vue'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
+import { PHASE_LABEL, RUN_STATUS_LABEL } from './connector-ui'
 
 defineProps<{ canManage: boolean }>()
 
@@ -70,12 +71,29 @@ function statusVariant(status: ConnectorRunInfo['status']) {
     <ul v-else class="space-y-3">
       <li v-for="run in runs" :key="run.id" class="rounded-lg border p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <Badge :variant="statusVariant(run.status)">{{ t(`connectors.status.${run.status}`) }}</Badge>
+          <div class="flex flex-wrap items-center gap-2">
+            <Badge :variant="statusVariant(run.status)">{{ t(RUN_STATUS_LABEL[run.status]) }}</Badge>
             <span class="text-sm">{{ t(`connectors.direction${run.direction === 'push' ? 'Push' : 'Pull'}`) }}</span>
             <span class="text-muted-foreground text-xs">{{ t(`connectors.trigger.${run.trigger}`) }}</span>
+            <!-- Which part of the work it is in — distinct from status, since a
+                 run can be paused while discovering (docs/features/26). -->
+            <span v-if="run.phase" class="text-muted-foreground text-xs">· {{ t(PHASE_LABEL[run.phase]) }}</span>
+            <!-- The one count worth a colour: this run is waiting on a person. -->
+            <Badge v-if="run.awaitingReview > 0" variant="outline" class="border-amber-500/40 text-amber-700 dark:text-amber-400">
+              {{ t('connectors.awaitingReview', { count: run.awaitingReview }, run.awaitingReview) }}
+            </Badge>
           </div>
-          <span class="text-muted-foreground text-xs">{{ relativeTime(run.createdAt) }}</span>
+          <div class="flex items-center gap-3">
+            <!-- Every run opens, not just a staged one: the tree is also how you
+                 read what a finished run did, and how you revert one page of it. -->
+            <RouterLink
+              :to="`/settings/connectors/runs/${run.id}`"
+              class="text-primary text-xs font-medium hover:underline"
+            >
+              {{ run.awaitingReview > 0 ? t('connectors.reviewRun') : t('connectors.openRun') }}
+            </RouterLink>
+            <span class="text-muted-foreground text-xs">{{ relativeTime(run.createdAt) }}</span>
+          </div>
         </div>
 
         <p v-if="run.stage" class="text-muted-foreground mt-2 text-xs">

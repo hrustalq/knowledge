@@ -45,7 +45,17 @@ export function createRouter() {
         component: () => import('@/pages/ImportPage.vue'),
         meta: { fill: true },
       },
-      { path: '/search', component: () => import('@/pages/SearchPage.vue') },
+      // One connector sync run (docs/features/26). Top-level rather than a child
+    // of the settings shell for the reason the workflow wizard is: reviewing a
+    // staged tree needs the whole viewport, and a settings nav beside it would
+    // be a column of links nobody is going to follow mid-review. `meta.fill`
+    // because the frame is fixed and the two panes scroll inside it.
+    {
+      path: '/settings/connectors/runs/:runId',
+      component: () => import('@/pages/ConnectorRunPage.vue'),
+      meta: { fill: true },
+    },
+    { path: '/search', component: () => import('@/pages/SearchPage.vue') },
       // The inbox (docs/features/22). Top-level rather than under /settings:
       // it is a place you read, not a thing you configure — the preferences
       // that shape it live at /settings/notifications.

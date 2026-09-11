@@ -381,6 +381,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/ai/source-policies/check",
+      "tag": "ai",
+      "summary": "Dry-run one URL against this workspace’s source policy",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/ai/usage",
       "tag": "ai",
@@ -866,6 +876,66 @@
       "tag": "connectors",
       "summary": "One sync run — the poll target",
       "role": "viewer",
+      "source": "connector-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/runs/{runId}/events",
+      "tag": "connectors",
+      "summary": "Pause, resume, step, cancel, or approve everything staged",
+      "role": "editor",
+      "source": "connector-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/runs/{runId}/items",
+      "tag": "connectors",
+      "summary": "The tree of items this run found — flat rows joined by parentItemId",
+      "role": "viewer",
+      "source": "connector-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/runs/{runId}/items/{itemId}",
+      "tag": "connectors",
+      "summary": "One item with the document it would write, before it writes it",
+      "role": "viewer",
+      "source": "connector-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/connectors/runs/{runId}/items/{itemId}",
+      "tag": "connectors",
+      "summary": "Correct a staged item before approving it",
+      "role": "editor",
+      "source": "connector-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/runs/{runId}/items/{itemId}/ai",
+      "tag": "connectors",
+      "summary": "Ask the drafter to clean up the conversion, or merge it with the current page",
+      "role": "editor",
+      "source": "connector-run",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/runs/{runId}/items/{itemId}/events",
+      "tag": "connectors",
+      "summary": "Approve, skip, reject, retry or revert an item — optionally its whole subtree",
+      "role": "editor",
       "source": "connector-run",
       "public": false,
       "platformAdmin": false

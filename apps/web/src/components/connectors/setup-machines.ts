@@ -25,10 +25,12 @@
  * localStorage, which is per-viewer and needs no schema.
  */
 import { assign, createActor, fromPromise, sendParent, sendTo, setup, type Snapshot } from 'xstate'
+import { connectorKindInfo } from '@knowledge/contracts'
 import type {
   ConnectorConflictPolicy,
   ConnectorDirection,
   ConnectorKind,
+  ConnectorSyncMode,
   DocumentCategory,
 } from '@knowledge/contracts'
 
@@ -55,6 +57,14 @@ export interface SetupContext {
   syncIntervalMinutes: number | null
   webhookSecret: string
   pushOnPublish: boolean
+  /**
+   * How much of a run happens without a person (docs/features/26). New
+   * connectors that can walk a tree are offered `review`, because the first
+   * pull from a wiki is the one nobody can predict the shape of.
+   */
+  syncMode: ConnectorSyncMode
+  /** Recreate the external tree under the destination parent. */
+  preserveHierarchy: boolean
   /** What the last successful test reached — shown, because "OK" proves nothing. */
   testDetail: string | null
   error: string | null
@@ -144,9 +154,18 @@ type KindMachine = ReturnType<typeof kindMachine>
 export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
   // Which site, then which space. The token is asked for with the site, because
   // that is the pair the connection test actually needs.
+  // Which site, then which space. The token is asked for with the site, because
+  // that is the pair the connection test actually needs.
+  //
+  // `rootPageId` (docs/features/26) rides along with the space rather than
+  // taking a step of its own. It is a *refinement* of "which space" — sync this
+  // subtree, not all of it — exactly as `subdir` refines markdown-git's
+  // repository, and that step carries two optional fields for the same reason.
+  // A step per optional field would make everyone press Next past a question
+  // most connectors never answer.
   confluence: [
     { name: 'site', meta: { labelKey: 'connectors.step.site', fields: ['baseUrl'], credential: true } },
-    { name: 'space', meta: { labelKey: 'connectors.step.space', fields: ['spaceKey'] } },
+    { name: 'space', meta: { labelKey: 'connectors.step.space', fields: ['spaceKey', 'rootPageId'] } },
   ],
   // Identical questions to Cloud — the difference is what the answers mean: a
   // self-hosted base URL with no /wiki suffix, and a PAT rather than email:token.
@@ -154,7 +173,7 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
   // credential label, so the steps themselves are the same two.
   'confluence-server': [
     { name: 'site', meta: { labelKey: 'connectors.step.site', fields: ['baseUrl'], credential: true } },
-    { name: 'space', meta: { labelKey: 'connectors.step.space', fields: ['spaceKey'] } },
+    { name: 'space', meta: { labelKey: 'connectors.step.space', fields: ['spaceKey', 'rootPageId'] } },
   ],
   // The site and token, then the JQL that decides which issues become pages.
   jira: [
@@ -193,6 +212,18 @@ export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
 /** The per-kind steps, for the stepper — read without running the machine. */
 export function kindSteps(kind: ConnectorKind): StepMeta[] {
   return KIND_STEPS[kind].map((step) => step.meta)
+}
+
+/**
+ * Whether this kind's adapter can reproduce the external hierarchy
+ * (docs/features/26).
+ *
+ * Read from `CONNECTOR_KIND_INFO` rather than listed here, so the catalogue the
+ * API validates against stays the one place a capability is declared — the same
+ * reason the setup form reads its fields from there.
+ */
+export function canWalkTree(kind: ConnectorKind): boolean {
+  return connectorKindInfo(kind)?.capabilities.tree ?? false
 }
 
 /** The current sub-step's meta, so the renderer never switches on kind itself. */
@@ -262,6 +293,13 @@ export const connectorSetupMachine = setup({
     syncIntervalMinutes: input.syncIntervalMinutes ?? null,
     webhookSecret: '',
     pushOnPublish: input.pushOnPublish ?? false,
+    // The column defaults are `auto` / false, which is what keeps every
+    // connector created before docs/features/26 behaving exactly as it did.
+    // A *new* tree-walking connector is offered the opposite, because the
+    // first pull from a wiki is the one nobody can predict the shape of — but
+    // the offer is a prefilled control, not a forced value.
+    syncMode: input.syncMode ?? (canWalkTree(input.kind) ? 'review' : 'auto'),
+    preserveHierarchy: input.preserveHierarchy ?? canWalkTree(input.kind),
     testDetail: null,
     error: null,
     connectorId: null,

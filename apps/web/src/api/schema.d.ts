@@ -2141,6 +2141,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connectors/runs/{runId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tree of items this run found — flat rows joined by parentItemId */
+        get: operations["ConnectorsController_listItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/runs/{runId}/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One item with the document it would write, before it writes it */
+        get: operations["ConnectorsController_getItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Correct a staged item before approving it */
+        patch: operations["ConnectorsController_updateItem"];
+        trace?: never;
+    };
+    "/v1/connectors/runs/{runId}/items/{itemId}/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the drafter to clean up the conversion, or merge it with the current page */
+        post: operations["ConnectorsController_itemAi"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/runs/{runId}/items/{itemId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve, skip, reject, retry or revert an item — optionally its whole subtree */
+        post: operations["ConnectorsController_itemEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/runs/{runId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause, resume, step, cancel, or approve everything staged */
+        post: operations["ConnectorsController_runEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connectors/{id}": {
         parameters: {
             query?: never;
@@ -3330,12 +3416,42 @@ export interface components {
             conflict?: "manual" | "external-wins" | "local-wins";
             /** @description Defaults to false */
             pushOnPublish?: boolean;
+            /**
+             * @description How much of a run happens unattended. 'auto' applies as it goes and is the default; 'review' stages everything for approval; 'step' releases one page at a time.
+             * @enum {string}
+             */
+            syncMode?: "auto" | "review" | "step";
+            /** @description Recreate the source hierarchy under the destination page. Defaults to false; turning it on never moves pages already imported. */
+            preserveHierarchy?: boolean;
             /** @description null = manual only */
             syncIntervalMinutes?: number | null;
             /** @description Write-only. Enables the inbound webhook. */
             webhookSecret?: string | null;
             /** @description Defaults to true */
             enabled?: boolean;
+        };
+        UpdateConnectorRunItemDto: {
+            /** @description The title the page will be created with */
+            title?: string;
+            /** @description The prepared document, corrected */
+            markdown?: string;
+        };
+        ConnectorItemAiDto: {
+            /**
+             * @description 'cleanup' repairs the conversion; 'merge' reconciles it with the current page (conflicts only)
+             * @enum {string}
+             */
+            op: "cleanup" | "merge";
+        };
+        ConnectorItemEventDto: {
+            /** @enum {string} */
+            type: "APPROVE" | "SKIP" | "REJECT" | "RETRY" | "REVERT";
+            /** @description Apply to every item below this one as well. Defaults to false. */
+            subtree?: boolean;
+        };
+        ConnectorRunEventDto: {
+            /** @enum {string} */
+            type: "PAUSE" | "RESUME" | "NEXT" | "CANCEL" | "APPROVE_ALL";
         };
         UpdateConnectorDto: {
             name?: string;
@@ -3355,6 +3471,9 @@ export interface components {
             /** @enum {string} */
             conflict?: "manual" | "external-wins" | "local-wins";
             pushOnPublish?: boolean;
+            /** @enum {string} */
+            syncMode?: "auto" | "review" | "step";
+            preserveHierarchy?: boolean;
             syncIntervalMinutes?: number | null;
             /** @description Write-only. null disables the inbound webhook. */
             webhookSecret?: string | null;
@@ -3368,6 +3487,11 @@ export interface components {
             direction?: "pull" | "push";
             /** @description Limit the run to these external items */
             externalIds?: string[];
+            /**
+             * @description Override the connector's own mode for this run only. Defaults to the connector's setting.
+             * @enum {string}
+             */
+            mode?: "auto" | "review" | "step";
         };
         CreateGlossaryTermDto: {
             workspaceId: string;
@@ -10742,6 +10866,266 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_listItems: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_getItem: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                runId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_updateItem: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                runId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConnectorRunItemDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_itemAi: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                runId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorItemAiDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_itemEvent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                runId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorItemEventDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_runEvent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorRunEventDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

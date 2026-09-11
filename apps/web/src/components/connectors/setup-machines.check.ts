@@ -13,7 +13,7 @@
  * snapshot restoring mid-configure with the child's sub-step intact.
  */
 import assert from 'node:assert/strict'
-import { createSetupActor, kindSteps, stepIndex, stepLabels } from './setup-machines.ts'
+import { canWalkTree, createSetupActor, kindSteps, stepIndex, stepLabels } from './setup-machines.ts'
 
 const services = {
   test: async () => ({ ok: true, detail: 'Engineering (ENG)' }),
@@ -52,6 +52,8 @@ async function settle() {
   assert.equal(childState(actor.getSnapshot() as never), 'space', 'child owns its sub-steps')
 
   actor.send({ type: 'SET_FIELD', key: 'spaceKey', value: 'ENG' })
+  // The subtree question rides along with the space rather than taking a step.
+  actor.send({ type: 'SET_FIELD', key: 'rootPageId', value: '123456' })
   actor.send({ type: 'NEXT' })
   // The child reaching its final state is what advances the wrapper.
   await settle()
@@ -65,10 +67,43 @@ async function settle() {
   actor.send({ type: 'NEXT' })
   assert.equal(actor.getSnapshot().value, 'options')
 
+  // docs/features/26: a tree-walking kind is *offered* staging, and the space's
+  // optional subtree answer is carried as ordinary config.
+  assert.equal(actor.getSnapshot().context.syncMode, 'review')
+  assert.equal(actor.getSnapshot().context.preserveHierarchy, true)
+  assert.equal(actor.getSnapshot().context.config.rootPageId, '123456')
+
   actor.send({ type: 'SUBMIT' })
   await settle()
   assert.equal(actor.getSnapshot().value, 'done')
   assert.equal(actor.getSnapshot().context.connectorId, 'connector-1')
+}
+
+// --- staging defaults follow the capability, not the kind name ------------
+{
+  // A flat-list adapter has no tree to preserve and is left exactly as it
+  // behaved before the feature: the column defaults, unchanged.
+  assert.equal(canWalkTree('notion'), false)
+  const flat = createSetupActor('notion', { kind: 'notion' }, services)
+  flat.start()
+  assert.equal(flat.getSnapshot().context.syncMode, 'auto')
+  assert.equal(flat.getSnapshot().context.preserveHierarchy, false)
+
+  assert.equal(canWalkTree('confluence-server'), true)
+  const tree = createSetupActor('confluence-server', { kind: 'confluence-server' }, services)
+  tree.start()
+  assert.equal(tree.getSnapshot().context.syncMode, 'review')
+
+  // An existing connector keeps what it was saved with — the offer is for new
+  // ones only, or editing a connector would silently re-shape its next run.
+  const editing = createSetupActor(
+    'confluence',
+    { kind: 'confluence', editingId: 'c1', syncMode: 'auto' as const, preserveHierarchy: false },
+    services,
+  )
+  editing.start()
+  assert.equal(editing.getSnapshot().context.syncMode, 'auto', 'editing must not re-offer review')
+  assert.equal(editing.getSnapshot().context.preserveHierarchy, false)
 }
 
 // --- Back, in every position it can be pressed ----------------------------

@@ -3,7 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./documents": "./src/documents/index.ts",
+    "./reviews": "./src/reviews/index.ts",
+    "./graph": "./src/graph/index.ts",
+    "./identity": "./src/identity/index.ts",
+    "./notifications": "./src/notifications/index.ts",
+    "./ai": "./src/ai/index.ts",
+    "./content": "./src/content/index.ts",
+    "./workflows": "./src/workflows/index.ts",
+    "./connectors": "./src/connectors/index.ts"
+  },
   "scripts": {
     "lint": "echo contracts: no lint",
     "typecheck": "tsc --noEmit -p tsconfig.json"

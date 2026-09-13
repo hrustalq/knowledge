@@ -239,7 +239,13 @@ export class NotificationsService {
     /** 'document.comment.created' | 'merge-request.comment.created'. */
     type: string;
     metadata?: Record<string, unknown>;
-  }): Promise<void> {
+    // Returns what it wrote so the caller can publish a live frame for it: this
+    // service takes PrismaService and nothing else — the property that lets
+    // EventsModule import NotificationsCoreModule without a forwardRef — so it
+    // cannot announce its own rows. Callers hand these to
+    // `EventsPublisher.announce`; before they did, a mention wrote an inbox row
+    // and no frame, and the badge stayed stale until the next navigation.
+  }): Promise<NotificationDelivery[]> {
     try {
       await this.ensureSubscriptionOnComment(
         input.workspaceId,
@@ -248,8 +254,8 @@ export class NotificationsService {
         input.subjectId,
       );
       const mentioned = parseUserMentions(input.body).filter((id) => id !== input.actorId);
-      if (mentioned.length === 0) return;
-      await this.notifyMentions({
+      if (mentioned.length === 0) return [];
+      return await this.notifyMentions({
         workspaceId: input.workspaceId,
         body: input.body,
         userIds: mentioned,
@@ -263,6 +269,7 @@ export class NotificationsService {
       });
     } catch (e) {
       this.logger.warn(`onCommentPosted failed (non-fatal): ${(e as Error).message}`);
+      return [];
     }
   }
 

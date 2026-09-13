@@ -4,7 +4,7 @@ import { Redis } from 'ioredis';
 import type { KnowledgeEvent } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { EVENTS_CHANNEL } from './events.constants.js';
-import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationsService, type NotificationDelivery } from '../notifications/notifications.service.js';
 
 /**
  * Publish side of the live-event bus (docs/features/04): fire-and-forget
@@ -61,11 +61,30 @@ export class EventsPublisher implements OnModuleDestroy {
    */
   private async fanOut(event: KnowledgeEvent): Promise<void> {
     try {
-      const deliveries = await this.notifications.fanOut(event);
+      await this.announce(event.workspaceId, await this.notifications.fanOut(event));
+    } catch (e) {
+      this.logger.warn(`Notification fan-out failed (non-fatal): ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * Tell each recipient — and only that recipient — that they have an inbox row.
+   *
+   * Public because the DIRECTED notifications (mention, assigned,
+   * review-requested) are written through `NotificationsService.notify` /
+   * `onCommentPosted`, which cannot publish anything: it takes `PrismaService`
+   * and nothing else, which is exactly what lets `EventsModule` import
+   * `NotificationsCoreModule` outright instead of behind a forwardRef. So their
+   * callers hand the deliveries here. Without this, the three notifications
+   * addressed at a person by name were the only ones that wrote a row and no
+   * frame, and the badge stayed stale until the next navigation.
+   */
+  async announce(workspaceId: string, deliveries: NotificationDelivery[]): Promise<void> {
+    try {
       for (const { userId, notification } of deliveries) {
         const frame: KnowledgeEvent = {
           type: 'notification.created',
-          workspaceId: event.workspaceId,
+          workspaceId,
           userId,
           subjectId: notification.id,
           reason: notification.reason,
@@ -77,7 +96,7 @@ export class EventsPublisher implements OnModuleDestroy {
         await this.redis.publish(EVENTS_CHANNEL, JSON.stringify(frame));
       }
     } catch (e) {
-      this.logger.warn(`Notification fan-out failed (non-fatal): ${(e as Error).message}`);
+      this.logger.warn(`Notification announce failed (non-fatal): ${(e as Error).message}`);
     }
   }
 

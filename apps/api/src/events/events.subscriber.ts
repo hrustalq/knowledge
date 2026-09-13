@@ -21,23 +21,49 @@ export class EventsSubscriber implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EventsSubscriber.name);
   private readonly redis: Redis;
   private readonly subject = new Subject<KnowledgeEvent>();
+  /** Set once the channel is actually attached; drives the reconnect retry. */
+  private subscribed = false;
 
   constructor(config: ConfigService<Env, true>) {
     this.redis = new Redis(config.get('REDIS_URL', { infer: true }), { lazyConnect: true });
   }
 
   async onModuleInit(): Promise<void> {
+    // Two ordering rules here, both load-bearing.
+    //
+    // 1. The message listener is registered BEFORE the subscribe and outside the
+    //    try. Registering it after the await meant a rejected subscribe skipped
+    //    it entirely.
+    // 2. A failed FIRST subscribe has to be retried by hand. ioredis only
+    //    auto-resubscribes a channel it has already subscribed to successfully
+    //    (`autoResubscribe` is gated on `condition.subscriber`), so when Redis is
+    //    not up yet at boot — ordinary container start ordering — nothing ever
+    //    reattaches. That left the process deaf for its whole lifetime: no SSE,
+    //    no WS frames, and no WorkflowTriggerService, behind one boot-time warn.
+    this.redis.on('message', (_channel, message) => {
+      try {
+        this.subject.next(JSON.parse(message) as KnowledgeEvent);
+      } catch {
+        this.logger.warn(`Dropping malformed event payload: ${message.slice(0, 120)}`);
+      }
+    });
+    // `ready` fires on every (re)connection; the guard makes this a no-op once
+    // the channel is attached, leaving ioredis's own resubscribe to do the rest.
+    this.redis.on('ready', () => {
+      if (!this.subscribed) void this.attach();
+    });
+    await this.attach();
+  }
+
+  private async attach(): Promise<void> {
     try {
       await this.redis.subscribe(EVENTS_CHANNEL);
-      this.redis.on('message', (_channel, message) => {
-        try {
-          this.subject.next(JSON.parse(message) as KnowledgeEvent);
-        } catch {
-          this.logger.warn(`Dropping malformed event payload: ${message.slice(0, 120)}`);
-        }
-      });
+      this.subscribed = true;
+      this.logger.log(`Subscribed to ${EVENTS_CHANNEL}`);
     } catch (e) {
-      this.logger.warn(`Event subscription unavailable: ${(e as Error).message}`);
+      this.logger.warn(
+        `Event subscription unavailable, retrying on reconnect: ${(e as Error).message}`,
+      );
     }
   }
 

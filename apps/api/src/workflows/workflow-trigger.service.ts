@@ -154,28 +154,36 @@ export class WorkflowTriggerService implements OnModuleInit {
     }
 
     const started = applyRunEvent('pending', { type: 'START' }, { snapshot: initialRunSnapshot() });
-    const run = await this.prisma.workflowRun.create({
-      data: {
-        workspaceId: document.workspaceId,
-        projectId: document.projectId,
-        definitionId,
-        definitionSnapshot: graph as unknown as Prisma.InputJsonValue,
-        rootDocumentId: document.id,
-        status: started.status,
-        snapshot: started.snapshot as unknown as Prisma.InputJsonValue,
-        startedBy: 'trigger',
-        // The author who turned auto-start on owns what it produces.
-        createdBy: definition.createdBy,
-        startedAt: new Date(),
-      },
-    });
-    await this.prisma.workflowRunNode.createMany({
-      data: entry.map((step) => ({
-        runId: run.id,
-        stepId: step.id,
-        status: 'pending',
-        input: { rootDocumentId: document.id, trigger: eventType } as Prisma.InputJsonValue,
-      })),
+    // Run + entry nodes commit together, as in WorkflowsService.startRun. This
+    // path had the same pair without the transaction: a run created with no
+    // nodes enqueues nothing, so reconcileRun never runs and it sits in the list
+    // in-flight forever — which also trips the "one live run per (definition,
+    // page)" check, refusing every manual start for that page from then on.
+    const run = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.workflowRun.create({
+        data: {
+          workspaceId: document.workspaceId,
+          projectId: document.projectId,
+          definitionId,
+          definitionSnapshot: graph as unknown as Prisma.InputJsonValue,
+          rootDocumentId: document.id,
+          status: started.status,
+          snapshot: started.snapshot as unknown as Prisma.InputJsonValue,
+          startedBy: 'trigger',
+          // The author who turned auto-start on owns what it produces.
+          createdBy: definition.createdBy,
+          startedAt: new Date(),
+        },
+      });
+      await tx.workflowRunNode.createMany({
+        data: entry.map((step) => ({
+          runId: created.id,
+          stepId: step.id,
+          status: 'pending',
+          input: { rootDocumentId: document.id, trigger: eventType } as Prisma.InputJsonValue,
+        })),
+      });
+      return created;
     });
 
     const nodes = await this.prisma.workflowRunNode.findMany({

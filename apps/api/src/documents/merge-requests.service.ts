@@ -19,6 +19,7 @@ import { StorageService } from '../storage/storage.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { EventsPublisher } from '../events/events.publisher.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
@@ -63,6 +64,9 @@ export class MergeRequestsService {
     private readonly access: AccessService,
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
+    // See DocumentThreadsService: NotificationsService cannot publish, so the
+    // frames for `assigned` and `review-requested` are announced from here.
+    private readonly events: EventsPublisher,
   ) {}
 
   async create(
@@ -227,7 +231,7 @@ export class MergeRequestsService {
     // is not notifiable at all (a title edit is not news), and an assignee who
     // never watched the MR would otherwise hear nothing.
     if (page && updated.assigneeId && changed.includes('assigneeId')) {
-      await this.notifications.notify({
+      const delivered = await this.notifications.notify({
         workspaceId: page.workspaceId,
         userIds: [updated.assigneeId],
         // The event that actually happened. It is not notifiable on its own —
@@ -243,6 +247,7 @@ export class MergeRequestsService {
         metadata: { assigned: true },
         subscribe: true,
       });
+      await this.events.announce(page.workspaceId, delivered);
     }
     return { mergeRequest: await this.toDetail(updated) };
   }
@@ -306,7 +311,7 @@ export class MergeRequestsService {
       // live in the activity metadata, which never reaches the event bus, so
       // the fan-out could not find these people even in principle.
       if (page) {
-        await this.notifications.notify({
+        const delivered = await this.notifications.notify({
           workspaceId: page.workspaceId,
           userIds: added,
           type: 'merge-request.review-requested',
@@ -318,6 +323,7 @@ export class MergeRequestsService {
           title: mr.title,
           subscribe: true,
         });
+        await this.events.announce(page.workspaceId, delivered);
       }
     }
     const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });

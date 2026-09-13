@@ -60,11 +60,29 @@ export class WorkflowMaterializeSweeper implements OnModuleInit, OnModuleDestroy
       });
 
       for (const node of nodes) {
-        // Guarded claim, so two API instances sweeping at once cannot both
-        // create the page.
+        // Guarded claim, so two sweepers running at once cannot both create the
+        // page. The predicate has to include something this write CHANGES:
+        // matching on `status` and writing `status` back left the row inside its
+        // own predicate, so every caller got count === 1 and the guard passed for
+        // all of them. `updatedAt` is the optimistic-lock column — the winner
+        // bumps it, and the losers' `where` no longer matches.
+        //
+        // ponytail: claims the row, not the work. ceiling: stops two sweepers
+        // materialising concurrently; does NOT stop a re-materialise after a
+        // crash between `materialize()` (which commits its own document) and the
+        // `documentId` write below — the next sweep legitimately re-claims and
+        // creates a second page. upgrade: one transaction spanning the document
+        // write and the node update, which needs DocumentsService to accept a
+        // transaction client; same fix as the five other flows that bookkeep
+        // after a committed createDocument/finalizeRevision.
         const claimed = await this.prisma.workflowRunNode.updateMany({
-          where: { id: node.id, status: 'materializing', documentId: null },
-          data: { status: 'materializing', updatedAt: new Date() },
+          where: {
+            id: node.id,
+            status: 'materializing',
+            documentId: null,
+            updatedAt: node.updatedAt,
+          },
+          data: { updatedAt: new Date() },
         });
         if (claimed.count !== 1) continue;
 

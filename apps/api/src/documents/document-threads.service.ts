@@ -21,6 +21,7 @@ import { AUTHOR_ID_STUB } from './merge-requests.service.js';
 import type { CreateThreadDto } from './dto/merge-requests.dto.js';
 import { MentionRepliesService } from './mention-replies.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { EventsPublisher } from '../events/events.publisher.js';
 import { validateThreadAnchor } from './review-anchor.js';
 import { currentLocale, t } from '../i18n/t.js';
 
@@ -48,6 +49,10 @@ export class DocumentThreadsService {
     private readonly activity: ActivityService,
     private readonly mentions: MentionRepliesService,
     private readonly notifications: NotificationsService,
+    // NotificationsService cannot publish (it takes PrismaService alone, which is
+    // what keeps EventsModule → NotificationsCoreModule acyclic), so the frames
+    // for directed notifications are announced from here.
+    private readonly events: EventsPublisher,
   ) {}
 
   async list(documentId: string): Promise<ListDocumentThreadsResponse> {
@@ -100,7 +105,7 @@ export class DocumentThreadsService {
       actorId: authorId,
       locale: currentLocale(),
     });
-    await this.notifications.onCommentPosted({
+    const delivered = await this.notifications.onCommentPosted({
       workspaceId: doc.workspaceId,
       subjectType: 'document',
       subjectId: documentId,
@@ -111,6 +116,7 @@ export class DocumentThreadsService {
       type: 'document.comment.created',
       metadata: { threadId: thread.id },
     });
+    await this.events.announce(doc.workspaceId, delivered);
     return { thread: await this.reload(thread.id) };
   }
 
@@ -139,7 +145,7 @@ export class DocumentThreadsService {
       actorId: authorId,
       locale: currentLocale(),
     });
-    await this.notifications.onCommentPosted({
+    const delivered = await this.notifications.onCommentPosted({
       workspaceId: doc.workspaceId,
       subjectType: 'document',
       subjectId: documentId,
@@ -150,6 +156,7 @@ export class DocumentThreadsService {
       type: 'document.comment.created',
       metadata: { threadId: thread.id },
     });
+    await this.events.announce(doc.workspaceId, delivered);
     return { thread: await this.reload(thread.id) };
   }
 

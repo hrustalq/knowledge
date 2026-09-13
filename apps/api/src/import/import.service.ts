@@ -212,6 +212,17 @@ export class ImportService {
       throw new ConflictException(t('error.import.notSubmittable', { status: t(`status.import.${row.status}`) }));
     }
 
+    // ponytail: the `status !== 'parsed'` check above is check-then-act with
+    // nothing enforcing it — two submits racing it (a double-click, or a retry
+    // against a slow first call) each create a page, and only the last one is
+    // linked to the import. ceiling: unguarded; the window is the whole submit.
+    // upgrade: needs a claim column this table does not have — `import_jobs` has
+    // createdAt/completedAt but no `updatedAt`, so there is no free CAS, and a
+    // `submitting` status would strand the row on a crash because this method
+    // commits a document before writing `status: 'submitted'` and nothing sweeps
+    // imports. Add `updatedAt DateTime @updatedAt @default(now())` and CAS on it,
+    // or fold this into the transaction that spans createDocument → finalize →
+    // status (the same fix as merge, connector pull and workflow materialize).
     const projectId = dto.projectId ?? row.projectId;
     await this.projects.requireProjectInWorkspace(projectId, row.workspaceId);
     const parentId = dto.parentId === undefined ? row.parentId : dto.parentId;

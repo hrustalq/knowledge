@@ -291,18 +291,25 @@ export class DocumentsService {
       return { job };
     });
 
-    await this.ingestion.enqueue(job.id).catch(() => {
-      /* swallowed: outbox sweeper re-enqueues */
-    });
-
-    await this.activity.record({
-      workspaceId: document.workspaceId,
-      actor: revision.authorId,
-      action: 'revision.finalized',
-      documentId,
-      subjectId: revision.id,
-      metadata: { title: document.title, revisionNumber: revision.revisionNumber },
-    });
+    // Both of these are post-commit by contract, and `onCommit` is what keeps
+    // them so when a caller has wrapped this method in an outer transaction: the
+    // inner `$transaction` above then joins rather than commits, and enqueueing
+    // here inline would hand the worker a job for an `ingestion_jobs` row that
+    // has not committed — or never will, if the outer boundary rolls back.
+    // Outside a transaction `onCommit` runs them immediately, so the un-wrapped
+    // path is unchanged. Failures stay swallowed: the outbox sweeper re-enqueues,
+    // and the event bus is best-effort.
+    this.prisma.onCommit(() => this.ingestion.enqueue(job.id));
+    this.prisma.onCommit(() =>
+      this.activity.record({
+        workspaceId: document.workspaceId,
+        actor: revision.authorId,
+        action: 'revision.finalized',
+        documentId,
+        subjectId: revision.id,
+        metadata: { title: document.title, revisionNumber: revision.revisionNumber },
+      }),
+    );
 
     return { revisionId: revision.id, status: 'finalized', ingestionJobId: job.id, deduplicated: false };
   }

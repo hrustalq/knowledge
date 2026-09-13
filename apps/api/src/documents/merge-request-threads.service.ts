@@ -20,6 +20,7 @@ import { AUTHOR_ID_STUB, MergeRequestsService } from './merge-requests.service.j
 import type { CreateThreadDto } from './dto/merge-requests.dto.js';
 import { MentionRepliesService } from './mention-replies.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { EventsPublisher } from '../events/events.publisher.js';
 import { validateThreadAnchor } from './review-anchor.js';
 import { currentLocale, t } from '../i18n/t.js';
 
@@ -42,6 +43,9 @@ export class MergeRequestThreadsService {
     private readonly mergeRequests: MergeRequestsService,
     private readonly mentions: MentionRepliesService,
     private readonly notifications: NotificationsService,
+    // See DocumentThreadsService: NotificationsService cannot publish, so the
+    // frames for directed notifications are announced from here.
+    private readonly events: EventsPublisher,
   ) {}
 
   /** Threads are readable on merged/closed MRs too — only writes require `open`. */
@@ -98,7 +102,7 @@ export class MergeRequestThreadsService {
       locale: currentLocale(),
     });
     if (page) {
-      await this.notifications.onCommentPosted({
+      const delivered = await this.notifications.onCommentPosted({
         workspaceId: page.workspaceId,
         subjectType: 'merge-request',
         subjectId: mr.id,
@@ -109,6 +113,7 @@ export class MergeRequestThreadsService {
         type: 'merge-request.comment.created',
         metadata: { threadId: thread.id },
       });
+      await this.events.announce(page.workspaceId, delivered);
     }
     return { thread: await this.reload(thread.id) };
   }
@@ -143,7 +148,7 @@ export class MergeRequestThreadsService {
       locale: currentLocale(),
     });
     if (page) {
-      await this.notifications.onCommentPosted({
+      const delivered = await this.notifications.onCommentPosted({
         workspaceId: page.workspaceId,
         subjectType: 'merge-request',
         subjectId: mr.id,
@@ -154,6 +159,7 @@ export class MergeRequestThreadsService {
         type: 'merge-request.comment.created',
         metadata: { threadId: thread.id },
       });
+      await this.events.announce(page.workspaceId, delivered);
     }
     return { thread: await this.reload(thread.id) };
   }

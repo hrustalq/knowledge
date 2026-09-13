@@ -43,13 +43,20 @@ export class WorkspacesService {
   }
 
   async create(principal: Principal, name: string): Promise<CreateWorkspaceResponse> {
-    const workspace = await this.prisma.workspace.create({ data: { name: name.trim() } });
-    // The dev principal has no users row — membership would violate the FK.
-    if (principal.mode !== 'dev') {
-      await this.prisma.workspaceMember.create({
-        data: { workspaceId: workspace.id, userId: principal.userId, role: 'admin', trustedOperator: true },
-      });
-    }
+    // One transaction: a workspace whose founding admin never committed is
+    // invisible to its creator (list scopes to membership), un-joinable (adding a
+    // member is admin-gated) and undeletable (there is no delete route) — an
+    // orphan row nobody can reach.
+    const workspace = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.workspace.create({ data: { name: name.trim() } });
+      // The dev principal has no users row — membership would violate the FK.
+      if (principal.mode !== 'dev') {
+        await tx.workspaceMember.create({
+          data: { workspaceId: created.id, userId: principal.userId, role: 'admin', trustedOperator: true },
+        });
+      }
+      return created;
+    });
     return { workspaceId: workspace.id, name: workspace.name };
   }
 
@@ -129,12 +136,28 @@ export class WorkspacesService {
 
   async updateMember(workspaceId: string, userId: string, dto: UpdateMemberDto): Promise<ListWorkspaceMembersResponse> {
     const member = await this.requireMember(workspaceId, userId);
-    if (dto.role && dto.role !== 'admin' && member.role === 'admin') {
-      await this.requireAnotherAdmin(workspaceId, userId, 'error.workspace.lastAdminDemote');
+    const demotingAdmin = !!dto.role && dto.role !== 'admin' && member.role === 'admin';
+    if (demotingAdmin) {
+      // Guarded single statement rather than count-then-update: see removeMember.
+      const affected = await this.prisma.$executeRaw`
+        UPDATE workspace_members
+           SET role = ${dto.role!}
+         WHERE workspace_id = ${workspaceId}::uuid
+           AND user_id = ${userId}::uuid
+           AND EXISTS (
+                 SELECT 1 FROM workspace_members other
+                  WHERE other.workspace_id = ${workspaceId}::uuid
+                    AND other.role = 'admin'
+                    AND other.user_id <> ${userId}::uuid
+               )
+      `;
+      if (affected === 0) throw new BadRequestException(t('error.workspace.lastAdminDemote'));
     }
     await this.prisma.workspaceMember.update({
       where: { workspaceId_userId: { workspaceId, userId } },
       data: {
+        // The role is already written above when this is a demotion; re-applying
+        // the same value keeps one code path for trustedOperator.
         ...(dto.role !== undefined ? { role: dto.role } : {}),
         ...(dto.trustedOperator !== undefined ? { trustedOperator: dto.trustedOperator } : {}),
       },
@@ -144,10 +167,30 @@ export class WorkspacesService {
 
   async removeMember(workspaceId: string, userId: string): Promise<ListWorkspaceMembersResponse> {
     const member = await this.requireMember(workspaceId, userId);
-    if (member.role === 'admin') await this.requireAnotherAdmin(workspaceId, userId, 'error.workspace.lastAdminRemove');
-    await this.prisma.workspaceMember.delete({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    if (member.role !== 'admin') {
+      await this.prisma.workspaceMember.delete({ where: { workspaceId_userId: { workspaceId, userId } } });
+      return this.listMembers(workspaceId);
+    }
+    // Last-admin protection has to be ONE statement. `count(other admins)` then
+    // `delete` is check-then-act with nothing enforcing it: two concurrent
+    // removals of the last two admins each counted one other admin and each
+    // proceeded, leaving a workspace with zero admins — which no API route can
+    // repair, since adding a member is itself admin-gated. The EXISTS subquery
+    // is evaluated inside the same statement as the delete, so exactly one wins.
+    // Raw SQL for the same reason AgentFindingsService.claim uses it: the query
+    // API cannot express a predicate over a sibling row set.
+    const affected = await this.prisma.$executeRaw`
+      DELETE FROM workspace_members
+       WHERE workspace_id = ${workspaceId}::uuid
+         AND user_id = ${userId}::uuid
+         AND EXISTS (
+               SELECT 1 FROM workspace_members other
+                WHERE other.workspace_id = ${workspaceId}::uuid
+                  AND other.role = 'admin'
+                  AND other.user_id <> ${userId}::uuid
+             )
+    `;
+    if (affected === 0) throw new BadRequestException(t('error.workspace.lastAdminRemove'));
     return this.listMembers(workspaceId);
   }
 
@@ -159,19 +202,4 @@ export class WorkspacesService {
     return member;
   }
 
-  /** Last-admin protection: a workspace must always keep at least one admin. */
-  private async requireAnotherAdmin(
-    workspaceId: string,
-    exceptUserId: string,
-    // A whole message key, not a verb spliced into a sentence: Russian cannot
-    // take an English infinitive in the middle of one.
-    key: 'error.workspace.lastAdminDemote' | 'error.workspace.lastAdminRemove',
-  ): Promise<void> {
-    const otherAdmins = await this.prisma.workspaceMember.count({
-      where: { workspaceId, role: 'admin', userId: { not: exceptUserId } },
-    });
-    if (otherAdmins === 0) {
-      throw new BadRequestException(t(key));
-    }
-  }
 }

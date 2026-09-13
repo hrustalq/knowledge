@@ -253,6 +253,33 @@ export class ConnectorStagingService {
     const parentId = await this.resolveParent(row, item);
     const reRooted = row.preserveHierarchy && item.parentItemId !== null && parentId === row.parentId;
 
+    // The page and the `connector_links` row that identifies it commit together.
+    // They did not, and the gap was this feature's worst failure: a finalized,
+    // indexed page with no link row is invisible to `decideAction`, which sees
+    // `link === null`, decides 'create', and imports the same external item
+    // again — on that pull and on EVERY pull after it, silently, forever. The
+    // run-item update is inside for the same reason one step down: without it
+    // the item keeps `linkId: null` and re-applying makes a second page plus a
+    // second link for one `externalId`.
+    //
+    // The S3 write sits inside the boundary because the revision has to be
+    // finalized against bytes that exist. It is a local MinIO PUT of one
+    // markdown document, but it is still a network call holding a transaction
+    // open, hence the raised timeout — the `ProjectCascadeService` precedent.
+    await this.prisma.withTransaction(() => this.writePage(row, item, markdown, hash, parentId, reRooted), {
+      timeout: 30_000,
+      maxWait: 10_000,
+    });
+  }
+
+  private async writePage(
+    row: Connector,
+    item: ConnectorRunItem,
+    markdown: string,
+    hash: string,
+    parentId: string | null,
+    reRooted: boolean,
+  ): Promise<void> {
     // Created without inline content and written once afterwards, the way import
     // submit does: one revision, whose content was never half-written.
     const created = await this.documents.createDocument({

@@ -13,6 +13,7 @@ import { useEventsStore } from '@/stores/events'
 import { useSearchUiStore } from '@/stores/search-ui'
 import { useSidebarStore } from '@/stores/sidebar'
 import { startLive } from '@/api'
+import { authSlideDirection } from '@/router'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -43,6 +44,18 @@ watchEffect(() => {
  * that lives in the sidebar store because its width and open state are drawn
  * by the server on the first frame — see lib/api's rail accessors.
  */
+/**
+ * Which way the signed-out card slides. Resolved in a `pre`-flush watcher so it
+ * is already correct when the swap it describes begins to render.
+ */
+const authDir = ref<'fwd' | 'back'>('fwd')
+watch(
+  () => route.path,
+  (to, from) => {
+    authDir.value = authSlideDirection(to, from)
+  },
+)
+
 const mobileOpen = ref(false)
 function toggleSidebar() {
   if (window.matchMedia('(min-width: 1024px)').matches) sidebar.toggle()
@@ -72,8 +85,15 @@ watch(
          Only one of the two is ever mounted, so the level is never ambiguous;
          the router re-applies the name after the DOM settles, which is what
          lets a login-to-app navigation cross between the two. -->
-    <main data-kn-pane="1" class="flex-1 px-4 pb-10">
-      <RouterView />
+    <main data-kn-pane="1" class="flex flex-1 flex-col items-center justify-center px-4 py-6 sm:py-10">
+      <!-- The auth cards slide laterally between each other. `out-in` because
+           the two carry different forms: overlapping them would put two sets of
+           labels on top of each other at different offsets. -->
+      <RouterView v-slot="{ Component }">
+        <Transition :name="`kn-auth-${authDir}`" mode="out-in">
+          <component :is="Component" />
+        </Transition>
+      </RouterView>
     </main>
     <Toaster />
   </div>

@@ -11,4 +11,9 @@ graphify-out/
 .vscode/
 certs/
 logs/
-.dependency-cruiser-known-violations.json
+# NOT ignored: dependency-cruiser's known-violations baseline is meant to be
+# committed. `depcruise --ignore-known` (both apps' depcruise script) cannot run
+# without it, so an ignored baseline makes the dependency gate unrunnable on any
+# clean checkout — and `make deps-baseline` is shrink-only, which only means
+# anything if the file is shared.
+# .dependency-cruiser-known-violations.json

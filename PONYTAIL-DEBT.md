@@ -14,12 +14,12 @@ in-app events, workers). Last worked: 2026-09-14 — every open finding below th
 
 **0 markers.** All four were retired on 2026-09-14:
 
-| was | retired by |
-| --- | --- |
-| `common/safe-url.ts:28` — DNS-rebinding TOCTOU | `common/safe-fetch.ts` |
-| `ai/source-policy.service.ts:241` — same TOCTOU | same |
+| was                                                                           | retired by                                       |
+| ----------------------------------------------------------------------------- | ------------------------------------------------ |
+| `common/safe-url.ts:28` — DNS-rebinding TOCTOU                                | `common/safe-fetch.ts`                           |
+| `ai/source-policy.service.ts:241` — same TOCTOU                               | same                                             |
 | `workflows/workflow-materialize.sweeper.ts:70` — claims the row, not the work | the transaction boundary it named as the upgrade |
-| `import/import.service.ts:215` — submit is check-then-act | guarded claim inside the same boundary |
+| `import/import.service.ts:215` — submit is check-then-act                     | guarded claim inside the same boundary           |
 
 There is no `TODO`/`FIXME`/`HACK` anywhere in ~38k LOC of `apps/api/src`.
 
@@ -35,7 +35,7 @@ A diverged target 409s with a comparison link and the author rebases by hand.
 - **ceiling:** every merge whose target moved is manual work.
 - **upgrade:** real 3-way content merge. Large, and deliberately not attempted here.
 
-The *concurrency* half of this entry is now fixed — the `SELECT … FOR UPDATE` on
+The _concurrency_ half of this entry is now fixed — the `SELECT … FOR UPDATE` on
 the target branch row that the old `NOTE:` called "deliberately deferred" turned
 out to cost nothing once the boundary spanned check + finalize.
 
@@ -56,6 +56,11 @@ feature was written against"_).
 - **cost:** it ripples into every `ActivityService.record` caller, because an
   activity `action` becomes an event type. That is why it was not done in a
   debt pass.
+- **re-verified clean 2026-09-14**: 80 declared, 0 drift in either direction,
+  diffed against every producer (`action:`/`type:` literals, positional args to
+  `recordActivity`, and the one template literal at `workflows.service.ts:398`).
+  Recorded so the next audit can tell _clean_ from _not checked_ — which is the
+  whole reason this entry exists.
 
 ### Durable event delivery
 
@@ -84,9 +89,10 @@ to a rollback. What is still true:
   `BullModule.forRootAsync` side effect; the comments admit it. A
   `BullConnectionModule` would retire that.
 - The five producers are one file five times (~200 LOC). Left alone on purpose
-  (see *Rejected*) — but the **`attempts` difference between them is real and
-  was undocumented**: ingestion uses `attempts: 3` with exponential backoff, the
-  other four use `attempts: 1`.
+  (see _Rejected_). The **`attempts` difference between them is real**:
+  ingestion uses `attempts: 3` with exponential backoff, the other four use
+  `attempts: 1` — each now states its own reason in a comment, which was the
+  only upgrade this bullet asked for.
 
 ---
 
@@ -119,14 +125,14 @@ shared the shape; **all six now commit together** via
 `prisma.withTransaction()` + `.onCommit()` (`apps/api/src/prisma/transaction.ts`),
 with zero call-site changes to the services in between.
 
-| flow | gap produced | boundary now spans |
-| --- | --- | --- |
-| `merge-requests.service.ts` `merge()` | MR permanently open **and** unmergeable | branch lock → finalize → status flip |
-| `import/import.service.ts` `submit()` | wizard re-offered Submit → duplicate page | claim → page → attachments → status |
-| `workflows/workflows.service.ts` `sendNodeEvent()` | sweeper re-ran → duplicate page | `materializing` write → materialize → `documentId` → children |
-| `workflows/workflow-materialize.sweeper.ts` | same, after a crash | materialize → `documentId` → children |
-| `ai/agent-findings.service.ts` `propose()` | 409 `in-flight` forever, MR orphaned | branch → revision → finalize → MR → writeBack |
-| `connectors/connector-staging.service.ts` | *(fixed earlier)* | — |
+| flow                                               | gap produced                              | boundary now spans                                            |
+| -------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
+| `merge-requests.service.ts` `merge()`              | MR permanently open **and** unmergeable   | branch lock → finalize → status flip                          |
+| `import/import.service.ts` `submit()`              | wizard re-offered Submit → duplicate page | claim → page → attachments → status                           |
+| `workflows/workflows.service.ts` `sendNodeEvent()` | sweeper re-ran → duplicate page           | `materializing` write → materialize → `documentId` → children |
+| `workflows/workflow-materialize.sweeper.ts`        | same, after a crash                       | materialize → `documentId` → children                         |
+| `ai/agent-findings.service.ts` `propose()`         | 409 `in-flight` forever, MR orphaned      | branch → revision → finalize → MR → writeBack                 |
+| `connectors/connector-staging.service.ts`          | _(fixed earlier)_                         | —                                                             |
 
 Three things that had to be got right and must survive any refactor:
 
@@ -135,13 +141,13 @@ Three things that had to be got right and must survive any refactor:
    over HTTP** (one DELETE + one create per fact, remote, unrollbackable) and
    `activity.record` publishes onto Redis. Both are now `onCommit`. Same for
    `createBranch`'s record and `MergeRequestsService.recordActivity`, which is
-   the funnel for 8 call sites. `notifications.ensureSubscription` stays *inside*
+   the funnel for 8 call sites. `notifications.ensureSubscription` stays _inside_
    — it should roll back with the page.
 2. **Prisma interactive transactions have no per-statement savepoint.** Once any
    statement fails at the database the whole transaction is aborted and
    everything after it returns `25P02`. Every `catch { continue }` around a
    Prisma call inside a boundary is therefore a landmine — `promoteOriginal` and
-   `promoteImages` had one each, and both are now narrowed to the *storage* call
+   `promoteImages` had one each, and both are now narrowed to the _storage_ call
    they were actually there to tolerate.
 3. **Failure writes and claims belong OUTSIDE the boundary.** `sendNodeEvent`'s
    `failed` write, the materialize sweeper's `failNode`, and
@@ -158,7 +164,7 @@ Two fixes that fell out of the boundary rather than needing their own work:
   `count === 0`. That is precisely the property the materialize sweeper's old
   claim lacked (it matched `status` and wrote `status` back, so every racer won).
   Rollback releases the claim, so no `submitting` status and nothing to strand.
-- **The merge branch-row lock.** See *Still open* above.
+- **The merge branch-row lock.** See _Still open_ above.
 
 `agent-findings.release()` also now clears `mergeRequestId`, not just
 `proposedAt` — both re-entry guards read it, so a failure after `writeBack` left
@@ -166,7 +172,7 @@ the finding permanently unproposable.
 
 ### SSRF — checked at the dial instead of before it
 
-`assertSafeExternalUrl` resolved the host to decide and handed the *hostname* to
+`assertSafeExternalUrl` resolved the host to decide and handed the _hostname_ to
 whatever dialled it, which resolved again — so DNS rebinding slipped between the
 two, and no amount of checking beforehand could close that: a check that finishes
 before the socket opens is by construction a different resolution.
@@ -201,8 +207,9 @@ needs to say "that host is internal" in words, immediately.
   `WorkflowMaterializeSweeper`.
 - **`EventsSubscriberModule`** (new) — the last duplicated provider, exported by
   nothing.
-- **`BootstrapModule`** (new) — the env + i18n prelude was copy-pasted verbatim
-  into all three entrypoints, which is how the docstring above drifted.
+- **`BootstrapModule`** (new, `config/bootstrap.module.ts`) — the env + i18n
+  prelude was copy-pasted verbatim into all three entrypoints, which is how the
+  docstring above drifted.
 
 ### Workers and shutdown
 
@@ -219,7 +226,7 @@ needs to say "that host is internal" in words, immediately.
   connection, so disabling it would fail that one every time.
 - `events.subscriber.ts` — found by booting the worker, not by reading: the
   `!subscribed` guard could not stop a double attach, because `subscribed` is set
-  only *after* the await and `lazyConnect` means the first `subscribe()` is what
+  only _after_ the await and `lazyConnect` means the first `subscribe()` is what
   triggers `ready`. Harmless at the protocol level, but every boot logged two
   "Subscribed" lines, which reads as two subscribers. Now guarded by an
   `attaching` flag cleared in `finally`.
@@ -228,7 +235,7 @@ needs to say "that host is internal" in words, immediately.
 
 `KNOWN_EVENT_TYPES` corrected: 4 declared-but-never-produced removed
 (`connector.item.staged|applied|failed`, `connector.link.created` — note
-`connector.link.removed` *is* published), 29 produced-but-never-declared added
+`connector.link.removed` _is_ published), 29 produced-but-never-declared added
 (17 `ai.*`, 4 `assistant.*`, 3 `glossary.term.*`, 3 `workflow.*`, 2
 `attachment.*`).
 

@@ -24,6 +24,15 @@ ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     CI=true
+# Installed in `base`, not just `runtime`, on purpose. @prisma/engines picks its
+# query engine during postinstall/generate, and with no libssl present it warns
+# "failed to detect the libssl/openssl version" and falls back to openssl-1.1.x
+# — baking a mismatched engine that only fails once the app starts. Every stage
+# that touches Prisma therefore needs openssl, not just the one that runs it.
+# ca-certificates covers the API's outbound TLS (OpenAI SDK, S3, connectors).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 # corepack ships with Node through 24 (removed in 25+). Version pinned from the
 # root package.json "packageManager" field.
 RUN corepack enable && corepack prepare pnpm@10.30.1 --activate
@@ -79,13 +88,7 @@ RUN pnpm --filter @knowledge/api exec prisma generate
 
 # ------------------------------------------------------------------ runtime
 FROM base AS runtime
-# openssl: the Prisma query engine links libssl and bookworm-slim does not ship it.
-# ca-certificates: the API makes outbound TLS calls (OpenAI SDK, S3, connectors).
-# Nothing else — there are no native modules needing a compiler in this tree.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends openssl ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-
+# openssl + ca-certificates are already present from `base`.
 ENV NODE_ENV=production \
     PORT=3000 \
     LOG_DIR=/app/logs

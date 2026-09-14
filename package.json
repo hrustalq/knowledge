@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "prepare": "husky",
+    "prepare": "husky || true",
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",

@@ -4,7 +4,7 @@ import type { Env } from '../config/env.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { NoopExtractor } from './noop.provider.js';
 import { OpenAICompatibleExtractor } from './openai-compatible.provider.js';
-import type { RelationExtractor } from './relation-extractor.provider.js';
+import type { ExtractionTuning, RelationExtractor } from './relation-extractor.provider.js';
 
 /**
  * Builds the relation extractor for one workspace (docs/features/12).
@@ -35,13 +35,13 @@ export class ExtractorFactory {
             config.get('EXTRACTOR_BASE_URL', { infer: true }),
             config.get('EXTRACTOR_MODEL', { infer: true }),
             config.get('EXTRACTOR_API_KEY', { infer: true }),
-            config.get('EXTRACTOR_MIN_CONFIDENCE', { infer: true }),
-            config.get('EXTRACTOR_MAX_CHUNKS', { infer: true }),
           )
         : new NoopExtractor();
   }
 
-  async forWorkspace(workspaceId: string): Promise<RelationExtractor> {
+  async forWorkspace(
+    workspaceId: string,
+  ): Promise<{ extractor: RelationExtractor; tuning: ExtractionTuning }> {
     // The `extractor` agent (docs/features/20) owns this call's routing, so an
     // admin can pin extraction at one profile or switch it off without touching
     // the workspace-wide 'extraction' route. Its instructions are deliberately
@@ -49,33 +49,38 @@ export class ExtractorFactory {
     // RELATION_EDGE_TYPES allowlist, and letting settings rewrite that would
     // invite edge types GraphService is required to refuse.
     const agent = await this.agents.resolve(workspaceId, 'extractor');
+    const resolved = agent.config;
+
+    // Tuning rides along with the extractor rather than inside it. It cannot
+    // live on the instance: the cache below is keyed by connection identity so
+    // one object serves every workspace sharing a profile, and envExtractor is
+    // built once in the constructor. Resolving it here also means an admin's
+    // change takes effect within the config TTL instead of at worker restart.
+    const tuning: ExtractionTuning = {
+      minConfidence: resolved.extractionMinConfidence,
+      maxChunks: resolved.extractionMaxChunks,
+    };
+
     // Switched off explicitly — do no extraction rather than quietly falling
     // back to the env extractor, which would ignore the admin's decision.
-    if (!agent.enabled) return this.noopExtractor;
+    if (!agent.enabled) return { extractor: this.noopExtractor, tuning };
 
-    const resolved = agent.config;
     // No profile routed at extraction: keep the env-configured extractor,
     // which is a different provider setting from the assistant's and stays
     // independent of it.
-    if (!resolved.providerId || !resolved.enabled) return this.envExtractor;
+    if (!resolved.providerId || !resolved.enabled) return { extractor: this.envExtractor, tuning };
 
     const key = `${resolved.providerId}|${resolved.baseUrl}|${resolved.model}|${resolved.apiKey}`;
     const hit = this.cache.get(key);
-    if (hit) return hit;
+    if (hit) return { extractor: hit, tuning };
 
-    const extractor = new OpenAICompatibleExtractor(
-      resolved.baseUrl,
-      resolved.model,
-      resolved.apiKey,
-      this.config.get('EXTRACTOR_MIN_CONFIDENCE', { infer: true }),
-      this.config.get('EXTRACTOR_MAX_CHUNKS', { infer: true }),
-    );
+    const extractor = new OpenAICompatibleExtractor(resolved.baseUrl, resolved.model, resolved.apiKey);
     // Bounded: a workspace churning provider settings must not grow this map.
     if (this.cache.size >= 32) {
       const oldest = this.cache.keys().next().value;
       if (oldest !== undefined) this.cache.delete(oldest);
     }
     this.cache.set(key, extractor);
-    return extractor;
+    return { extractor, tuning };
   }
 }

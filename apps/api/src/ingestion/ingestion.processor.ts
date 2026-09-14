@@ -157,10 +157,12 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       try {
         // Resolved per job: the workspace may route extraction at its own
         // provider profile (docs/features/12), falling back to EXTRACTOR_*.
-        const extractor = await this.extractors.forWorkspace(revision.document.workspaceId);
+        const { extractor, tuning } = await this.extractors.forWorkspace(revision.document.workspaceId);
         const inferred = extractor.enabled
           ? await extractor.extract({
               documentTitle: revision.document.title,
+              minConfidence: tuning.minConfidence,
+              maxChunks: tuning.maxChunks,
               chunks: drafts.map((c) => ({
                 chunkId: `${revision.id}:${c.index}`,
                 text: c.text,

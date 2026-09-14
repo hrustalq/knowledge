@@ -51,6 +51,10 @@ type Form = {
   temperature: number
   maxToolCalls: number
   timeoutMs: number
+  // Strings, unlike the three above: these must be clearable back to "inherit
+  // the env value", and an emptied type="number" input cannot express that.
+  extractionMinConfidence: string
+  extractionMaxChunks: string
   agentModeEnabled: boolean
   pricePromptPerMTok: string
   priceCompletionPerMTok: string
@@ -73,6 +77,11 @@ function formFrom(s: AiSettingsResponse): Form {
     temperature: s.temperature,
     maxToolCalls: s.maxToolCalls,
     timeoutMs: s.timeoutMs,
+    // Left empty unless the workspace actually overrides it, so the placeholder
+    // can show what is being inherited and emptying the box means "inherit".
+    extractionMinConfidence:
+      s.sources.extractionMinConfidence === 'db' ? s.extractionMinConfidence.toString() : '',
+    extractionMaxChunks: s.sources.extractionMaxChunks === 'db' ? s.extractionMaxChunks.toString() : '',
     agentModeEnabled: s.agentModeEnabled,
     pricePromptPerMTok: s.pricePromptPerMTok?.toString() ?? '',
     priceCompletionPerMTok: s.priceCompletionPerMTok?.toString() ?? '',
@@ -135,6 +144,10 @@ async function onSave() {
       temperature: override('temperature', 'temperature', f.temperature) as number | null,
       maxToolCalls: override('maxToolCalls', 'maxToolCalls', f.maxToolCalls) as number | null,
       timeoutMs: override('timeoutMs', 'timeoutMs', f.timeoutMs) as number | null,
+      // num(), not override(): these render empty when inherited, so an empty
+      // box already means "inherit" and needs no untouched-field guard.
+      extractionMinConfidence: num(f.extractionMinConfidence),
+      extractionMaxChunks: num(f.extractionMaxChunks),
       agentModeEnabled: f.agentModeEnabled,
       pricePromptPerMTok: num(f.pricePromptPerMTok),
       priceCompletionPerMTok: num(f.priceCompletionPerMTok),
@@ -307,6 +320,41 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
           </span>
         </span>
       </label>
+    </AiSettingsSection>
+
+    <AiSettingsSection
+      :title="t('ai.extraction')"
+      :description="t('ai.extractionDesc')"
+    >
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block space-y-1.5">
+          <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+            {{ t('ai.extractionMinConfidence') }}
+            <span v-if="overridden('extractionMinConfidence')" class="text-primary/70">
+              {{ t('ai.overridden') }}
+            </span>
+          </span>
+          <Input
+            v-model="form.extractionMinConfidence"
+            :disabled="!canManage"
+            :placeholder="settings?.extractionMinConfidence?.toString()"
+          />
+        </label>
+        <label class="block space-y-1.5">
+          <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+            {{ t('ai.extractionMaxChunks') }}
+            <span v-if="overridden('extractionMaxChunks')" class="text-primary/70">
+              {{ t('ai.overridden') }}
+            </span>
+          </span>
+          <Input
+            v-model="form.extractionMaxChunks"
+            :disabled="!canManage"
+            :placeholder="settings?.extractionMaxChunks?.toString()"
+          />
+        </label>
+      </div>
+      <p class="text-muted-foreground text-xs leading-snug">{{ t('ai.extractionHint') }}</p>
     </AiSettingsSection>
 
     <AiSettingsSection

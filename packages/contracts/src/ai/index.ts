@@ -227,6 +227,8 @@ export interface AiSettingsSourceMap {
   temperature: AiSettingsSource;
   maxToolCalls: AiSettingsSource;
   timeoutMs: AiSettingsSource;
+  extractionMinConfidence: AiSettingsSource;
+  extractionMaxChunks: AiSettingsSource;
   /** docs/features/25 — 'clamped' when the ceiling overrode the workspace. */
   webAccessMode: AiSettingsSource;
 }
@@ -338,6 +340,9 @@ export interface AiSettingsResponse {
   temperature: number;
   maxToolCalls: number;
   timeoutMs: number;
+  /** Relation-extraction tuning, resolved from the DB override or EXTRACTOR_*. */
+  extractionMinConfidence: number;
+  extractionMaxChunks: number;
   agentModeEnabled: boolean;
   pricePromptPerMTok: number | null;
   priceCompletionPerMTok: number | null;

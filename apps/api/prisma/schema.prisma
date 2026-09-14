@@ -593,6 +593,12 @@ model AiSettings {
   reviewProviderId     String? @map("review_provider_id") @db.Uuid
   extractionProviderId String? @map("extraction_provider_id") @db.Uuid
 
+  /// Relation-extraction tuning. Null = inherit EXTRACTOR_MIN_CONFIDENCE /
+  /// EXTRACTOR_MAX_CHUNKS. Workspace-scoped on purpose: these shape extraction
+  /// behaviour, not the connection, so a provider profile never carries them.
+  extractionMinConfidence Float? @map("extraction_min_confidence")
+  extractionMaxChunks     Int?   @map("extraction_max_chunks")
+
   /// docs/features/25 — 'off' | 'allowlist' | 'open'. Null inherits the
   /// WEB_ACCESS_MODE env ceiling, and the effective value is the NARROWER of
   /// the two: a settings row must never widen what the model can reach.

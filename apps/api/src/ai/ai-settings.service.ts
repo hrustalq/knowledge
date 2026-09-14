@@ -21,6 +21,9 @@ export interface UpdateAiSettingsInput {
   temperature?: number | null;
   maxToolCalls?: number | null;
   timeoutMs?: number | null;
+  /** Relation-extraction tuning; null clears the override back to EXTRACTOR_*. */
+  extractionMinConfidence?: number | null;
+  extractionMaxChunks?: number | null;
   agentModeEnabled?: boolean;
   /** docs/features/25 — null clears the override and inherits the env ceiling. */
   webAccessMode?: WebAccessMode | null;
@@ -64,6 +67,8 @@ export class AiSettingsService {
       temperature: effective.temperature,
       maxToolCalls: effective.maxToolCalls,
       timeoutMs: effective.timeoutMs,
+      extractionMinConfidence: effective.extractionMinConfidence,
+      extractionMaxChunks: effective.extractionMaxChunks,
       agentModeEnabled: effective.agentModeEnabled,
       webAccess: effective.webAccess,
       pricePromptPerMTok: effective.pricePromptPerMTok,
@@ -100,6 +105,8 @@ export class AiSettingsService {
       ...pick(input, 'temperature'),
       ...pick(input, 'maxToolCalls'),
       ...pick(input, 'timeoutMs'),
+      ...pick(input, 'extractionMinConfidence'),
+      ...pick(input, 'extractionMaxChunks'),
       ...pick(input, 'pricePromptPerMTok'),
       ...pick(input, 'priceCompletionPerMTok'),
       ...pick(input, 'workspaceMonthlyTokenBudget'),

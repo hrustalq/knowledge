@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type {
   ExtractionChunk,
+  ExtractionTuning,
   InferredFact,
   RelationExtractor,
 } from './relation-extractor.provider.js';
@@ -38,18 +39,22 @@ export class OpenAICompatibleExtractor implements RelationExtractor {
   readonly enabled = true;
   private readonly logger = new Logger(OpenAICompatibleExtractor.name);
 
+  // Only connection identity lives on the instance. Tuning arrives per call
+  // (docs/features/12) because ExtractorFactory caches these by endpoint and
+  // credential, so a value baked in here would outlive the workspace it came
+  // from — and the env-configured instance is shared by every workspace.
   constructor(
     private readonly baseUrl: string,
     private readonly model: string,
     private readonly apiKey: string,
-    private readonly minConfidence: number,
-    private readonly maxChunks: number,
   ) {}
 
-  async extract(input: { documentTitle: string; chunks: ExtractionChunk[] }): Promise<InferredFact[]> {
+  async extract(
+    input: { documentTitle: string; chunks: ExtractionChunk[] } & ExtractionTuning,
+  ): Promise<InferredFact[]> {
     const facts = new Map<string, InferredFact>();
-    for (const chunk of input.chunks.slice(0, this.maxChunks)) {
-      for (const fact of await this.extractChunk(input.documentTitle, chunk)) {
+    for (const chunk of input.chunks.slice(0, input.maxChunks)) {
+      for (const fact of await this.extractChunk(input.documentTitle, chunk, input.minConfidence)) {
         const id = `${fact.type} ${fact.target.key}`;
         const existing = facts.get(id);
         if (!existing || fact.confidence > existing.confidence) facts.set(id, fact);
@@ -58,7 +63,11 @@ export class OpenAICompatibleExtractor implements RelationExtractor {
     return [...facts.values()];
   }
 
-  private async extractChunk(title: string, chunk: ExtractionChunk): Promise<InferredFact[]> {
+  private async extractChunk(
+    title: string,
+    chunk: ExtractionChunk,
+    minConfidence: number,
+  ): Promise<InferredFact[]> {
     const res = await fetch(`${this.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -98,8 +107,12 @@ export class OpenAICompatibleExtractor implements RelationExtractor {
       if (!(INFERABLE_TYPES as readonly string[]).includes(type)) continue;
       const key = typeof rel.entity?.key === 'string' ? rel.entity.key.trim() : '';
       if (!key) continue;
-      const confidence = Math.min(1, Math.max(0, Number(rel.confidence ?? 0)));
-      if (confidence < this.minConfidence) continue;
+      // An omitted confidence means the model asserted the relation without
+      // scoring it, so it is read as asserted (1). It used to default to 0,
+      // which silently dropped EVERY such relation at any threshold above 0 —
+      // a workspace could run extraction correctly and still get an empty graph.
+      const confidence = Math.min(1, Math.max(0, Number(rel.confidence ?? 1)));
+      if (confidence < minConfidence) continue;
       out.push({
         type,
         target: {

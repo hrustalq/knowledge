@@ -57,6 +57,21 @@ and the env stays a working deployment path. `AiConfigService.resolve()` folds
 DB → env → `PROVIDER_DEFAULTS` and reports, per field, which layer won — that
 is what the "from env" badges in the UI are reading.
 
+Relation extraction carries two tuning overrides of its own —
+`extraction_min_confidence` and `extraction_max_chunks`, inheriting
+`EXTRACTOR_MIN_CONFIDENCE` / `EXTRACTOR_MAX_CHUNKS`. They are workspace-scoped
+rather than per profile because they shape extraction *behaviour*, not the
+connection, and they travel into `extract()` per call rather than sitting on the
+extractor: `ExtractorFactory` caches instances by connection identity, and the
+env-configured one is a process-wide singleton, so neither could hold a
+per-workspace value. Resolving them per job is also what lets an admin's change
+take effect within the config TTL instead of at the next worker restart.
+
+The confidence floor is the sharper of the two. A model that returns a relation
+with no `confidence` field is read as asserting it (1), not as scoring it 0 —
+the old default, which silently discarded every such relation at any threshold
+above zero and could leave a correctly-configured workspace with an empty graph.
+
 **Config resolves per call, not per boot.** `AssistantClient` methods take an
 `AiCallContext` carrying the resolved config plus who to bill, and cache one
 SDK instance per distinct (endpoint, credential, timeout). This is the change

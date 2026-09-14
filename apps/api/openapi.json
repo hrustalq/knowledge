@@ -14940,6 +14940,20 @@
             "minimum": 1000,
             "maximum": 600000
           },
+          "extractionMinConfidence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Relations scoring below this are discarded. Null inherits EXTRACTOR_MIN_CONFIDENCE (0.5)."
+          },
+          "extractionMaxChunks": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Chunks of a page sent to the extractor. Null inherits EXTRACTOR_MAX_CHUNKS (20)."
+          },
           "agentModeEnabled": {
             "type": "boolean",
             "description": "Allow Agent mode (write tools) in the chat for this workspace"

@@ -3138,6 +3138,10 @@ export interface components {
             temperature?: number | null;
             maxToolCalls?: number | null;
             timeoutMs?: number | null;
+            /** @description Relations scoring below this are discarded. Null inherits EXTRACTOR_MIN_CONFIDENCE (0.5). */
+            extractionMinConfidence?: number | null;
+            /** @description Chunks of a page sent to the extractor. Null inherits EXTRACTOR_MAX_CHUNKS (20). */
+            extractionMaxChunks?: number | null;
             /** @description Allow Agent mode (write tools) in the chat for this workspace */
             agentModeEnabled?: boolean;
             /** @description USD per 1M prompt tokens (cost estimate) */

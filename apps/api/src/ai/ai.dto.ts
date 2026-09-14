@@ -99,6 +99,34 @@ export class UpdateAiSettingsDto {
   @Max(600_000, { message: vmsg('max') })
   timeoutMs?: number | null;
 
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 0,
+    maximum: 1,
+    description: 'Relations scoring below this are discarded. Null inherits EXTRACTOR_MIN_CONFIDENCE (0.5).',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('extractionMinConfidence')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  extractionMinConfidence?: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 1,
+    maximum: 200,
+    description: 'Chunks of a page sent to the extractor. Null inherits EXTRACTOR_MAX_CHUNKS (20).',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('extractionMaxChunks')
+  @IsInt()
+  @Min(1, { message: vmsg('min') })
+  @Max(200, { message: vmsg('max') })
+  extractionMaxChunks?: number | null;
+
   @ApiPropertyOptional({ description: 'Allow Agent mode (write tools) in the chat for this workspace' })
   @IsOptional()
   @IsBoolean()

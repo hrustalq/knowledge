@@ -57,6 +57,14 @@ export interface ResolvedAiConfig {
   temperature: number;
   maxToolCalls: number;
   timeoutMs: number;
+  /**
+   * Relation-extraction tuning (docs/features/12). Resolved here so the
+   * extractor can take it per job: the factory's instance cache holds
+   * connection identity only, and its env extractor is a process-wide
+   * singleton that could not carry a per-workspace value at all.
+   */
+  extractionMinConfidence: number;
+  extractionMaxChunks: number;
   agentModeEnabled: boolean;
   pricePromptPerMTok: number | null;
   priceCompletionPerMTok: number | null;
@@ -145,6 +153,11 @@ export class AiConfigService {
       temperature: row?.temperature ?? 0.2,
       maxToolCalls: row?.maxToolCalls ?? this.config.get('ASSISTANT_MAX_TOOL_CALLS', { infer: true }),
       timeoutMs: row?.timeoutMs ?? this.config.get('ASSISTANT_TIMEOUT_MS', { infer: true }),
+      // `??`, not `||`: an explicit 0 confidence is a real setting ("keep
+      // everything the model returns") and must not fall through to the env.
+      extractionMinConfidence:
+        row?.extractionMinConfidence ?? this.config.get('EXTRACTOR_MIN_CONFIDENCE', { infer: true }),
+      extractionMaxChunks: row?.extractionMaxChunks ?? this.config.get('EXTRACTOR_MAX_CHUNKS', { infer: true }),
       agentModeEnabled: row?.agentModeEnabled ?? true,
       webAccess: this.sourcePolicies.webAccess(row?.webAccessMode),
       pricePromptPerMTok: row?.pricePromptPerMTok ? Number(row.pricePromptPerMTok) : null,
@@ -159,6 +172,8 @@ export class AiConfigService {
         temperature: row?.temperature != null ? 'db' : 'env',
         maxToolCalls: row?.maxToolCalls != null ? 'db' : 'env',
         timeoutMs: row?.timeoutMs != null ? 'db' : 'env',
+        extractionMinConfidence: row?.extractionMinConfidence != null ? 'db' : 'env',
+        extractionMaxChunks: row?.extractionMaxChunks != null ? 'db' : 'env',
         // Not `row ? 'db' : 'env'`: a workspace can ask for a mode the
         // deployment refuses, and the third value is the only honest report of
         // that. `webAccess()` works it out; the map just mirrors it.

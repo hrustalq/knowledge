@@ -98,6 +98,10 @@ lint: ## Lint all workspaces
 typecheck: ## Typecheck all workspaces
 	pnpm typecheck
 
+.PHONY: test
+test: ## Run the vitest unit suites (e2e needs infra: $(API) run test:e2e)
+	pnpm test
+
 .PHONY: deps
 deps: ## Validate the dependency graph (process boundaries, layering, cycles)
 	pnpm run depcruise
@@ -112,7 +116,14 @@ deps-graph: ## Render dependency graphs to apps/*/dependency-graph.svg (needs gr
 	$(WEB) run depcruise:graph
 
 .PHONY: check
-check: lint typecheck deps build ## Lint + typecheck + dependency rules + build (CI gate)
+check: lint typecheck deps test build ## Lint + typecheck + dependency rules + tests + build (CI gate)
+
+.PHONY: backtest
+backtest: ## Retrieval/pipeline backtest. ARGS="--generate --limit 120" or ARGS="--report"
+	@# Runs the built output rather than the source: Node's type stripping emits
+	@# no decorator metadata, and Nest's DI needs it to construct SearchService.
+	$(API) run build
+	$(API) exec node dist/scripts/backtest.main.js $(ARGS)
 
 .PHONY: clean
 clean: ## Remove build artifacts and turbo cache

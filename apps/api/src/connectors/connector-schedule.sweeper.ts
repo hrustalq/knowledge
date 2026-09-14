@@ -60,9 +60,21 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
         try {
           const run = await this.connectors.createRun(connector, direction, 'schedule');
           await this.producer.enqueue(run.id);
-        } catch {
-          // A run already in flight, or a connector that cannot do this
-          // direction — both are ordinary and must not stop the sweep.
+        } catch (err) {
+          // Still non-fatal, for the original reason: a run already in flight,
+          // or a connector that cannot do this direction, are both ordinary and
+          // must not stop the sweep.
+          //
+          // Logged rather than silent because from here those ordinary cases are
+          // indistinguishable from a real failure — a connector that has not
+          // synced for a week looked exactly like one that had nothing to do.
+          this.logger.warn({
+            msg: 'Scheduled connector run could not start',
+            code: 'SCHEDULED_RUN_FAILED',
+            connectorId: connector.id,
+            direction,
+            err,
+          });
         }
       }
     } catch (err) {

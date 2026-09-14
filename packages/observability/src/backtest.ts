@@ -1,6 +1,20 @@
 import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { BacktestEvent } from '@knowledge/contracts/observability';
+import { currentService, type ServiceName } from '@knowledge/observability/logger';
+
+/**
+ * `<repo root>/logs`, resolved from this file's own location — never from
+ * process.cwd().
+ *
+ * cwd differs per process: the API starts in apps/api and the SSR server in
+ * apps/web, so a cwd-relative default quietly produced one stream per app and
+ * split every browser → SSR → API trace across two files. This module always
+ * lives at packages/observability/src/, so the repo root is three levels up.
+ */
+function defaultDir(): string {
+  return resolve(import.meta.dirname, '..', '..', '..', 'logs');
+}
 
 /**
  * The measurement stream: one JSON object per line, one file per day.
@@ -16,13 +30,15 @@ import type { BacktestEvent } from '@knowledge/contracts/observability';
  */
 let stream: WriteStream | undefined;
 let streamDay: string | undefined;
-let dir = 'logs';
+let dir: string | undefined;
+let service: ServiceName | undefined;
 let enabled = false;
 let dropped = 0;
 
-export function configureBacktest(opts: { enabled: boolean; dir: string }): void {
+export function configureBacktest(opts: { enabled: boolean; dir?: string; service?: ServiceName }): void {
   enabled = opts.enabled;
   dir = opts.dir;
+  service = opts.service;
 }
 
 function today(): string {
@@ -33,9 +49,14 @@ function destination(): WriteStream | undefined {
   const day = today();
   if (stream && streamDay === day) return stream;
   try {
-    mkdirSync(dir, { recursive: true });
+    const root = dir ?? defaultDir();
+    mkdirSync(root, { recursive: true });
     stream?.end();
-    const next = createWriteStream(join(dir, `ops-${day}.jsonl`), { flags: 'a' });
+    // One file per service, not one shared file. Two processes appending to the
+    // same file is only atomic for writes under PIPE_BUF, and a serialized stack
+    // trace comfortably exceeds that — interleaved writes would corrupt exactly
+    // the records worth keeping. One directory still means one glob and one grep.
+    const next = createWriteStream(join(root, `ops-${service ?? currentService()}-${day}.jsonl`), { flags: 'a' });
     // An unhandled 'error' event on a stream takes the process down. Dropping
     // measurements is always preferable to that.
     next.on('error', () => {
@@ -66,6 +87,16 @@ export function emitBacktest(event: BacktestEvent): void {
 /** Read by the ops surface rather than logged, so a failing stream cannot log its way into a loop. */
 export function backtestDropped(): number {
   return dropped;
+}
+
+/**
+ * Where the stream is being written. Exported so the backtest harness reads the
+ * same location the writers use rather than re-deriving it — two copies of this
+ * rule would drift, and the failure mode is a harness that silently reports on
+ * an empty directory.
+ */
+export function backtestDir(): string {
+  return dir ?? defaultDir();
 }
 
 export function closeBacktest(): void {

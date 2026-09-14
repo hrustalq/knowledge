@@ -23,7 +23,8 @@ export class ObservabilityRegistry implements OnModuleInit {
   onModuleInit(): void {
     configureBacktest({
       enabled: this.config.get('OPS_JSONL_ENABLED', { infer: true }),
-      dir: this.config.get('LOG_DIR', { infer: true }),
+      // Empty or unset both mean "use the shared repo-root default".
+      dir: this.config.get('LOG_DIR', { infer: true }) || undefined,
     });
   }
 }

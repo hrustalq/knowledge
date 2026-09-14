@@ -11,6 +11,7 @@ import { AiUsageService, estimateTokens, type AiUsageTokens } from '../ai/ai-usa
 import { FREE_TOOLS } from './assistant.tools.js';
 import type { Locale } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
+import { currentTrace, emitBacktest } from '@knowledge/observability';
 
 /**
  * Everything one upstream call needs to know beyond its messages: which
@@ -486,16 +487,39 @@ export class AssistantClient {
     startedAt: number,
     outcome: { ok: boolean; error?: string; toolCallCount?: number },
   ): void {
+    const durationMs = Date.now() - startedAt;
     void this.usage.record({
       config: ctx.config,
       userId: ctx.userId,
       operation: ctx.operation,
       threadId: ctx.threadId,
       tokens,
-      durationMs: Date.now() - startedAt,
+      durationMs,
       ok: outcome.ok,
       error: outcome.error,
       toolCallCount: outcome.toolCallCount ?? 0,
+    });
+    // The measurement twin of the ai_usage row. ai_usage stays billing truth in
+    // Postgres; this rides the JSONL stream and carries the trace id, so a model
+    // or prompt change can be compared against the run before it without a SQL
+    // join per experiment. Emitted from bill() because that is the one funnel
+    // both create() and createStream() already pass through — including their
+    // failure and cancellation paths, which are the calls worth measuring most.
+    emitBacktest({
+      ...(currentTrace() ?? { traceId: 'unscoped', source: 'cli' as const }),
+      workspaceId: ctx.config.workspaceId,
+      userId: ctx.userId,
+      kind: 'ai.call',
+      ts: new Date().toISOString(),
+      durationMs,
+      operation: ctx.operation,
+      provider: ctx.config.provider,
+      model: ctx.config.model,
+      promptTokens: tokens.promptTokens,
+      completionTokens: tokens.completionTokens,
+      toolCallCount: outcome.toolCallCount ?? 0,
+      ok: outcome.ok,
+      estimated: tokens.estimated,
     });
   }
 

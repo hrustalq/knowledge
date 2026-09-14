@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { RelatedDocumentResult, SearchResponse, SearchResult } from '@knowledge/contracts';
+import { currentTrace, emitBacktest } from '@knowledge/observability';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService, type ChunkHit } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
@@ -39,17 +40,63 @@ export class SearchService {
     const useText = this.fulltext.enabled && mode !== 'semantic';
     const useVector = mode !== 'keyword' || !this.fulltext.enabled;
 
-    const [vectorHits, textHits, taggedDocs] = await Promise.all([
-      useVector
-        ? this.embeddings.embed(dto.query).then((e) => this.graph.searchChunks(dto.workspaceId, e, fetchK))
-        : Promise.resolve([] as ChunkHit[]),
-      useText ? this.fulltext.search(dto.workspaceId, dto.query, fetchK) : Promise.resolve([]),
+    const startedAt = process.hrtime.bigint();
+    const since = (from: bigint) => Number(process.hrtime.bigint() - from) / 1e6;
+    // Per-leg, not just total: a retrieval regression is almost always in one
+    // leg, and a single duration cannot tell a slow embedder from a slow BM25
+    // index from a graph walk. The legs run concurrently, so these overlap.
+    const timed = async <T>(fn: () => Promise<T>): Promise<[T, number]> => {
+      const at = process.hrtime.bigint();
+      const value = await fn();
+      return [value, since(at)];
+    };
+
+    const [[vectorHits, vectorMs], [textHits, fulltextMs], [taggedDocs, tagsMs]] = await Promise.all([
+      timed(() =>
+        useVector
+          ? this.embeddings.embed(dto.query).then((e) => this.graph.searchChunks(dto.workspaceId, e, fetchK))
+          : Promise.resolve([] as ChunkHit[]),
+      ),
+      timed(() => (useText ? this.fulltext.search(dto.workspaceId, dto.query, fetchK) : Promise.resolve([]))),
       // Overlaps the embedding round-trip rather than serializing after it.
-      tagKeys ? this.graph.getDocumentIdsByTags(dto.workspaceId, tagKeys) : Promise.resolve(null),
+      timed(() => (tagKeys ? this.graph.getDocumentIdsByTags(dto.workspaceId, tagKeys) : Promise.resolve(null))),
     ]);
 
     const hits = this.fuse(vectorHits, textHits, fetchK);
-    if (hits.length === 0) return { results: [] };
+
+    /**
+     * The measurement a recall@k / MRR sweep replays.
+     *
+     * Recorded at every exit including the empty one — "this query returned
+     * nothing" is a data point the September backtest was built to count, and a
+     * harness that only sees successful searches overstates recall.
+     */
+    const record = (out: SearchResult[]): void => {
+      const trace = currentTrace();
+      emitBacktest({
+        ...(trace ?? { traceId: 'unscoped', source: 'cli' as const }),
+        workspaceId: dto.workspaceId,
+        kind: 'search.executed',
+        ts: new Date().toISOString(),
+        durationMs: since(startedAt),
+        query: dto.query,
+        mode,
+        limit: k,
+        fetchK,
+        vectorMs: useVector ? vectorMs : undefined,
+        fulltextMs: useText ? fulltextMs : undefined,
+        tagsMs: tagKeys ? tagsMs : undefined,
+        vectorHits: vectorHits.length,
+        fulltextHits: textHits.length,
+        fusedHits: hits.length,
+        results: out.map((r) => ({ documentId: r.documentId, chunkId: r.chunkId, score: r.score })),
+      });
+    };
+
+    if (hits.length === 0) {
+      record([]);
+      return { results: [] };
+    }
 
     // Join PG for authoritative titles (three-store separation: PG owns metadata).
     const docs = await this.prisma.document.findMany({
@@ -71,6 +118,8 @@ export class SearchService {
         snippet: h.text.slice(0, 300),
         score: Number(h.score.toFixed(4)),
       }));
+
+    record(results);
 
     // Phase 4 hybrid mode: vectors find evidence, the graph expands it
     // (plan.md §12.7). Walk relation edges out from the hit documents.

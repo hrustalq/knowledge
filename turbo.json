@@ -11,6 +11,10 @@
       "dependsOn": ["^build"]
     },
     "lint": {},
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "depcruise": {},
     "dev": {
       "cache": false,

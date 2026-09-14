@@ -228,8 +228,23 @@ export const envSchema = z.object({
    * read, not its source.
    */
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
-  /** Directory for the backtest JSONL stream — one file per day, gitignored. */
-  LOG_DIR: z.string().default('logs'),
+  /**
+   * Render records as coloured, human-readable lines instead of JSON.
+   *
+   * Defaults to on outside production — and, like LOG_LEVEL, the entrypoints
+   * read process.env directly because the logger is built before DI exists.
+   * Declared here so a typo fails boot rather than silently picking a side.
+   */
+  LOG_PRETTY: boolish(process.env.NODE_ENV !== 'production'),
+  /**
+   * Directory for the backtest JSONL stream — one file per service per day.
+   *
+   * Optional on purpose: unset means <repo root>/logs, resolved from the
+   * observability package's own location rather than process.cwd(). The API and
+   * the SSR server start in different directories, so a cwd-relative default
+   * split a single browser → SSR → API trace across two separate files.
+   */
+  LOG_DIR: z.string().optional(),
   /**
    * Persist error-level records to ops_events. The stdout stream is unaffected
    * either way; this only controls whether errors are also queryable in SQL.

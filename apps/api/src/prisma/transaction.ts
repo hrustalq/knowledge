@@ -1,5 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+
+/**
+ * Module-level because this file is free functions, not a provider. Routed
+ * through Nest's Logger rather than console so it picks up the ambient trace
+ * context and the ops_events sink like every other record.
+ */
+const logger = new Logger('Transaction');
 
 /**
  * Ambient transaction scope.
@@ -71,11 +79,22 @@ export function runInTransaction<T>(
  * Failures are swallowed, deliberately: these run after the data is durable, so
  * a failed enqueue is the outbox sweeper's problem and a failed publish is the
  * best-effort bus's, exactly as when they ran inline.
+ *
+ * They are logged, though. Swallowing a failure and having no record of it are
+ * different things, and only the first was ever intended: with neither, a job
+ * that was queued and failed to enqueue looked exactly like a job nobody ever
+ * queued, and this is the single highest-traffic swallow in the codebase.
  */
 export function deferUntilCommit(fn: () => Promise<unknown>): void {
   const scope = store.getStore();
   if (!scope) {
-    void fn().catch(() => {});
+    void fn().catch((err: unknown) =>
+      logger.warn({
+        msg: 'Deferred effect failed (no transaction open, ran inline)',
+        code: 'TX_AFTER_COMMIT_FAILED',
+        err,
+      }),
+    );
     return;
   }
   scope.afterCommit.push(fn);
@@ -86,8 +105,15 @@ export async function drainAfterCommit(scope: TransactionScope): Promise<void> {
   for (const fn of scope.afterCommit) {
     try {
       await fn();
-    } catch {
-      /* see deferUntilCommit: post-commit effects are best-effort by contract */
+    } catch (err) {
+      // Still swallowed — see deferUntilCommit, the contract is deliberate and
+      // the data is already durable. The loop must also continue: one failed
+      // effect must not cancel the ones queued behind it.
+      logger.warn({
+        msg: 'Post-commit effect failed (best-effort by contract)',
+        code: 'TX_AFTER_COMMIT_FAILED',
+        err,
+      });
     }
   }
 }

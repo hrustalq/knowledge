@@ -192,9 +192,19 @@ export class WorkflowRunnerService {
     let applied;
     try {
       applied = applyRunEvent(status, event, { snapshot: run.snapshot ?? undefined });
-    } catch {
+    } catch (err) {
       // The machine refused: leave the run where it is rather than forcing a
-      // status the machine does not believe in.
+      // status the machine does not believe in. Unchanged — but now visible,
+      // because a guard that rejects every transition presents as a run quietly
+      // stuck in its current status with nothing anywhere saying why.
+      this.logger.warn({
+        msg: 'Workflow run transition refused by the machine',
+        code: 'WORKFLOW_TRANSITION_FAILED',
+        runId,
+        from: status,
+        event: event.type,
+        err,
+      });
       return status;
     }
 

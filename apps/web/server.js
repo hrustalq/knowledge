@@ -16,7 +16,10 @@ const logger = createRootLogger({ service: 'web-ssr', level: envLogLevel() })
 const OFF = new Set(['false', '0', 'no', 'off'])
 configureBacktest({
   enabled: !OFF.has(String(process.env.OPS_JSONL_ENABLED ?? 'true').toLowerCase()),
-  dir: process.env.LOG_DIR ?? 'logs',
+  // Unset means <repo root>/logs — shared with the API, so one trace that
+  // crosses from this process into that one stays in a single directory.
+  dir: process.env.LOG_DIR || undefined,
+  service: 'web-ssr',
 })
 
 // In dev, Vite injects CSS through the JS module graph, so the SSR'd HTML would

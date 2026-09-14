@@ -15,7 +15,7 @@ import { extractFrontmatterFacts } from './relations.js';
 import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
-import { bindTrace, startTrace, withTrace } from '@knowledge/observability';
+import { bindTrace, currentTrace, emitBacktest, startTrace, withTrace } from '@knowledge/observability';
 
 interface IngestionJobData {
   ingestionJobId: string;
@@ -90,9 +90,23 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       }),
     ]);
 
+    // Declared outside the try so the catch can still report which step the
+    // pipeline reached before it failed — that is the single most useful thing
+    // to know about a failed ingestion, and it is exactly what is lost when the
+    // only record is the final error.
+    const steps: Array<{ step: string; ms: number; count?: number; ok: boolean }> = [];
+    const pipelineStart = process.hrtime.bigint();
+    let stepStart = pipelineStart;
+    const mark = (step: string, count?: number): void => {
+      const now = process.hrtime.bigint();
+      steps.push({ step, ms: Number(now - stepStart) / 1e6, count, ok: true });
+      stepStart = now;
+    };
+
     try {
       // 1. Fetch raw bytes
       const raw = await this.storage.getObjectText(revision.s3Key);
+      mark('fetch', raw.length);
 
       // 2. Parse (markdown only in Phase 1)
       if (!revision.contentType.includes('markdown') && !revision.contentType.startsWith('text/')) {
@@ -110,9 +124,11 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       };
       const normalizedKey = revision.s3Key.replace(/[^/]+$/, 'normalized.json');
       await this.storage.putObjectJson(normalizedKey, normalized);
+      mark('normalize', sections.length);
 
       // 4. Chunk
       const drafts = chunkSections(sections);
+      mark('chunk', drafts.length);
 
       // 5. Embed — as title + heading breadcrumb + body, never the bare body
       //    (chunkEmbedText). The stored `text` below stays verbatim.
@@ -125,6 +141,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           )),
         );
       }
+      mark('embed', embeddingsOut.length);
 
       // 6. Index into graph store (idempotent per revision)
       await this.graph.upsertRevisionChunks({
@@ -140,6 +157,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           embedding: embeddingsOut[i],
         })),
       });
+      mark('graph', drafts.length);
 
       // 6b. Phase 5 optional BM25 layer: mirror the chunks into the fulltext
       //     index (idempotent per revision). Non-fatal — the vector index in
@@ -160,6 +178,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       } catch (e) {
         this.logger.warn(`Fulltext indexing failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
       }
+      mark('fulltext');
 
       // 7. Deterministic relation extraction (plan.md §5 "deterministic" class):
       //    frontmatter `relations:`/`tags:` → typed edges with provenance.
@@ -171,6 +190,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         title: revision.document.title,
         facts: facts.map((f) => ({ ...f, extractor: 'frontmatter' as const, confidence: 1 })),
       });
+      mark('relations', facts.length);
 
       // 8. Inferred relation extraction (plan.md §11 Phase 4): LLM-derived
       //    edges tagged 'inferred' with confidence + source chunk. Non-fatal —
@@ -211,6 +231,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       } catch (e) {
         this.logger.warn(`Inferred extraction failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
       }
+      mark('inferred');
 
       await this.prisma.$transaction([
         this.prisma.ingestionJob.update({
@@ -228,6 +249,24 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         }),
       ]);
       this.logger.log(`Indexed revision ${revision.id} (${drafts.length} chunks)`);
+
+      // One event per revision carrying every step, rather than one event per
+      // step: nine records that only mean something together are nine records
+      // a harness has to reassemble.
+      emitBacktest({
+        ...(currentTrace() ?? { traceId: 'unscoped', source: 'job' as const }),
+        workspaceId: revision.document.workspaceId,
+        kind: 'ingest.step',
+        ts: new Date().toISOString(),
+        durationMs: Number(process.hrtime.bigint() - pipelineStart) / 1e6,
+        documentId: revision.documentId,
+        revisionId: revision.id,
+        ok: true,
+        bytes: raw.length,
+        chunks: drafts.length,
+        embeddingModel: embeddingSignature(this.config),
+        steps,
+      });
 
       // Feature 04 (docs/features/04): live event + one level of dependent
       // fan-out. Cascade jobs are marked with payload.reason and never
@@ -247,6 +286,20 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       }
     } catch (e) {
       const error = { message: (e as Error).message, stack: (e as Error).stack };
+      // `steps` holds everything that completed before the throw, so the failure
+      // record says how far the pipeline got — bytes and chunks are absent here
+      // because the throw may have preceded them.
+      emitBacktest({
+        ...(currentTrace() ?? { traceId: 'unscoped', source: 'job' as const }),
+        workspaceId: revision.document.workspaceId,
+        kind: 'ingest.step',
+        ts: new Date().toISOString(),
+        durationMs: Number(process.hrtime.bigint() - pipelineStart) / 1e6,
+        documentId: revision.documentId,
+        revisionId: revision.id,
+        ok: false,
+        steps,
+      });
       await this.prisma.$transaction([
         this.prisma.ingestionJob.update({
           where: { id: ingestionJobId },
@@ -319,8 +372,19 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           },
         },
       });
-      await this.producer.enqueue(job.id).catch(() => {
-        /* outbox sweeper re-enqueues */
+      await this.producer.enqueue(job.id).catch((err: unknown) => {
+        // Still non-fatal: OutboxSweeper re-enqueues anything left `queued`,
+        // which is the entire point of the outbox. Logged because "the sweeper
+        // will pick it up in a moment" and "every enqueue is failing" are
+        // indistinguishable from here — the second presents only as unexplained
+        // indexing latency, with nothing to grep for.
+        this.logger.warn({
+          msg: 'Dependent reindex enqueue failed (outbox sweeper will retry)',
+          code: 'JOB_ENQUEUE_FAILED',
+          ingestionJobId: job.id,
+          documentId: depId,
+          err,
+        });
       });
       await this.events.publish({
         type: 'revision.dependent-reindex',

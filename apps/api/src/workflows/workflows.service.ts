@@ -456,31 +456,69 @@ export class WorkflowsService {
     // APPROVE may carry a last-moment edit, so reviewing and editing are one
     // action rather than two round trips.
     const finalDraft = draft ?? (node.draft as unknown as WorkflowNodeDraft | null);
-    let current = await this.prisma.workflowRunNode.update({
-      where: { id: nodeId },
-      data: {
-        status: nextStatus,
-        ...(draft ? { draft: draft as unknown as Prisma.InputJsonValue } : {}),
-        ...(type === 'RETRY' ? { attempt: { increment: 1 }, error: null } : {}),
-      },
-    });
+    const nodeUpdate = {
+      status: nextStatus,
+      ...(draft ? { draft: draft as unknown as Prisma.InputJsonValue } : {}),
+      ...(type === 'RETRY' ? { attempt: { increment: 1 }, error: null } : {}),
+    };
 
-    if (nextStatus === 'materializing') {
+    let current: WorkflowRunNode;
+    let childrenSpawned = false;
+    if (nextStatus !== 'materializing') {
+      current = await this.prisma.workflowRunNode.update({ where: { id: nodeId }, data: nodeUpdate });
+    } else {
       try {
-        const documentId = await materialize(current, run, step);
-        current = await this.prisma.workflowRunNode.update({
-          where: { id: nodeId },
-          data: { status: 'materialized', documentId },
-        });
-        void this.activity.record({
-          workspaceId: run.workspaceId,
-          actor: userId,
-          action: 'workflow-node.materialized',
-          documentId: documentId ?? undefined,
-          subjectId: run.id,
-          metadata: { title: finalDraft?.title, stepId: step.id, nodeId },
-        });
+        // The status write, the page and the `documentId` back-reference commit
+        // together — and so does `spawnChildren`, which opens the next steps.
+        //
+        // The `materializing` write is INSIDE deliberately. Committing it on its
+        // own published a row matching WorkflowMaterializeSweeper's
+        // `{ status: 'materializing', documentId: null }` predicate, so the
+        // sweeper would race the very request that wrote it and both could
+        // create a page. Inside the boundary the sweeper never observes the
+        // interactive path at all: by the time anything commits, the status is
+        // already `materialized`.
+        //
+        // Folding `spawnChildren` in closes a second gap for free: a crash
+        // between the `documentId` write and it stranded the run, because the
+        // sweeper only revisits nodes still in `materializing`.
+        current = await this.prisma.withTransaction(
+          async () => {
+            const claimed = await this.prisma.workflowRunNode.update({
+              where: { id: nodeId },
+              data: nodeUpdate,
+            });
+            const documentId = await materialize(claimed, run, step);
+            const done = await this.prisma.workflowRunNode.update({
+              where: { id: nodeId },
+              data: { status: 'materialized', documentId },
+            });
+            await this.runner.spawnChildren(run, done, step);
+            childrenSpawned = true;
+            this.prisma.onCommit(() =>
+              this.activity.record({
+                workspaceId: run.workspaceId,
+                actor: userId,
+                action: 'workflow-node.materialized',
+                documentId: documentId ?? undefined,
+                subjectId: run.id,
+                metadata: { title: finalDraft?.title, stepId: step.id, nodeId },
+              }),
+            );
+            return done;
+          },
+          { timeout: 30_000, maxWait: 10_000 },
+        );
       } catch (e) {
+        // OUTSIDE the boundary on purpose: this write has to SURVIVE while the
+        // document work rolls back. Inside, the failure record would roll back
+        // with everything it was recording.
+        //
+        // The node reverts to its pre-event status on rollback and is then
+        // marked failed here, so the end state matches the old behaviour. If
+        // the process dies before this runs, the node is left where the
+        // reviewer found it rather than stranded in `materializing` — press
+        // Approve again.
         const message = (e as Error).message;
         current = await this.prisma.workflowRunNode.update({
           where: { id: nodeId },
@@ -490,8 +528,9 @@ export class WorkflowsService {
       }
     }
 
-    // A node that finished its life opens the next steps of the graph.
-    if (current.status === 'materialized' || current.status === 'approved') {
+    // A node that finished its life opens the next steps of the graph — unless
+    // the boundary above already did it, transactionally with the page.
+    if (!childrenSpawned && (current.status === 'materialized' || current.status === 'approved')) {
       await this.runner.spawnChildren(run, current, step);
     }
     // A fresh jobId: the kept failed job blocks reuse of the original, exactly

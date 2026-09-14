@@ -212,21 +212,57 @@ export class ImportService {
       throw new ConflictException(t('error.import.notSubmittable', { status: t(`status.import.${row.status}`) }));
     }
 
-    // ponytail: the `status !== 'parsed'` check above is check-then-act with
-    // nothing enforcing it — two submits racing it (a double-click, or a retry
-    // against a slow first call) each create a page, and only the last one is
-    // linked to the import. ceiling: unguarded; the window is the whole submit.
-    // upgrade: needs a claim column this table does not have — `import_jobs` has
-    // createdAt/completedAt but no `updatedAt`, so there is no free CAS, and a
-    // `submitting` status would strand the row on a crash because this method
-    // commits a document before writing `status: 'submitted'` and nothing sweeps
-    // imports. Add `updatedAt DateTime @updatedAt @default(now())` and CAS on it,
-    // or fold this into the transaction that spans createDocument → finalize →
-    // status (the same fix as merge, connector pull and workflow materialize).
+    // Validated before the boundary opens: these are reads, and a 400 for a bad
+    // destination should not have cost a transaction.
     const projectId = dto.projectId ?? row.projectId;
     await this.projects.requireProjectInWorkspace(projectId, row.workspaceId);
     const parentId = dto.parentId === undefined ? row.parentId : dto.parentId;
     if (parentId) await this.requireParent(parentId, projectId);
+
+    // The page, its attachments and `import_jobs.status` commit together.
+    // Previously the status write followed a committed `createDocument`, so a
+    // failure in between left the import back on the review step offering
+    // Submit again — against a page that already existed.
+    //
+    // The timeout is generous because attachment promotion is inside: one
+    // server-side `copyObject` per image plus the markdown PUT. Those are
+    // MinIO-side copies rather than round trips through this process, so even a
+    // heavily illustrated PDF stays in seconds — but an import is a
+    // once-per-document act, not a hot path, and correctness is worth the
+    // held connection. The `ConnectorStagingService.createPage` precedent.
+    return this.prisma.withTransaction(() => this.writePage(row, dto, projectId, parentId, userId), {
+      timeout: 120_000,
+      maxWait: 10_000,
+    });
+  }
+
+  private async writePage(
+    row: ImportJob,
+    dto: SubmitImportDto,
+    projectId: string,
+    parentId: string | null,
+    userId?: string,
+  ): Promise<SubmitImportResponse> {
+    // The claim, first and inside the boundary. `status !== 'parsed'` above is
+    // check-then-act, and two submits racing it — a double-click, or a retry
+    // against a slow first call — each used to create a page.
+    //
+    // This needs no `updatedAt` column and no CAS: the predicate matches
+    // `parsed` and the write moves the row to `submitted`, so the row genuinely
+    // LEAVES its own predicate. Under READ COMMITTED the second racer blocks on
+    // this row's lock, re-reads once the first commits, and gets `count === 0`.
+    // Contrast `WorkflowMaterializeSweeper`, which matched on `status` and wrote
+    // the same `status` back — the row stayed inside its predicate and every
+    // racer was told it had won.
+    //
+    // A rollback releases the claim for free, which is why no `submitting`
+    // status is needed: nothing sweeps imports, so a crash under a half-written
+    // status would have stranded the row forever.
+    const claimed = await this.prisma.importJob.updateMany({
+      where: { id: row.id, status: 'parsed' },
+      data: { status: 'submitted', completedAt: new Date() },
+    });
+    if (claimed.count === 0) throw new ConflictException(t('error.import.alreadySubmitted'));
 
     // Deliberately created *without* inline content: attachments need a
     // document id, and the markdown needs their ids back before it is written.
@@ -246,10 +282,7 @@ export class ImportService {
 
     // The original comes across as an attachment so the page carries its own
     // provenance: where a claim came from is worth as much as the claim.
-    const attachmentId = await this.promoteOriginal(row, created.documentId, userId).catch((e: unknown) => {
-      this.logger.warn(`Original not attached for import ${row.id}: ${(e as Error).message}`);
-      return null;
-    });
+    const attachmentId = await this.promoteOriginal(row, created.documentId, userId);
 
     const markdown = await this.promoteImages(row, created.documentId, dto.markdown, userId);
     const revision = await this.prisma.documentRevision.findUnique({ where: { id: created.revisionId } });
@@ -259,19 +292,22 @@ export class ImportService {
 
     await this.prisma.importJob.update({
       where: { id: row.id },
-      data: { status: 'submitted', documentId: created.documentId, completedAt: new Date() },
+      data: { documentId: created.documentId },
     });
 
-    void this.activity.record({
-      workspaceId: row.workspaceId,
-      action: 'import.submitted',
-      documentId: created.documentId,
-      subjectId: created.documentId,
-      metadata: { filename: row.sourceFilename, parser: row.parser, title: dto.title },
+    this.prisma.onCommit(async () => {
+      await this.activity.record({
+        workspaceId: row.workspaceId,
+        action: 'import.submitted',
+        documentId: created.documentId,
+        subjectId: created.documentId,
+        metadata: { filename: row.sourceFilename, parser: row.parser, title: dto.title },
+      });
+      // Staging is cleared once the page owns everything worth keeping — and
+      // only once it is durable. Deleting the staged objects before the commit
+      // would destroy the source of a transaction that may still roll back.
+      await this.cleanup(row).catch(() => undefined);
     });
-
-    // Staging is cleared once the page owns everything worth keeping.
-    void this.cleanup(row).catch(() => undefined);
 
     return { documentId: created.documentId, revisionId: finalized.revisionId, attachmentId };
   }
@@ -299,7 +335,16 @@ export class ImportService {
     }
   }
 
-  private async promoteOriginal(row: ImportJob, documentId: string, userId?: string): Promise<string> {
+  /**
+   * Returns null when the bytes could not be copied — a degraded import rather
+   * than a failed one.
+   *
+   * The soft failure is scoped to the storage call alone, for the reason spelled
+   * out in `promoteImages`: this runs inside `submit`'s transaction, where a
+   * swallowed database error would abort the transaction and make every later
+   * statement fail with 25P02.
+   */
+  private async promoteOriginal(row: ImportJob, documentId: string, userId?: string): Promise<string | null> {
     const attachment = await this.prisma.attachment.create({
       data: {
         workspaceId: row.workspaceId,
@@ -313,7 +358,12 @@ export class ImportService {
       },
     });
     const key = this.storage.attachmentObjectKey(row.workspaceId, documentId, attachment.id, row.sourceFilename);
-    await this.storage.copyObject(row.s3Key, key, row.contentType);
+    try {
+      await this.storage.copyObject(row.s3Key, key, row.contentType);
+    } catch (e) {
+      this.logger.warn(`Original not attached for import ${row.id}: ${(e as Error).message}`);
+      return null;
+    }
     await this.prisma.attachment.update({
       where: { id: attachment.id },
       data: { s3Key: key, status: 'ready' },
@@ -340,32 +390,46 @@ export class ImportService {
 
     const replacements = new Map<number, string>();
     for (const index of indices) {
+      // Only the STORAGE probe is allowed to fail softly. This loop runs inside
+      // `submit`'s transaction, and Prisma's interactive transactions have no
+      // per-statement savepoint: once a statement fails at the database the
+      // whole transaction is aborted, and every statement after it returns
+      // 25P02. A `catch` that swallowed a failed `attachment.create` and carried
+      // on would therefore turn one bad image into a cascade of confusing
+      // errors — so a database failure propagates and rolls the submit back,
+      // which is recoverable (the import stays `parsed`, Submit is re-offered).
+      const source = await this.findImageKey(row, index).catch(() => null);
+      if (!source) continue;
+      const head = await this.storage.headObject(source.key).catch(() => null);
+
+      const attachment = await this.prisma.attachment.create({
+        data: {
+          workspaceId: row.workspaceId,
+          documentId,
+          filename: source.filename,
+          contentType: head?.contentType ?? 'application/octet-stream',
+          sizeBytes: head?.contentLength ?? 0,
+          s3Key: '',
+          status: 'pending',
+          uploadedBy: userId ?? AUTHOR_ID_STUB,
+        },
+      });
+      const key = this.storage.attachmentObjectKey(row.workspaceId, documentId, attachment.id, source.filename);
       try {
-        const source = await this.findImageKey(row, index);
-        if (!source) continue;
-        const head = await this.storage.headObject(source.key);
-        const attachment = await this.prisma.attachment.create({
-          data: {
-            workspaceId: row.workspaceId,
-            documentId,
-            filename: source.filename,
-            contentType: head?.contentType ?? 'application/octet-stream',
-            sizeBytes: head?.contentLength ?? 0,
-            s3Key: '',
-            status: 'pending',
-            uploadedBy: userId ?? AUTHOR_ID_STUB,
-          },
-        });
-        const key = this.storage.attachmentObjectKey(row.workspaceId, documentId, attachment.id, source.filename);
         await this.storage.copyObject(source.key, key, head?.contentType ?? undefined);
-        await this.prisma.attachment.update({
-          where: { id: attachment.id },
-          data: { s3Key: key, status: 'ready' },
-        });
-        replacements.set(index, `/v1/documents/${documentId}/attachments/${attachment.id}/content`);
       } catch (e) {
+        // The bytes did not move, so the row must not claim they did. It stays
+        // `pending` — the same state a failed browser upload leaves behind —
+        // and the link keeps pointing at the staged image rather than at an
+        // attachment that would 404.
         this.logger.warn(`Image ${index} of import ${row.id} not promoted: ${(e as Error).message}`);
+        continue;
       }
+      await this.prisma.attachment.update({
+        where: { id: attachment.id },
+        data: { s3Key: key, status: 'ready' },
+      });
+      replacements.set(index, `/v1/documents/${documentId}/attachments/${attachment.id}/content`);
     }
 
     return markdown.replace(STAGED_IMAGE_RE, (match, id: string, n: string) =>

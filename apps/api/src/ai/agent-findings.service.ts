@@ -105,36 +105,57 @@ export class AgentFindingsService {
       const title = `${finding.title.slice(0, 200)}`;
       const branch = `agent/${run.agentKey}-${Date.now()}`;
 
-      await this.documents.createBranch(documentId, { name: branch });
-      const revision = await this.documents.createRevision(
-        documentId,
-        { branch, message: title, contentType: 'text/markdown' },
-        undefined,
-        principal.userId,
-      );
-      const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
-      if (!row) throw new BadRequestException(t('error.ai.draftRevisionGone'));
-      await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
-      await this.documents.finalizeRevision(documentId, revision.revisionId);
+      // Everything the proposal writes commits together. The finding's
+      // `mergeRequestId` used to be written after `mergeRequests.create` had
+      // committed, so a failure in between left the finding claimed forever
+      // (409 `in-flight`) beside an orphaned merge request nothing pointed at.
+      //
+      // The model call above is deliberately OUTSIDE: it routinely takes tens of
+      // seconds, and no Postgres transaction should be held open across it. So
+      // is the claim — it guards the LLM window, which is the part that
+      // actually takes time, and a claim invisible until commit would guard
+      // almost nothing.
+      const mergeRequestId = await this.prisma.withTransaction(
+        async () => {
+          await this.documents.createBranch(documentId, { name: branch });
+          const revision = await this.documents.createRevision(
+            documentId,
+            { branch, message: title, contentType: 'text/markdown' },
+            undefined,
+            principal.userId,
+          );
+          const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
+          if (!row) throw new BadRequestException(t('error.ai.draftRevisionGone'));
+          await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
+          await this.documents.finalizeRevision(documentId, revision.revisionId);
 
-      const mr = await this.mergeRequests.create(
-        documentId,
-        {
-          sourceBranch: branch,
-          title,
-          description:
-            `Proposed from a ${run.agentKey} run.\n\n**${finding.kind}** — ${finding.detail}`.slice(0, 4_000),
+          const mr = await this.mergeRequests.create(
+            documentId,
+            {
+              sourceBranch: branch,
+              title,
+              description:
+                `Proposed from a ${run.agentKey} run.\n\n**${finding.kind}** — ${finding.detail}`.slice(0, 4_000),
+            },
+            principal.userId,
+          );
+          await this.writeBack(runId, index, mr.mergeRequest.mergeRequestId);
+          return mr.mergeRequest.mergeRequestId;
         },
-        principal.userId,
+        { timeout: 30_000, maxWait: 10_000 },
       );
-      const mergeRequestId = mr.mergeRequest.mergeRequestId;
 
-      await this.writeBack(runId, index, mergeRequestId);
       return { mergeRequestId, documentId, documentTitle: document.title, branch, title };
     } catch (error) {
       // Release the claim, or a failed proposal would make the finding
-      // permanently unproposable. The branch and revision a partial failure may
-      // have left behind are harmless — an unmerged branch on the document.
+      // permanently unproposable. Nothing is left behind either way now: a
+      // failure before the boundary had written nothing yet, and one inside it
+      // rolled the branch, revision and merge request back.
+      //
+      // This MUST stay outside the boundary. It runs after the rollback, with
+      // the ambient scope already gone, so it reaches the base client and
+      // commits on its own — move it inside and the release rolls back with
+      // everything else, which is precisely the stuck-at-409 bug being fixed.
       await this.release(runId, index).catch(() => {
         this.logger.warn(`Could not release the proposal claim on run ${runId} finding ${index}`);
       });
@@ -244,10 +265,27 @@ export class AgentFindingsService {
     `;
   }
 
+  /**
+   * The exact inverse of `claim`, which guards on BOTH keys.
+   *
+   * Clearing only `proposedAt` left any failure that happened after `writeBack`
+   * with `mergeRequestId` still set — and both the 409 in `propose` and
+   * `claim`'s own predicate read that key, so the finding was permanently
+   * unproposable while pointing at a merge request that may have rolled back.
+   *
+   * Set to JSON `null` rather than removing the key, matching what this method
+   * already did: `->>` on a JSON null yields SQL NULL, so `claim`'s
+   * `COALESCE(…, '') = ''` passes unchanged.
+   */
   private async release(runId: string, index: number): Promise<void> {
     await this.prisma.$executeRaw`
       UPDATE agent_runs
-         SET findings = jsonb_set(findings, ARRAY[${String(index)}::text, 'proposedAt'], 'null'::jsonb, true)
+         SET findings = jsonb_set(
+               jsonb_set(findings, ARRAY[${String(index)}::text, 'proposedAt'], 'null'::jsonb, true),
+               ARRAY[${String(index)}::text, 'mergeRequestId'],
+               'null'::jsonb,
+               true
+             )
        WHERE id = ${runId}::uuid
     `;
   }

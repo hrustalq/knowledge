@@ -1,4 +1,4 @@
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -28,8 +28,9 @@ const STALE_RUN_MS = 30 * 60_000;
  * behind rather than piling up.
  */
 @Injectable()
-export class AgentScheduleSweeper implements OnModuleInit {
+export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AgentScheduleSweeper.name);
+  private timer?: NodeJS.Timeout;
   private running = false;
 
   constructor(
@@ -43,7 +44,12 @@ export class AgentScheduleSweeper implements OnModuleInit {
       this.logger.log('Agent schedules disabled (AGENT_SCHEDULE_ENABLED=false)');
       return;
     }
-    setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS).unref();
+    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
+    this.timer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
   }
 
   private async sweep(): Promise<void> {

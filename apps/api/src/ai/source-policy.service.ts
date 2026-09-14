@@ -238,16 +238,17 @@ export class SourcePolicyService {
     return this.webAccess(row?.webAccessMode).effective;
   }
 
-  // ponytail: resolves the host, then hands the *hostname* to `fetch`, which
-  // resolves it again — so a DNS answer that is public on the first lookup and
-  // loopback on the second (rebinding) passes this check and is then connected
-  // to. ceiling: stops an attacker who controls only the record's contents, not
-  // one who controls its timing. upgrade: when a target is reachable that a
-  // public IP alone should not authorise (metadata endpoints on a hosted
-  // deployment), pin the resolved address by giving undici a custom dispatcher
-  // with a fixed `lookup` and verify SNI/Host, here and in `assertSafeExternalUrl`
-  // both — the flaw is shared with connectors and MCP plugins, so the fix is one
-  // helper, not three.
+  /**
+   * A policy decision, not the connection's guarantee.
+   *
+   * This resolves the host to decide; `WebResearchService` then dials through
+   * `safeFetch`, which resolves once more inside undici's connector and refuses
+   * a private answer there. That second check is the load-bearing one — it is
+   * the resolution the socket actually uses, so a name that rebinds between the
+   * two cannot get through it. This one stays because a refusal here is a
+   * *policy* refusal, reported to the model with a reason, rather than a
+   * connection failure.
+   */
   private async resolvesPrivate(host: string): Promise<boolean> {
     const addresses = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((a) => a.address);
     // An unresolvable host is refused rather than allowed through to `fetch`:

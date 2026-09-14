@@ -185,7 +185,24 @@ export interface KnowledgeEvent {
   at: string;
 }
 
-/** Event types the platform emits today — the tracking-config vocabulary (event.type stays an open string for forward compat). */
+/**
+ * Event types the platform emits today — the tracking-config vocabulary
+ * (`event.type` stays an open string for forward compat).
+ *
+ * This list is the subscription vocabulary, not the notification one: it backs
+ * `LIVE_TRACKED_EVENTS`, the WS `subscribe` filter, and the workflow trigger
+ * picker. `notificationCategoryFor` reads it separately and maps most of it to
+ * no category on purpose.
+ *
+ * **It drifts in both directions and nothing catches it.** `publish()` is
+ * unchecked and `KnowledgeEvent.type` is a plain string, so a type can be
+ * declared here with no producer (four `connector.*` entries were, and were
+ * removed) or produced with no declaration (29 were, and were added) — the
+ * latter silently unsubscribable, since a filter can only match what is listed.
+ * Audit with a grep for `publish(` and `record({ action:` before trusting it.
+ * The real fix is an `EventRegistry` keyed on a closed union, which would make
+ * both directions compile errors; see PONYTAIL-DEBT.md.
+ */
 export const KNOWN_EVENT_TYPES = [
   'document.created',
   'document.updated',
@@ -244,12 +261,46 @@ export const KNOWN_EVENT_TYPES = [
   'connector.run.paused',
   'connector.run.resumed',
   'connector.run.awaiting-review',
-  'connector.item.staged',
-  'connector.item.applied',
   'connector.item.reverted',
-  'connector.item.failed',
-  'connector.link.created',
   'connector.link.removed',
+  // Configuration changes. These are TRACKABLE but not notifiable: they map to
+  // no `notificationCategoryFor` category, which is correct — an admin editing
+  // a provider is something a dashboard may watch live, not something anyone
+  // should find in an inbox.
+  'ai.settings.updated',
+  'ai.provider.created',
+  'ai.provider.updated',
+  'ai.provider.deleted',
+  'ai.skill.created',
+  'ai.skill.updated',
+  'ai.skill.deleted',
+  'ai.plugin.created',
+  'ai.plugin.updated',
+  'ai.plugin.deleted',
+  'ai.agent.created',
+  'ai.agent.updated',
+  'ai.agent.deleted',
+  // An agent override reset back to its built-in default (docs/features/20).
+  'ai.agent.reset',
+  'ai.sourcePolicy.created',
+  'ai.sourcePolicy.updated',
+  'ai.sourcePolicy.deleted',
+  // Workflow DEFINITION lifecycle — distinct from the `workflow-run.*` above,
+  // which is one execution of one.
+  'workflow.created',
+  'workflow.updated',
+  'workflow.deleted',
+  'glossary.term.created',
+  'glossary.term.updated',
+  'glossary.term.deleted',
+  'attachment.created',
+  'attachment.deleted',
+  // A turn in progress, for a client rendering the assistant's own work
+  // (docs/features/09). High-frequency: a tool-heavy turn emits several pairs.
+  'assistant.turn.started',
+  'assistant.turn.finished',
+  'assistant.tool-call.started',
+  'assistant.tool-call.finished',
   // Carries a `userId` and reaches only that person (docs/features/22).
   // Deliberately outside every notification category, which is what stops a
   // notification from fanning out into another notification.

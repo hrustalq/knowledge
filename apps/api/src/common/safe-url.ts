@@ -25,12 +25,17 @@ export interface SafeUrlMessageKeys {
   private: string;
 }
 
-// ponytail: same TOCTOU as SourcePolicyService.resolvesPrivate — the name is
-// resolved here and again by whatever client dials it, so DNS rebinding slips
-// between the two. ceiling: catches a static record pointing inward, not a
-// record that changes between the check and the call. upgrade: fix both callers
-// at once with a shared IP-pinning dispatcher; see the marker in
-// source-policy.service.ts.
+/**
+ * Admin-time validation only. This resolves the name to decide, and whatever
+ * dials it later resolves it again — so on its own it never closed the DNS
+ * rebinding window, and no amount of checking here could: a check that finishes
+ * before the socket opens is by construction a different resolution.
+ *
+ * The runtime half now lives in `common/safe-fetch.ts`, which validates inside
+ * the connection's own lookup. This stays because a settings form needs to say
+ * "that host is internal" in words, immediately, rather than failing a request
+ * an hour later.
+ */
 export async function assertSafeExternalUrl(
   raw: string,
   allowPrivate: boolean,

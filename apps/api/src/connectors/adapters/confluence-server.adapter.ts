@@ -79,7 +79,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
       url.searchParams.set('start', String(start));
 
       const body = (await (
-        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx)
       ).json()) as ServerList<ServerContent>;
 
       const results = body.results ?? [];
@@ -113,7 +113,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
     if (!parent && rootId) {
       const url = `${base}/rest/api/content/${encodeURIComponent(rootId)}?expand=version,ancestors`;
       const page = (await (
-        await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+        await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
       ).json()) as ServerContent;
       yield { ...this.toRef(base, page), parentExternalId: undefined, hasChildren: true };
       return;
@@ -155,7 +155,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
       if (cursor) url.searchParams.set('cursor', cursor);
 
       const body = (await (
-        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx)
       ).json()) as ServerBulkList;
 
       const results = body.results ?? [];
@@ -198,7 +198,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
       url.searchParams.set('start', String(start));
 
       const body = (await (
-        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx)
       ).json()) as ServerList<ServerContent>;
 
       const results = body.results ?? [];
@@ -238,7 +238,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
     const base = this.base(ctx);
     const url = `${base}/rest/api/content/${encodeURIComponent(ref.externalId)}?expand=body.storage,version`;
     const page = (await (
-      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal })
+      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
     ).json()) as ServerContent;
 
     const storage = page.body?.storage?.value ?? '';
@@ -282,7 +282,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
             space: { key },
             body: { storage: { value, representation: 'storage' } },
           }),
-        })
+        }, ctx)
       ).json()) as ServerContent;
       return {
         externalId: created.id,
@@ -300,7 +300,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
       await connectorFetch(`${base}/rest/api/content/${id}?expand=version`, {
         headers: this.headers(ctx),
         signal: ctx.signal,
-      })
+      }, ctx)
     ).json()) as ServerContent;
     const next = (current.version?.number ?? 0) + 1;
 
@@ -317,7 +317,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
           body: { storage: { value, representation: 'storage' } },
           version: { number: next, message: t('connector.pushVersionMessage') },
         }),
-      })
+      }, ctx)
     ).json()) as ServerContent;
 
     return {
@@ -366,7 +366,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
     const key = requireConfig(ctx.config, 'spaceKey');
     const url = `${base}/rest/api/space?spaceKey=${encodeURIComponent(key)}&limit=1`;
     const body = (await (
-      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal })
+      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
     ).json()) as ServerList<{ key: string; name: string }>;
     const space = body.results?.[0];
     // v1 answers 200 with an empty list for a space that does not exist *and*

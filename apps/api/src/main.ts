@@ -23,6 +23,11 @@ async function bootstrap() {
 
   SwaggerModule.setup('docs', app, createOpenApiDocument(app));
 
+  // worker.main.ts and mcp.main.ts both do this; the API did not, so on SIGTERM
+  // it skipped every OnModuleDestroy — no sweeper timer cleared, no Redis
+  // client disconnected, no in-flight request drained.
+  app.enableShutdownHooks();
+
   await app.listen(process.env.PORT ?? 3000);
   console.log(`API listening on :${process.env.PORT ?? 3000} (Swagger at /docs)`);
 }

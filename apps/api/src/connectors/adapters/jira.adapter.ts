@@ -58,7 +58,7 @@ export class JiraAdapter implements ConnectorAdapter {
     const base = this.base(ctx);
     const url = `${base}/rest/api/3/issue/${encodeURIComponent(ref.externalId)}?expand=renderedFields`;
     const issue = (await (
-      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal })
+      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
     ).json()) as JiraIssue;
 
     const warnings: string[] = [];
@@ -123,7 +123,7 @@ export class JiraAdapter implements ConnectorAdapter {
     url.searchParams.set('maxResults', String(maxResults));
     url.searchParams.set('fields', 'summary,updated');
     return (await (
-      await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal })
+      await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx)
     ).json()) as JiraSearch;
   }
 }

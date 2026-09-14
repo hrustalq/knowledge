@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
-import { ActivityModule } from '../activity/activity.module.js';
+import { ActivityCoreModule } from '../activity/activity-core.module.js';
 import { WorkflowQueueModule } from './workflow-queue.module.js';
 import { WorkflowRunnerService } from './workflow-runner.service.js';
 
@@ -11,7 +11,7 @@ import { WorkflowRunnerService } from './workflow-runner.service.js';
  * `AiCoreModule` under `AiModule`.
  */
 @Module({
-  imports: [PrismaModule, ActivityModule, WorkflowQueueModule],
+  imports: [PrismaModule, ActivityCoreModule, WorkflowQueueModule],
   providers: [WorkflowRunnerService],
   exports: [WorkflowRunnerService, WorkflowQueueModule],
 })

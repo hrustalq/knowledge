@@ -4,7 +4,10 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { AiPlugin } from '@prisma/client';
 import type { AiPluginTool } from '@knowledge/contracts';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../config/env.js';
 import { assertSafeExternalUrl } from '../common/safe-url.js';
+import { safeFetch } from '../common/safe-fetch.js';
 
 /** Namespace separator: `mcp__<plugin slug>__<tool>` stays inside `^[a-zA-Z0-9_-]+$`. */
 export const MCP_TOOL_PREFIX = 'mcp__';
@@ -41,6 +44,12 @@ interface PooledConnection {
 export class McpClientService implements OnModuleDestroy {
   private readonly logger = new Logger(McpClientService.name);
   private readonly pool = new Map<string, PooledConnection>();
+
+  constructor(private readonly config: ConfigService<Env, true>) {}
+
+  private get allowPrivateUrls(): boolean {
+    return this.config.get('AI_PLUGINS_ALLOW_PRIVATE_URLS', { infer: true });
+  }
 
   async onModuleDestroy(): Promise<void> {
     await Promise.all([...this.pool.keys()].map((id) => this.release(id)));
@@ -116,11 +125,20 @@ export class McpClientService implements OnModuleDestroy {
     const headers: Record<string, string> =
       plugin.authHeader && authValue ? { [plugin.authHeader]: authValue } : {};
 
+    // The SDK's own `fetch`, so the SSRF guard runs on the plugin's requests
+    // too. `assertSafePluginUrl` checks the URL when an admin saves it, but that
+    // resolution is not the one these sockets use — and a plugin server is by
+    // definition a third party, which makes it the call site where a rebound
+    // name matters most.
+    const allowPrivate = this.allowPrivateUrls;
+    const guardedFetch = ((input: string | URL, init?: RequestInit) =>
+      safeFetch(input, init ?? {}, allowPrivate)) as typeof fetch;
+
     const transport =
       plugin.transport === 'sse'
         ? // eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy servers still speak only SSE
-          new SSEClientTransport(url, { requestInit: { headers } })
-        : new StreamableHTTPClientTransport(url, { requestInit: { headers } });
+          new SSEClientTransport(url, { requestInit: { headers }, fetch: guardedFetch })
+        : new StreamableHTTPClientTransport(url, { requestInit: { headers }, fetch: guardedFetch });
 
     const client = new Client({ name: 'knowledge-platform', version: '1.0.0' }, { capabilities: {} });
     await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS });

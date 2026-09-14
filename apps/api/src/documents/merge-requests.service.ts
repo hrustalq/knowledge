@@ -453,58 +453,81 @@ export class MergeRequestsService {
         ? `${mr.title} (squashed from ${mr.sourceBranch.name})`
         : `Merge branch '${mr.sourceBranch.name}' into '${mr.targetBranch.name}'`;
 
-    // Draft on the target branch: createRevision parents it on the target head (order 1).
-    const draft = await this.documents.createRevision(mr.documentId, {
-      branch: mr.targetBranch.name,
-      message,
-      contentType: sourceHead.contentType,
-    });
-    if (strategy === 'merge-commit') {
-      // Second parent = source head → a true merge node in the revision DAG (plan.md §4).
-      await this.prisma.revisionParent.create({
-        data: {
-          revisionId: draft.revisionId,
-          parentRevisionId: sourceHeadId,
-          parentOrder: targetHeadId ? 2 : 1,
-        },
-      });
-    }
+    // The merge revision and the MR's own status commit together. They did not,
+    // and the gap left the worst possible pair of facts: the target branch
+    // advanced, so the MR was no longer mergeable, while its status was still
+    // `open` — permanently, with no route back.
+    //
+    // Four S3 round trips live inside (the source GET, the draft PUT, and
+    // finalizeRevision's HEAD + GET), hence the raised timeout — the
+    // ConnectorStagingService.createPage precedent, and the same numbers: one
+    // document body, not a fan-out.
+    const finalized = await this.prisma.withTransaction(
+      async () => {
+        // The branch-row lock this method has wanted since Phase 3. The
+        // fast-forward precondition above is an unlocked read: under READ
+        // COMMITTED it sees the last committed head and NOT a concurrent
+        // merge's uncommitted advance, so two mergers could both pass it and
+        // the second would then commit over the first's head.
+        //
+        // Taking it here rather than inside finalizeRevision is what made this
+        // affordable: the boundary already spans check + finalize, so no
+        // restructuring of DocumentsService was needed after all. It is also
+        // the first branch-row lock in the transaction and the same first lock
+        // for every concurrent merger, so the ordering is consistent and two
+        // merges into one branch serialize rather than deadlock.
+        const locked = await this.prisma.$queryRaw<{ head_revision_id: string | null }[]>`
+          SELECT head_revision_id FROM document_branches WHERE id = ${mr.targetBranchId}::uuid FOR UPDATE
+        `;
+        const headNow = locked[0]?.head_revision_id ?? null;
+        if (headNow !== targetHeadId) {
+          throw new ConflictException({
+            statusCode: 409,
+            message: t('error.mergeRequest.divergedWhileMerging', { target: mr.targetBranch.name }),
+            reason: 'diverged',
+            currentHeadRevisionId: headNow,
+            comparisonUrl: `/v1/documents/${mr.documentId}/compare?from=${headNow}&to=${sourceHeadId}&mode=merge-base`,
+          });
+        }
 
-    const draftRow = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
-    const text = await this.storage.getObjectText(sourceHead.s3Key);
-    await this.storage.putObjectText(draftRow.s3Key, text, sourceHead.contentType);
+        // Draft on the target branch: createRevision parents it on the target head (order 1).
+        const draft = await this.documents.createRevision(mr.documentId, {
+          branch: mr.targetBranch.name,
+          message,
+          contentType: sourceHead.contentType,
+        });
+        if (strategy === 'merge-commit') {
+          // Second parent = source head → a true merge node in the revision DAG (plan.md §4).
+          await this.prisma.revisionParent.create({
+            data: {
+              revisionId: draft.revisionId,
+              parentRevisionId: sourceHeadId,
+              parentOrder: targetHeadId ? 2 : 1,
+            },
+          });
+        }
 
-    // Concurrency check: a merge of ANOTHER MR into the same branch may have
-    // advanced the head between our fast-forward check and here. Abort before
-    // finalize (the orphaned draft revision is harmless — it never finalizes).
-    // NOTE: the full fix is a branch-row lock (SELECT … FOR UPDATE) spanning
-    // check + finalize, which would require restructuring
-    // DocumentsService.finalizeRevision — deliberately deferred.
-    const headNow = await this.prisma.documentBranch.findUnique({
-      where: { id: mr.targetBranchId },
-      select: { headRevisionId: true },
-    });
-    if ((headNow?.headRevisionId ?? null) !== targetHeadId) {
-      throw new ConflictException({
-        statusCode: 409,
-        message: t('error.mergeRequest.divergedWhileMerging', { target: mr.targetBranch.name }),
-        reason: 'diverged',
-        currentHeadRevisionId: headNow?.headRevisionId ?? null,
-        comparisonUrl: `/v1/documents/${mr.documentId}/compare?from=${headNow?.headRevisionId}&to=${sourceHeadId}&mode=merge-base`,
-      });
-    }
+        const draftRow = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
+        const text = await this.storage.getObjectText(sourceHead.s3Key);
+        await this.storage.putObjectText(draftRow.s3Key, text, sourceHead.contentType);
 
-    // Normal pipeline: hash → (branch-scoped) dedupe → branch head advance → outbox → reindex.
-    const finalized = await this.documents.finalizeRevision(mr.documentId, draft.revisionId);
+        // Normal pipeline: hash → (branch-scoped) dedupe → branch head advance → outbox → reindex.
+        const result = await this.documents.finalizeRevision(mr.documentId, draft.revisionId);
 
-    // Guarded status flip: a concurrent merge/close of THIS MR loses the race and 409s.
-    const flipped = await this.prisma.mergeRequest.updateMany({
-      where: { id: mr.id, status: 'open' },
-      data: { status: 'merged', strategy, mergedRevisionId: finalized.revisionId, mergedAt: new Date() },
-    });
-    if (flipped.count === 0) {
-      throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
-    }
+        // Guarded status flip: a concurrent merge/close of THIS MR loses the race and 409s.
+        // Now a rollback too, so the merge revision it would have orphaned goes with it.
+        const flipped = await this.prisma.mergeRequest.updateMany({
+          where: { id: mr.id, status: 'open' },
+          data: { status: 'merged', strategy, mergedRevisionId: result.revisionId, mergedAt: new Date() },
+        });
+        if (flipped.count === 0) {
+          throw new ConflictException(t('error.mergeRequest.concurrentChange', { id: mr.id }));
+        }
+        return result;
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
+
     const updated = await this.prisma.mergeRequest.findUniqueOrThrow({ where: { id: mr.id }, include: MR_INCLUDE });
     const mergedRevision = await this.prisma.documentRevision.findUnique({ where: { id: finalized.revisionId } });
     await this.recordActivity(mr.documentId, 'merge-request.merged', mr.id, principal?.userId, {
@@ -656,14 +679,22 @@ export class MergeRequestsService {
       select: { workspaceId: true, title: true },
     });
     if (!doc) return null;
-    await this.activity.record({
-      workspaceId: doc.workspaceId,
-      actor,
-      action,
-      documentId,
-      subjectId,
-      metadata: { documentTitle: doc.title, ...metadata },
-    });
+    // The lookup stays inline — callers use the returned page synchronously —
+    // but the record itself is post-commit: it publishes onto the Redis bus and
+    // fans out notifications, neither of which can be taken back. Callers that
+    // run inside a transaction (merge, agent-finding proposals) would otherwise
+    // announce a merge request that has not committed. Outside a transaction
+    // `onCommit` runs it immediately, so every other caller is unchanged.
+    this.prisma.onCommit(() =>
+      this.activity.record({
+        workspaceId: doc.workspaceId,
+        actor,
+        action,
+        documentId,
+        subjectId,
+        metadata: { documentTitle: doc.title, ...metadata },
+      }),
+    );
     return doc;
   }
 

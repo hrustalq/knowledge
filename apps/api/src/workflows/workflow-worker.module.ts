@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
-import { ActivityModule } from '../activity/activity.module.js';
+import { ActivityCoreModule } from '../activity/activity-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
-import { SearchModule } from '../search/search.module.js';
+import { SearchCoreModule } from '../search/search-core.module.js';
 import { EventsModule } from '../events/events.module.js';
-import { EventsSubscriber } from '../events/events.subscriber.js';
+import { EventsSubscriberModule } from '../events/events-subscriber.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
@@ -20,23 +20,27 @@ import { WorkflowTriggerService } from './workflow-trigger.service.js';
  * exactly like `IngestionWorkerModule`. Loading it into `AppModule` would make
  * the API process start executing workflow steps.
  *
- * `EventsSubscriber` is provided directly, and the model client comes from
- * `AssistantClientModule`, rather than importing the modules that own them. Each needs almost nothing —
- * `EventsSubscriber` wants Redis, the client wants only `AiUsageService` — while `EventsApiModule` also carries the SSE controller and
- * the WS gateway, and `AssistantModule` pulls in `DocumentsModule`, neither of
- * which will load here.
+ * Every import here is a Core half, chosen so nothing controller-bearing loads:
+ * `EventsSubscriberModule` rather than `EventsApiModule` (which carries the SSE
+ * controller and the WS gateway), `AssistantClientModule` rather than
+ * `AssistantModule` (which pulls in `DocumentsModule`), and the `*CoreModule`
+ * halves of activity and search rather than the modules that own their
+ * controllers — importing those mapped `GET /v1/activity` and `POST /v1/search`
+ * inside a process with no HTTP server and no guard to enforce their `@Access`.
  *
  * `DocumentsModule` is deliberately absent — it does not load here (its
  * `MergeRequestsService` needs `AccessService` from the global auth module),
  * which is what puts materialisation on the API side.
  */
 @Module({
-  imports: [AgentCoreModule, 
+  imports: [
+    AgentCoreModule,
     PrismaModule,
-    ActivityModule,
+    ActivityCoreModule,
     StorageModule,
-    SearchModule,
+    SearchCoreModule,
     EventsModule,
+    EventsSubscriberModule,
     AiCoreModule,
     // AccessService without the guards, so a node runs its owner's role
     // through the same check an HTTP request does (docs/features/20).
@@ -45,7 +49,6 @@ import { WorkflowTriggerService } from './workflow-trigger.service.js';
     WorkflowCoreModule,
   ],
   providers: [
-    EventsSubscriber,
     WorkflowExecutors,
     WorkflowProcessor,
     WorkflowSweeper,

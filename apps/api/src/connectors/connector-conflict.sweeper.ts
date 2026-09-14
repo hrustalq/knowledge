@@ -21,6 +21,7 @@ const BATCH = 20;
 export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConnectorConflictSweeper.name);
   private timer?: NodeJS.Timeout;
+  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -37,6 +38,11 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   async sweep(): Promise<void> {
+    // On a 30s tick against a batch of 20 merge-request creations, a slow sweep
+    // can still be running when the next fires — and both would read the same
+    // `pending` rows and open the merge request twice.
+    if (this.running) return;
+    this.running = true;
     try {
       const pending = await this.prisma.connectorConflict.findMany({
         where: { status: 'pending' },
@@ -80,6 +86,8 @@ export class ConnectorConflictSweeper implements OnModuleInit, OnModuleDestroy {
       }
     } catch (err) {
       this.logger.warn(`Connector conflict sweep failed: ${(err as Error).message}`);
+    } finally {
+      this.running = false;
     }
   }
 }

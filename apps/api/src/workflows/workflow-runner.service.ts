@@ -145,7 +145,12 @@ export class WorkflowRunnerService {
       where: { runId: run.id, parentId: node.id, status: 'pending', stepId: { in: create.map((s) => s.id) } },
       select: { id: true },
     });
-    for (const child of spawned) await this.producer.enqueue(child.id);
+    // Post-commit: handing a worker a job for a `workflow_run_nodes` row that
+    // has not committed is the exact race `deferUntilCommit` exists for — the
+    // worker claims a row it cannot see, or one that never arrives. Outside a
+    // transaction this fires immediately, so the sweeper and reconcile paths
+    // that call `spawnChildren` un-wrapped are unchanged.
+    for (const child of spawned) this.prisma.onCommit(() => this.producer.enqueue(child.id));
   }
 
   /**

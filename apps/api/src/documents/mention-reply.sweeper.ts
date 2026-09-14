@@ -21,6 +21,7 @@ const SWEEP_INTERVAL_MS = 60_000;
 export class MentionReplySweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MentionReplySweeper.name);
   private timer?: NodeJS.Timeout;
+  private running = false;
 
   constructor(private readonly mentions: MentionRepliesService) {}
 
@@ -35,11 +36,15 @@ export class MentionReplySweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   async sweep(): Promise<void> {
+    if (this.running) return; // a slow sweep must not stack on itself
+    this.running = true;
     try {
       const closed = await this.mentions.sweepStale();
       if (closed > 0) this.logger.warn(`timed out ${closed} unanswered agent replies`);
     } catch (e: unknown) {
       this.logger.warn(`mention reply sweep failed: ${String(e)}`);
+    } finally {
+      this.running = false;
     }
   }
 }

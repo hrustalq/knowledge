@@ -55,7 +55,20 @@ export class EventsSubscriber implements OnModuleInit, OnModuleDestroy {
     await this.attach();
   }
 
+  /**
+   * `subscribed` alone cannot guard this: it is only set AFTER the await, and
+   * with `lazyConnect` the very first `subscribe()` is what opens the
+   * connection — so `ready` fires while that first call is still in flight, the
+   * guard is still false, and the channel is subscribed twice. Harmless at the
+   * protocol level (a repeat SUBSCRIBE on one connection is a no-op and the
+   * 'message' listener is registered once), but it logged two "Subscribed"
+   * lines at every boot, which reads as two subscribers.
+   */
+  private attaching = false;
+
   private async attach(): Promise<void> {
+    if (this.attaching || this.subscribed) return;
+    this.attaching = true;
     try {
       await this.redis.subscribe(EVENTS_CHANNEL);
       this.subscribed = true;
@@ -64,6 +77,10 @@ export class EventsSubscriber implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(
         `Event subscription unavailable, retrying on reconnect: ${(e as Error).message}`,
       );
+    } finally {
+      // Cleared either way: a failed attempt must leave the next `ready` free
+      // to retry, which is the whole point of the retry path.
+      this.attaching = false;
     }
   }
 

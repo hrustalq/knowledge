@@ -35,7 +35,7 @@ export class NotionAdapter implements ConnectorAdapter {
 
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
     const me = (await (
-      await connectorFetch(`${API}/users/me`, { headers: this.headers(ctx), signal: ctx.signal })
+      await connectorFetch(`${API}/users/me`, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
     ).json()) as { name?: string; bot?: { workspace_name?: string } };
     return { ok: true, detail: me.bot?.workspace_name ?? me.name ?? 'connected' };
   }
@@ -56,7 +56,7 @@ export class NotionAdapter implements ConnectorAdapter {
           headers: { ...this.headers(ctx), 'content-type': 'application/json' },
           signal: ctx.signal,
           body: JSON.stringify(body),
-        })
+        }, ctx)
       ).json()) as NotionList;
 
       for (const page of res.results ?? []) {
@@ -78,7 +78,7 @@ export class NotionAdapter implements ConnectorAdapter {
       await connectorFetch(`${API}/pages/${ref.externalId}`, {
         headers: this.headers(ctx),
         signal: ctx.signal,
-      })
+      }, ctx)
     ).json()) as NotionPage;
 
     const warnings: string[] = [];
@@ -116,7 +116,7 @@ export class NotionAdapter implements ConnectorAdapter {
             properties: { title: { title: [{ text: { content: doc.title.slice(0, 2000) } }] } },
             children: blocks.slice(0, 100),
           }),
-        })
+        }, ctx)
       ).json()) as NotionPage;
       return {
         externalId: created.id,
@@ -133,22 +133,26 @@ export class NotionAdapter implements ConnectorAdapter {
       await connectorFetch(`${API}/blocks/${doc.ref.externalId}/children?page_size=${PAGE_SIZE}`, {
         headers: this.headers(ctx),
         signal: ctx.signal,
-      })
+      }, ctx)
     ).json()) as NotionList;
     for (const block of existing.results ?? []) {
-      await connectorFetch(`${API}/blocks/${block.id}`, {
-        method: 'DELETE',
-        headers: this.headers(ctx),
-        signal: ctx.signal,
-      }).catch(() => undefined);
+      await connectorFetch(
+        `${API}/blocks/${block.id}`,
+        { method: 'DELETE', headers: this.headers(ctx), signal: ctx.signal },
+        ctx,
+      ).catch(() => undefined);
     }
 
-    await connectorFetch(`${API}/blocks/${doc.ref.externalId}/children`, {
-      method: 'PATCH',
-      headers: { ...this.headers(ctx), 'content-type': 'application/json' },
-      signal: ctx.signal,
-      body: JSON.stringify({ children: blocks.slice(0, 100) }),
-    });
+    await connectorFetch(
+      `${API}/blocks/${doc.ref.externalId}/children`,
+      {
+        method: 'PATCH',
+        headers: { ...this.headers(ctx), 'content-type': 'application/json' },
+        signal: ctx.signal,
+        body: JSON.stringify({ children: blocks.slice(0, 100) }),
+      },
+      ctx,
+    );
 
     const updated = (await (
       await connectorFetch(`${API}/pages/${doc.ref.externalId}`, {
@@ -158,7 +162,7 @@ export class NotionAdapter implements ConnectorAdapter {
         body: JSON.stringify({
           properties: { title: { title: [{ text: { content: doc.title.slice(0, 2000) } }] } },
         }),
-      })
+      }, ctx)
     ).json()) as NotionPage;
 
     return {
@@ -215,7 +219,7 @@ export class NotionAdapter implements ConnectorAdapter {
       url.searchParams.set('page_size', String(PAGE_SIZE));
       if (cursor) url.searchParams.set('start_cursor', cursor);
       const res = (await (
-        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal })
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx)
       ).json()) as NotionList;
 
       for (const block of res.results ?? []) {

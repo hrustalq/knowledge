@@ -114,14 +114,24 @@ export class DocumentsService {
     });
 
     // Explicit relations (plan.md §5 "explicit" fact class) go straight to the graph.
+    //
+    // Post-commit: this is ArcadeDB over HTTP — one DELETE plus one edge create
+    // per fact, each a remote round trip — and it cannot roll back. Running it
+    // inline held those round trips inside any caller's transaction boundary
+    // (import submit, connector pull, workflow materialise), and wrote graph
+    // edges for a page that might still roll back. Outside a transaction
+    // `onCommit` runs it immediately, so the un-wrapped callers are unchanged.
     if (dto.relations?.length) {
-      await this.graph.addExplicitRelations({
-        workspaceId: document.workspaceId,
-        documentId: document.id,
-        revisionId: null,
-        title: document.title,
-        facts: this.toFacts(dto.relations),
-      });
+      const facts = this.toFacts(dto.relations);
+      this.prisma.onCommit(() =>
+        this.graph.addExplicitRelations({
+          workspaceId: document.workspaceId,
+          documentId: document.id,
+          revisionId: null,
+          title: document.title,
+          facts,
+        }),
+      );
     }
 
     let status: RevisionStatus = 'draft';
@@ -131,13 +141,18 @@ export class DocumentsService {
       status = finalized.status;
     }
 
-    await this.activity.record({
-      workspaceId: dto.workspaceId,
-      actor: authorId,
-      action: 'document.created',
-      documentId: document.id,
-      metadata: { title: dto.title, category: dto.category ?? 'other', projectId: dto.projectId },
-    });
+    // Post-commit for the reason finalizeRevision's record is: `record` publishes
+    // onto the Redis bus, which cannot be taken back, and announcing a page that
+    // has not committed tells every subscriber about something that may vanish.
+    this.prisma.onCommit(() =>
+      this.activity.record({
+        workspaceId: dto.workspaceId,
+        actor: authorId,
+        action: 'document.created',
+        documentId: document.id,
+        metadata: { title: dto.title, category: dto.category ?? 'other', projectId: dto.projectId },
+      }),
+    );
     // Writing a page is watching it (docs/features/22). A subscription row
     // rather than an implicit rule at fan-out time, so that an author who
     // unwatches their own page stays unwatched.
@@ -458,13 +473,16 @@ export class DocumentsService {
     const branch = await this.prisma.documentBranch.create({
       data: { documentId, name: dto.name, headRevisionId: head },
     });
-    await this.activity.record({
-      workspaceId: document.workspaceId,
-      action: 'branch.created',
-      documentId,
-      subjectId: branch.id,
-      metadata: { title: document.title, branch: dto.name },
-    });
+    // Post-commit: publishes onto the bus (see createDocument above).
+    this.prisma.onCommit(() =>
+      this.activity.record({
+        workspaceId: document.workspaceId,
+        action: 'branch.created',
+        documentId,
+        subjectId: branch.id,
+        metadata: { title: document.title, branch: dto.name },
+      }),
+    );
     return { branch: this.toBranchInfo(branch) };
   }
 

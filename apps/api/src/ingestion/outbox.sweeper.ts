@@ -11,6 +11,7 @@ import { IngestionProducer } from './ingestion.producer.js';
 export class OutboxSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OutboxSweeper.name);
   private timer?: NodeJS.Timeout;
+  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -27,6 +28,8 @@ export class OutboxSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   async sweep(): Promise<void> {
+    if (this.running) return; // a slow sweep must not stack on itself
+    this.running = true;
     try {
       const stale = await this.prisma.ingestionJob.findMany({
         where: { status: 'queued', createdAt: { lt: new Date(Date.now() - 60_000) } },
@@ -39,6 +42,8 @@ export class OutboxSweeper implements OnModuleInit, OnModuleDestroy {
       }
     } catch (e) {
       this.logger.warn(`Sweep failed: ${(e as Error).message}`);
+    } finally {
+      this.running = false;
     }
   }
 }

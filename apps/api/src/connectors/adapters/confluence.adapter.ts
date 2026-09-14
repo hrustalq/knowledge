@@ -55,7 +55,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
       if (cursor) url.searchParams.set('cursor', cursor);
 
       const body = (await (
-        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx)
       ).json()) as ConfluenceList<ConfluencePage>;
 
       const results = body.results ?? [];
@@ -80,7 +80,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
     if (!parent && rootId) {
       const url = `${base}/api/v2/pages/${encodeURIComponent(rootId)}?body-format=none`;
       const page = (await (
-        await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+        await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
       ).json()) as ConfluencePage;
       yield { ...this.toRef(base, page), parentExternalId: undefined, hasChildren: true };
       return;
@@ -100,7 +100,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
       if (cursor) url.searchParams.set('cursor', cursor);
 
       const body = (await (
-        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx.debug)
+        await connectorFetch(url.toString(), { headers: this.headers(ctx), signal: ctx.signal }, ctx)
       ).json()) as ConfluenceList<ConfluencePage>;
 
       const results = body.results ?? [];
@@ -135,7 +135,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
     const base = this.base(ctx);
     const url = `${base}/api/v2/pages/${encodeURIComponent(ref.externalId)}?body-format=storage`;
     const page = (await (
-      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal })
+      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
     ).json()) as ConfluencePage;
 
     const storage = page.body?.storage?.value ?? '';
@@ -180,7 +180,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
             title: doc.title,
             body: { representation: 'storage', value },
           }),
-        })
+        }, ctx)
       ).json()) as ConfluencePage;
       return {
         externalId: created.id,
@@ -197,7 +197,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
       await connectorFetch(`${base}/api/v2/pages/${encodeURIComponent(doc.ref.externalId)}`, {
         headers: this.headers(ctx),
         signal: ctx.signal,
-      })
+      }, ctx)
     ).json()) as ConfluencePage;
     const next = (current.version?.number ?? 0) + 1;
 
@@ -213,7 +213,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
           body: { representation: 'storage', value },
           version: { number: next, message: t('connector.pushVersionMessage') },
         }),
-      })
+      }, ctx)
     ).json()) as ConfluencePage;
 
     return {
@@ -257,7 +257,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
     const key = requireConfig(ctx.config, 'spaceKey');
     const url = `${base}/api/v2/spaces?keys=${encodeURIComponent(key)}&limit=1`;
     const body = (await (
-      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal })
+      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
     ).json()) as ConfluenceList<{ id: string; name: string }>;
     const space = body.results?.[0];
     if (!space) throw new Error(`space ${key} not found`);

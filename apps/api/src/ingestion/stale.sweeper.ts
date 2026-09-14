@@ -17,6 +17,7 @@ import { IngestionProducer } from './ingestion.producer.js';
 export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(StaleSweeper.name);
   private timer?: NodeJS.Timeout;
+  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -38,12 +39,18 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   async sweep(): Promise<void> {
+    // Reindexes up to 10 documents a tick; overlapping sweeps would re-queue
+    // the same drifted heads twice before the first pass had updated any.
+    if (this.running) return;
+    this.running = true;
     try {
       await this.requeueStuck();
       await this.retryFailed();
       await this.reindexDrifted();
     } catch (e) {
       this.logger.warn(`Stale sweep failed: ${(e as Error).message}`);
+    } finally {
+      this.running = false;
     }
   }
 

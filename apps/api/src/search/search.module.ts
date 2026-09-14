@@ -1,14 +1,11 @@
 import { Module } from '@nestjs/common';
-import { GraphModule } from '../graph/graph.module.js';
-import { EmbeddingModule } from '../embedding/embedding.module.js';
-import { FulltextModule } from '../fulltext/fulltext.module.js';
+import { SearchCoreModule } from './search-core.module.js';
 import { SearchController } from './search.controller.js';
-import { SearchService } from './search.service.js';
 
+/** API side: the search endpoint on top of SearchCoreModule's service. */
 @Module({
-  imports: [GraphModule, EmbeddingModule, FulltextModule],
+  imports: [SearchCoreModule],
   controllers: [SearchController],
-  providers: [SearchService],
-  exports: [SearchService],
+  exports: [SearchCoreModule],
 })
 export class SearchModule {}

@@ -19,6 +19,7 @@ const SWEEP_INTERVAL_MS = 5 * 60_000;
 export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConnectorScheduleSweeper.name);
   private timer?: NodeJS.Timeout;
+  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -41,6 +42,8 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
   }
 
   async sweep(): Promise<void> {
+    if (this.running) return; // a slow sweep must not stack on itself
+    this.running = true;
     try {
       const due = await this.prisma.connector.findMany({
         where: { enabled: true, syncIntervalMinutes: { not: null } },
@@ -64,6 +67,8 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
       }
     } catch (err) {
       this.logger.warn(`Connector schedule sweep failed: ${(err as Error).message}`);
+    } finally {
+      this.running = false;
     }
   }
 }

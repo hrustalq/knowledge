@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AssistantWebSource, WebAccessDenial, WebAccessMode } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { SourcePolicyService } from '../ai/source-policy.service.js';
+import { safeFetch } from '../common/safe-fetch.js';
 import { htmlTitle, htmlToMarkdown } from '../import/parsers/html-to-markdown.js';
 import { t } from '../i18n/t.js';
 
@@ -145,11 +146,19 @@ export class WebResearchService {
       let target = rawUrl;
       let response: Response;
       for (let hop = 0; ; hop += 1) {
-        response = await fetch(target, {
-          redirect: 'manual',
-          signal: deadline,
-          headers: { accept: 'text/html,text/plain;q=0.9,*/*;q=0.1', 'user-agent': USER_AGENT },
-        });
+        // safeFetch, not fetch: the policy decision above resolved the host to
+        // decide, and this resolves it again to dial. `safeFetch` refuses a
+        // private address inside the connection's own lookup, which is the only
+        // place the two cannot disagree.
+        response = await safeFetch(
+          target,
+          {
+            redirect: 'manual',
+            signal: deadline,
+            headers: { accept: 'text/html,text/plain;q=0.9,*/*;q=0.1', 'user-agent': USER_AGENT },
+          },
+          this.policies.allowPrivate,
+        );
 
         const location = response.headers.get('location');
         if (response.status < 300 || response.status >= 400 || !location) break;

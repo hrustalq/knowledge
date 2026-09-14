@@ -1,9 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { validateEnv } from './config/env.js';
-import { I18nModule } from 'nestjs-i18n';
-import { I18nSetupModule } from './i18n/i18n-setup.module.js';
-import { i18nAsyncOptions } from './i18n/i18n.config.js';
+import { BootstrapModule } from './config/bootstrap.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -26,22 +22,13 @@ import { AiModule } from './ai/ai.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
 import { ImportModule } from './import/import.module.js';
 import { WorkflowsModule } from './workflows/workflows.module.js';
+import { WorkflowMaterializeModule } from './workflows/workflow-materialize.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      validate: validateEnv,
-      // cwd-first, repo root as fallback: `make dev` (turbo) runs with
-      // cwd=apps/api, so apps/api/.env wins for keys it defines and the root
-      // .env fills everything else (assistant/extractor/auth/... sections).
-      // When run from the repo root (dist scripts, MCP), only ['.env'] hits.
-      envFilePath: ['.env', '../../.env'],
-    }),
-    I18nModule.forRootAsync(i18nAsyncOptions),
-    I18nSetupModule,
+    BootstrapModule,
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -64,6 +51,9 @@ import { AppService } from './app.service.js';
     GlossaryModule,
     ImportModule,
     WorkflowsModule,
+    // API-only: materialisation writes pages, so it runs here and not in the
+    // MCP process, which imports WorkflowsModule for its read/start tools.
+    WorkflowMaterializeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

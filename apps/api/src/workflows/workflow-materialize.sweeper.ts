@@ -67,14 +67,10 @@ export class WorkflowMaterializeSweeper implements OnModuleInit, OnModuleDestroy
         // all of them. `updatedAt` is the optimistic-lock column — the winner
         // bumps it, and the losers' `where` no longer matches.
         //
-        // ponytail: claims the row, not the work. ceiling: stops two sweepers
-        // materialising concurrently; does NOT stop a re-materialise after a
-        // crash between `materialize()` (which commits its own document) and the
-        // `documentId` write below — the next sweep legitimately re-claims and
-        // creates a second page. upgrade: one transaction spanning the document
-        // write and the node update, which needs DocumentsService to accept a
-        // transaction client; same fix as the five other flows that bookkeep
-        // after a committed createDocument/finalizeRevision.
+        // The claim stays OUTSIDE the boundary below: it is the anti-stacking
+        // guard between two sweepers, and it only works because it commits
+        // immediately and becomes visible. Inside, it would be invisible until
+        // the page was already written.
         const claimed = await this.prisma.workflowRunNode.updateMany({
           where: {
             id: node.id,
@@ -95,18 +91,29 @@ export class WorkflowMaterializeSweeper implements OnModuleInit, OnModuleDestroy
         }
 
         try {
-          const documentId = await this.materializer.materialize(
-            node,
-            node.run,
-            step,
-            node.run.createdBy,
+          // The page, the `documentId` back-reference and the children commit
+          // together. Previously `materialize()` committed its own document and
+          // the node update followed unprotected, so a crash in between left
+          // the node still `materializing` with `documentId: null` — matching
+          // this very sweeper's predicate, which then created a second page.
+          await this.prisma.withTransaction(
+            async () => {
+              const documentId = await this.materializer.materialize(
+                node,
+                node.run,
+                step,
+                node.run.createdBy,
+              );
+              const updated = await this.prisma.workflowRunNode.update({
+                where: { id: node.id },
+                data: { status: 'materialized', documentId },
+              });
+              await this.runner.spawnChildren(node.run, updated, step);
+            },
+            { timeout: 30_000, maxWait: 10_000 },
           );
-          const updated = await this.prisma.workflowRunNode.update({
-            where: { id: node.id },
-            data: { status: 'materialized', documentId },
-          });
-          await this.runner.spawnChildren(node.run, updated, step);
         } catch (e) {
+          // Outside the boundary: the failure record must survive the rollback.
           const message = (e as Error).message;
           this.logger.warn(`Materialising node ${node.id} failed: ${message}`);
           await this.runner.failNode(node.id, message);

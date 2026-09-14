@@ -251,6 +251,10 @@ export class ConnectorsService {
       webhookSecret: decryptSecret(row.webhookSecret, this.key),
       onStage,
       debug,
+      // Read once per context for the same reason `debug` is, and handed to
+      // `connectorFetch` so the SSRF guard runs at the dial rather than only
+      // when an admin saved the base URL.
+      allowPrivate: this.allowPrivateUrls,
       signal,
     };
   }

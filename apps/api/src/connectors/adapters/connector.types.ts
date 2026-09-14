@@ -1,4 +1,5 @@
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
+import { safeFetch } from '../../common/safe-fetch.js';
 
 /**
  * The connector adapter interface (docs/features/19).
@@ -75,6 +76,12 @@ export interface ConnectorContext {
    * full URL with a query string; `connectorFetch` traces the HTTP layer itself.
    */
   debug(message: string, fields?: Record<string, unknown>): void;
+  /**
+   * CONNECTOR_ALLOW_PRIVATE_URLS. Pointing a connector at an internal Confluence
+   * is a legitimate self-hosted deployment, so `connectorFetch` needs to know
+   * whether this install is one before it refuses a private address.
+   */
+  allowPrivate: boolean;
   signal?: AbortSignal;
 }
 
@@ -194,7 +201,12 @@ export class ConnectorNetworkError extends Error {
 /**
  * `fetch` with the error shapes above; every adapter goes through it.
  *
- * Passing `debug` traces the HTTP layer (docs/features/26) — the one place a
+ * Pass `ctx`. It is optional only so a call can be written without one, and a
+ * call without one is guarded at its strictest (private addresses refused);
+ * every real adapter call should pass it, both for the trace and so a
+ * self-hosted install reaching its own network still works.
+ *
+ * The context's `debug` traces the HTTP layer (docs/features/26) — the one place a
  * "the space looks empty" bug is actually visible, since a wrong token gets an
  * anonymous 200 from Confluence rather than a 401. The query string is stripped
  * from the trace for the same reason `ConnectorNetworkError` strips it: it is
@@ -203,13 +215,18 @@ export class ConnectorNetworkError extends Error {
 export async function connectorFetch(
   url: string,
   init: RequestInit & { signal?: AbortSignal },
-  debug?: ConnectorContext['debug'],
+  ctx?: Pick<ConnectorContext, 'debug' | 'allowPrivate'>,
 ): Promise<Response> {
+  const debug = ctx?.debug;
+  const allowPrivate = ctx?.allowPrivate ?? false;
   const started = Date.now();
   const method = init.method ?? 'GET';
   let res: Response;
   try {
-    res = await fetch(url, init);
+    // safeFetch: a connector base URL is validated when an admin saves it, but
+    // that resolution is not the one this dial uses. The guard belongs at the
+    // connection, where a rebound name cannot slip between the two.
+    res = await safeFetch(url, init, allowPrivate);
   } catch (err) {
     // An abort is the caller's own timeout, which carries its own message.
     if (init.signal?.aborted) throw err;

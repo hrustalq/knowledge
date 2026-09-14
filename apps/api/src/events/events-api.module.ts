@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { EventsController } from './events.controller.js';
-import { EventsSubscriber } from './events.subscriber.js';
+import { EventsSubscriberModule } from './events-subscriber.module.js';
 import { LiveGateway } from './live.gateway.js';
 
 /**
@@ -10,7 +10,8 @@ import { LiveGateway } from './live.gateway.js';
  * AccessService resolve without imports.
  */
 @Module({
+  imports: [EventsSubscriberModule],
   controllers: [EventsController],
-  providers: [EventsSubscriber, LiveGateway],
+  providers: [LiveGateway],
 })
 export class EventsApiModule {}

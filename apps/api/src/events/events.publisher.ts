@@ -35,7 +35,19 @@ export class EventsPublisher implements OnModuleDestroy {
     config: ConfigService<Env, true>,
     private readonly notifications: NotificationsService,
   ) {
-    this.redis = new Redis(config.get('REDIS_URL', { infer: true }), { lazyConnect: true });
+    this.redis = new Redis(config.get('REDIS_URL', { infer: true }), {
+      lazyConnect: true,
+      // Bound how long a publish against a down Redis can hold its caller.
+      // "Non-fatal" was only ever try/catch, not latency: ioredis defaults to
+      // 20 reconnection attempts before it rejects a queued command, and
+      // `publish` sits in request paths through `ActivityService.record`.
+      //
+      // The offline queue stays ON deliberately — with `lazyConnect` the first
+      // publish is what opens the connection, so disabling it would make that
+      // one fail every time.
+      maxRetriesPerRequest: 1,
+      connectTimeout: 2_000,
+    });
   }
 
   async publish(event: Omit<KnowledgeEvent, 'at'>): Promise<void> {

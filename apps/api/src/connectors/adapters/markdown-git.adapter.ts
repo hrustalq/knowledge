@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { unzipSync } from 'fflate';
 import matter from 'gray-matter';
 import { safeJson, verifyHubSignature } from './confluence.adapter.js';
+import { safeFetch } from '../../common/safe-fetch.js';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import {
   connectorFetch,
@@ -99,10 +100,13 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
     if (host.kind === 'github') {
       const api = `https://api.github.com/repos/${host.owner}/${host.repo}/contents/${encodePath(path)}`;
       // GitHub's contents API needs the blob sha to update; its absence means create.
-      const existing = await fetch(`${api}?ref=${encodeURIComponent(branch)}`, {
-        headers: this.githubHeaders(ctx),
-        signal: ctx.signal,
-      });
+      // safeFetch rather than bare fetch: this probe dials a user-configured
+      // host like every other call here, and was the one that skipped the guard.
+      const existing = await safeFetch(
+        `${api}?ref=${encodeURIComponent(branch)}`,
+        { headers: this.githubHeaders(ctx), signal: ctx.signal },
+        ctx.allowPrivate,
+      );
       const sha = existing.ok ? ((await existing.json()) as { sha?: string }).sha : undefined;
 
       const res = (await (
@@ -111,7 +115,7 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
           headers: { ...this.githubHeaders(ctx), 'content-type': 'application/json' },
           signal: ctx.signal,
           body: JSON.stringify({ message, content, branch, ...(sha ? { sha } : {}) }),
-        })
+        }, ctx)
       ).json()) as { content?: { sha?: string; html_url?: string } };
 
       return {
@@ -130,9 +134,13 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
 
       // GitLab separates create from update by verb, and answers 400 when a
       // create collides — so update first and fall back to create.
-      const updated = await fetch(api, { method: 'PUT', headers, signal: ctx.signal, body });
+      const updated = await safeFetch(
+        api,
+        { method: 'PUT', headers, signal: ctx.signal, body },
+        ctx.allowPrivate,
+      );
       if (!updated.ok) {
-        await connectorFetch(api, { method: 'POST', headers, signal: ctx.signal, body });
+        await connectorFetch(api, { method: 'POST', headers, signal: ctx.signal, body }, ctx);
       }
       return { externalId: path, title: doc.title, url: this.blobUrl(ctx, path) };
     }
@@ -185,10 +193,14 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
         ? `${host.origin}/${host.owner}/${host.repo}/-/archive/${encodeURIComponent(branch)}/${host.repo}-${branch}.zip`
         : `https://codeload.github.com/${host.owner}/${host.repo}/zip/refs/heads/${encodeURIComponent(branch)}`;
 
-    const res = await connectorFetch(url, {
-      headers: host.kind === 'gitlab' ? this.gitlabHeaders(ctx) : this.githubHeaders(ctx),
-      signal: ctx.signal,
-    });
+    const res = await connectorFetch(
+      url,
+      {
+        headers: host.kind === 'gitlab' ? this.gitlabHeaders(ctx) : this.githubHeaders(ctx),
+        signal: ctx.signal,
+      },
+      ctx,
+    );
     const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
 
     const files = new Map<string, Uint8Array>();

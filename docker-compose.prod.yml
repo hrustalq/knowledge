@@ -56,7 +56,10 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    # quay.io, not Docker Hub: docker.io/minio/minio no longer exists (the Hub
+    # API returns 404 "object not found" and a pull fails with "pull access
+    # denied ... repository does not exist"). MinIO publishes to quay.io.
+    image: quay.io/minio/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -73,7 +76,8 @@ services:
   # One-shot: creates the bucket and enables versioning, which the revision
   # store depends on. Exits 0; `up -d` does not wait for it beyond completion.
   minio-init:
-    image: minio/mc:latest
+    # Same reason as minio above: docker.io/minio/mc is gone too.
+    image: quay.io/minio/mc:latest
     depends_on:
       minio:
         condition: service_healthy

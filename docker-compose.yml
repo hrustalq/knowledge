@@ -15,7 +15,13 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    # quay.io, not Docker Hub. docker.io/minio/minio no longer exists: the Hub
+    # API answers 404 "object not found" and a pull fails with "pull access
+    # denied ... repository does not exist or may require 'docker login'".
+    # Verified from two networks, so this is the repo being gone, not a local
+    # registry or rate-limit problem. An existing machine keeps working off its
+    # image cache, which is why this stayed invisible until a fresh pull.
+    image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
     ports: ["9000:9000", "9001:9001"]
     environment:
@@ -30,7 +36,8 @@ services:
       retries: 10
 
   minio-init:
-    image: minio/mc:latest
+    # Same reason as minio above: docker.io/minio/mc is gone too.
+    image: quay.io/minio/mc:latest
     depends_on:
       minio:
         condition: service_healthy

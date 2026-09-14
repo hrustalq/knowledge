@@ -116,7 +116,7 @@ deps-graph: ## Render dependency graphs to apps/*/dependency-graph.svg (needs gr
 	$(WEB) run depcruise:graph
 
 .PHONY: verify
-verify: lint typecheck deps test ## Pre-push gate: everything in `check` except build (.husky/pre-push)
+verify: db-generate lint typecheck deps test ## Pre-push gate: everything in `check` except build (.husky/pre-push)
 
 .PHONY: check
 check: lint typecheck deps test build ## Lint + typecheck + dependency rules + tests + build (CI gate)

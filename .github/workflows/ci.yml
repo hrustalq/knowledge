@@ -34,6 +34,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Prisma's generated client is what supplies apps/api's model types
+      # (Prisma.InputJsonValue, the *WhereInput types, every delegate signature).
+      # On a clean checkout it does not exist yet, and without it `typecheck`
+      # fails with TS2694 plus a flood of implicit-any. The `build` script does
+      # generate it — but build runs last, long after typecheck. A working tree
+      # that has ever run the app hides this, so only CI catches it.
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
       # Mirrors `make check` (lint typecheck deps test build). Kept as discrete
       # steps so a failure names itself in the UI instead of collapsing into one
       # red "make" line. No infra needed: the API build is `prisma generate &&

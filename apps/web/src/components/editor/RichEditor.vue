@@ -47,6 +47,7 @@ import {
   PenLine,
   Plus,
   Quote,
+  Route,
   Square,
   Table2,
   Trash2,
@@ -59,6 +60,7 @@ import type { PageRefResolver } from '@/lib/page-refs'
 import { htmlToMarkdown } from '@/lib/markdown/serialize'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
 import { Layout, LayoutColumn, Expand, Panel, TableOfContents } from './extensions/blocks'
+import { ApiContract, ApiSection } from './extensions/api'
 import { Drawing, FileEmbed, Mermaid, ResizableImage } from './extensions/media'
 import { AgentMention, DocMention, StatusMark, UserMention } from './extensions/inline'
 import { createSuggestionExtension, type SuggestionSession } from './extensions/suggestion'
@@ -282,6 +284,10 @@ const SLASH_ITEMS: (CommandItem & { run: (e: CoreEditor) => void })[] = [
   { id: 'layout3', group: t('toolbar.group.structure'), label: t('toolbar.threeColumns'), icon: Columns3, keywords: 'section layout', run: (e) => e.chain().focus().setLayout(3).run() },
   { id: 'toc', group: t('toolbar.group.structure'), label: t('toolbar.tableOfContents'), icon: Type, keywords: 'outline headings', run: (e) => e.chain().focus().setToc().run() },
 
+  // Russian keywords are carried here because `menuItems` filters on
+  // label + keywords + group: without them a Russian-locale author typing
+  // `/энд` gets an empty menu.
+  { id: 'api', group: t('toolbar.group.structure'), label: t('toolbar.apiContract'), icon: Route, keywords: 'endpoint http rest request response openapi swagger эндпоинт запрос', run: (e) => e.chain().focus().setApiContract().run() },
   { id: 'mermaid', group: t('toolbar.group.media'), label: t('toolbar.mermaid'), icon: Workflow, keywords: 'graph flowchart sequence', run: (e) => e.chain().focus().setMermaid().run() },
   { id: 'drawing', group: t('toolbar.group.media'), label: t('toolbar.whiteboard'), icon: PenLine, keywords: 'draw sketch excalidraw diagram', run: (e) => e.chain().focus().setDrawing().run() },
   { id: 'image', group: t('toolbar.group.media'), label: t('toolbar.image'), icon: ImageIcon, keywords: 'picture photo upload', run: (e) => pickFiles(e, 'image/*') },
@@ -290,7 +296,7 @@ const SLASH_ITEMS: (CommandItem & { run: (e: CoreEditor) => void })[] = [
 ]
 
 /** Blocks that belong in a page but not in a comment. */
-const COMPACT_EXCLUDED = new Set(['layout2', 'layout3', 'toc', 'drawing', 'expand'])
+const COMPACT_EXCLUDED = new Set(['layout2', 'layout3', 'toc', 'drawing', 'expand', 'api'])
 const slashItems = computed(() =>
   props.compact ? SLASH_ITEMS.filter((i) => !COMPACT_EXCLUDED.has(i.id)) : SLASH_ITEMS,
 )
@@ -552,6 +558,10 @@ onMounted(() => {
       Layout,
       LayoutColumn,
       TableOfContents,
+      // The block's section labels land in stored content, so it needs this
+      // app's translator — same reason CommentAnchors takes one.
+      ApiContract.configure({ t }),
+      ApiSection,
       Mermaid,
       Drawing,
       FileEmbed,

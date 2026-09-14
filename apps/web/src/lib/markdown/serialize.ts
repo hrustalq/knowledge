@@ -116,6 +116,39 @@ turndown.addRule('knColumn', {
   replacement: (content) => `\n<div ${KN.column}>\n\n${content.trim()}\n\n</div>\n`,
 });
 
+/**
+ * HTTP endpoint contract. A div for the same reason a layout is one: markdown
+ * has no such construct, and a fence would take every parameter name and
+ * description out of the index.
+ *
+ * The endpoint is written twice on purpose — once as attributes the editor
+ * reads back, once as the real `###` heading carried in `content`. The heading
+ * is what earns its keep: `chunkEmbedText` prepends the heading path to every
+ * chunk before embedding, so the parameter tables are indexed as
+ * "Documents API > GET /v1/documents/{id} > Responses …". With the endpoint
+ * living only in an attribute, that same chunk embeds as a bare table.
+ *
+ * There is one writer, so the two copies cannot drift: `renderHTML` builds the
+ * heading from the attributes and `parseHTML` strips it back out.
+ */
+turndown.addRule('knApi', {
+  filter: (node) => (node as HTMLElement).hasAttribute?.(KN.api),
+  replacement: (content, node) => {
+    const method = (attr(node, KN.api) || 'GET').toUpperCase();
+    // `"` is the only character that can break out of the attribute; the path
+    // is otherwise written verbatim so `{id}` templates survive untouched.
+    const path = (attr(node, KN.apiPath) || '/').replace(/"/g, '&quot;');
+    return `\n\n<div ${KN.api}="${method}" ${KN.apiPath}="${path}">\n\n${content.trim()}\n\n</div>\n\n`;
+  },
+});
+
+/** One section of a contract. The marker carries the meaning; the heading inside carries the label. */
+turndown.addRule('knApiSection', {
+  filter: (node) => (node as HTMLElement).hasAttribute?.(KN.apiSection),
+  replacement: (content, node) =>
+    `\n\n<div ${KN.apiSection}="${attr(node, KN.apiSection) || 'summary'}">\n\n${content.trim()}\n\n</div>\n\n`,
+});
+
 /** File / PDF embeds. The filename stays as link text so a plain renderer still shows something useful. */
 turndown.addRule('knFile', {
   filter: (node) => (node as HTMLElement).hasAttribute?.(KN.file),

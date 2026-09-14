@@ -1895,6 +1895,7 @@
     "twoColumns": "Two columns",
     "threeColumns": "Three columns",
     "tableOfContents": "Table of contents",
+    "apiContract": "API contract",
     "mermaid": "Mermaid diagram",
     "whiteboard": "Whiteboard",
     "image": "Image",
@@ -2030,6 +2031,28 @@
     "hideRail": "Hide filters",
     "saveFailed": "Could not save this filter",
     "railLabel": "Filters"
+  },
+  "api": {
+    "changeMethod": "Change method",
+    "editPath": "Edit path",
+    "section": {
+      "params": "Path and query",
+      "body": "Request body",
+      "responses": "Responses",
+      "auth": "Headers and auth"
+    },
+    "col": {
+      "name": "Name",
+      "in": "In",
+      "type": "Type",
+      "required": "Required",
+      "description": "Description",
+      "field": "Field",
+      "code": "Code",
+      "body": "Body",
+      "header": "Header"
+    },
+    "yes": "yes"
   },
   "panel": {
     "note": "Info",

@@ -1,4 +1,18 @@
-import { AGENT_MENTION_ATTR } from '@knowledge/contracts';
+import {
+  AGENT_MENTION_ATTR,
+  API_CONTRACT_ATTR,
+  API_PATH_ATTR,
+  API_SECTION_ATTR,
+} from '@knowledge/contracts';
+
+export {
+  API_SECTIONS,
+  HTTP_METHODS,
+  isApiSection,
+  isHttpMethod,
+  type ApiSectionKind,
+  type HttpMethod,
+} from '@knowledge/contracts';
 
 /**
  * The rich-block vocabulary, shared by the editor, the serializer and the read
@@ -31,6 +45,12 @@ export const KN = {
   // attribute out of comment bodies to find out which agent was tagged, so the
   // writer and the reader must not be able to drift apart.
   agent: AGENT_MENTION_ATTR,
+  // Same reasoning as `agent`: the server reads these back out of stored
+  // markdown (graph facts, OpenAPI export), so they are spelled once, in
+  // contracts, and imported by both sides.
+  api: API_CONTRACT_ATTR,
+  apiPath: API_PATH_ATTR,
+  apiSection: API_SECTION_ATTR,
 } as const;
 
 /**

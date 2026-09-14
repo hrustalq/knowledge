@@ -1895,6 +1895,7 @@
     "twoColumns": "Две колонки",
     "threeColumns": "Три колонки",
     "tableOfContents": "Оглавление",
+    "apiContract": "API-контракт",
     "mermaid": "Диаграмма Mermaid",
     "whiteboard": "Доска",
     "image": "Изображение",
@@ -2030,6 +2031,28 @@
     "hideRail": "Скрыть фильтры",
     "saveFailed": "Не удалось сохранить фильтр",
     "railLabel": "Фильтры"
+  },
+  "api": {
+    "changeMethod": "Сменить метод",
+    "editPath": "Изменить путь",
+    "section": {
+      "params": "Путь и query",
+      "body": "Тело запроса",
+      "responses": "Ответы",
+      "auth": "Заголовки и авторизация"
+    },
+    "col": {
+      "name": "Имя",
+      "in": "Где",
+      "type": "Тип",
+      "required": "Обяз.",
+      "description": "Описание",
+      "field": "Поле",
+      "code": "Код",
+      "body": "Тело",
+      "header": "Заголовок"
+    },
+    "yes": "да"
   },
   "panel": {
     "note": "Инфо",

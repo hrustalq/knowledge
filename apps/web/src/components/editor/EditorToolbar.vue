@@ -34,6 +34,7 @@ import {
   Plus,
   Quote,
   Redo2,
+  Route,
   Square,
   Strikethrough,
   Table2,
@@ -362,6 +363,9 @@ const ALIGNMENTS = [
         </DropdownMenuItem>
         <DropdownMenuItem v-if="!compact" @select="editor.chain().focus().setToc().run()">
           <Type class="size-4" /> {{ t('toolbar.tableOfContents') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem v-if="!compact" @select="editor.chain().focus().setApiContract().run()">
+          <Route class="size-4" /> {{ t('toolbar.apiContract') }}
         </DropdownMenuItem>
         <DropdownMenuItem @select="editor.chain().focus().setHorizontalRule().run()">
           <Minus class="size-4" /> {{ t('toolbar.divider') }}

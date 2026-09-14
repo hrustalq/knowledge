@@ -290,6 +290,47 @@ export const DOCUMENT_CATEGORIES = [
 ] as const;
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 
+// ---------------------------------------------------------------------------
+// API contract block — the editor's endpoint widget.
+//
+// These live in contracts rather than in the web app for the AGENT_MENTION_ATTR
+// reason: the block is written by the editor and read back by the server (the
+// ingestion worker turns an endpoint into a graph entity, and the OpenAPI
+// exporter parses these attributes out of stored markdown), so the writer and
+// the reader must not be able to drift apart.
+// ---------------------------------------------------------------------------
+
+/** Wrapper attribute; its value is the HTTP method. */
+export const API_CONTRACT_ATTR = 'data-kn-api';
+/** The endpoint path, on the same wrapper. */
+export const API_PATH_ATTR = 'data-kn-path';
+/**
+ * Marks one section inside the block. The *meaning* rides here so the visible
+ * label stays translatable — an exporter that matched on the label text would
+ * break the moment a page was authored in Russian (docs/features/18).
+ */
+export const API_SECTION_ATTR = 'data-kn-api-section';
+
+/**
+ * The methods worth a block of their own. TRACE and CONNECT are omitted the way
+ * a sixth panel colour is: a vocabulary nobody reaches for is a menu everyone
+ * reads past.
+ */
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
+export type HttpMethod = (typeof HTTP_METHODS)[number];
+
+export function isHttpMethod(value: string): value is HttpMethod {
+  return (HTTP_METHODS as readonly string[]).includes(value);
+}
+
+/** Section kinds, in the order the template lays them out. */
+export const API_SECTIONS = ['summary', 'params', 'body', 'responses', 'auth'] as const;
+export type ApiSectionKind = (typeof API_SECTIONS)[number];
+
+export function isApiSection(value: string): value is ApiSectionKind {
+  return (API_SECTIONS as readonly string[]).includes(value);
+}
+
 // GET /v1/documents/:id/content (feature 01)
 export interface DocumentContentResponse {
   documentId: string;

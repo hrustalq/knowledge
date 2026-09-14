@@ -1,0 +1,188 @@
+# Production stack for knowledge-prod. Lives at /srv/knowledge/docker-compose.prod.yml
+# alongside a hand-managed .env (chmod 600) that this file both interpolates from
+# and injects into containers.
+#
+# Images are built and tagged by .github/workflows/deploy.yml, NOT here — there
+# is deliberately no `build:` section, because /srv/knowledge holds no source
+# tree and a stray `compose up` must never try to build one.
+#   TAG=<sha> docker compose -f docker-compose.prod.yml up -d
+#
+# EXPOSURE: only caddy publishes publicly (80/443). The four datastores get no
+# host binding at all — a deliberate break from docker-compose.yml, which
+# publishes all of them on 0.0.0.0. api and web bind loopback only, so the
+# existing `make smoke` still works when run on the box.
+
+name: knowledge
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificates — losing this re-issues and can hit rate limits
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-knowledge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-knowledge}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-knowledge}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: creates the bucket and enables versioning, which the revision
+  # store depends on. Exits 0; `up -d` does not wait for it beyond completion.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 '${S3_ACCESS_KEY}' '${S3_SECRET_KEY}' &&
+      mc mb --ignore-existing local/${S3_BUCKET:-knowledge} &&
+      mc version enable local/${S3_BUCKET:-knowledge}
+      "
+    restart: "no"
+
+  arcadedb:
+    image: arcadedata/arcadedb:latest
+    restart: unless-stopped
+    environment:
+      # Heap is capped on purpose: this is a 3.8 GB box that also builds images.
+      # Unbounded, the JVM sizes itself against total RAM and starves everything else.
+      JAVA_OPTS: >-
+        -Xms256m -Xmx512m
+        -Darcadedb.server.rootPassword=${ARCADE_PASSWORD:?set ARCADE_PASSWORD in .env}
+        -Darcadedb.server.defaultDatabases=${ARCADE_DB:-knowledge}[${ARCADE_USER:-root}:${ARCADE_PASSWORD}]
+    volumes:
+      - arcadedata:/home/arcadedb/databases
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "-T", "3", "http://localhost:2480/api/v1/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    image: knowledge-api:${TAG:-latest}
+    restart: unless-stopped
+    # PID 1 semantics + zombie reaping. main.ts calls enableShutdownHooks(), and
+    # without init nothing drains: no sweeper timer cleared, no Redis client
+    # disconnected, no in-flight request finished on redeploy.
+    init: true
+    env_file: [.env]
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - applogs:/app/logs
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      arcadedb: { condition: service_healthy }
+
+  worker:
+    # Same image as api — one build, two commands.
+    image: knowledge-api:${TAG:-latest}
+    command: ["node", "dist/worker.main"]
+    restart: unless-stopped
+    init: true
+    env_file: [.env]
+    volumes:
+      - applogs:/app/logs
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      arcadedb: { condition: service_healthy }
+    # worker.main.ts is createApplicationContext — no HTTP listener, nothing to
+    # curl. This asks Redis which clients are blocked on the five BullMQ queues
+    # (ingestion, import, workflow, connector, agent), which proves both that
+    # Redis is reachable AND that every processor is actually attached — strictly
+    # stronger than PING. It depends on BullMQ's internal connection-naming
+    # scheme, so if a BullMQ major bump breaks it, degrade to a plain r.ping():
+    # that still catches the most common real failure.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - --input-type=module
+        - -e
+        - |
+          const {default:Redis}=await import('ioredis');
+          const r=new Redis(process.env.REDIS_URL,{maxRetriesPerRequest:1,connectTimeout:3000,lazyConnect:true});
+          await r.connect();
+          const list=await r.client('LIST');
+          await r.quit();
+          const queues=['aW5nZXN0aW9u','aW1wb3J0','d29ya2Zsb3c=','Y29ubmVjdG9y','YWdlbnQ='];
+          process.exit(queues.every(n=>list.includes('name=bull:'+n))?0:1);
+      interval: 30s
+      timeout: 10s
+      # worker.main boots six Nest modules before any processor registers.
+      start_period: 60s
+      retries: 3
+
+  web:
+    image: knowledge-web:${TAG:-latest}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      PORT: 5173
+      # Runtime (not build-time) — this one survives verbatim in the SSR bundle.
+      API_URL_INTERNAL: http://api:3000
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - applogs:/app/logs
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  arcadedata:
+  caddy_data:
+  caddy_config:
+  applogs:

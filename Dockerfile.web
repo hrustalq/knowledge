@@ -1,0 +1,111 @@
+# syntax=docker/dockerfile:1.7
+#
+# SSR web server: `NODE_ENV=production node server.js` with cwd = apps/web,
+# because server.js reads ./dist/client/index.html and ./dist/server/entry-server.js
+# relative to the working directory.
+#
+# Same buildless-package constraint as Dockerfile.api, for a narrower reason:
+# the SSR bundle itself inlines the workspace deps, but server.js is plain
+# unbundled Node and imports @knowledge/observability at runtime. So packages/*
+# must still ship as .ts outside node_modules.
+ARG NODE_IMAGE=node:24.21.0-bookworm-slim
+
+# --------------------------------------------------------------------- base
+FROM ${NODE_IMAGE} AS base
+ENV PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    CI=true
+RUN corepack enable && corepack prepare pnpm@10.30.1 --activate
+WORKDIR /app
+
+# ------------------------------------------------------------------ builder
+FROM base AS builder
+ENV NODE_OPTIONS=--max-old-space-size=2560
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/web/package.json apps/web/
+COPY apps/api/package.json apps/api/
+COPY packages/contracts/package.json     packages/contracts/
+COPY packages/observability/package.json packages/observability/
+COPY packages/workflow/package.json      packages/workflow/
+COPY packages/tsconfig/package.json      packages/tsconfig/
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --filter "@knowledge/web..."
+
+COPY packages/ packages/
+COPY apps/web/ apps/web/
+
+# VITE_* are INLINED into the client bundle at build time, so they must be build
+# args — setting them as container env vars does nothing. Leave both at their
+# defaults: the browser then calls /api (stripped by Caddy exactly as the Vite
+# dev proxy does) and live.ts derives wss://<host>/api/v1/events/ws from
+# window.location. Overriding either only makes sense on a split-origin deploy.
+ARG VITE_API_URL=/api
+ARG VITE_WS_URL=
+ENV VITE_API_URL=${VITE_API_URL} \
+    VITE_WS_URL=${VITE_WS_URL}
+
+# vite build --outDir dist/client && vite build --ssr src/entry-server.ts --outDir dist/server
+# NOTE: `typecheck` (vue-tsc) is deliberately NOT run here — it is the most
+# expensive step in the repo and belongs in CI, not in every image build.
+RUN pnpm --filter @knowledge/web run build
+
+# --------------------------------------------------------------- prod deps
+FROM base AS prod-deps
+ENV NODE_ENV=production
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/web/package.json apps/web/
+COPY apps/api/package.json apps/api/
+COPY packages/contracts/package.json     packages/contracts/
+COPY packages/observability/package.json packages/observability/
+COPY packages/workflow/package.json      packages/workflow/
+COPY packages/tsconfig/package.json      packages/tsconfig/
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --prod --frozen-lockfile --filter "@knowledge/web..."
+
+# ------------------------------------------------------------------ runtime
+FROM base AS runtime
+# No Prisma here, so no openssl — only outbound TLS verification.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production \
+    PORT=5173 \
+    LOG_DIR=/app/logs
+
+WORKDIR /app
+
+COPY --from=prod-deps --chown=node:node /app/node_modules           ./node_modules
+COPY --from=prod-deps --chown=node:node /app/packages              ./packages
+COPY --from=prod-deps --chown=node:node /app/apps/web/node_modules ./apps/web/node_modules
+
+COPY --chown=node:node package.json pnpm-workspace.yaml ./
+COPY --chown=node:node packages/ ./packages/
+# server.js is unbundled Node and imports @knowledge/observability at runtime.
+COPY --chown=node:node apps/web/package.json apps/web/server.js ./apps/web/
+
+COPY --from=builder --chown=node:node /app/apps/web/dist ./apps/web/dist
+
+RUN mkdir -p /app/logs && chown node:node /app/logs
+
+USER node
+WORKDIR /app/apps/web
+
+RUN node --input-type=module -e "\
+await import('@knowledge/observability'); \
+await import('@knowledge/observability/express'); \
+console.log('type stripping OK');"
+
+EXPOSE 5173
+
+# Probes a static asset rather than /, on purpose: / triggers a full SSR render
+# that calls the API, which would make web report unhealthy whenever api is down.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD \
+  node -e "fetch('http://127.0.0.1:'+(process.env.PORT||5173)+'/favicon.svg').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+# cwd must remain /app/apps/web — server.js resolves dist/ relative to it.
+CMD ["node", "server.js"]

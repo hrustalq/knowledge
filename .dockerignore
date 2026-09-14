@@ -1,0 +1,58 @@
+# Build-context weight. Uncontrolled this is ~1.2 GB streamed to the daemon
+# before a single instruction runs.
+node_modules
+**/node_modules
+.turbo
+**/.turbo
+.git
+.gitignore
+**/dist
+**/*.tsbuildinfo
+coverage
+**/coverage
+
+# SECURITY, not housekeeping: apps/api/.env holds live DATABASE_URL, S3_SECRET_KEY
+# and ARCADE_PASSWORD right now, and certs/ holds TLS material. Anything that
+# reaches a layer stays recoverable from the image no matter what later RUN rm does.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!.env.production.example
+certs
+
+# Runtime artifacts that must never be baked in
+logs
+**/*.log
+
+# Tooling / docs / agent scratch (CLAUDE.md alone is 88 KB)
+.claude
+.vscode
+.impeccable
+graphify-out
+docs
+plan.md
+features.md
+CLAUDE.md
+AGENTS.md
+PONYTAIL-DEBT.md
+dependency-graph.svg
+**/dependency-graph.svg
+.dependency-cruiser.cjs
+.dependency-cruiser-known-violations.json
+
+# Infra config belongs to compose, not to app images
+docker-compose.yml
+docker-compose.prod.yml
+Caddyfile
+Dockerfile*
+.dockerignore
+Makefile
+searxng
+scripts
+.github
+.husky
+
+# Generated only for web's dev-time `generate:api` script
+apps/api/openapi.json

@@ -1,0 +1,38 @@
+# Reverse proxy for knowledge.hrustalq.dev, with automatic Let's Encrypt TLS.
+#
+# The whole browser surface of this app is /api/* — verified in three places:
+#   apps/web/src/api/http.ts:86-88   baseURL defaults to '/api'
+#   apps/web/src/api/live.ts:24-25   WebSocket is wss://<host>/api/v1/events/ws
+#   apps/web/src/lib/api.ts:378-384  resolveAssetUrl prefixes attachments/avatars
+# In development the Vite middleware strips that prefix (vite.config.ts:19).
+# Production server.js installs NO such proxy, so stripping it is this file's job
+# and `handle_path` must mirror Vite's rewrite exactly.
+
+{
+	# Uncomment and set an address to receive Let's Encrypt expiry notices.
+	# Certificates are issued fine without it.
+	# email you@example.com
+}
+
+knowledge.hrustalq.dev {
+	encode zstd gzip
+
+	# handle_path strips the matched prefix before proxying: /api/v1/documents
+	# reaches the API as /v1/documents. WebSocket upgrades (/api/v1/events/ws)
+	# and SSE (/api/v1/events) both pass through this same route — Caddy
+	# upgrades transparently and disables response buffering for
+	# text/event-stream, so neither needs special handling.
+	handle_path /api/* {
+		reverse_proxy api:3000
+	}
+
+	# Everything else is the SSR app.
+	handle {
+		reverse_proxy web:5173
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

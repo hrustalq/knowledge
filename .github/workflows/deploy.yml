@@ -1,0 +1,98 @@
+name: deploy
+
+# SELF-HOSTED. This repository is public, and GitHub warns against exposing a
+# self-hosted runner to untrusted code. Every trigger here is therefore
+# push-to-main, a tag, or a manual dispatch — NEVER pull_request, which is the
+# one event a fork can cause. See also the `if:` repository guard below and the
+# `production` environment's branch policy.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_migrations:
+        description: "Skip prisma migrate deploy (use only if migrations already applied)"
+        type: boolean
+        default: false
+
+# Never run two deploys at once against one box; never cancel one mid-migration.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # A fork that somehow triggers this workflow still cannot run it.
+    if: github.repository == 'hrustalq/knowledge'
+    runs-on: [self-hosted, linux, x64, knowledge-prod]
+    environment: production
+    timeout-minutes: 60
+
+    env:
+      TAG: ${{ github.sha }}
+      DEPLOY_DIR: /srv/knowledge
+      COMPOSE: docker compose -f /srv/knowledge/docker-compose.prod.yml
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # The stack runs out of /srv/knowledge, not out of the runner workspace,
+      # which CI rewrites on every job. Only config crosses over; .env is
+      # hand-managed on the box and is never touched here.
+      - name: Sync deployment config
+        run: |
+          install -m 644 docker-compose.prod.yml "$DEPLOY_DIR/docker-compose.prod.yml"
+          install -m 644 Caddyfile              "$DEPLOY_DIR/Caddyfile"
+          test -f "$DEPLOY_DIR/.env" || { echo "::error::$DEPLOY_DIR/.env is missing — create it from .env.production.example"; exit 1; }
+
+      # SEQUENTIALLY, never in parallel: two concurrent tsc processes against a
+      # 3.8 GB ceiling is the likeliest way this box OOMs. Each image is tagged
+      # with the commit SHA and with latest, so a rollback is a retag rather
+      # than a rebuild.
+      - name: Build api image
+        run: |
+          docker build -f Dockerfile.api -t "knowledge-api:$TAG" -t knowledge-api:latest .
+
+      - name: Build web image
+        run: |
+          docker build -f Dockerfile.web -t "knowledge-web:$TAG" -t knowledge-web:latest .
+
+      # Bring datastores up first so migrations have something to talk to.
+      - name: Start datastores
+        run: $COMPOSE up -d --wait postgres redis minio arcadedb
+
+      - name: Run migrations
+        if: ${{ !inputs.skip_migrations }}
+        run: $COMPOSE run --rm --no-deps api npx prisma migrate deploy
+
+      - name: Roll out application
+        run: $COMPOSE up -d --remove-orphans
+
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:3000/ && curl -fsS -o /dev/null http://127.0.0.1:5173/; then
+              echo "api and web are answering on loopback"; exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::services did not become healthy in 150s"
+          $COMPOSE ps
+          $COMPOSE logs --tail=80 api web
+          exit 1
+
+      - name: Verify public endpoint
+        run: curl -fsS -o /dev/null -w 'public https://knowledge.hrustalq.dev -> %{http_code}\n' https://knowledge.hrustalq.dev
+
+      - name: Report status
+        if: always()
+        run: $COMPOSE ps
+
+      # Keeps the box from filling up over months of deploys. Tagged images
+      # (including the previous SHA) survive; only dangling layers go.
+      - name: Prune dangling images
+        if: success()
+        run: docker image prune -f

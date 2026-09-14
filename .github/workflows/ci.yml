@@ -1,0 +1,65 @@
+name: ci
+
+# Runs on GitHub-hosted runners, ALWAYS — never on the self-hosted runner.
+# This is the job untrusted fork PRs can reach, and the self-hosted runner is a
+# box with docker-group access to the production stack. Keeping this split is
+# the whole reason the deploy workflow is a separate file.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Prisma's generated client is what supplies apps/api's model types
+      # (Prisma.InputJsonValue, the *WhereInput types, every delegate signature).
+      # On a clean checkout it does not exist yet, and without it `typecheck`
+      # fails with TS2694 plus a flood of implicit-any. The `build` script does
+      # generate it — but build runs last, long after typecheck. A working tree
+      # that has ever run the app hides this, so only CI catches it.
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      # Mirrors `make check` (lint typecheck deps test build). Kept as discrete
+      # steps so a failure names itself in the UI instead of collapsing into one
+      # red "make" line. No infra needed: the API build is `prisma generate &&
+      # nest build`, which never touches a database.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Dependency rules
+        run: pnpm run depcruise
+
+      - name: Test
+        run: pnpm test
+
+      # Not covered by the pre-push hook (it deliberately omits build, which
+      # would kill a running dev server) — so this is the only gate that runs it.
+      - name: Build
+        run: pnpm build

@@ -1,0 +1,140 @@
+# syntax=docker/dockerfile:1.7
+#
+# Builds ONE image serving two compose services:
+#   api    -> node dist/main         (HTTP, port 3000)
+#   worker -> node dist/worker.main  (BullMQ, no port at all)
+# A single `nest build` emits both entrypoints from one tsc pass, so splitting
+# this into two images would mean two installs and two compilations for
+# byte-identical output — which a 2-vCPU / 3.8 GB box cannot afford.
+#
+# THE LOAD-BEARING CONSTRAINT: packages/{contracts,observability,workflow} are
+# buildless — their exports point at ./src/*.ts and they carry real runtime
+# values (pino, xstate, API_ERROR_CODES). Node strips their types at runtime,
+# and Node REFUSES to strip any file whose realpath contains a node_modules
+# segment. So the workspace symlink layout must survive into the final image:
+# packages/* at a real path, reached via apps/api/node_modules/@knowledge/* ->
+# ../../../../packages/*. This is why `pnpm deploy --prod` cannot be used here
+# (it relinks workspace packages into the virtual store, whose realpath IS under
+# node_modules) and why --node-linker=hoisted and any bundling step are out.
+ARG NODE_IMAGE=node:24.21.0-bookworm-slim
+
+# --------------------------------------------------------------------- base
+FROM ${NODE_IMAGE} AS base
+ENV PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    CI=true
+# corepack ships with Node through 24 (removed in 25+). Version pinned from the
+# root package.json "packageManager" field.
+RUN corepack enable && corepack prepare pnpm@10.30.1 --activate
+WORKDIR /app
+
+# ------------------------------------------------------------------ builder
+FROM base AS builder
+ENV NODE_OPTIONS=--max-old-space-size=2560
+
+# Manifests first so edits under src/ never bust the install layer.
+# apps/web/package.json is copied despite web being filtered out: pnpm-workspace.yaml
+# globs apps/*, and a missing importer makes --frozen-lockfile call the lockfile stale.
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages/contracts/package.json     packages/contracts/
+COPY packages/observability/package.json packages/observability/
+COPY packages/workflow/package.json      packages/workflow/
+COPY packages/tsconfig/package.json      packages/tsconfig/
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --filter "@knowledge/api..."
+
+COPY packages/ packages/
+COPY apps/api/ apps/api/
+
+# prisma generate && nest build -> dist/{main,worker.main,mcp.main}.js
+# plus dist/i18n/**/*.json via the `assets` rule in apps/api/nest-cli.json.
+RUN pnpm --filter @knowledge/api run build
+
+# --------------------------------------------------------------- prod deps
+# Production closure only. Requires `prisma` to be a dependency (not a
+# devDependency) of apps/api — otherwise the CLI is absent here and both
+# `prisma generate` below and `prisma migrate deploy` at deploy time fail.
+FROM base AS prod-deps
+ENV NODE_ENV=production
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages/contracts/package.json     packages/contracts/
+COPY packages/observability/package.json packages/observability/
+COPY packages/workflow/package.json      packages/workflow/
+COPY packages/tsconfig/package.json      packages/tsconfig/
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --prod --frozen-lockfile --filter "@knowledge/api..."
+
+# Generate into the tree we actually ship. The client and its native query
+# engine land under node_modules/.pnpm/@prisma+client@<hash>/... — never try to
+# COPY that hashed path between stages.
+COPY apps/api/prisma/ apps/api/prisma/
+RUN pnpm --filter @knowledge/api exec prisma generate
+
+# ------------------------------------------------------------------ runtime
+FROM base AS runtime
+# openssl: the Prisma query engine links libssl and bookworm-slim does not ship it.
+# ca-certificates: the API makes outbound TLS calls (OpenAI SDK, S3, connectors).
+# Nothing else — there are no native modules needing a compiler in this tree.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    LOG_DIR=/app/logs
+
+WORKDIR /app
+
+# node_modules and packages/*/node_modules first, at the same layout they were
+# built at, so the relative symlinks resolve. packages/*/node_modules is NOT
+# optional: pino, pino-pretty and xstate are real runtime deps of the buildless
+# packages, and logger.ts imports pino-pretty unconditionally at module scope.
+COPY --from=prod-deps --chown=node:node /app/node_modules           ./node_modules
+COPY --from=prod-deps --chown=node:node /app/packages              ./packages
+COPY --from=prod-deps --chown=node:node /app/apps/api/node_modules ./apps/api/node_modules
+
+# Workspace-root markers plus the buildless .ts sources, which must live OUTSIDE
+# node_modules for Node's type stripping to accept them.
+COPY --chown=node:node package.json pnpm-workspace.yaml ./
+COPY --chown=node:node packages/ ./packages/
+COPY --chown=node:node apps/api/package.json ./apps/api/
+# Migrations must ship: the generated client embeds a schema copy but NOT the
+# migrations directory, so `prisma migrate deploy` would have nothing to apply.
+COPY --chown=node:node apps/api/prisma/ ./apps/api/prisma/
+
+COPY --from=builder --chown=node:node /app/apps/api/dist ./apps/api/dist
+
+RUN mkdir -p /app/logs && chown node:node /app/logs
+
+USER node
+WORKDIR /app/apps/api
+
+# Fail the BUILD, not production at 3am, if the layout ever stops being
+# strippable. CLAUDE.md prescribes exactly this check because `make check`
+# passes clean either way — the breakage only ever shows up at runtime.
+RUN node --input-type=module -e "\
+await import('@knowledge/contracts'); \
+await import('@knowledge/contracts/core'); \
+await import('@knowledge/observability'); \
+await import('@knowledge/observability/express'); \
+await import('@knowledge/workflow'); \
+console.log('type stripping OK');"
+
+EXPOSE 3000
+
+# LIVENESS ONLY. GET / is the single @Public() route (AppController) — there is
+# no health controller in this codebase. It proves the event loop is responsive
+# and the port is bound; it will report healthy during a total database outage.
+# A real /health that pings Prisma and Redis is a known follow-up gap.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 CMD \
+  node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+# The worker service overrides this with: node dist/worker.main
+CMD ["node", "dist/main"]

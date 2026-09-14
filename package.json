@@ -6,6 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "prepare": "husky",
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "dependency-cruiser": "^18.3.0",
+    "husky": "^9.1.7",
     "turbo": "^2.10.12"
   },
   "dependencies": {

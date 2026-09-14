@@ -1,0 +1,11 @@
+# Pre-push gate. Deliberately `make verify`, NOT `make check`.
+#
+# `check` additionally runs `build`, which rewrites apps/api/dist underneath a
+# running `nest start --watch` and takes the dev server down with it — a hook
+# that kills your dev server every time you push is a hook people disable. It is
+# also the slowest step, and `typecheck` already covers type errors.
+#
+# CI runs the full `make check` including `build` on every PR and push to main,
+# so nothing is actually ungated — the build break is caught on a GitHub-hosted
+# runner instead of on your machine.
+make verify

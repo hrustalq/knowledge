@@ -14,7 +14,8 @@
     "./ai": "./src/ai/index.ts",
     "./content": "./src/content/index.ts",
     "./workflows": "./src/workflows/index.ts",
-    "./connectors": "./src/connectors/index.ts"
+    "./connectors": "./src/connectors/index.ts",
+    "./observability": "./src/observability/index.ts"
   },
   "scripts": {
     "lint": "echo contracts: no lint",

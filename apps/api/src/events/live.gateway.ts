@@ -25,6 +25,7 @@ import { EventsSubscriber } from './events.subscriber.js';
 import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts';
 import { localeFromRequest } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
+import { bindTrace, startTrace, withTrace } from '@knowledge/observability';
 
 interface SocketState {
   principal: Principal;
@@ -125,7 +126,18 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     // speak plain JSON.
     // One wrap at the entry point: every t() inside handleMessage — including
     // those in AccessService — then answers in this socket's language.
-    socket.on('message', (raw) => void withLocale(locale, () => this.handleMessage(socket, raw.toString())));
+    // One trace scope per message, for the same reason there is one withLocale
+    // wrap here: an upgrade runs no middleware, so nothing upstream has opened
+    // either scope. A message is the unit of work a request would have been.
+    socket.on('message', (raw) =>
+      void withTrace(
+        startTrace('ws', {
+          route: '/v1/events/ws',
+          userId: this.state.get(socket)?.principal.userId,
+        }),
+        () => withLocale(locale, () => this.handleMessage(socket, raw.toString())),
+      ),
+    );
   }
 
   handleDisconnect(socket: WebSocket): void {
@@ -165,6 +177,7 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
           }
           // Access control: membership check in PG BEFORE the subscription exists.
           await this.access.requireRole(st.principal, msg.workspaceId, 'viewer');
+          bindTrace({ workspaceId: msg.workspaceId });
           const tracking: LiveTrackingConfig = {
             events: Array.isArray(msg.tracking?.events) ? msg.tracking.events.filter((e) => typeof e === 'string').slice(0, 64) : undefined,
             documents: Array.isArray(msg.tracking?.documents) ? msg.tracking.documents.filter((d) => typeof d === 'string').slice(0, 256) : undefined,

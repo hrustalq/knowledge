@@ -10,6 +10,9 @@
     "build:server": "vite build --ssr src/entry-server.ts --outDir dist/server",
     "preview": "cross-env NODE_ENV=production node server",
     "lint": "echo web: lint via typecheck",
+    "depcruise": "depcruise src --output-type err-long --ignore-known",
+    "depcruise:baseline": "depcruise src --baseline --baseline-mode shrink-only",
+    "depcruise:graph": "depcruise src --output-type archi | dot -T svg > dependency-graph.svg",
     "typecheck": "vue-tsc -b",
     "generate:api": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts",
     "generate:docs": "node scripts/generate-docs-reference.mjs"
@@ -17,6 +20,7 @@
   "dependencies": {
     "@floating-ui/vue": "^1.1.11",
     "@knowledge/contracts": "workspace:*",
+    "@knowledge/observability": "workspace:*",
     "@knowledge/workflow": "workspace:*",
     "@lucide/vue": "^1.38.0",
     "@tanstack/vue-query": "^5.102.8",

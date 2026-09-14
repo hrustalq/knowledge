@@ -14,6 +14,8 @@ interface SsrRequestContext {
   glossary: string | null
   treeOpen: string | null
   locale: Locale | null
+  /** The server's trace id for this page request, so API calls made during the render join it. */
+  traceId: string | null
 }
 
 // Per-request auth context for lib/api (async-context scoped, so concurrent
@@ -34,6 +36,7 @@ export async function render(url: string, ctx: Partial<SsrRequestContext> = {}) 
     glossary: ctx.glossary ?? null,
     treeOpen: ctx.treeOpen ?? null,
     locale: ctx.locale ?? null,
+    traceId: ctx.traceId ?? null,
   }
   return ssrCtx.run(request, async () => {
     const { app, router, pinia } = createApp()

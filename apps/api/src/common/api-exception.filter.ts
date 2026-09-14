@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { type ApiErrorCode, type ApiErrorPayload, API_ERROR_CODES, errorCodeForStatus } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
+import { currentTrace } from '@knowledge/observability';
 
 /**
  * Global HTTP exception filter: normalizes EVERY error — HttpException,
@@ -23,8 +24,13 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const res = ctx.getResponse<Response>();
     const req = ctx.getRequest<Request>();
 
+    // The trace scope opened at request entry owns the id. This filter used to
+    // mint one here, which meant a successful request had no id at all and an
+    // error's id correlated to nothing that came before it. The header and
+    // randomUUID remain as fallbacks for a throw raised outside a scope.
     const headerId = req.headers['x-request-id'];
-    const requestId = (Array.isArray(headerId) ? headerId[0] : headerId) ?? randomUUID();
+    const requestId =
+      currentTrace()?.traceId ?? (Array.isArray(headerId) ? headerId[0] : headerId) ?? randomUUID();
 
     let status: number = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = t('error.internal');
@@ -62,14 +68,27 @@ export class ApiExceptionFilter implements ExceptionFilter {
       }
     } else {
       // Unexpected throw: never leak internals to the client, always log them.
-      this.logger.error(
-        `Unhandled exception on ${req.method} ${req.originalUrl ?? req.url} [${requestId}]`,
-        exception instanceof Error ? exception.stack : String(exception),
-      );
+      this.logger.error({
+        msg: 'Unhandled exception',
+        code: 'UNHANDLED_EXCEPTION',
+        method: req.method,
+        route: req.originalUrl ?? req.url,
+        err: exception instanceof Error ? exception : { message: String(exception) },
+      });
     }
 
     if (status >= 500 && exception instanceof HttpException) {
-      this.logger.error(`HTTP ${status} on ${req.method} ${req.originalUrl ?? req.url} [${requestId}]: ${message}`);
+      // Carries `err` now. This branch logged without a stack while the one
+      // above logged with it, which made an InternalServerErrorException thrown
+      // from a service the hardest kind of 500 to debug.
+      this.logger.error({
+        msg: message,
+        code: code ?? errorCodeForStatus(status),
+        status,
+        method: req.method,
+        route: req.originalUrl ?? req.url,
+        err: exception,
+      });
     }
 
     const payload: ApiErrorPayload = {

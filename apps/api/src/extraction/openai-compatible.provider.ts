@@ -1,15 +1,23 @@
 import { Logger } from '@nestjs/common';
 import type {
+  ExtractionBilling,
   ExtractionChunk,
   ExtractionTuning,
   InferredFact,
   RelationExtractor,
 } from './relation-extractor.provider.js';
+import { AiUsageService, estimateTokens, type AiUsageTokens } from '../ai/ai-usage.service.js';
 
 /**
  * Relation extraction via any OpenAI-compatible /chat/completions endpoint
  * (OpenAI, Ollama, LM Studio, vLLM…). One request per chunk, JSON output.
  * TAGGED_WITH is deliberately excluded — tags stay deterministic (frontmatter).
+ *
+ * Calls are made here rather than through AssistantClient, and billed here for
+ * the same reason the OCR parser is: that client appends the locale directive
+ * to every prompt (docs/features/18), and this prompt must stay unlocalized so
+ * its graph keys are identical whatever language the page is in. It also pins
+ * temperature 0, which AssistantClient cannot express.
  */
 const INFERABLE_TYPES = [
   'DESCRIBES',
@@ -35,26 +43,35 @@ interface RawRelation {
   confidence?: unknown;
 }
 
+/** OpenAI-shaped usage block; several compatible servers omit it entirely. */
+interface RawUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+}
+
 export class OpenAICompatibleExtractor implements RelationExtractor {
   readonly enabled = true;
   private readonly logger = new Logger(OpenAICompatibleExtractor.name);
 
-  // Only connection identity lives on the instance. Tuning arrives per call
-  // (docs/features/12) because ExtractorFactory caches these by endpoint and
-  // credential, so a value baked in here would outlive the workspace it came
-  // from — and the env-configured instance is shared by every workspace.
+  // Only connection identity lives on the instance. Tuning and the billing
+  // identity arrive per call (docs/features/12) because ExtractorFactory caches
+  // these by endpoint and credential, so a value baked in here would outlive
+  // the workspace it came from. AiUsageService is the exception: it is a
+  // process-wide singleton with no per-workspace state.
   constructor(
     private readonly baseUrl: string,
     private readonly model: string,
     private readonly apiKey: string,
+    private readonly usage: AiUsageService,
   ) {}
 
   async extract(
-    input: { documentTitle: string; chunks: ExtractionChunk[] } & ExtractionTuning,
+    input: { documentTitle: string; chunks: ExtractionChunk[] } & ExtractionTuning & ExtractionBilling,
   ): Promise<InferredFact[]> {
     const facts = new Map<string, InferredFact>();
     for (const chunk of input.chunks.slice(0, input.maxChunks)) {
-      for (const fact of await this.extractChunk(input.documentTitle, chunk, input.minConfidence)) {
+      for (const fact of await this.extractChunk(input.documentTitle, chunk, input.minConfidence, input)) {
         const id = `${fact.type} ${fact.target.key}`;
         const existing = facts.get(id);
         if (!existing || fact.confidence > existing.confidence) facts.set(id, fact);
@@ -63,35 +80,78 @@ export class OpenAICompatibleExtractor implements RelationExtractor {
     return [...facts.values()];
   }
 
+  /**
+   * Records one upstream call. Fire-and-forget, exactly like
+   * AssistantClient.bill and ActivityService.record: token accounting is
+   * observability, and a failed insert must never fail an indexing job.
+   */
+  private bill(
+    billing: ExtractionBilling,
+    tokens: AiUsageTokens,
+    startedAt: number,
+    outcome: { ok: boolean; error?: string },
+  ): void {
+    void this.usage
+      .record({
+        config: billing.config,
+        userId: billing.userId,
+        operation: 'extraction',
+        tokens,
+        durationMs: Date.now() - startedAt,
+        ok: outcome.ok,
+        error: outcome.error,
+      })
+      .catch((e: unknown) => this.logger.warn(`Usage not recorded: ${(e as Error).message}`));
+  }
+
   private async extractChunk(
     title: string,
     chunk: ExtractionChunk,
     minConfidence: number,
+    billing: ExtractionBilling,
   ): Promise<InferredFact[]> {
-    const res = await fetch(`${this.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: this.model,
-        temperature: 0,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `Document: ${title}\nSection: ${chunk.headingPath.join(' > ') || '(root)'}\n\n${chunk.text}`,
-          },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`Extraction request failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    const prompt = `Document: ${title}\nSection: ${chunk.headingPath.join(' > ') || '(root)'}\n\n${chunk.text}`;
+    const startedAt = Date.now();
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model: this.model,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: prompt },
+          ],
+        }),
+      });
+    } catch (err) {
+      // Unreachable endpoint: nothing was spent upstream, but the attempt is
+      // still recorded so a misconfigured provider is visible in the log
+      // rather than only in worker output nobody reads.
+      this.bill(billing, zeroTokens(), startedAt, {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
     }
-    const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    if (!res.ok) {
+      const body = (await res.text()).slice(0, 200);
+      this.bill(billing, zeroTokens(), startedAt, { ok: false, error: `HTTP ${res.status}: ${body}` });
+      throw new Error(`Extraction request failed (${res.status}): ${body}`);
+    }
+    const json = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: RawUsage;
+    };
     const content = json.choices?.[0]?.message?.content ?? '';
+    this.bill(billing, tokensFrom(json.usage, prompt, content), startedAt, { ok: true });
+
     let parsed: { relations?: RawRelation[] };
     try {
       parsed = JSON.parse(content) as { relations?: RawRelation[] };
@@ -135,4 +195,29 @@ export class OpenAICompatibleExtractor implements RelationExtractor {
     }
     return out;
   }
+}
+
+function zeroTokens(): AiUsageTokens {
+  return { promptTokens: 0, completionTokens: 0, totalTokens: 0, estimated: true };
+}
+
+/**
+ * Provider-reported usage when there is one, a local estimate otherwise — the
+ * same fallback AssistantClient makes, flagged `estimated` so nobody reads it
+ * as billing truth.
+ */
+function tokensFrom(usage: RawUsage | undefined, prompt: string, completion: string): AiUsageTokens {
+  if (usage) {
+    const promptTokens = usage.prompt_tokens ?? 0;
+    const completionTokens = usage.completion_tokens ?? 0;
+    return {
+      promptTokens,
+      completionTokens,
+      totalTokens: usage.total_tokens ?? promptTokens + completionTokens,
+      estimated: false,
+    };
+  }
+  const promptTokens = estimateTokens(`${SYSTEM_PROMPT}\n${prompt}`);
+  const completionTokens = estimateTokens(completion);
+  return { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens, estimated: true };
 }

@@ -1,10 +1,23 @@
 import fs from 'node:fs/promises'
 import express from 'express'
+import { configureBacktest, createRootLogger, envLogLevel } from '@knowledge/observability'
+import { traceMiddleware } from '@knowledge/observability/express'
 
 // Constants
 const isProduction = process.env.NODE_ENV === 'production'
 const port = process.env.PORT || 5173
 const base = process.env.BASE || '/'
+
+// The same logger apps/api runs, so an SSR render and the API request it makes
+// land in one stream under one trace id. This process previously wrote nothing
+// but bare console.log, which made an SSR failure unattributable to the page
+// that caused it.
+const logger = createRootLogger({ service: 'web-ssr', level: envLogLevel() })
+const OFF = new Set(['false', '0', 'no', 'off'])
+configureBacktest({
+  enabled: !OFF.has(String(process.env.OPS_JSONL_ENABLED ?? 'true').toLowerCase()),
+  dir: process.env.LOG_DIR ?? 'logs',
+})
 
 // In dev, Vite injects CSS through the JS module graph, so the SSR'd HTML would
 // paint unstyled until entry-client loads (FOUC + layout shift). Link the global
@@ -19,6 +32,10 @@ const templateHtml = isProduction
 
 // Create http server
 const app = express()
+
+// Registered first, so Vite's middlewares and the SSR handler both run inside
+// the scope and every response carries x-request-id — static asset 404s included.
+app.use(traceMiddleware)
 
 // Add Vite or respective production middlewares
 /** @type {import('vite').ViteDevServer | undefined} */
@@ -92,6 +109,11 @@ app.use('*all', async (req, res) => {
     // rather than flashing English and swapping after hydration.
     const locale = resolveLocale(readCookie(req.headers.cookie, 'kn_lang'), req.headers['accept-language'])
 
+    // Set by traceMiddleware on the way in. Handing it to the render is what
+    // puts the browser's request, this render, and every API call the render
+    // makes onto one trace id.
+    const headerTraceId = res.getHeader('x-request-id')
+
     const rendered = await render(url, {
       token: readCookie(req.headers.cookie, 'kn_token'),
       projectId: readCookie(req.headers.cookie, 'kn_proj'),
@@ -103,6 +125,7 @@ app.use('*all', async (req, res) => {
       treeOpen: readCookie(req.headers.cookie, 'kn_tree'),
       workspaceId: readCookie(req.headers.cookie, 'kn_ws'),
       locale,
+      traceId: typeof headerTraceId === 'string' ? headerTraceId : null,
     })
 
     const html = template
@@ -114,12 +137,15 @@ app.use('*all', async (req, res) => {
     res.status(200).set({ 'Content-Type': 'text/html' }).send(html)
   } catch (e) {
     vite?.ssrFixStacktrace(e)
-    console.log(e.stack)
-    res.status(500).end(e.stack)
+    // The stack goes to the log, never to the client. This used to send the
+    // server's stack trace as the response body, which hands anyone who can
+    // trigger a render error the internal paths and dependency layout.
+    logger.error({ msg: 'SSR render failed', route: req.originalUrl, err: e })
+    res.status(500).set({ 'Content-Type': 'text/plain' }).end('Internal Server Error')
   }
 })
 
 // Start http server
 app.listen(port, () => {
-  console.log(`Server started at http://localhost:${port}`)
+  logger.info({ port }, `Server started at http://localhost:${port}`)
 })

@@ -15,6 +15,7 @@ import { extractFrontmatterFacts } from './relations.js';
 import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
+import { bindTrace, startTrace, withTrace } from '@knowledge/observability';
 
 interface IngestionJobData {
   ingestionJobId: string;
@@ -42,7 +43,24 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     await this.graph.ensureSchema();
   }
 
+  /**
+   * Opens the job's correlation scope, then runs the pipeline.
+   *
+   * The scope has to be opened here because AsyncLocalStorage does not cross the
+   * BullMQ boundary — the enqueue happened in another process, under another
+   * request, possibly minutes ago. The parent link is recovered from
+   * ingestion_jobs.payload, which is already a free-form Json column (it carries
+   * `reason` and `triggeredBy`), so joining a job back to the request that
+   * queued it cost no migration and no change to the queue's payload type.
+   */
   async process(job: Job<IngestionJobData>): Promise<void> {
+    return withTrace(
+      startTrace('job', { route: INGESTION_QUEUE, jobId: job.data.ingestionJobId }),
+      () => this.runJob(job),
+    );
+  }
+
+  private async runJob(job: Job<IngestionJobData>): Promise<void> {
     const { ingestionJobId } = job.data;
     const jobRow = await this.prisma.ingestionJob.findUnique({ where: { id: ingestionJobId } });
     if (!jobRow) {
@@ -50,6 +68,10 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       return;
     }
     if (jobRow.status === 'completed') return; // idempotent retry guard
+
+    // Known only after the row is read, which is what bindTrace exists for.
+    const jobPayload = jobRow.payload as { reason?: string; traceId?: string } | null;
+    bindTrace({ workspaceId: jobRow.workspaceId, parentTraceId: jobPayload?.traceId });
 
     const revision = await this.prisma.documentRevision.findUnique({
       where: { id: jobRow.revisionId },
@@ -157,12 +179,18 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       try {
         // Resolved per job: the workspace may route extraction at its own
         // provider profile (docs/features/12), falling back to EXTRACTOR_*.
-        const { extractor, tuning } = await this.extractors.forWorkspace(revision.document.workspaceId);
+        const { extractor, tuning, config } = await this.extractors.forWorkspace(
+          revision.document.workspaceId,
+        );
         const inferred = extractor.enabled
           ? await extractor.extract({
               documentTitle: revision.document.title,
               minConfidence: tuning.minConfidence,
               maxChunks: tuning.maxChunks,
+              // Billed to whoever wrote the revision — the worker has no
+              // principal, and ai_usage.user_id must be a real uuid.
+              config,
+              userId: revision.authorId,
               chunks: drafts.map((c) => ({
                 chunkId: `${revision.id}:${c.index}`,
                 text: c.text,
@@ -211,7 +239,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         revisionId: revision.id,
         title: revision.document.title,
       });
-      const reason = (jobRow.payload as { reason?: string } | null)?.reason;
+      const reason = jobPayload?.reason;
       if (reason !== 'dependent-reindex') {
         await this.reindexDependents(revision.document.workspaceId, revision.documentId).catch((e) =>
           this.logger.warn(`Dependent reindex failed (non-fatal): ${(e as Error).message}`),

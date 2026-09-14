@@ -98,8 +98,21 @@ lint: ## Lint all workspaces
 typecheck: ## Typecheck all workspaces
 	pnpm typecheck
 
+.PHONY: deps
+deps: ## Validate the dependency graph (process boundaries, layering, cycles)
+	pnpm run depcruise
+
+.PHONY: deps-baseline
+deps-baseline: ## Re-record apps/web's known violations (shrink-only: never grows)
+	$(WEB) run depcruise:baseline
+
+.PHONY: deps-graph
+deps-graph: ## Render dependency graphs to apps/*/dependency-graph.svg (needs graphviz)
+	$(API) run depcruise:graph
+	$(WEB) run depcruise:graph
+
 .PHONY: check
-check: lint typecheck build ## Lint + typecheck + build (CI gate)
+check: lint typecheck deps build ## Lint + typecheck + dependency rules + build (CI gate)
 
 .PHONY: clean
 clean: ## Remove build artifacts and turbo cache

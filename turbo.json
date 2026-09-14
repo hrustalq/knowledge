@@ -11,6 +11,7 @@
       "dependsOn": ["^build"]
     },
     "lint": {},
+    "depcruise": {},
     "dev": {
       "cache": false,
       "persistent": true

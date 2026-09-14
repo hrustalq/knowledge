@@ -9,7 +9,7 @@ import {
   type ApiErrorCode,
   type ApiErrorPayload,
 } from '@knowledge/contracts'
-import { getLocale, getToken } from '@/lib/api'
+import { getLocale, getToken, requestTraceId } from '@/lib/api'
 
 export class ApiRequestError extends Error {
   readonly payload: ApiErrorPayload
@@ -94,6 +94,9 @@ http.interceptors.request.use((config) => {
   if (token) config.headers.set('Authorization', `Bearer ${token}`)
   // Second HTTP stack, same contract: the API replies in the UI's language.
   config.headers.set('Accept-Language', getLocale())
+  // Correlates this call to the API's logs — and, under SSR, to the page render
+  // and the browser request that triggered it.
+  config.headers.set('x-request-id', requestTraceId())
   return config
 })
 

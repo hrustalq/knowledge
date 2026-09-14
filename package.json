@@ -10,10 +10,13 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "depcruise": "turbo depcruise && pnpm run depcruise:packages",
+    "depcruise:packages": "depcruise packages --output-type err-long",
     "db:generate": "turbo db:generate",
     "db:migrate": "turbo db:migrate"
   },
   "devDependencies": {
+    "dependency-cruiser": "^18.3.0",
     "turbo": "^2.10.12"
   },
   "dependencies": {

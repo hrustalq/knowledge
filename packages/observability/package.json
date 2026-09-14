@@ -1,0 +1,25 @@
+{
+  "name": "@knowledge/observability",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./trace": "./src/trace.ts",
+    "./logger": "./src/logger.ts",
+    "./backtest": "./src/backtest.ts",
+    "./express": "./src/express.ts"
+  },
+  "scripts": {
+    "lint": "echo observability: no lint",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@knowledge/contracts": "workspace:*",
+    "pino": "^10.0.0"
+  },
+  "devDependencies": {
+    "@knowledge/tsconfig": "workspace:*",
+    "typescript": "^5.7.0"
+  }
+}

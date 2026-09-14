@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
+import { AiUsageService } from '../ai/ai-usage.service.js';
+import type { ResolvedAiConfig } from '../ai/ai-config.service.js';
 import { NoopExtractor } from './noop.provider.js';
 import { OpenAICompatibleExtractor } from './openai-compatible.provider.js';
 import type { ExtractionTuning, RelationExtractor } from './relation-extractor.provider.js';
@@ -28,6 +30,7 @@ export class ExtractorFactory {
   constructor(
     private readonly config: ConfigService<Env, true>,
     private readonly agents: AgentRegistryService,
+    private readonly usage: AiUsageService,
   ) {
     this.envExtractor =
       config.get('EXTRACTOR_PROVIDER', { infer: true }) === 'openai-compatible'
@@ -35,13 +38,14 @@ export class ExtractorFactory {
             config.get('EXTRACTOR_BASE_URL', { infer: true }),
             config.get('EXTRACTOR_MODEL', { infer: true }),
             config.get('EXTRACTOR_API_KEY', { infer: true }),
+            usage,
           )
         : new NoopExtractor();
   }
 
   async forWorkspace(
     workspaceId: string,
-  ): Promise<{ extractor: RelationExtractor; tuning: ExtractionTuning }> {
+  ): Promise<{ extractor: RelationExtractor; tuning: ExtractionTuning; config: ResolvedAiConfig }> {
     // The `extractor` agent (docs/features/20) owns this call's routing, so an
     // admin can pin extraction at one profile or switch it off without touching
     // the workspace-wide 'extraction' route. Its instructions are deliberately
@@ -63,24 +67,31 @@ export class ExtractorFactory {
 
     // Switched off explicitly — do no extraction rather than quietly falling
     // back to the env extractor, which would ignore the admin's decision.
-    if (!agent.enabled) return { extractor: this.noopExtractor, tuning };
+    if (!agent.enabled) return { extractor: this.noopExtractor, tuning, config: resolved };
 
     // No profile routed at extraction: keep the env-configured extractor,
     // which is a different provider setting from the assistant's and stays
     // independent of it.
-    if (!resolved.providerId || !resolved.enabled) return { extractor: this.envExtractor, tuning };
+    if (!resolved.providerId || !resolved.enabled) {
+      return { extractor: this.envExtractor, tuning, config: resolved };
+    }
 
     const key = `${resolved.providerId}|${resolved.baseUrl}|${resolved.model}|${resolved.apiKey}`;
     const hit = this.cache.get(key);
-    if (hit) return { extractor: hit, tuning };
+    if (hit) return { extractor: hit, tuning, config: resolved };
 
-    const extractor = new OpenAICompatibleExtractor(resolved.baseUrl, resolved.model, resolved.apiKey);
+    const extractor = new OpenAICompatibleExtractor(
+      resolved.baseUrl,
+      resolved.model,
+      resolved.apiKey,
+      this.usage,
+    );
     // Bounded: a workspace churning provider settings must not grow this map.
     if (this.cache.size >= 32) {
       const oldest = this.cache.keys().next().value;
       if (oldest !== undefined) this.cache.delete(oldest);
     }
     this.cache.set(key, extractor);
-    return { extractor, tuning };
+    return { extractor, tuning, config: resolved };
   }
 }

@@ -6,11 +6,28 @@ import { AppModule } from './app.module.js';
 import { ApiExceptionFilter } from './common/api-exception.filter.js';
 import { validationExceptionFactory } from './common/validation.js';
 import { createOpenApiDocument } from './config/swagger.js';
+import { createRootLogger, envLogLevel } from '@knowledge/observability';
+import { traceMiddleware } from '@knowledge/observability/express';
+import { PinoNestLogger } from './observability/nest-logger.js';
 
 async function bootstrap() {
+  // Built before Nest so boot-time records are structured too. LOG_LEVEL is read
+  // from process.env rather than ConfigService: DI does not exist yet. env.ts
+  // still declares it, so a bad value fails boot rather than silently defaulting.
+  const logger = createRootLogger({ service: 'api', level: envLogLevel() });
+
   // rawBody: connector webhooks (docs/features/19) verify an HMAC over the
   // exact bytes sent; re-serialising the parsed body would not reproduce them.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  // bufferLogs: hold Nest's own boot output until useLogger below, or it would
+  // bypass pino and print unstructured.
+  const app = await NestFactory.create(AppModule, { rawBody: true, bufferLogs: true });
+
+  // Routes all 54 existing `new Logger(X.name)` declarations through pino, each
+  // record picking up the active trace context from the logger's mixin.
+  app.useLogger(new PinoNestLogger(logger));
+
+  // Ahead of the router, so an unmatched path is traced and counted too.
+  app.use(traceMiddleware);
   // Live tracked-entity updates: plain `ws` adapter for the /v1/events/ws gateway.
   app.useWebSocketAdapter(new WsAdapter(app));
   // exceptionFactory translates class-validator failures while keeping the
@@ -29,6 +46,9 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   await app.listen(process.env.PORT ?? 3000);
-  console.log(`API listening on :${process.env.PORT ?? 3000} (Swagger at /docs)`);
+  logger.info(
+    { port: Number(process.env.PORT ?? 3000), docs: '/docs' },
+    `API listening on :${process.env.PORT ?? 3000} (Swagger at /docs)`,
+  );
 }
 await bootstrap();

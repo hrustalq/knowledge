@@ -2,6 +2,7 @@ import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/com
 import { Reflector } from '@nestjs/core';
 import { PUBLIC_META } from './access.decorator.js';
 import { TokenAuthService } from './token-auth.service.js';
+import { bindTrace } from '@knowledge/observability';
 
 /**
  * Phase 5 authentication (plan.md §11). AUTH_MODE=none keeps the Phase 0-4
@@ -32,6 +33,9 @@ export class AuthGuard implements CanActivate {
     const queryToken = typeof req.query?.token === 'string' && req.query.token ? req.query.token : undefined;
 
     req.principal = await this.tokenAuth.resolve(bearer ?? queryToken);
+    // Every record emitted downstream carries the caller, without a single
+    // service having to accept a userId argument purely to log it.
+    bindTrace({ userId: req.principal.userId });
     return true;
   }
 }

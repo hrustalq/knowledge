@@ -10,6 +10,7 @@ import { ACCESS_META, PLATFORM_ADMIN_META, PUBLIC_META, type AccessSpec } from '
 import { AccessService } from './access.service.js';
 import type { Principal } from './principal.js';
 import { t } from '../i18n/t.js';
+import { bindTrace } from '@knowledge/observability';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -42,9 +43,20 @@ export class AclGuard implements CanActivate {
 
     const spec = this.reflector.get<AccessSpec | undefined>(ACCESS_META, ctx.getHandler());
     if (!spec) return true;
-    if (principal.mode === 'dev') return true; // AUTH_MODE=none
+    if (principal.mode === 'dev') {
+      // AUTH_MODE=none returns before the workspace is ever resolved, so for
+      // logging take whatever the request declared. Deliberately no DB lookup:
+      // adding a query to the hot path to populate a log field is not a trade
+      // worth making, and dev is where most logs are read.
+      const declared = req.body?.workspaceId ?? req.query?.workspaceId;
+      if (typeof declared === 'string') bindTrace({ workspaceId: declared });
+      return true; // AUTH_MODE=none
+    }
 
     const workspaceId = await this.resolveWorkspace(spec, req);
+    // From here on every record carries the tenant — including records from
+    // services that never receive a workspaceId argument at all.
+    bindTrace({ workspaceId });
     await this.access.requireRole(principal, workspaceId, spec.role, spec.operator);
     return true;
   }

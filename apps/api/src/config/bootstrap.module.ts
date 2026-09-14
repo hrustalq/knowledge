@@ -4,6 +4,7 @@ import { I18nModule } from 'nestjs-i18n';
 import { validateEnv } from './env.js';
 import { I18nSetupModule } from '../i18n/i18n-setup.module.js';
 import { i18nAsyncOptions } from '../i18n/i18n.config.js';
+import { ObservabilityModule } from '../observability/observability.module.js';
 
 /**
  * The prelude every entrypoint needs: validated env + i18n.
@@ -29,6 +30,9 @@ import { i18nAsyncOptions } from '../i18n/i18n.config.js';
     }),
     I18nModule.forRootAsync(i18nAsyncOptions),
     I18nSetupModule,
+    // Applies LOG_DIR / OPS_JSONL_ENABLED to the shared backtest stream. Here
+    // rather than in AppModule so the worker and MCP processes measure too.
+    ObservabilityModule,
   ],
 })
 export class BootstrapModule {}

@@ -16,7 +16,10 @@ make dev                # infra containers + api :3000 (Swagger /docs) + web :51
 make kill               # kill this repo's dev processes (api, web, worker, mcp, turbo); kill-all also stops infra
 make dev-worker         # run only the BullMQ ingestion worker (already included in make dev)
 make dev-mcp            # MCP server on stdio (knowledge_* tools) — for agent clients
-make check              # lint + typecheck + build (CI gate)
+make check              # lint + typecheck + deps + build (CI gate)
+make deps               # dependency-cruiser: process boundaries, layering, cycles, buildless-package rules
+make deps-baseline      # re-record known violations (shrink-only: drops fixed ones, never adds new)
+make deps-graph         # render apps/*/dependency-graph.svg (needs graphviz)
 make smoke              # health-check all six services
 
 make infra-up|down|logs # docker compose: postgres, minio (+bucket init), redis, arcadedb

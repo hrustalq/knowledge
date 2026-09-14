@@ -896,6 +896,50 @@ model AiUsage {
   @@map("ai_usage")
 }
 
+/// Ops events: the failures worth keeping in SQL, beside audit_logs and
+/// activity_log.
+///
+/// Deliberately NOT where the measurement stream goes. Search timings, model
+/// calls and ingestion steps are written to the rotated JSONL under LOG_DIR,
+/// because a full corpus re-index emits tens of thousands of them and nothing
+/// transactional ever reads one. This table holds what somebody will search for
+/// by trace id weeks later, after a report that "it broke on Tuesday".
+///
+/// No FK and no relation fields, matching all three log tables above: a record
+/// outlives the thing it describes, and the evidence of what went wrong in a
+/// workspace must not disappear with the workspace.
+model OpsEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Ties this record to every other one from the same request, job, socket
+  /// message or tool call. Plain String, not @db.Uuid: an inbound
+  /// x-request-id is whatever the caller chose to send.
+  traceId     String   @map("trace_id")
+  /// 'http' | 'job' | 'ws' | 'mcp' | 'cli'
+  source      String
+  /// pino level name — in practice 'warn' | 'error' | 'fatal'.
+  level       String
+  /// OpsCode or ApiErrorCode from contracts. A closed set, so failures can be
+  /// counted and alerted on; a message string can be neither.
+  code        String?
+  message     String
+  /// Nullable because the most interesting failures happen *before* the tenant
+  /// is resolved — a rejected token, a malformed body, a 404.
+  workspaceId String?  @map("workspace_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  route       String?
+  durationMs  Int?     @map("duration_ms")
+  /// The serialized error ({type, message, stack}) plus any site-specific
+  /// fields. Json for the activity_log.metadata reason: the useful context
+  /// differs per call site and must not cost a migration each time.
+  fields      Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([traceId])
+  @@index([code, createdAt])
+  @@map("ops_events")
+}
+
 /// Glossary (docs/features/14): the workspace's shared vocabulary. Terms are
 /// linked into rendered documents deterministically at read time, so nothing
 /// here ever rewrites a page — an entry can be renamed or retired and every

@@ -57,11 +57,34 @@ interface SsrRequestContext {
   glossary: string | null
   treeOpen: string | null
   locale: Locale | null
+  traceId: string | null
 }
 function ssrContext(): SsrRequestContext | undefined {
   return (
     globalThis as { __KN_SSR_CTX__?: { getStore(): SsrRequestContext | undefined } }
   ).__KN_SSR_CTX__?.getStore()
+}
+
+/**
+ * The id to send as `x-request-id` on an outgoing API call.
+ *
+ * During SSR this is the page request's own trace id, so the browser's request,
+ * the SSR render and every API call that render makes all share one id — which
+ * is the whole reason the logger lives in a shared package rather than inside
+ * apps/api. In the browser there is no enclosing request to inherit from, so
+ * each call gets a fresh id; the API echoes it back on the response and carries
+ * it in every error envelope.
+ */
+export function requestTraceId(): string {
+  const inherited = import.meta.env.SSR ? ssrContext()?.traceId : null
+  if (inherited) return inherited
+  try {
+    return crypto.randomUUID()
+  } catch {
+    // randomUUID needs a secure context; an id that is merely unique enough
+    // beats no correlation at all.
+    return `kn-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  }
 }
 
 let clientToken: string | null = null
@@ -328,6 +351,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       // The API answers in this language (docs/features/18) — errors included,
       // and those surface straight into toasts.
       'Accept-Language': getLocale(),
+      'x-request-id': requestTraceId(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },

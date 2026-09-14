@@ -1,3 +1,5 @@
+import type { ResolvedAiConfig } from '../ai/ai-config.service.js';
+
 export interface ExtractionChunk {
   chunkId: string;
   text: string;
@@ -32,9 +34,24 @@ export interface ExtractionTuning {
  * emit types from the graph allowlist and confidence in [0, 1]; extraction
  * failures must throw — the caller treats them as non-fatal for indexing.
  */
+/**
+ * Who an extraction call is billed to (docs/features/12).
+ *
+ * Extraction runs in the worker, which has no request principal, so the owner
+ * is the revision's author — `document_revisions.author_id`, a NOT NULL uuid
+ * already loaded at the call site. Deliberately not a sentinel string like
+ * 'worker': `ai_usage.user_id` is `@db.Uuid`, so a non-uuid fails the insert,
+ * and `record` swallows failures — which is exactly how trigger-started
+ * workflow spend became invisible (docs/features/20 §A).
+ */
+export interface ExtractionBilling {
+  config: ResolvedAiConfig;
+  userId: string;
+}
+
 export interface RelationExtractor {
   readonly enabled: boolean;
   extract(
-    input: { documentTitle: string; chunks: ExtractionChunk[] } & ExtractionTuning,
+    input: { documentTitle: string; chunks: ExtractionChunk[] } & ExtractionTuning & ExtractionBilling,
   ): Promise<InferredFact[]>;
 }

@@ -515,7 +515,12 @@ export type AiUsageOperation =
   /** A background agent run (docs/features/20). */
   | 'agent'
   /** Cleaning up or merging a staged connector item (docs/features/26). */
-  | 'connector';
+  | 'connector'
+  /**
+   * Inferring graph relations from a chunk during ingestion. One row per chunk
+   * call, so a reindex of a large corpus is visible as the spend it is.
+   */
+  | 'extraction';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {

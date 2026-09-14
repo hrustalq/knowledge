@@ -205,7 +205,7 @@ export const envSchema = z.object({
    * verbose enough to be useless in production, and its whole point is
    * diagnosing "the connector pulled nothing and said nothing".
    */
-  CONNECTOR_DEBUG: z.coerce.boolean().default(false),
+  CONNECTOR_DEBUG: boolish(false),
   /**
    * Items processed before the run checkpoints and re-enqueues itself. This is
    * what keeps a large space from dying on CONNECTOR_SYNC_TIMEOUT_MS, and it is
@@ -219,6 +219,28 @@ export const envSchema = z.object({
   LIVE_TRACKED_EVENTS: z.string().default('*'),
   /** Max concurrent workspace subscriptions per socket. */
   LIVE_WS_MAX_SUBSCRIPTIONS: z.coerce.number().int().positive().max(64).default(8),
+
+  /**
+   * Minimum level written to stdout (stderr in the MCP process, whose stdout is
+   * the JSON-RPC transport). Declared here so a typo fails boot, but note the
+   * asymmetry: the entrypoints build their logger *before* DI exists, so they
+   * read process.env.LOG_LEVEL directly. This schema is the validation for that
+   * read, not its source.
+   */
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
+  /** Directory for the backtest JSONL stream — one file per day, gitignored. */
+  LOG_DIR: z.string().default('logs'),
+  /**
+   * Persist error-level records to ops_events. The stdout stream is unaffected
+   * either way; this only controls whether errors are also queryable in SQL.
+   */
+  OPS_SINK_ENABLED: boolish(true),
+  /**
+   * Write the backtest event stream (search / ai / ingest) to LOG_DIR. Separate
+   * from LOG_LEVEL on purpose: these are measurements, not diagnostics, and a
+   * full corpus re-index emits tens of thousands of them.
+   */
+  OPS_JSONL_ENABLED: boolish(true),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

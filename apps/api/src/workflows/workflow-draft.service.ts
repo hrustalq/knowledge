@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
   WORKFLOW_STEP_KINDS,
+  isAuthorableRelationType,
   type DocumentCategory,
   type DraftWorkflowResponse,
   type WorkflowDraftMessage,
@@ -78,7 +80,7 @@ const RESPONSE_CONTRACT =
   'holds the whole design. Exactly one step must have nothing pointing at it — that is where a run starts. ' +
   '"fanOut" is true only on "ai.generate". Omit "produces" on a step that writes no page. ' +
   `"category" must be one of: ${DOCUMENT_CATEGORIES.join(', ')}. ` +
-  '"relationToParent" is one of: IMPLEMENTS, DESCRIBES, DEPENDS_ON, RELATED_TO, SUPERSEDES. ' +
+  `"relationToParent" is one of: ${AUTHORABLE_RELATION_TYPES.join(', ')}. ` +
   `At most ${MAX_STEPS} steps.`;
 
 @Injectable()
@@ -225,8 +227,6 @@ export class WorkflowDraftService {
   }
 }
 
-const RELATIONS = new Set(['IMPLEMENTS', 'DESCRIBES', 'DEPENDS_ON', 'RELATED_TO', 'SUPERSEDES']);
-
 function readProduces(value: unknown): WorkflowStepProduces | null {
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
@@ -235,7 +235,10 @@ function readProduces(value: unknown): WorkflowStepProduces | null {
   const relation = String(record.relationToParent ?? '');
   return {
     category: category as DocumentCategory,
-    relationToParent: RELATIONS.has(relation) ? relation : 'IMPLEMENTS',
+    // A model that names an edge type the graph would refuse falls back rather
+    // than stranding the run: `assertEdgeType` throws at materialize time, which
+    // is hours later and after a person has already approved the draft.
+    relationToParent: isAuthorableRelationType(relation) ? relation : 'IMPLEMENTS',
     // Feature 08's nesting: a produced page belongs under the page it came
     // from, which is what makes the chain legible in the tree afterwards.
     nestUnderParent: true,

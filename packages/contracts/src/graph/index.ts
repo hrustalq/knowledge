@@ -9,6 +9,55 @@ import type { EntityRef } from '@knowledge/contracts/documents';
  */
 export type FactExtractor = 'explicit' | 'frontmatter' | 'inferred' | 'curated';
 
+/**
+ * Relation edge types allowed in the graph (plan.md §6).
+ *
+ * This lives here rather than beside the graph service because seven consumers
+ * have to agree on it and, until this moved, did not: the SQL allowlist carried
+ * eight types, the frontmatter parser and the DTO seven, and the workflow canvas
+ * five — so a chain could name an edge type the graph would refuse, and the
+ * architect silently rewrote anything it did not recognise to IMPLEMENTS.
+ *
+ * Edge type names are interpolated into SQL by `GraphService`, so this list is a
+ * security boundary: `assertEdgeType` must keep importing it rather than
+ * carrying a copy. Shared here, forked nowhere.
+ */
+export const RELATION_EDGE_TYPES = [
+  'DESCRIBES',
+  'DEPENDS_ON',
+  'IMPLEMENTS',
+  'RELATED_TO',
+  'OWNED_BY',
+  'SUPERSEDES',
+  'CONTRADICTS',
+  'TAGGED_WITH',
+] as const;
+export type RelationEdgeType = (typeof RELATION_EDGE_TYPES)[number];
+
+/**
+ * The types a person or a model may write by hand — in frontmatter `relations:`,
+ * through the relations API, or as a workflow's `relationToParent`.
+ *
+ * TAGGED_WITH is deliberately absent: a tag edge is *synthesised* from the
+ * `tags:` key by the deterministic extractor, so accepting it here would give
+ * tags two spellings that behave differently. `normalizeRelation` already
+ * rejects it; this constant is why.
+ */
+export const AUTHORABLE_RELATION_TYPES = [
+  'DESCRIBES',
+  'DEPENDS_ON',
+  'IMPLEMENTS',
+  'RELATED_TO',
+  'OWNED_BY',
+  'SUPERSEDES',
+  'CONTRADICTS',
+] as const;
+export type AuthorableRelationType = (typeof AUTHORABLE_RELATION_TYPES)[number];
+
+export function isAuthorableRelationType(value: string): value is AuthorableRelationType {
+  return (AUTHORABLE_RELATION_TYPES as readonly string[]).includes(value);
+}
+
 
 export interface EntitySummary {
   key: string;

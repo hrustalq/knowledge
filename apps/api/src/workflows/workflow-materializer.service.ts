@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { WorkflowRun, WorkflowRunNode } from '@prisma/client';
 import type { RelationInput, WorkflowNodeDraft, WorkflowStep } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { writeFrontmatter } from '../common/frontmatter.js';
 import { DocumentsService } from '../documents/documents.service.js';
 
 /**
@@ -117,12 +118,10 @@ export class WorkflowMaterializerService {
   private withFrontmatter(draft: WorkflowNodeDraft): string {
     const fm = draft.frontmatter;
     if (!fm || Object.keys(fm).length === 0) return draft.markdown;
-    if (draft.markdown.startsWith('---')) return draft.markdown;
-
-    const lines = Object.entries(fm).map(([key, value]) => {
-      if (Array.isArray(value)) return `${key}:\n${value.map((v) => `  - ${String(v)}`).join('\n')}`;
-      return `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`;
-    });
-    return `---\n${lines.join('\n')}\n---\n\n${draft.markdown}`;
+    // This used to hand-roll YAML and, worse, `return draft.markdown` whenever
+    // the body already began with `---` — so a draft that carried its own
+    // frontmatter had everything the step produced silently dropped. Merging is
+    // the fix, and it belongs in one helper rather than here.
+    return writeFrontmatter(draft.markdown, fm);
   }
 }

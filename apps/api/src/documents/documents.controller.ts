@@ -19,6 +19,7 @@ import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.j
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
+import { DocumentRelationsService } from './document-relations.service.js';
 import { HistoryService } from './history.service.js';
 import { DocumentThreadsService } from './document-threads.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
@@ -31,6 +32,7 @@ import {
   CreateRevisionDto,
   CreateUploadDto,
   CurateRelationDto,
+  ProposeRelationsDto,
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
 import { CreateCommentDto, CreateThreadDto, ResolveThreadDto } from './dto/merge-requests.dto.js';
@@ -48,6 +50,7 @@ function csv(value?: string, single?: string): string[] {
 export class DocumentsController {
   constructor(
     private readonly documents: DocumentsService,
+    private readonly relations: DocumentRelationsService,
     private readonly connectorLinks: ConnectorLinksService,
     private readonly connectorsService: ConnectorsService,
     private readonly connectorProducer: ConnectorProducer,
@@ -256,6 +259,20 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Curate a relation: user-confirmed, confidence 1, protected from re-extraction (plan.md §5)' })
   curateRelation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CurateRelationDto) {
     return this.documents.curateRelation(id, dto.relation);
+  }
+
+  @Post(':id/relations/propose')
+  @Access('editor', 'document')
+  @ApiOperation({
+    summary:
+      'Propose a change to the page’s frontmatter relations as a merge request (never edits the live page)',
+  })
+  proposeRelations(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ProposeRelationsDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.relations.propose(id, dto, principal);
   }
 
   @Delete(':id/relations')

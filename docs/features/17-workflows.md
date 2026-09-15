@@ -183,6 +183,23 @@ MCP gained `knowledge_list_workflows`, `knowledge_start_workflow` and
 and stdio has no principal to attribute that to. An agent can start a chain and
 watch it; a person still decides what gets published.
 
+## Frontmatter and relations
+
+A draft carries `frontmatter` and `relations` as well as prose, and the
+materializer writes them into the page's own frontmatter — which is what makes a
+generated page's relations *deterministic* facts (plan.md §5) rather than
+something only the workflow knows.
+
+Both fields were declared, validated and written from the start, and for a long
+while no executor produced either: `ai.draft` told the model "no front matter"
+and returned title, body and summary. That is the same declared-and-ignored
+defect feature 20 was written against, and docs/features/28 closes it —
+`ai.draft` now returns `relations` and `tags`, unknown edge types are dropped
+rather than coerced, the materializer merges into an existing block instead of
+giving up on it, and the review panel renders both so nobody approves a graph
+fact sight-unseen. `produces.relationToParent` is validated against the shared
+edge-type vocabulary on the canvas, where it can still be fixed.
+
 ## Limits
 
 Three-way content merges are not attempted anywhere here — a run writes new

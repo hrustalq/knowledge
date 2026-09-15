@@ -12,20 +12,16 @@
  *   tags: [security, identity]
  */
 
+import { normalizeRelation as normalizeRelationInput } from '../common/relations.js';
+
 export interface ExtractedFact {
   type: string;
   target: { key: string; type: string; name: string };
 }
 
-const RELATION_TYPES = new Set([
-  'DESCRIBES',
-  'DEPENDS_ON',
-  'IMPLEMENTS',
-  'RELATED_TO',
-  'OWNED_BY',
-  'SUPERSEDES',
-  'CONTRADICTS',
-]);
+// TAGGED_WITH is absent on purpose: a tag edge is synthesised from the `tags:`
+// key below, so accepting it here would give tags two spellings. That rule now
+// lives with the vocabulary itself, in @knowledge/contracts.
 
 export function extractFrontmatterFacts(frontmatter: Record<string, unknown>): ExtractedFact[] {
   const facts: ExtractedFact[] = [];
@@ -57,26 +53,11 @@ export function extractFrontmatterFacts(frontmatter: Record<string, unknown>): E
   });
 }
 
+/**
+ * Delegates to the shared normalizer so the parse direction and the write
+ * direction cannot disagree about what a relation is — the same reasoning that
+ * moved the edge-type vocabulary into @knowledge/contracts.
+ */
 function normalizeRelation(rel: unknown): ExtractedFact | null {
-  if (typeof rel !== 'object' || rel === null) return null;
-  const { type, target } = rel as { type?: unknown; target?: unknown };
-  if (typeof type !== 'string' || !RELATION_TYPES.has(type)) return null;
-
-  if (typeof target === 'string' && target.trim()) {
-    const key = target.trim();
-    const entityType = key.includes(':') ? key.slice(0, key.indexOf(':')) : 'entity';
-    return { type, target: { key, type: entityType, name: key.split(':').pop() ?? key } };
-  }
-
-  if (typeof target === 'object' && target !== null) {
-    const t = target as { type?: unknown; key?: unknown; name?: unknown };
-    if (typeof t.key !== 'string' || !t.key.trim()) return null;
-    const key = t.key.trim();
-    const entityType = typeof t.type === 'string' && t.type.trim() ? t.type.trim() : 'entity';
-    const name =
-      typeof t.name === 'string' && t.name.trim() ? t.name.trim() : (key.split(':').pop() ?? key);
-    return { type, target: { key, type: entityType, name } };
-  }
-
-  return null;
+  return normalizeRelationInput(rel);
 }

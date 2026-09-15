@@ -1,9 +1,15 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { AgentFinding, Locale, ProposeAgentFindingResponse } from '@knowledge/contracts';
+import type {
+  AgentFinding,
+  Locale,
+  ProposeAgentFindingResponse,
+  ProposeRelationsResponse,
+} from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { DocumentRelationsService } from '../documents/document-relations.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
@@ -35,6 +41,7 @@ export class AgentFindingsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly documents: DocumentsService,
+    private readonly relations: DocumentRelationsService,
     private readonly mergeRequests: MergeRequestsService,
     private readonly registry: AgentRegistryService,
     private readonly client: AssistantClient,
@@ -156,6 +163,92 @@ export class AgentFindingsService {
       // the ambient scope already gone, so it reaches the base client and
       // commits on its own — move it inside and the release rolls back with
       // everything else, which is precisely the stuck-at-409 bug being fixed.
+      await this.release(runId, index).catch(() => {
+        this.logger.warn(`Could not release the proposal claim on run ${runId} finding ${index}`);
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Apply a relation finding as a frontmatter change (docs/features/28).
+   *
+   * The sibling of `propose`, and deliberately not a branch inside it. That one
+   * hands a page to the drafter and asks for a complete new body; a relation fix
+   * must leave every byte outside `relations:`/`tags:` exactly as it was, which
+   * is a structural edit and not a rewrite. It is also why no model is called
+   * here at all — the relations were decided when the finding was made.
+   *
+   * The claim/write-back/release trio is reused verbatim: it is real concurrency
+   * control, and two presses of Apply must not open two merge requests.
+   */
+  async applyRelations(
+    workspaceId: string,
+    runId: string,
+    index: number,
+    principal: Principal,
+  ): Promise<ProposeRelationsResponse> {
+    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
+    if (!run || run.workspaceId !== workspaceId) {
+      throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
+    }
+
+    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
+    const finding = findings[index];
+    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    if (finding.mergeRequestId) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.findingAlreadyProposed'),
+        reason: 'already-proposed',
+        mergeRequestId: finding.mergeRequestId,
+      });
+    }
+
+    const documentId = finding.documentIds[0];
+    if (!documentId) throw new BadRequestException(t('error.ai.findingNoDocument'));
+    // The mirror of `propose`'s orphan refusal: that path rejects a finding whose
+    // fix is a relation, so this one rejects a finding that carries none.
+    if (!finding.relations?.length) throw new BadRequestException(t('error.ai.findingNoRelations'));
+
+    const document = await this.prisma.document.findUnique({ where: { id: documentId } });
+    if (!document || document.workspaceId !== workspaceId) {
+      throw new BadRequestException(t('error.ai.findingDocumentGone', { documentId }));
+    }
+
+    if (!(await this.claim(runId, index))) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.findingInFlight'),
+        reason: 'in-flight',
+      });
+    }
+
+    try {
+      const result = await this.relations.propose(
+        documentId,
+        {
+          add: finding.relations,
+          title: finding.title.slice(0, 200),
+          description: `Proposed from a ${run.agentKey} run.\n\n**${finding.kind}** — ${finding.detail}`.slice(
+            0,
+            2_000,
+          ),
+        },
+        principal,
+      );
+
+      // The page already declared everything the finding proposed — someone got
+      // there first. Nothing was opened, so the claim must come off again or the
+      // finding is stuck at 409 forever.
+      if (!result.changed || !result.mergeRequestId) {
+        await this.release(runId, index);
+        return result;
+      }
+
+      await this.writeBack(runId, index, result.mergeRequestId);
+      return result;
+    } catch (error) {
       await this.release(runId, index).catch(() => {
         this.logger.warn(`Could not release the proposal claim on run ${runId} finding ${index}`);
       });

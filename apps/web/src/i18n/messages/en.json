@@ -536,7 +536,14 @@
       "onePage": "one {category} page, for review",
       "onePageAuto": "one {category} page, published straight away",
       "context": "context for the next step",
-      "item": "item"
+      "item": "item",
+      "relations": "Relations",
+      "relationsHint": "These become graph facts when the page is published. Targets are stable keys like \"service:identity\".",
+      "relationTargetPlaceholder": "service:identity",
+      "removeRelation": "Remove relation",
+      "addRelation": "Add relation",
+      "tags": "Tags",
+      "tagsPlaceholder": "comma, separated"
     },
     "canvas": {
       "loading": "Loading canvas…",
@@ -1323,7 +1330,10 @@
       },
       "propose": "Propose fix",
       "proposed": "Opened a merge request: {title}",
-      "viewProposal": "View merge request"
+      "viewProposal": "View merge request",
+      "applyRelations": "Apply relations",
+      "relationsApplied": "Opened a merge request: {title}",
+      "nothingToApply": "The page already declares these relations — nothing to propose."
     },
     "providerNone": "None — assistant disabled",
     "overridden": "· overridden",

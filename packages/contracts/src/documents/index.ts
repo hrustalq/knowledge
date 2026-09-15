@@ -1,5 +1,5 @@
 import type { ChunkSummary, DocumentSummary, RevisionInfo, RevisionStatus } from '@knowledge/contracts/core';
-import type { FactExtractor } from '@knowledge/contracts/graph';
+import type { AuthorableRelationType, FactExtractor } from '@knowledge/contracts/graph';
 import type { DeleteReviewCommentResponse, ReviewComment, ReviewThread, SemanticDiff, StructuralDiff } from '@knowledge/contracts/reviews';
 
 // rich editor. Two-step by design (presign → confirm), mirroring the revision
@@ -211,8 +211,12 @@ export interface RelationTarget {
   name?: string;
 }
 export interface RelationInput {
-  /** Edge type, e.g. DESCRIBES, DEPENDS_ON, IMPLEMENTS, RELATED_TO. */
-  type: string;
+  /**
+   * Edge type. Narrowed to what may be written by hand — TAGGED_WITH is
+   * synthesised from `tags:` and is never an input, so the type says so rather
+   * than leaving every writer to remember it.
+   */
+  type: AuthorableRelationType;
   target: RelationTarget;
 }
 
@@ -240,6 +244,45 @@ export interface RelationWithProvenance {
 export interface ListDocumentRelationsResponse {
   documentId: string;
   relations: RelationWithProvenance[];
+}
+
+/** One relation addressed by what identifies it: its type and its target key. */
+export interface RelationRef {
+  type: string;
+  targetKey: string;
+}
+
+/**
+ * A change to a page's *frontmatter* relations (docs/features/28).
+ *
+ * Deliberately not an op union: `add` + `remove` in one call expresses create,
+ * update (remove then add) and delete, and validates with plain decorators —
+ * a discriminated union would need a custom validator to buy nothing.
+ *
+ * This is a different thing from `POST /:id/relations`, which writes a graph
+ * edge directly. An edge written that way is invisible in the page source and
+ * is not reproducible by re-indexing; these are declared in the page's own
+ * frontmatter, so they survive as deterministic facts.
+ */
+export interface RelationFrontmatterPatch {
+  add?: RelationInput[];
+  remove?: RelationRef[];
+  /** Replaces the whole `tags:` list. Omit to leave tags untouched. */
+  tags?: string[];
+}
+
+// POST /v1/documents/:id/relations/propose
+export interface ProposeRelationsResponse {
+  documentId: string;
+  /** False when the patch changed nothing — no branch, revision or merge request was made. */
+  changed: boolean;
+  mergeRequestId: string | null;
+  branch: string | null;
+  title: string | null;
+  /** What the patch actually did, after validation and de-duplication. */
+  added: RelationInput[];
+  removed: RelationRef[];
+  tags: string[];
 }
 
 // ---------------------------------------------------------------------------

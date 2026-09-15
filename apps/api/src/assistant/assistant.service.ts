@@ -15,7 +15,7 @@ import type {
   AssistantUiBlock,
   PostAssistantMessageResponse,
 } from '@knowledge/contracts';
-import { assistantSourceKey, isWebSource } from '@knowledge/contracts';
+import { ASSISTANT_WRITE_TOOL_NAMES, assistantSourceKey, isWebSource } from '@knowledge/contracts';
 import type { AssistantThread } from '@prisma/client';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -61,7 +61,7 @@ const MAX_UI_BLOCKS = 4;
  */
 /** The two built-ins that hold a conversation; every other built-in answers in JSON. */
 const CHAT_BUILT_INS = new Set(['researcher', 'author']);
-const WRITE_TOOL_NAMES = new Set(['create_document', 'propose_update']);
+const WRITE_TOOL_NAMES = new Set<string>(ASSISTANT_WRITE_TOOL_NAMES);
 
 /**
  * Can this agent take a chat turn in this mode?

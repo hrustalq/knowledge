@@ -3,13 +3,17 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { Check, ExternalLink, RotateCcw, SkipForward, X } from 'lucide-vue-next'
 import type {
+  RelationInput,
   WorkflowGraph,
+  WorkflowNodeDraft,
   WorkflowNodeEventType,
   WorkflowRunNodeInfo,
 } from '@knowledge/contracts'
+import { AUTHORABLE_RELATION_TYPES, isAuthorableRelationType } from '@knowledge/contracts'
 import { allowedNodeEvents } from '@knowledge/workflow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import { isBusyStatus, NODE_STATUS_CLASS, NODE_STATUS_ICON, NODE_STATUS_LABEL } from './workflow-ui'
@@ -32,9 +36,17 @@ const props = defineProps<{
   busy: boolean
 }>()
 
+/**
+ * The whole draft, not just its prose.
+ *
+ * A step can now propose the relations and tags its page should declare, and
+ * those become deterministic graph facts the moment the page is published — so
+ * approving them unseen would be approving a claim about the workspace nobody
+ * read. They are shown here, and editable, for the same reason the body is.
+ */
 const emit = defineEmits<{
-  event: [WorkflowNodeEventType, { title: string; markdown: string } | undefined]
-  save: [{ title: string; markdown: string }]
+  event: [WorkflowNodeEventType, WorkflowNodeDraft | undefined]
+  save: [WorkflowNodeDraft]
   select: [string]
 }>()
 
@@ -50,6 +62,13 @@ const step = computed(() => props.graph.steps.find((s) => s.id === props.node.st
 const editing = ref(false)
 const title = ref('')
 const markdown = ref('')
+const relations = ref<RelationInput[]>([])
+const tags = ref('')
+
+function readTags(frontmatter?: Record<string, unknown> | null): string[] {
+  const raw = frontmatter?.tags
+  return Array.isArray(raw) ? raw.filter((tag): tag is string => typeof tag === 'string') : []
+}
 
 watch(
   () => props.node.id,
@@ -57,22 +76,64 @@ watch(
     editing.value = false
     title.value = props.node.draft?.title ?? ''
     markdown.value = props.node.draft?.markdown ?? ''
+    // Deep-copied, so editing a row does not mutate the query cache in place.
+    relations.value = (props.node.draft?.relations ?? []).map((r) => ({ ...r, target: { ...r.target } }))
+    tags.value = readTags(props.node.draft?.frontmatter).join(', ')
   },
   { immediate: true },
 )
+
+/** What the draft would become — read by both Save and Approve. */
+const draftPatch = computed<WorkflowNodeDraft>(() => {
+  const tagList = tags.value.split(',').map((tag) => tag.trim()).filter(Boolean)
+  // Every other frontmatter key the step produced is carried through untouched.
+  const frontmatter = { ...(props.node.draft?.frontmatter ?? {}) }
+  if (tagList.length > 0) frontmatter.tags = tagList
+  else delete frontmatter.tags
+
+  return {
+    title: title.value,
+    markdown: markdown.value,
+    ...(props.node.draft?.summary ? { summary: props.node.draft.summary } : {}),
+    relations: relations.value.filter((r) => r.type && r.target.key.trim()),
+    ...(Object.keys(frontmatter).length > 0 ? { frontmatter } : {}),
+  }
+})
+
+const viewRelations = computed(() => props.node.draft?.relations ?? [])
+const viewTags = computed(() => readTags(props.node.draft?.frontmatter))
+
+function addRelation() {
+  relations.value.push({ type: 'RELATED_TO', target: { type: 'entity', key: '', name: '' } })
+}
+
+function setRelationType(index: number, value: string) {
+  const row = relations.value[index]
+  // The Select only offers allowed types; the guard is what lets the narrowed
+  // contract type hold without a cast.
+  if (row && isAuthorableRelationType(value)) row.type = value
+}
 
 const allowed = computed<WorkflowNodeEventType[]>(() =>
   step.value && props.canEdit ? allowedNodeEvents(step.value, props.node.status) : [],
 )
 const can = (event: WorkflowNodeEventType) => allowed.value.includes(event)
 
-const edited = computed(
-  () => title.value !== (props.node.draft?.title ?? '') || markdown.value !== (props.node.draft?.markdown ?? ''),
-)
+const edited = computed(() => {
+  const before = props.node.draft
+  if (title.value !== (before?.title ?? '')) return true
+  if (markdown.value !== (before?.markdown ?? '')) return true
+  if (tags.value !== readTags(before?.frontmatter).join(', ')) return true
+
+  const now = draftPatch.value.relations ?? []
+  const was = before?.relations ?? []
+  if (now.length !== was.length) return true
+  return now.some((r, i) => r.type !== was[i]?.type || r.target.key !== was[i]?.target.key)
+})
 
 /** Approving carries the edit, so reviewing and correcting are one action. */
 function approve() {
-  emit('event', 'APPROVE', edited.value ? { title: title.value, markdown: markdown.value } : undefined)
+  emit('event', 'APPROVE', edited.value ? draftPatch.value : undefined)
   editing.value = false
 }
 </script>
@@ -155,8 +216,38 @@ function approve() {
           <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.node.body') }}</span>
           <Textarea v-model="markdown" rows="16" class="font-mono text-xs" />
         </label>
+        <div class="space-y-1.5">
+          <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.node.relations') }}</span>
+          <p class="text-muted-foreground text-[11px]">{{ t('workflow.node.relationsHint') }}</p>
+          <div v-for="(row, i) in relations" :key="i" class="flex items-center gap-2">
+            <Select :model-value="row.type" @update:model-value="(v) => setRelationType(i, String(v))">
+              <SelectTrigger class="h-9 w-[11rem] shrink-0 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="r in AUTHORABLE_RELATION_TYPES" :key="r" :value="r">{{ r }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              v-model="row.target.key"
+              class="min-w-0 flex-1 text-xs"
+              :placeholder="t('workflow.node.relationTargetPlaceholder')"
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              :aria-label="t('workflow.node.removeRelation')"
+              @click="relations.splice(i, 1)"
+            >
+              <X class="size-4" />
+            </Button>
+          </div>
+          <Button size="sm" variant="outline" @click="addRelation">{{ t('workflow.node.addRelation') }}</Button>
+        </div>
+        <label class="block space-y-1.5">
+          <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.node.tags') }}</span>
+          <Input v-model="tags" :placeholder="t('workflow.node.tagsPlaceholder')" />
+        </label>
         <div class="flex gap-2">
-          <Button size="sm" variant="outline" :disabled="!edited" @click="emit('save', { title, markdown })">
+          <Button size="sm" variant="outline" :disabled="!edited" @click="emit('save', draftPatch)">
             {{ t('workflow.node.saveDraft') }}
           </Button>
           <Button size="sm" variant="ghost" @click="editing = false">{{ t('workflow.node.doneEditing') }}</Button>
@@ -165,6 +256,25 @@ function approve() {
 
       <div v-else class="min-h-0 overflow-auto">
         <p v-if="node.draft.summary" class="text-muted-foreground mb-3 text-sm">{{ node.draft.summary }}</p>
+        <!-- Relations become graph facts on publication, so they are shown
+             beside the prose rather than approved sight-unseen. -->
+        <div v-if="viewRelations.length || viewTags.length" class="mb-3 flex flex-wrap gap-1.5">
+          <span
+            v-for="(r, i) in viewRelations"
+            :key="`r-${i}`"
+            class="bg-muted/60 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]"
+          >
+            <span class="font-medium">{{ r.type }}</span>
+            <span class="text-muted-foreground">{{ r.target.key }}</span>
+          </span>
+          <span
+            v-for="tag in viewTags"
+            :key="`t-${tag}`"
+            class="text-muted-foreground rounded border px-1.5 py-0.5 text-[11px]"
+          >
+            #{{ tag }}
+          </span>
+        </div>
         <MarkdownView v-if="node.draft.markdown" :markdown="node.draft.markdown" />
         <p v-else class="text-muted-foreground text-sm italic">
           {{ t('workflow.node.noBody') }}

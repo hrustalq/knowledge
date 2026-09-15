@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { WorkflowRun, WorkflowRunNode } from '@prisma/client';
-import type { WorkflowNodeDraft, WorkflowStep } from '@knowledge/contracts';
+import { AUTHORABLE_RELATION_TYPES } from '@knowledge/contracts';
+import type { RelationInput, WorkflowNodeDraft, WorkflowStep } from '@knowledge/contracts';
+import { normalizeRelation } from '../common/relations.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
@@ -9,6 +11,10 @@ import { AssistantClient } from '../assistant/assistant.client.js';
 import { SearchService } from '../search/search.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
+
+/** Caps on what one draft may declare, so a hallucinated list cannot fill a page's frontmatter. */
+const MAX_DRAFT_RELATIONS = 20;
+const MAX_DRAFT_TAGS = 20;
 
 /** What a step produced: either a fan-out list, or one node's draft. */
 export type StepResult =
@@ -140,8 +146,15 @@ export class WorkflowExecutors {
         role: 'system',
         content: [
           step.prompt?.system ?? drafter.instructions,
-          'Return JSON: {"title":"…","markdown":"…","summary":"…"}.',
+          'Return JSON: {"title":"…","markdown":"…","summary":"…","relations":[{"type":"…","targetKey":"…"}],"tags":["…"]}.',
           'The markdown is the page body — no front matter, no wrapping code fence.',
+          // Relations travel in their own field rather than as YAML the model
+          // writes by hand: the materializer owns the frontmatter block, and a
+          // hand-written one would have to be parsed back out before it could be
+          // merged with what the step's `produces` adds.
+          `Relations go in the "relations" field, never in the body. Allowed types: ${AUTHORABLE_RELATION_TYPES.join(', ')}.`,
+          'A relation target is a stable entity key such as "service:identity" — reuse the spelling the source page already uses, since a near-miss key creates a second entity rather than linking to the first.',
+          'Declare only relations the source material actually supports; return [] rather than guessing. Tags are not relations.',
           'Stay grounded in the source material; say plainly when something is not specified.',
           await this.skillText(run.workspaceId, step, drafter),
         ]
@@ -170,14 +183,67 @@ export class WorkflowExecutors {
     const markdown = typeof parsed.markdown === 'string' ? parsed.markdown : '';
     if (!markdown.trim()) throw new Error('The model returned an empty page');
 
+    // Until now these two fields were declared on WorkflowNodeDraft, validated by
+    // the DTO and written by the materializer — and no executor ever produced
+    // them. That is the same declared-and-ignored defect `WorkflowStep.tools`
+    // was (docs/features/20).
+    const relations = this.parseRelations(parsed.relations);
+    const tags = this.parseTags(parsed.tags);
+
     return {
       kind: 'draft',
       draft: {
         title: (typeof parsed.title === 'string' && parsed.title.trim()) || title,
         markdown,
         summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
+        ...(relations.length > 0 ? { relations } : {}),
+        ...(tags.length > 0 ? { frontmatter: { tags } } : {}),
       },
     };
+  }
+
+  /**
+   * Relations the model proposed, validated here rather than downstream.
+   *
+   * An unknown edge type would otherwise travel worker → draft → approval →
+   * `createDocument` → `GraphService.assertEdgeType`, which throws — stranding
+   * the node in `materializing` hours after a person approved it. Dropping it
+   * with a warning keeps the rest of the page: a step that proposed one bad
+   * relation should still produce what it was asked for.
+   */
+  private parseRelations(value: unknown): RelationInput[] {
+    if (!Array.isArray(value)) return [];
+    const out: RelationInput[] = [];
+    const seen = new Set<string>();
+    for (const entry of value) {
+      if (!entry || typeof entry !== 'object') continue;
+      const e = entry as Record<string, unknown>;
+      const normalized = normalizeRelation({ type: e.type, target: e.target ?? e.targetKey });
+      if (!normalized) {
+        this.logger.warn(
+          `Dropped a relation a workflow step proposed: ${JSON.stringify(entry).slice(0, 200)}`,
+        );
+        continue;
+      }
+      const key = `${normalized.type} ${normalized.target.key}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ type: normalized.type, target: normalized.target });
+      if (out.length >= MAX_DRAFT_RELATIONS) break;
+    }
+    return out;
+  }
+
+  private parseTags(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    const out: string[] = [];
+    for (const tag of value) {
+      if (typeof tag !== 'string' || !tag.trim()) continue;
+      const trimmed = tag.trim().slice(0, 60);
+      if (!out.includes(trimmed)) out.push(trimmed);
+      if (out.length >= MAX_DRAFT_TAGS) break;
+    }
+    return out;
   }
 
   // ----------------------------------------------------------------- context

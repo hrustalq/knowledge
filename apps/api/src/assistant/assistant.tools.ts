@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
+import {
+  ASSISTANT_WRITE_TOOL_NAMES,
+  AUTHORABLE_RELATION_TYPES,
+  isAuthorableRelationType,
+} from '@knowledge/contracts';
 import type {
   AssistantSource,
   AssistantChatMode,
@@ -13,6 +18,8 @@ import { AccessService } from '../auth/access.service.js';
 import type { Principal } from '../auth/principal.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { DocumentRelationsService } from '../documents/document-relations.service.js';
+import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { SearchService } from '../search/search.service.js';
@@ -20,8 +27,11 @@ import { AiConfigService } from '../ai/ai-config.service.js';
 import { WebResearchService } from './web-research.service.js';
 
 /** Tools that mutate the workspace — require 'editor', not just 'viewer'. Exported so
- * AssistantService can also filter them out of the tool list when mode = 'ask'. */
-export const WRITE_TOOLS = new Set(['create_document', 'propose_update']);
+ * AssistantService can also filter them out of the tool list when mode = 'ask'.
+ * The membership itself lives in contracts: this used to be one of three
+ * hand-maintained copies, and a name missing from any of them silently removed
+ * the tool rather than failing. */
+export const WRITE_TOOLS = new Set<string>(ASSISTANT_WRITE_TOOL_NAMES);
 
 /**
  * Tools that do not count against the turn's tool budget.
@@ -107,6 +117,7 @@ export class AssistantToolsService {
     private readonly prisma: PrismaService,
     private readonly search: SearchService,
     private readonly documents: DocumentsService,
+    private readonly relations: DocumentRelationsService,
     private readonly mergeRequests: MergeRequestsService,
     private readonly storage: StorageService,
     private readonly aiConfig: AiConfigService,
@@ -169,6 +180,80 @@ export class AssistantToolsService {
             properties: {
               documentId: { type: 'string', description: 'UUID of the document to start from' },
               depth: { type: 'integer', minimum: 1, maximum: 2, description: 'Entity hops (default 1)' },
+            },
+            required: ['documentId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'list_relations',
+          description:
+            'What a page is connected to: the relations it declares in its own frontmatter, its tags, and the ' +
+            'edges the knowledge graph holds for it. Each graph edge names the class it came from — ' +
+            '"frontmatter" (the page declares it), "explicit"/"curated" (a person added or confirmed it), or ' +
+            '"inferred" (a model guessed it from the text, and nobody has confirmed it). Call this before ' +
+            'proposing any relation change, so you are editing what the page actually declares rather than ' +
+            'what the graph happens to hold.',
+          parameters: {
+            type: 'object',
+            properties: {
+              documentId: { type: 'string', description: 'UUID of the page' },
+            },
+            required: ['documentId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'edit_relations',
+          description:
+            'Change the relations a page declares in its own frontmatter, by opening a merge request for a ' +
+            'human to review — this NEVER edits the live page. Add relations, remove them, and/or replace the ' +
+            'tag list. Only the `relations:` and `tags:` keys are touched; the body and every other ' +
+            'frontmatter key are left exactly as they are, so this is the safe way to fix a connection ' +
+            'without rewriting prose. Call list_relations first. Allowed relation types: ' +
+            `${AUTHORABLE_RELATION_TYPES.join(', ')}. DESCRIBES means "this page is the documentation for ` +
+            'that entity". Targets are stable entity keys like "service:identity" — reuse the exact spelling ' +
+            'the workspace already uses, since a near-miss key creates a second entity instead of linking to ' +
+            'the first. Tags are NOT relations: put them in `tags`, never as a TAGGED_WITH relation.',
+          parameters: {
+            type: 'object',
+            properties: {
+              documentId: { type: 'string', description: 'UUID of the page to change' },
+              add: {
+                type: 'array',
+                description: 'Relations to declare',
+                items: {
+                  type: 'object',
+                  properties: {
+                    type: { type: 'string', enum: [...AUTHORABLE_RELATION_TYPES] },
+                    targetKey: { type: 'string', description: 'Stable entity key, e.g. "service:identity"' },
+                    name: { type: 'string', description: 'Optional display name for the entity' },
+                  },
+                  required: ['type', 'targetKey'],
+                },
+              },
+              remove: {
+                type: 'array',
+                description: 'Relations to stop declaring',
+                items: {
+                  type: 'object',
+                  properties: {
+                    type: { type: 'string', enum: [...AUTHORABLE_RELATION_TYPES] },
+                    targetKey: { type: 'string' },
+                  },
+                  required: ['type', 'targetKey'],
+                },
+              },
+              tags: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Replaces the whole tag list. Omit to leave tags alone.',
+              },
+              reason: { type: 'string', description: 'Why, for the merge request description' },
             },
             required: ['documentId'],
           },
@@ -383,6 +468,10 @@ export class AssistantToolsService {
           return await this.readDocument(args, ctx);
         case 'explore_document_graph':
           return await this.exploreGraph(args, ctx);
+        case 'list_relations':
+          return await this.listRelations(args, ctx);
+        case 'edit_relations':
+          return await this.editRelations(args, ctx);
         case 'ask_user':
           return this.askUser(args);
         case 'request_agent_mode':
@@ -472,6 +561,134 @@ export class AssistantToolsService {
         .slice(0, 8)
         .map((n) => ({ documentId: n.id, title: n.label })),
     };
+  }
+
+  /**
+   * Declared relations and graph edges side by side (docs/features/28).
+   *
+   * Both halves matter and they routinely disagree: an `inferred` edge exists in
+   * the graph while the page declares nothing, and that gap is exactly what a
+   * model asked to tidy relations needs to see. Showing only one half would let
+   * it "add" something already there, or miss what it was asked to confirm.
+   */
+  private async listRelations(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    const documentId = String(args.documentId ?? '');
+    const doc = await this.requireWorkspaceDocument(documentId, ctx);
+    if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
+
+    const { relations } = await this.documents.listRelations(documentId);
+    // A draft or unindexed page has no readable content; its graph edges are
+    // still worth reporting, so this degrades rather than failing.
+    const content = await this.documents.getContent(documentId).catch(() => null);
+
+    return {
+      content: JSON.stringify({
+        documentId,
+        title: doc.title,
+        declared: readFrontmatterRelations(content?.frontmatter).map((r) => ({
+          type: r.type,
+          targetKey: r.target.key,
+          name: r.target.name,
+        })),
+        tags: readFrontmatterTags(content?.frontmatter),
+        graph: relations.map((r) => ({
+          type: r.type,
+          targetKey: r.to.key,
+          name: r.to.name,
+          extractor: r.provenance.extractor,
+          confidence: r.provenance.confidence,
+        })),
+      }),
+      ok: true,
+      sources: [{ documentId, title: doc.title }],
+    };
+  }
+
+  private async editRelations(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    const documentId = String(args.documentId ?? '');
+    const doc = await this.requireWorkspaceDocument(documentId, ctx);
+    if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
+
+    // Models spell a target either way round; accept both rather than failing on
+    // a shape difference that carries no meaning.
+    const add = (Array.isArray(args.add) ? args.add : []).flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return [];
+      const e = entry as Record<string, unknown>;
+      const type = typeof e.type === 'string' ? e.type : '';
+      const key = typeof e.targetKey === 'string' ? e.targetKey : '';
+      // Dropped here rather than sent on: the service refuses an unknown type
+      // with a 400, and one bad entry should not lose the rest of the edit.
+      if (!isAuthorableRelationType(type)) return [];
+      if (e.target && typeof e.target === 'object') {
+        return [{ type, target: e.target as { type: string; key: string; name?: string } }];
+      }
+      if (!key) return [];
+      return [
+        {
+          type,
+          target: {
+            key,
+            type: key.includes(':') ? key.slice(0, key.indexOf(':')) : 'entity',
+            ...(typeof e.name === 'string' && e.name.trim() ? { name: e.name.trim() } : {}),
+          },
+        },
+      ];
+    });
+
+    const remove = (Array.isArray(args.remove) ? args.remove : []).flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return [];
+      const e = entry as Record<string, unknown>;
+      const type = typeof e.type === 'string' ? e.type : '';
+      const targetKey = typeof e.targetKey === 'string' ? e.targetKey : '';
+      return type && targetKey ? [{ type, targetKey }] : [];
+    });
+
+    const tags = Array.isArray(args.tags)
+      ? args.tags.filter((tag): tag is string => typeof tag === 'string')
+      : undefined;
+
+    try {
+      const result = await this.relations.propose(
+        documentId,
+        {
+          add,
+          remove,
+          ...(tags === undefined ? {} : { tags }),
+          ...(typeof args.reason === 'string' && args.reason.trim()
+            ? { description: args.reason.slice(0, 2_000) }
+            : {}),
+        },
+        ctx.principal,
+      );
+
+      if (!result.changed) {
+        return {
+          content: JSON.stringify({
+            changed: false,
+            note: 'The page already declares exactly this — nothing was proposed. Do not try again; say so instead.',
+          }),
+          ok: true,
+          sources: [{ documentId, title: doc.title }],
+        };
+      }
+
+      return {
+        content: JSON.stringify({
+          documentId,
+          documentTitle: doc.title,
+          mergeRequestId: result.mergeRequestId,
+          branch: result.branch,
+          added: result.added.map((r) => `${r.type} ${r.target.key}`),
+          removed: result.removed.map((r) => `${r.type} ${r.targetKey}`),
+          tags: result.tags,
+          note: 'Opened as a merge request — a human must review and merge it before the change goes live.',
+        }),
+        ok: true,
+        sources: [{ documentId, title: doc.title }],
+      };
+    } catch (err) {
+      return this.fail(err instanceof Error ? err.message : 'Failed to propose the relation change');
+    }
   }
 
   private async createDocument(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {

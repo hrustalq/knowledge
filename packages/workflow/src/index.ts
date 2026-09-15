@@ -13,7 +13,9 @@
  */
 import { createActor, setup, type Snapshot, type SnapshotFrom } from 'xstate';
 import {
+  AUTHORABLE_RELATION_TYPES,
   WORKFLOW_STEP_KINDS,
+  isAuthorableRelationType,
   type WorkflowGraph,
   type WorkflowNodeEventType,
   type WorkflowNodeStatus,
@@ -378,6 +380,18 @@ export function validateGraph(graph: WorkflowGraph): WorkflowValidationIssue[] {
     // can only ever be read inside the run — usually a mistake, never fatal.
     if (step.produces && !step.produces.category) {
       err('producesNeedsCategory', 'A producing step must name the category of the pages it creates.', step.id);
+    }
+    // The edge type is interpolated into SQL by GraphService and checked there
+    // against the same allowlist. Catching it here means the canvas refuses it
+    // while it is being drawn, rather than the run stranding a node in
+    // `materializing` hours later — after a person already approved the draft.
+    if (step.produces?.relationToParent && !isAuthorableRelationType(step.produces.relationToParent)) {
+      err(
+        'unknownRelationType',
+        `"${step.produces.relationToParent}" is not a relation type; use one of ${AUTHORABLE_RELATION_TYPES.join(', ')}.`,
+        step.id,
+        { type: step.produces.relationToParent },
+      );
     }
     if (!step.produces && step.next.length === 0 && step.kind !== 'review') {
       warn('deadEnd', 'This step produces nothing and leads nowhere.', step.id);

@@ -1,4 +1,5 @@
 import type { ApiErrorPayload, AssistantSource, AssistantToolCall } from '@knowledge/contracts/core';
+import type { RelationInput } from '@knowledge/contracts/documents';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
 // sidebar materializes from each assistant message's toolCalls trace rather
@@ -652,6 +653,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'curator',
   /** Designs a workflow definition from a description (docs/features/17). */
   'architect',
+  /** Proposes the relations a page should declare (docs/features/28). */
+  'cartographer',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -685,11 +688,31 @@ export const ASSISTANT_TOOL_NAMES = [
   'search_knowledge',
   'read_document',
   'explore_document_graph',
+  /** What a page declares in frontmatter, beside what the graph holds (docs/features/28). */
+  'list_relations',
   'ask_user',
   'request_agent_mode',
   'render_component',
   'create_document',
   'propose_update',
+  /** Edits the page's frontmatter relations, as a merge request (docs/features/28). */
+  'edit_relations',
+] as const;
+
+/**
+ * The tools that change the workspace.
+ *
+ * One list, because there were three: `assistant.tools.ts` filters and
+ * role-checks on it, `built-in-agents.ts` composes the author's allowlist from
+ * it, and `assistant.service.ts` decides from it whether an agent may hold a
+ * turn in Ask mode. Allowlists intersect rather than union, so a name missing
+ * from one copy did not raise an error — it silently removed the tool. Three
+ * hand-maintained copies of one set is a drift waiting to happen.
+ */
+export const ASSISTANT_WRITE_TOOL_NAMES = [
+  'create_document',
+  'propose_update',
+  'edit_relations',
 ] as const;
 
 /** Effective configuration of one agent: the code default ⊕ this workspace's override row. */
@@ -762,6 +785,8 @@ export const AGENT_FINDING_KINDS = [
   'contradiction',
   'orphan',
   'gap',
+  /** A relation the page should declare but does not (docs/features/28). */
+  'relation',
   'other',
 ] as const;
 export type AgentFindingKind = (typeof AGENT_FINDING_KINDS)[number];
@@ -793,6 +818,13 @@ export interface AgentFinding {
    * fails.
    */
   proposedAt?: string | null;
+  /**
+   * The relations this finding proposes the first cited page should declare
+   * (docs/features/28). Set only by the cartographer, and what lets the finding
+   * be applied as a frontmatter edit instead of being handed to a model that
+   * would rewrite the prose. A finding without it is a prose finding.
+   */
+  relations?: RelationInput[];
 }
 
 // POST /v1/ai/agents/runs/:id/findings/:index/propose

@@ -31,6 +31,7 @@ import type {
   ListAiSkillsResponse,
   ListSourcePoliciesResponse,
   ProposeAgentFindingResponse,
+  ProposeRelationsResponse,
   SourcePolicy,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
@@ -373,6 +374,28 @@ export class AiController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<ProposeAgentFindingResponse> {
     return this.findings.propose(workspaceId, id, index, principal);
+  }
+
+  /**
+   * Declare the relations a finding proposes (docs/features/28).
+   *
+   * The counterpart to `propose` for findings whose fix is an edge rather than
+   * prose — the case that endpoint has always refused. Same authority and same
+   * attribution: it writes a branch, a revision and a merge request as the
+   * caller, not as the run's owner.
+   */
+  @Post('agents/runs/:id/findings/:index/apply-relations')
+  @Access('editor', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
+  @ApiOperation({ summary: 'Open a merge request declaring the relations one finding proposes' })
+  applyFindingRelations(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ProposeRelationsResponse> {
+    return this.findings.applyRelations(workspaceId, id, index, principal);
   }
 
   @Post('agents/route')

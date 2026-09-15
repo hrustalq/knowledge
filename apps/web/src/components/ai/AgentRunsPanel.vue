@@ -6,7 +6,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { CircleAlert, CircleCheck, Clock, GitPullRequest, Loader2, TriangleAlert } from 'lucide-vue-next'
+import { CircleAlert, CircleCheck, Clock, GitPullRequest, Link2, Loader2, TriangleAlert } from 'lucide-vue-next'
 import type { AgentFinding, AgentRunSummary, ListAgentRunsResponse } from '@knowledge/contracts'
 import { toast } from 'vue-sonner'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
@@ -29,16 +29,27 @@ const counts = computed(() => (query.data.value as ListAgentRunsResponse | undef
 const proposeFinding = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/propose', {
   invalidates: () => [['/v1/ai/agents/runs'], ['/v1/merge-requests']],
 })
+const applyRelations = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/apply-relations', {
+  invalidates: () => [['/v1/ai/agents/runs'], ['/v1/merge-requests'], ['/v1/documents']],
+})
 /** Which finding is mid-flight, so only its own button spins. */
 const proposing = ref<string | null>(null)
 
 /**
- * An orphan finding is about missing relations rather than page prose, and the
- * server refuses it — so it is not offered. Everything else is proposable until
- * it has been proposed once.
+ * Two verbs, because there are two kinds of fix.
+ *
+ * `propose` rewrites page prose, and the server refuses it for a finding whose
+ * fix is a relation — an orphan page has nothing to rewrite. Those now have a
+ * verb of their own: a finding that carries relations is *applied*, editing only
+ * the page's frontmatter. Until this existed, an orphan finding could not be
+ * acted on at all.
  */
 function canPropose(f: AgentFinding): boolean {
-  return !f.mergeRequestId && f.kind !== 'orphan' && f.documentIds.length > 0
+  return !f.mergeRequestId && f.kind !== 'orphan' && f.kind !== 'relation' && f.documentIds.length > 0
+}
+
+function canApplyRelations(f: AgentFinding): boolean {
+  return !f.mergeRequestId && (f.relations?.length ?? 0) > 0 && f.documentIds.length > 0
 }
 
 async function propose(run: AgentRunSummary, index: number) {
@@ -49,6 +60,25 @@ async function propose(run: AgentRunSummary, index: number) {
       query: { workspaceId },
     })
     toast.success(t('ai.runs.proposed', { title: (res as { title: string }).title }))
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    proposing.value = null
+  }
+}
+
+async function apply(run: AgentRunSummary, index: number) {
+  proposing.value = `${run.id}:${index}`
+  try {
+    const res = (await applyRelations.mutateAsync({
+      path: { id: run.id, index },
+      query: { workspaceId },
+    })) as { changed: boolean; title: string | null }
+    // The page already declared everything the finding proposed — someone got
+    // there first. Nothing was opened, and saying so beats a success toast
+    // pointing at a merge request that does not exist.
+    if (res.changed) toast.success(t('ai.runs.relationsApplied', { title: res.title ?? '' }))
+    else toast.info(t('ai.runs.nothingToApply'))
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
@@ -152,6 +182,17 @@ const severityClass = (f: AgentFinding) =>
               >
                 <GitPullRequest class="size-3" /> {{ t('ai.runs.viewProposal') }}
               </RouterLink>
+              <Button
+                v-else-if="canApplyRelations(f)"
+                variant="outline"
+                size="sm"
+                :disabled="proposing !== null"
+                @click="apply(run, i)"
+              >
+                <Loader2 v-if="proposing === `${run.id}:${i}`" class="size-3.5 animate-spin" />
+                <Link2 v-else class="size-3.5" />
+                {{ t('ai.runs.applyRelations') }}
+              </Button>
               <Button
                 v-else-if="canPropose(f)"
                 variant="outline"

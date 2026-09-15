@@ -7,6 +7,7 @@ import { NotificationsCoreModule } from '../notifications/notifications-core.mod
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { DocumentsController } from './documents.controller.js';
 import { CompareService } from './compare.service.js';
+import { DocumentRelationsService } from './document-relations.service.js';
 import { MergeRequestsController } from './merge-requests.controller.js';
 import { MergeRequestsService } from './merge-requests.service.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
@@ -59,6 +60,9 @@ import { MentionReplySweeper } from './mention-reply.sweeper.js';
   controllers: [DocumentsController, MergeRequestsController],
   providers: [
     CompareService,
+    // Frontmatter relation edits (docs/features/28). API-only by construction:
+    // it opens merge requests, so it needs MergeRequestsService.
+    DocumentRelationsService,
     MergeRequestsService,
     MergeRequestThreadsService,
     SavedFiltersService,
@@ -70,6 +74,7 @@ import { MentionReplySweeper } from './mention-reply.sweeper.js';
   exports: [
     DocumentsCoreModule,
     CompareService,
+    DocumentRelationsService,
     MergeRequestsService,
     MergeRequestThreadsService,
     DocumentThreadsService,

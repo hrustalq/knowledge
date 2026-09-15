@@ -9,6 +9,7 @@
     "selfLoop": "Step \"{id}\" points at itself.",
     "missingPrompt": "An AI step needs a prompt.",
     "producesNeedsCategory": "A producing step must name the category of the pages it creates.",
+    "unknownRelationType": "\"{type}\" is not a relation type the graph accepts.",
     "deadEnd": "This step produces nothing and leads nowhere.",
     "maxItemsRange": "maxItems must be between 1 and 50.",
     "fanOutIgnored": "Only ai.generate steps fan out; this step will produce a single node.",

@@ -122,6 +122,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/ai/agents/runs/{id}/findings/{index}/apply-relations",
+      "tag": "ai",
+      "summary": "Open a merge request declaring the relations one finding proposes",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/ai/agents/runs/{id}/findings/{index}/propose",
       "tag": "ai",
       "summary": "Open a merge request that addresses one finding",
@@ -1145,6 +1155,16 @@
       "path": "/v1/documents/{id}/relations/curate",
       "tag": "documents",
       "summary": "Curate a relation: user-confirmed, confidence 1, protected from re-extraction (plan.md §5)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/relations/propose",
+      "tag": "documents",
+      "summary": "Propose a change to the page’s frontmatter relations as a merge request (never edits the live page)",
       "role": "editor",
       "source": "document",
       "public": false,

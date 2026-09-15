@@ -21,6 +21,8 @@
   "curatorDesc": "Scans the workspace for stale, orphaned and duplicated pages.",
   "architect": "Architect",
   "architectDesc": "Turns a description of a chain into a workflow definition to review.",
+  "cartographer": "Cartographer",
+  "cartographerDesc": "Proposes the relations a page should declare, grounded in what it says.",
   "route": {
     "explicit": "Explicitly requested.",
     "disabled": "disabled",
@@ -39,5 +41,12 @@
     "orphanTitle": "\"{title}\" is not connected to anything",
     "orphanDetail": "This page declares no relations and nothing references it, so it will not surface through the graph — only through search. Adding a relation in its frontmatter puts it back on the map.",
     "summary": "Looked at {pages} pages. {orphans} are unconnected."
+  },
+  "cartography": {
+    "noPages": "This workspace has no pages yet.",
+    "unconfirmedTitle": "\"{title}\" has {count} inferred connection(s) nobody has confirmed",
+    "unconfirmedDetail": "A model read these connections out of the text, but the page does not declare them. An inferred edge is the lowest-trust class there is and is replaced on every re-index; declaring it in the page's frontmatter makes it a fact the page itself asserts. Proposed: {list}.",
+    "graphUnavailable": "The relation graph could not be read, so only the model's suggestions are included.",
+    "summary": "Looked at {pages} pages and proposes relations for {found} of them."
   }
 }

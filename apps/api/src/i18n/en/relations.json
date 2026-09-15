@@ -1,0 +1,7 @@
+{
+  "proposeTitle": "Update relations on \"{title}\"",
+  "added": "Added: {list}",
+  "removed": "Removed: {list}",
+  "tagsSet": "Tags set to: {list}",
+  "proposeNote": "Only the frontmatter `relations:` and `tags:` keys were edited — the page body is unchanged. Rewriting the block re-serializes the whole of it, so neighbouring keys may be reformatted; that churn is cosmetic."
+}

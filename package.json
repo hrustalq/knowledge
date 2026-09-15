@@ -18,6 +18,8 @@
     "db:migrate": "turbo db:migrate"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
     "dependency-cruiser": "^18.3.0",
     "husky": "^9.1.7",
     "turbo": "^2.10.12"

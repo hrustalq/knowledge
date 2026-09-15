@@ -1,0 +1,7 @@
+# Conventional Commits gate. See commitlint.config.js and CONTRIBUTING.md#commits.
+#
+# This is cheap (no build, no infra) unlike the pre-push hook, so it runs on every
+# commit rather than being deferred to CI. It has to: the release bump and the
+# changelog are derived from `git log <lastTag>..main`, and a malformed subject is
+# only discoverable at release time, when the author has moved on.
+pnpm exec commitlint --edit "$1"

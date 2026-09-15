@@ -49,7 +49,9 @@ const emit = defineEmits<{
 }>()
 
 defineExpose({
-  focus: () => inputEl.value?.focus(),
+  // preventScroll: the composer is already in view, and letting focus scroll
+  // the page would move the transcript at the exact moment a turn ends.
+  focus: () => inputEl.value?.focus({ preventScroll: true }),
   /** Reset hands a rewound message back here, ready to send again or rewrite. */
   setDraft: (text: string) => {
     draft.value = text

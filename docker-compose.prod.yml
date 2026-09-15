@@ -95,10 +95,20 @@ services:
     environment:
       # Heap is capped on purpose: this is a 3.8 GB box that also builds images.
       # Unbounded, the JVM sizes itself against total RAM and starves everything else.
+      # defaultDatabases grammar is <db>[(<user>:<password>[:<group>])*] — the
+      # THIRD element is the group, and omitting it is NOT harmless. `[root:<pw>]`
+      # registers root against this database with a null group, which shadows
+      # root's server-wide {"*":["admin"]}: reads still succeed, but every DDL
+      # returns 403 "User 'root' is not allowed to update schema". The worker then
+      # logs "DDL skipped" per statement and every later ingestion job dies on
+      # "Type with name 'Chunk' was not found".
+      #
+      # These comments MUST stay outside the `>-` block below: inside a folded
+      # scalar a `#` is literal text, not a comment, and would be handed to the JVM.
       JAVA_OPTS: >-
         -Xms256m -Xmx512m
         -Darcadedb.server.rootPassword=${ARCADE_PASSWORD:?set ARCADE_PASSWORD in .env}
-        -Darcadedb.server.defaultDatabases=${ARCADE_DB:-knowledge}[${ARCADE_USER:-root}:${ARCADE_PASSWORD}]
+        -Darcadedb.server.defaultDatabases=${ARCADE_DB:-knowledge}[${ARCADE_USER:-root}:${ARCADE_PASSWORD}:admin]
     volumes:
       - arcadedata:/home/arcadedb/databases
     healthcheck:

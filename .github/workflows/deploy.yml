@@ -1,13 +1,21 @@
 name: deploy
 
 # SELF-HOSTED. This repository is public, and GitHub warns against exposing a
-# self-hosted runner to untrusted code. Every trigger here is therefore
-# push-to-main, a tag, or a manual dispatch — NEVER pull_request, which is the
-# one event a fork can cause. See also the `if:` repository guard below and the
-# `production` environment's branch policy.
+# self-hosted runner to untrusted code. Every trigger here is therefore a version
+# tag or a manual dispatch — NEVER pull_request, which is the one event a fork can
+# cause. See also the `if:` repository guard below and the `production`
+# environment's deployment-branch policy.
+#
+# TAGS DEPLOY, MERGES DO NOT. `main` is integration and is not live: pushing
+# `vX.Y.Z` is what moves production. The release runbook is in
+# CONTRIBUTING.md#release and the bump rules in docs/versioning.md.
+#
+# NOTE: the `production` environment must carry a *tag* deployment policy for
+# `v*`. A policy listing only the `main` branch will not match `refs/tags/v0.1.0`
+# and every release will fail closed at the environment gate.
 on:
   push:
-    branches: [main]
+    tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
       skip_migrations:
@@ -32,12 +40,30 @@ jobs:
     timeout-minutes: 60
 
     env:
-      TAG: ${{ github.sha }}
+      # Images carry both: VERSION is what a human rolls back to, SHA is what
+      # uniquely identifies the build. Neither is `latest`, which moves.
+      VERSION: ${{ github.ref_name }}
+      SHA: ${{ github.sha }}
       DEPLOY_DIR: /srv/knowledge
       COMPOSE: docker compose -f /srv/knowledge/docker-compose.prod.yml
 
     steps:
+      # Full history: the ancestry check below needs more than the tagged commit.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # A tag can be cut from any commit in the repository, including one that
+      # never passed CI on main. Releases come from main or they do not happen.
+      - name: Verify the tag is on main
+        if: github.ref_type == 'tag'
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::$VERSION ($SHA) is not an ancestor of origin/main — refusing to deploy"
+            exit 1
+          fi
+          echo "$VERSION is on main"
 
       # The stack runs out of /srv/knowledge, not out of the runner workspace,
       # which CI rewrites on every job. Only config crosses over; .env is
@@ -50,20 +76,26 @@ jobs:
 
       # SEQUENTIALLY, never in parallel: two concurrent tsc processes against a
       # 3.8 GB ceiling is the likeliest way this box OOMs. Each image is tagged
-      # with the commit SHA and with latest, so a rollback is a retag rather
-      # than a rebuild.
+      # with the version, the commit SHA and latest, so a rollback is a retag
+      # rather than a rebuild:
+      #   docker tag knowledge-api:v0.4.0 knowledge-api:latest && compose up -d
       - name: Build api image
         run: |
-          docker build -f Dockerfile.api -t "knowledge-api:$TAG" -t knowledge-api:latest .
+          docker build -f Dockerfile.api \
+            -t "knowledge-api:$VERSION" -t "knowledge-api:$SHA" -t knowledge-api:latest .
 
       - name: Build web image
         run: |
-          docker build -f Dockerfile.web -t "knowledge-web:$TAG" -t knowledge-web:latest .
+          docker build -f Dockerfile.web \
+            -t "knowledge-web:$VERSION" -t "knowledge-web:$SHA" -t knowledge-web:latest .
 
       # Bring datastores up first so migrations have something to talk to.
       - name: Start datastores
         run: $COMPOSE up -d --wait postgres redis minio arcadedb
 
+      # Forward-only, and the database does NOT roll back with a retagged image.
+      # That is why every migration must be runnable by the previous release:
+      # docs/versioning.md#rollback-and-the-expandcontract-rule.
       - name: Run migrations
         if: ${{ !inputs.skip_migrations }}
         run: $COMPOSE run --rm --no-deps api npx prisma migrate deploy
@@ -89,10 +121,12 @@ jobs:
 
       - name: Report status
         if: always()
-        run: $COMPOSE ps
+        run: |
+          echo "deployed $VERSION ($SHA)"
+          $COMPOSE ps
 
       # Keeps the box from filling up over months of deploys. Tagged images
-      # (including the previous SHA) survive; only dangling layers go.
+      # (including the previous version) survive; only dangling layers go.
       - name: Prune dangling images
         if: success()
         run: docker image prune -f

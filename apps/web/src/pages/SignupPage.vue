@@ -5,7 +5,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
 const { t } = useI18n()
@@ -37,10 +37,10 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto my-auto mt-16 max-w-sm">
-    <Card>
-      <CardHeader>
-        <CardTitle>{{ t('auth.createAccount') }}</CardTitle>
+  <div class="w-full max-w-[25rem]">
+    <Card class="border-0 bg-transparent shadow-none sm:border sm:bg-card sm:shadow-sm">
+      <CardHeader class="text-center">
+        <h1 data-slot="card-title" class="leading-none font-semibold">{{ t('auth.createAccount') }}</h1>
         <CardDescription>{{ t('auth.signUpJoinHint') }}</CardDescription>
       </CardHeader>
       <CardContent>
@@ -53,10 +53,16 @@ async function submit() {
             <label class="text-sm font-medium" for="email">{{ t('auth.email') }}</label>
             <Input id="email" v-model="email" type="email" required autocomplete="email" placeholder="you@example.com" />
           </div>
+          <!-- The rule rides the label row rather than sitting under the field:
+               it is a condition of typing, so it has to be readable before you
+               start, and it leaves the space under the input free for the thing
+               that belongs there — what went wrong. -->
           <div class="space-y-1">
-            <label class="text-sm font-medium" for="password">{{ t('auth.password') }}</label>
-            <Input id="password" v-model="password" type="password" required minlength="8" autocomplete="new-password" />
-            <p class="text-xs text-muted-foreground">{{ t('auth.atLeast8') }}</p>
+            <div class="flex items-baseline justify-between gap-3">
+              <label class="text-sm font-medium" for="password">{{ t('auth.password') }}</label>
+              <span id="password-hint" class="text-xs text-muted-foreground">{{ t('auth.atLeast8') }}</span>
+            </div>
+            <Input id="password" v-model="password" type="password" required minlength="8" autocomplete="new-password" aria-describedby="password-hint" />
           </div>
           <div class="space-y-1">
             <label class="text-sm font-medium" for="confirm">{{ t('auth.confirmPassword') }}</label>
@@ -64,9 +70,9 @@ async function submit() {
           </div>
           <Button class="w-full" type="submit" :disabled="busy">{{ busy ? t('auth.creating') : t('auth.signUp') }}</Button>
         </form>
-        <p class="mt-4 text-sm text-muted-foreground">
+        <p class="mt-3 text-center text-sm text-muted-foreground">
           {{ t('auth.alreadyHaveAccount') }}
-          <RouterLink class="hover:text-foreground hover:underline" to="/login">{{ t('auth.logIn') }}</RouterLink>
+          <RouterLink class="inline-block py-1 hover:text-foreground hover:underline" to="/login">{{ t('auth.logIn') }}</RouterLink>
         </p>
       </CardContent>
     </Card>

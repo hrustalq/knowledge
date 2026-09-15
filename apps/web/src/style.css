@@ -772,6 +772,71 @@
   }
 }
 
+/* ------------------------------------------------------------ auth card ---
+ * Sign in ⇄ create account is a lateral move between two states of one card,
+ * so it slides sideways instead of taking the depth push the panes take. These
+ * four routes are siblings, not one inside the other: they travel equally and
+ * oppositely, the reading the pane rule calls a carousel, which is the right
+ * account of a row of tabs and the wrong account of going deeper.
+ *
+ * A Vue <Transition> and not a view transition — the exception in this file,
+ * and worth the sentence. The card lives inside the part of the DOM being
+ * replaced, so it is unmounted and remounted by the swap, and a
+ * view-transition name on an element that leaves the DOM mid-capture aborts the
+ * whole transition with an InvalidStateError: silently, as a plain cut. The
+ * pane transitions never meet this because `[data-kn-pane]` exists on both
+ * sides of every navigation. Measured, not assumed.
+ *
+ * `out-in` because the two cards carry different forms: any window where both
+ * are half-opaque is two sets of labels and wells on top of each other at
+ * different offsets, which reads as a glitch rather than a dissolve. The
+ * distance is a percentage of the card's own box, so it stays in proportion at
+ * every width instead of carrying a desktop number that would swamp a phone.
+ */
+.kn-auth-fwd-leave-active,
+.kn-auth-back-leave-active {
+  transition: opacity 110ms ease-out, transform 110ms ease-out;
+}
+.kn-auth-fwd-enter-active,
+.kn-auth-back-enter-active {
+  transition: opacity 200ms var(--pane-ease), transform 200ms var(--pane-ease);
+}
+
+.kn-auth-fwd-leave-to {
+  opacity: 0;
+  transform: translateX(-12%);
+}
+.kn-auth-fwd-enter-from {
+  opacity: 0;
+  transform: translateX(12%);
+}
+.kn-auth-back-leave-to {
+  opacity: 0;
+  transform: translateX(12%);
+}
+.kn-auth-back-enter-from {
+  opacity: 0;
+  transform: translateX(-12%);
+}
+
+/* Reduced motion keeps the crossfade and drops the travel — the same trade the
+   panes make. A swap with no motion at all is the jump cut this setting is not
+   asking for. */
+@media (prefers-reduced-motion: reduce) {
+  .kn-auth-fwd-leave-active,
+  .kn-auth-back-leave-active,
+  .kn-auth-fwd-enter-active,
+  .kn-auth-back-enter-active {
+    transition: opacity 100ms linear;
+  }
+  .kn-auth-fwd-leave-to,
+  .kn-auth-back-leave-to,
+  .kn-auth-fwd-enter-from,
+  .kn-auth-back-enter-from {
+    transform: none;
+  }
+}
+
 /* ---------------------------------------------------------------- graph ---
  * The relation graph's two bits of chrome. Both exist because the browser
  * ships its own look for a range track and neither the OS slider nor an

@@ -6,7 +6,7 @@ import { toast } from 'vue-sonner'
 import type { ForgotPasswordResponse } from '@knowledge/contracts'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
 const { t } = useI18n()
@@ -35,10 +35,10 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto my-auto mt-16 max-w-sm">
-    <Card>
-      <CardHeader>
-        <CardTitle>{{ t('auth.resetTitle') }}</CardTitle>
+  <div class="w-full max-w-[25rem]">
+    <Card class="border-0 bg-transparent shadow-none sm:border sm:bg-card sm:shadow-sm">
+      <CardHeader class="text-center">
+        <h1 data-slot="card-title" class="leading-none font-semibold">{{ t('auth.resetTitle') }}</h1>
         <CardDescription>{{ t('auth.forgotIssueHint') }}</CardDescription>
       </CardHeader>
       <CardContent>
@@ -52,7 +52,7 @@ async function submit() {
             {{ t('auth.devModeToken') }}
             <RouterLink class="underline" :to="`/reset-password?token=${debugToken}`">{{ t('auth.useItNow') }}</RouterLink>
           </p>
-          <RouterLink class="block text-muted-foreground hover:text-foreground hover:underline" to="/login">
+          <RouterLink class="inline-flex min-h-11 items-center text-muted-foreground hover:text-foreground hover:underline" to="/login">
             {{ t('auth.backToLogin') }}
           </RouterLink>
         </div>
@@ -62,7 +62,7 @@ async function submit() {
             <Input id="email" v-model="email" type="email" required autocomplete="email" placeholder="you@example.com" />
           </div>
           <Button class="w-full" type="submit" :disabled="busy">{{ busy ? t('auth.sending') : t('auth.forgotSubmit') }}</Button>
-          <RouterLink class="block text-center text-sm text-muted-foreground hover:text-foreground hover:underline" to="/login">
+          <RouterLink class="mx-auto flex min-h-11 items-center justify-center text-sm text-muted-foreground hover:text-foreground hover:underline" to="/login">
             {{ t('auth.backToLogin') }}
           </RouterLink>
         </form>

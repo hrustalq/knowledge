@@ -5,7 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
 const { t } = useI18n()
@@ -40,10 +40,10 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto mt-16 max-w-sm">
-    <Card>
-      <CardHeader>
-        <CardTitle>{{ t('auth.chooseNewPassword') }}</CardTitle>
+  <div class="w-full max-w-[25rem]">
+    <Card class="border-0 bg-transparent shadow-none sm:border sm:bg-card sm:shadow-sm">
+      <CardHeader class="text-center">
+        <h1 data-slot="card-title" class="leading-none font-semibold">{{ t('auth.chooseNewPassword') }}</h1>
         <CardDescription>{{ t('auth.resetSignsOutEverywhere') }}</CardDescription>
       </CardHeader>
       <CardContent>
@@ -56,8 +56,11 @@ async function submit() {
         </p>
         <form v-else class="space-y-3" @submit.prevent="submit">
           <div class="space-y-1">
-            <label class="text-sm font-medium" for="password">{{ t('auth.newPassword') }}</label>
-            <Input id="password" v-model="password" type="password" required minlength="8" autocomplete="new-password" />
+            <div class="flex items-baseline justify-between gap-3">
+              <label class="text-sm font-medium" for="password">{{ t('auth.newPassword') }}</label>
+              <span id="password-hint" class="text-xs text-muted-foreground">{{ t('auth.atLeast8') }}</span>
+            </div>
+            <Input id="password" v-model="password" type="password" required minlength="8" autocomplete="new-password" aria-describedby="password-hint" />
           </div>
           <div class="space-y-1">
             <label class="text-sm font-medium" for="confirm">{{ t('auth.confirmPassword') }}</label>

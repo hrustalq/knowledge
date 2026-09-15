@@ -14,11 +14,13 @@ export function createRouter() {
     history: import.meta.env.SSR ? createMemoryHistory() : createWebHistory(),
     routes: [
       { path: '/', redirect: '/documents' },
-      // Auth flow (public)
-      { path: '/login', component: () => import('@/pages/LoginPage.vue'), meta: { public: true } },
-      { path: '/signup', component: () => import('@/pages/SignupPage.vue'), meta: { public: true } },
-      { path: '/forgot-password', component: () => import('@/pages/ForgotPasswordPage.vue'), meta: { public: true } },
-      { path: '/reset-password', component: () => import('@/pages/ResetPasswordPage.vue'), meta: { public: true } },
+      // Auth flow (public). `authCard`: one card in one unchanging shell, so a
+      // move between any two of them animates the card and not the page — see
+      // the cardSwap branch in installViewTransitions().
+      { path: '/login', component: () => import('@/pages/LoginPage.vue'), meta: { public: true, authCard: true } },
+      { path: '/signup', component: () => import('@/pages/SignupPage.vue'), meta: { public: true, authCard: true } },
+      { path: '/forgot-password', component: () => import('@/pages/ForgotPasswordPage.vue'), meta: { public: true, authCard: true } },
+      { path: '/reset-password', component: () => import('@/pages/ResetPasswordPage.vue'), meta: { public: true, authCard: true } },
       { path: '/403', component: () => import('@/pages/ForbiddenPage.vue'), meta: { public: true } },
       // App (authenticated — guard redirects to /login when AUTH_MODE=api-key)
       // meta.fill: the pages landing leads with a graph canvas, which needs a
@@ -229,6 +231,18 @@ export function installViewTransitions(router: Router) {
       return true
     }
 
+    // Sign in ↔ create account is not a change of place: the shell, the logo
+    // and the card's own header stay exactly where they are, and only the
+    // card's size and fields differ. The signed-out shell animates that swap
+    // itself with an ordinary Vue <Transition> (see App.vue), so this stands
+    // aside rather than running a second mechanism across the same moment —
+    // two of them snapshotting one swap fight, and the capture freezes the
+    // card the other one is trying to move.
+    if (to.meta.authCard && from.meta.authCard) {
+      void nextTick(() => resetScroll(to))
+      return true
+    }
+
     // Both are set before the capture: the name decides what is snapshotted and
     // the direction decides which way it travels, and `startViewTransition`
     // captures the moment it is called.
@@ -240,6 +254,12 @@ export function installViewTransitions(router: Router) {
       const transition = document.startViewTransition(async () => {
         // Let the navigation finish, then wait for the DOM it produces — that
         // awaited render is what the API captures as the "new" state.
+        //
+        // One tick and no longer. Holding this callback open across a further
+        // await keeps it pending while Vue unmounts the old tree, and a named
+        // element that leaves the DOM mid-capture fails the whole transition
+        // with an InvalidStateError on `ready` — which shows up as no animation
+        // rather than as an error. Measured, not assumed.
         resolve(true)
         await nextTick()
         // Again, because the pane may be a different element now: signing in
@@ -301,6 +321,30 @@ function clearPaneNames(): HTMLElement[] {
   const panes = [...document.querySelectorAll<HTMLElement>('[data-kn-pane]')]
   panes.forEach((el) => el.style.removeProperty('view-transition-name'))
   return panes
+}
+
+/**
+ * The reading order of the auth cards, and so which way one slides to reach the
+ * next. Exported because the shell animates this swap, not the router.
+ *
+ * Deliberately not `directionBetween`: all four routes are one segment deep, so
+ * depth cannot separate them, and history would answer differently depending on
+ * how you arrived — the same two cards sliding left on a click and right on
+ * Back. Tabs do not behave that way, and this is a row of tabs. A fixed order
+ * makes sign-in ⇄ create-account one movement and its exact reverse, whichever
+ * way you got there.
+ *
+ * A path that is not on the list — /403 shares this shell — sorts after every
+ * path that is, so arriving reads as going forward and leaving as coming back.
+ */
+const AUTH_ORDER = ['/login', '/signup', '/forgot-password', '/reset-password']
+
+export function authSlideDirection(toPath: string, fromPath: string): 'fwd' | 'back' {
+  const rank = (path: string) => {
+    const i = AUTH_ORDER.indexOf(path)
+    return i === -1 ? AUTH_ORDER.length : i
+  }
+  return rank(toPath) < rank(fromPath) ? 'back' : 'fwd'
 }
 
 /**

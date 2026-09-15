@@ -12,7 +12,17 @@ traffic**. Production moves only when a `vX.Y.Z` tag is pushed. Entries are writ
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.2.0] — 2026-09-15
+
+### Breaking
+
+- `PATCH /v1/workflows/runs/:id/nodes/:nodeId` now validates `draft.relations`
+  element by element: each entry needs a `type` from the relation allowlist and a
+  `target.key`. `HTTP`
+  **Migration:** send each entry as
+  `{ "type": "IMPLEMENTS", "target": { "type": "service", "key": "service:identity" } }`,
+  or omit `relations` entirely. The field previously accepted any array and was
+  ignored by every executor, so a client that never sent it is unaffected.
 
 ### Added
 
@@ -131,5 +141,6 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/hrustalq/knowledge/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/hrustalq/knowledge/releases/tag/v0.1.0

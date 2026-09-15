@@ -111,6 +111,30 @@ export class GraphService {
         this.logger.warn(`DDL skipped ("${s}"): ${(e as Error).message}`);
       }
     }
+
+    // Tolerating each statement individually is right — but tolerating ALL of
+    // them is not. Verify the result instead of trusting it: if the types are
+    // absent the worker cannot index anything, and without this check that
+    // surfaces hours later as an endless stream of jobs failing on "Type with
+    // name 'Chunk' was not found", with the real cause (a 403 at boot) already
+    // scrolled out of the logs. Throwing here fails onModuleInit, so the worker
+    // refuses to start rather than pretending to work.
+    const REQUIRED_TYPES = ['Document', 'DocumentRevision', 'Chunk', 'Entity', 'HAS_REVISION', 'HAS_CHUNK'];
+    const existing = new Set(
+      (await this.arcade.query<{ name?: string }>('sql', 'select from schema:types'))
+        .map((t) => t.name)
+        .filter((n): n is string => typeof n === 'string'),
+    );
+    const missing = REQUIRED_TYPES.filter((t) => !existing.has(t));
+    if (missing.length > 0) {
+      throw new Error(
+        `ArcadeDB schema bootstrap failed: missing ${missing.join(', ')}. ` +
+          'Every CREATE above was rejected. The usual cause is permissions, not the DDL: ArcadeDB answers 403 ' +
+          "\"User is not allowed to update schema\" when ARCADE_USER has no admin group ON THIS DATABASE — a " +
+          'database-scoped entry with a null group silently shadows a server-wide {"*":["admin"]}. See the ' +
+          'defaultDatabases note in docker-compose.prod.yml; the group is the third bracket element.',
+      );
+    }
   }
 
   /**

@@ -108,10 +108,21 @@ git log --oneline "$(git describe --tags --abbrev=0)..main"
 #    and bump the version surfaces listed in docs/versioning.md#known-drift:
 #      apps/api/src/config/swagger.ts   .setVersion('X.Y.Z')
 #      apps/api/src/mcp/mcp.service.ts  new McpServer({ version: 'X.Y.Z' })
+#
+#    The release commit travels by pull request like every other change: `main`
+#    requires one plus a passing `check`, so pushing it straight to main is
+#    rejected by the ruleset ("Required status check \"check\" is expected").
+git switch -c chore/release-vX.Y.Z
 git commit -am "chore(release): vX.Y.Z"
-git push
+git push -u origin chore/release-vX.Y.Z
+gh pr create --title "chore(release): vX.Y.Z" --fill   # merge once check is green
 
-# 4. Tag the release commit. This is the deploy.
+# 4. Tag the commit that LANDED ON MAIN. This is the deploy.
+#    Squash merge rewrites the SHA, so tagging your local release commit produces
+#    a tag that is not an ancestor of main. The workflow's ancestry check refuses
+#    it — correctly, but only after you have already pushed the tag and have to
+#    delete it again.
+git checkout main && git pull
 git tag -a vX.Y.Z -m "vX.Y.Z"
 git push origin vX.Y.Z
 ```

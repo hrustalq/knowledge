@@ -10,11 +10,17 @@
 //
 // Pinning is conditional, and that condition is the whole difference between
 // a chat that follows the conversation and one that yanks you away from
-// something you were reading: it auto-scrolls only while you are already at
-// the bottom. Scroll up and the stream keeps running without moving you;
+// something you were reading: it follows the tail only while you are still
+// reading the tail. Scroll up and the stream keeps running without moving you;
 // a button offers the way back.
+//
+// Following is treated as a mode the reader owns rather than as a reading of
+// where the scrollbar sits, because in a transcript that measures itself the
+// scrollbar moves constantly with no input from anyone. The two mechanisms
+// below — a tail key that survives the end of a turn, and one observer that
+// re-aims on any size change — are what let that hold.
 import { useI18n } from 'vue-i18n'
-import { computed, nextTick, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { ArrowDown, Sparkles } from 'lucide-vue-next'
 import type { AssistantMessageInfo } from '@knowledge/contracts'
@@ -46,6 +52,8 @@ const emit = defineEmits<{
 }>()
 
 const scrollEl = ref<HTMLElement | null>(null)
+/** Everything inside the scrollport. Its height is what actually moves the tail. */
+const contentEl = ref<HTMLElement | null>(null)
 /** Distance from the bottom still counted as "following along". */
 const PIN_THRESHOLD = 96
 const pinned = ref(true)
@@ -62,6 +70,50 @@ const rows = computed<Row[]>(() => [
   ...(props.live ? [{ kind: 'live' as const, live: props.live }] : []),
 ])
 
+/**
+ * The tail row keeps one virtualizer key for the whole turn — while it streams,
+ * and after it lands as a persisted message.
+ *
+ * This is what stops the lurch at the end of a stream. Measurements are cached
+ * per key, and the `done` frame swaps the live row for a message row in a
+ * single tick without changing the row count. Keying that message by its id
+ * makes the swap a cache miss: a measured 1200px answer becomes the 132px
+ * estimate for one frame, the content collapses by the difference, the browser
+ * clamps scrollTop to the now-shorter page, and the reader is thrown up to
+ * wherever the clamp landed — the top of the reply for a long answer, just
+ * above it for a short one. Holding the key steady instead lets Vue patch the
+ * same row element in place, so its height moves continuously and there is
+ * nothing to clamp.
+ *
+ * The key rotates per turn rather than being the literal string 'live', so the
+ * message that inherits it keeps it for good without colliding with the next
+ * turn's live row.
+ */
+let turnSeq = 0
+const liveKey = ref<string | null>(null)
+/** The message that inherited the live row's key when its turn landed. */
+const tailOwner = ref<{ id: string; key: string } | null>(null)
+
+watch(
+  () => props.live !== null,
+  (streaming) => {
+    if (streaming) {
+      turnSeq += 1
+      liveKey.value = `turn-${turnSeq}`
+      return
+    }
+    // The turn ended, so whatever is last now is the message that row became.
+    // Both endings arrive here — `done` pushing the reply, and a stopped turn
+    // re-read from the server — so neither needs its own case.
+    const last = props.messages.at(-1)
+    if (last && liveKey.value) tailOwner.value = { id: last.id, key: liveKey.value }
+    liveKey.value = null
+  },
+  // Synchronous: the key has to be settled before the render that drops the
+  // live row, or the swap is a cache miss after all.
+  { flush: 'sync', immediate: true },
+)
+
 const virtualizer = useVirtualizer(
   computed(() => ({
     count: rows.value.length,
@@ -70,12 +122,14 @@ const virtualizer = useVirtualizer(
     // inward as rows measure, undershooting makes it jump outward.
     estimateSize: () => 132,
     overscan: 6,
-    // Keyed by message id so measurements survive a list that grows at the
-    // end (and the live row, which is the only one that changes height while
-    // it is on screen).
+    // Keyed so measurements survive a list that grows at the end, and so the
+    // tail keeps its measured height across the live → persisted handoff.
     getItemKey: (index: number) => {
       const row = rows.value[index]
-      return row?.kind === 'live' ? 'live' : (row?.message.id ?? index)
+      if (!row) return index
+      if (row.kind === 'live') return liveKey.value ?? 'live'
+      const owner = tailOwner.value
+      return owner?.id === row.message.id ? owner.key : row.message.id
     },
   })),
 )
@@ -114,96 +168,113 @@ function atBottom(el: HTMLElement): boolean {
 }
 
 /**
- * Scrolls we caused ourselves, which must not be read as the reader
- * scrolling away.
+ * Releasing the pin is something the reader does, not something the layout
+ * does.
  *
- * This is the whole subtlety of pinning a virtualized transcript. Rows are
- * measured after they paint, so a long answer's real height only lands a
- * frame or two later — and until it does, "scrolled to the bottom" quietly
- * becomes "800px from the bottom" with no input from anyone. Deriving the pin
- * from the raw scroll position alone drops it on the first tall reply and
- * again on every token while streaming. The window is time-based rather than
- * one frame because a scroll event can arrive several frames after the write
- * that caused it.
+ * Deriving it from scroll position looks equivalent and is not: rows are
+ * measured after they paint, so the scrollport resizes under a viewport nobody
+ * touched — on every token, on the markdown passes that only run once the text
+ * stops arriving, on a diagram that resolves its import half a second later.
+ * Position-derived pinning reads each of those as the reader walking away and
+ * quietly stops following. Taking intent as the input instead means layout
+ * never gets a vote, which is the entire fix for a transcript that measures
+ * itself.
+ *
+ * A flick that never clears the threshold is not a decision to stop following;
+ * `onScroll` takes the pin straight back on the next frame.
  */
-const PROGRAMMATIC_WINDOW_MS = 150
-/** Longest a thread may spend re-aiming at its own bottom before it gives up. */
-const SETTLE_MAX_MS = 800
-/** Frames of an unchanged measured total that count as "the rows have settled". */
-const SETTLE_STABLE_FRAMES = 3
-let programmaticUntil = 0
-
-function jumpToBottom(el: HTMLElement, behavior: ScrollBehavior) {
-  programmaticUntil = performance.now() + PROGRAMMATIC_WINDOW_MS
-  el.scrollTo({ top: el.scrollHeight, behavior })
+function releasePin() {
+  pinned.value = false
 }
 
-function onScroll() {
-  if (performance.now() < programmaticUntil) return
-  const el = scrollEl.value
-  if (el) pinned.value = atBottom(el)
+function onWheel(e: WheelEvent) {
+  if (e.deltaY < 0) releasePin()
 }
 
-function scrollToEnd(behavior: ScrollBehavior = 'smooth') {
-  const el = scrollEl.value
-  if (!el) return
-  pinned.value = true
-  jumpToBottom(el, behavior)
+let touchY = 0
+function onTouchStart(e: TouchEvent) {
+  touchY = e.touches[0]?.clientY ?? 0
 }
-
-/** Follow the tail while the reader is following it. */
-async function followTail() {
-  if (!pinned.value) return
-  await nextTick()
-  const el = scrollEl.value
-  if (el) jumpToBottom(el, 'auto')
+function onTouchMove(e: TouchEvent) {
+  const y = e.touches[0]?.clientY ?? 0
+  // Dragging the content downward means travelling up the transcript.
+  if (y > touchY + 2) releasePin()
+  touchY = y
 }
 
 /**
- * Re-aims at the bottom for a few frames after a thread opens.
- *
- * One scroll is not enough: the rows have not been measured yet, so the
- * scrollport is still sized from the 132px estimate and "the bottom" is
- * hundreds of pixels short of where it ends up. Re-aiming for a bounded burst
- * of frames rides the measurements in. Bounded is the point — following the
- * measured total indefinitely feeds the ResizeObserver back into itself and
- * the transcript stops answering the scroll wheel at all.
+ * The scrollbar and the keyboard are the ways up that fire no gesture we can
+ * name, so position still gets a vote — but only across a scrollport that held
+ * still. A scroll that arrives together with a height change is the transcript
+ * re-laying out beneath a stationary reader, which is the exact event the old
+ * position-derived pin mistook for walking away.
  */
-function settleToBottom() {
-  const deadline = performance.now() + SETTLE_MAX_MS
-  let lastHeight = -1
-  let stableFrames = 0
-  const step = () => {
-    const el = scrollEl.value
-    if (!el || !pinned.value) return
-    jumpToBottom(el, 'auto')
-    stableFrames = el.scrollHeight === lastHeight ? stableFrames + 1 : 0
-    lastHeight = el.scrollHeight
-    // Stop as soon as the measured total holds still — or at the deadline,
-    // so a pathological re-measure loop cannot pin the scroller forever.
-    if (stableFrames >= SETTLE_STABLE_FRAMES || performance.now() > deadline) return
-    requestAnimationFrame(step)
-  }
-  requestAnimationFrame(step)
+let lastScrollHeight = 0
+function onScroll() {
+  const el = scrollEl.value
+  if (!el) return
+  const resized = el.scrollHeight !== lastScrollHeight
+  lastScrollHeight = el.scrollHeight
+  if (atBottom(el)) pinned.value = true
+  else if (!resized) pinned.value = false
 }
 
-watch(() => props.messages.length, () => void followTail())
-// The live row grows on every token, so its measured height is what actually
-// moves the tail — watching the text is what keeps the caret in view.
-watch(() => props.live?.text.length ?? 0, () => void followTail())
-watch(() => props.live?.steps.length ?? 0, () => void followTail())
+/** Glue the viewport to the tail. Never animated — a stream has to keep up with tokens. */
+function stickToBottom() {
+  const el = scrollEl.value
+  if (!el || !pinned.value) return
+  el.scrollTop = el.scrollHeight
+  lastScrollHeight = el.scrollHeight
+}
+
+/** Instant by default; the jump button is the one caller that animates. */
+function scrollToEnd(behavior: ScrollBehavior = 'auto') {
+  const el = scrollEl.value
+  if (!el) return
+  pinned.value = true
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (behavior === 'smooth' && !reduced) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  else stickToBottom()
+}
+
+/**
+ * One observer in place of every timer this used to run.
+ *
+ * Everything that moves the tail is a size change somewhere in the scrollport:
+ * a token landing, the live row becoming a persisted message, the markdown
+ * passes deferred until the text stopped arriving, a mermaid diagram resolving
+ * its dynamic import, or the composer growing a line and taking the
+ * scrollport's height with it. Watching for the size change catches all of
+ * them and needs no deadline — where a bounded frame burst had to guess how
+ * long settling takes, and guessed wrong for anything that loaded
+ * asynchronously.
+ *
+ * Writing scrollTop cannot change scrollHeight, so this does not re-enter.
+ */
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  pinned.value = true
+  resizeObserver = new ResizeObserver(() => stickToBottom())
+  if (scrollEl.value) resizeObserver.observe(scrollEl.value)
+  if (contentEl.value) resizeObserver.observe(contentEl.value)
+  stickToBottom()
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+})
+
 watch(
   () => props.threadId,
   () => {
     pinned.value = true
-    void nextTick(settleToBottom)
+    // A different thread's messages never streamed here, so nothing owns the tail key.
+    tailOwner.value = null
+    void nextTick(stickToBottom)
   },
 )
-
-onMounted(() => {
-  pinned.value = true
-  void nextTick(settleToBottom)
-})
 
 defineExpose({ scrollToEnd })
 </script>
@@ -214,8 +285,11 @@ defineExpose({ scrollToEnd })
       ref="scrollEl"
       class="quiet-scroll h-full overflow-y-auto overscroll-contain"
       @scroll.passive="onScroll"
+      @wheel.passive="onWheel"
+      @touchstart.passive="onTouchStart"
+      @touchmove.passive="onTouchMove"
     >
-      <div class="mx-auto w-full max-w-4xl px-4 py-6 lg:px-8">
+      <div ref="contentEl" class="mx-auto w-full max-w-4xl px-4 py-6 lg:px-8">
         <!-- Loading a thread: shaped placeholders, not a spinner over nothing. -->
         <div v-if="loading" class="space-y-6" aria-hidden="true">
           <div class="flex justify-end"><Skeleton class="h-10 w-64 rounded-2xl" /></div>
@@ -322,7 +396,7 @@ defineExpose({ scrollToEnd })
         variant="outline"
         size="sm"
         class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-md backdrop-blur-lg"
-        @click="scrollToEnd()"
+        @click="scrollToEnd('smooth')"
       >
         <ArrowDown class="size-3.5" />
         {{ t('chat.jumpToLatest') }}

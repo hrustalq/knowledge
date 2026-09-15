@@ -12,7 +12,7 @@ traffic**. Production moves only when a `vX.Y.Z` tag is pushed. Entries are writ
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.1.0] — 2026-09-15
 
 ### Added
 
@@ -63,12 +63,11 @@ in the pull request that introduces them — see
   `squash`. Narrowing `allowed_merge_methods` to `["squash"]` makes the
   squash-only rule enforced rather than conventional.
 
-## [0.1.0] — 2026-09-14
+### Platform baseline
 
-First tagged release. Establishes the baseline: everything below was already
-serving traffic at `knowledge.hrustalq.dev` before tagging began.
-
-### Added
+Everything in this subsection was already serving traffic at
+`knowledge.hrustalq.dev` before tagging began; `v0.1.0` is the first tag to name
+it.
 
 - **Platform core (plan.md phases 0–5)** — three-store separation across
   PostgreSQL (transactional truth), MinIO (raw bytes) and ArcadeDB (graph +
@@ -91,5 +90,4 @@ serving traffic at `knowledge.hrustalq.dev` before tagging began.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[Unreleased]: https://github.com/hrustalq/knowledge/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/hrustalq/knowledge/releases/tag/v0.1.0

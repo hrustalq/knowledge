@@ -70,7 +70,7 @@ export function runInTransaction<T>(
  * an uncommitted row races the worker to a row that is not there yet, and a job
  * enqueued for a row that then rolls back never has one.
  *
- * Wrapping such a method in an outer transaction turns its own `$transaction`
+ * Wrapping such a method in an outer transaction turns its own `withTransaction`
  * into a join, so "after commit" silently becomes "before commit" and that
  * invariant inverts. Every post-commit side effect — queue enqueues, event
  * publishes, activity records — has to go through here instead, so it fires when
@@ -128,6 +128,22 @@ export async function drainAfterCommit(scope: TransactionScope): Promise<void> {
  * and Prisma's interactive client does not expose savepoints, so "join the
  * outer one" is the only correct semantics — and the outer commit is then the
  * only commit, which is exactly what the callers above need.
+ *
+ * The consequence is a trap, and it has already cost a production outage: since
+ * `$transaction` is excluded here — and `Prisma.TransactionClient` does not
+ * carry it anyway, so it would fall through regardless — calling
+ * `prisma.$transaction(...)` inside an open boundary does NOT join. It opens a
+ * second transaction on a second pooled connection. If that inner transaction
+ * touches a row the outer one has locked, the two wait on each other forever:
+ * the outer connection is `idle in transaction` rather than blocked, so
+ * Postgres cannot see a cycle and its deadlock detector never fires. The
+ * request hangs until something kills the connection, and each retry wedges
+ * another pair until the pool starves.
+ *
+ * So: in any service that might run under an outer boundary, use
+ * `withTransaction`, never `$transaction`. `DocumentsService.finalizeRevision`
+ * is the worked example — it deadlocked against
+ * `MergeRequestsService.merge`'s `document_branches ... FOR UPDATE`.
  *
  * The lifecycle methods are here because Nest calls them on the provider, which
  * is the proxy; connecting or disconnecting a transaction client is meaningless.

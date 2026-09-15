@@ -84,8 +84,12 @@ export class DocumentsService {
       }
     }
 
-    const { document, revision } = await this.prisma.$transaction(async (tx) => {
-      const document = await tx.document.create({
+    // `withTransaction` so an outer boundary absorbs this one — see the note in
+    // finalizeRevision. A raw `$transaction` here commits on its own connection
+    // regardless of the caller, so an import or connector pull whose outer
+    // boundary later rolled back still left the page durably created.
+    const { document, revision } = await this.prisma.withTransaction(async () => {
+      const document = await this.prisma.document.create({
         data: {
           workspaceId: dto.workspaceId,
           projectId: dto.projectId,
@@ -94,10 +98,10 @@ export class DocumentsService {
           parentId: dto.parentId ?? null,
         },
       });
-      const branch = await tx.documentBranch.create({
+      const branch = await this.prisma.documentBranch.create({
         data: { documentId: document.id, name: 'main', headRevisionId: null },
       });
-      const revision = await tx.documentRevision.create({
+      const revision = await this.prisma.documentRevision.create({
         data: {
           documentId: document.id,
           branchId: branch.id,
@@ -109,7 +113,7 @@ export class DocumentsService {
         },
       });
       const s3Key = this.storage.revisionObjectKey(dto.workspaceId, document.id, revision.id, 'source.md');
-      await tx.documentRevision.update({ where: { id: revision.id }, data: { s3Key } });
+      await this.prisma.documentRevision.update({ where: { id: revision.id }, data: { s3Key } });
       return { document, revision: { ...revision, s3Key } };
     });
 
@@ -267,15 +271,24 @@ export class DocumentsService {
       where: { documentId, branchId: revision.branchId, contentHash },
     });
     if (existing && existing.id !== revision.id) {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.revisionParent.deleteMany({ where: { revisionId: revision.id } });
-        await tx.documentRevision.delete({ where: { id: revision.id } });
+      await this.prisma.withTransaction(async () => {
+        await this.prisma.revisionParent.deleteMany({ where: { revisionId: revision.id } });
+        await this.prisma.documentRevision.delete({ where: { id: revision.id } });
       });
       return { revisionId: existing.id, status: existing.status as RevisionStatus, ingestionJobId: null, deduplicated: true };
     }
 
-    const { job } = await this.prisma.$transaction(async (tx) => {
-      await tx.documentRevision.update({
+    // `withTransaction`, NOT `$transaction`: `$transaction` is in
+    // NEVER_FROM_TRANSACTION, so under an outer boundary it opens a SECOND
+    // transaction on a SECOND pooled connection instead of joining. That is a
+    // deadlock, not an inefficiency — `MergeRequestsService.merge` holds
+    // `document_branches ... FOR UPDATE` on the outer connection and this block
+    // updates that same row, so the inner connection waits for a lock the outer
+    // will not release until this call returns. Postgres sees the outer as
+    // `idle in transaction` rather than blocked, so its deadlock detector never
+    // fires and the request hangs until something kills the connection.
+    const { job } = await this.prisma.withTransaction(async () => {
+      await this.prisma.documentRevision.update({
         where: { id: revision.id },
         data: {
           status: 'finalized',
@@ -286,7 +299,7 @@ export class DocumentsService {
       });
       // Advance the head of the branch this revision belongs to (branch_id,
       // plan.md §4); legacy rows without branchId fall back to the default branch.
-      await tx.documentBranch.update({
+      await this.prisma.documentBranch.update({
         where: revision.branchId
           ? { id: revision.branchId }
           : { documentId_name: { documentId, name: document.defaultBranch } },
@@ -294,7 +307,7 @@ export class DocumentsService {
       });
       // Outbox (plan.md §5): the job row commits atomically with the status change;
       // enqueue happens after commit, the sweeper covers enqueue failures.
-      const job = await tx.ingestionJob.create({
+      const job = await this.prisma.ingestionJob.create({
         data: {
           workspaceId: document.workspaceId,
           revisionId: revision.id,
@@ -308,7 +321,7 @@ export class DocumentsService {
 
     // Both of these are post-commit by contract, and `onCommit` is what keeps
     // them so when a caller has wrapped this method in an outer transaction: the
-    // inner `$transaction` above then joins rather than commits, and enqueueing
+    // inner `withTransaction` above then joins rather than commits, and enqueueing
     // here inline would hand the worker a job for an `ingestion_jobs` row that
     // has not committed — or never will, if the outer boundary rolls back.
     // Outside a transaction `onCommit` runs them immediately, so the un-wrapped
@@ -1136,12 +1149,18 @@ export class DocumentsService {
     });
     if (!branch) throw new NotFoundException(t('error.branch.notFound', { name: branchName, documentId }));
 
-    return this.prisma.$transaction(async (tx) => {
-      const max = await tx.documentRevision.aggregate({
+    // `withTransaction`, not `$transaction` — see the note in finalizeRevision.
+    // This is the FIRST place a merge deadlocks, before finalizeRevision is even
+    // reached: creating a revision inserts a row whose FK to `document_branches`
+    // takes a `KEY SHARE` lock on that branch row, and `MergeRequestsService.merge`
+    // already holds it `FOR UPDATE` on the outer connection. A second connection
+    // here waits for a lock that cannot be released until this call returns.
+    return this.prisma.withTransaction(async () => {
+      const max = await this.prisma.documentRevision.aggregate({
         where: { documentId },
         _max: { revisionNumber: true },
       });
-      const revision = await tx.documentRevision.create({
+      const revision = await this.prisma.documentRevision.create({
         data: {
           documentId,
           branchId: branch.id,
@@ -1154,9 +1173,12 @@ export class DocumentsService {
         },
       });
       const s3Key = this.storage.revisionObjectKey(document.workspaceId, documentId, revision.id, 'source.md');
-      const updated = await tx.documentRevision.update({ where: { id: revision.id }, data: { s3Key } });
+      const updated = await this.prisma.documentRevision.update({
+        where: { id: revision.id },
+        data: { s3Key },
+      });
       if (branch.headRevisionId) {
-        await tx.revisionParent.create({
+        await this.prisma.revisionParent.create({
           data: { revisionId: revision.id, parentRevisionId: branch.headRevisionId, parentOrder: 1 },
         });
       }

@@ -536,7 +536,14 @@
       "onePage": "«{category}» — на проверку",
       "onePageAuto": "«{category}» — сразу в дерево",
       "context": "контекст дальше",
-      "item": "элемент"
+      "item": "элемент",
+      "relations": "Связи",
+      "relationsHint": "После публикации страницы они становятся фактами графа. Цель — стабильный ключ, например «service:identity».",
+      "relationTargetPlaceholder": "service:identity",
+      "removeRelation": "Удалить связь",
+      "addRelation": "Добавить связь",
+      "tags": "Теги",
+      "tagsPlaceholder": "через, запятую"
     },
     "canvas": {
       "loading": "Загрузка холста…",
@@ -1323,7 +1330,10 @@
       },
       "propose": "Предложить правку",
       "proposed": "Создан merge request: {title}",
-      "viewProposal": "Открыть merge request"
+      "viewProposal": "Открыть merge request",
+      "applyRelations": "Применить связи",
+      "relationsApplied": "Создан merge request: {title}",
+      "nothingToApply": "Страница уже объявляет эти связи — предлагать нечего."
     },
     "providerNone": "Нет — ассистент отключён",
     "overridden": "· переопределено",

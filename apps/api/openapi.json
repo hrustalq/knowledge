@@ -3173,6 +3173,73 @@
         ]
       }
     },
+    "/v1/documents/{id}/relations/propose": {
+      "post": {
+        "operationId": "DocumentsController_proposeRelations",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeRelationsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Propose a change to the page’s frontmatter relations as a merge request (never edits the live page)",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/v1/documents/{id}/uploads": {
       "post": {
         "operationId": "DocumentsController_upload",
@@ -9558,6 +9625,80 @@
         ]
       }
     },
+    "/v1/ai/agents/runs/{id}/findings/{index}/apply-relations": {
+      "post": {
+        "operationId": "AiController_applyFindingRelations",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "required": true,
+            "in": "path",
+            "description": "Position in the run's findings array",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Open a merge request declaring the relations one finding proposes",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/agents/route": {
       "post": {
         "operationId": "AiController_routeAgent",
@@ -14002,6 +14143,63 @@
           "relation"
         ]
       },
+      "RelationRefDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "DESCRIBES",
+              "DEPENDS_ON",
+              "IMPLEMENTS",
+              "RELATED_TO",
+              "OWNED_BY",
+              "SUPERSEDES",
+              "CONTRADICTS"
+            ]
+          },
+          "targetKey": {
+            "type": "string",
+            "example": "service:identity"
+          }
+        },
+        "required": [
+          "type",
+          "targetKey"
+        ]
+      },
+      "ProposeRelationsDto": {
+        "type": "object",
+        "properties": {
+          "add": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationInputDto"
+            }
+          },
+          "remove": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationRefDto"
+            }
+          },
+          "tags": {
+            "description": "Replaces the whole tag list",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string",
+            "description": "Merge request title; defaulted when absent"
+          },
+          "description": {
+            "type": "string",
+            "description": "Why the change is being proposed"
+          }
+        }
+      },
       "CreateUploadDto": {
         "type": "object",
         "properties": {
@@ -16215,6 +16413,51 @@
           "type"
         ]
       },
+      "WorkflowRelationTargetDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "service"
+          },
+          "key": {
+            "type": "string",
+            "example": "service:identity"
+          },
+          "name": {
+            "type": "string",
+            "example": "Identity Service"
+          }
+        },
+        "required": [
+          "type",
+          "key"
+        ]
+      },
+      "WorkflowRelationDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "DESCRIBES",
+              "DEPENDS_ON",
+              "IMPLEMENTS",
+              "RELATED_TO",
+              "OWNED_BY",
+              "SUPERSEDES",
+              "CONTRADICTS"
+            ]
+          },
+          "target": {
+            "$ref": "#/components/schemas/WorkflowRelationTargetDto"
+          }
+        },
+        "required": [
+          "type",
+          "target"
+        ]
+      },
       "WorkflowNodeDraftDto": {
         "type": "object",
         "properties": {
@@ -16231,8 +16474,7 @@
           "relations": {
             "type": "array",
             "items": {
-              "type": "object",
-              "additionalProperties": true
+              "$ref": "#/components/schemas/WorkflowRelationDto"
             }
           },
           "summary": {

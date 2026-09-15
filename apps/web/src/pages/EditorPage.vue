@@ -15,6 +15,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
+  AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
   type CreateDocumentResponse,
   type CreateUploadResponse,
@@ -55,8 +56,6 @@ import ChatPane from '@/components/assistant/ChatPane.vue'
 
 const { t } = useI18n()
 
-const RELATION_TYPES = ['DESCRIBES', 'DEPENDS_ON', 'IMPLEMENTS', 'RELATED_TO', 'OWNED_BY', 'SUPERSEDES', 'CONTRADICTS'] as const
-
 interface RelationRow {
   type: string
   key: string
@@ -81,6 +80,17 @@ const body = ref('')
 const message = ref('')
 const relationRows = ref<RelationRow[]>([])
 const tags = ref('')
+/**
+ * Every frontmatter key this editor does not model.
+ *
+ * The settings sheet offers `relations:` and `tags:`, but a page's frontmatter
+ * routinely carries more — `source:` is written by every connector adapter, and
+ * `glossary: false` turns term linking off for a page (DocumentCanvas reads it).
+ * `buildSource` rebuilt the block from the two fields on screen, so everything
+ * else was silently destroyed on every save, on both the create and edit paths.
+ * Held here on load and re-emitted verbatim instead.
+ */
+const otherFrontmatter = ref<Record<string, unknown>>({})
 const headRevisionId = ref<string | null>(null)
 const busy = ref(false)
 const loading = ref(false)
@@ -111,7 +121,7 @@ const parentSelection = computed<string[]>({
   },
 })
 
-const relationTypeOptions: AutocompleteOption[] = RELATION_TYPES.map((t) => ({ value: t, label: t }))
+const relationTypeOptions: AutocompleteOption[] = AUTHORABLE_RELATION_TYPES.map((t) => ({ value: t, label: t }))
 
 const projectOptions = computed<AutocompleteOption[]>(() =>
   projects.items.map((p) => ({ value: p.projectId, label: p.name, meta: p.documentCount })),
@@ -161,6 +171,9 @@ onMounted(async () => {
     headRevisionId.value = detail.document.headRevisionId
     body.value = content.markdown
     const fm = content.frontmatter ?? {}
+    otherFrontmatter.value = Object.fromEntries(
+      Object.entries(fm).filter(([key]) => key !== 'relations' && key !== 'tags'),
+    )
     if (Array.isArray(fm.relations)) {
       relationRows.value = (fm.relations as Array<Record<string, unknown>>)
         .map((r) => {
@@ -187,8 +200,13 @@ onMounted(async () => {
 function buildSource(markdown: string): string {
   const rows = relationRows.value.filter((r) => r.type && r.key.trim())
   const tagList = tags.value.split(',').map((t) => t.trim()).filter(Boolean)
-  if (rows.length === 0 && tagList.length === 0) return markdown
+  const preserved = Object.entries(otherFrontmatter.value).filter(([, v]) => v !== undefined)
+  if (rows.length === 0 && tagList.length === 0 && preserved.length === 0) return markdown
   const lines: string[] = ['---']
+  // Keys the editor does not model, put back exactly as they arrived. JSON is
+  // valid YAML flow style, so anything gray-matter parsed round-trips without
+  // this file needing a YAML emitter of its own.
+  for (const [key, value] of preserved) lines.push(`${key}: ${JSON.stringify(value)}`)
   if (rows.length > 0) {
     lines.push('relations:')
     for (const r of rows) {

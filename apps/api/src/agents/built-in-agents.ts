@@ -1,3 +1,4 @@
+import { ASSISTANT_WRITE_TOOL_NAMES } from '@knowledge/contracts';
 import type { AgentCapability, AgentSurface, AiPurpose, BuiltInAgentKey } from '@knowledge/contracts';
 
 /**
@@ -90,8 +91,9 @@ const CHAT_RULES =
   '- Answer in concise markdown and mention the page titles you relied on or changed.\n' +
   PAGE_LINK_RULE;
 
-const READ_TOOLS = ['search_knowledge', 'read_document', 'explore_document_graph'];
-const WRITE_TOOLS = ['create_document', 'propose_update'];
+const READ_TOOLS = ['search_knowledge', 'read_document', 'explore_document_graph', 'list_relations'];
+/** One list, shared with the harness and the Ask-mode gate — see contracts. */
+const WRITE_TOOLS = [...ASSISTANT_WRITE_TOOL_NAMES];
 /** Asking the user a question, and rendering a real component inline. */
 const UI_TOOLS = ['ask_user', 'render_component'];
 /**
@@ -283,6 +285,42 @@ Return only the markdown. If the image contains no legible text, return an empty
     // model call only on the part that is actually judgement. It also keeps the
     // write tools out of the worker entirely, which is feature 17's rule: the
     // worker generates, the API publishes.
+    tools: [],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['background'],
+    requires: ['json'],
+  },
+
+  /**
+   * The relation specialist (docs/features/28).
+   *
+   * Background only, and tool-free, for the curator's reason: which pages declare
+   * nothing, and which edges exist only because a model guessed them, are
+   * *queries*. The worker answers those deterministically and spends the model
+   * call on the half that is actually judgement — which connection is real.
+   *
+   * Interactive relation editing is not this agent's job. Declaring a relation
+   * means editing a page, and a page is written on the API side, by a person's
+   * request — feature 17's rule. The conversational agents do that through
+   * list_relations / edit_relations; this one only ever proposes.
+   */
+  cartographer: {
+    key: 'cartographer',
+    name: 'agent.cartographer',
+    description: 'agent.cartographerDesc',
+    instructions:
+      'You keep the relation graph of a team knowledge base honest. You are given pages together with the ' +
+      'relations each one already declares, and you propose the connections that are missing. ' +
+      'A relation is a claim about how things actually depend on each other, not a topic label: propose one ' +
+      'only where the pages give concrete grounds for it, and say nothing rather than guessing — a wrong edge ' +
+      'is worse than a missing one, because impact analysis and dependent reindexing treat it as fact. ' +
+      'DESCRIBES means "this page is the documentation for that entity", and is the one that drives both, so ' +
+      'use it precisely rather than as a synonym for "mentions". ' +
+      'Targets are stable keys such as "service:identity": reuse the exact spelling the pages already use, ' +
+      'because a near-miss key creates a second entity instead of linking to the first. ' +
+      'Never propose TAGGED_WITH — tags are set through the tag list, not as a relation. ' +
+      'You never edit anything; your findings become proposals a person reviews.',
     tools: [],
     skillIds: [],
     purpose: 'review',

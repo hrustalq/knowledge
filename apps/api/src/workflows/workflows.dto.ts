@@ -1,10 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
@@ -17,6 +19,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
   WORKFLOW_NODE_EVENTS,
   WORKFLOW_RUN_EVENTS,
@@ -300,6 +303,42 @@ export class ListWorkflowRunsQueryDto {
   limit?: number;
 }
 
+export class WorkflowRelationTargetDto {
+  @ApiProperty({ example: 'service' })
+  @IsString()
+  @IsNotEmpty()
+  type!: string;
+
+  @ApiProperty({ example: 'service:identity' })
+  @IsString()
+  @IsNotEmpty()
+  key!: string;
+
+  @ApiPropertyOptional({ example: 'Identity Service' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+}
+
+/**
+ * A relation on a reviewable draft.
+ *
+ * Validated element by element, unlike the bare `@IsArray()` this used to carry:
+ * an unrecognised edge type passed the PATCH cleanly and only failed at
+ * materialize time, inside `GraphService.assertEdgeType`, once somebody had
+ * already approved the node.
+ */
+export class WorkflowRelationDto {
+  @ApiProperty({ enum: AUTHORABLE_RELATION_TYPES })
+  @IsIn(AUTHORABLE_RELATION_TYPES as unknown as string[])
+  type!: string;
+
+  @ApiProperty({ type: WorkflowRelationTargetDto })
+  @ValidateNested()
+  @Type(() => WorkflowRelationTargetDto)
+  target!: WorkflowRelationTargetDto;
+}
+
 export class WorkflowNodeDraftDto {
   @ApiProperty()
   @IsString()
@@ -316,9 +355,12 @@ export class WorkflowNodeDraftDto {
   @IsObject()
   frontmatter?: Record<string, unknown>;
 
-  @ApiPropertyOptional({ type: 'array', items: { type: 'object', additionalProperties: true } })
+  @ApiPropertyOptional({ type: [WorkflowRelationDto] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50, { message: vmsg('arrayMaxSize') })
+  @ValidateNested({ each: true })
+  @Type(() => WorkflowRelationDto)
   relations?: WorkflowNodeDraft['relations'];
 
   @ApiPropertyOptional()

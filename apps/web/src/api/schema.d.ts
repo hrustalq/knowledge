@@ -612,6 +612,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/relations/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose a change to the page’s frontmatter relations as a merge request (never edits the live page) */
+        post: operations["DocumentsController_proposeRelations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/uploads": {
         parameters: {
             query?: never;
@@ -1862,6 +1879,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/agents/runs/{id}/findings/{index}/apply-relations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a merge request declaring the relations one finding proposes */
+        post: operations["AiController_applyFindingRelations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/agents/route": {
         parameters: {
             query?: never;
@@ -2805,6 +2839,22 @@ export interface components {
         CurateRelationDto: {
             relation: components["schemas"]["RelationInputDto"];
         };
+        RelationRefDto: {
+            /** @enum {string} */
+            type: "DESCRIBES" | "DEPENDS_ON" | "IMPLEMENTS" | "RELATED_TO" | "OWNED_BY" | "SUPERSEDES" | "CONTRADICTS";
+            /** @example service:identity */
+            targetKey: string;
+        };
+        ProposeRelationsDto: {
+            add?: components["schemas"]["RelationInputDto"][];
+            remove?: components["schemas"]["RelationRefDto"][];
+            /** @description Replaces the whole tag list */
+            tags?: string[];
+            /** @description Merge request title; defaulted when absent */
+            title?: string;
+            /** @description Why the change is being proposed */
+            description?: string;
+        };
         CreateUploadDto: {
             /** Format: uuid */
             revisionId?: string;
@@ -3622,15 +3672,26 @@ export interface components {
             /** @enum {string} */
             type: "PAUSE" | "RESUME" | "CANCEL";
         };
+        WorkflowRelationTargetDto: {
+            /** @example service */
+            type: string;
+            /** @example service:identity */
+            key: string;
+            /** @example Identity Service */
+            name?: string;
+        };
+        WorkflowRelationDto: {
+            /** @enum {string} */
+            type: "DESCRIBES" | "DEPENDS_ON" | "IMPLEMENTS" | "RELATED_TO" | "OWNED_BY" | "SUPERSEDES" | "CONTRADICTS";
+            target: components["schemas"]["WorkflowRelationTargetDto"];
+        };
         WorkflowNodeDraftDto: {
             title: string;
             markdown: string;
             frontmatter?: {
                 [key: string]: unknown;
             };
-            relations?: {
-                [key: string]: unknown;
-            }[];
+            relations?: components["schemas"]["WorkflowRelationDto"][];
             summary?: string;
         };
         UpdateWorkflowNodeDto: {
@@ -5750,6 +5811,50 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CurateRelationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_proposeRelations: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeRelationsDto"];
             };
         };
         responses: {
@@ -9889,6 +9994,50 @@ export interface operations {
         };
     };
     AiController_proposeFinding: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                /** @description Position in the run's findings array */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_applyFindingRelations: {
         parameters: {
             query: {
                 workspaceId: string;

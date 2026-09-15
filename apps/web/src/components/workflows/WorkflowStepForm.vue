@@ -3,7 +3,9 @@ import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { ArrowRight, Trash2 } from 'lucide-vue-next'
 import {
+  AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
+  isAuthorableRelationType,
   type DocumentCategory,
   type WorkflowGraph,
   type WorkflowStep,
@@ -37,14 +39,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{ update: [WorkflowStep]; remove: [string]; select: [string] }>()
 
-const RELATION_TYPES = ['IMPLEMENTS', 'DESCRIBES', 'DEPENDS_ON', 'RELATED_TO', 'SUPERSEDES'] as const
-
 const isAi = computed(() => props.step.kind === 'ai.generate' || props.step.kind === 'ai.draft')
 const myIssues = computed(() => props.issues.filter((i) => i.stepId === props.step.id))
 const kindMeta = computed(() => stepKind(props.step.kind))
 
 function patch(fields: Partial<WorkflowStep>) {
   emit('update', { ...props.step, ...fields })
+}
+
+/** The Select only offers allowed types; the guard keeps the narrowed contract honest. */
+function setRelationToParent(value: unknown) {
+  const next = String(value)
+  if (isAuthorableRelationType(next)) setProduces({ relationToParent: next })
 }
 
 function setKind(kind: WorkflowStepKind) {
@@ -238,11 +244,11 @@ const promptPlaceholder = computed(() =>
             <Select
               :model-value="step.produces.relationToParent"
               :disabled="!canManage"
-              @update:model-value="(v) => setProduces({ relationToParent: String(v) })"
+              @update:model-value="setRelationToParent"
             >
               <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="r in RELATION_TYPES" :key="r" :value="r">{{ r }}</SelectItem>
+                <SelectItem v-for="r in AUTHORABLE_RELATION_TYPES" :key="r" :value="r">{{ r }}</SelectItem>
               </SelectContent>
             </Select>
           </label>

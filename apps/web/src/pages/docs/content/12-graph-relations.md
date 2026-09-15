@@ -54,7 +54,25 @@ relations:
 
 Relation type names are interpolated into graph queries, so they are checked against a
 fixed allowlist before they get anywhere near one. An unknown type is rejected rather
-than escaped.
+than escaped. `TAGGED_WITH` is not in the hand-writable set: tag edges are synthesised
+from the `tags:` key, so writing one as a relation is refused.
+
+## Letting the assistant maintain them
+
+Frontmatter is a page's own text, so changing it is a revision — and a revision an AI
+authored is a proposal, never a fact. Ask the assistant to add or remove a relation and
+it opens a **merge request** against the page; only `relations:` and `tags:` are touched,
+and every other key is carried through untouched. Nothing reaches the default branch
+without somebody merging it.
+
+The **Cartographer** agent does the same job unattended. It reports two things: pages
+carrying an inferred edge nobody has confirmed — a claim the graph holds and the page
+does not — and connections the pages support but nothing has spotted. Its findings are
+proposals; **Apply relations** turns one into that same merge request.
+
+One caveat worth knowing: rewriting the block re-serializes all of it, so neighbouring
+keys can come back reformatted. The content is unchanged — it is a cosmetic diff, and
+the merge request says so.
 
 `DESCRIBES` is the load-bearing one: it says *this page is the documentation for that
 entity*, which is what makes impact analysis and dependent reindexing work.

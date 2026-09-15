@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { AUTHORABLE_RELATION_TYPES } from '@knowledge/contracts';
 import type {
   ExtractionBilling,
   ExtractionChunk,
@@ -19,15 +20,10 @@ import { AiUsageService, estimateTokens, type AiUsageTokens } from '../ai/ai-usa
  * its graph keys are identical whatever language the page is in. It also pins
  * temperature 0, which AssistantClient cannot express.
  */
-const INFERABLE_TYPES = [
-  'DESCRIBES',
-  'DEPENDS_ON',
-  'IMPLEMENTS',
-  'RELATED_TO',
-  'OWNED_BY',
-  'SUPERSEDES',
-  'CONTRADICTS',
-] as const;
+/** Exactly what a person may write by hand: inference must not invent an edge
+ *  type the frontmatter parser would reject, or the two classes disagree about
+ *  what the vocabulary is. TAGGED_WITH stays deterministic, as above. */
+const INFERABLE_TYPES = AUTHORABLE_RELATION_TYPES;
 
 // Deliberately NOT localized (docs/features/18): this prompt emits stable graph
 // keys like "service:identity", and those must be identical whatever language

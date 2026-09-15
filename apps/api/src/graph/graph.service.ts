@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { RELATION_EDGE_TYPES } from '@knowledge/contracts';
 import { ArcadeClient } from './arcade.client.js';
 import { t } from '../i18n/t.js';
 
@@ -29,17 +30,15 @@ const CHUNK_SCAN_LIMIT = 5000;
 /**
  * Relation edge types allowed in the graph (plan.md §6). Edge type names are
  * interpolated into SQL, so everything MUST be validated against this list.
+ *
+ * The list itself now lives in `@knowledge/contracts`: seven consumers have to
+ * agree on it and, until it moved, did not — this file carried eight types, the
+ * frontmatter parser and the DTO seven, the workflow canvas five. It is
+ * re-exported here so every existing importer of this module is unchanged, and
+ * so `assertEdgeType` keeps guarding the same list the writers validate against.
+ * Share it; never fork it.
  */
-export const RELATION_EDGE_TYPES = [
-  'DESCRIBES',
-  'DEPENDS_ON',
-  'IMPLEMENTS',
-  'RELATED_TO',
-  'OWNED_BY',
-  'SUPERSEDES',
-  'CONTRADICTS',
-  'TAGGED_WITH',
-] as const;
+export { RELATION_EDGE_TYPES };
 
 export interface FactInput {
   type: string;

@@ -12,6 +12,47 @@ traffic**. Production moves only when a `vX.Y.Z` tag is pushed. Entries are writ
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **The assistant can maintain a page's relations.** Ask it to connect or
+  disconnect two pages and it edits the page's own frontmatter and opens a merge
+  request — it never changes a live page. Only `relations:` and `tags:` are
+  touched; every other frontmatter key is carried through untouched.
+- **Cartographer**, a background agent that proposes the relations a page should
+  declare. It reports connections a model inferred from a page's text that the
+  page itself never declared — the lowest-trust class there is, replaced on every
+  re-index — alongside gaps the pages support but nothing has recorded.
+- Findings about missing relations can now be acted on at all. An orphan finding
+  could previously only be read: "propose a fix" refused it, because the fix is a
+  relation rather than page text. Such findings now carry the relations they
+  propose, and **Apply relations** turns one into a merge request.
+- Workflow steps propose relations and tags for the pages they draft, and the
+  review panel shows them — so a generated page's connections are read before
+  they are approved rather than discovered afterwards.
+
+### Fixed
+
+- **Editing a page no longer destroys its frontmatter.** Saving in the rich
+  editor rebuilt the block from `relations:` and `tags:` alone and silently
+  discarded every other key — including `source:`, written by every connector
+  adapter, and `glossary: false`, which turns term linking off for a page. This
+  affected both creating and editing a page.
+- Workflow-generated pages no longer lose the frontmatter their step produced.
+  If the drafted body already began with `---`, the whole block was dropped.
+- The workflow canvas offers every relation type the graph accepts. It listed
+  five of eight, and a chain naming one of the other three was silently rewritten
+  to `IMPLEMENTS`. An unrecognised type is now refused in the editor, where it can
+  still be corrected, instead of failing when the page is finally published.
+
+### Changed
+
+- A relation change shows some incidental reformatting of neighbouring
+  frontmatter keys in its merge-request diff — rewriting the block re-serializes
+  all of it. Keys and values are unchanged; comments and quoting style are not
+  preserved. The merge request says so.
+
 ## [0.1.0] — 2026-09-15
 
 ### Added
@@ -90,4 +131,5 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/hrustalq/knowledge/releases/tag/v0.1.0

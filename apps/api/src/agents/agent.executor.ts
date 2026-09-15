@@ -1,7 +1,14 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import type { AgentRun } from '@prisma/client';
-import type { AgentFinding, AgentFindingKind, Locale } from '@knowledge/contracts';
-import { AGENT_FINDING_KINDS } from '@knowledge/contracts';
+import type {
+  AgentFinding,
+  AgentFindingKind,
+  AuthorableRelationType,
+  Locale,
+  RelationInput,
+} from '@knowledge/contracts';
+import { AGENT_FINDING_KINDS, isAuthorableRelationType } from '@knowledge/contracts';
+import { normalizeRelation } from '../common/relations.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
@@ -17,7 +24,7 @@ import type { Principal } from '../auth/principal.js';
  * the point somebody asks for it, rather than accepting it and failing in the
  * worker a second later with nothing to show for the round trip.
  */
-export const RUNNABLE_AGENTS = new Set(['curator', 'reviewer', 'glossarist']);
+export const RUNNABLE_AGENTS = new Set(['curator', 'reviewer', 'glossarist', 'cartographer']);
 
 /** How many pages the curator will look at in one pass. */
 const MAX_PAGES = 60;
@@ -78,6 +85,8 @@ export class AgentExecutor {
         return this.review(run, agent, principal);
       case 'glossarist':
         return this.buildGlossary(run, principal);
+      case 'cartographer':
+        return this.mapRelations(run, agent);
       default:
         // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
         // here got past that check, so failing loudly beats running an agent as
@@ -389,6 +398,177 @@ export class AgentExecutor {
     };
   }
 
+  // ------------------------------------------------------------- cartographer
+
+  /**
+   * Proposes the relations pages should declare (docs/features/28).
+   *
+   * The curator's division of labour, applied to edges. One thing here is a
+   * query rather than a judgement, and it is the sharpest finding this agent
+   * makes: an `inferred` edge that the page does not declare. A model read that
+   * connection out of the text at some point, nobody ever confirmed it, and it
+   * is replaced wholesale on the next re-index — so it is a claim the graph
+   * carries and the page does not. Declaring it is a mechanical fix, and the
+   * finding carries the exact relations to declare.
+   *
+   * The model is spent only on the genuinely uncertain half: which connection a
+   * page's text supports that nothing has spotted at all.
+   *
+   * Nothing here writes. `AgentFindingsService.applyRelations` turns a finding
+   * into a frontmatter merge request on the API side, where a person exists.
+   */
+  private async mapRelations(run: AgentRun, agent: ResolvedAgent): Promise<AgentRunResult> {
+    const documents = await this.prisma.document.findMany({
+      where: { workspaceId: run.workspaceId },
+      select: { id: true, title: true, category: true },
+      orderBy: { createdAt: 'desc' },
+      take: MAX_PAGES,
+    });
+    if (documents.length === 0) return { summary: t('agent.cartography.noPages'), findings: [] };
+
+    const known = new Map(documents.map((d) => [d.id, d.title]));
+    const declared = new Map<string, Set<string>>();
+    const unconfirmed = new Map<string, Array<{ type: AuthorableRelationType; targetKey: string }>>();
+    const entityNames = new Map<string, string>();
+    let graphReadable = true;
+
+    try {
+      const graph = await this.graph.getWorkspaceRelationGraph(run.workspaceId);
+      for (const [key, entity] of Object.entries(graph.entities)) entityNames.set(key, entity.name);
+      for (const edge of graph.edges) {
+        if (!known.has(edge.documentId)) continue;
+        if (edge.extractor === 'inferred') {
+          // Only what a page could actually declare. A TAGGED_WITH edge is
+          // synthesised from `tags:`, so proposing it as a relation is not a fix
+          // anyone could apply.
+          if (!isAuthorableRelationType(edge.type)) continue;
+          const list = unconfirmed.get(edge.documentId) ?? [];
+          list.push({ type: edge.type, targetKey: edge.targetKey });
+          unconfirmed.set(edge.documentId, list);
+        } else {
+          const set = declared.get(edge.documentId) ?? new Set<string>();
+          set.add(`${edge.type} ${edge.targetKey}`);
+          declared.set(edge.documentId, set);
+        }
+      }
+    } catch (error) {
+      // Same accommodation the curator makes: the graph store being down must
+      // not sink the run, it just loses the deterministic half.
+      graphReadable = false;
+      this.logger.warn(`Cartographer could not read the relation graph: ${String(error)}`);
+    }
+
+    const findings: AgentFinding[] = [];
+    for (const [documentId, edges] of unconfirmed) {
+      if (findings.length >= MAX_FINDINGS) break;
+      const already = declared.get(documentId) ?? new Set<string>();
+      const missing = edges.filter((e) => !already.has(`${e.type} ${e.targetKey}`));
+      if (missing.length === 0) continue;
+
+      const title = known.get(documentId) ?? documentId;
+      findings.push({
+        kind: 'relation',
+        severity: 'info',
+        title: t('agent.cartography.unconfirmedTitle', { title, count: missing.length }),
+        detail: t('agent.cartography.unconfirmedDetail', {
+          list: missing.map((m) => `${m.type} ${m.targetKey}`).join(', '),
+        }),
+        documentIds: [documentId],
+        documentTitles: [title],
+        relations: missing.map((m) => ({
+          type: m.type,
+          target: {
+            key: m.targetKey,
+            type: m.targetKey.includes(':') ? m.targetKey.slice(0, m.targetKey.indexOf(':')) : 'entity',
+            name: entityNames.get(m.targetKey) ?? m.targetKey,
+          },
+        })),
+      });
+    }
+
+    let summary = t('agent.cartography.summary', { pages: documents.length, found: findings.length });
+    if (agent.config.enabled && agent.missing.length === 0 && findings.length < MAX_FINDINGS) {
+      const listing = documents
+        .slice(0, MAX_DESCRIBED)
+        .map((d) => {
+          const rels = [...(declared.get(d.id) ?? [])];
+          return `- ${d.id} | ${d.category ?? 'other'} | ${d.title} | declares: ${
+            rels.length ? rels.join('; ') : 'nothing'
+          }`;
+        })
+        .join('\n');
+
+      try {
+        const raw = await this.client.chat(
+          {
+            config: agent.config,
+            userId: run.createdBy,
+            operation: 'agent',
+            locale: run.locale as Locale,
+          },
+          [
+            {
+              role: 'system',
+              content:
+                `${agent.instructions}\n\n${RELATION_OUTPUT_CONTRACT}` +
+                this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
+            },
+            {
+              role: 'user',
+              content:
+                (run.input && typeof (run.input as { note?: string }).note === 'string'
+                  ? `Extra instructions: ${(run.input as { note?: string }).note}\n\n`
+                  : '') +
+                `Pages in this workspace (id | category | title | relations it already declares):\n${listing}`,
+            },
+          ],
+          { json: true },
+        );
+
+        const parsed = safeJson(raw);
+        for (const proposal of Array.isArray(parsed?.findings) ? (parsed.findings as unknown[]) : []) {
+          const finding = this.readRelationFinding(proposal, known);
+          if (!finding) continue;
+          findings.push(finding);
+          if (findings.length >= MAX_FINDINGS) break;
+        }
+        if (typeof parsed?.summary === 'string' && parsed.summary.trim()) {
+          summary = parsed.summary.trim().slice(0, 2_000);
+        }
+      } catch (error) {
+        this.logger.warn(`Cartographer model pass failed: ${String(error)}`);
+      }
+    }
+
+    if (!graphReadable) summary += ` ${t('agent.cartography.graphUnavailable')}`;
+    return { summary, findings: findings.slice(0, MAX_FINDINGS) };
+  }
+
+  /**
+   * A relation finding must carry relations that survive the allowlist, on top
+   * of citing a page that exists.
+   *
+   * One without any is a prose opinion about the graph: nothing downstream can
+   * apply it, and the Apply button would be offered for something that cannot
+   * be applied. Dropped, exactly as an uncited finding is.
+   */
+  private readRelationFinding(value: unknown, known: Map<string, string>): AgentFinding | null {
+    const base = this.readFinding(value, known);
+    if (!base) return null;
+
+    const raw = value as Record<string, unknown>;
+    const relations: RelationInput[] = [];
+    for (const entry of Array.isArray(raw.relations) ? raw.relations : []) {
+      if (!entry || typeof entry !== 'object') continue;
+      const e = entry as Record<string, unknown>;
+      const normalized = normalizeRelation({ type: e.type, target: e.target ?? e.targetKey });
+      if (normalized) relations.push({ type: normalized.type, target: normalized.target });
+    }
+    if (relations.length === 0) return null;
+
+    return { ...base, kind: 'relation', relations };
+  }
+
   /**
    * A finding survives only if it cites pages that actually exist in this
    * workspace (plan.md §12.7: source-backed citations, never a bare LLM
@@ -425,6 +605,16 @@ export class AgentExecutor {
     };
   }
 }
+
+const RELATION_OUTPUT_CONTRACT =
+  'Respond ONLY with a json object of the shape ' +
+  '{"summary": string, "findings": [{"kind": "relation", "severity": "info"|"warning", "title": string, ' +
+  '"detail": string, "documentIds": string[], "relations": [{"type": string, "targetKey": string}]}]}. ' +
+  'Every finding MUST cite at least one page id from the list, copied exactly, and the FIRST id is the page ' +
+  'whose frontmatter would gain the relations. Every finding MUST carry at least one relation; a finding ' +
+  'with none is dropped. Do not propose a relation the page already declares — they are listed beside it. ' +
+  'You are looking at titles, categories and existing relations only: propose a connection where those give ' +
+  'you real grounds, and leave it out otherwise. At most 12 findings; returning none is a valid answer.';
 
 const OUTPUT_CONTRACT =
   'Respond ONLY with a json object of the shape ' +

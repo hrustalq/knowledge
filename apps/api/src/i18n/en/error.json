@@ -67,7 +67,11 @@
     "badMode": "mode must be \"direct\" or \"merge-base\", got \"{mode}\""
   },
   "relations": {
-    "missingParams": "type and targetKey query params are required"
+    "missingParams": "type and targetKey query params are required",
+    "noneGiven": "Give at least one relation to add or remove, or a list of tags.",
+    "unknownType": "\"{type}\" is not a relation type. Use one of: {allowed}.",
+    "badTarget": "The {type} relation needs a target key, such as \"service:identity\".",
+    "revisionGone": "The draft revision disappeared before the relation change could be written."
   },
   "mergeRequest": {
     "notFound": "Merge request {id} not found",
@@ -175,7 +179,8 @@
     "findingAlreadyProposed": "This finding has already been proposed as a merge request.",
     "findingInFlight": "This finding is already being proposed.",
     "findingNoDocument": "This finding cites no page to change.",
-    "findingOrphan": "An orphan finding is about missing relations, not page content — add a relation instead.",
+    "findingOrphan": "An orphan finding is about missing relations, not page content. Use Apply relations instead, or add one in the page's frontmatter.",
+    "findingNoRelations": "This finding proposes no relations, so there is nothing to declare. Propose it as a page change instead.",
     "findingDocumentGone": "The page this finding cites ({documentId}) is no longer in this workspace.",
     "assistantDisabled": "The AI assistant is disabled for this workspace.",
     "drafterCannot": "The model routed at the drafter cannot: {capabilities}.",

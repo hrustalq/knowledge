@@ -1,5 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts';
+import {
+  AUTHORABLE_RELATION_TYPES,
+  DOCUMENT_CATEGORIES,
+  type AuthorableRelationType,
+  type DocumentCategory,
+} from '@knowledge/contracts';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -10,6 +15,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -31,16 +37,6 @@ export class InlineContentDto {
   text!: string;
 }
 
-export const RELATION_TYPES = [
-  'DESCRIBES',
-  'DEPENDS_ON',
-  'IMPLEMENTS',
-  'RELATED_TO',
-  'OWNED_BY',
-  'SUPERSEDES',
-  'CONTRADICTS',
-] as const;
-
 export class RelationTargetDto {
   @ApiProperty({ example: 'service' })
   @IsString()
@@ -59,9 +55,10 @@ export class RelationTargetDto {
 }
 
 export class RelationInputDto {
-  @ApiProperty({ enum: RELATION_TYPES })
-  @IsIn(RELATION_TYPES as unknown as string[])
-  type!: string;
+  /** `@IsIn` already guarantees this at runtime; the type says so too. */
+  @ApiProperty({ enum: AUTHORABLE_RELATION_TYPES })
+  @IsIn(AUTHORABLE_RELATION_TYPES as unknown as string[])
+  type!: AuthorableRelationType;
 
   @ApiProperty({ type: RelationTargetDto })
   @IsObject()
@@ -191,6 +188,59 @@ export class CurateRelationDto {
   @ValidateNested()
   @Type(() => RelationInputDto)
   relation!: RelationInputDto;
+}
+
+export class RelationRefDto {
+  @ApiProperty({ enum: AUTHORABLE_RELATION_TYPES })
+  @IsIn(AUTHORABLE_RELATION_TYPES as unknown as string[])
+  type!: string;
+
+  @ApiProperty({ example: 'service:identity' })
+  @IsString()
+  @IsNotEmpty()
+  targetKey!: string;
+}
+
+/**
+ * A change to the page's frontmatter relations, proposed as a merge request
+ * (docs/features/28). `add` + `remove` in one call covers update; `tags`
+ * replaces the whole list when present and leaves it alone when absent.
+ */
+export class ProposeRelationsDto {
+  @ApiPropertyOptional({ type: [RelationInputDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100, { message: vmsg('arrayMaxSize') })
+  @ValidateNested({ each: true })
+  @Type(() => RelationInputDto)
+  add?: RelationInputDto[];
+
+  @ApiPropertyOptional({ type: [RelationRefDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100, { message: vmsg('arrayMaxSize') })
+  @ValidateNested({ each: true })
+  @Type(() => RelationRefDto)
+  remove?: RelationRefDto[];
+
+  @ApiPropertyOptional({ type: String, isArray: true, description: 'Replaces the whole tag list' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiPropertyOptional({ description: 'Merge request title; defaulted when absent' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300, { message: vmsg('maxLength') })
+  title?: string;
+
+  @ApiPropertyOptional({ description: 'Why the change is being proposed' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000, { message: vmsg('maxLength') })
+  description?: string;
 }
 
 export class AddRelationsDto {

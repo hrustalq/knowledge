@@ -139,6 +139,21 @@ Every finding must cite pages that exist in the workspace; one that cites
 nothing, or cites an id the model invented, is dropped before it is stored
 (plan.md §12.7 — source-backed citations, never a bare LLM answer).
 
+## The cartographer follows the same split
+
+docs/features/28 added a twelfth built-in on exactly this shape, and it is worth
+naming here because it is the argument above applied a second time. Which pages
+declare no relations, and which carry an `inferred` edge nobody ever confirmed,
+are queries — so the worker answers them and the model is spent only on which
+connection is real. It declares `tools: []` and `requires: ['json']` like the
+curator, and `RUNNABLE_AGENTS` is now
+`curator | reviewer | glossarist | cartographer`.
+
+It also gave `orphan` findings something to do. They were refused by the
+merge-request proposal path because the fix is a relation and not prose; a
+finding may now carry the relations it proposes, and Apply turns that into a
+frontmatter merge request without a model rewriting the page.
+
 ## Why scheduling is a sweeper and not a cron
 
 This repo has no `@nestjs/schedule`, no `@Cron`, and no BullMQ repeatables.

@@ -1,4 +1,5 @@
 import type { DocumentCategory, RelationInput } from '@knowledge/contracts/documents';
+import type { AuthorableRelationType } from '@knowledge/contracts/graph';
 
 // ---------------------------------------------------------------------------
 // A workflow definition is a graph of steps run against a source page: one
@@ -60,8 +61,15 @@ export type WorkflowRunEventType = (typeof WORKFLOW_RUN_EVENTS)[number];
 /** What a step's approved drafts become when materialised. */
 export interface WorkflowStepProduces {
   category: DocumentCategory;
-  /** Edge type written from the produced page to the node's parent page. */
-  relationToParent: string;
+  /**
+   * Edge type written from the produced page to the node's parent page.
+   *
+   * Narrowed so a definition cannot name a type the graph will refuse:
+   * `assertEdgeType` throws at materialize time, which is after a person has
+   * already approved the draft. `validateGraph` enforces the same rule on
+   * definitions that arrive as plain JSON.
+   */
+  relationToParent: AuthorableRelationType;
   /** Nest the produced page under the parent page (feature 08). */
   nestUnderParent?: boolean;
 }
@@ -148,6 +156,8 @@ export type WorkflowIssueCode =
   | 'selfLoop'
   | 'missingPrompt'
   | 'producesNeedsCategory'
+  /** `produces.relationToParent` names an edge type the graph would refuse. */
+  | 'unknownRelationType'
   | 'deadEnd'
   | 'maxItemsRange'
   | 'fanOutIgnored'

@@ -24,3 +24,4 @@ architecture document; these docs cover the product-feature layer on top of it.
 | 15  | Page comments                              | [features/15-page-comments.md](features/15-page-comments.md)         | ✅ implemented |
 | 16  | Document import                            | —                                                                    | ✅ implemented, undocumented |
 | 17  | Dynamic document workflows                 | [features/17-workflows.md](features/17-workflows.md)                 | ✅ implemented |
+| 28  | Relation management                        | [features/28-relation-management.md](features/28-relation-management.md) | ✅ implemented |

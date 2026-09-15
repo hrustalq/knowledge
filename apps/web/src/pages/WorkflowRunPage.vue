@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { PauseCircle, PlayCircle, XCircle } from 'lucide-vue-next'
 import type {
+  WorkflowNodeDraft,
   WorkflowNodeEventType,
   WorkflowNodeStatus,
   WorkflowRunEventType,
@@ -108,7 +109,9 @@ const runActions = computed<WorkflowRunEventType[]>(() =>
   data.value && auth.canEdit ? allowedRunEvents(data.value.run.status) : [],
 )
 
-async function sendNodeEvent(type: WorkflowNodeEventType, draft?: { title: string; markdown: string }) {
+// The draft carries relations and frontmatter as well as prose, so a reviewer's
+// correction to a proposed relation survives the round trip.
+async function sendNodeEvent(type: WorkflowNodeEventType, draft?: WorkflowNodeDraft) {
   if (!selected.value) return
   try {
     await nodeEvent.mutateAsync({
@@ -121,7 +124,7 @@ async function sendNodeEvent(type: WorkflowNodeEventType, draft?: { title: strin
   }
 }
 
-async function persistDraft(draft: { title: string; markdown: string }) {
+async function persistDraft(draft: WorkflowNodeDraft) {
   if (!selected.value) return
   try {
     await saveDraft.mutateAsync({ path: { id: runId.value, nodeId: selected.value.id }, body: { draft } })

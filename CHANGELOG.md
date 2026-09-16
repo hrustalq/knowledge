@@ -12,6 +12,47 @@ traffic**. Production moves only when a `vX.Y.Z` tag is pushed. Entries are writ
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.4.0] — 2026-09-16
+
+### Added
+
+- **The background agents can now read while they work.** The four read-only
+  tools — `search_knowledge`, `read_document`, `explore_document_graph` and the
+  new `list_relations` — moved into a service the worker can load, so the curator
+  opens pages before judging them. It used to decide whether two pages duplicated
+  or contradicted each other from a listing of ids, titles and dates, which
+  cannot answer that question: "Deploys" and "Release process" are either the
+  same page written twice or two different pages, and only their contents say
+  which. A model without tool support still runs the previous single-shot pass
+  rather than being skipped entirely.
+- `list_relations`, a fourth read-only tool, listing a page's relations.
+
+### Changed
+
+- **The assistant's tool budget now defaults to 24 calls per question, up from
+  6**, and its ceiling rises from 16 to 64. Six was spent by a single real
+  question on search → read ×2 → explore → `list_relations`, after which the
+  model had to answer from half the evidence it had asked for. **This increases
+  model spend per question**; set `ASSISTANT_MAX_TOOL_CALLS=6` to keep the
+  previous behaviour.
+
+### Fixed
+
+- Pasting a long page, writing a long comment or submitting a large import no
+  longer fails with an untranslated 500. Request bodies were silently capped at
+  Express's 100 kB default; the cap is now configurable, starts at 2 MB, and an
+  oversize body comes back as a translated error instead of a crash inside the
+  body parser.
+
+### Operations
+
+- New env var **`HTTP_BODY_LIMIT`** (default `2mb`) caps JSON and urlencoded
+  request bodies. It has a default, so no action is required to deploy — set it
+  only to raise or lower the cap. It counts **bytes, not characters** (Cyrillic
+  is two bytes each), so keep it comfortably above the per-field length limits.
+- `ASSISTANT_MAX_TOOL_CALLS` changes default from 6 to 24. An install that never
+  set it explicitly will spend more per assistant question after this release.
+
 ## [0.3.0] — 2026-09-16
 
 ### Added
@@ -164,7 +205,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.3.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/hrustalq/knowledge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/hrustalq/knowledge/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/hrustalq/knowledge/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/hrustalq/knowledge/releases/tag/v0.1.0

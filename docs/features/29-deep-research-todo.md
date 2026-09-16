@@ -1,9 +1,9 @@
 # 29 — Deep research: remaining work
 
 Backlog for the deep research feature (see [`29-deep-research.md`](29-deep-research.md)
-for the design and the reasoning behind it). Prerequisite 1 shipped in **v0.5.0**;
-the rest are open and recorded below, each with the evidence a fresh reader would
-otherwise have to re-derive.
+for the design and the reasoning behind it). Prerequisites 1–5 have shipped; the
+research loop itself and the fetch-revalidation item are open and recorded below,
+each with the evidence a fresh reader would otherwise have to re-derive.
 
 Effort: S (≤half a day), M (a day or two), L (more).
 
@@ -60,76 +60,111 @@ change here should be re-checked the same way rather than by reading the diff.
 
 ---
 
+**2. The heartbeat and the reaper race — was A.**
+
+`agent_runs` gained `stage` / `progress` / `warnings`
+(`20260916103000_agent_run_progress`, all nullable, so the previous release's
+image can run it). The processor builds an `AgentReporter` and hands it to
+`AgentExecutor.run`, which now reports as it works — per page in the reviewer
+and glossarist loops, and either side of the single long model call in the
+curator and cartographer.
+
+Three things worth knowing:
+
+- **The fix for the race is the guarded terminal write, not the heartbeat.** The
+  heartbeat makes reaping rare; it cannot make it impossible, because a single
+  model call can outlast `STALE_RUN_MS` on its own. Both terminal writes are now
+  `updateMany({ where: { id, status: 'running' } })` and check `count === 1`, so
+  a superseded execution discards its own result instead of winning by finishing
+  second. Its event is not published either.
+- **Every progress write is guarded the same way**, so once the sweeper has
+  handed the row to a retry the dead execution stops leaving marks on it. The
+  claim resets `stage`/`progress`/`warnings`, or a retry would inherit the dead
+  run's position and claim to be somewhere it is not.
+- **`stage` is free text, not an enum.** The stages a curator passes through are
+  not the ones a research loop will, and freezing them in contracts would mean
+  widening a union every time an executor learns a step. The web resolves it
+  through `labelFor`, which falls back to the raw value — the
+  `documents.category` rule. Unknown stages render as themselves, never as a
+  message key.
+
+**3. Parallel reads, serial writes — was B.**
+
+`assistant.client.ts` decides the budget for a round up front, in request order,
+then runs the parallel-safe calls with `Promise.all` and everything else one at a
+time. Both harnesses, buffered and streaming.
+
+- **The partition is `PARALLEL_SAFE_TOOLS`, an allowlist, not the complement of
+  `ASSISTANT_WRITE_TOOL_NAMES`** as this file originally proposed. `READ_TOOL_NAMES`
+  ∪ `WEB_TOOLS` and nothing else: an `mcp__<slug>__<tool>` call is an external
+  server's code whose side effects this process cannot see, and "not a declared
+  write" would have batched somebody else's mutation.
+- **The abort check stays exactly where the side effects are** — before each
+  serial call. A batch in flight cannot be interrupted between its members, which
+  is why the batch contains only calls that change nothing.
+- **Results are replayed in the order the model asked**, whatever order they
+  finished in, because that transcript is what the next round reads.
+- Budget accounting is unchanged by construction: the pre-pass increments the
+  same counter in the same order the serial loop did.
+
+**Verified by runtime script** against `apps/api/dist` (the item-1 convention), a
+fake OpenAI-compatible server driving both harnesses: three reads and a write in
+one round overlap only among the reads, four 300 ms tools complete in 602 ms
+rather than ~1200 ms, the trace replays in request order, a budget of 2 runs
+exactly two billable calls while a free tool still passes, and a Stop pressed
+during the read batch leaves the write unexecuted.
+
+**4. `WebResearchService` is worker-loadable — was C.**
+
+New `assistant/web-research.module.ts` (imports `AiCoreModule`, provides and
+exports the service). `AssistantModule` reaches it through that module instead of
+providing it directly, so the API path is unchanged.
+
+`AgentWorkerModule` imports it **even though no runnable agent calls the web
+yet**, and that is the point rather than dead wiring: Nest instantiates an
+imported module's providers at boot, so the worker constructs the service on
+every start and fails loudly there if anyone gives it an API-only dependency —
+which is exactly how it became unreachable from the worker in the first place.
+Confirmed by booting `dist/worker.main.js`: `WebResearchModule dependencies
+initialized`, no DI error.
+
+**5. `AgentFinding` carries web sources — was D.**
+
+`AgentFinding.sources?: AssistantWebSource[]`, and `readFinding` now keeps a
+finding that cites **either** a workspace page or a fetched URL. Web-only on
+purpose: a cited page is already `documentIds`/`documentTitles`, and widening to
+`AssistantSource` would give one finding two ways to cite the same page.
+
+- `readWebSources` validates rather than trusts — a URL that does not parse is
+  dropped, the scheme must be http(s) (these become `href`s), and the host is
+  derived here so a finding cannot claim `docs.stripe.com` while linking
+  elsewhere.
+- **Behaviour today is unchanged**, deliberately: neither the curator's nor the
+  cartographer's output contract asks for `sources`, so no existing agent emits
+  any and the grounding rule still drops everything it dropped before.
+- `AgentFindingsService.draft` passes the URLs to the drafter as context. It
+  passes the *reference*, never a re-fetch: a finding records what a run read,
+  and silently re-reading those URLs here would make pressing Propose a second,
+  unpoliced trip to the open web.
+- The panel renders them with the assistant's own `SourceChip`, so a citation
+  reads the same wherever it appears.
+
+**6. `docs/versioning.md#known-drift` corrected — was G.**
+
+The table claimed `0.1.0` and `0.3.0`; both surfaces declare `0.5.0`. The entry
+now says what the real defect is — they are correct only because the runbook
+bumps them by hand, so they are one forgotten step from lying — rather than
+recording two numbers that had since been fixed. The `APP_VERSION` build arg is
+still the actual cure and is still not built.
+
+Worth knowing: `make api-client` in this change also corrected **pre-existing**
+drift in the committed `apps/api/openapi.json` (`version` 0.2.0 → 0.5.0, and
+`maxToolCalls` maximum 16 → 64 from an earlier DTO change that never regenerated
+it). Neither came from this work; the generated artifact was simply stale.
+
+---
+
 ## Open
-
-### A. `agent_runs` has no heartbeat, and the reaper races — S
-
-**This is a live bug, not a feature gap, and it is a prerequisite rather than a
-refinement:** deep research runs five to thirty minutes by design, which is
-exactly where it bites.
-
-`agent.processor.ts` writes the row twice — the guarded claim (`:49-52`) and the
-terminal result (`:83-91`) — and nothing in between, so `updatedAt` is frozen at
-claim time for the whole run. `AgentScheduleSweeper.requeueStuck`
-(`agent-schedule.sweeper.ts:69-84`) presumes any run still `running` after
-`STALE_RUN_MS` (`:14`, 30 minutes) is dead.
-
-Two consequences, the second worse than the first:
-
-1. A run over 30 minutes is re-queued, up to `AGENT_MAX_ATTEMPTS` (3,
-   `agent.constants.ts:8`), duplicating its model spend.
-2. `requeueStuck` sets the row back to `'pending'` — **exactly the state the
-   retry's guarded claim looks for** — so a second execution starts while the
-   first is still running. The terminal write is a plain `update`, not a guarded
-   `updateMany`, so both complete and the last writer wins. The back-pressure
-   check in `startDue` (`:112-115`) does not cover this path; it only guards
-   scheduling a _new_ run.
-
-Fix: add `stage`/`progress`/`warnings` to `agent_runs` and write them as the run
-proceeds (converging on `connector_runs`, already the fullest polling vocabulary
-in the schema), and make the terminal write guarded. That fixes the reaper, the
-race and the blank poll in one change.
-
-### B. Tool calls execute serially — M
-
-`assistant.client.ts:263` (buffered) and `:373` (streaming) are plain `for … of`
-loops with `await` inside. There is no `Promise.all` anywhere in the harness, so
-ten parallel `tool_calls` in one round are ten sequential fetches — at
-`WEB_TIMEOUT_MS` of 15s, 150 seconds of wall clock for work the model asked to
-do at once. Every BullMQ queue also runs at the default concurrency of 1.
-
-**Do not simply wrap it in `Promise.all`.** `:386` checks `signal?.aborted`
-_between_ calls on purpose — tools create pages and open merge requests, so Stop
-means stop before a side effect, not merely stop the output. A batch in flight
-cannot be interrupted between its members.
-
-The partition already has a name: `ASSISTANT_WRITE_TOOL_NAMES` in contracts is
-exactly `create_document | propose_update | edit_relations`. Run reads
-concurrently, keep writes serial with the abort check between them. The budget is
-not an obstacle — `spent++` increments as it iterates only because execution is
-serial; partition `requested` into allowed and overflow up front at `budgetLeft`
-for identical accounting with no ordering dependency.
-
-### C. `WebResearchService` is not worker-loadable — S
-
-`AgentWorkerModule` deliberately excludes `AssistantToolsService`, which is what
-pulls `WebResearchService` in, so the worker process cannot construct the web
-tools at all and a background researcher currently cannot reach the web.
-
-Cheap: `WebResearchService` takes only `ConfigService` and `SourcePolicyService`.
-This is a controller-free module split of the kind `AiCoreModule` and
-`GlossaryCoreModule` already established.
-
-### D. `AgentFinding` cannot carry a web source — S
-
-`agent.executor.ts:635-638` (`readFinding`) drops any finding that does not cite
-a document id existing in the workspace, so a research finding citing only URLs
-is silently discarded. `AssistantWebSource` already exists in contracts and
-already works correctly in the chat path — it is simply not wired into findings.
-
-This is what makes a background researcher's output land somewhere, and it is the
-minimal version of the promotion the design doc defers: a finding carrying its
-sources can go through the existing `findings/:index/propose` path.
 
 ### E. ETag / `If-None-Match` revalidation — M
 
@@ -144,21 +179,25 @@ already has the natural home for the identity half in content hashes.
 
 ### F. The research loop itself — L
 
-The feature the design doc is actually about; A–D are its prerequisites. Shape,
-argued in `29-deep-research.md`: a fifth `RUNNABLE_AGENTS` case (not the workflow
-engine — its fan-out is a human review queue by construction, it has no join
-step, and it rejects cycles), a token budget with a reserved endgame slice, a
-separate evaluator prompt, a flat FIFO gap queue rather than recursion, and
+The feature the design doc is actually about. Shape, argued in
+`29-deep-research.md`: a fifth `RUNNABLE_AGENTS` case (not the workflow engine —
+its fan-out is a human review queue by construction, it has no join step, and it
+rejects cycles), a token budget with a reserved endgame slice, a separate
+evaluator prompt, a flat FIFO gap queue rather than recursion, and
 server-assigned citation labels.
 
-Do not start this before A and B. A loop that cannot report progress will be
-reaped mid-run and billed twice, and one that fetches serially will spend its
-budget on wall clock.
+**Its prerequisites are now met.** A run can report progress without being reaped
+mid-flight (2), its reads parallelise (3), the worker can reach the web (4), and
+a finding citing only URLs survives instead of being dropped (5). What remains is
+the loop.
 
-### G. `docs/versioning.md#known-drift` is itself stale — S
+Two things the prerequisites leave for this item rather than solve:
 
-It claims `swagger.ts` declares `0.1.0` and `mcp.service.ts` declares `0.3.0`.
-Both were at `0.4.0` before v0.5.0 and are at `0.5.0` now — the table describes a
-drift that each release has been fixing by hand. Either correct the table or
-build the `APP_VERSION` build arg that document already proposes, which removes
-two manual edits from every release.
+- **A web-only finding cannot be proposed yet.** `AgentFindingsService.propose`
+  still requires `documentIds[0]` — there is no page to rewrite — so such a
+  finding renders with its citations and no action. Promotion (a cited page
+  becoming a document with a `SOURCED_FROM` relation) is still deferred, per the
+  design doc.
+- **Nothing emits `sources` yet.** The research agent's output contract is what
+  will, and it should say so as explicitly as `OUTPUT_CONTRACT` says "cite a page
+  id from the list".

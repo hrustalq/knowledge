@@ -6,3 +6,13 @@ export const AGENT_QUEUE = 'agent';
  * WORKFLOW_MAX_ATTEMPTS.
  */
 export const AGENT_MAX_ATTEMPTS = 3;
+
+/**
+ * Warnings kept on one run (docs/features/29).
+ *
+ * A run reports what degraded without failing — a page it could not read, a
+ * graph store that was down. Capped for the reason `connector_runs` caps its
+ * own: the row is polled, and a run that degrades on every one of sixty pages
+ * would otherwise carry sixty lines of the same sentence into every poll.
+ */
+export const MAX_RUN_WARNINGS = 20;

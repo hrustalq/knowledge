@@ -8,7 +8,7 @@ import type {
 import type { AssistantToolCall, AiUsageOperation } from '@knowledge/contracts';
 import type { ResolvedAiConfig } from '../ai/ai-config.service.js';
 import { AiUsageService, estimateTokens, type AiUsageTokens } from '../ai/ai-usage.service.js';
-import { FREE_TOOLS } from './assistant.tools.js';
+import { FREE_TOOLS, PARALLEL_SAFE_TOOLS } from './assistant.tools.js';
 import type { Locale } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { currentTrace, emitBacktest } from '@knowledge/observability';
@@ -259,17 +259,18 @@ export class AssistantClient {
       // of six. Everything past the line still needs a `tool` reply — the
       // protocol requires one per tool_call_id — so the overflow is answered
       // with an error instead of being dropped.
+      //
+      // Allowance is decided up front, in request order, rather than by a
+      // counter incremented as each call runs. The two give identical answers;
+      // only the first survives execution that is no longer one-at-a-time.
       let spent = 0;
-      for (const call of requested) {
-        const billable = !FREE_TOOLS.has(call.function.name);
-        if (billable && spent++ >= budgetLeft) {
-          convo.push({
-            role: 'tool',
-            tool_call_id: call.id,
-            content: JSON.stringify({ error: 'Tool budget for this turn is exhausted; answer with what you have.' }),
-          });
-          continue;
-        }
+      const planned = requested.map((call) => ({
+        call,
+        allowed: FREE_TOOLS.has(call.function.name) || spent++ < budgetLeft,
+      }));
+      const results = new Array<ToolExecutionResult | undefined>(planned.length);
+
+      const runOne = async (call: ChatCompletionMessageFunctionToolCall, at: number): Promise<void> => {
         let args: Record<string, unknown> = {};
         try {
           args = JSON.parse(call.function.arguments || '{}') as Record<string, unknown>;
@@ -277,12 +278,41 @@ export class AssistantClient {
           // The model produced invalid JSON — run the tool with no args so it
           // gets a structured error back instead of the request 500ing.
         }
-        let result: ToolExecutionResult;
         try {
-          result = await execute(call.function.name, args);
+          results[at] = await execute(call.function.name, args);
         } catch (err) {
           this.logger.warn(`Tool ${call.function.name} failed: ${err instanceof Error ? err.message : err}`);
-          result = { content: JSON.stringify({ error: 'Tool execution failed' }), ok: false };
+          results[at] = { content: JSON.stringify({ error: 'Tool execution failed' }), ok: false };
+        }
+      };
+
+      // Reads together, everything else one at a time (docs/features/29). Ten
+      // parallel tool_calls used to be ten sequential awaits, so a round of
+      // web_fetches spent minutes of wall clock on work the model asked for at
+      // once. PARALLEL_SAFE_TOOLS is an allowlist of calls with no side effects
+      // rather than "not a declared write": a plugin tool is an external
+      // server's code this process cannot see the effects of.
+      const live = planned.map((p, at) => ({ ...p, at })).filter((p) => p.allowed);
+      await Promise.all(
+        live.filter((p) => PARALLEL_SAFE_TOOLS.has(p.call.function.name)).map((p) => runOne(p.call, p.at)),
+      );
+      for (const p of live) {
+        if (PARALLEL_SAFE_TOOLS.has(p.call.function.name)) continue;
+        await runOne(p.call, p.at);
+      }
+
+      // Replayed in the order the model asked, whatever order they finished in:
+      // this transcript is what the next round reads, and it should not depend
+      // on which fetch happened to return first.
+      for (const [at, { call, allowed }] of planned.entries()) {
+        const result = allowed ? results[at] : undefined;
+        if (!result) {
+          convo.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify({ error: 'Tool budget for this turn is exhausted; answer with what you have.' }),
+          });
+          continue;
         }
         trace.push({
           tool: call.function.name,
@@ -368,22 +398,16 @@ export class AssistantClient {
       });
 
       // Per call, not per round — see the note in runWithTools. Free tools are
-      // always let through; only billable calls are rationed.
+      // always let through; only billable calls are rationed, and the allowance
+      // is settled in request order before anything runs.
       let spent = 0;
-      for (const call of round.toolCalls) {
-        const billable = !FREE_TOOLS.has(call.name);
-        if (billable && spent++ >= budgetLeft) {
-          convo.push({
-            role: 'tool',
-            tool_call_id: call.id,
-            content: JSON.stringify({ error: 'Tool budget for this turn is exhausted; answer with what you have.' }),
-          });
-          continue;
-        }
-        // A cancelled turn stops before the next side effect. Tools can create
-        // pages and open merge requests, so "stop" has to mean stop *before*
-        // one of those runs, not merely stop showing the user the result.
-        if (signal?.aborted) return { content: round.content, trace, cancelled: true };
+      const planned = round.toolCalls.map((call) => ({
+        call,
+        allowed: FREE_TOOLS.has(call.name) || spent++ < budgetLeft,
+      }));
+      const results = new Array<ToolExecutionResult | undefined>(planned.length);
+
+      const runOne = async (call: { id: string; name: string; arguments: string }, at: number): Promise<void> => {
         await on.toolStart(call.name, call.arguments.slice(0, 500));
         let args: Record<string, unknown> = {};
         try {
@@ -399,9 +423,43 @@ export class AssistantClient {
           this.logger.warn(`Tool ${call.name} failed: ${err instanceof Error ? err.message : err}`);
           result = { content: JSON.stringify({ error: 'Tool execution failed' }), ok: false };
         }
-        const ok = result.ok ?? true;
-        trace.push({ tool: call.name, arguments: call.arguments.slice(0, 500), ok });
-        await on.toolEnd(call.name, ok);
+        results[at] = result;
+        await on.toolEnd(call.name, result.ok ?? true);
+      };
+
+      // A cancelled turn stops before the next side effect. Tools can create
+      // pages and open merge requests, so "stop" has to mean stop *before* one
+      // of those runs, not merely stop showing the user the result.
+      //
+      // That is why the batch below is reads only (docs/features/29): a batch
+      // in flight cannot be interrupted between its members, so running writes
+      // inside one would quietly downgrade Stop from "no further side effects"
+      // to "no further output". Reads change nothing, so a batch of them is
+      // interruptible in the only sense that matters, and the abort check stays
+      // exactly where the side effects are — before each serial call.
+      if (signal?.aborted) return { content: round.content, trace, cancelled: true };
+      const live = planned.map((p, at) => ({ ...p, at })).filter((p) => p.allowed);
+      await Promise.all(
+        live.filter((p) => PARALLEL_SAFE_TOOLS.has(p.call.name)).map((p) => runOne(p.call, p.at)),
+      );
+      for (const p of live) {
+        if (PARALLEL_SAFE_TOOLS.has(p.call.name)) continue;
+        if (signal?.aborted) return { content: round.content, trace, cancelled: true };
+        await runOne(p.call, p.at);
+      }
+
+      // Replayed in the order the model asked, whatever order they finished in.
+      for (const [at, { call, allowed }] of planned.entries()) {
+        const result = allowed ? results[at] : undefined;
+        if (!result) {
+          convo.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify({ error: 'Tool budget for this turn is exhausted; answer with what you have.' }),
+          });
+          continue;
+        }
+        trace.push({ tool: call.name, arguments: call.arguments.slice(0, 500), ok: result.ok ?? true });
         convo.push({
           role: 'tool',
           tool_call_id: call.id,

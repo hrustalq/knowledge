@@ -1,4 +1,9 @@
-import type { ApiErrorPayload, AssistantSource, AssistantToolCall } from '@knowledge/contracts/core';
+import type {
+  ApiErrorPayload,
+  AssistantSource,
+  AssistantToolCall,
+  AssistantWebSource,
+} from '@knowledge/contracts/core';
 import type { RelationInput } from '@knowledge/contracts/documents';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
@@ -846,6 +851,19 @@ export interface AgentFinding {
    * would rewrite the prose. A finding without it is a prose finding.
    */
   relations?: RelationInput[];
+  /**
+   * Pages on the open web this finding rests on (docs/features/29).
+   *
+   * Web-only on purpose. A cited workspace page is already `documentIds` +
+   * `documentTitles`, and widening this to `AssistantSource` would give one
+   * finding two ways to cite the same page — the shape `assistantSourceKey`
+   * exists to keep straight.
+   *
+   * What it changes is what counts as *grounded*: `readFinding` drops any
+   * finding citing no page that exists, so a finding whose whole evidence is
+   * off-platform was discarded in silence. It now survives if it cites either.
+   */
+  sources?: AssistantWebSource[];
 }
 
 // POST /v1/ai/agents/runs/:id/findings/:index/propose
@@ -869,6 +887,20 @@ export interface AgentRunSummary {
   findings: AgentFinding[];
   findingCount: number;
   error: string | null;
+  /**
+   * What the run is doing now, free text from the executor (docs/features/29).
+   *
+   * Not a closed union: the stages a curator passes through are not the ones a
+   * research run passes through, and freezing them here would mean widening a
+   * contract every time an executor learns a step. The web renders it through
+   * `labelFor`, which falls back to the raw value — the `documents.category`
+   * rule.
+   */
+  stage: string | null;
+  /** 0–1 where the executor can honestly say how far in it is; null where it cannot. */
+  progress: number | null;
+  /** What degraded without failing the run. Capped at MAX_RUN_WARNINGS. */
+  warnings: string[];
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;

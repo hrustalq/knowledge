@@ -13696,7 +13696,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.2.0",
+    "version": "0.5.0",
     "contact": {}
   },
   "tags": [],
@@ -15136,7 +15136,7 @@
             "type": "number",
             "nullable": true,
             "minimum": 0,
-            "maximum": 16
+            "maximum": 64
           },
           "timeoutMs": {
             "type": "number",
@@ -15279,7 +15279,7 @@
             "type": "number",
             "nullable": true,
             "minimum": 0,
-            "maximum": 16
+            "maximum": 64
           },
           "timeoutMs": {
             "type": "number",

@@ -12,6 +12,46 @@ traffic**. Production moves only when a `vX.Y.Z` tag is pushed. Entries are writ
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **A background agent run says what it is doing while it does it.** A running
+  agent now shows the step it is on and how far in it is, and lists anything that
+  degraded without failing the run — a page it could not read, a graph store that
+  was down — instead of showing nothing until it finished. The list refreshes on
+  its own while work is in flight.
+- **A finding can cite a page on the web.** Until now a finding that named no
+  page in the workspace was discarded, so anything grounded off-platform was
+  thrown away in silence. Web citations render as the same chips the assistant
+  cites with, and carry through to the draft when you propose a fix.
+
+### Fixed
+
+- **A long agent run is no longer run twice.** Any run still going after half an
+  hour was presumed dead and started again, paying for a second set of model
+  calls — and whichever copy finished last overwrote the other's result. Runs now
+  report as they go, so a slow one is not mistaken for a dead one, and a run that
+  has been superseded discards its own result rather than overwriting the run
+  that replaced it.
+- **The published API description declares the right version** (it said `0.2.0`),
+  along with a tool-budget limit that had moved without the description being
+  regenerated.
+
+### Changed
+
+- **The assistant fetches several sources at once.** When a turn asks for several
+  searches or web pages in one round, they are retrieved together rather than one
+  after another, which is where turns that read a lot of the web spent most of
+  their time. Actions that change something still run one at a time, so Stop
+  continues to stop before anything is created.
+
+### Operations
+
+- One migration (`20260916103000_agent_run_progress`) adds three nullable columns
+  to `agent_runs`. Additive only, and runnable by the previous release's image —
+  no expand/contract sequencing needed.
+
 ## [0.5.0] — 2026-09-16
 
 ### Added

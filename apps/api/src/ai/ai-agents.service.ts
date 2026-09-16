@@ -379,6 +379,14 @@ function toRunSummary(run: AgentRun, agentName: string): AgentRunSummary {
     findings,
     findingCount: findings.length,
     error: run.error,
+    // Progress as the run wrote it (docs/features/29). `stage` is free text from
+    // the executor rather than a closed enum, so the web renders it through
+    // `labelFor` and falls back to the raw value — the documents.category rule.
+    stage: run.stage,
+    progress: run.progress,
+    warnings: Array.isArray(run.warnings)
+      ? (run.warnings as unknown[]).filter((w): w is string => typeof w === 'string')
+      : [],
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
     createdAt: run.createdAt.toISOString(),

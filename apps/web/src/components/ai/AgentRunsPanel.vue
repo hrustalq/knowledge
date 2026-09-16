@@ -15,12 +15,27 @@ import { getWorkspaceId } from '@/lib/api'
 import { relativeTime } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { labelFor } from '@/lib/labels'
+// The same chip the assistant cites with (docs/features/25). A finding's web
+// sources are citations of exactly that kind, and rendering them a second way
+// here would make one thing look like two.
+import SourceChip from '@/components/assistant/SourceChip.vue'
 import AiEmptyState from './AiEmptyState.vue'
 
 const { t } = useI18n()
 
 const workspaceId = getWorkspaceId()
-const query = useQuery(apiQueryOptions('/v1/ai/agents/runs', { query: { workspaceId } }))
+const query = useQuery({
+  ...apiQueryOptions('/v1/ai/agents/runs', { query: { workspaceId } }),
+  // A run writes its stage as it goes (docs/features/29), which is only worth
+  // anything if the page asks again. Polled while something is in flight and
+  // not otherwise: a finished list is finished, and a background tab of settled
+  // runs should not be re-fetching every five seconds forever.
+  refetchInterval: (q) => {
+    const runs = (q.state.data as ListAgentRunsResponse | undefined)?.runs ?? []
+    return runs.some((r) => r.status === 'pending' || r.status === 'running') ? 5_000 : false
+  },
+})
 const runs = computed<AgentRunSummary[]>(
   () => (query.data.value as ListAgentRunsResponse | undefined)?.runs ?? [],
 )
@@ -149,9 +164,34 @@ const severityClass = (f: AgentFinding) =>
             <span class="text-muted-foreground mt-0.5 block text-xs">
               {{ run.summary || run.error || t('ai.runs.noSummary') }}
             </span>
+            <!-- What it is doing, while it is doing it (docs/features/29).
+                 Only while it runs: a finished run's last stage is noise next to
+                 the summary, which says what it actually did. The stage is free
+                 text from the executor, so it resolves through labelFor and
+                 falls back to itself rather than rendering a message key. -->
+            <span v-if="run.status === 'running' && run.stage" class="mt-1.5 flex items-center gap-2">
+              <span class="text-muted-foreground text-[11px]">{{ labelFor(t, 'ai.runs.stage', run.stage) }}</span>
+              <span v-if="run.progress !== null" class="bg-muted h-1 w-20 overflow-hidden rounded-full">
+                <span
+                  class="bg-primary block h-full rounded-full transition-[width] duration-500"
+                  :style="{ width: `${Math.round(run.progress * 100)}%` }"
+                />
+              </span>
+            </span>
           </span>
           <span class="text-muted-foreground shrink-0 text-xs">{{ relativeTime(run.createdAt) }}</span>
         </button>
+
+        <!-- What degraded without failing the run (docs/features/29). On expand
+             rather than in the row: it qualifies the findings, and a run that
+             warned is still a run that succeeded — putting it in the row would
+             read as a failure. -->
+        <ul v-if="expanded === run.id && run.warnings.length" class="space-y-1 border-t px-3 py-2">
+          <li v-for="(w, i) in run.warnings" :key="i" class="flex gap-2 text-[11px] text-amber-600">
+            <TriangleAlert class="mt-0.5 size-3 shrink-0" />
+            <span>{{ w }}</span>
+          </li>
+        </ul>
 
         <ul v-if="expanded === run.id && run.findings.length" class="space-y-2 border-t px-3 py-3">
           <li v-for="(f, i) in run.findings" :key="i" class="flex gap-2.5">
@@ -170,6 +210,13 @@ const severityClass = (f: AgentFinding) =>
                 >
                   {{ f.documentTitles[n] ?? id }}
                 </RouterLink>
+              </p>
+              <!-- Pages on the open web the finding rests on (docs/features/29).
+                   The same chip the assistant cites with, so one kind of thing
+                   reads one way wherever it appears — and it carries its host
+                   out loud, because clicking it leaves the product. -->
+              <p v-if="f.sources?.length" class="mt-1 flex flex-wrap gap-1">
+                <SourceChip v-for="s in f.sources" :key="s.url" :source="s" />
               </p>
             </div>
             <div class="ml-auto shrink-0">

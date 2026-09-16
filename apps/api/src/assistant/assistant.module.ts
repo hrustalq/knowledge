@@ -8,7 +8,7 @@ import { EventsModule } from '../events/events.module.js';
 import { AssistantClientModule } from './assistant-client.module.js';
 import { AssistantReadToolsModule } from './assistant-read-tools.module.js';
 import { AssistantToolsService } from './assistant.tools.js';
-import { WebResearchService } from './web-research.service.js';
+import { WebResearchModule } from './web-research.module.js';
 import { AssistantService } from './assistant.service.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
 import { AssistantController } from './assistant.controller.js';
@@ -34,10 +34,14 @@ import { AiModule } from '../ai/ai.module.js';
     DocumentsModule,
     StorageModule,
     EventsModule,
+    // The web tools moved into a controller-free module of their own so the
+    // agent worker can construct them too (docs/features/29). Reached exactly
+    // as before from here — AssistantToolsService still injects the service.
+    WebResearchModule,
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],
-  providers: [AssistantToolsService, WebResearchService, AssistantService, AssistantThreadsService],
+  providers: [AssistantToolsService, AssistantService, AssistantThreadsService],
   // Re-exported rather than re-provided, so the API and the worker share one
   // client with one SDK cache.
   exports: [AssistantClientModule],

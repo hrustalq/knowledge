@@ -10,7 +10,14 @@ import type { DocumentCategory } from '@knowledge/contracts/documents';
  * the settings UI, the create guard and the worker registry all read, so they
  * cannot disagree about what exists.
  */
-export const CONNECTOR_KINDS = ['confluence', 'confluence-server', 'jira', 'notion', 'markdown-git'] as const;
+export const CONNECTOR_KINDS = [
+  'confluence',
+  'confluence-server',
+  'jira',
+  'notion',
+  'markdown-git',
+  'codebase',
+] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
 /** 'pull' | 'push' | 'both' — what a connector is allowed to do. */
@@ -200,6 +207,49 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         required: false,
         placeholder: 'docs',
         help: 'Only markdown under this path is synced. An Obsidian vault is just a folder.',
+      },
+    ],
+  },
+  {
+    // The repository as a subject rather than as a folder of pages
+    // (docs/features/27). `markdown-git` mirrors files that are already prose;
+    // this reads the code and derives pages that exist nowhere upstream. Same
+    // archive download underneath — the difference is that the unit keys are
+    // ours, so there is nothing on the far side to push back to.
+    kind: 'codebase',
+    label: 'Codebase',
+    // Pull only, and no webhook in this version. A push event names *files*, and
+    // which module a file belongs to is not knowable until the archive has been
+    // read — so a webhook could only guess, and every wrong guess seeds an
+    // identity-map key for a page that does not exist. Scheduled sync covers the
+    // same ground: a module whose files did not change costs a hash, not a call.
+    capabilities: { pull: true, push: false, webhook: false, tree: false },
+    credentialLabel: 'Personal access token',
+    fields: [
+      {
+        key: 'repoUrl',
+        label: 'Repository URL',
+        kind: 'text',
+        required: true,
+        placeholder: 'https://github.com/acme/service',
+        help: 'The repository to document. A private repository needs a token with read access.',
+      },
+      { key: 'branch', label: 'Branch', kind: 'text', required: false, placeholder: 'main' },
+      {
+        key: 'subdir',
+        label: 'Subdirectory',
+        kind: 'text',
+        required: false,
+        placeholder: 'src',
+        help: 'Only code under this path is read. Leave empty for the whole repository.',
+      },
+      {
+        key: 'maxModules',
+        label: 'Module limit',
+        kind: 'text',
+        required: false,
+        placeholder: '24',
+        help: 'At most this many module pages, largest first. Defaults to 24.',
       },
     ],
   },

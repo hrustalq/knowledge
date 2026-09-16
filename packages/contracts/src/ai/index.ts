@@ -518,6 +518,12 @@ export type AiUsageOperation =
   /** Cleaning up or merging a staged connector item (docs/features/26). */
   | 'connector'
   /**
+   * Deriving a documentation page from source code (docs/features/27). One row
+   * per unit, so a repository's first sync is visible as the spend it is — and
+   * a re-sync of an unchanged module is visible as the absence of one.
+   */
+  | 'codebase'
+  /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
    */

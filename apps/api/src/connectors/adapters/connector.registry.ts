@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { ConnectorKind } from '@knowledge/contracts';
+import { CodebaseAdapter } from './codebase.adapter.js';
 import { ConfluenceAdapter } from './confluence.adapter.js';
 import { ConfluenceServerAdapter } from './confluence-server.adapter.js';
 import { JiraAdapter } from './jira.adapter.js';
@@ -22,8 +23,16 @@ export class ConnectorRegistry {
     jira: JiraAdapter,
     notion: NotionAdapter,
     markdownGit: MarkdownGitAdapter,
+    codebase: CodebaseAdapter,
   ) {
-    this.byKind = { confluence, 'confluence-server': confluenceServer, jira, notion, 'markdown-git': markdownGit };
+    this.byKind = {
+      confluence,
+      'confluence-server': confluenceServer,
+      jira,
+      notion,
+      'markdown-git': markdownGit,
+      codebase,
+    };
   }
 
   /** Null when the kind is not one we ship — the caller turns that into a 400. */

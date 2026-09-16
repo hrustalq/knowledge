@@ -1,4 +1,4 @@
-import { Agent, type Dispatcher } from 'undici';
+import { Agent, fetch as undiciFetch, type RequestInit as UndiciRequestInit } from 'undici';
 import { lookup as dnsLookup, type LookupAddress, type LookupOptions } from 'node:dns';
 import { isPrivateAddress } from './safe-url.js';
 
@@ -89,15 +89,39 @@ function blocked(hostname: string, address: string): NodeJS.ErrnoException {
  *
  * `allowPrivate` mirrors the flag `assertSafeExternalUrl` takes: a self-hosted
  * deployment pointing at its own network is a legitimate configuration, and in
- * that case this is a plain `fetch` with the default dispatcher.
+ * that case this is a plain fetch with undici's default dispatcher.
+ *
+ * ## Why undici's own `fetch` rather than the global one
+ *
+ * A dispatcher and the `fetch` driving it are two halves of one private
+ * interface, and undici changed it in v7: a handler now answers
+ * `onRequestStart` where it used to answer `onConnect`. Node's global `fetch`
+ * is backed by the undici *bundled with that Node*, so handing it an `Agent`
+ * from the undici in `node_modules` makes every guarded call depend on those
+ * two versions belonging to the same generation — which they do only by luck.
+ *
+ * They did not: on Node 24 and 25 (bundled undici 7.x) this package's undici 8
+ * `Agent` rejects the global fetch's handler outright with
+ * `UND_ERR_INVALID_ARG: invalid onRequestStart method`, and since undici
+ * reports every dispatch failure as the bare words "fetch failed", it reached
+ * users as `could not reach <url>` on every connector, plugin and web-research
+ * call. Node 26 bundles undici 8 and works, which is what made the break look
+ * like a property of the network rather than of the runtime.
+ *
+ * Driving the agent with the `fetch` from the same package removes the
+ * coupling: both halves are now the dependency this repo installs and pins,
+ * whatever Node runs it. What comes back is undici's `Response` — the same
+ * WHATWG shape, from the same implementation the global one is built on — cast
+ * once here so no call site has to know which of the two it is holding.
  */
 export function safeFetch(
   input: string | URL,
   init: RequestInit = {},
   allowPrivate = false,
 ): Promise<Response> {
-  if (allowPrivate) return fetch(input, init);
-  // `dispatcher` is an undici option that Node's global fetch honours but does
-  // not carry in its RequestInit type.
-  return fetch(input, { ...init, dispatcher: guardedAgent() } as RequestInit & { dispatcher: Dispatcher });
+  const options = init as UndiciRequestInit;
+  return undiciFetch(
+    input,
+    allowPrivate ? options : { ...options, dispatcher: guardedAgent() },
+  ) as unknown as Promise<Response>;
 }

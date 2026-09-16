@@ -1,4 +1,4 @@
-import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
+import type { ConnectorCapabilities, ConnectorKind, Locale } from '@knowledge/contracts';
 import { safeFetch } from '../../common/safe-fetch.js';
 
 /**
@@ -82,6 +82,24 @@ export interface ConnectorContext {
    * whether this install is one before it refuses a private address.
    */
   allowPrivate: boolean;
+  /**
+   * Who owns this connector — `connectors.created_by` (docs/features/27).
+   *
+   * Null is a real state: the column is nullable, and a connector whose creator
+   * was deleted still syncs. It is carried because an adapter that spends money
+   * has to bill somebody: `ai_usage.user_id` is a uuid column, so a run with no
+   * owner would fail its insert and be swallowed, which is precisely the
+   * invisible background spend feature 20 was written to stop. The codebase
+   * adapter therefore declines to call a model at all when this is null, rather
+   * than spending anonymously.
+   */
+  userId: string | null;
+  /**
+   * The connector's frozen locale (docs/features/18). Worker paths have no
+   * request to read `Accept-Language` from, so it travels with the context the
+   * way `import_jobs.locale` and `workflow_runs.locale` do.
+   */
+  locale: Locale;
   signal?: AbortSignal;
 }
 

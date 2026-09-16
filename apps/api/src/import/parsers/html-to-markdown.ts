@@ -1,4 +1,6 @@
 import TurndownService from 'turndown';
+import { Defuddle } from 'defuddle/node';
+import { countWords } from './parser.types.js';
 
 /**
  * HTML → markdown, server side.
@@ -80,5 +82,97 @@ export function htmlToMarkdown(html: string): string {
 export function htmlTitle(html: string): string | undefined {
   const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
   const text = m?.[1]?.replace(/\s+/g, ' ').trim();
+  return text ? text.slice(0, 200) : undefined;
+}
+
+/** What a page turned out to be, once the chrome around it was scored away. */
+export interface ExtractedArticle {
+  markdown: string;
+  title?: string;
+  author?: string;
+  published?: string;
+  site?: string;
+  /**
+   * Words in the article that survived scoring. This is the number that says
+   * whether extraction actually found anything, and it is the only honest
+   * trigger for a fallback: a client-rendered page answers 200 with an empty
+   * shell, and some anti-bot walls answer with nonstandard codes, so HTTP
+   * status is the wrong signal in both directions.
+   */
+  wordCount: number;
+  /** True when the serializer ran over the whole document, scoring having failed. */
+  fellBack: boolean;
+}
+
+/**
+ * Article extraction, then markdown — two questions, two answers.
+ *
+ * `htmlToMarkdown` answers "how does HTML become *our* markdown", and its
+ * settings are pinned to the editor's serializer so an imported page does not
+ * churn on its first save. It does not answer "which part of this page is the
+ * article", and it was never asked to: its denylist drops `nav`/`header`/
+ * `footer`/`aside`, so everything boilerplate that does not happen to sit
+ * inside one of those — sidebars, related-article rails, comment sections,
+ * cookie-notice remnants — survives into the reader's context. On the standard
+ * extraction benchmark that gap is roughly 0.67 F1 against roughly 0.92.
+ *
+ * So Defuddle scores the DOM and hands back the article as HTML, and the
+ * existing serializer turns that into markdown. One serializer, one scoring
+ * pass in front of it — not a second answer to the first question, which is
+ * what feature 25 was right to refuse.
+ */
+export async function extractArticle(html: string, url: string): Promise<ExtractedArticle> {
+  try {
+    const result = await Defuddle(html, url, {
+      // Defuddle's async extractors fetch from third-party APIs when local
+      // extraction comes up empty. That is an outbound request to a host no
+      // source policy ever authorized, issued from inside what the caller
+      // believes is one fetch of one URL — precisely the ordering feature 25
+      // exists to protect (policy decides whether a page is fetched at all).
+      // Off, always.
+      useAsync: false,
+      // An image is a link in markdown. The model cannot see it, and each one
+      // spends context on a URL nobody will follow.
+      removeImages: true,
+    });
+
+    const article = (result.content ?? '').trim();
+    // Non-empty markup is not non-empty text, and the gap between them is
+    // exactly a script-rendered shell: Defuddle hands back `<div id="root">`,
+    // which is truthy, scores zero words, and would otherwise be reported as a
+    // successful extraction that happens to say nothing — passing the caller a
+    // page with no text *and* no warning, since a thin-content check keyed on
+    // a word count cannot fire on zero. Words are the honest test, so a scored
+    // result carrying none falls through to serializing the whole document,
+    // which cannot do worse and usually does better.
+    if (article && (result.wordCount ?? 0) > 0) {
+      return {
+        markdown: htmlToMarkdown(article),
+        title: metaField(result.title),
+        author: metaField(result.author),
+        published: metaField(result.published),
+        site: metaField(result.site),
+        wordCount: result.wordCount ?? 0,
+        fellBack: false,
+      };
+    }
+  } catch {
+    // Scoring is an improvement on the fallback, never a precondition for it:
+    // a page Defuddle cannot score is still a page we can serialize, and a
+    // thrown extractor must not turn a retrieved page into "the page was empty".
+  }
+
+  const markdown = htmlToMarkdown(html);
+  return {
+    markdown,
+    title: htmlTitle(html),
+    wordCount: countWords(markdown),
+    fellBack: true,
+  };
+}
+
+/** Defuddle reports absent metadata as `''`; a caller wants absence to read as absence. */
+function metaField(value: string | undefined): string | undefined {
+  const text = value?.trim().replace(/\s+/g, ' ');
   return text ? text.slice(0, 200) : undefined;
 }

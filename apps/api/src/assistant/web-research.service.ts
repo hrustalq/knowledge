@@ -4,7 +4,9 @@ import type { AssistantWebSource, WebAccessDenial, WebAccessMode } from '@knowle
 import type { Env } from '../config/env.js';
 import { SourcePolicyService } from '../ai/source-policy.service.js';
 import { safeFetch } from '../common/safe-fetch.js';
-import { htmlTitle, htmlToMarkdown } from '../import/parsers/html-to-markdown.js';
+import { extractArticle, type ExtractedArticle } from '../import/parsers/html-to-markdown.js';
+import { inferTitle } from '../import/parsers/parser.types.js';
+import { pdfToMarkdown } from '../import/parsers/pdf-text.js';
 import { t } from '../i18n/t.js';
 
 /** One SearXNG hit, after policy filtering. */
@@ -27,6 +29,16 @@ const MAX_PAGE_CHARS = 20_000;
 const MAX_RESULTS = 8;
 /** Redirect hops followed by hand, each one policy-checked. */
 const MAX_REDIRECTS = 5;
+/**
+ * Below this, a page is reported as thin rather than served as an answer.
+ *
+ * Chosen against the two failure modes it sits between: a script-rendered shell
+ * or a nav-only page yields tens of words, while a genuinely short but real
+ * page — a changelog entry, an API reference stub — clears a hundred. Set
+ * higher this note fires on real content and stops being read; set lower it
+ * misses the empty shells it exists for.
+ */
+const THIN_ARTICLE_WORDS = 120;
 
 /**
  * The two web tools (docs/features/25).
@@ -129,7 +141,8 @@ export class WebResearchService {
     const timeoutMs = this.config.get('WEB_TIMEOUT_MS', { infer: true });
     const maxBytes = this.config.get('WEB_FETCH_MAX_BYTES', { infer: true });
 
-    let html: string;
+    let bytes: Uint8Array;
+    let contentType = '';
     let finalUrl: URL;
     try {
       // Every hop is decided, not just the last one. `redirect: 'follow'` lets
@@ -183,27 +196,93 @@ export class WebResearchService {
       finalUrl = new URL(target);
 
       const type = response.headers.get('content-type') ?? '';
-      if (!/text\/html|text\/plain|application\/xhtml/i.test(type)) {
+      // PDFs are admitted here (docs/features/29). Refusing them was the gap
+      // that cost the most for the least reason: a standard, a whitepaper and a
+      // spec are all PDFs, so research questions land on one constantly, and
+      // `unpdf` has been a dependency since feature 16 — the format was refused
+      // by a regex, not for want of a parser.
+      if (!/text\/html|text\/plain|application\/xhtml|application\/pdf/i.test(type)) {
         await response.body?.cancel().catch(() => {});
         return fail(t('error.web.fetchType', { type: type.split(';')[0] || 'unknown' }));
       }
-      html = await readCapped(response, maxBytes);
+      contentType = type;
+      bytes = await readCappedBytes(response, maxBytes);
     } catch (err) {
       return fail(t('error.web.fetchFailed', { error: err instanceof Error ? err.message : String(err) }));
     }
 
-    // No new dependency and no new pipeline: feature 16 already ships the whole
-    // of it. htmlToMarkdown strips the chrome a fetched page arrives wrapped in
-    // (nav/header/footer/aside/script/style/form/iframe) and renders GFM
-    // tables; htmlTitle beside it pulls the title. Writing a second extraction
-    // step would mean maintaining two answers to "what part of this page is the
-    // article".
-    const markdown = htmlToMarkdown(html);
-    const title = htmlTitle(html) ?? finalUrl.hostname;
-    const truncated = markdown.length > MAX_PAGE_CHARS;
-    const body = truncated ? `${markdown.slice(0, MAX_PAGE_CHARS)}\n\n…[truncated]` : markdown;
+    // What arrived decides how it is read (docs/features/29), because the two
+    // formats pose different questions.
+    //
+    // HTML asks "which part of this page is the article": `extractArticle`
+    // scores the DOM, and `htmlToMarkdown` underneath it — unchanged — stays the
+    // single answer to how HTML becomes *our* markdown. Feature 25 was right
+    // that a second serializer would mean maintaining two answers to one
+    // question; this is a scoring pass in front of the one serializer, not a
+    // rival to it.
+    //
+    // A PDF has no article to find — it has glyphs at coordinates — so it is
+    // reconstructed rather than scored, by the font-size ranking feature 16
+    // already built.
+    const notes: string[] = [];
+    let article: ExtractedArticle;
+    if (/application\/pdf/i.test(contentType)) {
+      try {
+        const pdf = await pdfToMarkdown(bytes);
+        article = {
+          markdown: pdf.markdown,
+          // Only a declared metadata title is authoritative. Where a PDF
+          // declares none, its reconstructed headings make a far better
+          // citation label than the bare hostname this would otherwise fall
+          // through to — a cited paper reading `arxiv.org` is a worse citation
+          // than one reading its own title.
+          title: pdf.title ?? inferTitle(pdf.markdown, lastPathSegment(finalUrl)),
+          wordCount: pdf.words,
+          fellBack: false,
+        };
+        // A scanned PDF is a picture of a document. The parser already works
+        // this out; saying so here is what stops the model reading an empty
+        // transcript as the document having nothing to say.
+        if (pdf.needsOcr) {
+          notes.push(
+            'This PDF appears to be scanned images rather than text, so almost nothing could be read from it. Do not treat that emptiness as the document saying nothing.',
+          );
+        }
+      } catch (err) {
+        return fail(
+          t('error.web.fetchPdf', { error: err instanceof Error ? err.message : String(err) }),
+        );
+      }
+    } else {
+      article = await extractArticle(new TextDecoder().decode(bytes), finalUrl.href);
+    }
+
+    const title = article.title ?? finalUrl.hostname;
+    const truncated = article.markdown.length > MAX_PAGE_CHARS;
+    const body = truncated
+      ? `${article.markdown.slice(0, MAX_PAGE_CHARS)}\n\n…[truncated]`
+      : article.markdown;
 
     if (!body.trim()) return fail(t('error.web.fetchEmpty'));
+
+    // What came back, said plainly. These are model-facing, so they are literal
+    // English like `wrapUntrusted` and the search note, not `t()` — the reader
+    // never sees them, the model does.
+    //
+    // A page that yields almost nothing is the failure this tool hides worst:
+    // a near-empty result reads to the model as "the page says nothing", and it
+    // answers confidently from it. Reported, never a failure — the little that
+    // came back may still be the answer, and refusing it would be worse.
+    if (article.wordCount > 0 && article.wordCount < THIN_ARTICLE_WORDS) {
+      notes.push(
+        'Very little text survived extraction. This page may be script-rendered, gated, or mostly navigation — treat it as weak evidence and say so rather than answering confidently from it.',
+      );
+    }
+    if (article.fellBack) {
+      notes.push(
+        'Article detection failed, so this is the whole page serialized: it may still contain navigation, sidebars and comments.',
+      );
+    }
 
     const fetchedAt = new Date().toISOString();
     return {
@@ -218,7 +297,21 @@ export class WebResearchService {
           fetchedAt,
         },
       ],
-      content: wrapUntrusted(JSON.stringify({ url: finalUrl.href, title, fetchedAt, markdown: body }), 'web_fetch'),
+      content: wrapUntrusted(
+        JSON.stringify({
+          url: finalUrl.href,
+          title,
+          fetchedAt,
+          // Defuddle reads these off the page; they are what lets an answer say
+          // how old a source is and who wrote it, rather than only where it lives.
+          ...(article.author ? { author: article.author } : {}),
+          ...(article.published ? { published: article.published } : {}),
+          words: article.wordCount,
+          ...(notes.length ? { notes } : {}),
+          markdown: body,
+        }),
+        'web_fetch',
+      ),
     };
   }
 
@@ -278,8 +371,8 @@ const USER_AGENT = 'knowledge-platform/1.0 (+web research; docs/features/25)';
  * A cut mid-sequence leaves one replacement char at the end; TextDecoder is
  * non-fatal by default and the extraction step never sees the difference.
  */
-async function readCapped(response: Response, maxBytes: number): Promise<string> {
-  if (!response.body) return '';
+async function readCappedBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
+  if (!response.body) return new Uint8Array();
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -293,12 +386,30 @@ async function readCapped(response: Response, maxBytes: number): Promise<string>
   } finally {
     await reader.cancel().catch(() => {});
   }
-  return new TextDecoder().decode(Buffer.concat(chunks, Math.min(total, maxBytes)));
+  // Bytes, not text: a PDF has to reach its parser unmangled, and decoding is
+  // now the caller's business because only it knows which format arrived.
+  return Buffer.concat(chunks, Math.min(total, maxBytes));
 }
 
 /** The host as a reader recognises it — `docs.example.com`, never `www.`. */
 export function displayHost(url: URL): string {
   return url.hostname.replace(/^www\./, '');
+}
+
+/**
+ * The last path segment, which is what a URL carries in place of a filename.
+ *
+ * `inferTitle` ends on a filename, and a fetched document has none — the URL is
+ * the only name it ever had.
+ */
+function lastPathSegment(url: URL): string {
+  const segment = url.pathname.split('/').filter(Boolean).pop() ?? '';
+  try {
+    return decodeURIComponent(segment) || url.hostname;
+  } catch {
+    // A malformed percent-escape is not a reason to fail a fetch that worked.
+    return segment || url.hostname;
+  }
 }
 
 /**

@@ -28,6 +28,8 @@ export type I18nTranslations = {
         "curatorDesc": string;
         "architect": string;
         "architectDesc": string;
+        "cartographer": string;
+        "cartographerDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -45,6 +47,13 @@ export type I18nTranslations = {
             "noPages": string;
             "orphanTitle": string;
             "orphanDetail": string;
+            "summary": string;
+        };
+        "cartography": {
+            "noPages": string;
+            "unconfirmedTitle": string;
+            "unconfirmedDetail": string;
+            "graphUnavailable": string;
             "summary": string;
         };
     };
@@ -82,6 +91,16 @@ export type I18nTranslations = {
             "orphansFound": string;
             "discoveryStopped": string;
             "reRooted": string;
+            "codebase": {
+                "noOwner": string;
+                "aiDisabled": string;
+                "budget": string;
+                "narrationFailed": string;
+                "oversize": string;
+                "unparsed": string;
+                "truncated": string;
+                "modulesOmitted": string;
+            };
         };
         "pushVersionMessage": string;
         "syncRevisionMessage": string;
@@ -90,6 +109,7 @@ export type I18nTranslations = {
     };
     "error": {
         "internal": string;
+        "payloadTooLarge": string;
         "invalidUuid": string;
         "auth": {
             "missingBearer": string;
@@ -158,6 +178,10 @@ export type I18nTranslations = {
         };
         "relations": {
             "missingParams": string;
+            "noneGiven": string;
+            "unknownType": string;
+            "badTarget": string;
+            "revisionGone": string;
         };
         "mergeRequest": {
             "notFound": string;
@@ -266,6 +290,7 @@ export type I18nTranslations = {
             "findingInFlight": string;
             "findingNoDocument": string;
             "findingOrphan": string;
+            "findingNoRelations": string;
             "findingDocumentGone": string;
             "assistantDisabled": string;
             "drafterCannot": string;
@@ -276,6 +301,7 @@ export type I18nTranslations = {
         };
         "assistant": {
             "providerDisabled": string;
+            "roundsExhausted": string;
             "threadNotFound": string;
             "messageNotFound": string;
             "budgetUser": string;
@@ -365,6 +391,7 @@ export type I18nTranslations = {
             "fetchType": string;
             "fetchFailed": string;
             "fetchEmpty": string;
+            "fetchPdf": string;
             "remedy": string;
             "denied": {
                 "mode-off": string;
@@ -446,6 +473,13 @@ export type I18nTranslations = {
     };
     "prompt": {
         "localeDirective": string;
+    };
+    "relations": {
+        "proposeTitle": string;
+        "added": string;
+        "removed": string;
+        "tagsSet": string;
+        "proposeNote": string;
     };
     "role": {
         "viewer": string;
@@ -552,6 +586,7 @@ export type I18nTranslations = {
             "selfLoop": string;
             "missingPrompt": string;
             "producesNeedsCategory": string;
+            "unknownRelationType": string;
             "deadEnd": string;
             "maxItemsRange": string;
             "fanOutIgnored": string;

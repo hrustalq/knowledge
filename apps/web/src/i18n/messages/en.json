@@ -42,6 +42,12 @@
     "tooLarge": "That is too large to send. Split it up, or attach it as a file instead of pasting it.",
     "unknownError": "Something went wrong. Try again."
   },
+  "page": {
+    "empty": "Nothing here yet",
+    "errorTitle": "This did not load",
+    "forbiddenTitle": "You do not have access to this",
+    "forbiddenHint": "Ask a workspace admin for a role that can see it."
+  },
   "nav": {
     "toggleSidebar": "Toggle navigation",
     "toggleTheme": "Toggle theme",

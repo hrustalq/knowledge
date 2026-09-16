@@ -24,6 +24,14 @@ import { apiQueryOptions } from '@/api/queries'
 import { api } from '@/api/client'
 import { getFilterRailOpen, getWorkspaceId, setFilterRailOpen } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import {
+  PageLayout,
+  PageSubRail,
+  PageTabs,
+  panelId,
+  tabId,
+  type PageTab,
+} from '@/components/layout/page'
 import type { ActiveFilter } from '@/components/ui/filter-bar'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
 import MergeRequestSearchBar from '@/components/merge-requests/MergeRequestSearchBar.vue'
@@ -58,8 +66,15 @@ const queryParams = computed(() => ({
   ...(cursor.value ? { cursor: cursor.value } : {}),
 }))
 
-// Narrowing invalidates the pages already stacked up behind it.
-watch([filters, search], () => resetPaging())
+/**
+ * Narrowing invalidates the pages already stacked up behind it.
+ *
+ * The status joins the other two here rather than keeping a setter of its own.
+ * It narrows exactly as they do, and a separate path was one more place that
+ * had to remember `resetPaging()` — which is also what lets the tab strip be an
+ * ordinary `v-model` instead of a handler.
+ */
+watch([filters, search, state], () => resetPaging())
 
 const listQuery = useQuery(
   computed(() => apiQueryOptions('/v1/merge-requests', { query: queryParams.value })),
@@ -75,6 +90,19 @@ function countFor(s: MrState): number {
   return s === 'all' ? c.open + c.merged + c.closed : c[s]
 }
 
+/**
+ * The counts are `null` until the first page lands, not 0 — a strip claiming
+ * every status holds nothing is a statement, and the only true one while the
+ * request is still out is that we do not know yet.
+ */
+const stateTabs = computed<PageTab<MrState>[]>(() =>
+  MR_STATES.map((s) => ({
+    key: s,
+    label: t(`mr.state${s.charAt(0).toUpperCase()}${s.slice(1)}`),
+    count: counts.value ? countFor(s) : null,
+  })),
+)
+
 const narrowed = computed(
   () => search.value !== '' || state.value !== 'open' || filters.value.some((f) => f.values[0]),
 )
@@ -89,11 +117,6 @@ const narrowed = computed(
 const narrowCount = computed(
   () => (search.value ? 1 : 0) + filters.value.filter((f) => f.values[0]).length,
 )
-
-function setState(next: MrState) {
-  state.value = next
-  resetPaging()
-}
 
 function resetPaging() {
   cursor.value = undefined
@@ -164,25 +187,17 @@ void restoreFromUrl()
 
 // --- rail -------------------------------------------------------------------
 // Server-rendered from a cookie, like the app rail, so a closed rail does not
-// flash open on the first frame before the client can collapse it.
+// flash open on the first frame before the client can collapse it. It keeps its
+// own cookie rather than the layout store's session memory for exactly that
+// reason — this one is drawn before any JavaScript runs.
 const railOpen = ref(getFilterRailOpen())
 watch(railOpen, (open) => setFilterRailOpen(open))
 </script>
 
 <template>
-  <!-- Bleed out of the main column's padding so the rail sits flush against the
-       shell, the same shape as the settings surface: a hairline-separated nav
-       column, not a card floating inside the page. -->
-  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 lg:flex-row lg:items-stretch">
-    <!--
-      One element, two collapses: a column beside the list at lg, a panel above
-      it below that. Two mechanisms rather than two components, because a second
-      instance would be a second copy of the rail's state — the naming box
-      half-typed in one and empty in the other, at whichever width the reader
-      happened to resize past.
-    -->
-    <div class="kn-filter-rail" :data-open="railOpen">
-      <nav :aria-label="t('filters.applied')" class="kn-filter-rail-inner bg-sidebar">
+  <PageLayout variant="list" :title="t('nav.mergeRequests')" :subtitle="t('mr.listSubtitle')">
+    <template #sub-rail>
+      <PageSubRail :label="t('filters.applied')" :open="railOpen">
         <SavedFilterRail
           v-model:state="state"
           v-model:search="search"
@@ -191,73 +206,56 @@ watch(railOpen, (open) => setFilterRailOpen(open))
           @apply="applySaved"
           @clear="clearNarrowing"
         />
-      </nav>
+      </PageSubRail>
+    </template>
+
+    <template #tabs>
+      <PageTabs v-model="state" :tabs="stateTabs" :label="t('filters.status')" />
+    </template>
+
+    <div class="flex items-start gap-2">
+      <!--
+        The toggle sits beside the search bar rather than up by the title:
+        the rail starts closed, so this is the only way in, and filtering is
+        already what this row is for. It carries its own label for the same
+        reason — an unlabelled icon is not somewhere you look for a feature
+        you have not met yet.
+      -->
+      <Button
+        variant="outline"
+        class="shrink-0"
+        :aria-expanded="railOpen"
+        :title="railOpen ? t('filters.hideRail') : t('filters.showRail')"
+        @click="railOpen = !railOpen"
+      >
+        <PanelLeftClose v-if="railOpen" />
+        <PanelLeftOpen v-else />
+        <span class="hidden sm:inline">{{ t('filters.railLabel') }}</span>
+        <!-- A closed rail must not take what it was telling you with it. -->
+        <span
+          v-if="narrowCount"
+          class="rounded-full bg-primary px-1.5 text-[0.625rem] leading-4 font-medium tabular-nums text-primary-foreground"
+        >
+          {{ narrowCount }}
+        </span>
+      </Button>
+
+      <MergeRequestSearchBar
+        v-model:filters="filters"
+        v-model:search="search"
+        class="min-w-0 flex-1"
+      />
     </div>
 
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-4 px-4 py-6 lg:px-8">
-      <div class="min-w-0">
-        <h1 class="font-display text-2xl font-bold tracking-tight">
-          {{ t('nav.mergeRequests') }}
-        </h1>
-        <p class="mt-0.5 text-sm text-muted-foreground">{{ t('mr.listSubtitle') }}</p>
-      </div>
-
-      <!-- Status tabs with count badges -->
-      <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
-        <button
-          v-for="s in MR_STATES"
-          :key="s"
-          role="tab"
-          :aria-selected="state === s"
-          class="flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors"
-          :class="
-            state === s
-              ? 'border-primary font-medium text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          "
-          @click="setState(s)"
-        >
-          {{ t(`mr.state${s.charAt(0).toUpperCase()}${s.slice(1)}`) }}
-          <span class="rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground">
-            {{ countFor(s) }}
-          </span>
-        </button>
-      </div>
-
-      <div class="flex items-start gap-2">
-        <!--
-          The toggle sits beside the search bar rather than up by the title:
-          the rail starts closed, so this is the only way in, and filtering is
-          already what this row is for. It carries its own label for the same
-          reason — an unlabelled icon is not somewhere you look for a feature
-          you have not met yet.
-        -->
-        <Button
-          variant="outline"
-          class="shrink-0"
-          :aria-expanded="railOpen"
-          :title="railOpen ? t('filters.hideRail') : t('filters.showRail')"
-          @click="railOpen = !railOpen"
-        >
-          <PanelLeftClose v-if="railOpen" />
-          <PanelLeftOpen v-else />
-          <span class="hidden sm:inline">{{ t('filters.railLabel') }}</span>
-          <!-- A closed rail must not take what it was telling you with it. -->
-          <span
-            v-if="narrowCount"
-            class="rounded-full bg-primary px-1.5 text-[0.625rem] font-medium leading-4 tabular-nums text-primary-foreground"
-          >
-            {{ narrowCount }}
-          </span>
-        </Button>
-
-        <MergeRequestSearchBar
-          v-model:filters="filters"
-          v-model:search="search"
-          class="min-w-0 flex-1"
-        />
-      </div>
-
+    <!-- The panel the strip above points at. Naming it is what makes the tabs
+         operable by anything other than a mouse: a screen reader follows
+         `aria-controls` from the tab to here. -->
+    <div
+      :id="panelId(state)"
+      role="tabpanel"
+      :aria-labelledby="tabId(state)"
+      class="flex min-w-0 flex-col gap-4"
+    >
       <MergeRequestList
         :rows="rows"
         :loading="listQuery.isPending.value && rows.length === 0"
@@ -271,5 +269,5 @@ watch(railOpen, (open) => setFilterRailOpen(open))
         </Button>
       </div>
     </div>
-  </div>
+  </PageLayout>
 </template>

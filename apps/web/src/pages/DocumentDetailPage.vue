@@ -53,8 +53,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { PageLayout, PageRail, PageState } from '@/components/layout/page'
 import TocRail from '@/components/knowledge/TocRail.vue'
-import RailSection from '@/components/knowledge/RailSection.vue'
 import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
 import RevisionsView from '@/components/knowledge/RevisionsView.vue'
 import MergeRequestList from '@/components/merge-requests/MergeRequestList.vue'
@@ -86,28 +86,19 @@ const RAIL_WIDGETS = [
 type RailWidget = (typeof RAIL_WIDGETS)[number]['id']
 
 const documentId = computed(() => route.params.id as string)
+
 /**
- * The rail is a stack of collapsible widgets, so more than one can be open and
- * "which is open" is not a single value the URL can hold. `?tab=` therefore
- * survives as an *opening* instruction — every existing deep link still lands
- * with the right widget open — rather than as two-way state. Values that used
- * to name a main tab (`overview`, `content`) now describe something always on
- * screen and open nothing in particular.
+ * Which widgets are open, and the `?tab=` opening instruction that seeds them,
+ * now belong to PageRail — along with remembering the set across pages, which
+ * is new: the rail used to reset to Overview on every document, so a reader who
+ * always checks History opened it again on every one.
+ *
+ * Frontmatter is filtered out entirely rather than shown empty: a widget whose
+ * answer is "this page has none" is a row that costs a glance to dismiss.
  */
-function initialOpen(): RailWidget[] {
-  const q = route.query.tab as RailWidget
-  // Overview is what a reader wants without asking; everything else is opened
-  // on purpose, or by a deep link that named it.
-  return RAIL_WIDGETS.some((w) => w.id === q) ? ['overview', q] : ['overview']
-}
-const open = ref<RailWidget[]>(initialOpen())
 const visibleWidgets = computed(() =>
   RAIL_WIDGETS.filter((w) => w.id !== 'frontmatter' || !!content.value?.frontmatter),
 )
-const isOpen = (id: RailWidget) => open.value.includes(id)
-function setOpen(id: RailWidget, next: boolean) {
-  open.value = next ? [...open.value, id] : open.value.filter((x) => x !== id)
-}
 
 /** The widget currently blown up into the dialog, if any. */
 const expanded = ref<RailWidget | null>(null)
@@ -400,112 +391,78 @@ watch(
 </script>
 
 <template>
-  <p v-if="error" class="text-destructive">{{ error }}</p>
+  <PageState v-if="error" state="error" :description="error" />
 
+  <!-- Shaped like the page it stands in for — a title, a column, a rail —
+       rather than a stack of generic bars, so the layout does not visibly
+       re-flow the moment the real thing lands on top of it. -->
   <div v-else-if="!detail" class="space-y-4">
     <Skeleton class="h-8 w-1/2" />
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem] 2xl:grid-cols-[minmax(0,1fr)_32rem]">
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem]">
       <Skeleton class="h-96 w-full" />
       <Skeleton class="hidden h-72 w-full lg:block" />
     </div>
   </div>
 
-  <div v-else class="space-y-5">
-    <!-- Page head ------------------------------------------------------- -->
-    <header class="space-y-2">
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 class="font-display text-2xl font-bold tracking-tight">{{ detail.document.title }}</h1>
+  <template v-else>
+    <PageLayout variant="detail" :title="detail.document.title">
+      <template #status>
         <Badge variant="outline">{{ labelFor(t, 'category', detail.document.category) }}</Badge>
         <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
-        <!-- Watch sits before Edit and carries the auto-margin: following a
-             page is open to every reader, while editing is not, so hanging the
-             margin off Edit would leave the row unbalanced for a viewer. -->
-        <div class="ml-auto flex items-center gap-1.5">
-          <!-- Only on pages that actually have vocabulary in them: a switch for
-               something the page does not do is noise. -->
-          <Button
-            v-if="canvasEl?.hasGlossary"
-            variant="ghost"
-            size="sm"
-            class="text-muted-foreground"
-            :aria-pressed="canvasEl?.glossaryOn"
-            :title="canvasEl?.glossaryOn ? t('glossary.linksOn') : t('glossary.linksOff')"
-            @click="canvasEl?.toggleGlossaryLinks()"
-          >
-            <BookA class="size-3.5" :class="canvasEl?.glossaryOn ? 'text-primary' : 'opacity-60'" />
-            {{ t('glossary.toggleLinks') }}
-          </Button>
-          <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
-          <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
-            <RouterLink :to="`/documents/${detail.document.documentId}/edit`">
-              <Pencil class="size-3.5" />
-              {{ t('common.edit') }}
-            </RouterLink>
-          </Button>
-        </div>
-      </div>
-      <p class="text-xs text-muted-foreground">
-        Revision #{{ detail.revision.revisionNumber }}
-        <span class="font-mono">({{ detail.revision.revisionId.slice(0, 8) }})</span>
-        <template v-if="detail.revision.finalizedAt">
-          · {{ t('documents.finalizedAt', { when: formatDateTime(detail.revision.finalizedAt) }) }}
-        </template>
-      </p>
-    </header>
+      </template>
 
-    <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem] xl:gap-8 2xl:grid-cols-[minmax(0,1fr)_32rem]">
-      <!-- Main column: what this is, what it says, what was said about it -->
-      <div class="min-w-0 space-y-6">
-        <!-- Content -->
-        <section class="space-y-2">
-          <p v-if="viewingRevision" class="text-xs text-muted-foreground">
-            Viewing revision {{ viewingRevision.slice(0, 8) }} — commenting is off while reading history.
-            <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
-          </p>
-          <p v-if="contentError" class="text-sm text-destructive">{{ contentError }}</p>
-          <Skeleton v-else-if="!content" class="h-96 w-full" />
-          <template v-else>
-            <DocumentCanvas
-              ref="canvasEl"
-              :markdown="content.markdown"
-              :document-id="documentId"
-              :frontmatter="content.frontmatter"
-              :title="detail.document.title"
-              :revision-id="content.revisionId"
-              :threads="threads"
-              :can-comment="canComment"
-              :busy="threadsBusy"
-              :resolve-document-id="resolveDocumentId"
-              @create-thread="onCreateThread"
-              @reply="onReply"
-              @resolve="onResolve"
-              @edit="onEditComment"
-              @delete="onDeleteComment"
-              @outdated="outdatedThreads = $event"
-              @headings="headings = $event"
-            />
+      <template #actions>
+        <!-- Only on pages that actually have vocabulary in them: a switch for
+             something the page does not do is noise. -->
+        <Button
+          v-if="canvasEl?.hasGlossary"
+          variant="ghost"
+          size="sm"
+          class="text-muted-foreground"
+          :aria-pressed="canvasEl?.glossaryOn"
+          :title="canvasEl?.glossaryOn ? t('glossary.linksOn') : t('glossary.linksOff')"
+          @click="canvasEl?.toggleGlossaryLinks()"
+        >
+          <BookA class="size-3.5" :class="canvasEl?.glossaryOn ? 'text-primary' : 'opacity-60'" />
+          {{ t('glossary.toggleLinks') }}
+        </Button>
+        <!-- Watch sits before Edit: following a page is open to every reader,
+             while editing is not, so a viewer still sees a balanced row. -->
+        <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
+        <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
+          <RouterLink :to="`/documents/${detail.document.documentId}/edit`">
+            <Pencil class="size-3.5" />
+            {{ t('common.edit') }}
+          </RouterLink>
+        </Button>
+      </template>
+
+      <template #meta>
+        <p class="text-xs text-muted-foreground">
+          Revision #{{ detail.revision.revisionNumber }}
+          <span class="font-mono">({{ detail.revision.revisionId.slice(0, 8) }})</span>
+          <template v-if="detail.revision.finalizedAt">
+            · {{ t('documents.finalizedAt', { when: formatDateTime(detail.revision.finalizedAt) }) }}
           </template>
-        </section>
-
-      </div>
+        </p>
+      </template>
 
       <!-- Rail: everything about the page rather than in it ------------- -->
-      <aside class="lg:sticky lg:top-6 space-y-3">
-        <TocRail v-if="headings.length > 1" :headings="headings" />
-
-        <RailSection
-          v-for="w in visibleWidgets"
-          :key="w.id"
-          :icon="w.icon"
-          :title="w.label"
-          :preview="previewFor[w.id]"
-          :open="isOpen(w.id)"
-          :expandable="w.expandable"
-          @update:open="setOpen(w.id, $event)"
-          @expand="expanded = w.id"
+      <template #rail>
+        <PageRail
+          :widgets="visibleWidgets"
+          surface="document"
+          :previews="previewFor"
+          @expand="expanded = $event"
         >
+          <!-- Above the stack and outside it: the contents belong to the page
+               being read, not to the facts about it. -->
+          <template #before>
+            <TocRail v-if="headings.length > 1" :headings="headings" />
+          </template>
+
           <!-- What this page *is*: the facts a reader checks before trusting it. -->
-          <template v-if="w.id === 'overview'">
+          <template #widget-overview>
             <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
               <dt class="text-muted-foreground">{{ t('documents.revision') }}</dt>
               <dd class="text-right">
@@ -555,26 +512,59 @@ watch(
             </div>
           </template>
 
-          <pre
-            v-else-if="w.id === 'frontmatter'"
-            class="overflow-x-auto rounded bg-muted/40 p-2 text-xs"
-          >{{ JSON.stringify(content?.frontmatter, null, 2) }}</pre>
+          <template #widget-frontmatter>
+            <pre class="overflow-x-auto rounded bg-muted/40 p-2 text-xs">{{ JSON.stringify(content?.frontmatter, null, 2) }}</pre>
+          </template>
 
-          <RevisionsView v-else-if="w.id === 'revisions'" :document-id="documentId" />
-          <MergeRequestList v-else-if="w.id === 'merge-requests'" :document-id="documentId" />
-          <GraphView v-else-if="w.id === 'graph'" :document-id="documentId" />
-          <WorkflowRail v-else-if="w.id === 'workflows'" :document-id="documentId" />
-          <ConnectorRail v-else-if="w.id === 'connectors'" :document-id="documentId" />
-          <ActivityFeed v-else :document-id="documentId" />
-        </RailSection>
+          <template #widget-revisions><RevisionsView :document-id="documentId" /></template>
+          <template #widget-merge-requests><MergeRequestList :document-id="documentId" /></template>
+          <template #widget-graph><GraphView :document-id="documentId" /></template>
+          <template #widget-workflows><WorkflowRail :document-id="documentId" /></template>
+          <template #widget-connectors><ConnectorRail :document-id="documentId" /></template>
+          <template #widget-activity><ActivityFeed :document-id="documentId" /></template>
 
-        <p v-if="jumpTarget" class="px-1 text-xs text-muted-foreground">
-          <button class="underline underline-offset-2 hover:text-foreground" @click="jumpToComment">
-            {{ t('count.openComments', { n: unresolvedCount }, unresolvedCount) }}
-          </button>
+          <!-- Under the stack rather than in it: this is the way back to a
+               passage somebody is waiting on, not a fact about the page. -->
+          <template #after>
+            <p v-if="jumpTarget" class="px-1 text-xs text-muted-foreground">
+              <button class="underline underline-offset-2 hover:text-foreground" @click="jumpToComment">
+                {{ t('count.openComments', { n: unresolvedCount }, unresolvedCount) }}
+              </button>
+            </p>
+          </template>
+        </PageRail>
+      </template>
+
+      <!-- Main column: what this is, what it says, what was said about it -->
+      <section class="space-y-2">
+        <p v-if="viewingRevision" class="text-xs text-muted-foreground">
+          Viewing revision {{ viewingRevision.slice(0, 8) }} — commenting is off while reading history.
+          <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
         </p>
-      </aside>
-    </div>
+        <PageState v-if="contentError" state="error" :description="contentError" />
+        <PageState v-else-if="!content" state="loading" :rows="1" row-class="h-96" />
+        <DocumentCanvas
+          v-else
+          ref="canvasEl"
+          :markdown="content.markdown"
+          :document-id="documentId"
+          :frontmatter="content.frontmatter"
+          :title="detail.document.title"
+          :revision-id="content.revisionId"
+          :threads="threads"
+          :can-comment="canComment"
+          :busy="threadsBusy"
+          :resolve-document-id="resolveDocumentId"
+          @create-thread="onCreateThread"
+          @reply="onReply"
+          @resolve="onResolve"
+          @edit="onEditComment"
+          @delete="onDeleteComment"
+          @outdated="outdatedThreads = $event"
+          @headings="headings = $event"
+        />
+      </section>
+    </PageLayout>
 
     <!-- A widget, given room. A revision table or a change list needs width the
          rail does not have, and sending the reader to another page to get it
@@ -609,5 +599,5 @@ watch(
 
     <!-- Ask-AI chat about this page -->
     <AskAssistant :document-id="documentId" :title="detail.document.title" />
-  </div>
+  </template>
 </template>

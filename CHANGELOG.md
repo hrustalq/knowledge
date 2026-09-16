@@ -12,6 +12,36 @@ traffic**. Production moves only when a `vX.Y.Z` tag is pushed. Entries are writ
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **A shared page layout.** Every screen except the sign-in cards is now one of
+  four shapes — something you read, a list, a subject with a rail of facts
+  beside it, or a surface that owns the window — so the title, the controls and
+  the state of a page sit in the same place on all of them. (#17)
+- **Tab strips answer to the keyboard.** Arrow keys move between tabs, `Home`
+  and `End` jump to the ends, the strip takes one tab stop instead of one per
+  tab, and each tab names the panel it controls for a screen reader. Five pages
+  had hand-written strips and none of them did any of this. (#17)
+- **A page's rail remembers what you keep open.** Opening History or Changes on
+  one page leaves it open on the next for the rest of the session, rather than
+  collapsing back to Overview every time you open a page. (#17)
+
+### Changed
+
+- **A column that fills the window now measures the header above it instead of
+  assuming it.** Side rails subtracted a fixed topbar-plus-breadcrumb height,
+  but the breadcrumb strip only appears on screens that have a trail. Every
+  screen using it happened to have one, so nothing looked wrong — the next one
+  would have run 36px past the bottom of the window with nothing in the code to
+  explain why. (#17)
+- **Page titles are one size.** Workflows and the pages index showed their
+  titles smaller than a settings subpage; sixteen heading styles are now one. (#17)
+- **Empty, loading, failed and no-access states share one anatomy** instead of
+  eight hand-built variants, and being unable to edit something now reads as a
+  statement about your role rather than as an error. (#17)
+
 ## [0.4.0] — 2026-09-16
 
 ### Added

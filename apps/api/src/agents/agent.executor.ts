@@ -12,7 +12,9 @@ import { normalizeRelation } from '../common/relations.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AssistantClient } from '../assistant/assistant.client.js';
+import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -66,6 +68,7 @@ export class AgentExecutor {
     private readonly graph: GraphService,
     private readonly registry: AgentRegistryService,
     private readonly client: AssistantClient,
+    private readonly readTools: AssistantReadToolsService,
     private readonly skills: AiSkillsService,
     private readonly documents: DocumentsService,
     private readonly glossary: GlossaryService,
@@ -80,13 +83,13 @@ export class AgentExecutor {
   async run(run: AgentRun, agent: ResolvedAgent, principal: Principal): Promise<AgentRunResult> {
     switch (agent.key) {
       case 'curator':
-        return this.curate(run, agent);
+        return this.curate(run, agent, principal);
       case 'reviewer':
         return this.review(run, agent, principal);
       case 'glossarist':
         return this.buildGlossary(run, principal);
       case 'cartographer':
-        return this.mapRelations(run, agent);
+        return this.mapRelations(run, agent, principal);
       default:
         // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
         // here got past that check, so failing loudly beats running an agent as
@@ -95,7 +98,11 @@ export class AgentExecutor {
     }
   }
 
-  private async curate(run: AgentRun, agent: ResolvedAgent): Promise<AgentRunResult> {
+  private async curate(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+  ): Promise<AgentRunResult> {
     const documents = await this.prisma.document.findMany({
       where: { workspaceId: run.workspaceId },
       select: { id: true, title: true, category: true, projectId: true },
@@ -148,7 +155,9 @@ export class AgentExecutor {
     // set. Skipped entirely when no model is configured — the orphan findings
     // above are still worth returning.
     let summary = t('agent.curation.summary', { pages: documents.length, orphans: orphans.length });
-    if (agent.config.enabled && agent.missing.length === 0) {
+    // 'tools' is a preference, not a prerequisite — see the cartographer's note.
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    if (agent.config.enabled && blocking.length === 0) {
       const described = documents.slice(0, MAX_DESCRIBED);
       const listing = described
         .map((d) => {
@@ -159,35 +168,50 @@ export class AgentExecutor {
         })
         .join('\n');
       try {
-        const raw = await this.client.chat(
+        const call = {
+          config: agent.config,
+          userId: run.createdBy,
+          operation: 'agent' as const,
+          locale: run.locale as Locale,
+        };
+        const messages: ChatCompletionMessageParam[] = [
           {
-            config: agent.config,
-            userId: run.createdBy,
-            operation: 'agent',
-            locale: run.locale as Locale,
+            role: 'system',
+            // The agent's own skillIds, rendered through the same service the
+            // chat turn uses. A background agent references skills exactly as
+            // a conversational one does; there is no trigger message here, so
+            // only what the agent explicitly names applies.
+            content:
+              `${agent.instructions}\n\n${OUTPUT_CONTRACT}` +
+              this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
           },
-          [
-            {
-              role: 'system',
-              // The agent's own skillIds, rendered through the same service the
-              // chat turn uses. A background agent references skills exactly as
-              // a conversational one does; there is no trigger message here, so
-              // only what the agent explicitly names applies.
-              content:
-                `${agent.instructions}\n\n${OUTPUT_CONTRACT}` +
-                this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
-            },
-            {
-              role: 'user',
-              content:
-                (run.input && typeof (run.input as { note?: string }).note === 'string'
-                  ? `Extra instructions: ${(run.input as { note?: string }).note}\n\n`
-                  : '') +
-                `Pages in this workspace (id | category | title | last updated):\n${listing}`,
-            },
-          ],
-          { json: true },
-        );
+          {
+            role: 'user',
+            content:
+              (run.input && typeof (run.input as { note?: string }).note === 'string'
+                ? `Extra instructions: ${(run.input as { note?: string }).note}\n\n`
+                : '') +
+              `Pages in this workspace (id | category | title | last updated):\n${listing}`,
+          },
+        ];
+
+        // Titles and dates can suggest a duplicate; only the prose can confirm
+        // one. With the read tools the curator can open both pages before
+        // asserting a conflict — the single-shot call stays for models that
+        // cannot call tools. jsonFinalRound, not `json: true`: response_format
+        // suppresses tool calls, so the contract applies to the last round only.
+        const raw = agent.missing.includes('tools')
+          ? await this.client.chat(call, messages, { json: true })
+          : (
+              await this.client.runWithTools(
+                call,
+                messages,
+                this.readTools.definitions(),
+                (name, args) =>
+                  this.readTools.execute(name, args, { principal, workspaceId: run.workspaceId }),
+                { jsonFinalRound: true },
+              )
+            ).content;
         const parsed = safeJson(raw);
         const proposals = Array.isArray(parsed?.findings) ? (parsed.findings as unknown[]) : [];
         const known = new Map(documents.map((d) => [d.id, d.title]));
@@ -417,7 +441,11 @@ export class AgentExecutor {
    * Nothing here writes. `AgentFindingsService.applyRelations` turns a finding
    * into a frontmatter merge request on the API side, where a person exists.
    */
-  private async mapRelations(run: AgentRun, agent: ResolvedAgent): Promise<AgentRunResult> {
+  private async mapRelations(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+  ): Promise<AgentRunResult> {
     const documents = await this.prisma.document.findMany({
       where: { workspaceId: run.workspaceId },
       select: { id: true, title: true, category: true },
@@ -487,7 +515,11 @@ export class AgentExecutor {
     }
 
     let summary = t('agent.cartography.summary', { pages: documents.length, found: findings.length });
-    if (agent.config.enabled && agent.missing.length === 0 && findings.length < MAX_FINDINGS) {
+    // 'tools' is a preference, not a prerequisite: a model without tool support
+    // still does useful work here from the listing alone, so it must not block
+    // the model half the way a genuinely missing capability (json) does.
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    if (agent.config.enabled && blocking.length === 0 && findings.length < MAX_FINDINGS) {
       const listing = documents
         .slice(0, MAX_DESCRIBED)
         .map((d) => {
@@ -499,31 +531,49 @@ export class AgentExecutor {
         .join('\n');
 
       try {
-        const raw = await this.client.chat(
+        const call = {
+          config: agent.config,
+          userId: run.createdBy,
+          operation: 'agent' as const,
+          locale: run.locale as Locale,
+        };
+        const messages: ChatCompletionMessageParam[] = [
           {
-            config: agent.config,
-            userId: run.createdBy,
-            operation: 'agent',
-            locale: run.locale as Locale,
+            role: 'system',
+            content:
+              `${agent.instructions}\n\n${RELATION_OUTPUT_CONTRACT}` +
+              this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
           },
-          [
-            {
-              role: 'system',
-              content:
-                `${agent.instructions}\n\n${RELATION_OUTPUT_CONTRACT}` +
-                this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
-            },
-            {
-              role: 'user',
-              content:
-                (run.input && typeof (run.input as { note?: string }).note === 'string'
-                  ? `Extra instructions: ${(run.input as { note?: string }).note}\n\n`
-                  : '') +
-                `Pages in this workspace (id | category | title | relations it already declares):\n${listing}`,
-            },
-          ],
-          { json: true },
-        );
+          {
+            role: 'user',
+            content:
+              (run.input && typeof (run.input as { note?: string }).note === 'string'
+                ? `Extra instructions: ${(run.input as { note?: string }).note}\n\n`
+                : '') +
+              `Pages in this workspace (id | category | title | relations it already declares):\n${listing}`,
+          },
+        ];
+
+        // The listing says what each page DECLARES; whether a connection is real
+        // is in the prose, which this agent could never open. With the read
+        // tools it can search, read and walk the graph before proposing — the
+        // single-shot call below stays for models that cannot call tools.
+        //
+        // jsonFinalRound rather than `json: true`: response_format suppresses
+        // tool calls, so the JSON contract can only be applied on the last,
+        // toolless round.
+        const raw = agent.missing.includes('tools')
+          ? await this.client.chat(call, messages, { json: true })
+          : (
+              await this.client.runWithTools(
+                call,
+                messages,
+                this.readTools.definitions(),
+                (name, args) =>
+                  this.readTools.execute(name, args, { principal, workspaceId: run.workspaceId }),
+                { jsonFinalRound: true },
+              )
+            ).content;
 
         const parsed = safeJson(raw);
         for (const proposal of Array.isArray(parsed?.findings) ? (parsed.findings as unknown[]) : []) {

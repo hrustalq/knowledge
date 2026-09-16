@@ -12,6 +12,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { onKeyStroke, useDropZone, useFileDialog, useSpeechRecognition, useTextareaAutosize } from '@vueuse/core'
 import { CornerDownLeft, FileText, Mic, MicOff, Paperclip, SendHorizontal, Square, Upload, X } from 'lucide-vue-next'
 import type { AssistantChatAttachment, AssistantChatMode } from '@knowledge/contracts'
+import { ASSISTANT_MESSAGE_MAX_CHARS } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -96,6 +97,15 @@ watch(
 // AssistantService.prepareTurn's <attachment> block on the API side.
 const MAX_ATTACHMENTS = 3
 const MAX_ATTACHMENT_CHARS = 20_000
+
+/**
+ * The server rejects a message over this, and until now the only way to find
+ * that out was to press send and be refused — the paste was already typed, and
+ * nothing on screen had said anything about a limit.
+ */
+const tooLong = computed(() => draft.value.length > ASSISTANT_MESSAGE_MAX_CHARS)
+/** Stay out of the way until the limit is actually in sight. */
+const showCount = computed(() => draft.value.length > ASSISTANT_MESSAGE_MAX_CHARS * 0.8)
 
 async function addFiles(files: File[] | FileList | null) {
   if (!files) return
@@ -211,13 +221,19 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 const canSend = computed(
-  () => !props.sending && (draft.value.trim().length > 0 || attachments.value.length > 0),
+  () =>
+    !props.sending &&
+    !tooLong.value &&
+    (draft.value.trim().length > 0 || attachments.value.length > 0),
 )
 const contextCount = computed(() => attachments.value.length + appliedDocs.value.length)
 
 function send() {
   const content = draft.value.trim()
-  if (!content || props.sending) return
+  // canSend, not just the old `!content || sending`: Enter reaches this directly
+  // (see onKeydown above), so a disabled button alone would not stop an
+  // over-length message from being sent and refused by the server.
+  if (!content || !canSend.value) return
   emit('send', {
     content,
     mode: mode.value,
@@ -398,7 +414,20 @@ function send() {
               </div>
             </TooltipProvider>
 
-            <span class="ml-auto hidden items-center gap-1 pr-1 text-[11px] text-muted-foreground sm:inline-flex">
+            <!-- Appears only near the cap, and turns destructive past it, so the
+                 limit is visible while there is still time to act on it. -->
+            <span
+              v-if="showCount"
+              class="ml-auto pr-1 text-[11px] tabular-nums"
+              :class="tooLong ? 'text-destructive' : 'text-muted-foreground'"
+            >
+              {{ draft.length.toLocaleString() }} / {{ ASSISTANT_MESSAGE_MAX_CHARS.toLocaleString() }}
+            </span>
+
+            <span
+              class="hidden items-center gap-1 pr-1 text-[11px] text-muted-foreground sm:inline-flex"
+              :class="showCount ? '' : 'ml-auto'"
+            >
               <CornerDownLeft class="size-3" />
               {{ t('chat.toSend') }}
             </span>

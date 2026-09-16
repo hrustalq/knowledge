@@ -83,12 +83,14 @@ export class UpdateAiSettingsDto {
   @Max(2, { message: vmsg('max') })
   temperature?: number | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 16 })
+  @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 64 })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('maxToolCalls')
   @IsInt()
   @Min(0, { message: vmsg('min') })
-  @Max(16, { message: vmsg('max') })
+  // 64, matching ASSISTANT_MAX_TOOL_CALLS' ceiling in env.ts. At 16 a workspace
+  // could not raise its own override to the value the env default now uses.
+  @Max(64, { message: vmsg('max') })
   maxToolCalls?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 1000, maximum: 600_000 })
@@ -254,12 +256,14 @@ export class CreateAiProviderDto {
   @Max(2, { message: vmsg('max') })
   temperature?: number | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 16 })
+  @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 64 })
   @IsOptional()
   @NULLABLE<CreateAiProviderDto>('maxToolCalls')
   @IsInt()
   @Min(0, { message: vmsg('min') })
-  @Max(16, { message: vmsg('max') })
+  // 64, matching ASSISTANT_MAX_TOOL_CALLS' ceiling in env.ts. At 16 a workspace
+  // could not raise its own override to the value the env default now uses.
+  @Max(64, { message: vmsg('max') })
   maxToolCalls?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 1000, maximum: 600_000 })
@@ -352,7 +356,9 @@ export class UpdateAiProviderDto {
   @NULLABLE<UpdateAiProviderDto>('maxToolCalls')
   @IsInt()
   @Min(0, { message: vmsg('min') })
-  @Max(16, { message: vmsg('max') })
+  // 64, matching ASSISTANT_MAX_TOOL_CALLS' ceiling in env.ts. At 16 a workspace
+  // could not raise its own override to the value the env default now uses.
+  @Max(64, { message: vmsg('max') })
   maxToolCalls?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
@@ -653,7 +659,9 @@ export class UpdateAiAgentDto {
   @NULLABLE<UpdateAiAgentDto>('maxToolCalls')
   @IsInt()
   @Min(0, { message: vmsg('min') })
-  @Max(50, { message: vmsg('max') })
+  // Was 50 while every sibling DTO said 16 — an inconsistency that predates
+  // this change. All four now agree with env.ts.
+  @Max(64, { message: vmsg('max') })
   maxToolCalls?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })

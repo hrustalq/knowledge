@@ -58,12 +58,23 @@ const CLIENT_CACHE_MAX = 32;
 const MAX_TOOL_RESULT_CHARS = 28_000;
 
 /**
- * Absolute ceiling on harness rounds, independent of the tool budget.
+ * Harness rounds, derived from the tool budget rather than fixed.
  *
  * The budget alone no longer bounds the loop now that some tools are free, so
- * this is what guarantees a turn ends at all.
+ * this is what guarantees a turn ends at all. But a constant 12 also silently
+ * capped the budget: once a turn needed more than twelve rounds to spend its
+ * calls, raising ASSISTANT_MAX_TOOL_CALLS bought nothing.
+ *
+ * MIN_ROUNDS keeps the old floor, so no turn that worked before gets shorter.
+ * The +8 is headroom for narration rounds and for the free tools (ask_user,
+ * request_agent_mode) that consume a round without consuming budget — the exact
+ * hazard the fixed ceiling existed to contain. ROUNDS_CEILING keeps the
+ * termination guarantee absolute, whatever a workspace configures.
  */
-const MAX_ROUNDS = 12;
+const MIN_ROUNDS = 12;
+const ROUNDS_CEILING = 64;
+const roundsFor = (budget: number): number =>
+  Math.min(ROUNDS_CEILING, Math.max(MIN_ROUNDS, budget + 8));
 
 /**
  * Added to the final round, the one that runs with no tools attached.
@@ -197,22 +208,43 @@ export class AssistantClient {
     messages: ChatCompletionMessageParam[],
     tools: ChatCompletionFunctionTool[],
     execute: ToolExecutor,
+    /**
+     * Ask for a JSON object on the final, toolless round. `json_object` cannot
+     * be set on a tool-calling round — it suppresses tool calls outright — so a
+     * caller with a JSON output contract (the cartographer) gets it applied only
+     * where no tools are offered.
+     */
+    opts?: { jsonFinalRound?: boolean },
   ): Promise<{ content: string; trace: AssistantToolCall[] }> {
     const trace: AssistantToolCall[] = [];
     const convo: ChatCompletionMessageParam[] = [...messages];
 
     const free = tools.filter((t) => FREE_TOOLS.has(t.function.name));
+    const maxRounds = roundsFor(ctx.config.maxToolCalls);
 
     for (let round$ = 0; ; round$++) {
-      if (round$ >= MAX_ROUNDS) return { content: '', trace };
+      // Defensive only: the last permitted round is forced toolless below, so
+      // the loop normally exits through the no-tools-requested return with real
+      // prose. This used to return '' — a blank bubble shown to the reader as
+      // the answer, which is worse than saying plainly that nothing came back.
+      if (round$ >= maxRounds) return { content: t('error.assistant.roundsExhausted'), trace };
+
       const budgetLeft = this.budgetLeft(ctx, trace);
-      const offered = budgetLeft > 0 ? tools : free;
+      // Spending the budget is no longer the only way to reach the end: the
+      // final round offers no tools at all, so a model that would otherwise keep
+      // calling has to answer with what it has.
+      const finalRound = round$ >= maxRounds - 1;
+      const offered = finalRound ? [] : budgetLeft > 0 ? tools : free;
       const completion = await this.create(ctx, {
-        messages: budgetLeft > 0 ? convo : [...convo, LAST_ROUND_NUDGE],
+        messages: finalRound || budgetLeft <= 0 ? [...convo, LAST_ROUND_NUDGE] : convo,
         ...(offered.length > 0 ? { tools: offered } : {}),
+        ...(opts?.jsonFinalRound && offered.length === 0
+          ? { response_format: { type: 'json_object' as const } }
+          : {}),
       });
       const message = completion.choices[0]?.message;
-      if (!message) return { content: '', trace };
+      // No choices at all is an upstream failure, not an empty answer.
+      if (!message) throw this.upstreamError(new Error('Provider returned no completion choices'));
 
       const requested = (message.tool_calls ?? []).filter(
         (c): c is ChatCompletionMessageFunctionToolCall => c.type === 'function',
@@ -295,18 +327,24 @@ export class AssistantClient {
     const convo: ChatCompletionMessageParam[] = [...messages];
 
     const free = tools.filter((t) => FREE_TOOLS.has(t.function.name));
+    const maxRounds = roundsFor(ctx.config.maxToolCalls);
 
     for (let round$ = 0; ; round$++) {
       if (signal?.aborted) return { content: '', trace, cancelled: true };
       // A hard stop independent of the budget: free tools do not consume it,
       // so without this a model that kept calling one could loop forever.
-      if (round$ >= MAX_ROUNDS) return { content: stripToolMarkup(''), trace, cancelled: false };
+      // Defensive only, as in runWithTools — the final round below is toolless,
+      // so this used to hand the pane `stripToolMarkup('')`, an empty bubble.
+      if (round$ >= maxRounds) {
+        return { content: t('error.assistant.roundsExhausted'), trace, cancelled: false };
+      }
       const budgetLeft = this.budgetLeft(ctx, trace);
-      const offered = budgetLeft > 0 ? tools : free;
+      const finalRound = round$ >= maxRounds - 1;
+      const offered = finalRound ? [] : budgetLeft > 0 ? tools : free;
       const round = await this.createStream(
         ctx,
         {
-          messages: budgetLeft > 0 ? convo : [...convo, LAST_ROUND_NUDGE],
+          messages: finalRound || budgetLeft <= 0 ? [...convo, LAST_ROUND_NUDGE] : convo,
           ...(offered.length > 0 ? { tools: offered } : {}),
         },
         on.delta,

@@ -24,6 +24,7 @@ import type {
   MergeRequestThreadAnchor,
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import { errorMessage } from '@/api/errors'
 import { relativeTime } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { Badge } from '@/components/ui/badge'
@@ -191,7 +192,7 @@ function saveEdit() {
         editing.value = false
         toast.success(t('mr.updated'))
       },
-      onError: (e) => toast.error(e.message),
+      onError: (e) => toast.error(errorMessage(e, t)),
     },
   )
 }
@@ -251,7 +252,7 @@ function onCreateThread(
     { path: { id: id.value }, body: { body, resolvable, source, ...(anchor ? { anchor } : {}) } },
     {
       onSuccess: () => (pendingAnchor.value = null),
-      onError: (e) => toast.error(e.message),
+      onError: (e) => toast.error(errorMessage(e, t)),
     },
   )
 }
@@ -264,19 +265,19 @@ function onAiComment(body: string) {
 function onReply(threadId: string, body: string, replyToId: string | null = null) {
   replyThread.mutate(
     { path: { id: id.value, threadId }, body: { body, ...(replyToId ? { replyToId } : {}) } },
-    { onError: (e) => toast.error(e.message) },
+    { onError: (e) => toast.error(errorMessage(e, t)) },
   )
 }
 function onResolve(threadId: string, resolved: boolean) {
   resolveThread.mutate(
     { path: { id: id.value, threadId }, body: { resolved } },
-    { onError: (e) => toast.error(e.message) },
+    { onError: (e) => toast.error(errorMessage(e, t)) },
   )
 }
 function onEditComment(threadId: string, commentId: string, body: string) {
   editComment.mutate(
     { path: { id: id.value, threadId, commentId }, body: { body } },
-    { onError: (e) => toast.error(e.message) },
+    { onError: (e) => toast.error(errorMessage(e, t)) },
   )
 }
 function onDeleteComment(threadId: string, commentId: string) {
@@ -284,7 +285,7 @@ function onDeleteComment(threadId: string, commentId: string) {
     { path: { id: id.value, threadId, commentId } },
     {
       onSuccess: () => toast.success(t('mr.commentDeleted')),
-      onError: (e) => toast.error(e.message),
+      onError: (e) => toast.error(errorMessage(e, t)),
     },
   )
 }

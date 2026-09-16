@@ -6,6 +6,7 @@ import { DocumentsModule } from '../documents/documents.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { AssistantClientModule } from './assistant-client.module.js';
+import { AssistantReadToolsModule } from './assistant-read-tools.module.js';
 import { AssistantToolsService } from './assistant.tools.js';
 import { WebResearchService } from './web-research.service.js';
 import { AssistantService } from './assistant.service.js';
@@ -26,6 +27,9 @@ import { AiModule } from '../ai/ai.module.js';
     // every injection site for no gain (docs/features/25).
     AiCoreModule,
     AssistantClientModule,
+    // The read half of the tool surface, which AssistantToolsService delegates
+    // to and the agent worker loads on its own (see the module's own note).
+    AssistantReadToolsModule,
     SearchModule,
     DocumentsModule,
     StorageModule,

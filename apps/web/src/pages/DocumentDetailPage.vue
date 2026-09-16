@@ -14,6 +14,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/lib/format'
+import { errorMessage } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
@@ -217,7 +218,7 @@ const threadsBusy = computed(
 function onCreateThread(body: string, anchor?: ReviewThreadAnchor, resolvable = false) {
   createThread.mutate(
     { path: { id: documentId.value }, body: { body, resolvable, ...(anchor ? { anchor } : {}) } },
-    { onError: (e) => toast.error(e.message) },
+    { onError: (e) => toast.error(errorMessage(e, t)) },
   )
 }
 function onReply(threadId: string, body: string, replyToId: string | null = null) {
@@ -226,19 +227,19 @@ function onReply(threadId: string, body: string, replyToId: string | null = null
       path: { id: documentId.value, threadId },
       body: { body, ...(replyToId ? { replyToId } : {}) },
     },
-    { onError: (e) => toast.error(e.message) },
+    { onError: (e) => toast.error(errorMessage(e, t)) },
   )
 }
 function onResolve(threadId: string, resolved: boolean) {
   resolveThread.mutate(
     { path: { id: documentId.value, threadId }, body: { resolved } },
-    { onError: (e) => toast.error(e.message) },
+    { onError: (e) => toast.error(errorMessage(e, t)) },
   )
 }
 function onEditComment(threadId: string, commentId: string, body: string) {
   editComment.mutate(
     { path: { id: documentId.value, threadId, commentId }, body: { body } },
-    { onError: (e) => toast.error(e.message) },
+    { onError: (e) => toast.error(errorMessage(e, t)) },
   )
 }
 function onDeleteComment(threadId: string, commentId: string) {
@@ -246,7 +247,7 @@ function onDeleteComment(threadId: string, commentId: string) {
     { path: { id: documentId.value, threadId, commentId } },
     {
       onSuccess: () => toast.success(t('documents.commentDeleted')),
-      onError: (e) => toast.error(e.message),
+      onError: (e) => toast.error(errorMessage(e, t)),
     },
   )
 }

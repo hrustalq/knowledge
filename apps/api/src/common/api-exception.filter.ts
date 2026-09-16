@@ -15,6 +15,19 @@ import { currentTrace } from '@knowledge/observability';
  * `new ConflictException({ message, comparisonUrl, … })` are hoisted into
  * `details` (see RevisionConflictResponse in contracts).
  */
+/**
+ * body-parser's PayloadTooLargeError, which reaches this filter unwrapped.
+ *
+ * `type` is the stable discriminator across body-parser versions; http-errors
+ * sets both `status` and `statusCode`, and which one survives depends on how the
+ * error was constructed — so test `type` first and accept either numeric field.
+ */
+function isPayloadTooLarge(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { type?: unknown; status?: unknown; statusCode?: unknown };
+  return e.type === 'entity.too.large' || e.status === 413 || e.statusCode === 413;
+}
+
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ApiExceptionFilter.name);
@@ -66,6 +79,21 @@ export class ApiExceptionFilter implements ExceptionFilter {
         }
         if (Object.keys(extras).length > 0) details = { ...details, ...extras };
       }
+    } else if (isPayloadTooLarge(exception)) {
+      // body-parser throws a bare PayloadTooLargeError, not an HttpException, so
+      // without this branch it fell through to `else` and surfaced as an
+      // untranslated 500 that never mentioned size — the whole reason a large
+      // paste "just errored" on every prose surface.
+      status = HttpStatus.PAYLOAD_TOO_LARGE;
+      code = 'PAYLOAD_TOO_LARGE';
+      message = t('error.payloadTooLarge');
+      // Worth seeing, but it is a client mistake, not an incident.
+      this.logger.warn({
+        msg: 'Request body too large',
+        code,
+        method: req.method,
+        route: req.originalUrl ?? req.url,
+      });
     } else {
       // Unexpected throw: never leak internals to the client, always log them.
       this.logger.error({

@@ -21,6 +21,9 @@ import {
 } from 'class-validator';
 import { vmsg } from '../../common/validation.js';
 
+/** Ceiling on an inline document body — see the note on InlineContentDto.text. */
+const MAX_INLINE_TEXT_CHARS = 500_000;
+
 export class InlineContentDto {
   @ApiProperty({ enum: ['inline'] })
   @IsIn(['inline'])
@@ -31,9 +34,15 @@ export class InlineContentDto {
   @IsNotEmpty()
   format!: string;
 
-  @ApiProperty()
+  /**
+   * A very long page. Bounded so oversize is a translated VALIDATION_FAILED
+   * rather than an untranslated 500 from body-parser; HTTP_BODY_LIMIT sits
+   * above this (in bytes, which is not the same unit — see env.ts).
+   */
+  @ApiProperty({ maxLength: MAX_INLINE_TEXT_CHARS })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(MAX_INLINE_TEXT_CHARS, { message: vmsg('maxLength') })
   text!: string;
 }
 

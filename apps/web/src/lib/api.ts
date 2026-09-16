@@ -1,4 +1,10 @@
-import { DEFAULT_LOCALE, isLocale, type Locale } from '@knowledge/contracts'
+import {
+  DEFAULT_LOCALE,
+  isApiErrorPayload,
+  isLocale,
+  type ApiErrorCode,
+  type Locale,
+} from '@knowledge/contracts'
 import { formatRelative } from './format'
 
 /** Fallback workspace when the caller has no memberships (AUTH_MODE=none demo flow). */
@@ -35,10 +41,20 @@ export type SidebarPane = 'projects' | 'pages'
 export class ApiError extends Error {
   readonly status: number
 
-  constructor(status: number, message: string) {
+  /**
+   * The envelope's stable code, when the body was an ApiErrorPayload.
+   *
+   * Without it callers branched on message *text* — `msg.startsWith('409')` in
+   * the editor — which breaks the moment the message is translated, and left a
+   * 413 indistinguishable from any other failure.
+   */
+  readonly code?: ApiErrorCode
+
+  constructor(status: number, message: string, code?: ApiErrorCode) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
@@ -357,7 +373,20 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     },
   })
   if (!res.ok) {
-    throw new ApiError(res.status, `${res.status} ${res.statusText}: ${(await res.text()).slice(0, 300)}`)
+    // The API normalises every failure into ApiErrorPayload, so prefer its
+    // translated message and stable code. Throwing the raw body is what put
+    // `500 Internal Server Error: {"statusCode":500,…}` into a toast; the
+    // fallback stays for anything that answers before the filter runs (a proxy,
+    // a gateway) and therefore is not an envelope at all.
+    const text = await res.text()
+    let parsed: unknown = null
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      /* not JSON — fall through to the raw-text form below */
+    }
+    if (isApiErrorPayload(parsed)) throw new ApiError(res.status, parsed.message, parsed.code)
+    throw new ApiError(res.status, `${res.status} ${res.statusText}: ${text.slice(0, 300)}`)
   }
   return res.json() as Promise<T>
 }

@@ -26,6 +26,22 @@ export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
 
+  /**
+   * Max size of a JSON/urlencoded request body.
+   *
+   * Express's own default is 100 kB, which this app silently inherited: a
+   * pasted page, a long comment or an import submit died inside body-parser as
+   * an untranslated 500 that never mentioned size. Sits above the DTO
+   * @MaxLength caps on purpose, so oversize arrives as a translated
+   * VALIDATION_FAILED and 413 stays a pure safety net.
+   *
+   * Note the units differ: @MaxLength counts UTF-16 code units, this counts
+   * BYTES, and Cyrillic is 2 bytes/UTF-8 — never derive one from the other as
+   * if 1 char = 1 byte. Must keep a default: generate-openapi.main.ts runs this
+   * schema with no infra. Accepts anything `bytes` parses ('2mb', '512kb').
+   */
+  HTTP_BODY_LIMIT: z.string().min(1).default('2mb'),
+
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
 
@@ -94,8 +110,15 @@ export const envSchema = z.object({
   ASSISTANT_BASE_URL: z.string().optional().default(''),
   ASSISTANT_MODEL: z.string().optional().default(''),
   ASSISTANT_API_KEY: z.string().optional().default(''),
-  /** Tool harness: max tool executions per /v1/assistant/ask request (0 = plain chat). */
-  ASSISTANT_MAX_TOOL_CALLS: z.coerce.number().int().min(0).max(16).default(6),
+  /**
+   * Tool harness: max tool executions per /v1/assistant/ask request (0 = plain chat).
+   *
+   * Was 6, which a single real question spent on search -> read x2 -> explore ->
+   * list_relations before the harness forced a toolless final round — the model
+   * answered from half the evidence it had asked for. MAX_ROUNDS in
+   * assistant.client.ts scales off this, so raising it here actually buys rounds.
+   */
+  ASSISTANT_MAX_TOOL_CALLS: z.coerce.number().int().min(0).max(64).default(24),
   /** Upstream request timeout for the assistant provider. */
   ASSISTANT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 

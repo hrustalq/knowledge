@@ -18,6 +18,7 @@ import type {
 } from '@knowledge/contracts'
 import type { ComposerTranslation } from 'vue-i18n'
 import { request } from '@/api/client'
+import { errorMessage } from '@/api/errors'
 import { presignedPut } from '@/lib/presigned-put'
 
 /** Where the wizard is, as far as the person looking at it is concerned. */
@@ -258,6 +259,9 @@ export function useImport() {
 
 function messageOf(e: unknown, t: ComposerTranslation): string {
   if (e instanceof DOMException && e.name === 'AbortError') return t('import.uploadCancelled')
-  const message = (e as { message?: string })?.message
+  // Through the shared mapper: submitting a large parsed document is the failure
+  // this wizard hits most, and reading `.message` directly showed the raw body
+  // rather than the envelope's translated "too large".
+  const message = errorMessage(e, t)
   return message && message !== 'Request failed' ? message : t('import.somethingWentWrong')
 }

@@ -31,6 +31,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const MAX_QUOTE_CHARS = 1_000;
 const MAX_CONTEXT_CHARS = 100;
 
+/**
+ * A remark, not a document — an order of magnitude under the inline-page cap.
+ * These two classes serve BOTH merge-request threads and page comments
+ * (documents.controller.ts imports them), so this bounds all four surfaces.
+ */
+const MAX_BODY_CHARS = 50_000;
+
 export class CreateMergeRequestDto {
   @ApiProperty({ example: 'feature/oauth' })
   @IsString()
@@ -211,9 +218,10 @@ export class ThreadAnchorDto {
 }
 
 export class CreateThreadDto {
-  @ApiProperty()
+  @ApiProperty({ maxLength: MAX_BODY_CHARS })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(MAX_BODY_CHARS, { message: vmsg('maxLength') })
   body!: string;
 
   @ApiPropertyOptional({ type: ThreadAnchorDto })
@@ -243,9 +251,10 @@ export class CreateThreadDto {
 }
 
 export class CreateCommentDto {
-  @ApiProperty()
+  @ApiProperty({ maxLength: MAX_BODY_CHARS })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(MAX_BODY_CHARS, { message: vmsg('maxLength') })
   body!: string;
 
   /**

@@ -121,33 +121,73 @@ Feature 17's rule stands: **the worker generates, the API publishes.**
 `AgentWorkerModule` provides `AssistantClient` directly and nothing that can
 write. A background agent proposes; a person acts.
 
-## Why the curator has no tool loop
+## The curator reads, but only after the queries are answered
 
 Which pages exist, which have no relations, when each last changed — those are
-queries, not judgements. The executor gathers them deterministically and spends
-the model call only on the half that is actually judgement: duplication,
+queries, not judgements. The executor still gathers them deterministically and
+spends the model call only on the half that is actually judgement: duplication,
 contradiction, gaps. That split is the one this codebase draws everywhere
-between deterministic and inferred facts.
+between deterministic and inferred facts, and it is unchanged.
 
-It also means orphan findings are exactly right rather than probable, a
-workspace with no model configured still gets half an answer, and the write
-tools never have to exist in the worker at all. The built-in declares
-`requires: ['json']` rather than `['tools']`, because a declaration the executor
-does not honour is worse than no declaration.
+What changed is what the judgement half can see. It used to receive a bare
+listing — id, category, title, date — and be asked to find duplicates and
+contradictions in it. Titles cannot answer that. A page called "Deploys" and a
+page called "Release process" are either the same thing written twice or two
+different things, and nothing in the listing says which. The curator now
+declares `tools: [...READ_TOOLS]` and runs `runWithTools`, so it can open both
+before claiming they conflict.
+
+Every property the old split was protecting survives. Orphan findings are still
+exactly right rather than probable, because the worker still computes them. A
+workspace with no model configured still gets half an answer. And the write
+tools still do not exist in the worker: what the curator gained is
+`AssistantReadToolsService`, which reaches search, documents, prisma and access,
+and nothing else.
+
+The built-in now declares `requires: ['json', 'tools']`. The older note here
+warned that a declaration the executor does not honour is worse than no
+declaration — that still holds, so `curate()` honours it by **degrading rather
+than refusing**: `'tools'` is filtered out of what counts as blocking, and a
+model without tool support runs the original single-shot pass instead of no
+model pass at all. Declaring it blocking would have turned a capability the
+agent merely prefers into a reason to skip the work entirely.
 
 Every finding must cite pages that exist in the workspace; one that cites
 nothing, or cites an id the model invented, is dropped before it is stored
 (plan.md §12.7 — source-backed citations, never a bare LLM answer).
 
-## The cartographer follows the same split
+## The cartographer keeps the split, but reads
 
 docs/features/28 added a twelfth built-in on exactly this shape, and it is worth
 naming here because it is the argument above applied a second time. Which pages
 declare no relations, and which carry an `inferred` edge nobody ever confirmed,
-are queries — so the worker answers them and the model is spent only on which
-connection is real. It declares `tools: []` and `requires: ['json']` like the
-curator, and `RUNNABLE_AGENTS` is now
+are queries — so the worker answers them deterministically and the model is
+spent only on which connection is real. `RUNNABLE_AGENTS` is
 `curator | reviewer | glossarist | cartographer`.
+
+That half of the split is unchanged. What changed is the other half. The
+cartographer used to declare `tools: []` and answer from a single `client.chat`
+call over a pre-baked listing — and the listing says what each page *declares*,
+which is not the question. Whether a connection is real is in the prose, and the
+agent could not open it. It now declares `tools: [...READ_TOOLS]` and runs
+`runWithTools`, so it can search, read a page and walk the graph before
+proposing anything.
+
+Two details of that are load-bearing:
+
+- The tools are the **read half only** — `AssistantReadToolsService`, split out of
+  `AssistantToolsService` precisely so the worker can load it without
+  `StorageService`, `MergeRequestsService` or anything else that writes. Feature
+  17's rule is untouched: the worker generates, the API publishes.
+- `requires` names `'tools'` so the roster shows honestly what the agent wants,
+  but `mapRelations` filters `'tools'` out of what counts as *blocking* and falls
+  back to the original single-shot call on a model without tool support. A bare
+  `requires` entry would have skipped the model half altogether on those
+  deployments, which is a regression dressed up as a capability check.
+
+The JSON output contract moved with it: `response_format: json_object` suppresses
+tool calls, so it can only be applied on the final, toolless round —
+`runWithTools` takes a `jsonFinalRound` option that does exactly that.
 
 It also gave `orphan` findings something to do. They were refused by the
 merge-request proposal path because the fix is a relation and not prose; a

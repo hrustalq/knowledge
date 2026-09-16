@@ -681,6 +681,21 @@ export type AgentSurface = (typeof AGENT_SURFACES)[number];
 export const AGENT_CAPABILITIES = ['tools', 'vision', 'json'] as const;
 export type AgentCapability = (typeof AGENT_CAPABILITIES)[number];
 
+/**
+ * Longest message a person may send the assistant in one turn.
+ *
+ * Lives here for the reason ASSISTANT_WRITE_TOOL_NAMES does: the server
+ * validates against it and the composer counts against it, and when those were
+ * two numbers the cap was only discoverable by pressing send and being refused.
+ *
+ * 4_000 was the old server-side value, which is under two pages — too small for
+ * the thing people actually do, which is paste a spec and ask about it. At
+ * 32_000 the worst-case prompt is roughly this plus the grounding page (30k)
+ * plus three attachments (20k each), which still sits comfortably inside a
+ * 128k-token context; anything larger belongs on the attachment path.
+ */
+export const ASSISTANT_MESSAGE_MAX_CHARS = 32_000;
+
 
 
 /**

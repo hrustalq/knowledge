@@ -13966,7 +13966,8 @@
             "example": "markdown"
           },
           "text": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 500000
           }
         },
         "required": [
@@ -14323,7 +14324,8 @@
         "type": "object",
         "properties": {
           "body": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 50000
           },
           "anchor": {
             "$ref": "#/components/schemas/ThreadAnchorDto"
@@ -14349,7 +14351,8 @@
         "type": "object",
         "properties": {
           "body": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 50000
           },
           "replyToId": {
             "type": "string",
@@ -14924,7 +14927,8 @@
             ]
           },
           "content": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 32000
           }
         },
         "required": [
@@ -14945,7 +14949,8 @@
           },
           "question": {
             "type": "string",
-            "example": "Why do sessions get revoked on password reset?"
+            "example": "Why do sessions get revoked on password reset?",
+            "maxLength": 32000
           },
           "history": {
             "description": "Prior turns, most recent last",
@@ -15040,7 +15045,8 @@
         "properties": {
           "content": {
             "type": "string",
-            "example": "Draft a short onboarding page for new hires"
+            "example": "Draft a short onboarding page for new hires",
+            "maxLength": 32000
           },
           "documentId": {
             "type": "string",
@@ -16272,7 +16278,8 @@
           },
           "markdown": {
             "type": "string",
-            "description": "Markdown as reviewed and edited; this is what the page is created from"
+            "description": "Markdown as reviewed and edited; this is what the page is created from",
+            "maxLength": 500000
           },
           "projectId": {
             "type": "string",

@@ -9,8 +9,9 @@ A chat grounded in the workspace. It answers from pages it actually read, and ci
 
 ## The tools it has
 
-Three, and only three: **search the knowledge base**, **read a document**, **explore a
-document's graph**. The loop is bounded by `ASSISTANT_MAX_TOOL_CALLS`.
+Four, and only four: **search the knowledge base**, **read a document**, **explore a
+document's graph**, and **list what a page is connected to**. The loop is bounded by
+`ASSISTANT_MAX_TOOL_CALLS`.
 
 Two rules make it safe to point at real content:
 

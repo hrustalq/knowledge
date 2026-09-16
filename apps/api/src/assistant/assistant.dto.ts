@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
+import { ASSISTANT_MESSAGE_MAX_CHARS } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 export class AssistantReviewDto {
@@ -54,10 +55,12 @@ export class AssistantAskTurnDto {
   @IsIn(['user', 'assistant'])
   role!: 'user' | 'assistant';
 
-  @ApiProperty()
+  // Must track the live message cap, or a turn long enough to send becomes too
+  // long to replay as history on the next one.
+  @ApiProperty({ maxLength: ASSISTANT_MESSAGE_MAX_CHARS })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(8_000, { message: vmsg('maxLength') })
+  @MaxLength(ASSISTANT_MESSAGE_MAX_CHARS, { message: vmsg('maxLength') })
   content!: string;
 }
 
@@ -141,10 +144,13 @@ export class ChatAttachmentDto {
 }
 
 export class PostAssistantMessageDto {
-  @ApiProperty({ example: 'Draft a short onboarding page for new hires' })
+  @ApiProperty({
+    example: 'Draft a short onboarding page for new hires',
+    maxLength: ASSISTANT_MESSAGE_MAX_CHARS,
+  })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(4_000, { message: vmsg('maxLength') })
+  @MaxLength(ASSISTANT_MESSAGE_MAX_CHARS, { message: vmsg('maxLength') })
   content!: string;
 
   @ApiPropertyOptional({ format: 'uuid', description: "Overrides the thread's default grounding document for this turn" })
@@ -215,10 +221,13 @@ export class AssistantAskDto {
   @IsUUID()
   documentId!: string;
 
-  @ApiProperty({ example: 'Why do sessions get revoked on password reset?' })
+  @ApiProperty({
+    example: 'Why do sessions get revoked on password reset?',
+    maxLength: ASSISTANT_MESSAGE_MAX_CHARS,
+  })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(4_000, { message: vmsg('maxLength') })
+  @MaxLength(ASSISTANT_MESSAGE_MAX_CHARS, { message: vmsg('maxLength') })
   question!: string;
 
   @ApiPropertyOptional({ type: [AssistantAskTurnDto], description: 'Prior turns, most recent last' })

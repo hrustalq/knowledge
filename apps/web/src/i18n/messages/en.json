@@ -38,7 +38,9 @@
     "noneYet": "No {label} yet.",
     "noMatchFor": "No match for {query}",
     "continue": "Continue",
-    "send": "Send"
+    "send": "Send",
+    "tooLarge": "That is too large to send. Split it up, or attach it as a file instead of pasting it.",
+    "unknownError": "Something went wrong. Try again."
   },
   "nav": {
     "toggleSidebar": "Toggle navigation",

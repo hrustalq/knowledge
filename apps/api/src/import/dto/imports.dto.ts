@@ -16,6 +16,9 @@ import { vmsg } from '../../common/validation.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Matches InlineContentDto's ceiling — both end up as one document body. */
+const MAX_MARKDOWN_CHARS = 500_000;
+
 export class CreateImportDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
@@ -59,8 +62,17 @@ export class SubmitImportDto {
   @MaxLength(300, { message: vmsg('maxLength') })
   title!: string;
 
-  @ApiProperty({ description: 'Markdown as reviewed and edited; this is what the page is created from' })
+  /**
+   * A parsed PDF is the largest real markdown this sees. Bounded for the same
+   * reason as InlineContentDto.text: below HTTP_BODY_LIMIT, so oversize is a
+   * translated VALIDATION_FAILED instead of a 500 out of body-parser.
+   */
+  @ApiProperty({
+    description: 'Markdown as reviewed and edited; this is what the page is created from',
+    maxLength: MAX_MARKDOWN_CHARS,
+  })
   @IsString()
+  @MaxLength(MAX_MARKDOWN_CHARS, { message: vmsg('maxLength') })
   markdown!: string;
 
   @ApiPropertyOptional({ format: 'uuid', description: 'Overrides the destination chosen before parsing' })

@@ -25,7 +25,9 @@ import {
   type FinalizeRevisionResponse,
   type RevisionInfo,
 } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { ApiError, apiFetch, getWorkspaceId } from '@/lib/api'
+import { errorMessage } from '@/api/errors'
+import { presignedPut } from '@/lib/presigned-put'
 import { labelFor } from '@/lib/labels'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
@@ -92,6 +94,15 @@ const tags = ref('')
  */
 const otherFrontmatter = ref<Record<string, unknown>>({})
 const headRevisionId = ref<string | null>(null)
+/**
+ * A draft revision created by `ensureDocumentId` and not yet written to.
+ *
+ * Dropping an image into an unsaved page creates the document early, which
+ * leaves an empty draft revision behind. Without claiming it here, the next
+ * save would take the edit path and open a *second* revision, orphaning the
+ * first.
+ */
+const pendingRevisionId = ref<string | null>(null)
 const busy = ref(false)
 const loading = ref(false)
 const dirty = ref(false)
@@ -238,7 +249,8 @@ async function ensureDocumentId(): Promise<string | null> {
     return null
   }
   try {
-    const markdown = editorRef.value?.flush() ?? body.value
+    // No `content`: nothing has been saved yet, and inlining the draft body here
+    // sent the whole page through a JSON request just to get an id for an image.
     const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
       method: 'POST',
       body: JSON.stringify({
@@ -247,20 +259,47 @@ async function ensureDocumentId(): Promise<string | null> {
         title: title.value.trim() || 'Untitled page',
         category: category.value,
         ...(parentId.value ? { parentId: parentId.value } : {}),
-        content: { mode: 'inline', format: 'markdown', text: buildSource(markdown) },
       }),
     })
     editId.value = res.documentId
     headRevisionId.value = res.revisionId
+    // Claimed by the next save instead of opening a second revision.
+    pendingRevisionId.value = res.revisionId
     void store.fetchList()
     // Keep the URL honest without unmounting the editor mid-upload.
     await router.replace(`/documents/${res.documentId}/edit`)
     toast.success(t('editor.draftCreatedForFiles'))
     return res.documentId
   } catch (e) {
-    toast.error((e as Error).message)
+    toast.error(errorMessage(e, t))
     return null
   }
+}
+
+/**
+ * Upload a revision's body straight to object storage, then finalize it.
+ *
+ * Both save paths go through this now. Creating a page used to inline the whole
+ * markdown into the JSON POST while editing uploaded it directly — which is why
+ * the same paste saved fine on an existing page and failed on a new one.
+ */
+async function publishRevision(
+  documentId: string,
+  revisionId: string,
+  text: string,
+): Promise<FinalizeRevisionResponse> {
+  const up = await apiFetch<CreateUploadResponse>(`/v1/documents/${documentId}/uploads`, {
+    method: 'POST',
+    body: JSON.stringify({ revisionId, contentType: 'text/markdown', filename: 'source.md' }),
+  })
+  await presignedPut(
+    { url: up.upload.url, headers: { 'Content-Type': 'text/markdown' } },
+    new Blob([text], { type: 'text/markdown' }),
+  )
+  return apiFetch<FinalizeRevisionResponse>(
+    `/v1/documents/${documentId}/revisions/${revisionId}/finalize`,
+    { method: 'POST' },
+  )
 }
 
 async function save() {
@@ -286,9 +325,10 @@ async function save() {
           title: title.value,
           category: category.value,
           ...(parentId.value ? { parentId: parentId.value } : {}),
-          content: { mode: 'inline', format: 'markdown', text },
         }),
       })
+      // The body goes to storage, not through the API — see publishRevision.
+      await publishRevision(res.documentId, res.revisionId, text)
       dirty.value = false
       toast.success(t('editor.documentCreated'))
       await router.push(`/documents/${res.documentId}`)
@@ -305,34 +345,34 @@ async function save() {
         ...(projectId.value ? { projectId: projectId.value } : {}),
       }),
     })
-    const revision = await apiFetch<RevisionInfo>(`/v1/documents/${editId.value}/revisions`, {
-      method: 'POST',
-      headers: headRevisionId.value ? { 'If-Match': headRevisionId.value } : {},
-      body: JSON.stringify({ message: message.value || 'Edited in web editor', contentType: 'text/markdown' }),
-    })
-    const up = await apiFetch<CreateUploadResponse>(`/v1/documents/${editId.value}/uploads`, {
-      method: 'POST',
-      body: JSON.stringify({ revisionId: revision.revisionId, contentType: 'text/markdown', filename: 'source.md' }),
-    })
-    const putRes = await fetch(up.upload.url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'text/markdown' },
-      body: text,
-    })
-    if (!putRes.ok) throw new Error(`Upload failed: ${putRes.status}`)
-    const fin = await apiFetch<FinalizeRevisionResponse>(
-      `/v1/documents/${editId.value}/revisions/${revision.revisionId}/finalize`,
-      { method: 'POST' },
-    )
+    // Claim the empty draft ensureDocumentId may have left, rather than opening
+    // a second revision and orphaning it.
+    const claimed = pendingRevisionId.value
+    pendingRevisionId.value = null
+    const revisionId =
+      claimed ??
+      (
+        await apiFetch<RevisionInfo>(`/v1/documents/${editId.value}/revisions`, {
+          method: 'POST',
+          headers: headRevisionId.value ? { 'If-Match': headRevisionId.value } : {},
+          body: JSON.stringify({
+            message: message.value || 'Edited in web editor',
+            contentType: 'text/markdown',
+          }),
+        })
+      ).revisionId
+    const fin = await publishRevision(editId.value as string, revisionId, text)
     dirty.value = false
     toast.success(fin.deduplicated ? t('editor.noContentChanges') : t('editor.revisionPublished'))
     await router.push(`/documents/${editId.value}`)
   } catch (e) {
-    const msg = (e as Error).message
-    if (msg.startsWith('409')) {
+    // Was a prefix match on the message text, which breaks the moment that
+    // message is translated and could never distinguish a 413 from anything
+    // else. Branch on the envelope instead.
+    if (e instanceof ApiError && e.status === 409) {
       toast.error(t('editor.headMoved'))
     } else {
-      toast.error(msg)
+      toast.error(errorMessage(e, t))
     }
   } finally {
     busy.value = false

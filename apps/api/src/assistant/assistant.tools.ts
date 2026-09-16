@@ -6,25 +6,22 @@ import {
   isAuthorableRelationType,
 } from '@knowledge/contracts';
 import type {
-  AssistantSource,
   AssistantChatMode,
   AssistantPrompt,
   AssistantPromptField,
   AssistantPromptOption,
-  AssistantUiBlock,
   DocumentCategory,
 } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
-import type { Principal } from '../auth/principal.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { DocumentRelationsService } from '../documents/document-relations.service.js';
-import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { StorageService } from '../storage/storage.service.js';
-import { SearchService } from '../search/search.service.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { WebResearchService } from './web-research.service.js';
+import { AssistantReadToolsService } from './assistant-read-tools.service.js';
+import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
 /** Tools that mutate the workspace — require 'editor', not just 'viewer'. Exported so
  * AssistantService can also filter them out of the tool list when mode = 'ask'.
@@ -57,32 +54,13 @@ export const FREE_TOOLS = new Set(['ask_user', 'request_agent_mode']);
 export const WEB_TOOLS = new Set(['web_search', 'web_fetch']);
 
 /**
- * Everything a tool run is allowed to see. `workspaceId` is pinned from the
- * request AFTER AclGuard verified the caller's membership — the model's tool
- * arguments can never widen it, so a prompt-injected "read workspace X"
- * instruction dead-ends here (context-engineering containment).
+ * Both types now live in a leaf module, so AssistantReadToolsService can share
+ * them without closing a cycle back through this file. Re-exported here because
+ * every existing importer takes them from assistant.tools.js.
  */
-export interface AssistantToolContext {
-  principal: Principal;
-  workspaceId: string;
-}
-
-export interface AssistantToolResult {
-  /** JSON string fed back to the model as the tool message. */
-  content: string;
-  ok: boolean;
-  /** What this call cited — workspace pages, or web pages it retrieved. */
-  sources: AssistantSource[];
-  /** Set only by render_component — an existing product component (GraphView/ActivityFeed/
-   * SearchWidget) the assistant wants the chat pane to render inline for this turn. */
-  uiBlock?: AssistantUiBlock;
-  /** Set by ask_user / request_agent_mode — a question for the user that ends the turn. */
-  prompt?: AssistantPrompt;
-}
+export type { AssistantToolContext, AssistantToolResult };
 
 const UI_COMPONENTS = new Set(['graph', 'activity', 'search']);
-
-const MAX_DOC_CHARS = 24_000;
 
 // Bounds on a model-authored form. A prompt is a thing the user has to read
 // and act on, so the limits are about what stays answerable in a chat column,
@@ -115,7 +93,9 @@ export class AssistantToolsService {
   constructor(
     private readonly access: AccessService,
     private readonly prisma: PrismaService,
-    private readonly search: SearchService,
+    // The read half lives in its own service so the agent worker can load it
+    // without any of the API-only dependencies below.
+    private readonly readTools: AssistantReadToolsService,
     private readonly documents: DocumentsService,
     private readonly relations: DocumentRelationsService,
     private readonly mergeRequests: MergeRequestsService,
@@ -133,78 +113,10 @@ export class AssistantToolsService {
   definitions(mode: AssistantChatMode = 'ask', opts: { ui?: boolean; web?: boolean } = {}): ChatCompletionFunctionTool[] {
     const ui = opts.ui ?? true;
     const all: ChatCompletionFunctionTool[] = [
-      {
-        type: 'function',
-        function: {
-          name: 'search_knowledge',
-          description:
-            'Hybrid (semantic + keyword) search over this workspace, with one hop of knowledge-graph ' +
-            'expansion. Returns matching documents with snippets plus graph-related documents. ' +
-            'Use it whenever the current page does not already answer the question.',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: { type: 'string', description: 'Natural-language search query' },
-              limit: { type: 'integer', minimum: 1, maximum: 10, description: 'Max results (default 5)' },
-            },
-            required: ['query'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'read_document',
-          description:
-            'Read the full markdown of one document in this workspace by its documentId ' +
-            '(from search results, graph nodes, or the current page). Use it only for the most promising hits.',
-          parameters: {
-            type: 'object',
-            properties: {
-              documentId: { type: 'string', description: 'UUID of the document to read' },
-            },
-            required: ['documentId'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'explore_document_graph',
-          description:
-            'The knowledge-graph neighbourhood of a document: related entities and the documents connected ' +
-            'through them, with relation types and confidence. Use it to answer questions about how pages, ' +
-            'systems, or concepts relate to each other.',
-          parameters: {
-            type: 'object',
-            properties: {
-              documentId: { type: 'string', description: 'UUID of the document to start from' },
-              depth: { type: 'integer', minimum: 1, maximum: 2, description: 'Entity hops (default 1)' },
-            },
-            required: ['documentId'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'list_relations',
-          description:
-            'What a page is connected to: the relations it declares in its own frontmatter, its tags, and the ' +
-            'edges the knowledge graph holds for it. Each graph edge names the class it came from — ' +
-            '"frontmatter" (the page declares it), "explicit"/"curated" (a person added or confirmed it), or ' +
-            '"inferred" (a model guessed it from the text, and nobody has confirmed it). Call this before ' +
-            'proposing any relation change, so you are editing what the page actually declares rather than ' +
-            'what the graph happens to hold.',
-          parameters: {
-            type: 'object',
-            properties: {
-              documentId: { type: 'string', description: 'UUID of the page' },
-            },
-            required: ['documentId'],
-          },
-        },
-      },
+      // The read half, from the service the background agents also run — one
+      // definition list, so what the chat offers and what an agent may call
+      // cannot drift apart.
+      ...this.readTools.definitions(),
       {
         type: 'function',
         function: {
@@ -462,14 +374,12 @@ export class AssistantToolsService {
       // write tools additionally require 'editor' (never widened by the model).
       await this.access.requireRole(ctx.principal, ctx.workspaceId, WRITE_TOOLS.has(name) ? 'editor' : 'viewer');
       switch (name) {
+        // The read half — same implementations the background agents run.
         case 'search_knowledge':
-          return await this.searchKnowledge(args, ctx);
         case 'read_document':
-          return await this.readDocument(args, ctx);
         case 'explore_document_graph':
-          return await this.exploreGraph(args, ctx);
         case 'list_relations':
-          return await this.listRelations(args, ctx);
+          return await this.readTools.execute(name, args, ctx);
         case 'edit_relations':
           return await this.editRelations(args, ctx);
         case 'ask_user':
@@ -497,112 +407,10 @@ export class AssistantToolsService {
     }
   }
 
-  private async searchKnowledge(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
-    const query = String(args.query ?? '').slice(0, 2_000).trim();
-    if (!query) return this.fail('query is required');
-    const limit = Math.min(Math.max(Math.floor(Number(args.limit)) || 5, 1), 10);
-
-    const res = await this.search.search({
-      workspaceId: ctx.workspaceId, // pinned — never from args
-      query,
-      mode: 'hybrid',
-      limit,
-      expandGraph: { depth: 1 },
-    });
-    const results = res.results.map((r) => ({
-      documentId: r.documentId,
-      title: r.title,
-      snippet: r.snippet,
-    }));
-    const related = (res.related ?? []).map((d) => ({
-      documentId: d.documentId,
-      title: d.title,
-      via: d.via.map((v) => `${v.relationType} ${v.entityKey}`).slice(0, 5),
-    }));
-    return {
-      content: JSON.stringify({ results, related }),
-      ok: true,
-      sources: res.results.map((r) => ({ documentId: r.documentId, title: r.title, snippet: r.snippet })),
-    };
-  }
-
-  private async readDocument(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
-    const documentId = String(args.documentId ?? '');
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
-    if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
-    try {
-      const content = await this.documents.getContent(documentId);
-      return {
-        content: JSON.stringify({ documentId, title: doc.title, markdown: content.markdown.slice(0, MAX_DOC_CHARS) }),
-        ok: true,
-        sources: [{ documentId, title: doc.title }],
-      };
-    } catch {
-      return this.fail(`Document "${doc.title}" has no readable content yet (draft or unindexed)`);
-    }
-  }
-
-  private async exploreGraph(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
-    const documentId = String(args.documentId ?? '');
-    const depth = Math.min(Math.max(Math.floor(Number(args.depth)) || 1, 1), 2);
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
-    if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
-
-    const graph = await this.documents.getDocumentGraph(documentId, depth);
-    return {
-      content: JSON.stringify({
-        documentId,
-        nodes: graph.nodes.map((n) => ({ id: n.id, kind: n.kind, label: n.label, distance: n.distance })),
-        edges: graph.edges.map((e) => ({ from: e.from, to: e.to, type: e.type, confidence: e.confidence })),
-      }),
-      ok: true,
-      sources: graph.nodes
-        .filter((n) => n.kind === 'document' && n.id !== documentId)
-        .slice(0, 8)
-        .map((n) => ({ documentId: n.id, title: n.label })),
-    };
-  }
-
-  /**
-   * Declared relations and graph edges side by side (docs/features/28).
-   *
-   * Both halves matter and they routinely disagree: an `inferred` edge exists in
-   * the graph while the page declares nothing, and that gap is exactly what a
-   * model asked to tidy relations needs to see. Showing only one half would let
-   * it "add" something already there, or miss what it was asked to confirm.
-   */
-  private async listRelations(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
-    const documentId = String(args.documentId ?? '');
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
-    if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
-
-    const { relations } = await this.documents.listRelations(documentId);
-    // A draft or unindexed page has no readable content; its graph edges are
-    // still worth reporting, so this degrades rather than failing.
-    const content = await this.documents.getContent(documentId).catch(() => null);
-
-    return {
-      content: JSON.stringify({
-        documentId,
-        title: doc.title,
-        declared: readFrontmatterRelations(content?.frontmatter).map((r) => ({
-          type: r.type,
-          targetKey: r.target.key,
-          name: r.target.name,
-        })),
-        tags: readFrontmatterTags(content?.frontmatter),
-        graph: relations.map((r) => ({
-          type: r.type,
-          targetKey: r.to.key,
-          name: r.to.name,
-          extractor: r.provenance.extractor,
-          confidence: r.provenance.confidence,
-        })),
-      }),
-      ok: true,
-      sources: [{ documentId, title: doc.title }],
-    };
-  }
+  // searchKnowledge / readDocument / exploreGraph / listRelations moved to
+  // AssistantReadToolsService — see the `execute` dispatch above. They are the
+  // only tools a background agent may run, so they had to live somewhere the
+  // worker can load, and keeping a second copy here is how the two would drift.
 
   private async editRelations(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
     const documentId = String(args.documentId ?? '');

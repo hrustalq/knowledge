@@ -5,6 +5,7 @@ import { EventsModule } from '../events/events.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
+import { AssistantReadToolsModule } from '../assistant/assistant-read-tools.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { AgentCoreModule } from './agent-core.module.js';
@@ -25,12 +26,31 @@ import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
  * pulls `DocumentsModule` — the same move `WorkflowWorkerModule` makes, and for
  * the same reason. `DocumentsCoreModule` and `GlossaryCoreModule` are the
  * worker-safe halves the reviewer and glossarist executors read pages through.
- * Note what is deliberately absent: `AssistantToolsService` and anything that
- * can write. A background agent proposes; publishing stays on the API side
+ * `AssistantReadToolsModule` is what gives a background agent a tool loop at
+ * all. Until it existed the cartographer answered from one pre-baked prompt,
+ * because the only tool implementation lived in `AssistantToolsService`, which
+ * injects StorageService, MergeRequestsService and the rest of the API-only
+ * half and therefore cannot load here.
+ *
+ * Note what is still deliberately absent: `AssistantToolsService` and anything
+ * that can write. The read module reaches only search, documents, prisma and
+ * access — a background agent proposes; publishing stays on the API side
  * (feature 17).
  */
 @Module({
-  imports: [PrismaModule, GraphModule, EventsModule, AiCoreModule, AuthCoreModule, AgentCoreModule, AgentQueueModule, AssistantClientModule, DocumentsCoreModule, GlossaryCoreModule],
+  imports: [
+    PrismaModule,
+    GraphModule,
+    EventsModule,
+    AiCoreModule,
+    AuthCoreModule,
+    AgentCoreModule,
+    AgentQueueModule,
+    AssistantClientModule,
+    AssistantReadToolsModule,
+    DocumentsCoreModule,
+    GlossaryCoreModule,
+  ],
   providers: [AgentExecutor, AgentProcessor, AgentScheduleSweeper],
 })
 export class AgentWorkerModule {}

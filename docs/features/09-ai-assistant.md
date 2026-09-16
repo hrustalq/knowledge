@@ -41,8 +41,17 @@ instruction }` → `{ enabled, suggestion }` (outline, continuation,
 ## Ask harness & access control
 
 `POST /v1/assistant/ask` runs a bounded agentic loop (`ASSISTANT_MAX_TOOL_CALLS`,
-default 6) with three read-only tools: `search_knowledge` (hybrid search + 1
-graph hop), `read_document`, `explore_document_graph`. Containment against
+default 24, ceiling 64) with four read-only tools: `search_knowledge` (hybrid
+search + 1 graph hop), `read_document`, `explore_document_graph` and
+`list_relations`. The default was 6, which one real question spent on
+search → read ×2 → explore → list_relations before the harness forced a toolless
+final round, so the model answered from half the evidence it had asked for. The
+round ceiling is derived from the budget rather than fixed, or raising the budget
+would buy nothing.
+
+The four live in `AssistantReadToolsService`, which `AssistantToolsService`
+delegates to — the same implementations the background agents run, so what the
+chat offers and what an agent may call cannot drift apart. Containment against
 context engineering / prompt injection:
 
 - `workspaceId` is pinned server-side after AclGuard's membership check — tool

@@ -298,7 +298,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
         </label>
         <label class="block space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('ai.toolBudget') }}</span>
-          <Input v-model.number="form.maxToolCalls" type="number" min="0" max="16" :disabled="!canManage" />
+          <Input v-model.number="form.maxToolCalls" type="number" min="0" max="64" :disabled="!canManage" />
         </label>
         <label class="block space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('ai.timeoutMs') }}</span>

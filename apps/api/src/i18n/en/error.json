@@ -1,5 +1,6 @@
 {
   "internal": "Internal server error",
+  "payloadTooLarge": "Request body is too large. Split the content, or attach a file instead of pasting its contents.",
   "invalidUuid": "{subject} must be a UUID",
   "auth": {
     "missingBearer": "Missing Authorization: Bearer <api key or session token>",
@@ -191,6 +192,7 @@
   },
   "assistant": {
     "providerDisabled": "Assistant provider is disabled for this workspace",
+    "roundsExhausted": "The assistant ran out of steps before finishing an answer. Try again, or narrow the question.",
     "threadNotFound": "Assistant thread {id} not found",
     "messageNotFound": "Message {messageId} not found in thread {threadId}",
     "budgetUser": "Your monthly AI token budget for this workspace is spent. Ask a workspace admin to raise it.",

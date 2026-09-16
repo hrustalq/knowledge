@@ -278,18 +278,26 @@ Return only the markdown. If the image contains no legible text, return an empty
       'pages nothing links to that should be linked. ' +
       'Report only what you can point at: every finding must name the pages it came from. ' +
       'Say nothing rather than guessing — a false finding costs a reviewer more than a missed one. ' +
-      'You never edit anything; your findings become proposals a person reviews.',
-    // Deliberately no tool loop. Everything the curator needs — which pages
-    // exist, which have no relations, which changed recently — is a query, not
-    // a judgement, so the worker gathers it deterministically and spends the
-    // model call only on the part that is actually judgement. It also keeps the
-    // write tools out of the worker entirely, which is feature 17's rule: the
-    // worker generates, the API publishes.
-    tools: [],
+      'You never edit anything; your findings become proposals a person reviews.\n\n' +
+      'You have read tools. The listing gives you titles and dates, which is enough to suspect a duplicate ' +
+      'or a contradiction and never enough to assert one — read both pages before you claim they conflict, ' +
+      'and quote the passages that do.',
+    // The deterministic half is unchanged: which pages exist, which have no
+    // relations, which changed recently are queries, and the worker answers them
+    // before any model call. What the model was missing is the other half — it
+    // was asked to find duplicates and contradictions from a bare title and a
+    // date, which is not something titles can tell you.
+    //
+    // Read tools only. Nothing here can write: the worker generates and the API
+    // publishes (feature 17).
+    tools: [...READ_TOOLS],
     skillIds: [],
     purpose: 'review',
     surfaces: ['background'],
-    requires: ['json'],
+    // 'tools' is declared for an honest roster but is NOT blocking — curate()
+    // falls back to the original single-shot pass on a model without tool
+    // support, rather than skipping the model half altogether.
+    requires: ['json', 'tools'],
   },
 
   /**
@@ -320,12 +328,21 @@ Return only the markdown. If the image contains no legible text, return an empty
       'Targets are stable keys such as "service:identity": reuse the exact spelling the pages already use, ' +
       'because a near-miss key creates a second entity instead of linking to the first. ' +
       'Never propose TAGGED_WITH — tags are set through the tag list, not as a relation. ' +
-      'You never edit anything; your findings become proposals a person reviews.',
-    tools: [],
+      'You never edit anything; your findings become proposals a person reviews.\n\n' +
+      'You have read tools. The listing you are given says what each page already DECLARES, not what its ' +
+      'text supports — which is the actual question. Read the pages you are unsure about and explore their ' +
+      'graph neighbourhood before proposing anything; a relation you can quote grounds for is worth more ' +
+      'than ten guessed from a title.',
+    // The read half only: this agent proposes, and publishing is the API's job.
+    tools: [...READ_TOOLS],
     skillIds: [],
     purpose: 'review',
     surfaces: ['background'],
-    requires: ['json'],
+    // 'tools' is declared so the roster shows honestly what this agent wants.
+    // It is NOT treated as blocking — mapRelations falls back to its original
+    // single-shot pass on a model without tool support, rather than skipping the
+    // model half altogether, which is what a bare `requires` entry would cause.
+    requires: ['json', 'tools'],
   },
 
   // --- Workflow design ------------------------------------------------------

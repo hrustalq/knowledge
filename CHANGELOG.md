@@ -12,6 +12,29 @@ traffic**. Production moves only when a `vX.Y.Z` tag is pushed. Entries are writ
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **Documentation can be derived from a codebase.** A new `codebase` connector
+  points at a GitHub or GitLab repository and produces an overview page plus one
+  page per module, read from the source rather than mirrored from prose that
+  already exists. Module structure comes from the repository's manifests, and
+  each page's API surface — exported symbols and their signatures — is extracted
+  with tree-sitter. The written summary that opens a page comes from the
+  workspace's `author` agent and is optional: with no AI provider configured, no
+  owner to bill or no budget left, the pages still arrive with the extracted
+  facts and a warning saying which. Re-syncing a repository whose source has not
+  changed makes no AI calls at all.
+
+### Fixed
+
+- Connectors, AI plugins and web research could reach no external host at all on
+  Node 24 and Node 25, reporting `could not reach <url>` for every request. The
+  guarded HTTP client drove a dispatcher from this repository's `undici` with the
+  `fetch` built into Node, and those two only interoperate when the running Node
+  happens to bundle a matching `undici` generation.
+
 ## [0.2.0] — 2026-09-15
 
 ### Breaking

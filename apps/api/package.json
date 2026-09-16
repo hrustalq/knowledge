@@ -51,6 +51,7 @@
     "bullmq": "^5.56.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "defuddle": "^0.19.3",
     "diff": "^9.0.0",
     "fflate": "^0.8.3",
     "gray-matter": "^4.0.3",

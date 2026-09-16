@@ -1336,6 +1336,15 @@
         "manual": "вручную",
         "schedule": "по расписанию"
       },
+      "stage": {
+        "scanning": "Просмотр страниц",
+        "graph": "Чтение графа",
+        "thinking": "Запрос к модели",
+        "reviewing": "Проверка страниц",
+        "terms": "Поиск терминов"
+      },
+      "warnings": "нет предупреждений | {count} предупреждение | {count} предупреждения | {count} предупреждений",
+      "sources": "Веб-источники",
       "propose": "Предложить правку",
       "proposed": "Создан merge request: {title}",
       "viewProposal": "Открыть merge request",

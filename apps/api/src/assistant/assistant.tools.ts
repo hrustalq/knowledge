@@ -20,7 +20,7 @@ import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { WebResearchService } from './web-research.service.js';
-import { AssistantReadToolsService } from './assistant-read-tools.service.js';
+import { AssistantReadToolsService, READ_TOOL_NAMES } from './assistant-read-tools.service.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
 /** Tools that mutate the workspace — require 'editor', not just 'viewer'. Exported so
@@ -52,6 +52,22 @@ export const FREE_TOOLS = new Set(['ask_user', 'request_agent_mode']);
  * open web. Every list stays explicit.
  */
 export const WEB_TOOLS = new Set(['web_search', 'web_fetch']);
+
+/**
+ * Tools the harness may run concurrently inside one round (docs/features/29).
+ *
+ * An allowlist of calls known to have no side effects — deliberately NOT the
+ * complement of {@link WRITE_TOOLS}. An `mcp__<slug>__<tool>` call is an
+ * external server's code whose effects this process cannot see, so reading
+ * "not a declared write" as "safe to batch" would parallelise somebody else's
+ * mutation, and a batch in flight cannot be interrupted between its members the
+ * way a serial loop can.
+ *
+ * Reads are also where the whole win is: ten `web_fetch` calls in one round
+ * were ten sequential fetches, which at WEB_TIMEOUT_MS apiece is minutes of
+ * wall clock for work the model asked to do at once.
+ */
+export const PARALLEL_SAFE_TOOLS = new Set<string>([...READ_TOOL_NAMES, ...WEB_TOOLS]);
 
 /**
  * Both types now live in a leaf module, so AssistantReadToolsService can share

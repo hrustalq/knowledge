@@ -1336,6 +1336,15 @@
         "manual": "manual",
         "schedule": "scheduled"
       },
+      "stage": {
+        "scanning": "Scanning pages",
+        "graph": "Reading the graph",
+        "thinking": "Asking the model",
+        "reviewing": "Reviewing pages",
+        "terms": "Looking for terms"
+      },
+      "warnings": "no warnings | {count} warning | {count} warnings",
+      "sources": "Web sources",
       "propose": "Propose fix",
       "proposed": "Opened a merge request: {title}",
       "viewProposal": "View merge request",

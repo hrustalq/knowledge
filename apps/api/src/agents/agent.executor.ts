@@ -3,6 +3,7 @@ import type { AgentRun } from '@prisma/client';
 import type {
   AgentFinding,
   AgentFindingKind,
+  AssistantWebSource,
   AuthorableRelationType,
   Locale,
   RelationInput,
@@ -42,11 +43,34 @@ const MAX_ISSUES_PER_PAGE = 5;
 const MAX_GLOSSARY_PAGES = 15;
 /** Findings kept from one run. A wall of findings is not a review, it is noise. */
 const MAX_FINDINGS = 20;
+/** Web citations kept on one finding — the reader is checking a claim, not reading a bibliography. */
+const MAX_SOURCES_PER_FINDING = 8;
 
 export interface AgentRunResult {
   summary: string;
   findings: AgentFinding[];
 }
+
+/**
+ * How a running executor says where it is (docs/features/29).
+ *
+ * The processor owns the write — it is the only thing that knows whether this
+ * execution still owns the row — so an executor reports rather than updates.
+ * Every call is also a heartbeat: `AgentScheduleSweeper` reads `updatedAt` to
+ * decide a run is dead, and before this the row went untouched from claim to
+ * result however long the run took.
+ *
+ * Reporting is best-effort by construction: the processor swallows its own
+ * failures, so an executor never has to guard a progress call.
+ */
+export type AgentReporter = (update: {
+  /** Free text, rendered through `labelFor` — see AgentRunSummary.stage. */
+  stage?: string;
+  /** 0–1, and only where it is honest. A step that cannot say omits it. */
+  progress?: number;
+  /** Something degraded but the run continues. Capped at MAX_RUN_WARNINGS. */
+  warning?: string;
+}) => Promise<void>;
 
 /**
  * Runs a background agent (docs/features/20).
@@ -80,16 +104,21 @@ export class AgentExecutor {
    * calls an API-shaped service (the glossarist calls the same `suggest` the
    * settings page calls) bills and authorises as that same person.
    */
-  async run(run: AgentRun, agent: ResolvedAgent, principal: Principal): Promise<AgentRunResult> {
+  async run(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
     switch (agent.key) {
       case 'curator':
-        return this.curate(run, agent, principal);
+        return this.curate(run, agent, principal, report);
       case 'reviewer':
-        return this.review(run, agent, principal);
+        return this.review(run, agent, principal, report);
       case 'glossarist':
-        return this.buildGlossary(run, principal);
+        return this.buildGlossary(run, principal, report);
       case 'cartographer':
-        return this.mapRelations(run, agent, principal);
+        return this.mapRelations(run, agent, principal, report);
       default:
         // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
         // here got past that check, so failing loudly beats running an agent as
@@ -102,7 +131,9 @@ export class AgentExecutor {
     run: AgentRun,
     agent: ResolvedAgent,
     principal: Principal,
+    report: AgentReporter,
   ): Promise<AgentRunResult> {
+    await report({ stage: 'scanning', progress: 0.05 });
     const documents = await this.prisma.document.findMany({
       where: { workspaceId: run.workspaceId },
       select: { id: true, title: true, category: true, projectId: true },
@@ -135,7 +166,12 @@ export class AgentExecutor {
     } catch (error) {
       // The graph store being unavailable must not sink the whole run; the
       // model half still works, it just loses the orphan check.
+      //
+      // Reported as well as logged (docs/features/29): the run still succeeds,
+      // and without this the reader is shown a pass with no orphan findings and
+      // no way to tell that from a workspace with no orphans.
       this.logger.warn(`Curator could not read the relation graph: ${String(error)}`);
+      await report({ warning: 'The relation graph could not be read, so the orphan check was skipped.' });
     }
 
     const findings: AgentFinding[] = [];
@@ -158,6 +194,11 @@ export class AgentExecutor {
     // 'tools' is a preference, not a prerequisite — see the cartographer's note.
     const blocking = agent.missing.filter((capability) => capability !== 'tools');
     if (agent.config.enabled && blocking.length === 0) {
+      // The model half is the long half — with the read tools it can open pages
+      // before asserting a duplicate, so this single step can run for minutes.
+      // Saying so before it starts is the difference between a run that looks
+      // stuck and one that is visibly working.
+      await report({ stage: 'thinking', progress: 0.4 });
       const described = documents.slice(0, MAX_DESCRIBED);
       const listing = described
         .map((d) => {
@@ -228,6 +269,7 @@ export class AgentExecutor {
         // A flaky model must not lose the deterministic findings already made.
         this.logger.warn(`Curator model pass failed: ${String(error)}`);
         summary += ' The model pass failed, so only structural findings are included.';
+        await report({ warning: `The model pass failed: ${String(error)}` });
       }
     }
 
@@ -244,7 +286,12 @@ export class AgentExecutor {
    * them. Naturally bounded by `take` — a review pass is per page, so the cost
    * is linear and the cap is the budget.
    */
-  private async review(run: AgentRun, agent: ResolvedAgent, principal: Principal): Promise<AgentRunResult> {
+  private async review(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
     if (!agent.config.enabled || agent.missing.length > 0) {
       throw new Error('The model routed at the reviewer cannot run it.');
     }
@@ -271,10 +318,15 @@ export class AgentExecutor {
 
     const findings: AgentFinding[] = [];
     let reviewed = 0;
-    for (const row of recent) {
+    for (const [at, row] of recent.entries()) {
       if (findings.length >= MAX_FINDINGS) break;
       const doc = byId.get(row.documentId);
       if (!doc) continue;
+      // One model call per page, so this loop is the run's whole duration and
+      // the one place it can honestly say how far in it is. It is also why the
+      // heartbeat matters here most: eight pages against a slow provider
+      // outlives the sweeper's 30-minute patience (docs/features/29).
+      await report({ stage: 'reviewing', progress: at / recent.length });
       const content = await this.documents.getContent(doc.id).catch(() => null);
       if (!content || !content.markdown.trim()) continue;
 
@@ -301,8 +353,10 @@ export class AgentExecutor {
           if (findings.length >= MAX_FINDINGS) break;
         }
       } catch (error) {
-        // One unreadable page must not lose the pages already reviewed.
+        // One unreadable page must not lose the pages already reviewed — but a
+        // pass that silently skipped half its pages reads as a clean review.
         this.logger.warn(`Reviewer could not review "${doc.title}": ${String(error)}`);
+        await report({ warning: `"${doc.title}" could not be reviewed: ${String(error)}` });
       }
     }
 
@@ -356,7 +410,11 @@ export class AgentExecutor {
    * nothing is written to the glossary, exactly as a background agent never
    * writes.
    */
-  private async buildGlossary(run: AgentRun, principal: Principal): Promise<AgentRunResult> {
+  private async buildGlossary(
+    run: AgentRun,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
     const documents = await this.prisma.document.findMany({
       where: { workspaceId: run.workspaceId },
       select: { id: true, title: true },
@@ -371,8 +429,11 @@ export class AgentExecutor {
     const seen = new Set<string>();
     let scanned = 0;
 
-    for (const doc of documents) {
+    for (const [at, doc] of documents.entries()) {
       if (findings.length >= MAX_FINDINGS) break;
+      // Also one model call per page — the reviewer's shape, so the same
+      // heartbeat (docs/features/29).
+      await report({ stage: 'terms', progress: at / documents.length });
       try {
         const res = await this.glossary.suggest(
           { workspaceId: run.workspaceId, documentId: doc.id, title: doc.title },
@@ -410,6 +471,7 @@ export class AgentExecutor {
           return { summary: `Stopped after ${scanned} page(s): the workspace AI budget is spent.`, findings };
         }
         this.logger.warn(`Glossarist could not scan "${doc.title}": ${String(error)}`);
+        await report({ warning: `"${doc.title}" could not be scanned: ${String(error)}` });
       }
     }
 
@@ -445,7 +507,9 @@ export class AgentExecutor {
     run: AgentRun,
     agent: ResolvedAgent,
     principal: Principal,
+    report: AgentReporter,
   ): Promise<AgentRunResult> {
+    await report({ stage: 'scanning', progress: 0.05 });
     const documents = await this.prisma.document.findMany({
       where: { workspaceId: run.workspaceId },
       select: { id: true, title: true, category: true },
@@ -460,6 +524,7 @@ export class AgentExecutor {
     const entityNames = new Map<string, string>();
     let graphReadable = true;
 
+    await report({ stage: 'graph', progress: 0.2 });
     try {
       const graph = await this.graph.getWorkspaceRelationGraph(run.workspaceId);
       for (const [key, entity] of Object.entries(graph.entities)) entityNames.set(key, entity.name);
@@ -484,6 +549,7 @@ export class AgentExecutor {
       // not sink the run, it just loses the deterministic half.
       graphReadable = false;
       this.logger.warn(`Cartographer could not read the relation graph: ${String(error)}`);
+      await report({ warning: 'The relation graph could not be read, so only the model half ran.' });
     }
 
     const findings: AgentFinding[] = [];
@@ -520,6 +586,9 @@ export class AgentExecutor {
     // the model half the way a genuinely missing capability (json) does.
     const blocking = agent.missing.filter((capability) => capability !== 'tools');
     if (agent.config.enabled && blocking.length === 0 && findings.length < MAX_FINDINGS) {
+      // The tool loop can open pages before proposing an edge, so this step is
+      // the long one here too — see the curator's note (docs/features/29).
+      await report({ stage: 'thinking', progress: 0.5 });
       const listing = documents
         .slice(0, MAX_DESCRIBED)
         .map((d) => {
@@ -587,6 +656,7 @@ export class AgentExecutor {
         }
       } catch (error) {
         this.logger.warn(`Cartographer model pass failed: ${String(error)}`);
+        await report({ warning: `The model pass failed: ${String(error)}` });
       }
     }
 
@@ -632,10 +702,17 @@ export class AgentExecutor {
     const detail = typeof raw.detail === 'string' ? raw.detail.trim() : '';
     if (!title || !detail) return null;
 
+    // Grounded means cited — by a page in this workspace, or by a page on the
+    // open web that was actually fetched (docs/features/29). Only the first
+    // counted before, so a finding whose whole evidence was off-platform was
+    // dropped in silence, which is what left a research run's output with
+    // nowhere to land. Neither kind is a free pass: a page id has to exist
+    // here, and a URL has to parse as http(s).
     const ids = Array.isArray(raw.documentIds)
       ? raw.documentIds.filter((id): id is string => typeof id === 'string' && known.has(id))
       : [];
-    if (ids.length === 0) return null;
+    const sources = readWebSources(raw.sources);
+    if (ids.length === 0 && sources.length === 0) return null;
 
     const kind = AGENT_FINDING_KINDS.includes(raw.kind as AgentFindingKind)
       ? (raw.kind as AgentFindingKind)
@@ -652,8 +729,50 @@ export class AgentExecutor {
       detail: detail.slice(0, 2_000),
       documentIds: ids,
       documentTitles: ids.map((id) => known.get(id) ?? id),
+      ...(sources.length ? { sources } : {}),
     };
   }
+}
+
+/**
+ * Web citations on a finding (docs/features/29).
+ *
+ * Validated, never trusted — the rule `readFinding` applies to page ids, applied
+ * to URLs. A string that does not parse is dropped rather than rendered as a
+ * dead link, and the scheme is checked because these end up as `href`s: a
+ * `javascript:` "citation" is worth rather less than nothing.
+ *
+ * The host is derived here rather than taken from the model, so a finding cannot
+ * claim a page on `docs.stripe.com` while linking somewhere else.
+ */
+function readWebSources(value: unknown): AssistantWebSource[] {
+  if (!Array.isArray(value)) return [];
+  const out: AssistantWebSource[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+    const raw = entry as Record<string, unknown>;
+    if (typeof raw.url !== 'string') continue;
+    let url: URL;
+    try {
+      url = new URL(raw.url);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
+    const title = typeof raw.title === 'string' ? raw.title.trim() : '';
+    out.push({
+      kind: 'web',
+      url: url.href,
+      site: url.hostname.replace(/^www\./, ''),
+      title: title ? title.slice(0, 300) : url.hostname,
+      ...(typeof raw.snippet === 'string' && raw.snippet.trim()
+        ? { snippet: raw.snippet.trim().slice(0, 500) }
+        : {}),
+      ...(typeof raw.fetchedAt === 'string' ? { fetchedAt: raw.fetchedAt } : {}),
+    });
+    if (out.length >= MAX_SOURCES_PER_FINDING) break;
+  }
+  return out;
 }
 
 const RELATION_OUTPUT_CONTRACT =

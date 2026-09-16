@@ -814,6 +814,19 @@ model AgentRun {
   /// Incremented by the sweeper when a run is re-queued after going stale.
   attempt  Int     @default(0)
 
+  /// Where the run is now, and how far in (docs/features/29). Written as it
+  /// proceeds, which is what makes `updated_at` a heartbeat: the row used to be
+  /// written exactly twice — the claim and the terminal result — so
+  /// AgentScheduleSweeper.requeueStuck reaped anything slower than STALE_RUN_MS
+  /// and billed its model calls a second time. Vocabulary converges on
+  /// connector_runs, already the fullest polling shape in this schema, rather
+  /// than inventing a third dialect for the same problem.
+  stage    String?
+  progress Float?
+  /// What degraded without failing the run — a page that could not be read, a
+  /// graph store that was down. Capped by the executor.
+  warnings Json?
+
   startedAt  DateTime? @map("started_at") @db.Timestamptz
   finishedAt DateTime? @map("finished_at") @db.Timestamptz
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz

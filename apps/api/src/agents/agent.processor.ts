@@ -8,8 +8,8 @@ import { AiUsageService } from '../ai/ai-usage.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { withLocale } from '../i18n/t.js';
 import { asLocale } from '../i18n/locale.js';
-import { AGENT_QUEUE } from './agent.constants.js';
-import { AgentExecutor } from './agent.executor.js';
+import { AGENT_QUEUE, MAX_RUN_WARNINGS } from './agent.constants.js';
+import { AgentExecutor, type AgentReporter } from './agent.executor.js';
 import { AgentRegistryService } from './agent-registry.service.js';
 
 /**
@@ -46,11 +46,48 @@ export class AgentProcessor extends WorkerHost {
 
     // Guarded claim: two workers racing a re-delivered job never ask the model
     // the same question twice (the WorkflowRunnerService.claim pattern).
+    //
+    // The progress fields are reset here rather than left alone: a run reaching
+    // this line for the second time is a retry, and inheriting the dead
+    // execution's stage would have the row claim to be somewhere it is not.
     const claimed = await this.prisma.agentRun.updateMany({
       where: { id: runId, status: 'pending' },
-      data: { status: 'running', startedAt: new Date() },
+      data: { status: 'running', startedAt: new Date(), stage: null, progress: 0, warnings: [] },
     });
     if (claimed.count !== 1) return;
+
+    // The heartbeat (docs/features/29).
+    //
+    // This row used to be written exactly twice — the claim above and the
+    // terminal result below — so `updatedAt` froze at claim time for the whole
+    // run, while `AgentScheduleSweeper.requeueStuck` presumes anything still
+    // `running` past STALE_RUN_MS is dead. A run that merely took longer than
+    // that was re-queued and its model calls paid for a second time. Writing as
+    // the run proceeds is what makes `updatedAt` mean "still alive", and the
+    // same writes are what the poll endpoint had nothing to show.
+    //
+    // Every write is guarded on the run still being ours: once the sweeper has
+    // handed the row to a retry, this execution must stop leaving marks on it.
+    const warnings: string[] = [];
+    const report: AgentReporter = async (update) => {
+      if (update.warning && warnings.length < MAX_RUN_WARNINGS) warnings.push(update.warning);
+      try {
+        await this.prisma.agentRun.updateMany({
+          where: { id: runId, status: 'running' },
+          data: {
+            ...(update.stage === undefined ? {} : { stage: update.stage }),
+            ...(update.progress === undefined
+              ? {}
+              : { progress: Math.min(1, Math.max(0, update.progress)) }),
+            ...(update.warning === undefined ? {} : { warnings }),
+          },
+        });
+      } catch (error) {
+        // A heartbeat that cannot be written is not a reason to lose the work
+        // the run has already done (the ActivityService.record rule).
+        this.logger.warn(`Agent run ${runId} could not record progress: ${String(error)}`);
+      }
+    };
 
     await withLocale(asLocale(row.locale), async () => {
       try {
@@ -78,17 +115,32 @@ export class AgentProcessor extends WorkerHost {
           subjectId: row.id,
         });
 
-        const result = await this.executor.run(row, agent, principal);
+        const result = await this.executor.run(row, agent, principal, report);
 
-        await this.prisma.agentRun.update({
-          where: { id: runId },
+        // Guarded, where this used to be a plain `update`.
+        //
+        // `requeueStuck` sets a stale run back to 'pending' — exactly the state
+        // the retry's guarded claim looks for — so a second execution can be
+        // running while this one finishes. With an unguarded write both
+        // completed and the last writer won, which meant the reader saw
+        // whichever of two executions happened to end second. If the row is no
+        // longer 'running', the sweeper gave it away and ours is the stale copy.
+        const settled = await this.prisma.agentRun.updateMany({
+          where: { id: runId, status: 'running' },
           data: {
             status: 'succeeded',
             summary: result.summary,
             findings: result.findings as unknown as object,
+            warnings,
+            stage: null,
+            progress: 1,
             finishedAt: new Date(),
           },
         });
+        if (settled.count !== 1) {
+          this.logger.warn(`Agent run ${runId} finished after being re-queued; its result is discarded.`);
+          return;
+        }
         await this.events.publish({
           type: 'agent.run.succeeded',
           workspaceId: row.workspaceId,
@@ -97,10 +149,20 @@ export class AgentProcessor extends WorkerHost {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(`Agent run ${runId} failed: ${message}`);
-        await this.prisma.agentRun.update({
-          where: { id: runId },
-          data: { status: 'failed', error: message.slice(0, 2_000), finishedAt: new Date() },
+        // Guarded for the same reason, and it matters more here: a superseded
+        // execution failing must not mark a run failed that a retry is still
+        // working on, or the reader is told the run is dead while it runs.
+        const settled = await this.prisma.agentRun.updateMany({
+          where: { id: runId, status: 'running' },
+          data: {
+            status: 'failed',
+            error: message.slice(0, 2_000),
+            warnings,
+            stage: null,
+            finishedAt: new Date(),
+          },
         });
+        if (settled.count !== 1) return;
         await this.events.publish({
           type: 'agent.run.failed',
           workspaceId: row.workspaceId,

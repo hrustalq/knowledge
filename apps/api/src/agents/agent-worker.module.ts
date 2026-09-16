@@ -6,6 +6,7 @@ import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AssistantReadToolsModule } from '../assistant/assistant-read-tools.module.js';
+import { WebResearchModule } from '../assistant/web-research.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { AgentCoreModule } from './agent-core.module.js';
@@ -48,6 +49,15 @@ import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
     AgentQueueModule,
     AssistantClientModule,
     AssistantReadToolsModule,
+    // No runnable agent reaches the web yet — the research loop that will is
+    // still open (docs/features/29). This is imported anyway, and it is not
+    // dead wiring: Nest constructs an imported module's providers at boot, so
+    // the worker builds WebResearchService on every start. The day somebody
+    // gives that service an API-only dependency, the worker fails loudly at
+    // boot rather than silently at the first tool call in a background run —
+    // which is exactly how it came to be unreachable from here in the first
+    // place.
+    WebResearchModule,
     DocumentsCoreModule,
     GlossaryCoreModule,
   ],

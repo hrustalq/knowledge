@@ -27,6 +27,14 @@ in the pull request that introduces them — see
 - **A page's rail remembers what you keep open.** Opening History or Changes on
   one page leaves it open on the next for the rest of the session, rather than
   collapsing back to Overview every time you open a page. (#17)
+- **The assistant can read PDFs it finds on the web.** A link to a standard, a
+  whitepaper or a spec used to be refused outright — the one format a research
+  question lands on most. Headings are reconstructed from font size, the same
+  way an imported PDF's are, and a scanned PDF now says it is scanned rather
+  than arriving as a document that appears to say nothing. (#18)
+- **Web citations carry an author and a publication date** where the page
+  declares them, so an answer can say how old a source is instead of only where
+  it lives. (#18)
 
 ### Changed
 
@@ -41,6 +49,11 @@ in the pull request that introduces them — see
 - **Empty, loading, failed and no-access states share one anatomy** instead of
   eight hand-built variants, and being unable to edit something now reads as a
   statement about your role rather than as an error. (#17)
+- **A fetched web page is now scored for its article rather than stripped by tag
+  name.** Sidebars, related-article rails, comment sections and cookie-notice
+  remnants reached the assistant as though they were the page, because none of
+  them sits inside `nav`, `header`, `footer` or `aside`. A page that yields
+  almost nothing now says so, instead of being answered from confidently. (#18)
 
 ## [0.4.0] — 2026-09-16
 

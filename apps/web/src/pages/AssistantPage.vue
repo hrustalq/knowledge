@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { PageLayout } from '@/components/layout/page'
 import ChatRail from '@/components/assistant/ChatRail.vue'
 import ChatPane from '@/components/assistant/ChatPane.vue'
 import ThreadDocuments from '@/components/assistant/ThreadDocuments.vue'
@@ -87,15 +88,28 @@ async function confirmDelete() {
 </script>
 
 <template>
-  <div class="flex h-full overflow-hidden">
-    <!-- Below lg the rail would eat a phone screen, so it moves into a sheet
-         opened from the chat header instead of stacking above the transcript. -->
-    <ChatRail class="hidden lg:flex" @rename="openRename" @delete="deleting = $event" />
+  <!--
+    `canvas`: a conversation owns the viewport rather than flowing down it, so
+    the transcript is the only thing that scrolls while the composer and both
+    rails stay put. Declaring it here is what pairs the page with `meta.fill` on
+    its route — PageLayout warns in dev if the two ever disagree, which is the
+    failure that leaves every `flex-1` below resolving against nothing.
 
-    <ChatPane @rename="openRename" @delete="deleting = $event" @browse="railOpen = true" />
+    The chat rail stays a plain flex child rather than becoming a PageSubRail:
+    below the shell's hinge it moves into a sheet instead of collapsing in
+    place, which is a different affordance, not a narrower one.
+  -->
+  <PageLayout variant="canvas">
+    <div class="flex min-h-0 flex-1 overflow-hidden">
+      <!-- Below lg the rail would eat a phone screen, so it moves into a sheet
+           opened from the chat header instead of stacking above the transcript. -->
+      <ChatRail class="hidden lg:flex" @rename="openRename" @delete="deleting = $event" />
 
-    <ThreadDocuments class="hidden xl:flex" />
-  </div>
+      <ChatPane @rename="openRename" @delete="deleting = $event" @browse="railOpen = true" />
+
+      <ThreadDocuments class="hidden xl:flex" />
+    </div>
+  </PageLayout>
 
   <Sheet v-model:open="railOpen">
     <SheetContent side="left" class="w-72 p-0">

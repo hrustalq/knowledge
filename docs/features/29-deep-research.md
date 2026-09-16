@@ -38,7 +38,7 @@ host, for three structural reasons, none of which is a missing feature:
 A fifth `RUNNABLE_AGENTS` case is the right home. It already has what a long run
 needs: a durable row, owner rehydration into a real `Principal`, a budget
 re-check at execution, and a poll endpoint. What it lacks is listed under
-*Prerequisites* below, and all of it is smaller than the three items above.
+_Prerequisites_ below, and all of it is smaller than the three items above.
 
 ## Stopping is the design
 
@@ -102,7 +102,7 @@ Three mitigations, in the order they pay:
 
 **Labels are assigned server-side, before the model sees the results.** Each
 search gets a contiguous block of citation numbers; the prompt asks the model
-only to *place* markers, never to choose them. Numbering cannot drift because
+only to _place_ markers, never to choose them. Numbering cannot drift because
 the model never holds the counter. This removes an entire class of failure
 structurally rather than probabilistically, which is the same reason
 `GraphService` owns the workspace predicate instead of asking each caller to
@@ -117,7 +117,7 @@ generation — a number the budget above can hold.
 
 **The anchoring primitive already exists.** `apps/web/src/lib/anchor-match.ts`
 (feature 15) normalizes, finds all occurrences, scores by surviving
-prefix/suffix, and reports *outdated* rather than silently re-anchoring — the
+prefix/suffix, and reports _outdated_ rather than silently re-anchoring — the
 W3C TextQuoteSelector shape. A web citation that carries a quote can be verified
 against the fetched text with the code that already verifies a comment against
 a page. Nothing new is needed to make a citation checkable; it needs to carry
@@ -134,7 +134,7 @@ the job layer either.
 
 The fix is not simply `Promise.all` over the requested calls. The streaming loop
 checks `signal?.aborted` **between** calls on purpose: "tools can create pages
-and open merge requests, so 'stop' has to mean stop *before* one of those runs."
+and open merge requests, so 'stop' has to mean stop _before_ one of those runs."
 A batch in flight cannot be interrupted between its members, so the naive change
 quietly downgrades Stop from _no further side effects_ to _no further output_.
 
@@ -166,7 +166,7 @@ Two consequences, and the second is worse than the first:
 
 This is latent today because the three existing background agents finish well
 inside the window. It becomes live the moment a research agent exists, since
-deep research runs five to thirty minutes *by design*. The heartbeat is
+deep research runs five to thirty minutes _by design_. The heartbeat is
 therefore a prerequisite of this feature and not a refinement of it: the run row
 gains `stage`/`progress`/`warnings` — converging on `connector_runs`, which is
 already the fullest polling vocabulary in the schema — and the executor writes
@@ -182,7 +182,7 @@ mostly wrong, for two independent reasons.
 in 2026 is cross-layer coherence — TLS/JA4 against the claimed browser version,
 JA4H header order and casing, HTTP/2 SETTINGS — and then how the browser is
 driven, not what the page advertises. In the best public benchmark of the year,
-an HTTP-only client with correct TLS impersonation at **58 MB** scored *better*
+an HTTP-only client with correct TLS impersonation at **58 MB** scored _better_
 than patched Chromium forks, one of which peaked at **13.3 GB**. (Single IP, 31
 targets, one night; the author states rankings invert under proxy rotation.
 Directionally strong, not a guarantee.)
@@ -199,13 +199,13 @@ a boundary.
 
 Ranked by that property the usual instinct inverts:
 
-| rung | SSRF guarantee |
-| --- | --- |
-| `safeFetch` | full; weakest fetching |
-| TLS-impersonating HTTP client | own resolver — needs an egress proxy to restore it |
-| **local headless browser** | **structurally incompatible; no hook exists** |
-| self-hosted service | guard does not apply, but it is already a separate netns |
-| commercial unblocker | full, *by remoteness* — vendor IPs cannot reach RFC1918 |
+| rung                          | SSRF guarantee                                           |
+| ----------------------------- | -------------------------------------------------------- |
+| `safeFetch`                   | full; weakest fetching                                   |
+| TLS-impersonating HTTP client | own resolver — needs an egress proxy to restore it       |
+| **local headless browser**    | **structurally incompatible; no hook exists**            |
+| self-hosted service           | guard does not apply, but it is already a separate netns |
+| commercial unblocker          | full, _by remoteness_ — vendor IPs cannot reach RFC1918  |
 
 The guarantee is inversely correlated with local capability, and the local
 browser is the only rung that costs it. So the ladder is: revalidate from cache
@@ -260,7 +260,7 @@ Four changes:
 **Promotion**, still. Feature 25 deferred turning a cited page into a document
 with a `SOURCED_FROM` relation, and the reasoning that it is "where all the
 graph and provenance design work is" has not changed. What changes is that a
-finding can now *carry* its web sources, so the existing
+finding can now _carry_ its web sources, so the existing
 `findings/:index/propose` path — drafter over the cited material, merge request
 attributed to the caller — is the minimal version of promotion, and the graph
 half can land against a behaviour that exists rather than a guess.
@@ -286,9 +286,16 @@ reliability actually bit.
 ## Prerequisites
 
 Ordered, because two of them are bugs rather than features and the loop cannot
-be trusted on top of either:
+be trusted on top of either.
 
-1. Extraction (above) — independent, ships alone, benefits `web_fetch` today.
+**Status is recorded in [`29-deep-research-todo.md`](29-deep-research-todo.md),
+not here.** This section is the plan as first written; that file records what is
+true in the tree, carries the file:line evidence for each item, and is the newer
+of the two wherever they disagree. Read it first.
+
+1. ~~Extraction~~ — **shipped in v0.5.0** (#18). `web_fetch` scores a page for
+   its article before serializing it, reads PDFs, and reports a thin or failed
+   extraction rather than serving a near-empty page in silence.
 2. `stage`/`progress`/`warnings` on `agent_runs`, written as the run proceeds,
    and a guarded terminal write. Fixes the reaper race and the blank poll.
 3. Parallel read tools with serial writes, per the partition above.

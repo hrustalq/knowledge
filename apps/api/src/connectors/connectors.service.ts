@@ -255,6 +255,11 @@ export class ConnectorsService {
       // `connectorFetch` so the SSRF guard runs at the dial rather than only
       // when an admin saved the base URL.
       allowPrivate: this.allowPrivateUrls,
+      // Who to bill and which language to answer in (docs/features/27). Both
+      // come off the row rather than a request, because the path that needs
+      // them most is the worker's, where there is no request at all.
+      userId: row.createdBy,
+      locale: row.locale as ConnectorContext['locale'],
       signal,
     };
   }

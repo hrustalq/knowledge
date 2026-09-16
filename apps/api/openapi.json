@@ -15797,7 +15797,8 @@
               "confluence-server",
               "jira",
               "notion",
-              "markdown-git"
+              "markdown-git",
+              "codebase"
             ]
           },
           "name": {

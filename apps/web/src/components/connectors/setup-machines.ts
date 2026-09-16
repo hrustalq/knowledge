@@ -193,6 +193,18 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
     { name: 'repo', meta: { labelKey: 'connectors.step.repo', fields: ['repoUrl'], credential: true } },
     { name: 'location', meta: { labelKey: 'connectors.step.location', fields: ['branch', 'subdir'] } },
   ],
+  // The same two questions as markdown-git, because it is the same archive being
+  // downloaded (docs/features/27) — the module limit rides along with the branch
+  // and folder for the reason `rootPageId` rides along with the space: it
+  // refines "how much of it", and a step of its own would make everyone press
+  // Next past a question most repositories never answer.
+  codebase: [
+    { name: 'repo', meta: { labelKey: 'connectors.step.repo', fields: ['repoUrl'], credential: true } },
+    {
+      name: 'location',
+      meta: { labelKey: 'connectors.step.location', fields: ['branch', 'subdir', 'maxModules'] },
+    },
+  ],
 }
 
 export const confluenceSetup = kindMachine('confluenceSetup', KIND_STEPS.confluence)
@@ -200,6 +212,7 @@ export const confluenceServerSetup = kindMachine('confluenceServerSetup', KIND_S
 export const jiraSetup = kindMachine('jiraSetup', KIND_STEPS.jira)
 export const notionSetup = kindMachine('notionSetup', KIND_STEPS.notion)
 export const markdownGitSetup = kindMachine('markdownGitSetup', KIND_STEPS['markdown-git'])
+export const codebaseSetup = kindMachine('codebaseSetup', KIND_STEPS.codebase)
 
 export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   confluence: confluenceSetup,
@@ -207,6 +220,7 @@ export const SETUP_MACHINES: Record<ConnectorKind, KindMachine> = {
   jira: jiraSetup,
   notion: notionSetup,
   'markdown-git': markdownGitSetup,
+  codebase: codebaseSetup,
 }
 
 /** The per-kind steps, for the stepper — read without running the machine. */

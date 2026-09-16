@@ -22,7 +22,17 @@
     "orphan": "Reached by listing the space, not by walking the tree - its parent may not be visible to this connector.",
     "orphansFound": "{count} page(s) were not reachable through the page tree and were added at the top level.",
     "discoveryStopped": "The page tree walk was stopped by request; {count} branch(es) were left unread.",
-    "reRooted": "Filed at the connector's destination: the page above this one has not been imported."
+    "reRooted": "Filed at the connector's destination: the page above this one has not been imported.",
+    "codebase": {
+      "noOwner": "This connector has no owner to bill, so the pages were written from the extracted facts only.",
+      "aiDisabled": "No AI provider is configured, so the pages contain the extracted facts only.",
+      "budget": "The workspace AI budget is exhausted, so the pages contain the extracted facts only.",
+      "narrationFailed": "Writing the summary failed, so this page contains the extracted facts only.",
+      "oversize": "{count} file(s) were too large to read and were skipped.",
+      "unparsed": "{count} file(s) in this module could not be parsed and were skipped.",
+      "truncated": "This module has {total} source files; its API surface was read from the first {limit}.",
+      "modulesOmitted": "{count} module(s) beyond the configured limit are not documented. Raise the module limit to include them."
+    }
   },
   "pushVersionMessage": "Updated from the knowledge base",
   "syncRevisionMessage": "Synced from a connector",

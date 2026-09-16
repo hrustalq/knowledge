@@ -12,7 +12,7 @@ traffic**. Production moves only when a `vX.Y.Z` tag is pushed. Entries are writ
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.6.0] — 2026-09-16
 
 ### Added
 
@@ -288,7 +288,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.5.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/hrustalq/knowledge/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/hrustalq/knowledge/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/hrustalq/knowledge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/hrustalq/knowledge/compare/v0.2.0...v0.3.0

@@ -30,6 +30,7 @@ import type {
   CheckSourcePolicyResponse,
   ListAiSkillsResponse,
   ListSourcePoliciesResponse,
+  CreatePageFromFindingResponse,
   ProposeAgentFindingResponse,
   ProposeRelationsResponse,
   SourcePolicy,
@@ -352,7 +353,29 @@ export class AiController {
     @Body() dto: StartAgentRunDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<AgentRunSummary> {
-    return this.runs.start(dto.workspaceId, key, principal, dto.note);
+    return this.runs.start(dto.workspaceId, key, principal, { note: dto.note, connectorId: dto.connectorId });
+  }
+
+  /**
+   * Create the page one finding drafted (docs/features/31).
+   *
+   * The counterpart to `propose` for findings that cite source files rather
+   * than pages: there is nothing to rewrite, so the draft becomes a new page
+   * under the connector's destination. No model call — the run wrote the
+   * draft; this is the person publishing it, attributed to them.
+   */
+  @Post('agents/runs/:id/findings/:index/create-page')
+  @Access('editor', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
+  @ApiOperation({ summary: 'Create the page a finding drafted, under the connector\'s destination' })
+  createPageFromFinding(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<CreatePageFromFindingResponse> {
+    return this.findings.createPage(workspaceId, id, index, principal);
   }
 
   /**

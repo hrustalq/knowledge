@@ -786,6 +786,16 @@ export class StartAgentRunDto {
   @IsString()
   @MaxLength(2_000, { message: vmsg('maxLength') })
   note?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'The repository connector a connector-scoped agent (the archaeologist) reads. Required when the ' +
+      'workspace has more than one; the only one is used otherwise.',
+  })
+  @IsOptional()
+  @IsUUID()
+  connectorId?: string;
 }
 
 // ---- Source policies (docs/features/25) ------------------------------------

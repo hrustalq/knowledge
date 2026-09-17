@@ -1,10 +1,14 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type {
   AgentFinding,
+  AgentRunInput,
+  CreatePageFromFindingResponse,
+  DocumentCategory,
   Locale,
   ProposeAgentFindingResponse,
   ProposeRelationsResponse,
 } from '@knowledge/contracts';
+import { composeFrontmatter } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -165,6 +169,97 @@ export class AgentFindingsService {
       // everything else, which is precisely the stuck-at-409 bug being fixed.
       await this.release(runId, index).catch(() => {
         this.logger.warn(`Could not release the proposal claim on run ${runId} finding ${index}`);
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Create the page a finding drafted (docs/features/31).
+   *
+   * The archaeologist's findings cite source files, not pages, and carry the
+   * page they propose. There is nothing to rewrite, so `propose` does not
+   * apply: the draft is published as a new page under the connector the run
+   * read, the way `create_document` publishes — immediately, as the person who
+   * pressed the button. No model call: the worker wrote the draft, the API
+   * publishes it (feature 17's rule, from the other side).
+   *
+   * The page's frontmatter records where it came from — `source:` is the first
+   * cited file on its host, the same key every connector adapter writes — so a
+   * reader can tell a page a model drafted from one a person wrote, and the
+   * next run finds it under the destination and treats the file as declared.
+   */
+  async createPage(
+    workspaceId: string,
+    runId: string,
+    index: number,
+    principal: Principal,
+  ): Promise<CreatePageFromFindingResponse> {
+    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
+    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
+
+    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
+    const finding = findings[index];
+    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    if (!finding.draft?.title || !finding.draft.markdown) throw new BadRequestException(t('error.ai.findingNoDraft'));
+    if (finding.documentIds.length > 0) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.findingAlreadyCreated'),
+        reason: 'already-created',
+        documentId: finding.documentIds[0],
+      });
+    }
+
+    const connectorId = (run.input as AgentRunInput | null)?.connectorId;
+    const connector = connectorId
+      ? await this.prisma.connector.findFirst({
+          where: { id: connectorId, workspaceId },
+          select: { projectId: true, parentId: true, category: true, name: true },
+        })
+      : null;
+    // A run with no resolvable connector (deleted since) still has a draft
+    // worth keeping; it lands in the workspace's first project at the root.
+    const projectId =
+      connector?.projectId ??
+      (await this.prisma.project.findFirst({ where: { workspaceId }, orderBy: { createdAt: 'asc' }, select: { id: true } }))
+        ?.id;
+    if (!projectId) throw new BadRequestException(t('error.ai.findingNoDraft'));
+
+    // Same guard as `propose`: two presses race here, and only one may create.
+    if (!(await this.claim(runId, index))) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.findingInFlight'),
+        reason: 'in-flight',
+      });
+    }
+
+    try {
+      const title = finding.draft.title.trim().slice(0, 300);
+      const sources = (finding.sources ?? []).map((s) => s.url);
+      const text = composeFrontmatter(finding.draft.markdown.trim(), {
+        source: sources[0],
+        ...(sources.length > 1 ? { sources } : {}),
+        generatedBy: run.agentKey,
+        ...(connector ? { repository: connector.name } : {}),
+      });
+      const created = await this.documents.createDocument(
+        {
+          workspaceId,
+          projectId,
+          title,
+          content: { mode: 'inline', format: 'markdown', text },
+          ...(connector?.category ? { category: connector.category as DocumentCategory } : {}),
+          ...(connector?.parentId ? { parentId: connector.parentId } : {}),
+        },
+        principal.userId,
+      );
+      await this.writeBackPage(runId, index, created.documentId, title);
+      return { documentId: created.documentId, title };
+    } catch (error) {
+      await this.release(runId, index).catch(() => {
+        this.logger.warn(`Could not release the create-page claim on run ${runId} finding ${index}`);
       });
       throw error;
     }
@@ -370,6 +465,25 @@ export class AgentFindingsService {
                findings,
                ARRAY[${String(index)}::text, 'mergeRequestId'],
                to_jsonb(${mergeRequestId}::text),
+               true
+             )
+       WHERE id = ${runId}::uuid
+    `;
+  }
+
+  /**
+   * The create-page counterpart of `writeBack`: the finding now cites the page
+   * it became, which is what the web reads to swap the button for a link and
+   * what the next run reads to treat the file as declared. `proposedAt` stays
+   * set — `claim` guards on it, so the finding cannot be created twice.
+   */
+  private async writeBackPage(runId: string, index: number, documentId: string, title: string): Promise<void> {
+    await this.prisma.$executeRaw`
+      UPDATE agent_runs
+         SET findings = jsonb_set(
+               jsonb_set(findings, ARRAY[${String(index)}::text, 'documentIds'], to_jsonb(ARRAY[${documentId}::text]), true),
+               ARRAY[${String(index)}::text, 'documentTitles'],
+               to_jsonb(ARRAY[${title}::text]),
                true
              )
        WHERE id = ${runId}::uuid

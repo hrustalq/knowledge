@@ -192,7 +192,13 @@ function openAndWatch(url: string | null) {
         </button>
       </div>
 
+      <!-- `key` is load-bearing, not hygiene. Autocomplete refetches only when
+           its query or open state changes, so the account this closure reads
+           can change underneath it and the list would keep showing the previous
+           account's repositories. Remounting on the account is what makes
+           switching accounts actually reload. -->
       <Autocomplete
+        :key="selected"
         :model-value="picked"
         :label="t('connectors.github.repository')"
         :placeholder="t('connectors.github.searchPlaceholder')"
@@ -201,6 +207,13 @@ function openAndWatch(url: string | null) {
         :empty-hint="t('connectors.github.noRepos')"
         @update:model-value="choose"
       />
+
+      <!-- A repository lives in exactly one of these accounts, and the list is
+           scoped to the selected one — so "no match" is ambiguous between "no
+           such repository" and "you are looking in the wrong account". -->
+      <p v-if="installations.length > 1" class="text-muted-foreground text-xs">
+        {{ t('connectors.github.otherAccountHint') }}
+      </p>
 
       <!-- Says why a list can be short, which is otherwise indistinguishable
            from the picker being broken. -->

@@ -315,6 +315,81 @@ export interface ConnectorTestResponse {
   detail: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// GitHub App repository picker (docs/features/28)
+// ---------------------------------------------------------------------------
+
+/**
+ * The config key that says "this connector authenticates as an installation".
+ *
+ * Deliberately *not* a `ConnectorConfigField`: the catalogue above drives the
+ * settings form, and this is written by the picker rather than typed. Keeping it
+ * out of `fields` is what stops the generic input loop from rendering a raw
+ * numeric box for it.
+ */
+export const GITHUB_INSTALLATION_CONFIG_KEY = 'githubInstallationId';
+
+/** One account or organisation the App is installed on. */
+export interface GithubInstallationSummary {
+  /** GitHub's installation id, as a string — it is a 64-bit integer. */
+  installationId: string;
+  accountLogin: string;
+  accountType: 'User' | 'Organization';
+  accountAvatarUrl: string | null;
+  /** 'selected' means the owner granted a subset, so a short list is not a bug. */
+  repositorySelection: 'all' | 'selected';
+  suspended: boolean;
+}
+
+export interface GithubRepoSummary {
+  /** 'owner/name'. This is the picker's stable identity for a repository. */
+  fullName: string;
+  name: string;
+  ownerLogin: string;
+  private: boolean;
+  description: string | null;
+  defaultBranch: string;
+  htmlUrl: string;
+  /** ISO-8601, for "most recently pushed first" ordering in the list. */
+  pushedAt: string | null;
+  language: string | null;
+}
+
+export interface GithubBranchSummary {
+  name: string;
+  isDefault: boolean;
+}
+
+/**
+ * The browse envelope, copied from `AiPluginTestResponse`: these endpoints
+ * answer "what can I see", and a network hiccup upstream is data for the picker
+ * to render, not a 500 for the client to catch. They never throw.
+ */
+export interface GithubInstallationsResponse {
+  /** False when GITHUB_APP_ID is unset — the picker hides and the PAT path stays. */
+  configured: boolean;
+  /** False until this person has completed the OAuth leg; the UI offers it. */
+  connected: boolean;
+  /** Where to send the browser to connect a GitHub identity, when `connected` is false. */
+  authorizeUrl: string | null;
+  /** Where to send the browser to add another account or org. */
+  installUrl: string | null;
+  installations: GithubInstallationSummary[];
+  error?: string;
+}
+
+export interface GithubReposResponse {
+  ok: boolean;
+  repositories: GithubRepoSummary[];
+  error?: string;
+}
+
+export interface GithubBranchesResponse {
+  ok: boolean;
+  branches: GithubBranchSummary[];
+  error?: string;
+}
+
 // GET /v1/connectors/:id/links
 export interface ConnectorLinkSummary {
   id: string;

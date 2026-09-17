@@ -48,5 +48,41 @@
     "unconfirmedDetail": "A model read these connections out of the text, but the page does not declare them. An inferred edge is the lowest-trust class there is and is replaced on every re-index; declaring it in the page's frontmatter makes it a fact the page itself asserts. Proposed: {list}.",
     "graphUnavailable": "The relation graph could not be read, so only the model's suggestions are included.",
     "summary": "Looked at {pages} pages and proposes relations for {found} of them."
+  },
+  "count": {
+    "pages": {
+      "one": "{count} page",
+      "other": "{count} pages"
+    },
+    "issues": {
+      "one": "{count} issue",
+      "other": "{count} issues"
+    },
+    "terms": {
+      "one": "{count} new term",
+      "other": "{count} new terms"
+    }
+  },
+  "review": {
+    "cannotRun": "The model routed at the reviewer cannot run it.",
+    "noPages": "No indexed pages to review yet.",
+    "none": "No page could be reviewed in this pass.",
+    "summary": "Reviewed {pages} changed recently and found {issues}."
+  },
+  "glossary": {
+    "disabled": "The AI assistant is disabled for this workspace.",
+    "seenOn": "Seen {count}× on \"{title}\".",
+    "aliases": "Aliases: {list}.",
+    "budgetSpent": "Stopped after {pages}: the workspace AI budget is spent.",
+    "nothingNew": "Scanned {pages}; every term they use is already defined.",
+    "summary": "Scanned {pages} and proposes {terms}."
+  },
+  "warning": {
+    "graphUnreadableOrphans": "The relation graph could not be read, so the orphan check was skipped.",
+    "graphUnreadableModelOnly": "The relation graph could not be read, so only the model half ran.",
+    "modelPassFailed": "The model pass failed: {error}",
+    "modelPassFailedStructuralOnly": "The model pass failed, so only structural findings are included.",
+    "pageNotReviewed": "\"{title}\" could not be reviewed: {error}",
+    "pageNotScanned": "\"{title}\" could not be scanned: {error}"
   }
 }

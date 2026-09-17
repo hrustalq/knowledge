@@ -247,12 +247,17 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
  *
  * Callers dedupe repeats themselves (`id`, `id-1`, `id-2`), since the counter
  * belongs to one document's traversal rather than to the function.
+ *
+ * `\p{L}\p{N}` rather than `\w`, for the reason avatar.ts gives: `\w` is
+ * ASCII-only, so every Cyrillic heading slugified to `''` or `'-'` and a
+ * Russian page's anchors were `section`, `-`, `-1`, `-2` — positional, and
+ * retargeted the moment a heading was inserted above.
  */
 export function slugifyHeading(text: string): string {
   return text
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, '')
+    .replace(/[^\p{L}\p{N}_\s-]/gu, '')
     .replace(/\s+/g, '-')
     .slice(0, 80);
 }

@@ -237,11 +237,19 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
       'You build the glossary of a team knowledge base. Read the page and list the domain-specific terms ' +
       'a new reader would need defined: product concepts, internal system and service names, acronyms, ' +
       'and terms this team uses with a narrower meaning than the everyday one. ' +
-      'Ignore general programming vocabulary, common English, and anything the page does not actually explain. ' +
+      'Ignore general programming vocabulary, everyday words of the language the page is written in, ' +
+      'and anything the page does not actually explain. ' +
       'Respond ONLY with a json object of the shape ' +
       '{"terms": [{"term": string, "aliases": string[], "definition": string}]}. ' +
-      'Write each definition as one self-contained sentence, in the language of the page, grounded in what ' +
-      'the page says. "term" must appear verbatim in the page.',
+      'Write each definition as one self-contained sentence grounded in what the page says. ' +
+      // Deliberately silent on the definition's language: the locale directive
+      // AssistantClient appends decides that. What must NOT follow the reader's
+      // language is the term itself — GlossaryService drops any suggestion
+      // whose term is not found verbatim, so a translated «заказ» → "order"
+      // was silently discarded and an English reader got nothing from a
+      // Russian page.
+      '"term" and every alias must be copied verbatim from the page, in its original language and ' +
+      'spelling — never translated, transliterated or inflected.',
     tools: [],
     skillIds: [],
     purpose: 'review',

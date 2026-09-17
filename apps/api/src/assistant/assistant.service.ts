@@ -205,7 +205,7 @@ export class AssistantService {
   async review(dto: AssistantReviewDto, principal: Principal): Promise<AssistantReviewResponse> {
     const opened = await this.openAgentCall(dto.workspaceId, principal, 'reviewer', 'review');
     if (!opened) {
-      return { enabled: false, issues: [], summary: 'Assistant disabled for this workspace.' };
+      return { enabled: false, issues: [], summary: t('assistant.disabled') };
     }
     const { agent, call } = opened;
     const raw = await this.client.chat(
@@ -268,7 +268,7 @@ export class AssistantService {
     }
     const call = await this.openCall(dto.workspaceId, principal, 'ask');
     if (!call) {
-      return { enabled: false, answer: 'Assistant disabled for this workspace.', sources: [] };
+      return { enabled: false, answer: t('assistant.disabled'), sources: [] };
     }
 
     // NOTE (docs/features/20): this endpoint keeps its own system prompt rather
@@ -526,10 +526,12 @@ export class AssistantService {
     // behaviour change that belongs with a decision about what disabling a
     // built-in chat agent should mean (docs/features/20-agents-todo.md).
     if (!agent.config.enabled) {
+      // Persisted into the thread, so it is written in the reader's language
+      // rather than frozen in English.
       const assistantMessage = await this.threads.appendMessage(
         threadId,
         'assistant',
-        'Assistant disabled for this workspace.',
+        t('assistant.disabled', undefined, principal.locale),
       );
       return { enabled: false, userMessage, response: { enabled: false, userMessage, assistantMessage } };
     }

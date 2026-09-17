@@ -56,6 +56,48 @@ export type I18nTranslations = {
             "graphUnavailable": string;
             "summary": string;
         };
+        "count": {
+            "pages": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "issues": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+            "terms": {
+                "one": string;
+                "other": string;
+                "few": string;
+                "many": string;
+            };
+        };
+        "review": {
+            "cannotRun": string;
+            "noPages": string;
+            "none": string;
+            "summary": string;
+        };
+        "glossary": {
+            "disabled": string;
+            "seenOn": string;
+            "aliases": string;
+            "budgetSpent": string;
+            "nothingNew": string;
+            "summary": string;
+        };
+        "warning": {
+            "graphUnreadableOrphans": string;
+            "graphUnreadableModelOnly": string;
+            "modelPassFailed": string;
+            "modelPassFailedStructuralOnly": string;
+            "pageNotReviewed": string;
+            "pageNotScanned": string;
+        };
     };
     "assistant": {
         "disabled": string;

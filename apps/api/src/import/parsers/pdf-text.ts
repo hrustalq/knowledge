@@ -291,7 +291,10 @@ function joinWrapped(lines: string[]): string {
       out = line;
       continue;
     }
-    if (/[­-]$/.test(out) && /^[a-zà-ÿ]/.test(line)) out = `${out.slice(0, -1)}${line}`;
+    // A continuation starts with any lowercase letter — `\p{Ll}`, not
+    // `[a-zà-ÿ]`, which stopped at Latin-1 and left «информа- ция» in every
+    // justified Russian PDF.
+    if (/[­-]$/.test(out) && /^\p{Ll}/u.test(line)) out = `${out.slice(0, -1)}${line}`;
     else out = `${out} ${line}`;
   }
   return out;

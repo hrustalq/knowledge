@@ -13,6 +13,38 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Russian headings have stable anchors again.** Every Cyrillic heading used to
+  slugify to nothing, so a Russian page's section links were `section`, `-1`,
+  `-2` — and retargeted whenever a heading was inserted above. Anchors are now
+  built from the heading text in any script. Existing deep links into Russian
+  sections change once.
+- **Russian PDFs no longer keep hyphenation breaks.** A word split across lines
+  in a justified Russian PDF («информа-ция») was imported as two fragments and
+  was unfindable; it is now rejoined the way Latin text already was.
+- **AI skill triggers written in Russian match whole words.** A trigger like
+  «релиз» fired inside «релизный»; the boundary test is now Unicode-aware.
+- **Auto-started workflow runs and scheduled agent runs are written in the
+  owner's language.** Both defaulted to English regardless of the workspace,
+  so an auto-triggered chain in a Russian workspace generated English pages and
+  the nightly curator reported in English. Manually started runs were unaffected.
+- **Glossary suggestions on a page in another language are no longer dropped.**
+  The glossarist was told to write in the page's language and, a line later, in
+  the reader's; when it translated the term, the verbatim-occurrence check
+  discarded every suggestion in silence. Terms are now always copied from the
+  page verbatim; the definition follows the reader's language.
+- **Reviewer and glossarist run summaries, warnings and the "assistant
+  disabled" reply are translated.** They were hardcoded English, and the
+  disabled reply was persisted into the chat thread that way.
+- **Russian counts above 100 are declined correctly.** 111 and 212 read as
+  «111 страница» / «212 страницы»; the plural rule now looks at the last two
+  digits.
+- **Review severity badges show a translated label** instead of the raw
+  `error` / `warning` / `suggestion` value.
+
 ## [0.6.0] — 2026-09-16
 
 ### Added

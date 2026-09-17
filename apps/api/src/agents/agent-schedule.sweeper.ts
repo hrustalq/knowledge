@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
+import { asLocale } from '../i18n/locale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentProducer } from './agent.producer.js';
 import { AGENT_MAX_ATTEMPTS } from './agent.constants.js';
@@ -115,6 +116,14 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
       if (inFlight > 0) continue;
 
       try {
+        // A manual run freezes the principal's locale; a scheduled one has no
+        // principal, so it is frozen from the owner's stored preference. Left
+        // unset, the column's `"en"` default made every nightly summary
+        // English in a Russian workspace.
+        const owner = await this.prisma.user.findUnique({
+          where: { id: agent.scheduleOwner! },
+          select: { locale: true },
+        });
         const run = await this.prisma.agentRun.create({
           data: {
             workspaceId: agent.workspaceId,
@@ -122,6 +131,7 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
             agentId: agent.id,
             trigger: 'schedule',
             createdBy: agent.scheduleOwner!,
+            locale: asLocale(owner?.locale),
             input: agent.scheduleNote ? { note: agent.scheduleNote } : undefined,
           },
         });

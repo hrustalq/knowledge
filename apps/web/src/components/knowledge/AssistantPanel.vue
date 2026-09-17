@@ -29,6 +29,12 @@ function severityVariant(s: string): 'destructive' | 'secondary' | 'outline' {
   return s === 'error' ? 'destructive' : s === 'warning' ? 'secondary' : 'outline'
 }
 
+// The severity is a machine value; the badge shows its translation, the same
+// keys AiCheckPane resolves, so a Russian reader does not see `error`.
+function severityLabel(s: string): string {
+  return s === 'error' ? 'mr.severityError' : s === 'warning' ? 'mr.severityWarning' : 'mr.severitySuggestion'
+}
+
 async function call<T>(kind: string, path: string, body: Record<string, unknown>): Promise<T | null> {
   busy.value = kind
   error.value = null
@@ -93,7 +99,7 @@ async function runSuggest() {
       <template v-else>
         <p class="text-xs text-muted-foreground">{{ review.summary }}</p>
         <div v-for="(issue, i) in review.issues" :key="i" class="flex items-start gap-2 text-xs">
-          <Badge :variant="severityVariant(issue.severity)" class="shrink-0 text-[10px]">{{ issue.severity }}</Badge>
+          <Badge :variant="severityVariant(issue.severity)" class="shrink-0 text-[10px]">{{ t(severityLabel(issue.severity)) }}</Badge>
           <span>
             <span v-if="issue.section" class="font-medium">{{ issue.section }}: </span>{{ issue.message }}
           </span>

@@ -8,7 +8,7 @@ import type {
 import type { AssistantToolCall, AiUsageOperation } from '@knowledge/contracts';
 import type { ResolvedAiConfig } from '../ai/ai-config.service.js';
 import { AiUsageService, estimateTokens, type AiUsageTokens } from '../ai/ai-usage.service.js';
-import { FREE_TOOLS, PARALLEL_SAFE_TOOLS } from './assistant.tools.js';
+import { FREE_TOOLS, PARALLEL_SAFE_TOOLS } from './assistant-tool-types.js';
 import type { Locale } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { currentTrace, emitBacktest } from '@knowledge/observability';

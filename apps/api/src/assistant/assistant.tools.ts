@@ -20,7 +20,9 @@ import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { WebResearchService } from './web-research.service.js';
-import { AssistantReadToolsService, READ_TOOL_NAMES } from './assistant-read-tools.service.js';
+import { AssistantReadToolsService } from './assistant-read-tools.service.js';
+import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
+import { CODE_TOOLS, FREE_TOOLS, PARALLEL_SAFE_TOOLS, WEB_TOOLS } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
 /** Tools that mutate the workspace — require 'editor', not just 'viewer'. Exported so
@@ -31,49 +33,13 @@ import type { AssistantToolContext, AssistantToolResult } from './assistant-tool
 export const WRITE_TOOLS = new Set<string>(ASSISTANT_WRITE_TOOL_NAMES);
 
 /**
- * Tools that do not count against the turn's tool budget.
- *
- * The budget bounds *work* — searches, reads, graph walks, writes. Asking the
- * user something is not work: it touches nothing, and it is how a turn that
- * has run out of room is supposed to end. Billing it produced exactly the
- * failure it should have prevented: the model spent its budget finding out
- * what the options were, then had no tool left to offer them with, and wrote
- * the question out as prose for the user to answer by hand.
+ * The name sets and both types live in a leaf module, so the client, the read
+ * service and the code research service can share them without closing a cycle
+ * back through this file (see assistant-tool-types.ts for the chain that would
+ * close). Re-exported here because every existing importer takes them from
+ * assistant.tools.js.
  */
-export const FREE_TOOLS = new Set(['ask_user', 'request_agent_mode']);
-
-/**
- * The two tools that leave the workspace (docs/features/25).
- *
- * Offered only when the caller opts in — `definitions(mode, { web: true })` —
- * and never by default. `/v1/assistant/ask` is the one model call site with no
- * agent behind it, so an allowlist cannot narrow what it is handed; adding
- * these to the base list would silently widen a page-scoped question into the
- * open web. Every list stays explicit.
- */
-export const WEB_TOOLS = new Set(['web_search', 'web_fetch']);
-
-/**
- * Tools the harness may run concurrently inside one round (docs/features/29).
- *
- * An allowlist of calls known to have no side effects — deliberately NOT the
- * complement of {@link WRITE_TOOLS}. An `mcp__<slug>__<tool>` call is an
- * external server's code whose effects this process cannot see, so reading
- * "not a declared write" as "safe to batch" would parallelise somebody else's
- * mutation, and a batch in flight cannot be interrupted between its members the
- * way a serial loop can.
- *
- * Reads are also where the whole win is: ten `web_fetch` calls in one round
- * were ten sequential fetches, which at WEB_TIMEOUT_MS apiece is minutes of
- * wall clock for work the model asked to do at once.
- */
-export const PARALLEL_SAFE_TOOLS = new Set<string>([...READ_TOOL_NAMES, ...WEB_TOOLS]);
-
-/**
- * Both types now live in a leaf module, so AssistantReadToolsService can share
- * them without closing a cycle back through this file. Re-exported here because
- * every existing importer takes them from assistant.tools.js.
- */
+export { CODE_TOOLS, FREE_TOOLS, PARALLEL_SAFE_TOOLS, WEB_TOOLS };
 export type { AssistantToolContext, AssistantToolResult };
 
 const UI_COMPONENTS = new Set(['graph', 'activity', 'search']);
@@ -118,6 +84,9 @@ export class AssistantToolsService {
     private readonly storage: StorageService,
     private readonly aiConfig: AiConfigService,
     private readonly web: WebResearchService,
+    // The repository tools (docs/features/31), worker-loadable like the read
+    // half and reached here the same way — delegated to, never re-implemented.
+    private readonly code: CodeResearchService,
   ) {}
 
   /** @param mode 'ask' (default) hides create_document/propose_update from the model entirely,
@@ -125,14 +94,22 @@ export class AssistantToolsService {
    * `execute`, which still applies on top of this when mode = 'agent'.
    * @param opts.ui defaults true — set false for callers whose UI can't render an AssistantUiBlock
    * (e.g. the one-shot /assistant/ask endpoint), so the model is never offered a tool it has no way
-   * to have an effect through. */
-  definitions(mode: AssistantChatMode = 'ask', opts: { ui?: boolean; web?: boolean } = {}): ChatCompletionFunctionTool[] {
+   * to have an effect through.
+   * @param opts.web offer the web pair; the caller decides from the workspace's effective mode.
+   * @param opts.code offer the repository tools; the caller decides from whether the workspace has
+   * a repository connector to read — there is nothing to offer otherwise. */
+  definitions(
+    mode: AssistantChatMode = 'ask',
+    opts: { ui?: boolean; web?: boolean; code?: boolean } = {},
+  ): ChatCompletionFunctionTool[] {
     const ui = opts.ui ?? true;
     const all: ChatCompletionFunctionTool[] = [
       // The read half, from the service the background agents also run — one
       // definition list, so what the chat offers and what an agent may call
       // cannot drift apart.
       ...this.readTools.definitions(),
+      // Same rule for the repository tools.
+      ...this.code.definitions(),
       {
         type: 'function',
         function: {
@@ -381,7 +358,8 @@ export class AssistantToolsService {
         ? all.filter((t) => t.function.name !== 'request_agent_mode')
         : all.filter((t) => !WRITE_TOOLS.has(t.function.name));
     const grounded = opts.web === true ? scoped : scoped.filter((t) => !WEB_TOOLS.has(t.function.name));
-    return ui ? grounded : grounded.filter((t) => !PANE_ONLY_TOOLS.has(t.function.name));
+    const withCode = opts.code === true ? grounded : grounded.filter((t) => !CODE_TOOLS.has(t.function.name));
+    return ui ? withCode : withCode.filter((t) => !PANE_ONLY_TOOLS.has(t.function.name));
   }
 
   async execute(name: string, args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
@@ -412,6 +390,12 @@ export class AssistantToolsService {
           return await this.webSearch(args, ctx);
         case 'web_fetch':
           return await this.webFetch(args, ctx);
+        // The repository tools — same implementations a background agent runs.
+        case 'code_tree':
+        case 'code_read':
+        case 'code_search':
+        case 'code_outline':
+          return await this.code.execute(name, args, ctx);
         default:
           return this.fail(`Unknown tool ${name}`);
       }

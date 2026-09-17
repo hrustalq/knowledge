@@ -422,6 +422,12 @@ export type I18nTranslations = {
             "subjectNotInWorkspace": string;
             "nothingToMark": string;
         };
+        "code": {
+            "notARepository": string;
+            "connectorDisabled": string;
+            "fileNotFound": string;
+            "notAFile": string;
+        };
         "web": {
             "notFound": string;
             "invalidPattern": string;

@@ -22,9 +22,12 @@ import { TreeSitterService } from './tree-sitter.service.js';
  * is really protecting. What is deliberately still absent is anything that can
  * write: an adapter produces pages, it does not publish them.
  *
- * `TreeSitterService` is a provider and not an export: only the codebase adapter
- * parses, and a grammar cache that other modules could reach into would be a
- * second owner of a wasm heap this one is careful about.
+ * `TreeSitterService` is exported for exactly one other consumer, the code
+ * research tools (docs/features/31), and exporting it does not make a second
+ * one: a Nest provider is a singleton per module, and every importer receives
+ * this instance. What the export must never become is a second *provider* —
+ * a grammar cache constructed twice would be two owners of a wasm heap this
+ * one is careful about.
  */
 @Module({
   imports: [AiCoreModule, AgentCoreModule, AssistantClientModule],
@@ -38,6 +41,6 @@ import { TreeSitterService } from './tree-sitter.service.js';
     TreeSitterService,
     ConnectorRegistry,
   ],
-  exports: [ConnectorRegistry],
+  exports: [ConnectorRegistry, TreeSitterService],
 })
 export class ConnectorAdaptersModule {}

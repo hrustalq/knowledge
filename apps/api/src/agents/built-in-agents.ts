@@ -1,4 +1,4 @@
-import { ASSISTANT_WRITE_TOOL_NAMES } from '@knowledge/contracts';
+import { ASSISTANT_CODE_TOOL_NAMES, ASSISTANT_WRITE_TOOL_NAMES } from '@knowledge/contracts';
 import type { AgentCapability, AgentSurface, AiPurpose, BuiltInAgentKey } from '@knowledge/contracts';
 
 /**
@@ -104,6 +104,12 @@ const UI_TOOLS = ['ask_user', 'render_component'];
  * them is therefore inert until a deployment opts in.
  */
 const WEB_TOOLS = ['web_search', 'web_fetch'];
+/**
+ * A connected repository (docs/features/31). Same footing as the web pair:
+ * named in the two conversational lists, and inert until the workspace has a
+ * repository connector — `definitions()` withholds them otherwise.
+ */
+const CODE_TOOLS = [...ASSISTANT_CODE_TOOL_NAMES];
 
 export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefault> = {
   router: {
@@ -135,7 +141,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     // Exactly what definitions('ask', { ui: true }) offers today: read tools,
     // the form, the offer to switch modes, and inline components — plus the two
     // web tools, which `definitions` withholds unless the deployment allows them.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, 'request_agent_mode'],
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, 'request_agent_mode'],
     skillIds: [],
     purpose: 'chat',
     // Interactive only. A researcher with nobody to answer has no job: every
@@ -154,7 +160,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     instructions: CHAT_PREAMBLE + AGENT_CLAUSE + FORM_CLAUSE + CHAT_RULES,
     // definitions('agent', { ui: true }) drops request_agent_mode — offering
     // the switch when the write tools are already on the table is confusing.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...WRITE_TOOLS],
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, ...WRITE_TOOLS],
     skillIds: [],
     purpose: 'chat',
     surfaces: ['interactive'],

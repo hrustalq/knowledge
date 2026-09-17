@@ -723,6 +723,26 @@ export const ASSISTANT_TOOL_NAMES = [
   'propose_update',
   /** Edits the page's frontmatter relations, as a merge request (docs/features/28). */
   'edit_relations',
+  /** Read a connected repository (docs/features/31). Opt-in, like the web pair. */
+  'code_tree',
+  'code_read',
+  'code_search',
+  'code_outline',
+] as const;
+
+/**
+ * The tools that read a connected repository (docs/features/31).
+ *
+ * One list for the same reason the write set is one list: the harness filters
+ * on it, the built-in agents compose their allowlists from it, and the settings
+ * picker renders it. Reads only — nothing here can change a repository or a
+ * page, which is what lets the harness run them in parallel.
+ */
+export const ASSISTANT_CODE_TOOL_NAMES = [
+  'code_tree',
+  'code_read',
+  'code_search',
+  'code_outline',
 ] as const;
 
 /**

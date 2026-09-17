@@ -269,6 +269,12 @@
     "subjectNotInWorkspace": "A subject can only be watched from the workspace it belongs to.",
     "nothingToMark": "Nothing to mark read: pass `ids` or `all`."
   },
+  "code": {
+    "notARepository": "Connector {name} is not a repository — the code tools read codebase and markdown/git connectors only",
+    "connectorDisabled": "Connector {name} is disabled, so its repository cannot be read",
+    "fileNotFound": "{path} is not in the repository snapshot",
+    "notAFile": "{path} is a directory, not a file"
+  },
   "web": {
     "notFound": "Source policy {id} not found",
     "invalidPattern": "“{pattern}” is not a domain — write a host such as docs.example.com",

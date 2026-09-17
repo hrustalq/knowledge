@@ -13915,7 +13915,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.6.1",
+    "version": "0.7.1",
     "contact": {}
   },
   "tags": [],

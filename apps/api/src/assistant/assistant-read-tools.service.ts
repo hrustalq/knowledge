@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { SearchService } from '../search/search.service.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
+import { READ_TOOL_NAMES } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
 /** How much of a page one read_document call returns. */
@@ -23,13 +24,12 @@ const MAX_DOC_CHARS = 24_000;
  *
  * The write half stays where it is: a background agent proposes, and publishing
  * is the API's job (docs/features/17, "worker generates, API publishes").
+ *
+ * The name set itself is declared in the leaf beside the tool types, so the
+ * harness can build its parallel-safe union without importing this service;
+ * re-exported here because this is where the tools are implemented.
  */
-export const READ_TOOL_NAMES = new Set([
-  'search_knowledge',
-  'read_document',
-  'explore_document_graph',
-  'list_relations',
-]);
+export { READ_TOOL_NAMES };
 
 @Injectable()
 export class AssistantReadToolsService {

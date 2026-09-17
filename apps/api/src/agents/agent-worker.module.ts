@@ -7,6 +7,7 @@ import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AssistantReadToolsModule } from '../assistant/assistant-read-tools.module.js';
 import { WebResearchModule } from '../assistant/web-research.module.js';
+import { CodeResearchModule } from '../connectors/code-research/code-research.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { AgentCoreModule } from './agent-core.module.js';
@@ -58,6 +59,10 @@ import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
     // which is exactly how it came to be unreachable from here in the first
     // place.
     WebResearchModule,
+    // The repository tools (docs/features/31), imported for the same canary
+    // reason — and, unlike the web pair, about to be used: the archaeologist
+    // reads a codebase from here.
+    CodeResearchModule,
     DocumentsCoreModule,
     GlossaryCoreModule,
   ],

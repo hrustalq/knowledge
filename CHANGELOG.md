@@ -13,6 +13,30 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **The assistant can read a connected repository.** Four tools — `code_tree`,
+  `code_search`, `code_outline`, `code_read` — are offered in chat and to the
+  `researcher` and `author` agents whenever the workspace has an enabled
+  codebase or markdown/git connector. Answers cite files by path and line, and
+  the sources rail links to the file on its host. Repository contents are
+  wrapped as untrusted data, like web pages. (docs/features/31)
+
+### Fixed
+
+- **Two concurrent parses no longer share a grammar.** The tree-sitter parser
+  set its language in one async step and parsed in another; a second caller
+  could switch the language in between. Harmless while only the sequential sync
+  pipeline parsed; not harmless once the API does.
+
+### Operations
+
+- New env vars, both with defaults: `CODE_SNAPSHOT_TTL_MS` (600000) and
+  `CODE_SNAPSHOT_MAX_BYTES` (268435456) bound how long a downloaded repository
+  is held in memory for the code tools and how much a process may hold.
+
 ## [0.7.1] — 2026-09-17
 
 ### Fixed

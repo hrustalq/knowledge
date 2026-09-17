@@ -2036,6 +2036,22 @@
     "web_fetch": {
       "running": "Reading a web page",
       "done": "Read a web page"
+    },
+    "code_tree": {
+      "running": "Listing repository files",
+      "done": "Listed repository files"
+    },
+    "code_search": {
+      "running": "Searching the code",
+      "done": "Searched the code"
+    },
+    "code_outline": {
+      "running": "Outlining a source file",
+      "done": "Outlined a source file"
+    },
+    "code_read": {
+      "running": "Reading a source file",
+      "done": "Read a source file"
     }
   },
   "entityType": {

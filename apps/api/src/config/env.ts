@@ -237,6 +237,17 @@ export const envSchema = z.object({
   CONNECTOR_SYNC_BATCH: z.coerce.number().int().positive().default(25),
 
   /**
+   * Code research (docs/features/31). A repository read by the code tools is
+   * downloaded once and held in memory: this is how long a snapshot stays
+   * fresh, and how much every snapshot in one process may hold together before
+   * the least recently used one is dropped. Per process — the API and the
+   * worker each keep their own, deliberately, rather than putting a live
+   * repository's contents into a second system.
+   */
+  CODE_SNAPSHOT_TTL_MS: z.coerce.number().int().positive().default(600_000),
+  CODE_SNAPSHOT_MAX_BYTES: z.coerce.number().int().positive().default(268_435_456),
+
+  /**
    * Where this API is reachable from a browser.
    *
    * Distinct from WEB_BASE_URL, which is the SPA. Needed because an OAuth

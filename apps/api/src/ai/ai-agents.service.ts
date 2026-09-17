@@ -3,7 +3,9 @@ import type { AgentRun, AiAgent } from '@prisma/client';
 import {
   ASSISTANT_TOOL_NAMES,
   BUILT_IN_AGENT_KEYS,
+  isConnectorScopedAgent,
   type AgentFinding,
+  type AgentRunInput,
   type AgentRunStatus,
   type AgentRunSummary,
   type AgentRunTrigger,
@@ -276,12 +278,23 @@ export class AgentRunsService {
     private readonly producer: AgentProducer,
   ) {}
 
-  async start(workspaceId: string, agentKey: string, principal: Principal, note?: string): Promise<AgentRunSummary> {
+  async start(
+    workspaceId: string,
+    agentKey: string,
+    principal: Principal,
+    input: AgentRunInput = {},
+  ): Promise<AgentRunSummary> {
     const agent = await this.registry.resolve(workspaceId, agentKey);
     if (!agent.enabled) throw new BadRequestException(t('error.ai.agentDisabled', { key: agentKey }));
     if (!agent.surfaces.includes('background') || !RUNNABLE_AGENTS.has(agentKey)) {
       throw new BadRequestException(t('error.ai.agentNotBackground', { key: agentKey }));
     }
+    // A connector-scoped agent (docs/features/31) reads one repository. The
+    // scope is settled here, where the person who pressed Run can be told what
+    // is wrong, rather than in the worker where the run would simply fail:
+    // a named connector must be an enabled repository in this workspace, and
+    // an unnamed one is fine only when there is exactly one to choose.
+    const connectorId = await this.resolveScope(workspaceId, agentKey, input.connectorId);
     // Checked at enqueue and again in the processor: a queued run can wait long
     // enough for the month's quota to be spent by something else.
     await this.usage.assertWithinBudget(workspaceId, principal.userId);
@@ -308,11 +321,32 @@ export class AgentRunsService {
         trigger: 'manual',
         createdBy: principal.userId,
         locale: principal.locale,
-        input: note ? { note } : undefined,
+        input:
+          input.note || connectorId
+            ? { ...(input.note ? { note: input.note } : {}), ...(connectorId ? { connectorId } : {}) }
+            : undefined,
       },
     });
     await this.producer.enqueue(run.id);
     return toRunSummary(run, agent.name);
+  }
+
+  /**
+   * The repository a connector-scoped run reads, or null for an agent that
+   * takes no scope. Read through prisma rather than ConnectorsService — this
+   * module has no edge to the connectors layer and needs only four columns.
+   */
+  private async resolveScope(workspaceId: string, agentKey: string, requested?: string): Promise<string | null> {
+    if (!isConnectorScopedAgent(agentKey)) return null;
+    const eligible = { workspaceId, enabled: true, kind: { in: ['codebase', 'markdown-git'] } };
+    if (requested) {
+      const row = await this.prisma.connector.findFirst({ where: { id: requested, ...eligible }, select: { id: true } });
+      if (!row) throw new BadRequestException(t('error.ai.agentConnectorInvalid', { id: requested }));
+      return row.id;
+    }
+    const rows = await this.prisma.connector.findMany({ where: eligible, select: { id: true }, take: 2 });
+    if (rows.length !== 1) throw new BadRequestException(t('error.ai.agentNeedsConnector', { key: agentKey }));
+    return rows[0].id;
   }
 
   async list(
@@ -375,6 +409,7 @@ function toRunSummary(run: AgentRun, agentName: string): AgentRunSummary {
     trigger: run.trigger as AgentRunTrigger,
     status: run.status as AgentRunStatus,
     createdBy: run.createdBy,
+    input: run.input && typeof run.input === 'object' ? (run.input as AgentRunInput) : null,
     summary: run.summary,
     findings,
     findingCount: findings.length,

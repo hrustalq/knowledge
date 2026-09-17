@@ -14,10 +14,15 @@ in a repository the workspace has connected and it can open the file, quote the
 lines and cite them; an `author` turn in Agent mode can research a codebase and
 write a page about what it found.
 
-This is the first of two cuts. The second is a background agent that
-reverse-documents a codebase on its own: reads what the repository declares
-about itself, ranks the source by undeclared business logic, and proposes a
-page per finding. It builds on these tools and ships separately.
+And, on top of them, the **archaeologist**: a background agent that
+reverse-documents a codebase on its own. It reads what the repository declares
+about itself and what the workspace already says, ranks the source by
+undeclared business logic, reads the files nothing mentions, and proposes a
+page per finding. A person creates the page; a second run treats it as
+declared and moves on to what is still undocumented.
+
+The two shipped as two pull requests — the tools first, the agent on top —
+and are one feature.
 
 ## Why
 
@@ -128,6 +133,75 @@ the tool for; the whole of it is what fills the tool budget in one call.
 `../../etc/passwd` could never escape anything — but a tool result that reads
 that way is a lie about what was read. Relative, never climbing, or refused.
 
+## The archaeologist
+
+Feature 29 argued where a long research loop should live — a `RUNNABLE_AGENTS`
+case, not the workflow engine — and why: a durable row, an owner rehydrated
+into a real principal, a budget re-check at execution, progress the reaper can
+see, and a poll endpoint. This is the fifth case, and the first one that reads
+something other than pages.
+
+**Deterministic first, the curator's shape a third time.** Four stages, and
+three of them are queries a program answers with no model:
+
+- `snapshot` opens the repository through the same cache the chat tools use.
+- `docs` gathers what is *already declared*: the repository's own documents
+  (README first, then anything under a docs directory or with a documenting
+  name, then the rest — the order matters because the digest is capped, and
+  when the cap bites it should bite the file least likely to be an overview),
+  plus the workspace pages linked to the connector or under its destination.
+  One model call digests that into topics; with no model, the document
+  headings stand in and the run says so.
+- `candidates` ranks every parseable source file by how much it decides —
+  branching constructs per hundred lines, weighted by domain words beside them
+  (`validate`, `threshold`, `price`, `permission`, `expire`, `retry`…) and by
+  size — after dropping tests, fixtures, config, generated code and hidden
+  trees. The top sixty are outlined, and a file is *covered* when the declared
+  text mentions its path, its own filename (if specific enough), or two of the
+  names it exports. Two, because a single common word appears in prose about
+  anything; two exported names together are a page that is about this file.
+  The first twelve uncovered files are the candidates.
+- `reading` is the judgement: one tool loop per candidate, the file in front
+  of the model and the read and code tools beside it to follow an import or
+  check a page, returning the page it would write. Progress is the file index;
+  a budget refusal ends the run with what it has; a file that fails is a
+  warning, not a failure.
+
+**A finding is a page, and it cites lines.** The output contract asks for a
+complete page — what it decides, the rules with their exact conditions, where
+it lives, what it depends on, open questions — for a reader who will not open
+the file. The finding carries that draft, cites paths with line ranges, and
+`readExcavation` validates rather than trusts: a path must be in the snapshot
+**and** must have been opened during that loop (a path seen in a tree listing
+is not a path that was read), the URL is built server-side from the path so a
+finding cannot claim the repository while linking elsewhere, and a draft under
+two hundred characters is a sentence, not a page, and is dropped.
+
+**Create page is a person acting.** `propose` opens a merge request against
+the page a finding cites; these findings cite files, so there is nothing to
+rewrite. The sibling endpoint `create-page` publishes the draft as a new page
+under the connector's destination — immediately, attributed to whoever
+pressed the button, the way `create_document` publishes — with `source:` in
+its frontmatter pointing at the first cited file and `generatedBy` naming the
+agent, so a reader can tell a page a model drafted from one a person wrote.
+The finding then records the page it became, which is what swaps the button
+for a link. No model call: the worker generates, the API publishes.
+
+**Re-running converges.** The page lands under the destination the next run
+reads as declared, so the file it documents is covered and not proposed twice.
+A page that drifts from the code it describes is the curator's problem, not
+this agent's.
+
+**The run is scoped to one repository, and the scope is settled at enqueue.**
+`StartAgentRunDto.connectorId` names it; the API refuses a connector-scoped
+agent without a connector it can resolve, and the web asks for one before
+pressing Run — both through `CONNECTOR_SCOPED_AGENT_KEYS`, one predicate, so
+the dialog and the 400 cannot disagree. With exactly one repository connected
+the choice is implied, which is also how a scheduled run (which carries no
+scope) finds its repository. Whatever `connectorId` the model writes into a
+tool call, the executor overrides it with the run's — the loop reads one
+repository.
+
 ## Surface
 
 | tool           | arguments                                                   | returns                                                            |
@@ -151,13 +225,28 @@ CODE_SNAPSHOT_TTL_MS=600000        # how long a downloaded repository stays fres
 CODE_SNAPSHOT_MAX_BYTES=268435456  # every snapshot in one process, together
 ```
 
+The agent's surface:
+
+```
+POST /v1/ai/agents/archaeologist/run      editor   body { workspaceId, connectorId?, note? }
+POST /v1/ai/agents/runs/:id/findings/:index/create-page   editor   → { documentId, title }
+```
+
+`AgentFinding.draft` (`{ title, markdown }`) is the new field; `AgentRunSummary`
+now carries `input` so the Runs tab can say which repository a run read. Stage
+values are `snapshot`, `docs`, `candidates`, `reading`.
+
 ## Deliberately deferred
 
-- **The archaeologist.** The background agent this feature exists for: reads
-  the repository's docs and the pages already under the connector's
-  destination, ranks source files by undeclared business logic, reads them with
-  these tools, and proposes a draft page per finding for a person to create.
-  Next cut.
+- **A scope column on schedules.** A scheduled run carries only a note, so a
+  scheduled archaeologist works in a one-repository workspace and fails, with
+  the reason, in any other. `scheduleConnectorId` is the obvious column and
+  earns itself when someone schedules one.
+- **Batching by module.** One loop per file is the honest unit today; a module
+  with six small files that share one rule would be better read together.
+- **An evaluator pass.** Feature 29's separate generate-and-evaluate prompts
+  would raise the floor on draft quality; they belong after there are drafts
+  to measure.
 - **MCP tools.** `knowledge_code_*` would serve agent clients that already hold
   the repository they are working in.
 - **A `kind: 'code'` source.** The blob URL is the right identity today; a
@@ -189,3 +278,11 @@ files implement something the repository does. The trail should show
 sources rail should carry `github.com` chips linking to the blob at those lines.
 Disable the connector and ask again: the next tool call is refused with the
 reason, not answered from a stale snapshot.
+
+The agent's own spec is `test/archaeology.spec.ts`: document selection and
+order, candidate filtering and ranking, the coverage rule, and everything
+`readExcavation` refuses. End to end: run the archaeologist against the same
+connector and watch the stages advance; every finding should carry a draft
+title and cite `github.com` lines; **Create page** on one should put a page
+under the connector's destination with `source:` frontmatter and turn the
+button into a link; a second run should not propose that file again.

@@ -23,6 +23,8 @@
   "architectDesc": "Turns a description of a chain into a workflow definition to review.",
   "cartographer": "Cartographer",
   "cartographerDesc": "Proposes the relations a page should declare, grounded in what it says.",
+  "archaeologist": "Archaeologist",
+  "archaeologistDesc": "Reads a connected repository and drafts pages for the business logic no document declares.",
   "route": {
     "explicit": "Explicitly requested.",
     "disabled": "disabled",
@@ -77,7 +79,15 @@
     "nothingNew": "Scanned {pages}; every term they use is already defined.",
     "summary": "Scanned {pages} and proposes {terms}."
   },
+  "archaeology": {
+    "noModel": "No model is configured for the archaeologist, so the repository was inventoried and nothing was read.",
+    "digestSkipped": "The declared-knowledge digest could not be written, so the raw document headings were used instead.",
+    "noCandidates": "Read {docs} documents and {pages} pages for \"{repository}\"; every source file that decides something is already covered.",
+    "budgetSpent": "Stopped after {files} of {candidates} files: the workspace AI budget is spent.",
+    "summary": "Read {docs} documents and {pages} pages for \"{repository}\", then {files} source files nothing declares; proposes {findings} new pages."
+  },
   "warning": {
+    "fileNotRead": "{path} could not be read: {error}",
     "graphUnreadableOrphans": "The relation graph could not be read, so the orphan check was skipped.",
     "graphUnreadableModelOnly": "The relation graph could not be read, so only the model half ran.",
     "modelPassFailed": "The model pass failed: {error}",

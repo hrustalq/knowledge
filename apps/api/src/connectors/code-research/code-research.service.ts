@@ -7,7 +7,7 @@ import { wrapUntrusted } from '../../common/untrusted.js';
 import { t } from '../../i18n/t.js';
 import { CODE_TOOLS } from '../../assistant/assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from '../../assistant/assistant-tool-types.js';
-import { extractImports, extractSymbols } from '../adapters/code-symbols.js';
+import { extractImports, extractSymbols, type CodeSymbol } from '../adapters/code-symbols.js';
 import { languageForPath, TreeSitterService } from '../adapters/tree-sitter.service.js';
 import { RepoSnapshotService, type RepoSnapshot, type RepoSummary } from './repo-snapshot.service.js';
 
@@ -331,9 +331,25 @@ export class CodeResearchService {
 
   // ---- code_outline ---------------------------------------------------------
 
+  /**
+   * What a file declares, as data — shared by the tool and by the archaeologist,
+   * which needs the exported names to decide whether a file is documented.
+   * Null when there is no grammar for the file or the parse failed.
+   */
+  async outlineFile(snapshot: RepoSnapshot, path: string): Promise<{ symbols: CodeSymbol[]; imports: string[] } | null> {
+    const language = languageForPath(path);
+    const bytes = snapshot.files.get(path);
+    if (!language || !bytes) return null;
+    const text = Buffer.from(bytes).toString('utf8');
+    return this.treeSitter.withTree(language, text, (tree) => ({
+      symbols: extractSymbols(language, tree),
+      imports: extractImports(language, tree),
+    }));
+  }
+
   private async outline(snapshot: RepoSnapshot, args: Record<string, unknown>): Promise<AssistantToolResult> {
     const path = normalizeRepoPath(typeof args.path === 'string' ? args.path : '');
-    const bytes = this.requireFile(snapshot, path);
+    this.requireFile(snapshot, path);
     const language = languageForPath(path);
     if (!language) {
       return this.ok('code_outline', {
@@ -344,11 +360,7 @@ export class CodeResearchService {
         note: 'No parser for this file type — read it with code_read instead.',
       });
     }
-    const text = Buffer.from(bytes).toString('utf8');
-    const parsed = await this.treeSitter.withTree(language, text, (tree) => ({
-      symbols: extractSymbols(language, tree),
-      imports: extractImports(language, tree),
-    }));
+    const parsed = await this.outlineFile(snapshot, path);
     if (!parsed) {
       return this.ok('code_outline', {
         path,

@@ -366,6 +366,42 @@ Return only the markdown. If the image contains no legible text, return an empty
   // produces a graph the compiler rejects — which the caller then has to
   // explain away in prose. The JSON shape, the category list and the editing
   // rules are appended by WorkflowDraftService, which owns them.
+  /**
+   * The reverse-documenter (docs/features/31).
+   *
+   * Background only, scoped to one repository connector, and the curator's
+   * shape a third time: which files the repository has, which of them decide
+   * something, and which of those no document or page mentions are all
+   * *queries* — the worker answers them in code. The model is spent on the
+   * half that is judgement: what a file decides, said for a reader who has not
+   * opened it. Every finding carries a draft page and cites the lines it rests
+   * on; a person creates the page, the agent never does.
+   */
+  archaeologist: {
+    key: 'archaeologist',
+    name: 'agent.archaeologist',
+    description: 'agent.archaeologistDesc',
+    instructions:
+      'You document the business logic of a codebase that no document declares. You are given a digest of what ' +
+      'the repository\'s own documents and the workspace\'s pages already say, and one source file at a time ' +
+      'that none of them mention. Read the file with the code tools before you say anything about it, and ' +
+      'follow what it imports when a rule is only understandable with it. ' +
+      'A rule is a decision the code makes — a validation, a threshold, a state transition, a price, an access ' +
+      'check, a retry, a side effect that happens under a condition — never what a function is named or that ' +
+      'a class exists. Write each page for a reader who has not opened the file and will not: what this code ' +
+      'decides, the exact conditions, where it lives, what it depends on, and what is unclear. ' +
+      'Cite the path and lines for every claim. If the file decides nothing a reader needs to know, or the ' +
+      'digest already covers it, return no findings — a page nobody needed costs a reviewer more than a ' +
+      'missing one. You never edit anything; a person creates the pages you draft.',
+    tools: [...READ_TOOLS, ...CODE_TOOLS],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['background'],
+    // 'tools' is a preference, not a prerequisite — the same degrade rule as
+    // the curator: a model without tool support is shown the file instead.
+    requires: ['json', 'tools'],
+  },
+
   architect: {
     key: 'architect',
     name: 'agent.architect',

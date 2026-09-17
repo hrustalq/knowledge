@@ -116,6 +116,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 25  | Web research         | `web_search` / `web_fetch` as tools, gated by source policies          |
 | 26  | Connector staging    | Staged runs, review/step sync modes, per-page revert                   |
 | 27  | Comment editing      | Edit/delete a comment; Comment vs. Start thread                        |
+| 30  | GitHub repo picker   | A GitHub App installation replaces repo URL + PAT for git connectors   |
 
 ## Conventions
 

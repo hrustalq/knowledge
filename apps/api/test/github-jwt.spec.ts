@@ -3,7 +3,7 @@ import { generateKeyPairSync, createVerify, randomBytes } from 'node:crypto';
 import { appJwt, parsePrivateKey, signState, verifyState, type OauthState } from '../src/connectors/github/github-jwt.js';
 
 /**
- * The signing half of the GitHub App integration (docs/features/28).
+ * The signing half of the GitHub App integration (docs/features/30).
  *
  * `verifyState` is the only thing standing between the `@Public()` OAuth
  * callback and a forged installation — without it anyone who could reach that

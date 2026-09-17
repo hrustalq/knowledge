@@ -8,7 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { signState, verifyState, type OauthState } from './github-jwt.js';
 
 /**
- * The user half of the GitHub integration (docs/features/28).
+ * The user half of the GitHub integration (docs/features/30).
  *
  * This exists for exactly one reason: the account switcher must show only the
  * installations *this person* can reach. No App-level credential can answer

@@ -2,7 +2,7 @@ import { createHmac, createSign, timingSafeEqual } from 'node:crypto';
 
 /**
  * The two pieces of signing the GitHub App needs, as pure functions
- * (docs/features/28).
+ * (docs/features/30).
  *
  * Kept out of the service so they can be tested without Nest and without a
  * network — which is the only way the `state` round trip below is worth

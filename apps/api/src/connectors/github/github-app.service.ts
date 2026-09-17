@@ -5,7 +5,7 @@ import type { Env } from '../../config/env.js';
 import { appJwt, parsePrivateKey } from './github-jwt.js';
 
 /**
- * The App half of the GitHub integration (docs/features/28).
+ * The App half of the GitHub integration (docs/features/30).
  *
  * This is what a *sync* authenticates as. It is deliberately separate from the
  * user's OAuth identity in `GithubOauthService`: an installation token is

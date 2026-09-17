@@ -225,7 +225,7 @@ export class ConnectorsService {
    * and live only for the duration of the call.
    */
   /**
-   * The credential an adapter will actually dial with (docs/features/28).
+   * The credential an adapter will actually dial with (docs/features/30).
    *
    * A connector created through the repository picker holds no secret of its
    * own: it names a GitHub App installation, and the token is minted per run

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { GithubAppService } from './github-app.service.js';
 
 /**
- * The App credential, alone (docs/features/28).
+ * The App credential, alone (docs/features/30).
  *
  * Split out to the smallest module that works because `ConnectorsService` —
  * which the **worker** loads — now resolves a connector's credential through

@@ -316,7 +316,7 @@ export interface ConnectorTestResponse {
 }
 
 // ---------------------------------------------------------------------------
-// GitHub App repository picker (docs/features/28)
+// GitHub App repository picker (docs/features/30)
 // ---------------------------------------------------------------------------
 
 /**

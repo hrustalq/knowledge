@@ -248,7 +248,7 @@ export const envSchema = z.object({
   API_PUBLIC_URL: z.string().default('http://localhost:3000'),
 
   /**
-   * GitHub App backing the repository picker (docs/features/28).
+   * GitHub App backing the repository picker (docs/features/30).
    *
    * Empty GITHUB_APP_ID is the off switch, and it is fail-soft in the same
    * spirit as SETTINGS_ENCRYPTION_KEY='': the picker is not offered, and every

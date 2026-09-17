@@ -16,7 +16,7 @@ import { GithubBrowseService } from './github-browse.service.js';
 import { GithubOauthService } from './github-oauth.service.js';
 
 /**
- * The repository picker's own surface (docs/features/28).
+ * The repository picker's own surface (docs/features/30).
  *
  * A separate controller from `ConnectorsController` rather than more routes on
  * it, for two reasons that both matter. The first is routing: every path here

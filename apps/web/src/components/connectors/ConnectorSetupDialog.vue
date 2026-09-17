@@ -47,6 +47,9 @@ import {
   type SetupContext,
 } from './setup-machines'
 
+import GithubBranchPicker from './GithubBranchPicker.vue'
+import GithubRepoPicker from './GithubRepoPicker.vue'
+
 const props = defineProps<{ open: boolean; editing: ConnectorSummary | null }>()
 const emit = defineEmits<{ 'update:open': [boolean] }>()
 
@@ -78,6 +81,35 @@ const fieldsFor = computed(() =>
     .map((key) => info.value?.fields.find((f) => f.key === key))
     .filter((f): f is NonNullable<typeof f> => !!f),
 )
+
+/** The two kinds that download a repository archive (docs/features/27, 28). */
+const isGitKind = computed(() => kind.value === 'codebase' || kind.value === 'markdown-git')
+
+/**
+ * The installation this connector authenticates as, if any.
+ *
+ * Empty for a connector configured by pasting a token, which is what keeps the
+ * credential box on screen for it. Read from config rather than held locally so
+ * a resumed snapshot and an edited connector both behave.
+ */
+const pickedInstallation = computed(() => context.value?.config.githubInstallationId ?? '')
+
+/**
+ * One repository pick writes three keys at once.
+ *
+ * The branch is seeded with the repository's real default rather than left
+ * empty, so the next step opens showing what will actually be read — the whole
+ * point of #28. It stays editable, and clearing it means "follow the default",
+ * which the API honours.
+ */
+function applyRepoPick(pick: { repoUrl: string; installationId: string; defaultBranch: string }) {
+  setField('repoUrl', pick.repoUrl)
+  setField('githubInstallationId', pick.installationId)
+  setField('branch', '')
+  // A picked repository needs no pasted token; clearing it stops a stale one
+  // being saved alongside an installation that supersedes it.
+  patch({ credential: '' })
+}
 
 // --- the services the machine invokes ------------------------------------
 
@@ -324,22 +356,62 @@ function startOver() {
 
         <!-- 2..n · The kind's own questions -------------------------------->
         <div v-else-if="state === 'configuring'" class="space-y-4">
-          <label v-for="field in fieldsFor" :key="field.key" class="block space-y-1.5">
-            <span class="text-sm font-medium">
-              {{ field.label }}
-              <span v-if="!field.required" class="text-muted-foreground font-normal">
-                — {{ t('connectors.optional') }}
-              </span>
-            </span>
-            <Input
-              :model-value="context?.config[field.key] ?? ''"
-              :placeholder="field.placeholder"
-              @update:model-value="setField(field.key, String($event))"
-            />
-            <span v-if="field.help" class="text-muted-foreground block text-xs">{{ field.help }}</span>
-          </label>
+          <template v-for="field in fieldsFor" :key="field.key">
+            <!-- The repository field becomes a picker for the two git kinds
+                 (docs/features/30). It falls back to its own text input when no
+                 GitHub App is registered, which is what keeps this deployment-
+                 optional rather than a hard requirement. -->
+            <GithubRepoPicker
+              v-if="field.key === 'repoUrl' && isGitKind"
+              :workspace-id="workspaceId"
+              :repo-url="context?.config.repoUrl ?? ''"
+              :installation-id="context?.config.githubInstallationId ?? ''"
+              @pick="applyRepoPick"
+            >
+              <template #fallback>
+                <label class="block space-y-1.5">
+                  <span class="text-sm font-medium">{{ field.label }}</span>
+                  <Input
+                    :model-value="context?.config[field.key] ?? ''"
+                    :placeholder="field.placeholder"
+                    @update:model-value="setField(field.key, String($event))"
+                  />
+                  <span v-if="field.help" class="text-muted-foreground block text-xs">{{ field.help }}</span>
+                </label>
+              </template>
+            </GithubRepoPicker>
 
-          <label v-if="stepMeta?.credential" class="block space-y-1.5">
+            <!-- Likewise the branch, but only once a repository has been picked
+                 through an installation: without one there is nothing to list. -->
+            <GithubBranchPicker
+              v-else-if="field.key === 'branch' && isGitKind && pickedInstallation"
+              :workspace-id="workspaceId"
+              :installation-id="pickedInstallation"
+              :repo-url="context?.config.repoUrl ?? ''"
+              :model-value="context?.config.branch ?? ''"
+              @update:model-value="setField('branch', $event)"
+            />
+
+            <label v-else class="block space-y-1.5">
+              <span class="text-sm font-medium">
+                {{ field.label }}
+                <span v-if="!field.required" class="text-muted-foreground font-normal">
+                  — {{ t('connectors.optional') }}
+                </span>
+              </span>
+              <Input
+                :model-value="context?.config[field.key] ?? ''"
+                :placeholder="field.placeholder"
+                @update:model-value="setField(field.key, String($event))"
+              />
+              <span v-if="field.help" class="text-muted-foreground block text-xs">{{ field.help }}</span>
+            </label>
+          </template>
+
+          <!-- Hidden once an installation is carrying the credential: asking for
+               a token that will never be read is how a form teaches the wrong
+               thing about how it works. -->
+          <label v-if="stepMeta?.credential && !pickedInstallation" class="block space-y-1.5">
             <span class="text-sm font-medium">{{ t('connectors.credential') }}</span>
             <Input
               :model-value="context?.credential ?? ''"

@@ -1620,7 +1620,7 @@ model NotificationPreference {
   @@map("notification_preferences")
 }
 
-/// A GitHub App installation on an account or organisation (docs/features/28).
+/// A GitHub App installation on an account or organisation (docs/features/30).
 ///
 /// Recorded per workspace rather than globally: an installation is what grants
 /// this workspace's connectors read access to a set of repositories, and two
@@ -1663,7 +1663,7 @@ model GithubInstallation {
   @@map("github_installations")
 }
 
-/// One person's GitHub OAuth identity (docs/features/28).
+/// One person's GitHub OAuth identity (docs/features/30).
 ///
 /// Distinct from the installation above, and deliberately so: the installation
 /// is what a *sync* authenticates as, and it outlives whoever configured it.

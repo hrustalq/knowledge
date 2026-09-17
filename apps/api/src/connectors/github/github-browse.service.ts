@@ -10,7 +10,7 @@ import { GithubAppService, toAccount } from './github-app.service.js';
 import { GithubOauthService } from './github-oauth.service.js';
 
 /**
- * What the repository picker reads (docs/features/28).
+ * What the repository picker reads (docs/features/30).
  *
  * Everything here acts as the **user**, not as the App. `GET /app/installations`
  * would list every account the App is installed on, across every customer — so

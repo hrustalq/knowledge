@@ -11,6 +11,7 @@
  * the unbounded one (tags, which are searched server-side).
  */
 import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { refDebounced, useVirtualList } from '@vueuse/core'
 import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
 import { Check, Loader2, Search, X } from 'lucide-vue-next'
@@ -34,6 +35,16 @@ const props = withDefaults(
     options?: AutocompleteOption[]
     /** Async loader; receives the debounced query. Takes precedence over `options`. */
     load?: (query: string) => Promise<AutocompleteOption[]>
+    /**
+     * Shortest query worth sending upstream. 0 (the default) searches from the
+     * first keystroke, which is right for a bounded roster.
+     *
+     * Set it where each query is a fan-out over a remote API: one or two
+     * characters match most of a corpus, so the request is both expensive and
+     * useless. An empty query is always allowed through — that is "show me the
+     * first page", not a search — and only 1..min-1 is held back.
+     */
+    minQueryLength?: number
     /** Shown when there is nothing to pick at all (not merely no match). */
     emptyHint?: string
     /**
@@ -91,6 +102,18 @@ const activeIndex = ref(0)
 const rootEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
 
+const { t } = useI18n()
+
+/**
+ * A query too short to send, as opposed to no query at all. Drives both the
+ * skipped fetch and the message, so the two cannot disagree.
+ */
+const belowMin = computed(() => {
+  const n = props.minQueryLength ?? 0
+  const len = query.value.trim().length
+  return n > 0 && len > 0 && len < n
+})
+
 let seq = 0
 
 /** Async mode fetches; static mode filters locally. */
@@ -98,6 +121,14 @@ watch(
   [debouncedQuery, open],
   async ([q, isOpen]) => {
     if (!props.load || !isOpen) return
+    // Below the threshold the previous results are cleared rather than left
+    // standing: showing the last query's matches under a newer query is a
+    // worse lie than showing nothing.
+    if (belowMin.value) {
+      loaded.value = []
+      loading.value = false
+      return
+    }
     const ticket = ++seq
     loading.value = true
     try {
@@ -144,8 +175,18 @@ const selectedOptions = computed(() =>
   }),
 )
 
-const isEmptyRoster = computed(
-  () => !props.load && (props.options?.length ?? 0) === 0,
+/**
+ * Nothing to pick *at all*, as opposed to nothing matching this query.
+ *
+ * Previously `!props.load && ...`, which made it unreachable for an async
+ * control — so a loader that legitimately returned nothing fell through to
+ * "no match for X" and blamed the query for an empty roster. In async mode the
+ * roster is empty when an unfiltered load came back with nothing.
+ */
+const isEmptyRoster = computed(() =>
+  props.load
+    ? !loading.value && query.value.trim() === '' && loaded.value.length === 0
+    : (props.options?.length ?? 0) === 0,
 )
 
 /**
@@ -378,7 +419,7 @@ const listId = useId()
         :aria-expanded="open"
         :aria-controls="listId"
         :placeholder="placeholder"
-        :disabled="disabled || isEmptyRoster"
+        :disabled="disabled || (!load && isEmptyRoster)"
         :class="bare
           ? 'h-6 w-full bg-transparent pr-6 text-xs outline-none placeholder:text-muted-foreground disabled:opacity-50'
           : 'h-8 w-full rounded-md border bg-background pl-8 pr-7 text-xs outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/50 disabled:opacity-50'"
@@ -480,14 +521,23 @@ const listId = useId()
               v-if="matches.length === 0 && !loading"
               class="px-3 py-1.5 text-xs text-muted-foreground"
             >
-              No match for “{{ query }}”.
+              <template v-if="belowMin">
+                {{ t('common.typeAtLeast', { n: props.minQueryLength }) }}
+              </template>
+              <template v-else-if="isEmptyRoster && emptyHint">{{ emptyHint }}</template>
+              <template v-else-if="query.trim() !== ''">
+                {{ t('common.noMatchFor', { query: `“${query}”` }) }}
+              </template>
+              <template v-else>{{ emptyHint ?? t('common.none') }}</template>
             </p>
           </div>
         </div>
       </Transition>
     </Teleport>
 
-    <p v-if="isEmptyRoster && emptyHint" class="text-[11px] leading-snug text-muted-foreground">
+    <!-- Static mode only. An async control says the same thing inside its open
+         list, and rendering both would print the hint twice. -->
+    <p v-if="!load && isEmptyRoster && emptyHint" class="text-[11px] leading-snug text-muted-foreground">
       {{ emptyHint }}
     </p>
 

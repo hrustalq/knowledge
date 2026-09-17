@@ -40,7 +40,8 @@
     "continue": "Continue",
     "send": "Send",
     "tooLarge": "That is too large to send. Split it up, or attach it as a file instead of pasting it.",
-    "unknownError": "Something went wrong. Try again."
+    "unknownError": "Something went wrong. Try again.",
+    "typeAtLeast": "Type at least {n} characters"
   },
   "page": {
     "empty": "Nothing here yet",
@@ -456,7 +457,9 @@
       "branchPinned": "Pinned to {branch}. It will stop syncing if that branch is deleted.",
       "branchFollows": "Following the default branch, currently {branch}.",
       "branchHint": "Leave empty to follow whatever the repository's default branch is.",
-      "otherAccountHint": "Searching only the selected account. If the repository belongs to another one, switch accounts above."
+      "otherAccountHint": "Searching only the selected account. If the repository belongs to another one, switch accounts above.",
+      "noneGranted": "This installation has no repositories.",
+      "noneGrantedHint": "The GitHub App is installed on this account but was granted access to zero repositories, so there is nothing to search. Choose which ones it may read."
     }
   },
   "workflow": {

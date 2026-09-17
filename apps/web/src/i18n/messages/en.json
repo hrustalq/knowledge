@@ -455,7 +455,8 @@
       "isDefault": "default",
       "branchPinned": "Pinned to {branch}. It will stop syncing if that branch is deleted.",
       "branchFollows": "Following the default branch, currently {branch}.",
-      "branchHint": "Leave empty to follow whatever the repository's default branch is."
+      "branchHint": "Leave empty to follow whatever the repository's default branch is.",
+      "otherAccountHint": "Searching only the selected account. If the repository belongs to another one, switch accounts above."
     }
   },
   "workflow": {

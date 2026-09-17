@@ -13,6 +13,18 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.7.1] — 2026-09-17
+
+### Fixed
+
+- **Switching GitHub account in the repository picker reloads the list.** The
+  search control refetches only when its query changes, and the account was read
+  through a closure it could not see change — so picking a different account
+  left the previous one's repositories on screen. With the list scoped to one
+  account and no refresh on switching, searching for a repository held by the
+  other account looked like search being broken. The picker now also says which
+  account it is searching. (#33)
+
 ## [0.7.0] — 2026-09-17
 
 ### Added
@@ -385,7 +397,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.7.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/hrustalq/knowledge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/hrustalq/knowledge/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/hrustalq/knowledge/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/hrustalq/knowledge/compare/v0.5.0...v0.6.0

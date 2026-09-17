@@ -23,6 +23,13 @@ in the pull request that introduces them — see
   codebase or markdown/git connector. Answers cite files by path and line, and
   the sources rail links to the file on its host. Repository contents are
   wrapped as untrusted data, like web pages. (docs/features/31)
+- **The archaeologist reverse-documents a repository.** A new background agent,
+  scoped to one codebase or markdown/git connector: it reads what the
+  repository's documents and the workspace's pages already declare, ranks the
+  source files by how much they decide, reads the ones nothing mentions, and
+  proposes a complete page per finding, citing the lines it rests on. **Create
+  page** in the Runs tab publishes a draft under the connector's destination;
+  a second run treats that page as declared. (docs/features/31)
 
 ### Fixed
 

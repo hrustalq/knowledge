@@ -1862,6 +1862,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/agents/runs/{id}/findings/{index}/create-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create the page a finding drafted, under the connector's destination */
+        post: operations["AiController_createPageFromFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/agents/runs/{id}/findings/{index}/propose": {
         parameters: {
             query?: never;
@@ -3354,6 +3371,11 @@ export interface components {
             workspaceId: string;
             /** @description Extra instruction seeded into this run only. */
             note?: string;
+            /**
+             * Format: uuid
+             * @description The repository connector a connector-scoped agent (the archaeologist) reads. Required when the workspace has more than one; the only one is used otherwise.
+             */
+            connectorId?: string;
         };
         RouteAgentDto: {
             /** Format: uuid */
@@ -10017,6 +10039,50 @@ export interface operations {
                 "application/json": components["schemas"]["StartAgentRunDto"];
             };
         };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_createPageFromFinding: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                /** @description Position in the run's findings array */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             201: {
                 headers: {

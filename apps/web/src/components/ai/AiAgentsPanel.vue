@@ -9,10 +9,12 @@ import { toast } from 'vue-sonner'
 import { Play, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
 import {
   ASSISTANT_TOOL_NAMES,
+  isConnectorScopedAgent,
   type AiAgentSummary,
   type AiProviderSummary,
   type ListAiAgentsResponse,
   type ListAiProvidersResponse,
+  type ListConnectorsResponse,
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
@@ -54,6 +56,23 @@ const deleteAgent = useApiMutation('delete', '/v1/ai/agents/{key}', { invalidate
 const runAgent = useApiMutation('post', '/v1/ai/agents/{key}/run', {
   invalidates: () => [['/v1/ai/agents'], ['/v1/ai/agents/runs']],
 })
+
+/**
+ * The repositories a connector-scoped agent can read (docs/features/31). The
+ * archaeologist runs against one; with exactly one connected it is implied,
+ * with several the person picks, with none the button says what to connect.
+ * `isConnectorScopedAgent` is the same predicate the API refuses with, so the
+ * dialog and the 400 cannot disagree about which agents need a pick.
+ */
+const connectorsQuery = useQuery(apiQueryOptions('/v1/connectors', { query: { workspaceId } }))
+const repositories = computed(() =>
+  ((connectorsQuery.data.value as ListConnectorsResponse | undefined)?.connectors ?? []).filter(
+    (c) => c.enabled && (c.kind === 'codebase' || c.kind === 'markdown-git'),
+  ),
+)
+const runOpen = ref(false)
+const runTarget = ref<AiAgentSummary | null>(null)
+const runConnectorId = ref('')
 
 /**
  * reka-ui reserves the empty string for "nothing selected", so "follow the
@@ -176,9 +195,30 @@ async function toggle(agent: AiAgentSummary, enabled: boolean) {
 }
 
 async function runNow(agent: AiAgentSummary) {
+  if (isConnectorScopedAgent(agent.key)) {
+    if (repositories.value.length === 0) {
+      toast.error(t('ai.agents.noRepositories'))
+      return
+    }
+    if (repositories.value.length > 1) {
+      runTarget.value = agent
+      runConnectorId.value = repositories.value[0].id
+      runOpen.value = true
+      return
+    }
+    return start(agent, repositories.value[0].id)
+  }
+  return start(agent)
+}
+
+async function start(agent: AiAgentSummary, connectorId?: string) {
   try {
-    await runAgent.mutateAsync({ path: { key: agent.key }, body: { workspaceId } })
+    await runAgent.mutateAsync({
+      path: { key: agent.key },
+      body: { workspaceId, ...(connectorId ? { connectorId } : {}) },
+    })
     toast.success(t('ai.agents.runStarted', { name: agent.name }))
+    runOpen.value = false
   } catch (e) {
     // The server owns the refusals a client cannot check for itself — a run
     // already in flight, a spent budget, a disabled provider.
@@ -298,6 +338,34 @@ async function remove(agent: AiAgentSummary) {
         </TableRow>
       </TableBody>
     </Table>
+
+    <!-- Which repository a connector-scoped run reads (docs/features/31).
+         Opened only when there is a real choice; one repository is implied. -->
+    <Dialog v-model:open="runOpen">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{{ t('ai.agents.pickConnector', { name: runTarget?.name ?? '' }) }}</DialogTitle>
+          <DialogDescription>{{ t('ai.agents.pickConnectorHint') }}</DialogDescription>
+        </DialogHeader>
+        <Select v-model="runConnectorId">
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="r in repositories" :key="r.id" :value="r.id">
+              {{ r.name }} <span class="text-muted-foreground">· {{ r.config.repoUrl }}</span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <DialogFooter>
+          <Button variant="outline" @click="runOpen = false">{{ t('cancel') }}</Button>
+          <Button
+            :disabled="!runConnectorId || runAgent.isPending.value"
+            @click="runTarget && start(runTarget, runConnectorId)"
+          >
+            <Play class="size-3.5" /> {{ t('ai.agents.runNow') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog v-model:open="open">
       <DialogContent class="sm:max-w-2xl">

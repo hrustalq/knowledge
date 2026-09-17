@@ -6,8 +6,8 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { CircleAlert, CircleCheck, Clock, GitPullRequest, Link2, Loader2, TriangleAlert } from 'lucide-vue-next'
-import type { AgentFinding, AgentRunSummary, ListAgentRunsResponse } from '@knowledge/contracts'
+import { CircleAlert, CircleCheck, Clock, FilePlus2, GitPullRequest, Link2, Loader2, TriangleAlert } from 'lucide-vue-next'
+import type { AgentFinding, AgentRunSummary, ListAgentRunsResponse, ListConnectorsResponse } from '@knowledge/contracts'
 import { toast } from 'vue-sonner'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { Button } from '@/components/ui/button'
@@ -47,24 +47,61 @@ const proposeFinding = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/
 const applyRelations = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/apply-relations', {
   invalidates: () => [['/v1/ai/agents/runs'], ['/v1/merge-requests'], ['/v1/documents']],
 })
+const createPage = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/create-page', {
+  invalidates: () => [['/v1/ai/agents/runs'], ['/v1/documents']],
+})
 /** Which finding is mid-flight, so only its own button spins. */
 const proposing = ref<string | null>(null)
 
 /**
- * Two verbs, because there are two kinds of fix.
+ * Which repository a run read (docs/features/31), by name. The run row carries
+ * only the connector id; the connectors list is one query the settings page
+ * already makes, and an id nobody can read is not a label.
+ */
+const connectorsQuery = useQuery(apiQueryOptions('/v1/connectors', { query: { workspaceId } }))
+const repositoryName = (run: AgentRunSummary): string | null => {
+  const id = run.input?.connectorId
+  if (!id) return null
+  const rows = (connectorsQuery.data.value as ListConnectorsResponse | undefined)?.connectors ?? []
+  return rows.find((c) => c.id === id)?.name ?? null
+}
+
+/**
+ * Three verbs, because there are three kinds of fix.
  *
  * `propose` rewrites page prose, and the server refuses it for a finding whose
- * fix is a relation — an orphan page has nothing to rewrite. Those now have a
- * verb of their own: a finding that carries relations is *applied*, editing only
- * the page's frontmatter. Until this existed, an orphan finding could not be
- * acted on at all.
+ * fix is a relation — an orphan page has nothing to rewrite. Those have a verb
+ * of their own: a finding that carries relations is *applied*, editing only the
+ * page's frontmatter. And a finding that carries a draft (docs/features/31)
+ * cites source files, not pages, so there is nothing to rewrite or declare — it
+ * is *created*, as a new page. A created finding then cites its page, which
+ * is why a draft finding is never proposable even once it has a document.
  */
 function canPropose(f: AgentFinding): boolean {
-  return !f.mergeRequestId && f.kind !== 'orphan' && f.kind !== 'relation' && f.documentIds.length > 0
+  return !f.mergeRequestId && !f.draft && f.kind !== 'orphan' && f.kind !== 'relation' && f.documentIds.length > 0
 }
 
 function canApplyRelations(f: AgentFinding): boolean {
   return !f.mergeRequestId && (f.relations?.length ?? 0) > 0 && f.documentIds.length > 0
+}
+
+function canCreatePage(f: AgentFinding): boolean {
+  return !!f.draft && f.documentIds.length === 0 && !f.proposedAt
+}
+
+async function create(run: AgentRunSummary, index: number) {
+  proposing.value = `${run.id}:${index}`
+  try {
+    const res = (await createPage.mutateAsync({
+      path: { id: run.id, index },
+      query: { workspaceId },
+    })) as { documentId: string; title: string }
+    toast.success(t('ai.runs.pageCreated', { title: res.title }))
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    proposing.value = null
+  }
 }
 
 async function propose(run: AgentRunSummary, index: number) {
@@ -157,6 +194,7 @@ const severityClass = (f: AgentFinding) =>
             <span class="flex flex-wrap items-center gap-2">
               <span class="font-medium">{{ run.agentName }}</span>
               <Badge variant="secondary" class="font-normal">{{ t(`ai.runs.trigger.${run.trigger}`) }}</Badge>
+              <Badge v-if="repositoryName(run)" variant="outline" class="font-normal">{{ repositoryName(run) }}</Badge>
               <span v-if="run.findingCount" class="text-muted-foreground text-xs">
                 {{ t('ai.runs.findings', { count: run.findingCount }) }}
               </span>
@@ -199,6 +237,12 @@ const severityClass = (f: AgentFinding) =>
             <div class="min-w-0">
               <p class="text-sm font-medium">{{ f.title }}</p>
               <p class="text-muted-foreground text-xs leading-relaxed">{{ f.detail }}</p>
+              <!-- The page this finding would become (docs/features/31), named
+                   so a reader knows what Create page creates before pressing it.
+                   Once created, the page link below replaces it. -->
+              <p v-if="f.draft && f.documentIds.length === 0" class="mt-1 text-xs">
+                <FilePlus2 class="mr-1 inline size-3 align-[-2px]" />{{ t('ai.runs.proposedPage', { title: f.draft.title }) }}
+              </p>
               <!-- The citation is the point: a finding that names no page is
                    dropped server-side, so every one of these resolves. -->
               <p class="mt-1 flex flex-wrap gap-1">
@@ -250,6 +294,17 @@ const severityClass = (f: AgentFinding) =>
                 <Loader2 v-if="proposing === `${run.id}:${i}`" class="size-3.5 animate-spin" />
                 <GitPullRequest v-else class="size-3.5" />
                 {{ t('ai.runs.propose') }}
+              </Button>
+              <Button
+                v-else-if="canCreatePage(f)"
+                variant="outline"
+                size="sm"
+                :disabled="proposing !== null"
+                @click="create(run, i)"
+              >
+                <Loader2 v-if="proposing === `${run.id}:${i}`" class="size-3.5 animate-spin" />
+                <FilePlus2 v-else class="size-3.5" />
+                {{ t('ai.runs.createPage') }}
               </Button>
             </div>
           </li>

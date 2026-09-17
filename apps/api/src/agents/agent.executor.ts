@@ -3,6 +3,7 @@ import type { AgentRun } from '@prisma/client';
 import type {
   AgentFinding,
   AgentFindingKind,
+  AgentRunInput,
   AssistantWebSource,
   AuthorableRelationType,
   Locale,
@@ -16,18 +17,40 @@ import { GraphService } from '../graph/graph.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
+import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
+import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
+import { RepoSnapshotService } from '../connectors/code-research/repo-snapshot.service.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
 import type { Principal } from '../auth/principal.js';
+import {
+  CODE_OUTPUT_CONTRACT,
+  DIGEST_CONTRACT,
+  MAX_CANDIDATE_FILES,
+  MAX_DIGEST_INPUT_CHARS,
+  MAX_FINDINGS_PER_FILE,
+  MAX_PREVIEW_CHARS,
+  MAX_RANKED_FILES,
+  digestInput,
+  headingDigest,
+  isCovered,
+  rankCandidates,
+  readExcavation,
+  selectRepoDocs,
+  type Candidate,
+} from './archaeology.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
  * the point somebody asks for it, rather than accepting it and failing in the
  * worker a second later with nothing to show for the round trip.
  */
-export const RUNNABLE_AGENTS = new Set(['curator', 'reviewer', 'glossarist', 'cartographer']);
+export const RUNNABLE_AGENTS = new Set(['curator', 'reviewer', 'glossarist', 'cartographer', 'archaeologist']);
+
+/** Workspace pages the archaeologist reads as "already declared" — linked to the connector or under its destination. */
+const MAX_DECLARED_PAGES = 40;
 
 /** How many pages the curator will look at in one pass. */
 const MAX_PAGES = 60;
@@ -96,6 +119,8 @@ export class AgentExecutor {
     private readonly skills: AiSkillsService,
     private readonly documents: DocumentsService,
     private readonly glossary: GlossaryService,
+    private readonly code: CodeResearchService,
+    private readonly snapshots: RepoSnapshotService,
   ) {}
 
   /**
@@ -119,6 +144,8 @@ export class AgentExecutor {
         return this.buildGlossary(run, principal, report);
       case 'cartographer':
         return this.mapRelations(run, agent, principal, report);
+      case 'archaeologist':
+        return this.excavate(run, agent, principal, report);
       default:
         // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
         // here got past that check, so failing loudly beats running an agent as
@@ -494,6 +521,262 @@ export class AgentExecutor {
             }),
       findings,
     };
+  }
+
+  // ------------------------------------------------------------ archaeologist
+
+  /**
+   * Reverse-documents one connected repository (docs/features/31).
+   *
+   * Four stages, three of them queries. `snapshot` opens the repository through
+   * the same cache the chat tools use. `docs` gathers what is already declared
+   * — the repository's own documents and the workspace pages linked to the
+   * connector or under its destination — and asks the model once to digest it.
+   * `candidates` ranks every source file by how much it decides and drops the
+   * ones the declared text mentions, in code, with no model. Only `reading` is
+   * judgement: one tool loop per uncovered file, with the file in front of the
+   * model and the tools to follow its imports, returning the page it would
+   * write. A person creates that page; the run never does.
+   *
+   * Re-running is what makes this converge rather than repeat: a page created
+   * from a finding lands under the connector's destination, is read as declared
+   * next time, and its file is no longer a candidate.
+   */
+  private async excavate(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const input = (run.input ?? {}) as AgentRunInput;
+    await report({ stage: 'snapshot', progress: 0.05 });
+    // The API settled the scope at enqueue; a scheduled run never went through
+    // it, so the only-repository fallback lives here too.
+    const connectorId = input.connectorId ?? (await this.onlyRepository(run.workspaceId));
+    if (!connectorId) throw new Error(t('error.ai.agentNeedsConnector', { key: agent.key }));
+    const snapshot = await this.snapshots.open(connectorId, run.workspaceId);
+    const connector = await this.prisma.connector.findUnique({
+      where: { id: connectorId },
+      select: { id: true, name: true, projectId: true, parentId: true },
+    });
+
+    // --- what is already declared: repo docs + workspace pages, and a digest of them
+    await report({ stage: 'docs', progress: 0.15 });
+    const docs = selectRepoDocs(snapshot.files);
+    const pages = connector ? await this.destinationPages(run.workspaceId, connector) : [];
+    // Lower-cased once: coverage is a substring test against this, per file.
+    const declared = [...docs.map((d) => d.text), ...pages.map((p) => `${p.title}\n${p.markdown}`)]
+      .join('\n')
+      .toLowerCase();
+    const counts = { docs: docs.length, pages: pages.length, repository: snapshot.name };
+
+    // 'tools' is a preference, not a prerequisite — the curator's rule.
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    const modelUsable = agent.config.enabled && blocking.length === 0;
+    const call = {
+      config: agent.config,
+      userId: run.createdBy,
+      operation: 'agent' as const,
+      locale: run.locale as Locale,
+    };
+
+    let digest = headingDigest(docs, pages);
+    if (modelUsable && (docs.length > 0 || pages.length > 0)) {
+      try {
+        const raw = await this.client.chat(
+          call,
+          [
+            { role: 'system', content: DIGEST_CONTRACT },
+            { role: 'user', content: digestInput(docs, pages, MAX_DIGEST_INPUT_CHARS) },
+          ],
+          { json: true },
+        );
+        const topics = safeJson(raw)?.topics;
+        if (Array.isArray(topics) && topics.length > 0) {
+          digest = topics
+            .filter((topic): topic is { name: string; summary?: string; paths?: unknown } =>
+              !!topic && typeof (topic as { name?: unknown }).name === 'string',
+            )
+            .map((topic) => {
+              const paths = Array.isArray(topic.paths) ? topic.paths.filter((p) => typeof p === 'string') : [];
+              return `- ${topic.name}: ${topic.summary ?? ''}${paths.length ? ` (${paths.join(', ')})` : ''}`;
+            })
+            .join('\n');
+        }
+      } catch (error) {
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          return { summary: t('agent.archaeology.budgetSpent', { files: 0, candidates: 0 }), findings: [] };
+        }
+        this.logger.warn(`Archaeologist digest failed: ${String(error)}`);
+        await report({ warning: t('agent.archaeology.digestSkipped') });
+      }
+    }
+
+    // --- which files decide something nothing declares: ranked, then outlined, in code
+    await report({ stage: 'candidates', progress: 0.3 });
+    const candidates: Candidate[] = [];
+    for (const candidate of rankCandidates(snapshot.files, MAX_RANKED_FILES)) {
+      const outline = await this.code.outlineFile(snapshot, candidate.path);
+      const names = outline?.symbols.filter((s) => s.exported).map((s) => s.name) ?? [];
+      if (isCovered(declared, candidate.path, names)) continue;
+      candidates.push(candidate);
+      if (candidates.length >= MAX_CANDIDATE_FILES) break;
+    }
+
+    if (!modelUsable) {
+      await report({ warning: t('agent.archaeology.noModel') });
+      return { summary: t('agent.archaeology.noModel'), findings: [] };
+    }
+    if (candidates.length === 0) return { summary: t('agent.archaeology.noCandidates', counts), findings: [] };
+
+    // --- the judgement: one tool loop per file
+    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const tools = [...this.readTools.definitions(), ...this.code.definitions()];
+    const toolCtx = { principal, workspaceId: run.workspaceId };
+    const findings: AgentFinding[] = [];
+    let filesRead = 0;
+
+    for (const [at, candidate] of candidates.entries()) {
+      await report({ stage: 'reading', progress: 0.3 + (0.65 * at) / candidates.length });
+      // Every path the model actually opened. A finding may cite only these:
+      // a path seen in a tree listing is not a path that was read.
+      const readPaths = new Set<string>([candidate.path]);
+      const execute = (name: string, args: Record<string, unknown>) => {
+        if (!CODE_TOOLS.has(name)) return this.readTools.execute(name, args, toolCtx);
+        // The run is scoped to one repository: whatever connectorId the model
+        // wrote, this is the one it reads.
+        if ((name === 'code_read' || name === 'code_outline') && typeof args.path === 'string') {
+          readPaths.add(args.path.trim().replace(/^\.?\//, ''));
+        }
+        return this.code.execute(name, { ...args, connectorId }, toolCtx);
+      };
+
+      const text = Buffer.from(snapshot.files.get(candidate.path) ?? new Uint8Array()).toString('utf8');
+      const outline = await this.code.outlineFile(snapshot, candidate.path);
+      const declares = outline?.symbols.length
+        ? `\nIt declares: ${outline.symbols
+            .slice(0, 40)
+            .map((s) => `${s.kind} ${s.name}${s.exported ? ' (exported)' : ''}`)
+            .join(', ')}.`
+        : '';
+      const messages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: `${agent.instructions}\n\n${CODE_OUTPUT_CONTRACT}${skills}` },
+        {
+          role: 'user',
+          content:
+            (typeof input.note === 'string' && input.note ? `Extra instructions: ${input.note}\n\n` : '') +
+            `Repository: ${snapshot.name} (${snapshot.host.owner}/${snapshot.host.repo} @ ${snapshot.branch}). ` +
+            `Every code tool call reads this repository; connectorId is ${connectorId}.\n\n` +
+            `What the repository's documents and the workspace's pages already declare:\n${digest || '(nothing)'}\n\n` +
+            `The file nothing declares: ${candidate.path} (${candidate.lines} lines).${declares}\n\n` +
+            `The first part of the file (use code_read for the rest, and code_search / code_outline for what it ` +
+            `imports):\n<file path=${JSON.stringify(candidate.path)}>\n${text.slice(0, MAX_PREVIEW_CHARS)}\n</file>`,
+        },
+      ];
+
+      try {
+        const raw = agent.missing.includes('tools')
+          ? await this.client.chat(call, messages, { json: true })
+          : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
+        filesRead += 1;
+        const proposals = safeJson(raw)?.findings;
+        let kept = 0;
+        for (const proposal of Array.isArray(proposals) ? proposals : []) {
+          const finding = readExcavation(proposal, snapshot, readPaths);
+          if (!finding) continue;
+          findings.push(finding);
+          if (++kept >= MAX_FINDINGS_PER_FILE) break;
+        }
+      } catch (error) {
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          await report({ warning: t('agent.archaeology.budgetSpent', { files: filesRead, candidates: candidates.length }) });
+          break;
+        }
+        this.logger.warn(`Archaeologist could not read ${candidate.path}: ${String(error)}`);
+        await report({ warning: t('agent.warning.fileNotRead', { path: candidate.path, error: String(error) }) });
+      }
+      if (findings.length >= MAX_FINDINGS) break;
+    }
+
+    const kept = findings.slice(0, MAX_FINDINGS);
+    return {
+      summary: t('agent.archaeology.summary', { ...counts, files: filesRead, findings: kept.length }),
+      findings: kept,
+    };
+  }
+
+  /** The one enabled repository connector, when there is exactly one to mean. */
+  private async onlyRepository(workspaceId: string): Promise<string | null> {
+    const rows = await this.prisma.connector.findMany({
+      where: { workspaceId, enabled: true, kind: { in: ['codebase', 'markdown-git'] } },
+      select: { id: true },
+      take: 2,
+    });
+    return rows.length === 1 ? rows[0].id : null;
+  }
+
+  /**
+   * The workspace pages that count as "already declared" for a repository:
+   * the ones the connector itself wrote (its links) and the ones under its
+   * destination — which is where a page created from a finding lands, and
+   * what makes a second run skip the file that page is about. With no
+   * destination parent the project's root pages stand in. Capped, and read
+   * through the same `getContent` a reader uses; a draft-only page is skipped.
+   */
+  private async destinationPages(
+    workspaceId: string,
+    connector: { id: string; projectId: string; parentId: string | null },
+  ): Promise<Array<{ id: string; title: string; markdown: string }>> {
+    const ids = new Set<string>();
+    for (const link of await this.prisma.connectorLink.findMany({
+      where: { connectorId: connector.id },
+      select: { documentId: true },
+      take: MAX_DECLARED_PAGES,
+    })) {
+      ids.add(link.documentId);
+    }
+    if (connector.parentId) {
+      ids.add(connector.parentId);
+      let frontier = [connector.parentId];
+      while (frontier.length > 0 && ids.size < MAX_DECLARED_PAGES) {
+        const children = await this.prisma.document.findMany({
+          where: { workspaceId, parentId: { in: frontier } },
+          select: { id: true },
+          take: MAX_DECLARED_PAGES,
+        });
+        frontier = children.map((c) => c.id).filter((id) => !ids.has(id));
+        for (const id of frontier) ids.add(id);
+      }
+    } else {
+      for (const root of await this.prisma.document.findMany({
+        where: { workspaceId, projectId: connector.projectId, parentId: null },
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+        take: MAX_DECLARED_PAGES,
+      })) {
+        ids.add(root.id);
+      }
+    }
+
+    const rows = await this.prisma.document.findMany({
+      where: { id: { in: [...ids].slice(0, MAX_DECLARED_PAGES) }, workspaceId },
+      select: { id: true, title: true },
+    });
+    const out: Array<{ id: string; title: string; markdown: string }> = [];
+    for (const row of rows) {
+      try {
+        const content = await this.documents.getContent(row.id);
+        // The frontmatter counts as declared text too: a page created from a
+        // finding names its file in `source:`, and that is the mention that
+        // keeps the next run from proposing the same file again even when the
+        // prose paraphrases the path.
+        const frontmatter = content.frontmatter ? JSON.stringify(content.frontmatter) : '';
+        out.push({ id: row.id, title: row.title, markdown: `${content.markdown}\n${frontmatter}` });
+      } catch {
+        // No indexed content yet, or a draft: nothing declared, nothing to read.
+      }
+    }
+    return out;
   }
 
   // ------------------------------------------------------------- cartographer

@@ -13,6 +13,45 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.7.0] — 2026-09-17
+
+### Added
+
+- **A GitHub repository picker for the codebase and Markdown/Git connectors.**
+  Instead of pasting a repository URL, a branch and a personal access token, a
+  workspace installs a GitHub App once and then picks: an account and
+  organisation switcher, a searchable repository list, and a branch dropdown
+  that opens on the repository's real default branch. Browsing authenticates as
+  the person, so the switcher shows only the organisations they can reach;
+  syncing authenticates as the installation, so a scheduled sync survives their
+  authorisation expiring. Repositories reached this way store no credential at
+  all — the token is minted per run and expires within the hour. (#29)
+
+### Fixed
+
+- **A repository that cannot be downloaded now says which of the three reasons
+  it was.** GitHub answers 404 for "no such repository", "you cannot see this
+  repository" and "no such branch" alike, and the failure was reported as the
+  bare status. It now names the credential or names the branch alongside the
+  repository's actual default. The extra request happens only when a download
+  has already failed. (#28)
+- **An empty Branch field follows the repository's default branch.** It meant
+  the literal string `main`, so a repository whose default is `dev` or `master`
+  failed on a configuration that looked complete in the form. A connector left
+  on the default also now survives that branch being renamed. (#28)
+
+### Operations
+
+- **New optional environment block: `GITHUB_APP_*` and `API_PUBLIC_URL`.**
+  Leaving `GITHUB_APP_ID` empty keeps the picker hidden and every existing
+  token-based connector working unchanged — no migration, no action required.
+  Deployments that want the picker register a GitHub App and fill the block;
+  see `docs/features/30-github-repo-picker.md`. Note `GITHUB_APP_PRIVATE_KEY`
+  must be base64 of the PEM, because Compose's `env_file` cannot hold a
+  multi-line value.
+- **Two new tables**, `github_installations` and `github_user_tokens`. Both are
+  created empty; there is no backfill and nothing to run beyond the migration.
+
 ## [0.6.1] — 2026-09-17
 
 ### Fixed
@@ -346,7 +385,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.6.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/hrustalq/knowledge/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/hrustalq/knowledge/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/hrustalq/knowledge/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/hrustalq/knowledge/compare/v0.4.0...v0.5.0

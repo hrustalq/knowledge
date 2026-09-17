@@ -236,6 +236,43 @@ export const envSchema = z.object({
    */
   CONNECTOR_SYNC_BATCH: z.coerce.number().int().positive().default(25),
 
+  /**
+   * Where this API is reachable from a browser.
+   *
+   * Distinct from WEB_BASE_URL, which is the SPA. Needed because an OAuth
+   * redirect URI has to match the provider's registration byte for byte, so it
+   * cannot be derived from the incoming request's Host — behind a proxy that is
+   * whatever the proxy chose to forward, and a mismatch fails the exchange with
+   * a message that names neither side.
+   */
+  API_PUBLIC_URL: z.string().default('http://localhost:3000'),
+
+  /**
+   * GitHub App backing the repository picker (docs/features/30).
+   *
+   * Empty GITHUB_APP_ID is the off switch, and it is fail-soft in the same
+   * spirit as SETTINGS_ENCRYPTION_KEY='': the picker is not offered, and every
+   * connector already configured with a personal access token keeps working
+   * byte-identically. Nothing here is required to boot, because
+   * generate-openapi.main.ts runs this schema with no infrastructure at all.
+   */
+  GITHUB_APP_ID: z.string().optional().default(''),
+  /** The App's URL slug — `https://github.com/apps/<slug>/installations/new`. */
+  GITHUB_APP_SLUG: z.string().optional().default(''),
+  GITHUB_APP_CLIENT_ID: z.string().optional().default(''),
+  GITHUB_APP_CLIENT_SECRET: z.string().optional().default(''),
+  /**
+   * The App's private key, used to sign the JWT that mints installation tokens.
+   *
+   * GitHub issues this as a multi-line PKCS#1 PEM, which a .env file cannot
+   * hold: `parsePrivateKey` therefore accepts base64 of the whole PEM (what you
+   * want in a secrets manager) and a single line with literal `\n` escapes,
+   * as well as a real PEM for the case where this arrives from a file mount.
+   */
+  GITHUB_APP_PRIVATE_KEY: z.string().optional().default(''),
+  /** Override for GitHub Enterprise Server. The web UI and OAuth URLs derive from it. */
+  GITHUB_API_URL: z.string().default('https://api.github.com'),
+
   /** Live tracked-entity updates over WebSocket (/v1/events/ws). */
   LIVE_WS_ENABLED: boolish(true),
   /** Server-side tracking configuration: comma-separated event types (exact or 'prefix.*'); '*' broadcasts everything. */

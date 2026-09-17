@@ -54,6 +54,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 25  | Web research                               | [features/25-web-research.md](features/25-web-research.md)             | ✅ implemented |
 | 26  | Connector staging                          | [features/26-connector-staging.md](features/26-connector-staging.md)   | ✅ implemented |
 | 27  | Comment editing, Comment vs. Start thread  | [features/27-comment-editing.md](features/27-comment-editing.md)       | ✅ implemented |
+| 30  | GitHub repository picker                   | [features/30-github-repo-picker.md](features/30-github-repo-picker.md) | ✅ implemented |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

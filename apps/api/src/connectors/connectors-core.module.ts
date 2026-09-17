@@ -10,6 +10,7 @@ import { ConnectorLinksService } from './connector-links.service.js';
 import { ConnectorStagingService } from './connector-staging.service.js';
 import { ConnectorSyncService } from './connector-sync.service.js';
 import { ConnectorsService } from './connectors.service.js';
+import { GithubCoreModule } from './github/github-core.module.js';
 
 /**
  * Connector configuration, credentials, links and the sync engine, with no
@@ -20,7 +21,17 @@ import { ConnectorsService } from './connectors.service.js';
  * pages in bulk from the worker, which is exactly why that split exists.
  */
 @Module({
-  imports: [PrismaModule, StorageModule, EventsModule, ProjectsCoreModule, DocumentsCoreModule, ConnectorAdaptersModule],
+  imports: [
+    PrismaModule,
+    StorageModule,
+    EventsModule,
+    ProjectsCoreModule,
+    DocumentsCoreModule,
+    ConnectorAdaptersModule,
+    // ConnectorsService resolves a picker-configured connector's credential to
+    // a freshly minted installation token, so the worker needs this too.
+    GithubCoreModule,
+  ],
   providers: [
     ConnectorsService,
     ConnectorLinksService,

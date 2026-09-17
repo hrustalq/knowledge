@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, type Connector, type ConnectorRun } from '@prisma/client';
 import {
   connectorKindInfo,
+  GITHUB_INSTALLATION_CONFIG_KEY,
   type ConnectorConflictPolicy,
   type ConnectorDirection,
   type ConnectorKind,
@@ -24,6 +25,7 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorRegistry } from './adapters/connector.registry.js';
+import { GithubAppService } from './github/github-app.service.js';
 import type { ConnectorContext } from './adapters/connector.types.js';
 
 /** Warnings are capped: a run over a 5 000-page space must not write a novel into one row. */
@@ -70,6 +72,7 @@ export class ConnectorsService {
     private readonly config: ConfigService<Env, true>,
     private readonly registry: ConnectorRegistry,
     private readonly projects: ProjectsService,
+    private readonly githubApp: GithubAppService,
   ) {
     this.key = parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.allowPrivateUrls = this.config.get('CONNECTOR_ALLOW_PRIVATE_URLS', { infer: true });
@@ -221,6 +224,31 @@ export class ConnectorsService {
    * Builds the per-call context. Secrets are decrypted here and nowhere else,
    * and live only for the duration of the call.
    */
+  /**
+   * The credential an adapter will actually dial with (docs/features/30).
+   *
+   * A connector created through the repository picker holds no secret of its
+   * own: it names a GitHub App installation, and the token is minted per run
+   * and expires within the hour. One that was configured by pasting a personal
+   * access token keeps using it, which is what makes the App optional.
+   *
+   * This is the whole integration seam. Every adapter already reads
+   * `ctx.credential` and `githubHeaders` already sends it as a bearer token, so
+   * nothing below this line knows or cares which of the two it got.
+   *
+   * Null when the mint fails — an expired installation, a revoked App, a
+   * suspended org. The adapter then behaves exactly as it would for a missing
+   * token, and the 404 classifier in `repo-archive.ts` says so in words.
+   */
+  private async credentialFor(row: Connector): Promise<string | null> {
+    const config = (row.config ?? {}) as Record<string, unknown>;
+    const installationId = config[GITHUB_INSTALLATION_CONFIG_KEY];
+    if (typeof installationId === 'string' && installationId.trim() !== '') {
+      return this.githubApp.installationToken(installationId.trim());
+    }
+    return decryptSecret(row.credential, this.key);
+  }
+
   async contextFor(
     row: Connector,
     onStage: (stage: string, progress?: number | null) => Promise<void>,
@@ -247,7 +275,7 @@ export class ConnectorsService {
       connectorId: row.id,
       workspaceId: row.workspaceId,
       config: (row.config ?? {}) as Record<string, string>,
-      credential: decryptSecret(row.credential, this.key),
+      credential: await this.credentialFor(row),
       webhookSecret: decryptSecret(row.webhookSecret, this.key),
       onStage,
       debug,

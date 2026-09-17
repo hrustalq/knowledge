@@ -14,6 +14,10 @@ import { ConnectorQueueModule } from './connector-queue.module.js';
 import { ConnectorWebhookController } from './connector-webhook.controller.js';
 import { ConnectorsCoreModule } from './connectors-core.module.js';
 import { ConnectorsController } from './connectors.controller.js';
+import { GithubBrowseService } from './github/github-browse.service.js';
+import { GithubCoreModule } from './github/github-core.module.js';
+import { GithubOauthService } from './github/github-oauth.service.js';
+import { GithubController } from './github/github.controller.js';
 
 /**
  * API side (docs/features/19). Holds the controllers and the conflict sweeper,
@@ -38,9 +42,17 @@ import { ConnectorsController } from './connectors.controller.js';
     AgentCoreModule,
     AiCoreModule,
     AssistantClientModule,
+    GithubCoreModule,
   ],
-  controllers: [ConnectorsController, ConnectorWebhookController],
-  providers: [ConnectorConflictSweeper, ConnectorItemsService, ConnectorItemAiService],
+  controllers: [ConnectorsController, ConnectorWebhookController, GithubController],
+  providers: [
+    ConnectorConflictSweeper,
+    ConnectorItemsService,
+    ConnectorItemAiService,
+    // API-only: both exist to serve a person clicking through the picker.
+    GithubOauthService,
+    GithubBrowseService,
+  ],
   exports: [ConnectorsCoreModule],
 })
 export class ConnectorsModule {}

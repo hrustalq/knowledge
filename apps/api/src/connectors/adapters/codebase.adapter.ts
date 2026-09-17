@@ -107,7 +107,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
   }
 
   async *list(ctx: ConnectorContext): AsyncIterable<ExternalRef> {
-    const { files } = await downloadRepoArchive(ctx);
+    const { files, branch } = await downloadRepoArchive(ctx);
     const map = await this.repoMap(ctx);
     const host = repoHost(ctx);
 
@@ -124,7 +124,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
       yield {
         externalId: module.key,
         title: module.name,
-        url: blobUrl(ctx, module.path),
+        url: blobUrl(ctx, module.path, branch),
         // The module's own files decide its version, which is what makes a
         // re-sync skip every module except the one somebody touched.
         version: unitInputHash(files, module.files),
@@ -133,7 +133,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
   }
 
   async fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument> {
-    const { files, skipped } = await downloadRepoArchive(ctx);
+    const { files, skipped, branch } = await downloadRepoArchive(ctx);
     const map = await this.repoMap(ctx);
     const host = repoHost(ctx);
     const warnings: string[] = [];
@@ -192,9 +192,9 @@ export class CodebaseAdapter implements ConnectorAdapter {
     return {
       ref,
       title: module.name,
-      markdown: joinSections(prose, this.moduleMarkdown(ctx, module, analysis)),
+      markdown: joinSections(prose, this.moduleMarkdown(ctx, module, analysis, branch)),
       frontmatter: {
-        source: blobUrl(ctx, module.path),
+        source: blobUrl(ctx, module.path, branch),
         generated: 'codebase-connector',
         unit: module.key,
         module: module.path,
@@ -290,7 +290,12 @@ export class CodebaseAdapter implements ConnectorAdapter {
     return sections.join('\n\n');
   }
 
-  private moduleMarkdown(ctx: ConnectorContext, module: RepoModule, analysis: ModuleAnalysis): string {
+  private moduleMarkdown(
+    ctx: ConnectorContext,
+    module: RepoModule,
+    analysis: ModuleAnalysis,
+    branch: string,
+  ): string {
     const sections: string[] = [];
 
     const facts = [
@@ -325,7 +330,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
       [
         '## Files',
         '',
-        ...listed.map((f) => `- [\`${f}\`](${blobUrl(ctx, f)})`),
+        ...listed.map((f) => `- [\`${f}\`](${blobUrl(ctx, f, branch)})`),
         ...(module.files.length > listed.length ? ['', `_…and ${module.files.length - listed.length} more._`] : []),
       ].join('\n'),
     );

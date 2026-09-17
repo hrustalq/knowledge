@@ -188,7 +188,11 @@
     "draftRevisionGone": "Draft revision disappeared before it could be written.",
     "noReadableContent": "\"{title}\" has no readable content to rewrite yet.",
     "emptyPage": "The model returned an empty page.",
-    "agentRunInFlight": "A run of \"{key}\" is already in progress."
+    "agentRunInFlight": "A run of \"{key}\" is already in progress.",
+    "agentNeedsConnector": "Agent \"{key}\" reads one repository — pick which connector it should run against.",
+    "agentConnectorInvalid": "{id} is not an enabled repository connector in this workspace.",
+    "findingNoDraft": "This finding carries no page draft to create.",
+    "findingAlreadyCreated": "This finding's page has already been created."
   },
   "assistant": {
     "providerDisabled": "Assistant provider is disabled for this workspace",

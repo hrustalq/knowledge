@@ -45,14 +45,16 @@ export function parsePrivateKey(raw: string): string | null {
  * A JWT that authenticates as the App itself, for minting installation tokens.
  *
  * `iat` is backdated a minute because GitHub rejects a token issued in its
- * future and clock skew between us and them is real. `exp` is nine minutes;
- * GitHub's own ceiling is ten, and sitting exactly on a limit is how you
- * discover it is exclusive.
+ * future and clock skew between us and them is real. That backdating is part of
+ * the span GitHub measures: it caps `exp - iat` at ten minutes, so the minute
+ * spent on skew has to come out of the other end. Nine minutes total keeps us
+ * strictly inside the limit rather than exactly on it, which is far more life
+ * than a token used once and discarded needs.
  */
 export function appJwt(appId: string, privateKeyPem: string, now = Date.now()): string {
   const seconds = Math.floor(now / 1000);
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = b64url(JSON.stringify({ iat: seconds - 60, exp: seconds + 540, iss: appId }));
+  const payload = b64url(JSON.stringify({ iat: seconds - 60, exp: seconds + 480, iss: appId }));
   const signature = createSign('RSA-SHA256').update(`${header}.${payload}`).end().sign(privateKeyPem);
   return `${header}.${payload}.${b64url(signature)}`;
 }

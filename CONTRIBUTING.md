@@ -14,33 +14,64 @@ make help    # everything else
 
 ## Branch policy
 
-`main` is the only long-lived branch. Everything else is short-lived and deleted
-on merge.
+`main` and `dev` are long-lived. Everything else is short-lived and deleted on
+merge.
 
-**There is no `develop` and there are no `release/*` branches**, deliberately.
-Gitflow exists to maintain several released versions in parallel; this project has
-one environment and supports exactly one version — the tag currently deployed. A
-`develop` branch would add a merge hop and a second thing to keep green without
-buying anything.
+Work integrates on `dev` and is **promoted** to `main` by pull request; the tag is
+then cut from `main`. This repo ran a single trunk until v0.6.0 and this file used
+to argue against a second branch — that a `develop` branch "would add a merge hop
+and a second thing to keep green without buying anything". What it buys, now that
+the hop is being paid for:
 
-| Branch          | Purpose                                              |
-| --------------- | ---------------------------------------------------- |
-| `main`          | Integration. Always releasable. **Not live.**        |
-| `<type>/<slug>` | One change. Branch from `main`, PR back into `main`. |
-| `hotfix/vX.Y.Z` | Exception only — see [Hotfix](#hotfix).              |
+1. **`main` is a record of what production has served.** Between releases `main`
+   equals the deployed tag, so _what is live_ is answerable by reading a branch
+   instead of diffing tags.
+2. **Unreleased work no longer sits on the branch the deploy tags from.** Every
+   merge to `main` used to be one `git tag` away from shipping. Shipping now takes
+   an explicit promotion PR.
+3. **Feature branches base on the released state** — every branch starts from a
+   commit that has actually run in production.
+
+It is still not Gitflow: there are no `release/*` branches and no parallel
+supported versions. One environment, one live version, one extra hop.
+
+| Branch                 | Purpose                                                                     |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `main`                 | Released state. Each commit is a release or the promotion about to be one.  |
+| `dev`                  | Integration. Always green. Where `## [Unreleased]` accumulates.             |
+| `<type>/<slug>`        | One change. Branch from `main`, PR into `dev`.                              |
+| `chore/release-vX.Y.Z` | Version bump. Branch from `dev`, PR into `dev` — see [Release](#release).   |
+| `hotfix/vX.Y.Z`        | Exception only — branch from `main`, PR into `main`. See [Hotfix](#hotfix). |
+
+Branch from `dev` instead of `main` when your work builds on something unreleased
+that is already merged there. Otherwise branch from `main`: it is the last state
+that ran in production, which is the honest base for a new change.
 
 Branch names use the commit types below: `feat/confluence-incremental-pull`,
 `fix/nil-uuid-workspace`, `chore/bump-turbo`, `docs/versioning`. Worktrees created
 by tooling (`worktree-*`) are local scratch — rename before pushing.
 
-`main` is protected by the **"main protection" repository ruleset**: a pull
-request is required, the `check` status check must pass, and force-push and
-deletion are blocked. Required approvals is deliberately **0** — GitHub forbids
-approving your own pull request, so requiring 1 would deadlock a solo repository.
+Both branches are protected by repository rulesets — **"main protection"** and
+**"dev protection"** — requiring a pull request, a passing `check`, and blocking
+force-push and deletion. Neither has bypass actors: `main` cannot be pushed to by
+anyone, including the owner. Required approvals is deliberately **0** — GitHub
+forbids approving your own pull request, so requiring 1 would deadlock a solo
+repository.
 
-Squash-only is currently **convention, not enforcement**: the ruleset still
-permits merge and rebase. Narrowing `allowed_merge_methods` to `["squash"]` is
-what would make rule 2 below true by construction.
+Squash-only is no longer convention but **enforcement**, and it differs per
+branch, because `allowed_merge_methods` is evaluated against a PR's base:
+
+- **`dev` permits only `squash`.** The PR title becomes the commit.
+- **`main` permits only `merge`.** A promotion must keep `dev`'s commits reachable
+  from `main`. Squashing `dev` into `main` would rewrite every SHA, leaving the two
+  branches permanently diverged and every later promotion replaying released work.
+
+That is also why nothing needs syncing back after a release: the promotion merge
+commit carries `dev`'s tree onto `main` wholesale, and the next promotion PR's
+merge base is the previous `dev` head, so the two branches never drift in content.
+`dev` will read as "behind `main`" in GitHub's UI by one merge commit per release,
+which is cosmetic — those commits contain nothing. A real back-merge is needed
+only after a [hotfix](#hotfix).
 
 ## Commits
 
@@ -78,7 +109,10 @@ be 1-5, so the demo workspace id was silently 400ing every seeded request.
 
 ## Pull requests
 
-1. Branch from an up-to-date `main`.
+1. Branch from an up-to-date `main`, and **target `dev`**:
+   `gh pr create --base dev`. GitHub bases a new PR on the default branch, which
+   is deliberately still `main` — pass the flag, or you open a promotion PR by
+   accident.
 2. `make verify` passes locally (the pre-push hook runs it — `verify`, not `check`,
    because `check` rebuilds `apps/api/dist` and takes a running dev server down
    with it).
@@ -86,9 +120,9 @@ be 1-5, so the demo workspace id was silently 400ing every seeded request.
    [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md). Skip
    only for changes that are genuinely not notable — refactors, tests, CI, silent
    dependency bumps.
-4. The **PR title is the commit message**: merges are squash-only, so the title
-   must itself be a valid conventional commit header. Commits inside the branch are
-   individually linted but collapse away.
+4. The **PR title is the commit message**: merges into `dev` are squash-only, so
+   the title must itself be a valid conventional commit header. Commits inside the
+   branch are individually linted but collapse away.
 5. CI (`make check`, including `build`) must be green.
 
 ## Release
@@ -96,10 +130,14 @@ be 1-5, so the demo workspace id was silently 400ing every seeded request.
 Merging integrates. **Tagging deploys** — `.github/workflows/deploy.yml` triggers
 on `v*.*.*` and on nothing else.
 
+Two pull requests: the bump lands on `dev`, then `dev` is promoted to `main`. The
+promotion PR therefore carries nothing of its own, which is the point — its diff
+_is_ the release, and it is the last chance to read that diff whole.
+
 ```bash
-# 1. main is green and has what you want to ship
-git checkout main && git pull
-git log --oneline "$(git describe --tags --abbrev=0)..main"
+# 1. dev is green and has what you want to ship
+git fetch origin
+git log --oneline "$(git describe --tags --abbrev=0)..origin/dev"
 
 # 2. Pick the bump from those commits: feat! -> MINOR (pre-1.0), feat -> MINOR,
 #    fix/perf -> PATCH. See docs/versioning.md.
@@ -109,23 +147,32 @@ git log --oneline "$(git describe --tags --abbrev=0)..main"
 #      apps/api/src/config/swagger.ts   .setVersion('X.Y.Z')
 #      apps/api/src/mcp/mcp.service.ts  new McpServer({ version: 'X.Y.Z' })
 #
-#    The release commit travels by pull request like every other change: `main`
-#    requires one plus a passing `check`, so pushing it straight to main is
-#    rejected by the ruleset ("Required status check \"check\" is expected").
-git switch -c chore/release-vX.Y.Z
+#    The bump travels by pull request like every other change — `dev` requires
+#    one plus a passing `check`, so pushing it straight to dev is rejected.
+git switch -c chore/release-vX.Y.Z origin/dev
 git commit -am "chore(release): vX.Y.Z"
 git push -u origin chore/release-vX.Y.Z
-gh pr create --title "chore(release): vX.Y.Z" --fill   # merge once check is green
+gh pr create --base dev --title "chore(release): vX.Y.Z" --fill   # squash when green
 
-# 4. Tag the commit that LANDED ON MAIN. This is the deploy.
-#    Squash merge rewrites the SHA, so tagging your local release commit produces
-#    a tag that is not an ancestor of main. The workflow's ancestry check refuses
-#    it — correctly, but only after you have already pushed the tag and have to
-#    delete it again.
-git checkout main && git pull
-git tag -a vX.Y.Z -m "vX.Y.Z"
+# 4. Promote. This PR's diff is the release; the ruleset offers only a merge
+#    commit, because squashing dev into main would diverge them permanently.
+git fetch origin
+gh pr create --base main --head dev --title "chore(release): promote vX.Y.Z" \
+  --body "Promotes vX.Y.Z to main. Tag follows."
+
+# 5. Tag the commit that LANDED ON MAIN. This is the deploy.
+#    deploy.yml refuses a tag that is not an ancestor of origin/main, so a tag cut
+#    from dev — or from your local release commit, whose SHA the squash rewrote —
+#    fails the ancestry check only after you have pushed it and have to delete it.
+git fetch origin --tags
+git tag -l 'v*'                                    # confirm it does not exist
+git tag -a vX.Y.Z "$(git rev-parse origin/main)" -m "vX.Y.Z"
 git push origin vX.Y.Z
 ```
+
+Nothing is merged back afterwards: step 4's merge commit already put `dev`'s exact
+tree on `main`. Do not merge features into `dev` between steps 4 and 5 — the tag
+should be the commit the promotion PR was reviewed as.
 
 Then watch the run: it builds both images sequentially, applies migrations, rolls
 out, and gates on loopback health plus the public endpoint.
@@ -149,20 +196,39 @@ changelog's **Operations** section before it ships.
 
 ### Hotfix
 
-Normally there is no hotfix flow: fix on `main`, tag a PATCH, done.
-
-Branch from the **tag** only when `main` already contains work you are unwilling
-to ship:
+A hotfix is the one change that does **not** integrate on `dev`: it branches from
+`main` and PRs straight back into `main`, skipping the queue of unreleased work.
 
 ```bash
-git checkout -b hotfix/v0.4.1 v0.4.0
-# fix, PR into main as usual, then tag the hotfix branch's commit
+git fetch origin
+git switch -c hotfix/v0.6.1 origin/main       # or a tag, if main is mid-promotion
+# fix, then:
+gh pr create --base main --title "fix(api): ..." --fill
+# merge (a merge commit — main permits nothing else), then tag as in Release step 5
 ```
+
+Keep the branch to **one commit**: `main` does not squash, so every commit on it
+survives into history.
+
+Then back-merge, because this is the one case where `main` holds content `dev` has
+never seen. Cherry-pick rather than merging `main` into `dev` — the fix is what
+`dev` needs, not the release merge commits:
+
+```bash
+git switch -c chore/backport-v0.6.1 origin/dev
+git cherry-pick <the hotfix commit on main>
+gh pr create --base dev --title "fix(api): ... (backport)" --fill
+```
+
+Skipping the backport means the next release silently reverts the hotfix.
 
 ## Rules
 
-1. **`main` is always releasable.** Anyone may tag it without asking.
-2. **Squash merge only.** The PR title becomes history.
+1. **`dev` is always releasable**, because a promotion PR is the only gate between
+   it and a tag. `main` is the released state; tagging its head is the deploy, and
+   anyone may do so without asking.
+2. **Squash into `dev`, merge-commit into `main`.** Both are enforced by ruleset,
+   not convention. The PR title becomes history on `dev`.
 3. **Every migration is expand/contract** and runnable by the previous release.
 4. **A new required env var with no default is a breaking change** — `env.ts`
    validates with zod and fails fast, so a missing variable does not degrade, it

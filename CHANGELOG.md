@@ -7,8 +7,9 @@ with two additions this project needs — **Breaking** and **Operations** — an
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) as
 narrowed in [docs/versioning.md](docs/versioning.md).
 
-`[Unreleased]` is work merged to `main` that is **built, tested and not serving
-traffic**. Production moves only when a `vX.Y.Z` tag is pushed. Entries are written
+`[Unreleased]` is work merged to `dev` that is **built, tested and not serving
+traffic**. A release promotes it to `main`; production moves only when a `vX.Y.Z`
+tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 

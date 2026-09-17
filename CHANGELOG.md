@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.8.0] — 2026-09-17
 
 ### Added
 
@@ -37,6 +37,12 @@ in the pull request that introduces them — see
   set its language in one async step and parsed in another; a second caller
   could switch the language in between. Harmless while only the sequential sync
   pipeline parsed; not harmless once the API does.
+- **The repository picker no longer blames the query for an empty roster.** A
+  loader that legitimately returned nothing fell through to "no match for X",
+  so an installation with zero granted repositories read as a failed search —
+  in hardcoded English. Autocomplete now holds queries shorter than its minimum
+  and says how many characters it wants; the picker names the zero-grant case
+  and links to where it is fixed. (#36)
 
 ### Operations
 
@@ -429,6 +435,7 @@ it.
   public endpoint.
 
 [unreleased]: https://github.com/hrustalq/knowledge/compare/v0.7.1...HEAD
+[0.8.0]: https://github.com/hrustalq/knowledge/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/hrustalq/knowledge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/hrustalq/knowledge/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/hrustalq/knowledge/compare/v0.6.0...v0.6.1

@@ -1,7 +1,8 @@
 // One place that decides how a tool call looks and reads, so the live trail
 // and the finished transcript can never label the same call differently.
 import {
-  FilePlus2, FileText, Globe, LayoutTemplate, Link, MessageCircleQuestion, Network, Search, SquarePen, Wand2, Wrench,
+  FileCode2, FilePlus2, FileText, FolderTree, Globe, LayoutTemplate, Link, ListTree, MessageCircleQuestion, Network,
+  Search, SearchCode, SquarePen, Wand2, Wrench,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -27,6 +28,13 @@ const TOOLS: Record<string, ToolVocabulary> = {
   // place a reader sees which happened.
   web_search: { icon: Globe, running: 'tool.web_search.running', done: 'tool.web_search.done' },
   web_fetch: { icon: Link, running: 'tool.web_fetch.running', done: 'tool.web_fetch.done' },
+  // docs/features/31. Four verbs again, for the same reason: listing a tree,
+  // searching, reading an outline and reading a file are different amounts of
+  // a repository looked at, and the trail is where a reader sees which.
+  code_tree: { icon: FolderTree, running: 'tool.code_tree.running', done: 'tool.code_tree.done' },
+  code_search: { icon: SearchCode, running: 'tool.code_search.running', done: 'tool.code_search.done' },
+  code_outline: { icon: ListTree, running: 'tool.code_outline.running', done: 'tool.code_outline.done' },
+  code_read: { icon: FileCode2, running: 'tool.code_read.running', done: 'tool.code_read.done' },
 }
 
 /**

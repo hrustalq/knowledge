@@ -30,6 +30,8 @@ export type I18nTranslations = {
         "architectDesc": string;
         "cartographer": string;
         "cartographerDesc": string;
+        "archaeologist": string;
+        "archaeologistDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -90,7 +92,15 @@ export type I18nTranslations = {
             "nothingNew": string;
             "summary": string;
         };
+        "archaeology": {
+            "noModel": string;
+            "digestSkipped": string;
+            "noCandidates": string;
+            "budgetSpent": string;
+            "summary": string;
+        };
         "warning": {
+            "fileNotRead": string;
             "graphUnreadableOrphans": string;
             "graphUnreadableModelOnly": string;
             "modelPassFailed": string;
@@ -340,6 +350,10 @@ export type I18nTranslations = {
             "noReadableContent": string;
             "emptyPage": string;
             "agentRunInFlight": string;
+            "agentNeedsConnector": string;
+            "agentConnectorInvalid": string;
+            "findingNoDraft": string;
+            "findingAlreadyCreated": string;
         };
         "assistant": {
             "providerDisabled": string;
@@ -421,6 +435,12 @@ export type I18nTranslations = {
         "notification": {
             "subjectNotInWorkspace": string;
             "nothingToMark": string;
+        };
+        "code": {
+            "notARepository": string;
+            "connectorDisabled": string;
+            "fileNotFound": string;
+            "notAFile": string;
         };
         "web": {
             "notFound": string;

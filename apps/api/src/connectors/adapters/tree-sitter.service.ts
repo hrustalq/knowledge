@@ -121,11 +121,24 @@ export class TreeSitterService {
 
     const grammar = await this.languageFor(language);
     if (!grammar) return null;
+    await this.ensureRuntime();
 
     let tree: Tree | null = null;
     try {
-      const parser = await this.parserFor(grammar);
-      tree = parser.parse(source);
+      // One parser, reused with `setLanguage` per file: constructing one per
+      // file reserves wasm memory every time for no benefit.
+      //
+      // `setLanguage` and `parse` MUST stay in one synchronous block with no
+      // await between them. This used to be split across an async helper, which
+      // was safe only while the sole caller was the sync pipeline at BullMQ
+      // concurrency 1. The code research tools (docs/features/31) parse from the
+      // API process, where two `code_outline` calls in one round run
+      // concurrently — an await boundary between the two calls would let the
+      // second caller's `setLanguage` land before the first caller's `parse`,
+      // and a TypeScript file would be read with the Python grammar.
+      this.parser ??= new Parser();
+      this.parser.setLanguage(grammar);
+      tree = this.parser.parse(source);
       return tree ? read(tree) : null;
     } catch (err) {
       this.logger.debug(`parse failed (${language}): ${(err as Error).message}`);
@@ -136,22 +149,6 @@ export class TreeSitterService {
   }
 
   // --- internals ---
-
-  /**
-   * One parser, reused with `setLanguage` per file.
-   *
-   * Constructing one per file reserves wasm memory every time for no benefit.
-   * Reuse is safe here because the sync pipeline is sequential by construction —
-   * `ConnectorProcessor` takes BullMQ's default concurrency of 1 and the walk is
-   * an ordered loop, not a fan-out. If that ever changes, this is the line that
-   * has to change with it.
-   */
-  private async parserFor(grammar: Language): Promise<Parser> {
-    await this.ensureRuntime();
-    this.parser ??= new Parser();
-    this.parser.setLanguage(grammar);
-    return this.parser;
-  }
 
   private ensureRuntime(): Promise<void> {
     this.runtime ??= Parser.init({

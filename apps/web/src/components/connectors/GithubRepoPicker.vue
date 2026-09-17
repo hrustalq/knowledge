@@ -71,12 +71,25 @@ watch(
 /** Full repo objects by `owner/name`, so picking can emit the default branch. */
 const known = new Map<string, { htmlUrl: string; defaultBranch: string }>()
 
+/** The account the list is currently scoped to. */
+const currentAccount = computed(() =>
+  installations.value.find((i) => i.installationId === selected.value),
+)
+
+/**
+ * True when an *unfiltered* load came back empty — the installation exists and
+ * has been granted nothing. Tracked here rather than inferred from an empty
+ * list, because an empty list under a query means something else entirely.
+ */
+const noneGranted = ref(false)
+
 async function loadRepos(query: string): Promise<AutocompleteOption[]> {
   if (!selected.value) return []
   const res = (await api.get('/v1/connectors/github/repos', {
     query: { workspaceId: props.workspaceId, installationId: selected.value, q: query },
   })) as GithubReposResponse
   if (!res.ok) return []
+  if (query.trim() === '') noneGranted.value = res.repositories.length === 0
 
   return res.repositories.map((repo) => {
     known.set(repo.fullName, { htmlUrl: repo.htmlUrl, defaultBranch: repo.defaultBranch })
@@ -204,6 +217,7 @@ function openAndWatch(url: string | null) {
         :placeholder="t('connectors.github.searchPlaceholder')"
         :load="loadRepos"
         :multiple="false"
+        :min-query-length="3"
         :empty-hint="t('connectors.github.noRepos')"
         @update:model-value="choose"
       />
@@ -215,10 +229,28 @@ function openAndWatch(url: string | null) {
         {{ t('connectors.github.otherAccountHint') }}
       </p>
 
+      <!-- An installation can be granted no repositories at all, and GitHub
+           permits it. That state is indistinguishable from a broken picker
+           unless it is named, so it gets its own panel rather than a footnote:
+           it is not a caveat about the list, it is the reason there is none. -->
+      <div
+        v-if="noneGranted"
+        class="border-border/60 bg-muted/40 text-muted-foreground space-y-1.5 rounded-md border p-2.5 text-xs"
+      >
+        <p class="text-foreground flex items-center gap-1.5 font-medium">
+          <Lock class="size-3 shrink-0" />
+          {{ t('connectors.github.noneGranted') }}
+        </p>
+        <p>{{ t('connectors.github.noneGrantedHint') }}</p>
+        <button type="button" class="text-foreground underline" @click="openAndWatch(state.installUrl)">
+          {{ t('connectors.github.manageAccess') }}
+        </button>
+      </div>
+
       <!-- Says why a list can be short, which is otherwise indistinguishable
            from the picker being broken. -->
       <p
-        v-if="installations.find((i) => i.installationId === selected)?.repositorySelection === 'selected'"
+        v-else-if="currentAccount?.repositorySelection === 'selected'"
         class="text-muted-foreground flex items-center gap-1.5 text-xs"
       >
         <Lock class="size-3 shrink-0" />

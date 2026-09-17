@@ -9551,6 +9551,80 @@
         ]
       }
     },
+    "/v1/ai/agents/runs/{id}/findings/{index}/create-page": {
+      "post": {
+        "operationId": "AiController_createPageFromFinding",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "required": true,
+            "in": "path",
+            "description": "Position in the run's findings array",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create the page a finding drafted, under the connector's destination",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/agents/runs/{id}/findings/{index}/propose": {
       "post": {
         "operationId": "AiController_proposeFinding",
@@ -13915,7 +13989,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.6.1",
+    "version": "0.7.1",
     "contact": {}
   },
   "tags": [],
@@ -15679,6 +15753,11 @@
           "note": {
             "type": "string",
             "description": "Extra instruction seeded into this run only."
+          },
+          "connectorId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The repository connector a connector-scoped agent (the archaeologist) reads. Required when the workspace has more than one; the only one is used otherwise."
           }
         },
         "required": [

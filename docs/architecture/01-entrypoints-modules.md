@@ -58,6 +58,15 @@ Consequences worth stating outright:
   tiebreaker as a parameter.
 - **Controller-free Core/Client splits never import their parent back**, which is
   what keeps them `forwardRef`-free.
+- **Lift a shared constant into a leaf rather than close a cycle.** The tool-name
+  sets (`FREE_TOOLS`, `PARALLEL_SAFE_TOOLS`, …) live in
+  `assistant/assistant-tool-types.ts`, which imports nothing but contracts:
+  `assistant.client.ts` needs them, the codebase adapter injects the client, and
+  the code research tools (feature 31) inject a connectors-layer service into
+  `assistant.tools.ts` — with the sets still there, that chain was a runtime
+  cycle. `WebResearchModule` and `CodeResearchModule` are the two
+  controller-free modules both `AssistantModule` and `AgentWorkerModule` import;
+  the worker builds them on every boot so an API-only dependency fails there.
 
 **The worker generates, the API publishes.** Anything that creates a document,
 opens a merge request or attributes an act to a person happens on the API side,

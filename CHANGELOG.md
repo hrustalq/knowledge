@@ -13,6 +13,43 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.8.0] — 2026-09-17
+
+### Added
+
+- **The assistant can read a connected repository.** Four tools — `code_tree`,
+  `code_search`, `code_outline`, `code_read` — are offered in chat and to the
+  `researcher` and `author` agents whenever the workspace has an enabled
+  codebase or markdown/git connector. Answers cite files by path and line, and
+  the sources rail links to the file on its host. Repository contents are
+  wrapped as untrusted data, like web pages. (docs/features/31)
+- **The archaeologist reverse-documents a repository.** A new background agent,
+  scoped to one codebase or markdown/git connector: it reads what the
+  repository's documents and the workspace's pages already declare, ranks the
+  source files by how much they decide, reads the ones nothing mentions, and
+  proposes a complete page per finding, citing the lines it rests on. **Create
+  page** in the Runs tab publishes a draft under the connector's destination;
+  a second run treats that page as declared. (docs/features/31)
+
+### Fixed
+
+- **Two concurrent parses no longer share a grammar.** The tree-sitter parser
+  set its language in one async step and parsed in another; a second caller
+  could switch the language in between. Harmless while only the sequential sync
+  pipeline parsed; not harmless once the API does.
+- **The repository picker no longer blames the query for an empty roster.** A
+  loader that legitimately returned nothing fell through to "no match for X",
+  so an installation with zero granted repositories read as a failed search —
+  in hardcoded English. Autocomplete now holds queries shorter than its minimum
+  and says how many characters it wants; the picker names the zero-grant case
+  and links to where it is fixed. (#36)
+
+### Operations
+
+- New env vars, both with defaults: `CODE_SNAPSHOT_TTL_MS` (600000) and
+  `CODE_SNAPSHOT_MAX_BYTES` (268435456) bound how long a downloaded repository
+  is held in memory for the code tools and how much a process may hold.
+
 ## [0.7.1] — 2026-09-17
 
 ### Fixed
@@ -398,6 +435,7 @@ it.
   public endpoint.
 
 [unreleased]: https://github.com/hrustalq/knowledge/compare/v0.7.1...HEAD
+[0.8.0]: https://github.com/hrustalq/knowledge/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/hrustalq/knowledge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/hrustalq/knowledge/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/hrustalq/knowledge/compare/v0.6.0...v0.6.1

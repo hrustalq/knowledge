@@ -1,4 +1,4 @@
-import { ASSISTANT_WRITE_TOOL_NAMES } from '@knowledge/contracts';
+import { ASSISTANT_CODE_TOOL_NAMES, ASSISTANT_WRITE_TOOL_NAMES } from '@knowledge/contracts';
 import type { AgentCapability, AgentSurface, AiPurpose, BuiltInAgentKey } from '@knowledge/contracts';
 
 /**
@@ -104,6 +104,12 @@ const UI_TOOLS = ['ask_user', 'render_component'];
  * them is therefore inert until a deployment opts in.
  */
 const WEB_TOOLS = ['web_search', 'web_fetch'];
+/**
+ * A connected repository (docs/features/31). Same footing as the web pair:
+ * named in the two conversational lists, and inert until the workspace has a
+ * repository connector — `definitions()` withholds them otherwise.
+ */
+const CODE_TOOLS = [...ASSISTANT_CODE_TOOL_NAMES];
 
 export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefault> = {
   router: {
@@ -135,7 +141,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     // Exactly what definitions('ask', { ui: true }) offers today: read tools,
     // the form, the offer to switch modes, and inline components — plus the two
     // web tools, which `definitions` withholds unless the deployment allows them.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, 'request_agent_mode'],
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, 'request_agent_mode'],
     skillIds: [],
     purpose: 'chat',
     // Interactive only. A researcher with nobody to answer has no job: every
@@ -154,7 +160,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     instructions: CHAT_PREAMBLE + AGENT_CLAUSE + FORM_CLAUSE + CHAT_RULES,
     // definitions('agent', { ui: true }) drops request_agent_mode — offering
     // the switch when the write tools are already on the table is confusing.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...WRITE_TOOLS],
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, ...WRITE_TOOLS],
     skillIds: [],
     purpose: 'chat',
     surfaces: ['interactive'],
@@ -360,6 +366,42 @@ Return only the markdown. If the image contains no legible text, return an empty
   // produces a graph the compiler rejects — which the caller then has to
   // explain away in prose. The JSON shape, the category list and the editing
   // rules are appended by WorkflowDraftService, which owns them.
+  /**
+   * The reverse-documenter (docs/features/31).
+   *
+   * Background only, scoped to one repository connector, and the curator's
+   * shape a third time: which files the repository has, which of them decide
+   * something, and which of those no document or page mentions are all
+   * *queries* — the worker answers them in code. The model is spent on the
+   * half that is judgement: what a file decides, said for a reader who has not
+   * opened it. Every finding carries a draft page and cites the lines it rests
+   * on; a person creates the page, the agent never does.
+   */
+  archaeologist: {
+    key: 'archaeologist',
+    name: 'agent.archaeologist',
+    description: 'agent.archaeologistDesc',
+    instructions:
+      'You document the business logic of a codebase that no document declares. You are given a digest of what ' +
+      'the repository\'s own documents and the workspace\'s pages already say, and one source file at a time ' +
+      'that none of them mention. Read the file with the code tools before you say anything about it, and ' +
+      'follow what it imports when a rule is only understandable with it. ' +
+      'A rule is a decision the code makes — a validation, a threshold, a state transition, a price, an access ' +
+      'check, a retry, a side effect that happens under a condition — never what a function is named or that ' +
+      'a class exists. Write each page for a reader who has not opened the file and will not: what this code ' +
+      'decides, the exact conditions, where it lives, what it depends on, and what is unclear. ' +
+      'Cite the path and lines for every claim. If the file decides nothing a reader needs to know, or the ' +
+      'digest already covers it, return no findings — a page nobody needed costs a reviewer more than a ' +
+      'missing one. You never edit anything; a person creates the pages you draft.',
+    tools: [...READ_TOOLS, ...CODE_TOOLS],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['background'],
+    // 'tools' is a preference, not a prerequisite — the same degrade rule as
+    // the curator: a model without tool support is shown the file instead.
+    requires: ['json', 'tools'],
+  },
+
   architect: {
     key: 'architect',
     name: 'agent.architect',

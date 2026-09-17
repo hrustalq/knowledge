@@ -666,8 +666,32 @@ export const BUILT_IN_AGENT_KEYS = [
   'architect',
   /** Proposes the relations a page should declare (docs/features/28). */
   'cartographer',
+  /** Reverse-documents a connected repository's undeclared business logic (docs/features/31). */
+  'archaeologist',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
+
+/**
+ * Agents whose run is scoped to one repository connector (docs/features/31).
+ *
+ * One predicate for the API, which refuses to start such a run without a
+ * connector it can resolve, and for the web, which asks for one before
+ * pressing Run. A declaration is not a fact: if the two read different lists,
+ * the Run button and the 400 it gets back disagree about what is runnable.
+ */
+export const CONNECTOR_SCOPED_AGENT_KEYS = ['archaeologist'] as const;
+export function isConnectorScopedAgent(key: string): boolean {
+  return (CONNECTOR_SCOPED_AGENT_KEYS as readonly string[]).includes(key);
+}
+
+/**
+ * What a run was asked to do — `agent_runs.input`. `note` seeds an extra
+ * instruction; `connectorId` scopes a connector-scoped agent to one repository.
+ */
+export interface AgentRunInput {
+  note?: string;
+  connectorId?: string;
+}
 
 /**
  * Where an agent may run. The surface caps its tools: `background` has nobody
@@ -723,6 +747,26 @@ export const ASSISTANT_TOOL_NAMES = [
   'propose_update',
   /** Edits the page's frontmatter relations, as a merge request (docs/features/28). */
   'edit_relations',
+  /** Read a connected repository (docs/features/31). Opt-in, like the web pair. */
+  'code_tree',
+  'code_read',
+  'code_search',
+  'code_outline',
+] as const;
+
+/**
+ * The tools that read a connected repository (docs/features/31).
+ *
+ * One list for the same reason the write set is one list: the harness filters
+ * on it, the built-in agents compose their allowlists from it, and the settings
+ * picker renders it. Reads only — nothing here can change a repository or a
+ * page, which is what lets the harness run them in parallel.
+ */
+export const ASSISTANT_CODE_TOOL_NAMES = [
+  'code_tree',
+  'code_read',
+  'code_search',
+  'code_outline',
 ] as const;
 
 /**
@@ -864,6 +908,20 @@ export interface AgentFinding {
    * off-platform was discarded in silence. It now survives if it cites either.
    */
   sources?: AssistantWebSource[];
+  /**
+   * A new page this finding proposes (docs/features/31). Set only by the
+   * archaeologist, whose findings cite source files rather than pages: there
+   * is nothing to rewrite, so `propose` does not apply — a person creates the
+   * page instead, and `documentIds` then records where it went. A finding with
+   * a draft and no document is one nobody has acted on yet.
+   */
+  draft?: AgentFindingDraft;
+}
+
+/** The page a finding would become: written by the run, published by a person. */
+export interface AgentFindingDraft {
+  title: string;
+  markdown: string;
 }
 
 // POST /v1/ai/agents/runs/:id/findings/:index/propose
@@ -875,6 +933,12 @@ export interface ProposeAgentFindingResponse {
   title: string;
 }
 
+// POST /v1/ai/agents/runs/:id/findings/:index/create-page
+export interface CreatePageFromFindingResponse {
+  documentId: string;
+  title: string;
+}
+
 export interface AgentRunSummary {
   id: string;
   workspaceId: string;
@@ -883,6 +947,8 @@ export interface AgentRunSummary {
   trigger: AgentRunTrigger;
   status: AgentRunStatus;
   createdBy: string;
+  /** What the run was asked to do; null for a run that took no parameters. */
+  input: AgentRunInput | null;
   summary: string | null;
   findings: AgentFinding[];
   findingCount: number;

@@ -9,6 +9,7 @@ import { AssistantClientModule } from './assistant-client.module.js';
 import { AssistantReadToolsModule } from './assistant-read-tools.module.js';
 import { AssistantToolsService } from './assistant.tools.js';
 import { WebResearchModule } from './web-research.module.js';
+import { CodeResearchModule } from '../connectors/code-research/code-research.module.js';
 import { AssistantService } from './assistant.service.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
 import { AssistantController } from './assistant.controller.js';
@@ -38,6 +39,9 @@ import { AiModule } from '../ai/ai.module.js';
     // agent worker can construct them too (docs/features/29). Reached exactly
     // as before from here — AssistantToolsService still injects the service.
     WebResearchModule,
+    // The repository tools (docs/features/31), same shape: controller-free,
+    // shared with the agent worker, delegated to by AssistantToolsService.
+    CodeResearchModule,
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],

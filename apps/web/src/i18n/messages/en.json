@@ -40,7 +40,8 @@
     "continue": "Continue",
     "send": "Send",
     "tooLarge": "That is too large to send. Split it up, or attach it as a file instead of pasting it.",
-    "unknownError": "Something went wrong. Try again."
+    "unknownError": "Something went wrong. Try again.",
+    "typeAtLeast": "Type at least {n} characters"
   },
   "page": {
     "empty": "Nothing here yet",
@@ -456,7 +457,9 @@
       "branchPinned": "Pinned to {branch}. It will stop syncing if that branch is deleted.",
       "branchFollows": "Following the default branch, currently {branch}.",
       "branchHint": "Leave empty to follow whatever the repository's default branch is.",
-      "otherAccountHint": "Searching only the selected account. If the repository belongs to another one, switch accounts above."
+      "otherAccountHint": "Searching only the selected account. If the repository belongs to another one, switch accounts above.",
+      "noneGranted": "This installation has no repositories.",
+      "noneGrantedHint": "The GitHub App is installed on this account but was granted access to zero repositories, so there is nothing to search. Choose which ones it may read."
     }
   },
   "workflow": {
@@ -1332,6 +1335,9 @@
       "missing": "model cannot: {caps}",
       "runNow": "Run now",
       "runStarted": "Started a run of \"{name}\"",
+      "pickConnector": "Which repository should {name} read?",
+      "pickConnectorHint": "One repository per run. Its pages and the repository's own documents count as already declared.",
+      "noRepositories": "Connect a codebase or markdown/git repository first — this agent reads one.",
       "scheduleEnabled": "Run on a schedule",
       "scheduleHint": "Unattended runs execute as whoever turned the schedule on, and count against this workspace budget. An agent slower than its interval falls behind rather than piling up.",
       "scheduleMinutes": "Every (minutes)",
@@ -1365,12 +1371,19 @@
         "graph": "Reading the graph",
         "thinking": "Asking the model",
         "reviewing": "Reviewing pages",
-        "terms": "Looking for terms"
+        "terms": "Looking for terms",
+        "snapshot": "Downloading the repository",
+        "docs": "Reading what is already declared",
+        "candidates": "Ranking source files",
+        "reading": "Reading source files"
       },
       "warnings": "no warnings | {count} warning | {count} warnings",
       "sources": "Web sources",
       "propose": "Propose fix",
       "proposed": "Opened a merge request: {title}",
+      "proposedPage": "Proposed page: {title}",
+      "createPage": "Create page",
+      "pageCreated": "Created the page \"{title}\"",
       "viewProposal": "View merge request",
       "applyRelations": "Apply relations",
       "relationsApplied": "Opened a merge request: {title}",
@@ -2036,6 +2049,22 @@
     "web_fetch": {
       "running": "Reading a web page",
       "done": "Read a web page"
+    },
+    "code_tree": {
+      "running": "Listing repository files",
+      "done": "Listed repository files"
+    },
+    "code_search": {
+      "running": "Searching the code",
+      "done": "Searched the code"
+    },
+    "code_outline": {
+      "running": "Outlining a source file",
+      "done": "Outlined a source file"
+    },
+    "code_read": {
+      "running": "Reading a source file",
+      "done": "Read a source file"
     }
   },
   "entityType": {

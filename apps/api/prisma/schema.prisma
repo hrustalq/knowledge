@@ -1619,3 +1619,80 @@ model NotificationPreference {
   @@id([userId, workspaceId])
   @@map("notification_preferences")
 }
+
+/// A GitHub App installation on an account or organisation (docs/features/30).
+///
+/// Recorded per workspace rather than globally: an installation is what grants
+/// this workspace's connectors read access to a set of repositories, and two
+/// workspaces installing the App on the same org must not inherit each other's
+/// connectors. The same org therefore appears once per workspace that installed
+/// it, which is why the unique key is the pair and not installation_id alone.
+///
+/// No FK on workspace_id or created_by, per house policy — it is what lets the
+/// AUTH_MODE=none dev principal, which has no users row, own data.
+model GithubInstallation {
+  id          String @id @default(uuid()) @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+
+  /// GitHub's own installation id. BigInt because GitHub's ids are 64-bit and
+  /// already past what a signed 32-bit column could hold.
+  installationId BigInt @map("installation_id")
+
+  /// Denormalised from the App API at install time so the account switcher can
+  /// render without a round trip per row, and so a suspended or deleted
+  /// installation still shows a name rather than a number.
+  accountLogin     String  @map("account_login")
+  /// 'User' | 'Organization'.
+  accountType      String  @map("account_type")
+  accountAvatarUrl String? @map("account_avatar_url")
+
+  /// 'all' | 'selected' — whether the org owner granted every repository or a
+  /// chosen set. Surfaced in the picker so an empty list is explainable.
+  repositorySelection String @default("all") @map("repository_selection")
+
+  /// Set when GitHub reports the installation suspended; the row is kept so the
+  /// connectors pointing at it can say why they stopped rather than vanishing.
+  suspendedAt DateTime? @map("suspended_at") @db.Timestamptz
+
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([workspaceId, installationId])
+  @@index([workspaceId])
+  @@map("github_installations")
+}
+
+/// One person's GitHub OAuth identity (docs/features/30).
+///
+/// Distinct from the installation above, and deliberately so: the installation
+/// is what a *sync* authenticates as, and it outlives whoever configured it.
+/// This is what *browsing* authenticates as, so that the account switcher can
+/// show only the installations this person may actually reach — GET
+/// /user/installations answers that, and no App-level credential can.
+///
+/// Keyed by our user id, not by workspace: a GitHub identity belongs to a
+/// person, and the same person browsing two workspaces is still one identity.
+model GithubUserToken {
+  /// Our user id. No FK, per house policy.
+  userId String @id @map("user_id") @db.Uuid
+
+  githubUserId    BigInt  @map("github_user_id")
+  githubLogin     String  @map("github_login")
+  githubAvatarUrl String? @map("github_avatar_url")
+
+  /// AES-256-GCM envelopes ("gcm$iv$tag$ct"), the same secret-box the connector
+  /// credential uses. Never leaves the API process.
+  accessToken  String  @map("access_token")
+  refreshToken String? @map("refresh_token")
+
+  /// Both null when the App does not have expiring user tokens switched on, in
+  /// which case the access token is used until GitHub rejects it.
+  expiresAt        DateTime? @map("expires_at") @db.Timestamptz
+  refreshExpiresAt DateTime? @map("refresh_expires_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("github_user_tokens")
+}

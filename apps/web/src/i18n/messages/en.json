@@ -433,6 +433,29 @@
     "aiDone": {
       "cleanup": "Conversion tidied",
       "merge": "Versions merged"
+    },
+    "github": {
+      "private": "private",
+      "loading": "Checking your GitHub connection…",
+      "connect": "Connect GitHub",
+      "connectHint": "Opens GitHub in a new tab. You stay on this step — come back when you're done and the list refreshes itself.",
+      "install": "Install on an account or organisation",
+      "installHint": "Choose which repositories this workspace may read. You can grant all of them, or pick a few and change it later.",
+      "addAccount": "Add account",
+      "repository": "Repository",
+      "searchPlaceholder": "Search repositories…",
+      "noRepos": "No repositories were granted to this installation.",
+      "limitedHint": "This installation was granted only selected repositories.",
+      "manageAccess": "Manage access on GitHub",
+      "refresh": "Refresh",
+      "branch": "Branch",
+      "branchPlaceholder": "Search branches…",
+      "noBranches": "No branches could be read for this repository.",
+      "defaultBranch": "Follow the default branch",
+      "isDefault": "default",
+      "branchPinned": "Pinned to {branch}. It will stop syncing if that branch is deleted.",
+      "branchFollows": "Following the default branch, currently {branch}.",
+      "branchHint": "Leave empty to follow whatever the repository's default branch is."
     }
   },
   "workflow": {

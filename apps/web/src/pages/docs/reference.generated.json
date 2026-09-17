@@ -882,6 +882,36 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connectors/github/branches",
+      "tag": "connectors",
+      "summary": "Branches of one repository, its default first",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/github/installations",
+      "tag": "connectors",
+      "summary": "GitHub accounts and orgs this workspace can pick repositories from",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/github/repos",
+      "tag": "connectors",
+      "summary": "Repositories in one installation, newest-pushed first",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/connectors/runs/{runId}",
       "tag": "connectors",
       "summary": "One sync run — the poll target",

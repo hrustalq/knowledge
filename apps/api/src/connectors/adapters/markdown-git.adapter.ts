@@ -9,7 +9,7 @@ import {
   downloadRepoArchive,
   githubHeaders,
   gitlabHeaders,
-  repoBranch,
+  resolveBranch,
   repoHost,
   repoSubdir,
 } from './repo-archive.js';
@@ -54,11 +54,14 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
 
   async *list(ctx: ConnectorContext): AsyncIterable<ExternalRef> {
     const files = await this.markdownFiles(ctx);
+    // Cached by `resolveBranch`, so this is free after the archive download
+    // that `markdownFiles` just awaited.
+    const branch = await resolveBranch(ctx);
     for (const [path, bytes] of files) {
       yield {
         externalId: path,
         title: titleFor(path, bytes),
-        url: blobUrl(ctx, path),
+        url: blobUrl(ctx, path, branch),
         // No per-file sha without an extra API call, so the content hash is the
         // version. It is exactly as good for change detection and costs nothing.
         version: hashBytes(bytes),
@@ -89,14 +92,14 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
       ref,
       title: (typeof parsed.data.title === 'string' && parsed.data.title) || titleFor(ref.externalId, bytes),
       markdown: parsed.content.trim(),
-      frontmatter: { ...parsed.data, source: blobUrl(ctx, ref.externalId) },
+      frontmatter: { ...parsed.data, source: blobUrl(ctx, ref.externalId, await resolveBranch(ctx)) },
       warnings,
     };
   }
 
   async push(ctx: ConnectorContext, doc: OutboundDocument): Promise<ExternalRef> {
     const host = repoHost(ctx);
-    const branch = repoBranch(ctx);
+    const branch = await resolveBranch(ctx);
     const path = doc.ref?.externalId ?? this.pathFor(ctx, doc.title);
     const content = Buffer.from(doc.markdown, 'utf8').toString('base64');
     const message = `Update ${path} from the knowledge base`;
@@ -125,7 +128,7 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
       return {
         externalId: path,
         title: doc.title,
-        url: res.content?.html_url ?? blobUrl(ctx, path),
+        url: res.content?.html_url ?? blobUrl(ctx, path, branch),
         version: res.content?.sha,
       };
     }
@@ -146,7 +149,7 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
       if (!updated.ok) {
         await connectorFetch(api, { method: 'POST', headers, signal: ctx.signal, body }, ctx);
       }
-      return { externalId: path, title: doc.title, url: blobUrl(ctx, path) };
+      return { externalId: path, title: doc.title, url: blobUrl(ctx, path, branch) };
     }
 
     throw new Error('only GitHub and GitLab repositories can be published to');

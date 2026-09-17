@@ -161,7 +161,11 @@ export class AiSkillsService {
   }
 }
 
-/** Whole-word-ish match so "release" does not fire on "released-by-accident". */
+/**
+ * Whole-word-ish match so "release" does not fire on "released-by-accident".
+ * The boundary test is `\p{L}\p{N}`, not `[a-z0-9]`: under the ASCII class a
+ * Cyrillic neighbour read as a boundary, so «релиз» fired inside «релизный».
+ */
 function matchesTrigger(skill: AiSkill, haystack: string): boolean {
   for (const trigger of readTriggers(skill.triggers)) {
     const t = trigger.toLowerCase();
@@ -170,7 +174,7 @@ function matchesTrigger(skill: AiSkill, haystack: string): boolean {
     if (at === -1) continue;
     const before = at === 0 ? '' : haystack[at - 1];
     const after = haystack[at + t.length] ?? '';
-    if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) return true;
+    if (!/[\p{L}\p{N}]/u.test(before) && !/[\p{L}\p{N}]/u.test(after)) return true;
   }
   return false;
 }

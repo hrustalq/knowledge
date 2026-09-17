@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { EventsSubscriber } from '../events/events.subscriber.js';
 import { ActivityService } from '../activity/activity.service.js';
 import type { Env } from '../config/env.js';
+import { asLocale } from '../i18n/locale.js';
 import { WorkflowProducer } from './workflow.producer.js';
 
 /**
@@ -154,6 +155,15 @@ export class WorkflowTriggerService implements OnModuleInit {
     }
 
     const started = applyRunEvent('pending', { type: 'START' }, { snapshot: initialRunSnapshot() });
+    // No request here to read a language from, so the run is written in the
+    // language of the person it executes and bills as — the same person the
+    // pages will be attributed to. Left unset, the column's `"en"` default
+    // produced English pages in a Russian workspace on every auto-start.
+    const owner = await this.prisma.user.findUnique({
+      where: { id: definition.createdBy },
+      select: { locale: true },
+    });
+    const locale = asLocale(owner?.locale);
     // Run + entry nodes commit together, as in WorkflowsService.startRun. This
     // path had the same pair without the transaction: a run created with no
     // nodes enqueues nothing, so reconcileRun never runs and it sits in the list
@@ -172,6 +182,7 @@ export class WorkflowTriggerService implements OnModuleInit {
           startedBy: 'trigger',
           // The author who turned auto-start on owns what it produces.
           createdBy: definition.createdBy,
+          locale,
           startedAt: new Date(),
         },
       });

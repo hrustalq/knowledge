@@ -171,7 +171,7 @@ export class AgentExecutor {
       // and without this the reader is shown a pass with no orphan findings and
       // no way to tell that from a workspace with no orphans.
       this.logger.warn(`Curator could not read the relation graph: ${String(error)}`);
-      await report({ warning: 'The relation graph could not be read, so the orphan check was skipped.' });
+      await report({ warning: t('agent.warning.graphUnreadableOrphans') });
     }
 
     const findings: AgentFinding[] = [];
@@ -268,8 +268,8 @@ export class AgentExecutor {
       } catch (error) {
         // A flaky model must not lose the deterministic findings already made.
         this.logger.warn(`Curator model pass failed: ${String(error)}`);
-        summary += ' The model pass failed, so only structural findings are included.';
-        await report({ warning: `The model pass failed: ${String(error)}` });
+        summary += ` ${t('agent.warning.modelPassFailedStructuralOnly')}`;
+        await report({ warning: t('agent.warning.modelPassFailed', { error: String(error) }) });
       }
     }
 
@@ -293,7 +293,7 @@ export class AgentExecutor {
     report: AgentReporter,
   ): Promise<AgentRunResult> {
     if (!agent.config.enabled || agent.missing.length > 0) {
-      throw new Error('The model routed at the reviewer cannot run it.');
+      throw new Error(t('agent.review.cannotRun'));
     }
 
     // Newest revision first, then back to the page — "recently changed" is a
@@ -305,7 +305,7 @@ export class AgentExecutor {
       select: { documentId: true, createdAt: true },
       take: MAX_REVIEWED,
     });
-    if (recent.length === 0) return { summary: 'No indexed pages to review yet.', findings: [] };
+    if (recent.length === 0) return { summary: t('agent.review.noPages'), findings: [] };
 
     const documents = await this.prisma.document.findMany({
       where: { id: { in: recent.map((r) => r.documentId) } },
@@ -356,15 +356,21 @@ export class AgentExecutor {
         // One unreadable page must not lose the pages already reviewed — but a
         // pass that silently skipped half its pages reads as a clean review.
         this.logger.warn(`Reviewer could not review "${doc.title}": ${String(error)}`);
-        await report({ warning: `"${doc.title}" could not be reviewed: ${String(error)}` });
+        await report({ warning: t('agent.warning.pageNotReviewed', { title: doc.title, error: String(error) }) });
       }
     }
 
     return {
+      // Counts are translated by a nested t() rather than glued in as
+      // `page(s)`: Russian declines the noun, so the number and its noun
+      // travel together (docs/features/18).
       summary:
         reviewed === 0
-          ? 'No page could be reviewed in this pass.'
-          : `Reviewed ${reviewed} recently changed page(s) and found ${findings.length} issue(s).`,
+          ? t('agent.review.none')
+          : t('agent.review.summary', {
+              pages: t('agent.count.pages', { count: reviewed }),
+              issues: t('agent.count.issues', { count: findings.length }),
+            }),
       findings,
     };
   }
@@ -442,7 +448,7 @@ export class AgentExecutor {
         // The provider is off for this workspace — every later page would say
         // the same, so stop rather than making the same failed call per page.
         if (!res.enabled) {
-          return { summary: 'The AI assistant is disabled for this workspace.', findings };
+          return { summary: t('agent.glossary.disabled'), findings };
         }
         scanned++;
         for (const s of res.suggestions) {
@@ -455,8 +461,8 @@ export class AgentExecutor {
             kind: 'gap',
             severity: 'info',
             title: s.term,
-            detail: `${s.definition}\n\nSeen ${s.occurrences}× on "${doc.title}".${
-              s.aliases.length ? ` Aliases: ${s.aliases.join(', ')}.` : ''
+            detail: `${s.definition}\n\n${t('agent.glossary.seenOn', { count: s.occurrences, title: doc.title })}${
+              s.aliases.length ? ` ${t('agent.glossary.aliases', { list: s.aliases.join(', ') })}` : ''
             }`,
             documentIds: [doc.id],
             documentTitles: [doc.title],
@@ -468,18 +474,24 @@ export class AgentExecutor {
         // Matched on the status, not the message: the message is localized
         // (docs/features/18), so a text match would only work in English.
         if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
-          return { summary: `Stopped after ${scanned} page(s): the workspace AI budget is spent.`, findings };
+          return {
+            summary: t('agent.glossary.budgetSpent', { pages: t('agent.count.pages', { count: scanned }) }),
+            findings,
+          };
         }
         this.logger.warn(`Glossarist could not scan "${doc.title}": ${String(error)}`);
-        await report({ warning: `"${doc.title}" could not be scanned: ${String(error)}` });
+        await report({ warning: t('agent.warning.pageNotScanned', { title: doc.title, error: String(error) }) });
       }
     }
 
     return {
       summary:
         findings.length === 0
-          ? `Scanned ${scanned} page(s); every term they use is already defined.`
-          : `Scanned ${scanned} page(s) and proposes ${findings.length} new term(s).`,
+          ? t('agent.glossary.nothingNew', { pages: t('agent.count.pages', { count: scanned }) })
+          : t('agent.glossary.summary', {
+              pages: t('agent.count.pages', { count: scanned }),
+              terms: t('agent.count.terms', { count: findings.length }),
+            }),
       findings,
     };
   }
@@ -549,7 +561,7 @@ export class AgentExecutor {
       // not sink the run, it just loses the deterministic half.
       graphReadable = false;
       this.logger.warn(`Cartographer could not read the relation graph: ${String(error)}`);
-      await report({ warning: 'The relation graph could not be read, so only the model half ran.' });
+      await report({ warning: t('agent.warning.graphUnreadableModelOnly') });
     }
 
     const findings: AgentFinding[] = [];
@@ -656,7 +668,7 @@ export class AgentExecutor {
         }
       } catch (error) {
         this.logger.warn(`Cartographer model pass failed: ${String(error)}`);
-        await report({ warning: `The model pass failed: ${String(error)}` });
+        await report({ warning: t('agent.warning.modelPassFailed', { error: String(error) }) });
       }
     }
 

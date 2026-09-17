@@ -44,6 +44,31 @@ in the pull request that introduces them — see
   digits.
 - **Review severity badges show a translated label** instead of the raw
   `error` / `warning` / `suggestion` value.
+### Added
+
+- `docs/architecture/` — nine per-layer implementation documents for the machinery
+  that belongs to no single feature: entrypoints and module boundaries, persistence
+  and revisions, ingestion, search and graph, merge and review, auth and ACLs, the
+  generated client and error contract, events and live updates, and the web
+  frontend. Where the code has diverged from `plan.md` they say so, rather than
+  letting the design document quietly stop being true.
+- `docs/features/27-comment-editing.md`, documenting comment editing and the
+  Comment vs. Start thread split, which had shipped undocumented — its only record
+  was a bullet in `CLAUDE.md`.
+
+### Changed
+
+- **`CLAUDE.md` carries conventions and gotchas only**, as `CONTRIBUTING.md`
+  already said it did. The 27 per-feature implementation narratives moved into
+  `docs/features/` and the new `docs/architecture/` layer, leaving a pointer table;
+  the cross-cutting rules that were buried inside them are collected under a new
+  **Conventions** section. Several claims were corrected against the code on the
+  way out: the glossary word boundary, a `MarkdownView` glossary prop that no
+  longer exists, comment reply nesting, the connector table count, and the
+  built-in agent roster.
+- `docs/README.md` indexes all 27 feature docs and the architecture set; it
+  previously stopped at 17 and listed feature 16 as undocumented although its doc
+  was sitting next to it.
 
 ## [0.6.0] — 2026-09-16
 

@@ -21,12 +21,12 @@ Four surfaces declare a version, and none of them derives it from the tag:
 
 | Surface                                           | Declares  | Should be          |
 | ------------------------------------------------- | --------- | ------------------ |
-| `apps/api/src/config/swagger.ts` `.setVersion()`  | `0.5.0`   | the tag            |
-| `apps/api/src/mcp/mcp.service.ts` `new McpServer` | `0.5.0`   | the tag            |
+| `apps/api/src/config/swagger.ts` `.setVersion()`  | `0.6.0`   | the tag            |
+| `apps/api/src/mcp/mcp.service.ts` `new McpServer` | `0.6.0`   | the tag            |
 | `apps/api/package.json`                           | `0.0.1`   | `0.0.0` (internal) |
 | root `package.json`                               | _(unset)_ | the tag, or unset  |
 
-The first two match `v0.5.0` today, and that is the drift rather than the cure:
+The first two match `v0.6.0` today, and that is the drift rather than the cure:
 they are correct only because the release runbook in
 [CONTRIBUTING.md](../CONTRIBUTING.md#release) bumps them **by hand** every time,
 so they are one forgotten step away from lying — which is exactly what the
@@ -129,16 +129,20 @@ cannot undo. Say so in the changelog's **Operations** section, out loud.
 ## What the tag does
 
 `vX.Y.Z` is not a label applied after the fact. Pushing it **is** the deploy:
-`.github/workflows/deploy.yml` triggers on `v*.*.*` and on nothing else. `main` is
-integration and is not live.
+`.github/workflows/deploy.yml` triggers on `v*.*.*` and on nothing else. `dev` is
+integration; `main` is the released state, and even `main` is not live until the
+tag is pushed.
 
-Two consequences worth internalising:
+Three consequences worth internalising:
 
-- `## [Unreleased]` in the changelog is now _honest_. Merged work sits in `main`,
-  built and tested but not serving traffic, until somebody tags.
-- `main` must stay releasable at every commit, because the tag is cut from it with
-  no further gate. CI green on `main` is the only thing standing between a merge
-  and production.
+- `## [Unreleased]` in the changelog is now _honest_. Merged work sits in `dev`,
+  built and tested but not serving traffic, until a release promotes it.
+- `dev` must stay releasable at every commit, because the promotion PR is the only
+  gate between it and a tag.
+- Between releases, `main` **equals the deployed tag**. That makes "what is
+  running in production?" a question you answer by reading a branch, and it is the
+  reason the promotion hop exists at all — see
+  [CONTRIBUTING.md](../CONTRIBUTING.md#branch-policy).
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the branch policy and the release
 runbook that follows from this.

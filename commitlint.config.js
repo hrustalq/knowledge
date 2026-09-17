@@ -1,7 +1,7 @@
 /**
  * Conventional Commits, enforced on every commit by .husky/commit-msg.
  *
- * The version bump and the changelog are both derived from `git log <lastTag>..main`
+ * The version bump and the changelog are both chosen from `git log <lastTag>..dev`
  * (see CONTRIBUTING.md#release), so a commit that does not parse is a release note
  * that has to be reconstructed by hand later.
  *

@@ -4,10 +4,15 @@ name: ci
 # This is the job untrusted fork PRs can reach, and the self-hosted runner is a
 # box with docker-group access to the production stack. Keeping this split is
 # the whole reason the deploy workflow is a separate file.
+#
+# `pull_request` is deliberately unfiltered, so it already gates PRs based on
+# `dev` (where features integrate) as well as the promotion PR into `main`. The
+# `push` list exists only for the post-merge signal on the two long-lived
+# branches; `dev` has to be there or its head is the one commit nobody rechecks.
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.ref }}

@@ -6,8 +6,8 @@ name: deploy
 # cause. See also the `if:` repository guard below and the `production`
 # environment's deployment-branch policy.
 #
-# TAGS DEPLOY, MERGES DO NOT. `main` is integration and is not live: pushing
-# `vX.Y.Z` is what moves production. The release runbook is in
+# TAGS DEPLOY, MERGES DO NOT. `dev` is integration; `main` is the released state
+# and is still not live until `vX.Y.Z` is pushed. The release runbook is in
 # CONTRIBUTING.md#release and the bump rules in docs/versioning.md.
 #
 # NOTE: the `production` environment must carry a *tag* deployment policy for
@@ -55,6 +55,10 @@ jobs:
 
       # A tag can be cut from any commit in the repository, including one that
       # never passed CI on main. Releases come from main or they do not happen.
+      #
+      # This is why the release promotes `dev` -> `main` by pull request BEFORE
+      # tagging: a tag cut from `dev` is not an ancestor of `main` and fails
+      # here, correctly, but only after it has been pushed and has to be deleted.
       - name: Verify the tag is on main
         if: github.ref_type == 'tag'
         run: |

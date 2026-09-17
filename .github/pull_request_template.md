@@ -1,6 +1,10 @@
 <!--
-The PR title IS the commit message — merges are squash-only. It must be a valid
-conventional commit header: `feat(web): add saved filter rail`
+Base this on `dev`, not `main`: `gh pr create --base dev`. Only a release
+promotion targets `main`, and only a hotfix branches from it.
+
+The PR title IS the commit message — PRs into `dev` are squash-only, enforced by
+ruleset. It must be a valid conventional commit header:
+`feat(web): add saved filter rail`
 See CONTRIBUTING.md#pull-requests.
 -->
 

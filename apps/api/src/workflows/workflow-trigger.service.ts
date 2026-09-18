@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Prisma } from '@prisma/client';
 import type { KnowledgeEvent, WorkflowGraph, WorkflowTrigger } from '@knowledge/contracts';
+import { REPO_EVENT_TYPES } from '@knowledge/contracts';
 import { applyRunEvent, compileDefinition, initialRunSnapshot } from '@knowledge/workflow';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventsSubscriber } from '../events/events.subscriber.js';
@@ -39,6 +40,7 @@ import { WorkflowProducer } from './workflow.producer.js';
 export class WorkflowTriggerService implements OnModuleInit {
   private readonly logger = new Logger(WorkflowTriggerService.name);
   private readonly maxActive: number;
+  private readonly repoCooldownMs: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -48,6 +50,8 @@ export class WorkflowTriggerService implements OnModuleInit {
     config: ConfigService<Env, true>,
     ) {
     this.maxActive = Number(config.get('WORKFLOW_AUTOSTART_MAX_ACTIVE', { infer: true }) ?? 5);
+    this.repoCooldownMs =
+      Number(config.get('WORKFLOW_REPO_RETRIGGER_COOLDOWN_MINUTES', { infer: true }) ?? 60) * 60_000;
   }
 
   onModuleInit(): void {
@@ -105,10 +109,35 @@ export class WorkflowTriggerService implements OnModuleInit {
 
       // A page this workflow already produced pages for should not silently
       // grow a second set; re-running is a deliberate act.
-      const previous = await this.prisma.workflowRun.count({
-        where: { definitionId: definition.id, rootDocumentId: document.id },
-      });
-      if (previous > 0) continue;
+      //
+      // Repo events are the exception (docs/features/32), and the reason the
+      // guard exists is the reason they are exempt from it: a page event
+      // recurs because a run's own output edits pages, so "only ever once" is
+      // what stops the chain feeding itself. A repo event is caused by a person
+      // on the far side, and an issue that opens, closes and reopens over a
+      // month is three separate pieces of news about the same page — under the
+      // absolute guard only the first would ever be heard.
+      //
+      // Exempt is not unbounded: a flow that closes an issue when it finishes
+      // makes the far side move, so a cooldown replaces the guard rather than
+      // removing it.
+      if (isRepoEvent(event.type)) {
+        const since = new Date(Date.now() - this.repoCooldownMs);
+        const recent = await this.prisma.workflowRun.count({
+          where: {
+            definitionId: definition.id,
+            rootDocumentId: document.id,
+            startedBy: 'trigger',
+            createdAt: { gte: since },
+          },
+        });
+        if (recent > 0) continue;
+      } else {
+        const previous = await this.prisma.workflowRun.count({
+          where: { definitionId: definition.id, rootDocumentId: document.id },
+        });
+        if (previous > 0) continue;
+      }
 
       const active = await this.prisma.workflowRun.count({
         where: {
@@ -213,4 +242,18 @@ export class WorkflowTriggerService implements OnModuleInit {
     });
     this.logger.log(`Auto-started "${name}" for document ${document.id} on ${eventType}`);
   }
+}
+
+/**
+ * A repo event is one the far side caused (docs/features/32), which is what
+ * makes it exempt from the "only ever once per page" guard.
+ *
+ * Read off the contracts array rather than a `startsWith('repo.')` test: the
+ * prefix is a naming convention, and a guard that keys off a convention says
+ * yes to the first event somebody names `repo.something` without meaning this.
+ */
+const REPO_EVENTS = new Set<string>(REPO_EVENT_TYPES);
+
+function isRepoEvent(type: string): boolean {
+  return REPO_EVENTS.has(type);
 }

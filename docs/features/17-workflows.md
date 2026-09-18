@@ -127,6 +127,15 @@ skipped, so re-running is a deliberate act; and
 Workflow events never trigger workflows, or a run's own output would restart the
 chain that produced it.
 
+Repo events are the one exception to the third guard, added by
+[feature 32](32-connector-work-items.md). The absolute "already ran once" rule
+exists because a run's output edits pages and an edit is itself a page event; a
+repo event is caused by a person on the far side, and an issue that opens,
+closes and reopens is three pieces of news about one page rather than one. It is
+a cooldown rather than an exemption — `WORKFLOW_REPO_RETRIGGER_COOLDOWN_MINUTES`
+(default 60) — because a flow that closes an issue when it finishes does make
+the far side move.
+
 ## Data model
 
 | Table                  | Notes                                                                                                                                                                                                           |

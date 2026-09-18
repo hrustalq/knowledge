@@ -12,7 +12,7 @@
  * switch nobody turned on is how this panel used to read as a form.
  */
 import { useI18n } from 'vue-i18n'
-import { DOCUMENT_CATEGORIES, KNOWN_EVENT_TYPES, type WorkflowTrigger } from '@knowledge/contracts'
+import { DOCUMENT_CATEGORIES, KNOWN_EVENT_TYPES, REPO_EVENT_TYPES, type WorkflowTrigger } from '@knowledge/contracts'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -32,7 +32,19 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 /** Only page and revision events can name a source page to run against. */
-const TRIGGER_EVENTS = KNOWN_EVENT_TYPES.filter((e) => e.startsWith('document.') || e.startsWith('revision.'))
+const PAGE_EVENTS = KNOWN_EVENT_TYPES.filter((e) => e.startsWith('document.') || e.startsWith('revision.'))
+
+/**
+ * What a connected repository reports (docs/features/32).
+ *
+ * Offered under their own heading rather than mixed into the list above,
+ * because they answer a different question — these fire on work moving on the
+ * far side, not on anybody editing a page here — and because they carry a
+ * condition the others do not: a repo event only reaches a workflow through a
+ * work item somebody attached to a page, so ticking one of these does nothing
+ * on its own. The hint under the group is where that is said.
+ */
+const REPO_EVENTS = REPO_EVENT_TYPES
 
 function patch(fields: Partial<WorkflowTrigger>) {
   emit('update:trigger', { ...props.trigger, ...fields })
@@ -102,7 +114,7 @@ function toggleCategory(category: string, on: boolean) {
       <div v-if="trigger.autoStart" class="space-y-4">
         <div class="space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.settings.after') }}</span>
-          <label v-for="event in TRIGGER_EVENTS" :key="event" class="flex items-center gap-2">
+          <label v-for="event in PAGE_EVENTS" :key="event" class="flex items-center gap-2">
             <Checkbox
               :model-value="trigger.events.includes(event)"
               :disabled="!canManage"
@@ -110,6 +122,19 @@ function toggleCategory(category: string, on: boolean) {
             />
             <span class="font-mono text-[11px]">{{ event }}</span>
           </label>
+        </div>
+
+        <div class="space-y-1.5">
+          <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.settings.afterRepo') }}</span>
+          <label v-for="event in REPO_EVENTS" :key="event" class="flex items-center gap-2">
+            <Checkbox
+              :model-value="trigger.events.includes(event)"
+              :disabled="!canManage"
+              @update:model-value="(v) => toggleEvent(event, Boolean(v))"
+            />
+            <span class="font-mono text-[11px]">{{ event }}</span>
+          </label>
+          <p class="text-muted-foreground text-[11px]">{{ t('workflow.settings.repoHint') }}</p>
         </div>
         <div class="space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.settings.onlyFor') }}</span>

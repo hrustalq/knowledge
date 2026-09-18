@@ -64,6 +64,12 @@ in the pull request that introduces them — see
   that page with it, which is what lets a workflow trigger fire on, say, an
   issue being closed against the page it is about. An unattached issue triggers
   nothing. (#PR)
+- **Workflows can be started by what happens on a connected repository.** The
+  trigger picker offers the `repo.*` events under their own heading, beside the
+  page and revision events it already had. Unlike a page event, a repo event may
+  fire the same workflow for the same page more than once — an issue that opens,
+  closes and reopens is three pieces of news — bounded by a cooldown rather than
+  by the "only ever once" rule that page events keep. (#PR)
 
 - **Access is one page again, and it says what a role means.** `/settings/users`
   folded into `/settings/access` as three tabs: **Members** (the roster as it
@@ -191,6 +197,11 @@ in the pull request that introduces them — see
   request review, Push, Release and Project v2 item. An installed App picks up
   new permissions only once an org owner approves them. See
   [docs/features/32](docs/features/32-connector-work-items.md).
+- **A second optional environment variable,
+  `WORKFLOW_REPO_RETRIGGER_COOLDOWN_MINUTES`** (default 60). It bounds how often
+  one workflow can be re-triggered for one page by repository events. Page
+  events are unaffected and keep their absolute "only ever once" guard, so no
+  existing workflow changes behaviour.
 - **One migration, additive and reversible.**
   `20260918122949_connector_work_items` adds a table and nothing else, so the
   previous release's image runs against this schema unchanged and a rollback

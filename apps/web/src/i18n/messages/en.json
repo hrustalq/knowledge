@@ -2065,6 +2065,10 @@
     "code_read": {
       "running": "Reading a source file",
       "done": "Read a source file"
+    },
+    "list_document_tree": {
+      "running": "Browsing the page tree",
+      "done": "Browsed the page tree"
     }
   },
   "entityType": {

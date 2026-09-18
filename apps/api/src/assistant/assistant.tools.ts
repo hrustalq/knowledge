@@ -282,7 +282,12 @@ export class AssistantToolsService {
               title: { type: 'string', description: 'Document title' },
               markdown: { type: 'string', description: 'Full markdown content of the new page' },
               category: { type: 'string', description: 'Optional category; defaults to "other"' },
-              parentId: { type: 'string', description: 'Optional UUID of a parent document to nest this under' },
+              parentId: {
+                type: 'string',
+                description:
+                  'UUID of the page to nest this under — get it from list_document_tree. Omitting it ' +
+                  'puts the page at the top level of the tree, which is rarely where it belongs.',
+              },
               projectId: {
                 type: 'string',
                 description: "Optional UUID of the owning project; defaults to the workspace's first project",

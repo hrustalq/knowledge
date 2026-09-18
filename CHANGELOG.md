@@ -13,6 +13,86 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **A workspace can declare that two entity keys mean the same thing.**
+  `POST /v1/entities/aliases` maps one key onto another — `сервис:биллинг` onto
+  `service:billing` — and folds the relation edges that already point at the old
+  spelling, so a Russian page and an English page about the same service finally
+  share one node in the graph. `GET` lists them; `DELETE` retires one.
+- **Relations can be declared in Russian.** `связи:` and `теги:` are read as
+  frontmatter keys, and relation types accept their Russian spellings
+  (`зависит_от`, `описывает`, `реализует`, `связано_с`, `принадлежит`,
+  `заменяет`, `противоречит`) alongside the English ones.
+- **The assistant can see where pages live.** A new `list_document_tree` tool
+  browses the page tree, and `read_document` and `search_knowledge` results now
+  carry a breadcrumb. Pages the assistant creates are placed under the section
+  they belong to instead of at the top level, and two pages sharing a title are
+  no longer indistinguishable to it.
+- **Markdown/git and codebase connectors import with their structure.** A `docs/`
+  folder or an Obsidian vault mirrors its folders instead of arriving as one flat
+  list of siblings, when the connector has **Preserve hierarchy** switched on. A
+  folder becomes a page only if it holds a `README.md`, `index.md` or
+  `<folder>.md`; one that does not is transparent, and its pages hang from the
+  nearest folder that does.
+
+### Fixed
+
+- **Relations declared in frontmatter stopped silently disappearing.** Four
+  spellings of the same thing were being treated as four different things, and
+  none of them reported a problem — the graph simply came out sparse:
+  - a key written `Сервис:Биллинг`, `service: Billing` or `service:billing`
+    produced a separate node for each spelling, including invisible Unicode
+    differences between a composed and decomposed Cyrillic `й`;
+  - a relation type written `depends_on` rather than `DEPENDS_ON` was discarded
+    without a trace, even though the same spelling was accepted when a model
+    produced it;
+  - a page using the Russian `связи:` key produced no relations at all;
+  - re-posting a relation through `POST /v1/documents/:id/relations` could leave
+    a duplicate edge behind.
+- **Tag filters are no longer case-sensitive.** Filtering on `Безопасность`
+  returned nothing when pages were tagged `безопасность`, and the empty result
+  read as "no such pages" rather than as a spelling mismatch. Search and the
+  document list both fold the tag now.
+- **Moving a page no longer leaves its children behind on failure.** Re-parenting
+  updated the page and its subtree in two separate statements outside a
+  transaction, so a failure between them left children in a project their parent
+  had already left.
+
+### Changed
+
+- Pages within a level are ordered by an explicit position, seeded from the
+  current alphabetical order — so nothing moves on screen, but ordering is no
+  longer permanently tied to the title.
+- Building a page's ancestors, its descendants, and the cycle check that guards a
+  move are now single indexed queries rather than walks. A deep tree stops
+  costing one query per level.
+
+### Operations
+
+- **Two migrations, both additive and both safe to roll back.**
+  `20260918083751_entity_aliases` adds a table.
+  `20260918084445_documents_materialized_path` adds `path`, `depth` and
+  `position` to `documents` and backfills them from the existing `parent_id`
+  tree; it is written for the no-FK case, so pages whose parent has been deleted
+  are re-rooted rather than skipped.
+- `20260918090000_documents_path_rollback_safe` exists specifically so the
+  **previous release's image can still write to this schema**, per the
+  expand/contract rule. Without it a rollback to v0.8.0 would have failed every
+  page creation on a not-null violation. Pages created while rolled back carry a
+  `/pending/` placeholder path; they behave as top-level pages and are inert in
+  subtree queries. After rolling forward again, repair them with the recursive
+  CTE from `20260918084445_documents_materialized_path`, or by touching each
+  page's parent. To find them:
+  `SELECT id, title FROM documents WHERE path = '/pending/';`
+- **No re-indexing or re-embedding is required.** `EMBED_RECIPE` is unchanged.
+  Entity keys written before this release converge on their canonical spelling
+  as pages are next indexed; to converge a whole workspace at once, run
+  `POST /v1/ingestion/reindex`. Declaring an alias folds existing edges
+  immediately and does not wait for a reindex.
+
 ## [0.8.0] — 2026-09-17
 
 ### Added
@@ -434,7 +514,7 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.7.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.8.0...HEAD
 [0.8.0]: https://github.com/hrustalq/knowledge/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/hrustalq/knowledge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/hrustalq/knowledge/compare/v0.6.1...v0.7.0

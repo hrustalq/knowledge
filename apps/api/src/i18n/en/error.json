@@ -298,5 +298,8 @@
       "blocked": "{detail} is blocked by this workspace's source policy.",
       "unsafe": "{detail} is not an address that may be requested from here."
     }
+  },
+  "entityAlias": {
+    "wouldChain": "An alias must point straight at a canonical key: \"{alias}\" or \"{canonicalKey}\" is already one side of another alias."
   }
 }

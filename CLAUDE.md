@@ -163,6 +163,14 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - One SSRF filter (`common/safe-url.ts`) and one credential store (`ai/secret-box.ts`, AES-256-GCM, write-only over the API) — one implementation is the only safe number.
 - There is **no cron** in this repo: no `@nestjs/schedule`, no BullMQ repeatables. Scheduled work is a due check inside a fixed tick, with back-pressure (never a second run while one is in flight).
 
+**Entity keys & hierarchy**
+
+- An entity key is **canonical or it is a fork**. `normalizeEntityKey` (contracts) folds NFC, case and inner whitespace; `GraphService` folds again at the recorder and `assertCanonicalKey` throws at the edge writer. Fold **at the top of a write method**, never inside `createRelationEdge` — the guarded DELETEs read `targetKey` first, so folding later duplicates an edge per re-post.
+- Folding cannot know `сервис:биллинг` and `service:billing` are one service. That is `EntityAlias`, resolved at **write** time so the graph holds one vertex and every walk is unchanged. Resolution is **one hop** — the guarded insert refuses anything that would chain.
+- A relation type is normalized before the guard, never inside it: `normalizeRelationType` accepts `depends_on`, `Depends On` and `зависит_от`; `isAuthorableRelationType` stays exact-case.
+- `documents.path` is `/rootId/…/selfId/`, **delimited at both ends** — that is what makes the cycle check `parent.path.includes('/' + id + '/')` and stops `/a/ab/` matching `/a/abc/`. Maintained app-side in `DocumentsService` only (every other writer routes through `createDocument`); a move shifts the subtree in **one** statement inside the same transaction.
+- Hierarchy still does not enter the graph. Features 08/11 stand: it reaches the model through `list_document_tree` and breadcrumbs on tool results, not through a `PART_OF` edge, and `EMBED_RECIPE` is untouched so nothing re-embeds.
+
 **Vocabulary**
 
 - A closed catalogue lives in `packages/contracts` when a form, a guard and a worker registry must agree — three consumers of one constant cannot drift.

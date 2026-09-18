@@ -740,6 +740,8 @@ export const ASSISTANT_TOOL_NAMES = [
   'explore_document_graph',
   /** What a page declares in frontmatter, beside what the graph holds (docs/features/28). */
   'list_relations',
+  /** Browse the page tree, so placement is a decision (docs/features/08). */
+  'list_document_tree',
   'ask_user',
   'request_agent_mode',
   'render_component',

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
+import type { DocumentTreeNode } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -12,7 +13,16 @@ import type { AssistantToolContext, AssistantToolResult } from './assistant-tool
 const MAX_DOC_CHARS = 24_000;
 
 /**
- * The four tools that only ever read.
+ * Ceiling on one list_document_tree answer.
+ *
+ * A whole workspace's tree is a lot of tokens to spend on orientation, and the
+ * model can always look inside a section by passing its id. The response says
+ * when the cap bit rather than reading as a complete tree.
+ */
+const MAX_TREE_NODES = 200;
+
+/**
+ * The five tools that only ever read.
  *
  * Split out of AssistantToolsService so the agent worker can run a tool loop.
  * That service injects DocumentRelationsService, MergeRequestsService,
@@ -44,6 +54,38 @@ export class AssistantReadToolsService {
 
   definitions(): ChatCompletionFunctionTool[] {
     return [
+      {
+        type: 'function',
+        function: {
+          name: 'list_document_tree',
+          description:
+            'Browse where pages actually sit in this workspace: the page tree, as flat rows each carrying ' +
+            'its own parentId, depth and childCount. Read parentId to see what a page hangs under — do not ' +
+            'infer it from the order of the rows. Call it before creating a page, to pick the section it belongs under ' +
+            'and pass that id as create_document\'s parentId. Also use it to check whether a page already ' +
+            'exists somewhere before writing a second one. Start with no parentId for the top level, then ' +
+            'pass the id of a section to look inside it.',
+          parameters: {
+            type: 'object',
+            properties: {
+              parentId: {
+                type: 'string',
+                description: 'Look inside this page. Omit for the top level of the tree.',
+              },
+              projectId: {
+                type: 'string',
+                description: 'Restrict to one project. Omit to span the whole workspace.',
+              },
+              depth: {
+                type: 'integer',
+                minimum: 1,
+                maximum: 3,
+                description: 'How many levels to expand; 2 when omitted.',
+              },
+            },
+          },
+        },
+      },
       {
         type: 'function',
         function: {
@@ -144,6 +186,8 @@ export class AssistantReadToolsService {
           return await this.exploreGraph(args, ctx);
         case 'list_relations':
           return await this.listRelations(args, ctx);
+        case 'list_document_tree':
+          return await this.listDocumentTree(args, ctx);
         default:
           return this.fail(`Unknown tool ${name}`);
       }
@@ -172,9 +216,18 @@ export class AssistantReadToolsService {
       limit,
       expandGraph: { depth: 1 },
     });
+    // Where each hit lives, not just what it is called. Two pages both called
+    // "Overview" in different sections were indistinguishable to the model,
+    // which is how it ended up citing the wrong one and nesting new pages
+    // beside it.
+    const trails = await this.documents.breadcrumbsFor(
+      ctx.workspaceId,
+      res.results.map((r) => r.documentId),
+    );
     const results = res.results.map((r) => ({
       documentId: r.documentId,
       title: r.title,
+      breadcrumb: trails.get(r.documentId) || '(top level)',
       snippet: r.snippet,
     }));
     const related = (res.related ?? []).map((d) => ({
@@ -198,10 +251,12 @@ export class AssistantReadToolsService {
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
     try {
       const content = await this.documents.getContent(documentId);
+      const trails = await this.documents.breadcrumbsFor(ctx.workspaceId, [documentId]);
       return {
         content: JSON.stringify({
           documentId,
           title: doc.title,
+          breadcrumb: trails.get(documentId) || '(top level)',
           markdown: content.markdown.slice(0, MAX_DOC_CHARS),
         }),
         ok: true,
@@ -210,6 +265,79 @@ export class AssistantReadToolsService {
     } catch {
       return this.fail(`Document "${doc.title}" has no readable content yet (draft or unindexed)`);
     }
+  }
+
+  /**
+   * The page tree, so placement can be a decision rather than a default.
+   *
+   * Until this existed the model could browse a connected git repository's
+   * directory tree (`code_tree`) but not the knowledge base's own, and
+   * `create_document`'s `parentId` asked for a UUID it had no way to discover.
+   * Every AI-authored page therefore landed at the root of whichever project
+   * happened to be oldest.
+   *
+   * Flat rows rather than nested JSON: `depth` carries the shape at a fraction
+   * of the brackets, and the model reads it just as well.
+   */
+  private async listDocumentTree(
+    args: Record<string, unknown>,
+    ctx: AssistantToolContext,
+  ): Promise<AssistantToolResult> {
+    const depth = Math.min(Math.max(Math.floor(Number(args.depth)) || 2, 1), 3);
+    const parentId = typeof args.parentId === 'string' && args.parentId ? args.parentId : undefined;
+    const projectId = typeof args.projectId === 'string' && args.projectId ? args.projectId : undefined;
+
+    const tree = await this.documents.getTree(ctx.workspaceId, projectId, {
+      ...(parentId ? { parentId } : {}),
+      depth,
+    });
+
+    const rows: Array<{
+      documentId: string;
+      title: string;
+      parentId: string | null;
+      depth: number;
+      childCount: number;
+      category: string;
+    }> = [];
+    let truncated = false;
+    const walk = (nodes: DocumentTreeNode[], level: number): void => {
+      for (const n of nodes) {
+        if (rows.length >= MAX_TREE_NODES) {
+          truncated = true;
+          return;
+        }
+        rows.push({
+          documentId: n.documentId,
+          title: n.title,
+          // Stated, never inferred. With depth alone the reader has to work the
+          // parent out from row order — "the nearest row above me at depth-1" —
+          // and a live model got that wrong on the first real tree it saw,
+          // naming a section two levels up as the page's parent.
+          parentId: n.parentId ?? null,
+          depth: level,
+          childCount: n.childCount,
+          category: n.category,
+        });
+        walk(n.children ?? [], level + 1);
+      }
+    };
+    walk(tree.roots, 0);
+
+    return {
+      content: JSON.stringify({
+        parentId: parentId ?? null,
+        projectId: tree.projectId,
+        nodes: rows,
+        // Say when the cap bit, the way the workspace graph does, rather than
+        // handing back a partial tree that reads as a complete one.
+        ...(truncated
+          ? { truncated: true, note: `Only the first ${MAX_TREE_NODES} nodes are listed. Pass parentId to look inside a section.` }
+          : {}),
+      }),
+      ok: true,
+      sources: [],
+    };
   }
 
   private async exploreGraph(

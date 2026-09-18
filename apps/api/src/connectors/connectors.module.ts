@@ -12,12 +12,14 @@ import { ConnectorItemAiService } from './connector-item-ai.service.js';
 import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorQueueModule } from './connector-queue.module.js';
 import { ConnectorWebhookController } from './connector-webhook.controller.js';
+import { ConnectorWorkItemsModule } from './connector-work-items.module.js';
 import { ConnectorsCoreModule } from './connectors-core.module.js';
 import { ConnectorsController } from './connectors.controller.js';
 import { GithubBrowseService } from './github/github-browse.service.js';
 import { GithubCoreModule } from './github/github-core.module.js';
 import { GithubOauthService } from './github/github-oauth.service.js';
 import { GithubController } from './github/github.controller.js';
+import { GithubWebhookController } from './github/github-webhook.controller.js';
 
 /**
  * API side (docs/features/19). Holds the controllers and the conflict sweeper,
@@ -33,6 +35,7 @@ import { GithubController } from './github/github.controller.js';
 @Module({
   imports: [
     ConnectorsCoreModule,
+    ConnectorWorkItemsModule,
     ConnectorQueueModule,
     ActivityModule,
     DocumentsModule,
@@ -44,7 +47,13 @@ import { GithubController } from './github/github.controller.js';
     AssistantClientModule,
     GithubCoreModule,
   ],
-  controllers: [ConnectorsController, ConnectorWebhookController, GithubController],
+  // GithubWebhookController comes FIRST, before ConnectorWebhookController:
+  // `/v1/connectors/github/webhook` and `/v1/connectors/:id/webhook` have the
+  // same segment count, so the per-connector route would otherwise claim it and
+  // ParseUuidPipe would 400 on the literal `github`. The three picker GETs on
+  // GithubController need no such care — they are one segment longer than
+  // anything `:id` declares.
+  controllers: [GithubWebhookController, ConnectorsController, ConnectorWebhookController, GithubController],
   providers: [
     ConnectorConflictSweeper,
     ConnectorItemsService,
@@ -53,6 +62,6 @@ import { GithubController } from './github/github.controller.js';
     GithubOauthService,
     GithubBrowseService,
   ],
-  exports: [ConnectorsCoreModule],
+  exports: [ConnectorsCoreModule, ConnectorWorkItemsModule],
 })
 export class ConnectorsModule {}

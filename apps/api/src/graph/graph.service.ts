@@ -1,6 +1,12 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { RELATION_EDGE_TYPES } from '@knowledge/contracts';
+import {
+  RELATION_EDGE_TYPES,
+  entityNameOf,
+  entityTypeOf,
+  normalizeEntityKey,
+} from '@knowledge/contracts';
 import { ArcadeClient } from './arcade.client.js';
+import { EntityAliasService } from './entity-alias.service.js';
 import { t } from '../i18n/t.js';
 
 export interface ChunkInput {
@@ -78,7 +84,10 @@ export interface WorkspaceRelationGraph {
 export class GraphService {
   private readonly logger = new Logger(GraphService.name);
 
-  constructor(private readonly arcade: ArcadeClient) {}
+  constructor(
+    private readonly arcade: ArcadeClient,
+    private readonly aliases: EntityAliasService,
+  ) {}
 
   /** Idempotent DDL, applied on worker boot. */
   async ensureSchema(): Promise<void> {
@@ -283,7 +292,8 @@ export class GraphService {
     title: string;
     facts: FactInput[];
   }): Promise<void> {
-    const { workspaceId, documentId, revisionId, title, facts } = input;
+    const { workspaceId, documentId, revisionId, title } = input;
+    const facts = await this.canonicalFacts(workspaceId, input.facts);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
         .command('sql', `DELETE FROM ${type} WHERE documentId = :documentId AND revisionId = :revisionId AND extractor = 'frontmatter'`, {
@@ -309,7 +319,8 @@ export class GraphService {
     title: string;
     facts: FactInput[];
   }): Promise<void> {
-    const { workspaceId, documentId, revisionId, title, facts } = input;
+    const { workspaceId, documentId, revisionId, title } = input;
+    const facts = await this.canonicalFacts(workspaceId, input.facts);
     if (facts.length === 0) return;
     await this.upsertDocumentVertex(workspaceId, documentId, title);
     for (const fact of facts) {
@@ -356,6 +367,79 @@ export class GraphService {
     return out;
   }
 
+  /**
+   * Fold every edge pointing at `alias` onto `canonicalKey`, then drop the
+   * abandoned vertex. Returns how many edges moved.
+   *
+   * Declaring an alias only changes what *future* writes resolve to; the ru and
+   * en halves already in the graph stay split until something moves them. This
+   * is that something, and it runs when the alias is declared rather than on a
+   * schedule — there is no cron in this repo, and the moment of declaration is
+   * the only moment a new fork becomes resolvable.
+   *
+   * Read-then-recreate rather than `UPDATE ... SET targetKey`: an edge holds
+   * both the denormalized `targetKey` and a real link to the vertex, so setting
+   * the column alone would leave the link pointing at a vertex about to be
+   * deleted. Going back through `createRelationEdge` keeps one write path, so
+   * the edge-type allowlist and the canonical-key assertion still apply.
+   * Idempotent: a second run finds no alias-keyed edges and does nothing.
+   */
+  async mergeEntityKey(workspaceId: string, alias: string, canonicalKey: string): Promise<number> {
+    const from = normalizeEntityKey(alias);
+    const to = normalizeEntityKey(canonicalKey);
+    if (!from || !to || from === to) return 0;
+
+    let moved = 0;
+    for (const type of RELATION_EDGE_TYPES) {
+      const rows = await this.arcade
+        .query<{
+          documentId: string;
+          revisionId: string | null;
+          extractor: FactInput['extractor'];
+          confidence: number;
+          sourceChunkId?: string | null;
+          snippet?: string | null;
+        }>(
+          'sql',
+          `SELECT documentId, revisionId, extractor, confidence, sourceChunkId, snippet FROM ${type} WHERE workspaceId = :workspaceId AND targetKey = :targetKey`,
+          { workspaceId, targetKey: from },
+        )
+        .catch(() => []);
+      if (rows.length === 0) continue;
+
+      await this.arcade
+        .command('sql', `DELETE FROM ${type} WHERE workspaceId = :workspaceId AND targetKey = :targetKey`, {
+          workspaceId,
+          targetKey: from,
+        })
+        .catch(() => {
+          /* nothing to move */
+        });
+
+      for (const r of rows) {
+        await this.createRelationEdge(workspaceId, r.documentId, r.revisionId ?? null, {
+          type,
+          target: { key: to, type: entityTypeOf(to), name: entityNameOf(to) },
+          extractor: r.extractor,
+          confidence: r.confidence,
+          ...(r.sourceChunkId ? { sourceChunkId: r.sourceChunkId } : {}),
+          ...(r.snippet ? { snippet: r.snippet } : {}),
+        });
+        moved += 1;
+      }
+    }
+
+    await this.arcade
+      .command('sql', 'DELETE FROM Entity WHERE workspaceId = :workspaceId AND entityKey = :entityKey', {
+        workspaceId,
+        entityKey: from,
+      })
+      .catch(() => {
+        /* the vertex may never have existed */
+      });
+    return moved;
+  }
+
   private async createRelationEdge(
     workspaceId: string,
     documentId: string,
@@ -363,6 +447,7 @@ export class GraphService {
     fact: FactInput,
   ): Promise<void> {
     this.assertEdgeType(fact.type);
+    this.assertCanonicalKey(fact.target.key);
     await this.arcade.command(
       'sql',
       'UPDATE Entity SET entityKey = :key, workspaceId = :workspaceId, entityType = :entityType, name = :name UPSERT WHERE entityKey = :key AND workspaceId = :workspaceId',
@@ -391,6 +476,45 @@ export class GraphService {
   }
 
   /**
+   * Entity keys are folded here, at the one place every write passes through.
+   *
+   * Callers normalize too, but a caller can forget; this is the recorder, the
+   * same role it plays for the mandatory workspace predicate. Note it must run
+   * BEFORE the guarded DELETEs in the methods below, not inside
+   * `createRelationEdge`: those delete by `targetKey`, so folding only on the
+   * way in would leave the delete looking for a key that is no longer written
+   * and quietly duplicate an edge on every re-post.
+   */
+  private async canonicalFacts(workspaceId: string, facts: FactInput[]): Promise<FactInput[]> {
+    const keys = await this.aliases.resolveAll(
+      workspaceId,
+      facts.map((f) => f.target.key),
+    );
+    return facts.map((f, i) => {
+      const key = keys[i];
+      if (key === f.target.key) return f;
+      // The display name has to follow the key. Left alone, the UPSERT below
+      // would let whichever page indexed last stamp "Биллинг" over "Billing"
+      // on the vertex they now share.
+      return {
+        ...f,
+        target: { ...f.target, key, type: entityTypeOf(key), name: entityNameOf(key) },
+      };
+    });
+  }
+
+  /**
+   * A key that reached the edge writer un-folded is a fork in the making, and
+   * the index will not complain — it will happily hold both spellings. Fail
+   * loudly instead, so a write path added later is caught on its first run.
+   */
+  private assertCanonicalKey(key: string): void {
+    if (key !== normalizeEntityKey(key)) {
+      throw new Error(`Entity key ${key} reached the graph un-normalized`);
+    }
+  }
+
+  /**
    * Idempotent replace of a revision's LLM-inferred relation edges (plan.md
    * §5 "inferred" class). Facts duplicating an existing curated or explicit
    * edge (same type + target) are skipped — curated/explicit facts are never
@@ -403,7 +527,8 @@ export class GraphService {
     title: string;
     facts: FactInput[];
   }): Promise<void> {
-    const { workspaceId, documentId, revisionId, title, facts } = input;
+    const { workspaceId, documentId, revisionId, title } = input;
+    const facts = await this.canonicalFacts(workspaceId, input.facts);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
         .command('sql', `DELETE FROM ${type} WHERE documentId = :documentId AND revisionId = :revisionId AND extractor = 'inferred'`, {
@@ -441,7 +566,8 @@ export class GraphService {
     title: string;
     fact: FactInput;
   }): Promise<void> {
-    const { workspaceId, documentId, revisionId, title, fact } = input;
+    const { workspaceId, documentId, revisionId, title } = input;
+    const [fact] = await this.canonicalFacts(workspaceId, [input.fact]);
     this.assertEdgeType(fact.type);
     await this.arcade
       .command(
@@ -465,12 +591,15 @@ export class GraphService {
     extractor?: string,
   ): Promise<void> {
     this.assertEdgeType(type);
+    // Fold here too: edges are stored under the canonical key, so a delete for
+    // the spelling the caller happens to hold would silently match nothing.
+    const canonicalKey = normalizeEntityKey(targetKey);
     const extra = extractor ? ' AND extractor = :extractor' : '';
     await this.arcade
       .command(
         'sql',
         `DELETE FROM ${type} WHERE workspaceId = :workspaceId AND documentId = :documentId AND targetKey = :targetKey${extra}`,
-        { workspaceId, documentId, targetKey, ...(extractor ? { extractor } : {}) },
+        { workspaceId, documentId, targetKey: canonicalKey, ...(extractor ? { extractor } : {}) },
       )
       .catch(() => {
         /* nothing to delete */

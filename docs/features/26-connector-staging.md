@@ -248,3 +248,30 @@ End-to-end, against a Confluence Server space with at least three levels and
    one of those rows shows the page as it stands, not a blank editor.
 9. A connector left at `preserveHierarchy=false, syncMode='auto'` pulls exactly
    as it did before the feature.
+
+## Update — markdown-git and codebase now have a tree
+
+`preserveHierarchy` only ever did anything for Confluence: every other adapter declared
+`tree: false`, so discovery took `seedFlat`, which passes `parentItemId: null` for every ref.
+`ExternalRef.parentExternalId` existed and `upsertItem` even recorded it — the flat path just
+never linked it up.
+
+For `markdown-git` that was the sharpest version of this feature's original sin, because the
+hierarchy needed no API call to discover: `externalId` **is** the repo path. A `docs/` folder
+or an Obsidian vault imported as one flat pile of siblings with the structure sitting unused
+in the id. It now implements `children()` over the path tree, so an import mirrors the
+folders.
+
+A directory becomes a page only when it holds an index file (`README.md`, `index.md` or
+`<dirname>.md`). One that does not is **transparent** — its files hang from the nearest
+ancestor that has one, which is the rule already stated here for a skipped parent. The
+alternative, inventing a placeholder page per folder, would put pages in the tree that do not
+exist upstream, and push would then have to invent files for them.
+
+`codebase` gets the two-level shape its own code already described: the comment above
+`list()` has called the overview "the page everything else hangs under" since the adapter was
+written, but it was never in the data, so a repo with forty modules put forty pages at the
+destination's top level. `children()` now says it.
+
+The stored default for `preserveHierarchy` stays `false` — flipping it would silently
+restructure connectors that already run. The toggle simply does something for these kinds now.

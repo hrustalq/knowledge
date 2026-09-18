@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import matter from 'gray-matter';
-import { safeJson, verifyHubSignature } from './confluence.adapter.js';
+import { safeJson, verifyHubSignature } from '../webhook-payload.js';
 import { safeFetch } from '../../common/safe-fetch.js';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import {
@@ -40,7 +40,7 @@ import {
 @Injectable()
 export class MarkdownGitAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'markdown-git';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: false };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: true };
 
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
     const files = await this.markdownFiles(ctx);
@@ -65,6 +65,39 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
         // No per-file sha without an extra API call, so the content hash is the
         // version. It is exactly as good for change detection and costs nothing.
         version: hashBytes(bytes),
+      };
+    }
+  }
+
+  /**
+   * The folder structure, which was sitting in `externalId` all along.
+   *
+   * `list()` yields every `.md` file as a root, so a `docs/` tree imported as
+   * one flat pile of siblings — the exact failure docs/features/26 was written
+   * against, except here the hierarchy needed no API call to discover: it is
+   * the path.
+   *
+   * A directory becomes a page only when it holds an index file (`README.md`,
+   * `index.md` or `<dirname>.md`). One that does not is **transparent**: its
+   * files hang from the nearest ancestor that has an index, which is the same
+   * rule the staging layer already applies to a skipped parent. Inventing a
+   * placeholder page per folder would put pages in the tree that do not exist
+   * upstream, and pushing back would then have to invent files for them.
+   */
+  async *children(ctx: ConnectorContext, parent: ExternalRef | null): AsyncIterable<ExternalRef> {
+    const files = await this.markdownFiles(ctx);
+    const branch = await resolveBranch(ctx);
+    const dir = parent ? dirOf(parent.externalId) : '';
+    for (const path of childPathsOf(dir, files)) {
+      const bytes = files.get(path)!;
+      yield {
+        externalId: path,
+        title: titleFor(path, bytes),
+        url: blobUrl(ctx, path, branch),
+        version: hashBytes(bytes),
+        ...(parent ? { parentExternalId: parent.externalId } : {}),
+        // An index file's directory may hold more; a plain leaf never does.
+        hasChildren: isIndexPath(path) && childPathsOf(dirOf(path), files).length > 0,
       };
     }
   }
@@ -233,4 +266,63 @@ function titleFor(path: string, bytes: Uint8Array): string {
 
 function hashBytes(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+}
+
+/** `docs/platform/billing.md` → `docs/platform`; a root file → `''`. */
+export function dirOf(path: string): string {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? '' : path.slice(0, slash);
+}
+
+/** The file that makes a directory a page rather than a transparent folder. */
+function indexNamesFor(dir: string): string[] {
+  const base = dir.slice(dir.lastIndexOf('/') + 1);
+  return ['README.md', 'readme.md', 'index.md', ...(base ? [`${base}.md`] : [])];
+}
+
+/** Is this path its own directory's index file? */
+export function isIndexPath(path: string): boolean {
+  const dir = dirOf(path);
+  const name = path.slice(dir ? dir.length + 1 : 0);
+  return indexNamesFor(dir).includes(name);
+}
+
+/** The index file of `dir`, or null when the directory is transparent. */
+function indexOf(dir: string, files: Map<string, Uint8Array>): string | null {
+  for (const name of indexNamesFor(dir)) {
+    const candidate = dir ? `${dir}/${name}` : name;
+    if (files.has(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * The refs that hang directly under `dir`: its non-index files, plus each
+ * subdirectory's index file — recursing through subdirectories that have none,
+ * so a transparent folder lifts its contents rather than hiding them.
+ */
+export function childPathsOf(dir: string, files: Map<string, Uint8Array>): string[] {
+  const prefix = dir ? `${dir}/` : '';
+  const ownIndex = indexOf(dir, files);
+  const out: string[] = [];
+  const subdirs = new Set<string>();
+
+  for (const path of files.keys()) {
+    if (!path.startsWith(prefix)) continue;
+    const rest = path.slice(prefix.length);
+    if (!rest) continue;
+    const slash = rest.indexOf('/');
+    if (slash === -1) {
+      if (path !== ownIndex) out.push(path);
+    } else {
+      subdirs.add(`${prefix}${rest.slice(0, slash)}`);
+    }
+  }
+
+  for (const sub of subdirs) {
+    const subIndex = indexOf(sub, files);
+    if (subIndex) out.push(subIndex);
+    else out.push(...childPathsOf(sub, files));
+  }
+  return out.sort();
 }

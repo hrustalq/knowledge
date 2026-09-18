@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { normalizeEntityKey, normalizeRelationType } from '@knowledge/contracts';
 import { composeFrontmatter, parseMarkdown, writeFrontmatter } from '../src/common/frontmatter.js';
 import {
   dedupeRelations,
   normalizeRelation,
   readFrontmatterRelations,
   readFrontmatterTags,
+  tagEntityKey,
+  tagFilterKey,
 } from '../src/common/relations.js';
+import { extractFrontmatterFacts } from '../src/ingestion/relations.js';
 
 const PAGE = `---
 source: https://git.example.com/a/b/identity.md
@@ -100,5 +104,119 @@ describe('relation normalization', () => {
     expect(readFrontmatterTags(data)).toEqual(['security']);
     expect(readFrontmatterRelations({ relations: 'nonsense' })).toEqual([]);
     expect(readFrontmatterTags(null)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bilingual canonicalization.
+//
+// The corpus is ru + en. Before this, entity identity was the raw byte-exact
+// key, so the same service written on a Russian page and on an English page
+// produced two disconnected vertices — and every failure here was silent,
+// which is why the graph read as thin rather than broken.
+// ---------------------------------------------------------------------------
+
+describe('entity key canonicalization', () => {
+  it('folds case, whitespace and the colon split', () => {
+    expect(normalizeEntityKey('Service: Billing')).toBe('service:billing');
+    expect(normalizeEntityKey('  service:billing  ')).toBe('service:billing');
+    expect(normalizeEntityKey('service:Billing Engine')).toBe('service:billing-engine');
+    expect(normalizeEntityKey('Сервис: Биллинг')).toBe('сервис:биллинг');
+  });
+
+  it('keeps a bare key bare and splits only on the first colon', () => {
+    expect(normalizeEntityKey('Postgres')).toBe('postgres');
+    expect(normalizeEntityKey('service:eu:Billing')).toBe('service:eu:billing');
+  });
+
+  it('collapses NFD and NFC spellings of the same Cyrillic word', () => {
+    // "й" composed vs. и + U+0306. Identical on screen, two rows in a unique index.
+    const composed = 'сервис:мой';
+    const decomposed = 'сервис:мой';
+    expect(decomposed).not.toBe(composed);
+    expect(normalizeEntityKey(decomposed)).toBe(normalizeEntityKey(composed));
+  });
+});
+
+describe('relation type canonicalization', () => {
+  it('accepts the casings people actually write', () => {
+    expect(normalizeRelationType('depends_on')).toBe('DEPENDS_ON');
+    expect(normalizeRelationType('Depends On')).toBe('DEPENDS_ON');
+    expect(normalizeRelationType('depends-on')).toBe('DEPENDS_ON');
+  });
+
+  it('accepts the Russian spellings', () => {
+    expect(normalizeRelationType('зависит_от')).toBe('DEPENDS_ON');
+    expect(normalizeRelationType('Описывает')).toBe('DESCRIBES');
+    expect(normalizeRelationType('реализует')).toBe('IMPLEMENTS');
+  });
+
+  it('still refuses TAGGED_WITH and nonsense', () => {
+    // Tags are synthesised from `tags:`; accepting the edge type here would
+    // give them two spellings that behave differently.
+    expect(normalizeRelationType('TAGGED_WITH')).toBeNull();
+    expect(normalizeRelationType('DROP TABLE')).toBeNull();
+  });
+});
+
+describe('bilingual frontmatter', () => {
+  const RU_PAGE = `---
+теги:
+  - Безопасность
+  - безопасность
+связи:
+  - type: зависит_от
+    target: "Сервис: Биллинг"
+---
+
+# Сервис идентификации
+`;
+
+  it('reads Russian frontmatter keys', () => {
+    const { data } = parseMarkdown(RU_PAGE);
+    expect(readFrontmatterRelations(data)).toEqual([
+      { type: 'DEPENDS_ON', target: { key: 'сервис:биллинг', type: 'сервис', name: 'Биллинг' } },
+    ]);
+  });
+
+  it('dedupes tags that differ only in case, keeping the first spelling', () => {
+    const { data } = parseMarkdown(RU_PAGE);
+    expect(readFrontmatterTags(data)).toEqual(['Безопасность']);
+  });
+
+  it('prefers the canonical English key when a page carries both', () => {
+    expect(readFrontmatterTags({ tags: ['a'], теги: ['b'] })).toEqual(['a']);
+  });
+
+  it('lands a ru page and an en page on one entity key', () => {
+    const ru = normalizeRelation({ type: 'зависит_от', target: 'Service: Billing' });
+    const en = normalizeRelation({ type: 'DEPENDS_ON', target: 'service:billing' });
+    expect(ru?.target.key).toBe(en?.target.key);
+    expect(ru?.type).toBe(en?.type);
+  });
+});
+
+describe('tag entity keys', () => {
+  it('uses one spelling for synthesis and for filtering', () => {
+    expect(tagEntityKey('Безопасность')).toBe('tag:безопасность');
+    expect(tagFilterKey('Безопасность')).toBe('tag:безопасность');
+    expect(tagFilterKey('tag:Безопасность')).toBe('tag:безопасность');
+  });
+});
+
+describe('deterministic extraction', () => {
+  it('synthesises canonical tag edges and reads both languages', () => {
+    const facts = extractFrontmatterFacts({
+      теги: ['Безопасность'],
+      relations: [{ type: 'описывает', target: 'service:Billing' }],
+    });
+    expect(facts).toEqual([
+      { type: 'DESCRIBES', target: { key: 'service:billing', type: 'service', name: 'Billing' } },
+      { type: 'TAGGED_WITH', target: { key: 'tag:безопасность', type: 'tag', name: 'Безопасность' } },
+    ]);
+  });
+
+  it('drops a target that folds away to punctuation', () => {
+    expect(extractFrontmatterFacts({ relations: [{ type: 'DESCRIBES', target: ' : ' }] })).toEqual([]);
   });
 });

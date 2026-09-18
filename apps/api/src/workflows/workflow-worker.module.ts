@@ -8,6 +8,7 @@ import { EventsSubscriberModule } from '../events/events-subscriber.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
+import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
 import { WorkflowCoreModule } from './workflow-core.module.js';
 import { WorkflowExecutors } from './workflow.executors.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
@@ -46,6 +47,12 @@ import { WorkflowTriggerService } from './workflow-trigger.service.js';
     // through the same check an HTTP request does (docs/features/20).
     AuthCoreModule,
     AssistantClientModule,
+    // The `task.update` step reports back to the issue a run is about
+    // (docs/features/32). Controller-free, hence loadable here — and this is
+    // the import that makes the worker construct it at boot, so the day it
+    // gains an API-only dependency the worker fails loudly at start rather
+    // than silently at the first flow that uses the step.
+    ConnectorWorkItemsModule,
     WorkflowCoreModule,
   ],
   providers: [

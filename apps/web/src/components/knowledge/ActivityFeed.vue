@@ -157,8 +157,25 @@ async function loadMore() {
  * haven't seen, so an incoming event doesn't discard the pages already loaded.
  * A capped feed stays capped — it trims back to `limit` rather than growing.
  */
+/**
+ * Live refresh is driven by an event counter that ticks for the whole
+ * workspace, and a dependent re-index ticks it once per page it touched. One
+ * request per tick meant a burst of them asking the same question; the answer
+ * to the second is whatever the first is already fetching.
+ */
+let headInFlight = false
+
 async function refreshHead() {
-  if (!loaded.value) return
+  if (!loaded.value || headInFlight) return
+  headInFlight = true
+  try {
+    await pullHead()
+  } finally {
+    headInFlight = false
+  }
+}
+
+async function pullHead() {
   const res = await fetchPage()
   const known = new Set(entries.value.map((e) => e.id))
   const fresh = res.entries.filter((e) => !known.has(e.id))

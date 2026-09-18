@@ -51,10 +51,17 @@ function setTab(key: TabKey) {
 </script>
 
 <template>
-  <!-- One measure for the whole page. Without it the tab strip and the tables
-       ran the full column while the settings form stopped at 42rem, so every
-       tab switch moved the right-hand edge. -->
-  <div class="flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-5">
+  <!-- Fills the column, like every other settings section.
+       It used to cap at 64rem so the right-hand edge would not move between a
+       form-shaped tab and a table-shaped one. That bought a still edge at the
+       price of the page: the eight-column call log was forced into a horizontal
+       scroller, the usage chart lost the width a chart is for, and the section
+       sat visibly narrower than Profile or Notifications beside it in the same
+       shell. The shell itself passes `measure: false` for exactly this reason —
+       a panel knows whether it is a form or a table and the page does not. So
+       the measure moved into the one panel that is a form; the rest spend the
+       width they are given. -->
+  <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="font-display text-2xl font-bold tracking-tight">AI</h1>

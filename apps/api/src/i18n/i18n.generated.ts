@@ -210,6 +210,7 @@ export type I18nTranslations = {
             "parentNotInProject": string;
             "selfParent": string;
             "moveCycle": string;
+            "siblingGone": string;
             "nothingToUpdate": string;
             "contentIsDraft": string;
             "uploadMissing": string;
@@ -384,6 +385,12 @@ export type I18nTranslations = {
         "connector": {
             "notFound": string;
             "runNotFound": string;
+            "workItemNotFound": string;
+            "workItemsUnsupported": string;
+            "workItemsGithubOnly": string;
+            "workItemsNoCredential": string;
+            "workItemsNotVisible": string;
+            "workItemsRequestFailed": string;
             "linkNotFound": string;
             "nameTaken": string;
             "unknownKind": string;
@@ -461,6 +468,9 @@ export type I18nTranslations = {
                 "blocked": string;
                 "unsafe": string;
             };
+        };
+        "entityAlias": {
+            "wouldChain": string;
         };
     };
     "import": {

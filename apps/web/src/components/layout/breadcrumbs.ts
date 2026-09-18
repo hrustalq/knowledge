@@ -134,6 +134,23 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
         if (path.endsWith('/edit')) list.push({ label: t('nav.edit') })
         return list
       }
+      // One connector (docs/features/32). The name is not in any store — a
+      // connector roster is workspace-wide and loaded by the page itself — so
+      // the id's prefix stands in until the page's own <h1> names it, which is
+      // the same trade the project crumb makes when its roster has not loaded.
+      if (path.startsWith('/settings/connectors/')) {
+        const list: Crumb[] = [
+          { label: t('nav.settings'), to: '/settings' },
+          { label: t('nav.connectors'), to: '/settings/connectors' },
+        ]
+        // A sync run is a third level under the connector, but it arrives by
+        // its own id and knows nothing of which connector it belongs to, so it
+        // stops at a neutral crumb rather than guessing a parent.
+        const id = route.params.id as string | undefined
+        if (id) list.push({ label: id.slice(0, 8) })
+        else list.push({ label: t('connectors.tabRuns') })
+        return list
+      }
       const key = SETTINGS[path]
       return key
         ? [{ label: t('nav.settings'), to: '/settings' }, { label: t(key) }]

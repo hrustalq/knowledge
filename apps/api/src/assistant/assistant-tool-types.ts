@@ -1,4 +1,4 @@
-import { ASSISTANT_CODE_TOOL_NAMES } from '@knowledge/contracts';
+import { ASSISTANT_CODE_TOOL_NAMES, ASSISTANT_TASK_READ_TOOL_NAMES, ASSISTANT_TASK_TOOL_NAMES } from '@knowledge/contracts';
 import type { AssistantPrompt, AssistantSource, AssistantUiBlock } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
 
@@ -47,7 +47,7 @@ export interface AssistantToolResult {
 }
 
 /**
- * The four tools that only ever read the workspace. Owned by
+ * The five tools that only ever read the workspace. Owned by
  * AssistantReadToolsService, which re-exports the set; declared here so the
  * parallel-safe union below can be built without importing a service file.
  */
@@ -56,6 +56,7 @@ export const READ_TOOL_NAMES = new Set([
   'read_document',
   'explore_document_graph',
   'list_relations',
+  'list_document_tree',
 ]);
 
 /**
@@ -89,6 +90,21 @@ export const WEB_TOOLS = new Set(['web_search', 'web_fetch']);
 export const CODE_TOOLS = new Set<string>(ASSISTANT_CODE_TOOL_NAMES);
 
 /**
+ * The tools that reach the work on a connected repository (docs/features/32).
+ * Opt-in like the two sets above — `definitions(mode, { tasks: true })` — and
+ * offered only when the workspace has a connector whose kind has work items.
+ */
+export const TASK_TOOLS = new Set<string>(ASSISTANT_TASK_TOOL_NAMES);
+
+/**
+ * The half of the task set that only reads.
+ *
+ * Split out because the other half writes to somebody else's repository, and
+ * the parallel-safe union below is an allowlist of calls with no side effects.
+ */
+export const TASK_READ_TOOLS = new Set<string>(ASSISTANT_TASK_READ_TOOL_NAMES);
+
+/**
  * Tools the harness may run concurrently inside one round (docs/features/29).
  *
  * An allowlist of calls known to have no side effects — deliberately NOT the
@@ -102,4 +118,12 @@ export const CODE_TOOLS = new Set<string>(ASSISTANT_CODE_TOOL_NAMES);
  * were ten sequential fetches, which at WEB_TIMEOUT_MS apiece is minutes of
  * wall clock for work the model asked to do at once.
  */
-export const PARALLEL_SAFE_TOOLS = new Set<string>([...READ_TOOL_NAMES, ...WEB_TOOLS, ...CODE_TOOLS]);
+export const PARALLEL_SAFE_TOOLS = new Set<string>([
+  ...READ_TOOL_NAMES,
+  ...WEB_TOOLS,
+  ...CODE_TOOLS,
+  // The read half only. `task_create` and `task_comment` are in TASK_TOOLS and
+  // deliberately absent here: batching a write to somebody's repository is the
+  // one thing this allowlist exists to prevent.
+  ...TASK_READ_TOOLS,
+]);

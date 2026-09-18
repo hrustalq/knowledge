@@ -181,6 +181,22 @@ export const envSchema = z.object({
   WORKFLOW_AUTOSTART_MAX_ACTIVE: z.coerce.number().int().min(0).default(5),
 
   /**
+   * How long after a repo-event-triggered run this definition refuses to start
+   * another for the same page (docs/features/32).
+   *
+   * Page events get an absolute "only ever once" guard, because a run's output
+   * edits pages and an edit is itself a page event — the chain would feed
+   * itself forever. A repo event cannot do that on its own: it is caused by a
+   * person on the far side, not by anything this product writes.
+   *
+   * It is not *quite* impossible, which is why this is a cooldown rather than
+   * nothing. A flow that comments on or closes an issue when it finishes makes
+   * the far side move, and that comes back as another `repo.*` event. The
+   * in-flight guard catches the common shape of that; this bounds the rest.
+   */
+  WORKFLOW_REPO_RETRIGGER_COOLDOWN_MINUTES: z.coerce.number().int().min(0).default(60),
+
+  /**
    * How long a workflow node may sit claimed (`running`) before the sweeper
    * assumes the worker that took it died and returns it to the queue.
    * Generous by default: a drafting step with tools legitimately takes minutes,
@@ -281,6 +297,18 @@ export const envSchema = z.object({
    * as well as a real PEM for the case where this arrives from a file mount.
    */
   GITHUB_APP_PRIVATE_KEY: z.string().optional().default(''),
+  /**
+   * Shared secret for the App-level webhook (docs/features/32).
+   *
+   * Separate from every connector's own `webhook_secret`, and deliberately so:
+   * that one authenticates a repository hook somebody configured per connector,
+   * this one authenticates GitHub itself delivering for the whole installation.
+   * One App has one secret, so one env var is the honest shape.
+   *
+   * Empty is the off switch, matching GITHUB_APP_ID: with no secret the
+   * endpoint refuses every delivery rather than trusting an unsigned one.
+   */
+  GITHUB_APP_WEBHOOK_SECRET: z.string().optional().default(''),
   /** Override for GitHub Enterprise Server. The web UI and OAuth URLs derive from it. */
   GITHUB_API_URL: z.string().default('https://api.github.com'),
 

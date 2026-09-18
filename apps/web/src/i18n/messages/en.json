@@ -209,7 +209,7 @@
     "projectsHint": "Organize documents",
     "glossaryHint": "Shared vocabulary",
     "usersHint": "Platform accounts",
-    "accessHint": "Workspace members",
+    "accessHint": "Members, roles and accounts",
     "activityHint": "Workspace timeline",
     "aiHint": "Assistant, skills, usage",
     "workflowsHint": "Document step chains",
@@ -460,7 +460,40 @@
       "otherAccountHint": "Searching only the selected account. If the repository belongs to another one, switch accounts above.",
       "noneGranted": "This installation has no repositories.",
       "noneGrantedHint": "The GitHub App is installed on this account but was granted access to zero repositories, so there is nothing to search. Choose which ones it may read."
-    }
+    },
+    "overview": "Overview",
+    "never": "Never",
+    "openExternal": "Open in the external system",
+    "tabWorkItems": "Work items",
+    "tabsLabel": "Connector sections",
+    "fieldDirection": "Direction",
+    "fieldSchedule": "Schedule",
+    "fieldLastSync": "Last sync",
+    "fieldLastRun": "Last run",
+    "manualOnly": "Manual only",
+    "linksEmpty": "This connector has not claimed any pages yet",
+    "runsEmpty": "This connector has never run",
+    "runCounts": "{created} created · {updated} updated · {skipped} skipped",
+    "workItemsUnsupported": "This kind of connector has no issues or pull requests.",
+    "workItemCount": "no work items | {count} work item | {count} work items",
+    "workItemNew": "New issue",
+    "workItemCreate": "Open issue",
+    "workItemCreated": "Issue opened",
+    "workItemsEmptyTitle": "Nothing open",
+    "workItemsEmptyBody": "Issues and pull requests on the connected repository appear here, with the page each one is about.",
+    "workItemAttach": "Attach a page",
+    "workItemAttachHint": "Optional. Attaching a page is what lets events on this issue start a workflow.",
+    "workItemDetach": "Detach this page",
+    "workItemLinkedPage": "Linked page",
+    "workItemTitlePlaceholder": "What needs doing",
+    "workItemBodyPlaceholder": "Context for whoever picks this up",
+    "workItemState": {
+      "open": "Open",
+      "closed": "Closed",
+      "merged": "Merged",
+      "draft": "Draft"
+    },
+    "configure": "Configure"
   },
   "workflow": {
     "nodeStatus": {
@@ -523,7 +556,10 @@
       "searchHint": "No model. Searches the knowledge base and hands what it finds to the next step.",
       "review": "Wait",
       "reviewHint": "Stops and waits for a person. No model call.",
-      "fallback": "Step"
+      "fallback": "Step",
+      "taskUpdate": "Report back to the issue",
+      "taskUpdateShort": "Report back",
+      "taskUpdateHint": "Posts your message as a comment on every open issue attached to this page. No model call."
     },
     "form": {
       "name": "Name",
@@ -634,7 +670,9 @@
       "runs": "Runs",
       "retired": "Not available to run",
       "openInBuilder": "Open “{name}” in the builder",
-      "actionsFor": "Actions for “{name}”"
+      "actionsFor": "Actions for “{name}”",
+      "afterRepo": "Or when a connected repository reports",
+      "repoHint": "Only reaches this workflow through an issue or pull request attached to a page — attach one on the connector page."
     },
     "runStarted": "Run started",
     "draftSaved": "Draft saved",
@@ -1069,12 +1107,28 @@
     "applyDocuments": "Apply documents",
     "searchByTitle": "Search pages by title…",
     "loadingPages": "Loading pages…",
-    "groundHint": "Ground this message in pages that already exist in the workspace."
+    "groundHint": "Ground this message in pages that already exist in the workspace.",
+    "searchPages": "Search pages"
   },
   "tree": {
     "collapse": "Collapse",
     "expand": "Expand",
-    "onThisPage": "On this page"
+    "onThisPage": "On this page",
+    "dnd": {
+      "current": "current",
+      "grabbed": "{title} grabbed. Use the arrow keys to choose a place, Enter to move it, Escape to cancel.",
+      "invalid": "{title} cannot be moved inside itself.",
+      "moveConfirm": "Move",
+      "moveDescription": "Choose the page it should sit under. It is added at the end; drag it, or grab it with Space, to order it.",
+      "moveNoMatch": "No page matches that.",
+      "moveSearch": "Search pages",
+      "moveTitle": "Move “{title}”",
+      "moveTo": "Move to…",
+      "positionBefore": "{title}: before {sibling}, in {parent}.",
+      "positionLast": "{title}: last in {parent}.",
+      "rowMenu": "Actions for {title}",
+      "topLevel": "Top level"
+    }
   },
   "graph": {
     "depth": "Depth",
@@ -1728,7 +1782,44 @@
     "inviteTo": "Invite people to {workspace} so they can work in it.",
     "memberAdded": "{email} added as {role}",
     "memberUpdated": "Updated {email}",
-    "memberRemoved": "Removed {email}"
+    "memberRemoved": "Removed {email}",
+    "tabMembers": "Members",
+    "tabRoles": "Roles",
+    "tabAccounts": "Accounts",
+    "rolesHint": "Three roles, each one adding to the one before it. A role is held per workspace.",
+    "rolesNoteMerge": "Merging is an editor’s right, not an admin’s — there is no separate approver rank.",
+    "rolesNoteViewer": "A viewer can comment and can use the AI assistant; neither needs edit access.",
+    "noMembersInRole": "Nobody holds this role yet.",
+    "operatorTitle": "Trusted operator",
+    "operatorHint": "A flag on top of the admin role rather than a rank of its own. It permits read-only graph queries run straight against the store, and every one is written to the audit log.",
+    "operatorNone": "Nobody in this workspace holds it.",
+    "selectedCount": "{n} selected",
+    "changeRoleTo": "Change role to",
+    "clearSelection": "Clear",
+    "selectMember": "Select {name}",
+    "rolesReadOnly": "You can see who holds what, but only an admin can change it.",
+    "grant": {
+      "viewer": {
+        "read": "Read every page, its revision history and the graph around it",
+        "comment": "Comment on any page, and resolve comment threads",
+        "search": "Search, trace relations and run impact analysis",
+        "assistant": "Use the AI assistant, which spends the workspace’s token budget",
+        "follow": "Follow merge requests, and save personal filters"
+      },
+      "editor": {
+        "pages": "Create, edit, move and re-categorize pages, and upload attachments",
+        "relations": "Curate a page’s relations and its glossary links",
+        "merge": "Open, review, approve and merge merge requests",
+        "projects": "Create projects, edit the glossary and import documents",
+        "automation": "Run workflows, connector syncs and AI agents"
+      },
+      "admin": {
+        "members": "Add and remove members, and set their role and operator flag",
+        "ai": "Configure AI providers, skills, plugins and spending budgets",
+        "integrations": "Set up connectors, and define the workflows editors run",
+        "housekeeping": "Delete a project, force re-indexing, and read the audit log"
+      }
+    }
   },
   "users": {
     "title": "Users",
@@ -2065,6 +2156,26 @@
     "code_read": {
       "running": "Reading a source file",
       "done": "Read a source file"
+    },
+    "list_document_tree": {
+      "running": "Browsing the page tree",
+      "done": "Browsed the page tree"
+    },
+    "task_list": {
+      "running": "Listing issues",
+      "done": "Listed issues"
+    },
+    "task_read": {
+      "running": "Reading an issue",
+      "done": "Read an issue"
+    },
+    "task_create": {
+      "running": "Opening an issue",
+      "done": "Opened an issue"
+    },
+    "task_comment": {
+      "running": "Commenting on an issue",
+      "done": "Commented on an issue"
     }
   },
   "entityType": {
@@ -2371,6 +2482,7 @@
     "watchingTitle": "What I follow",
     "watchingHint": "Pages, projects and reviews you watch, plus anything you have muted.",
     "watchingEmpty": "You are not following anything yet.",
+    "watchingLoaded": "{n} loaded",
     "tab": {
       "all": "All",
       "unread": "Unread"

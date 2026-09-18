@@ -210,18 +210,39 @@ export const SUBSCRIPTION_STATES = ['watching', 'muted', 'default'] as const;
 export type SubscriptionState = (typeof SUBSCRIPTION_STATES)[number];
 
 export interface NotificationSubscriptionEntry {
+  /** The row's own id — what `nextCursor` points at, as on every paged list here. */
+  id: string;
   subjectType: NotificationSubjectType;
   subjectId: string;
+  /**
+   * What the subject is called — a page or merge-request title, a project name.
+   *
+   * Null only when the subject has since been deleted, which is the one case
+   * where there is nothing to name and the id is all that is left. The list is
+   * a list of things somebody chose to follow; identifying them by the first
+   * eight characters of a UUID asked the reader to recognise their own pages by
+   * hash.
+   */
+  title: string | null;
   state: Exclude<SubscriptionState, 'default'>;
   /** How the row appeared: 'manual' when a person pressed Watch, else the involvement that added it. */
   reason: string;
   createdAt: string;
 }
 
-// GET /v1/notifications/subscriptions?workspaceId=&subjectType=&subjectId=
+// GET /v1/notifications/subscriptions?workspaceId=&subjectType=&subjectId=&limit=&cursor=
 export interface ListNotificationSubscriptionsResponse {
   workspaceId: string;
   subscriptions: NotificationSubscriptionEntry[];
+  /**
+   * Null at the end of the list.
+   *
+   * Somebody who watches a page per working day crosses a thousand rows in four
+   * years, and the settings page drew every one of them. This is the same
+   * cursor the activity feed and the inbox use — the last row's id, opaque to
+   * the caller.
+   */
+  nextCursor: string | null;
 }
 
 

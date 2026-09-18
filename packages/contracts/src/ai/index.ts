@@ -740,6 +740,8 @@ export const ASSISTANT_TOOL_NAMES = [
   'explore_document_graph',
   /** What a page declares in frontmatter, beside what the graph holds (docs/features/28). */
   'list_relations',
+  /** Browse the page tree, so placement is a decision (docs/features/08). */
+  'list_document_tree',
   'ask_user',
   'request_agent_mode',
   'render_component',
@@ -752,6 +754,11 @@ export const ASSISTANT_TOOL_NAMES = [
   'code_read',
   'code_search',
   'code_outline',
+  /** Issues and pull requests on a connected repository (docs/features/32). */
+  'task_list',
+  'task_read',
+  'task_create',
+  'task_comment',
 ] as const;
 
 /**
@@ -770,6 +777,25 @@ export const ASSISTANT_CODE_TOOL_NAMES = [
 ] as const;
 
 /**
+ * The tools that reach the work on a connected repository (docs/features/32).
+ *
+ * One list for the reason the code set is one list: the harness filters on it,
+ * the built-in agents compose their allowlists from it, and the settings picker
+ * renders it.
+ *
+ * Unlike the code set this one is **not** reads-only, which is why it is not in
+ * `PARALLEL_SAFE_TOOLS`. `task_create` and `task_comment` are also in
+ * `ASSISTANT_WRITE_TOOL_NAMES`, and they are the only writes in this product
+ * whose effect lands **outside** the workspace: a page can be reverted, a
+ * comment on somebody's issue cannot. So they are offered in Agent mode only,
+ * and the `editor` check runs on execution rather than on offer.
+ */
+export const ASSISTANT_TASK_TOOL_NAMES = ['task_list', 'task_read', 'task_create', 'task_comment'] as const;
+
+/** The half of the task tools that only reads. Parallel-safe; offered in Ask mode. */
+export const ASSISTANT_TASK_READ_TOOL_NAMES = ['task_list', 'task_read'] as const;
+
+/**
  * The tools that change the workspace.
  *
  * One list, because there were three: `assistant.tools.ts` filters and
@@ -783,6 +809,15 @@ export const ASSISTANT_WRITE_TOOL_NAMES = [
   'create_document',
   'propose_update',
   'edit_relations',
+  /**
+   * These two leave the workspace (docs/features/32). Grouped with the page
+   * writes because the gate is the same — `editor`, checked on execution, and
+   * absent from Ask mode — but they are the stronger case for that gate, not
+   * the weaker one: an issue opened on somebody's repository is not ours to
+   * undo.
+   */
+  'task_create',
+  'task_comment',
 ] as const;
 
 /** Effective configuration of one agent: the code default ⊕ this workspace's override row. */

@@ -19,6 +19,15 @@ export const WORKFLOW_STEP_KINDS = [
   'search',
   /** A pure human gate — no model call. */
   'review',
+  /**
+   * Report back to the issue this run is about (docs/features/32).
+   *
+   * Deterministic, like `search`, and the only step kind whose effect lands
+   * outside the workspace — which is why it acts on the work item already
+   * attached to the run's source page rather than taking a number from the
+   * graph. A definition cannot name somebody else's issue.
+   */
+  'task.update',
 ] as const;
 export type WorkflowStepKind = (typeof WORKFLOW_STEP_KINDS)[number];
 

@@ -22,7 +22,15 @@ import { AiConfigService } from '../ai/ai-config.service.js';
 import { WebResearchService } from './web-research.service.js';
 import { AssistantReadToolsService } from './assistant-read-tools.service.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
-import { CODE_TOOLS, FREE_TOOLS, PARALLEL_SAFE_TOOLS, WEB_TOOLS } from './assistant-tool-types.js';
+import { WorkItemToolsService } from '../connectors/work-item-tools.service.js';
+import {
+  CODE_TOOLS,
+  TASK_TOOLS,
+  FREE_TOOLS,
+  PARALLEL_SAFE_TOOLS,
+  READ_TOOL_NAMES,
+  WEB_TOOLS,
+} from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
 /** Tools that mutate the workspace — require 'editor', not just 'viewer'. Exported so
@@ -87,6 +95,7 @@ export class AssistantToolsService {
     // The repository tools (docs/features/31), worker-loadable like the read
     // half and reached here the same way — delegated to, never re-implemented.
     private readonly code: CodeResearchService,
+    private readonly tasks: WorkItemToolsService,
   ) {}
 
   /** @param mode 'ask' (default) hides create_document/propose_update from the model entirely,
@@ -100,7 +109,7 @@ export class AssistantToolsService {
    * a repository connector to read — there is nothing to offer otherwise. */
   definitions(
     mode: AssistantChatMode = 'ask',
-    opts: { ui?: boolean; web?: boolean; code?: boolean } = {},
+    opts: { ui?: boolean; web?: boolean; code?: boolean; tasks?: boolean } = {},
   ): ChatCompletionFunctionTool[] {
     const ui = opts.ui ?? true;
     const all: ChatCompletionFunctionTool[] = [
@@ -282,7 +291,12 @@ export class AssistantToolsService {
               title: { type: 'string', description: 'Document title' },
               markdown: { type: 'string', description: 'Full markdown content of the new page' },
               category: { type: 'string', description: 'Optional category; defaults to "other"' },
-              parentId: { type: 'string', description: 'Optional UUID of a parent document to nest this under' },
+              parentId: {
+                type: 'string',
+                description:
+                  'UUID of the page to nest this under — get it from list_document_tree. Omitting it ' +
+                  'puts the page at the top level of the tree, which is rarely where it belongs.',
+              },
               projectId: {
                 type: 'string',
                 description: "Optional UUID of the owning project; defaults to the workspace's first project",
@@ -359,7 +373,11 @@ export class AssistantToolsService {
         : all.filter((t) => !WRITE_TOOLS.has(t.function.name));
     const grounded = opts.web === true ? scoped : scoped.filter((t) => !WEB_TOOLS.has(t.function.name));
     const withCode = opts.code === true ? grounded : grounded.filter((t) => !CODE_TOOLS.has(t.function.name));
-    return ui ? withCode : withCode.filter((t) => !PANE_ONLY_TOOLS.has(t.function.name));
+    // Work items (docs/features/32). Opt-in like the two sets above, and note
+    // the ordering: the write half was already removed in Ask mode by `scoped`,
+    // so this filter only decides whether the READ half is on the table.
+    const withTasks = opts.tasks === true ? withCode : withCode.filter((t) => !TASK_TOOLS.has(t.function.name));
+    return ui ? withTasks : withTasks.filter((t) => !PANE_ONLY_TOOLS.has(t.function.name));
   }
 
   async execute(name: string, args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
@@ -367,13 +385,17 @@ export class AssistantToolsService {
       // Session-scoped ACL re-check on EVERY call — not just once per request;
       // write tools additionally require 'editor' (never widened by the model).
       await this.access.requireRole(ctx.principal, ctx.workspaceId, WRITE_TOOLS.has(name) ? 'editor' : 'viewer');
+      // The read half — same implementations the background agents run.
+      //
+      // Membership test rather than a case label per tool: this was the fifth
+      // hand-maintained copy of the read-tool list, and the one that broke.
+      // `list_document_tree` was added to the vocabulary, to READ_TOOL_NAMES and
+      // to the agent allowlists, so the model was offered it and called it — and
+      // it fell through to `default: Unknown tool`, because this switch had its
+      // own idea of what the read half contains. One list, read by everyone.
+      if (READ_TOOL_NAMES.has(name)) return await this.readTools.execute(name, args, ctx);
+
       switch (name) {
-        // The read half — same implementations the background agents run.
-        case 'search_knowledge':
-        case 'read_document':
-        case 'explore_document_graph':
-        case 'list_relations':
-          return await this.readTools.execute(name, args, ctx);
         case 'edit_relations':
           return await this.editRelations(args, ctx);
         case 'ask_user':
@@ -390,6 +412,12 @@ export class AssistantToolsService {
           return await this.webSearch(args, ctx);
         case 'web_fetch':
           return await this.webFetch(args, ctx);
+        // The work item tools (docs/features/32).
+        case 'task_list':
+        case 'task_read':
+        case 'task_create':
+        case 'task_comment':
+          return await this.tasks.execute(name, args, ctx);
         // The repository tools — same implementations a background agent runs.
         case 'code_tree':
         case 'code_read':

@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import { htmlToMarkdown } from '../../import/parsers/html-to-markdown.js';
 import { t } from '../../i18n/t.js';
 import { markdownToStorageFormat } from './markdown-to-html.js';
+import { safeJson, verifyHubSignature } from '../webhook-payload.js';
 import {
   connectorFetch,
   optionalConfig,
@@ -292,27 +292,4 @@ export function countMacros(storage: string): string[] {
   const names = new Set<string>();
   for (const m of storage.matchAll(/<ac:structured-macro[^>]*ac:name="([^"]+)"/g)) names.add(m[1]);
   return [...names].slice(0, 10);
-}
-
-export function verifyHubSignature(
-  headers: Record<string, string>,
-  rawBody: string,
-  secret: string,
-): boolean {
-  const header = headers['x-hub-signature-256'] ?? headers['x-hub-signature'] ?? '';
-  const sent = header.replace(/^sha256=/, '');
-  if (!sent) return false;
-  const expected = createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex');
-  const a = Buffer.from(sent, 'hex');
-  const b = Buffer.from(expected, 'hex');
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-export function safeJson(raw: string): Record<string, any> | null {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : null;
-  } catch {
-    return null;
-  }
 }

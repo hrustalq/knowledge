@@ -1,7 +1,17 @@
 <script setup lang="ts">
-// Users management (platform admin; the /admin/users route is RBAC-guarded).
+// Platform accounts — the Accounts tab of /settings/access.
 //
-// Layout is toolbar + table: the roster is the page, so creating an account
+// This is the account layer rather than the workspace layer: who exists at all,
+// whether they can sign in, and who is a platform admin. It used to be its own
+// route (/settings/users, and /admin/users before that), which put two halves
+// of one question — "can this person get in" and "what may they do here" — in
+// two places, so answering it meant crossing the settings nav mid-thought.
+//
+// The tab only renders for a platform admin; the API is the real gate
+// (@PlatformAdmin on UsersController), and a workspace admin who is not one
+// never sees the tab rather than being offered a door that 403s.
+//
+// Layout is toolbar + table: the roster is the content, so creating an account
 // lives behind a dialog and narrowing the list lives in the filter bar rather
 // than in stacked cards above the thing you came to read.
 import { useI18n } from 'vue-i18n'
@@ -173,18 +183,18 @@ function setPassword(user: UserSummary) {
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between gap-3">
-      <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('users.title') }}</h1>
-      <Button size="sm" @click="createOpen = true">
-        <Plus class="size-3.5" /> {{ t('users.newUser') }}
-      </Button>
-    </div>
-
+    <!-- No heading of its own: the page above names the surface and the tab
+         names this panel, so a third title would only repeat one of them. -->
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <FilterBar v-model="filters" :fields="fields" />
-      <p class="text-muted-foreground text-xs tabular-nums">
-        {{ t('documents.ofAccounts', { shown: visibleUsers.length, total: t('count.accounts', { n: users.length }, users.length) }) }}
-      </p>
+      <div class="flex items-center gap-3">
+        <p class="text-muted-foreground text-xs tabular-nums">
+          {{ t('documents.ofAccounts', { shown: visibleUsers.length, total: t('count.accounts', { n: users.length }, users.length) }) }}
+        </p>
+        <Button size="sm" @click="createOpen = true">
+          <Plus class="size-3.5" /> {{ t('users.newUser') }}
+        </Button>
+      </div>
     </div>
 
     <div v-if="loading" class="space-y-2">

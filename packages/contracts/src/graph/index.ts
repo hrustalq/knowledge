@@ -58,6 +58,105 @@ export function isAuthorableRelationType(value: string): value is AuthorableRela
   return (AUTHORABLE_RELATION_TYPES as readonly string[]).includes(value);
 }
 
+// --- canonical spelling -----------------------------------------------------
+
+/**
+ * Relation types as a bilingual team actually writes them.
+ *
+ * The workspace is ru + en (docs/features/18) and the edge vocabulary is
+ * English uppercase, so a Russian author had exactly one way to declare a
+ * relation: in a language their page is not written in. Anything else was
+ * dropped by `isAuthorableRelationType` with no log line, which is why the
+ * graph looked thin rather than broken.
+ *
+ * Keys are the NFC-uppercased form `normalizeRelationType` produces, so the
+ * lookup happens after folding rather than needing a case variant per entry.
+ * This is a closed catalogue in contracts for the usual reason: the frontmatter
+ * parser, the inferred extractor and the relations DTO must agree on it.
+ */
+export const RELATION_TYPE_ALIASES: Readonly<Record<string, AuthorableRelationType>> = {
+  ОПИСЫВАЕТ: 'DESCRIBES',
+  ОПИСАНИЕ: 'DESCRIBES',
+  ЗАВИСИТ_ОТ: 'DEPENDS_ON',
+  ЗАВИСИМОСТЬ: 'DEPENDS_ON',
+  РЕАЛИЗУЕТ: 'IMPLEMENTS',
+  РЕАЛИЗАЦИЯ: 'IMPLEMENTS',
+  СВЯЗАНО_С: 'RELATED_TO',
+  СВЯЗАН_С: 'RELATED_TO',
+  СВЯЗАНО: 'RELATED_TO',
+  ПРИНАДЛЕЖИТ: 'OWNED_BY',
+  ВЛАДЕЛЕЦ: 'OWNED_BY',
+  ЗАМЕНЯЕТ: 'SUPERSEDES',
+  УСТАРЕЛО: 'SUPERSEDES',
+  ПРОТИВОРЕЧИТ: 'CONTRADICTS',
+};
+
+/**
+ * The frontmatter keys the deterministic extractor recognises.
+ *
+ * Same reasoning as the type aliases: `связи:` on a Russian page used to yield
+ * zero edges, silently. Longest/exact match only — these are whole keys, not
+ * prefixes.
+ */
+export const FRONTMATTER_KEY_ALIASES: Readonly<Record<string, 'relations' | 'tags'>> = {
+  relations: 'relations',
+  связи: 'relations',
+  отношения: 'relations',
+  tags: 'tags',
+  теги: 'tags',
+  метки: 'tags',
+};
+
+/** Trim, case-fold, and collapse inner whitespace into the kebab the keys use. */
+function fold(part: string): string {
+  return part.trim().toLowerCase().replace(/\s+/gu, '-');
+}
+
+/**
+ * The canonical spelling of an entity key — the graph's identity for a concept.
+ *
+ * `Entity` uniques on `(workspaceId, entityKey)` with plain string equality, so
+ * before this existed `service:Billing`, `service: billing` and a macOS-composed
+ * `Сервис:Биллинг` were three vertices for one thing, and the ru and en pages
+ * about it never linked up. Unicode normalization is not optional here: NFC vs
+ * NFD `й` is invisible on screen and fatal to an equality index.
+ *
+ * Splits on the FIRST colon so a key may carry more (`service:eu:billing`), and
+ * folds each side. Display text is deliberately NOT folded — the caller keeps
+ * the author's casing in `name` so the graph view stays legible.
+ */
+export function normalizeEntityKey(raw: string): string {
+  const nfc = raw.normalize('NFC');
+  const colon = nfc.indexOf(':');
+  if (colon === -1) return fold(nfc);
+  return `${fold(nfc.slice(0, colon))}:${fold(nfc.slice(colon + 1))}`;
+}
+
+/** `service:identity` → `service`; a bare key is a plain entity. */
+export function entityTypeOf(key: string): string {
+  return key.includes(':') ? key.slice(0, key.indexOf(':')) : 'entity';
+}
+
+/** `service:identity` → `identity`, so a vertex stays legible in the graph view. */
+export function entityNameOf(key: string): string {
+  return key.split(':').pop() ?? key;
+}
+
+/**
+ * One relation type, or null when it is not one.
+ *
+ * Accepts `depends_on`, `DEPENDS ON`, `depends-on` and `зависит_от` alike. The
+ * two fact classes used to disagree about this — the inferred extractor
+ * uppercased what the model returned while the frontmatter parser demanded the
+ * exact constant — so the same spelling was valid from a model and invalid from
+ * a person. One function now, both callers.
+ */
+export function normalizeRelationType(raw: string): AuthorableRelationType | null {
+  const folded = raw.normalize('NFC').trim().toUpperCase().replace(/[\s-]+/gu, '_');
+  if (isAuthorableRelationType(folded)) return folded;
+  return RELATION_TYPE_ALIASES[folded] ?? null;
+}
+
 
 export interface EntitySummary {
   key: string;

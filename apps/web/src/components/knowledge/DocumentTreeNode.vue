@@ -17,8 +17,11 @@ import { Badge } from '@/components/ui/badge'
 import { statusDot } from '@/lib/api'
 import { formatDate } from '@/lib/format'
 import { labelFor } from '@/lib/labels'
+import { useTreeDndRow } from '@/components/knowledge/tree-dnd'
+import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useSidebarStore } from '@/stores/sidebar'
+import TreeRowMenu from './TreeRowMenu.vue'
 
 const { t } = useI18n()
 defineOptions({ name: 'DocumentTreeNode' })
@@ -26,6 +29,7 @@ const props = defineProps<{ node: TreeNode; depth: number }>()
 
 const store = useDocumentsStore()
 const sidebar = useSidebarStore()
+const auth = useAuthStore()
 
 /** `childCount`, not `children.length` — an unexpanded branch has neither yet. */
 const hasChildren = computed(() => props.node.childCount > 0)
@@ -58,16 +62,39 @@ watchEffect(() => {
 function toggle() {
   open.value = !open.value
 }
+
+/** One level of the index tree indents by 24px; the drop line follows it. */
+const INDEX_INDENT = 24
+const dnd = useTreeDndRow({
+  id: props.node.documentId,
+  title: () => props.node.title,
+  parentId: () => props.node.parentId,
+  depth: () => props.depth,
+  hasChildren: () => hasChildren.value,
+  open,
+  indent: INDEX_INDENT,
+})
 </script>
 
 <template>
-  <div>
+  <div class="kn-tree-row" :class="{ 'kn-drop-before': dnd.dropBefore.value, 'kn-drop-after': dnd.dropAfter.value }">
     <div
-      class="group flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/60"
-      :style="{ paddingLeft: `${depth * 24 + 8}px` }"
+      :ref="dnd.setEl"
+      data-tree-row
+      class="group relative flex items-center gap-2 rounded-md px-2 py-1.5 transition-[background-color,color,opacity] hover:bg-muted/60"
+      :class="[
+        dnd.isSource.value ? 'opacity-40' : '',
+        dnd.isLocked.value ? 'opacity-60' : '',
+        dnd.dropInside.value ? 'bg-primary/10 ring-primary/40 ring-1' : '',
+      ]"
+      :style="{ paddingLeft: `${depth * 24 + 8}px`, '--kn-drop-inset': `${depth * 24 + 8 + dnd.indicatorInset.value}px` }"
+      :aria-grabbed="dnd.isSource.value || undefined"
+      @pointerdown="dnd.onPointerdown"
+      @keydown="(e: KeyboardEvent) => dnd.onKeydown(e, auth.canEdit)"
     >
       <button
         v-if="hasChildren"
+        data-no-drag
         class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted"
         :aria-label="open ? t('tree.collapse') : t('tree.expand')"
         :aria-expanded="open"
@@ -87,6 +114,7 @@ function toggle() {
       <RouterLink
         :to="`/documents/${node.documentId}`"
         class="truncate text-sm font-medium transition-colors hover:text-primary"
+        draggable="false"
       >
         {{ node.title }}
       </RouterLink>
@@ -99,6 +127,13 @@ function toggle() {
         {{ node.childCount }}
       </span>
       <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ formatDate(node.createdAt) }}</span>
+      <TreeRowMenu
+        v-if="auth.canEdit"
+        :document-id="node.documentId"
+        :title="node.title"
+        :disabled="dnd.isLocked.value"
+        class="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+      />
     </div>
 
     <Collapse v-if="hasChildren" :open="open">

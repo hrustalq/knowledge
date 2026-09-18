@@ -49,6 +49,7 @@
     "parentNotInProject": "Parent document {id} not found in this project",
     "selfParent": "A document cannot be its own parent",
     "moveCycle": "Move would create a cycle in the document tree",
+    "siblingGone": "The page this was dropped next to is no longer there — the tree moved under you",
     "nothingToUpdate": "Nothing to update",
     "contentIsDraft": "Revision {id} is a draft — finalize it before reading content",
     "uploadMissing": "No object uploaded at {key} — upload before finalizing",
@@ -221,6 +222,12 @@
   "connector": {
     "notFound": "Connector {id} not found",
     "runNotFound": "Connector run {id} not found",
+    "workItemNotFound": "Work item {id} is not part of this connector",
+    "workItemsUnsupported": "{kind} connectors have no issues or pull requests",
+    "workItemsGithubOnly": "Work items are only available on GitHub repositories",
+    "workItemsNoCredential": "This connector has no usable GitHub credential",
+    "workItemsNotVisible": "not found, or the credential cannot see it",
+    "workItemsRequestFailed": "GitHub refused the request ({detail})",
     "linkNotFound": "Connector link {id} not found",
     "nameTaken": "A connector named \"{name}\" already exists in this workspace",
     "unknownKind": "\"{kind}\" is not a connector type this workspace can use",
@@ -298,5 +305,8 @@
       "blocked": "{detail} is blocked by this workspace's source policy.",
       "unsafe": "{detail} is not an address that may be requested from here."
     }
+  },
+  "entityAlias": {
+    "wouldChain": "An alias must point straight at a canonical key: \"{alias}\" or \"{canonicalKey}\" is already one side of another alias."
   }
 }

@@ -1,6 +1,8 @@
 import {
   Body,
+  ConflictException,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -9,14 +11,23 @@ import {
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { Access } from '../auth/access.decorator.js';
+import { normalizeEntityKey } from '@knowledge/contracts';
+import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import type { Principal } from '../auth/principal.js';
+import { EntityAliasService } from '../graph/entity-alias.service.js';
+import { GraphService } from '../graph/graph.service.js';
 import { EntitiesService } from './entities.service.js';
-import { ImpactAnalysisDto } from './dto/entities.dto.js';
+import { CreateEntityAliasDto, ImpactAnalysisDto } from './dto/entities.dto.js';
+import { t } from '../i18n/t.js';
 
 @ApiTags('entities')
 @Controller('v1/entities')
 export class EntitiesController {
-  constructor(private readonly entities: EntitiesService) {}
+  constructor(
+    private readonly entities: EntitiesService,
+    private readonly aliases: EntityAliasService,
+    private readonly graph: GraphService,
+  ) {}
 
   @Get()
   @Access('viewer', 'query')
@@ -36,6 +47,55 @@ export class EntitiesController {
       q,
       limit: Number.isFinite(n) ? Math.min(Math.max(n, 1), 200) : undefined,
     });
+  }
+
+  // NB: declared before :key routes so "aliases" is not captured as a key.
+  @Get('aliases')
+  @Access('viewer', 'query')
+  @ApiOperation({ summary: "A workspace's canonical entity-key aliases (ru ↔ en)" })
+  listAliases(@Query('workspaceId', ParseUUIDPipe) workspaceId: string) {
+    return this.aliases.list(workspaceId);
+  }
+
+  @Post('aliases')
+  @HttpCode(200)
+  @Access('editor', 'body')
+  @ApiOperation({
+    summary: 'Declare one entity key to mean another, folding the edges that already exist',
+  })
+  async createAlias(@Body() dto: CreateEntityAliasDto, @CurrentPrincipal() principal: Principal) {
+    // Answer in the spelling actually stored, not the one that was sent. The
+    // whole point of this endpoint is that the two differ, so echoing the input
+    // back would hide the only thing the caller needs to see.
+    const alias = normalizeEntityKey(dto.alias);
+    const canonicalKey = normalizeEntityKey(dto.canonicalKey);
+
+    const created = await this.aliases.create({
+      workspaceId: dto.workspaceId,
+      alias: dto.alias,
+      canonicalKey: dto.canonicalKey,
+      createdBy: principal.userId,
+    });
+    if (!created) {
+      // The guard refuses anything that would make resolution more than one
+      // hop. Saying so beats reporting a success that resolved nothing.
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.entityAlias.wouldChain', { alias, canonicalKey }),
+        alias,
+        canonicalKey,
+      });
+    }
+    const edgesMoved = await this.graph.mergeEntityKey(dto.workspaceId, alias, canonicalKey);
+    return { alias, canonicalKey, edgesMoved };
+  }
+
+  @Delete('aliases/:alias')
+  @HttpCode(204)
+  @Access('editor', 'query')
+  @ApiOperation({ summary: 'Retire an alias. Edges already folded onto the canonical key stay there.' })
+  removeAlias(@Param('alias') alias: string, @Query('workspaceId', ParseUUIDPipe) workspaceId: string) {
+    return this.aliases.remove(workspaceId, alias);
   }
 
   // NB: declared before :key routes so "trace" is not captured as a key.

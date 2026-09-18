@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService, type ChunkHit } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
+import { tagFilterKey } from '../common/relations.js';
 import type { SearchDto } from './search.dto.js';
 
 /** Reciprocal-rank-fusion constant (standard k=60). */
@@ -30,7 +31,7 @@ export class SearchService {
     // edges to `tag:<name>` entities. Accept either form so callers can pass
     // the entity key straight back from GET /v1/entities.
     const tagKeys = dto.filters?.tags?.length
-      ? [...new Set(dto.filters.tags.map((t) => (t.startsWith('tag:') ? t : `tag:${t}`)))]
+      ? [...new Set(dto.filters.tags.map(tagFilterKey))]
       : null;
     const fetchK = categories || projectIds || tagKeys ? k * 5 : k;
 

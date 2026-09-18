@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
-import { safeJson } from './confluence.adapter.js';
+import { safeJson } from '../webhook-payload.js';
 import {
   connectorFetch,
   optionalConfig,

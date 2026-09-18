@@ -462,6 +462,9 @@ export type I18nTranslations = {
                 "unsafe": string;
             };
         };
+        "entityAlias": {
+            "wouldChain": string;
+        };
     };
     "import": {
         "stage": {

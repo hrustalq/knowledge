@@ -22,7 +22,13 @@ import { AiConfigService } from '../ai/ai-config.service.js';
 import { WebResearchService } from './web-research.service.js';
 import { AssistantReadToolsService } from './assistant-read-tools.service.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
-import { CODE_TOOLS, FREE_TOOLS, PARALLEL_SAFE_TOOLS, WEB_TOOLS } from './assistant-tool-types.js';
+import {
+  CODE_TOOLS,
+  FREE_TOOLS,
+  PARALLEL_SAFE_TOOLS,
+  READ_TOOL_NAMES,
+  WEB_TOOLS,
+} from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
 /** Tools that mutate the workspace — require 'editor', not just 'viewer'. Exported so
@@ -372,13 +378,17 @@ export class AssistantToolsService {
       // Session-scoped ACL re-check on EVERY call — not just once per request;
       // write tools additionally require 'editor' (never widened by the model).
       await this.access.requireRole(ctx.principal, ctx.workspaceId, WRITE_TOOLS.has(name) ? 'editor' : 'viewer');
+      // The read half — same implementations the background agents run.
+      //
+      // Membership test rather than a case label per tool: this was the fifth
+      // hand-maintained copy of the read-tool list, and the one that broke.
+      // `list_document_tree` was added to the vocabulary, to READ_TOOL_NAMES and
+      // to the agent allowlists, so the model was offered it and called it — and
+      // it fell through to `default: Unknown tool`, because this switch had its
+      // own idea of what the read half contains. One list, read by everyone.
+      if (READ_TOOL_NAMES.has(name)) return await this.readTools.execute(name, args, ctx);
+
       switch (name) {
-        // The read half — same implementations the background agents run.
-        case 'search_knowledge':
-        case 'read_document':
-        case 'explore_document_graph':
-        case 'list_relations':
-          return await this.readTools.execute(name, args, ctx);
         case 'edit_relations':
           return await this.editRelations(args, ctx);
         case 'ask_user':

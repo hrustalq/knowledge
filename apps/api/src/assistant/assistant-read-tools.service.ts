@@ -59,8 +59,9 @@ export class AssistantReadToolsService {
         function: {
           name: 'list_document_tree',
           description:
-            'Browse where pages actually sit in this workspace: the page tree, as flat rows carrying ' +
-            'depth and childCount. Call it before creating a page, to pick the section it belongs under ' +
+            'Browse where pages actually sit in this workspace: the page tree, as flat rows each carrying ' +
+            'its own parentId, depth and childCount. Read parentId to see what a page hangs under — do not ' +
+            'infer it from the order of the rows. Call it before creating a page, to pick the section it belongs under ' +
             'and pass that id as create_document\'s parentId. Also use it to check whether a page already ' +
             'exists somewhere before writing a second one. Start with no parentId for the top level, then ' +
             'pass the id of a section to look inside it.',
@@ -294,6 +295,7 @@ export class AssistantReadToolsService {
     const rows: Array<{
       documentId: string;
       title: string;
+      parentId: string | null;
       depth: number;
       childCount: number;
       category: string;
@@ -308,6 +310,11 @@ export class AssistantReadToolsService {
         rows.push({
           documentId: n.documentId,
           title: n.title,
+          // Stated, never inferred. With depth alone the reader has to work the
+          // parent out from row order — "the nearest row above me at depth-1" —
+          // and a live model got that wrong on the first real tree it saw,
+          // naming a section two levels up as the page's parent.
+          parentId: n.parentId ?? null,
           depth: level,
           childCount: n.childCount,
           category: n.category,

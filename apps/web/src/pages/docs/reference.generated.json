@@ -1152,6 +1152,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/documents/{id}/move",
+      "tag": "documents",
+      "summary": "Feature 32: place a page under a parent and among its siblings in one call. parentId: null re-roots; beforeId names the sibling it lands above, omitted appends last",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/documents/{id}/push",
       "tag": "documents",
       "summary": "Publish this page back to its connector (docs/features/19)",
@@ -1356,6 +1366,36 @@
       "tag": "entities",
       "summary": "Entity neighborhood: edges + entities within N hops (knowledge.find_relations)",
       "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/entities/aliases",
+      "tag": "entities",
+      "summary": "A workspace's canonical entity-key aliases (ru ↔ en)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/entities/aliases",
+      "tag": "entities",
+      "summary": "Declare one entity key to mean another, folding the edges that already exist",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/entities/aliases/{alias}",
+      "tag": "entities",
+      "summary": "Retire an alias. Edges already folded onto the canonical key stay there.",
+      "role": "editor",
       "source": "query",
       "public": false,
       "platformAdmin": false

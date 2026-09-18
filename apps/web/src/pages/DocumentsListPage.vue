@@ -34,6 +34,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import DocumentTreeNode from '@/components/knowledge/DocumentTreeNode.vue'
+import TreeDragLayer from '@/components/knowledge/TreeDragLayer.vue'
+import { provideTreeDnd } from '@/components/knowledge/tree-dnd'
+import { toast } from 'vue-sonner'
 import DocumentFacets from '@/components/knowledge/DocumentFacets.vue'
 import GraphCanvas from '@/components/graph/GraphCanvas.vue'
 import { toGraphNodes } from '@/components/graph/graph-model'
@@ -42,6 +45,9 @@ const { t } = useI18n()
 
 const auth = useAuthStore()
 const store = useDocumentsStore()
+// Feature 32: the index tree drags too. Same controller, same store, so a
+// move made here and one made in the rail cannot mean different things.
+provideTreeDnd((message: string) => toast.error(message))
 const projects = useProjectsStore()
 const router = useRouter()
 
@@ -254,7 +260,7 @@ watch(virtualRows, (rows) => {
         </template>
 
         <!-- Tree ----------------------------------------------------------->
-        <div v-else-if="view === 'tree'" class="h-full overflow-y-auto px-2 py-3 lg:px-4">
+        <div v-else-if="view === 'tree'" data-tree-scroll class="h-full overflow-y-auto px-2 py-3 lg:px-4">
           <div v-if="!store.treeLoaded" class="space-y-2 px-2">
             <Skeleton v-for="i in 8" :key="i" class="h-8 w-full" />
           </div>
@@ -266,6 +272,7 @@ watch(virtualRows, (rows) => {
               :depth="0"
             />
           </template>
+          <TreeDragLayer />
         </div>
 
         <!-- List ----------------------------------------------------------->

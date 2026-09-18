@@ -145,6 +145,41 @@ export class UpdateDocumentDto {
   projectId?: string;
 }
 
+/**
+ * Ordered placement (feature 32): where a page sits *and* where it sits among
+ * its siblings, in one call.
+ *
+ * This is a separate route from `PATCH :id` rather than a `position` field on
+ * it because placement is a multi-row renumber, not a scalar write — and the
+ * house rule is that idempotency is a single guarded statement, which a
+ * partial update carrying a bare index cannot be.
+ */
+export class MoveDocumentDto {
+  /**
+   * The new parent. Explicit `null` re-roots the page, which is why this is
+   * required rather than optional: a move that omitted it would be ambiguous
+   * between "keep the parent" and "make it a root".
+   */
+  @ApiProperty({ type: String, format: 'uuid', nullable: true })
+  @ValidateIf((o: MoveDocumentDto) => o.parentId !== null)
+  @IsUUID()
+  parentId!: string | null;
+
+  /**
+   * The sibling this page lands *above*; `null` or omitted appends it last.
+   *
+   * A sibling id rather than a numeric index on purpose. An index is computed
+   * against the client's copy of the tree, so it is already wrong if anyone
+   * moved a row in between, and it fails silently — landing the page one slot
+   * off. An id either still names a child of `parentId` or it does not, and
+   * the second case is a 409 the caller can act on.
+   */
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })
+  @ValidateIf((o: MoveDocumentDto) => o.beforeId !== undefined && o.beforeId !== null)
+  @IsUUID()
+  beforeId?: string | null;
+}
+
 export class CreateUploadDto {
   @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()

@@ -1074,7 +1074,22 @@
   "tree": {
     "collapse": "Свернуть",
     "expand": "Развернуть",
-    "onThisPage": "На этой странице"
+    "onThisPage": "На этой странице",
+    "dnd": {
+      "current": "сейчас",
+      "grabbed": "{title} захвачен. Стрелки — выбрать место, Enter — переместить, Escape — отменить.",
+      "invalid": "«{title}» нельзя переместить внутрь себя.",
+      "moveConfirm": "Переместить",
+      "moveDescription": "Выберите страницу-родителя. Страница добавится в конец; порядок задаётся перетаскиванием или захватом через пробел.",
+      "moveNoMatch": "Ничего не найдено.",
+      "moveSearch": "Поиск страниц",
+      "moveTitle": "Переместить «{title}»",
+      "moveTo": "Переместить…",
+      "positionBefore": "{title}: перед «{sibling}», в «{parent}».",
+      "positionLast": "{title}: последний в «{parent}».",
+      "rowMenu": "Действия для «{title}»",
+      "topLevel": "Верхний уровень"
+    }
   },
   "graph": {
     "depth": "Глубина",

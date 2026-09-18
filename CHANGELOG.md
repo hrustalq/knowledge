@@ -17,6 +17,20 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **Pages can be dragged into place.** The page tree — in the rail and on the
+  pages index — now reorganises by dragging: drop onto a page to file something
+  under it, drop between two to set the order. Branches open as you hover over
+  them, the list scrolls when you reach its edge, and a page dropped onto its own
+  descendant is refused rather than detached from the tree. The page moves the
+  moment you let go and only its own subtree waits on the server, so a slow
+  answer never blocks the rest of the tree; if the move fails it returns to
+  exactly where it was and says why.
+- **A page can be moved without a mouse.** Space on a page title picks it up,
+  the arrow keys walk it through the tree — up and down to choose a neighbour,
+  left and right to change how deep it nests — Enter commits and Escape puts it
+  back, with each candidate position announced. Every row also carries a `⋯` menu
+  with **Move to…**, which is the same move as a destination picker for anyone
+  who would rather not drag. `POST /v1/documents/:id/move`
 - **A workspace can declare that two entity keys mean the same thing.**
   `POST /v1/entities/aliases` maps one key onto another — `сервис:биллинг` onto
   `service:billing` — and folds the relation edges that already point at the old
@@ -41,6 +55,13 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- **A page moved to a new parent no longer lands in an arbitrary slot.** It kept
+  the position it held under its old parent, which collided with whichever
+  sibling already held that slot and left the order to be settled by title.
+  Moving a page now renumbers both the run it joins and the run it left, so a
+  tree that had accumulated collisions repairs itself as its pages are moved.
+- **The published API description had drifted.** `openapi.json` and the generated
+  web client were regenerated; they were missing the entity-alias routes.
 - **Relations declared in frontmatter stopped silently disappearing.** Four
   spellings of the same thing were being treated as four different things, and
   none of them reported a problem — the graph simply came out sparse:

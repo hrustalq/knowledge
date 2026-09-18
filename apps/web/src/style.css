@@ -347,6 +347,55 @@ main::-webkit-scrollbar-thumb:hover,
 }
 
 /*
+ * Feature 32: where a dragged page would land.
+ *
+ * The insertion line is inset to the depth of the run it would join, not to
+ * the depth of the row it happens to sit against. That inset is the whole
+ * message: the same gap under an expanded parent means "first child" or "next
+ * sibling" depending only on where the line starts, and a line that always
+ * started at the row's own indent would make those two drops look identical.
+ *
+ * It is drawn on the <li> rather than the row so it survives the row's own
+ * hover and active tints, and it uses the accent — a drop indicator marks
+ * structure, which is exactly what the one indigo is for.
+ */
+.kn-tree-row {
+  position: relative;
+}
+.kn-tree-row.kn-drop-before::before,
+.kn-tree-row.kn-drop-after::after {
+  content: '';
+  position: absolute;
+  left: var(--kn-drop-inset, 0px);
+  right: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--primary);
+  /* Centred on the boundary rather than sitting inside one row: a line that
+     belonged visibly to the row above would claim a slot it is not. */
+  z-index: 1;
+  pointer-events: none;
+}
+.kn-tree-row.kn-drop-before::before {
+  top: -1px;
+}
+.kn-tree-row.kn-drop-after::after {
+  bottom: -1px;
+}
+
+/*
+ * A drag owns the pointer. Without this, crossing a row mid-drag selects its
+ * title, and the browser's own text-drag takes over from ours.
+ */
+body.kn-tree-dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+body.kn-tree-dragging a {
+  cursor: grabbing;
+}
+
+/*
  * Reduced motion. The panes keep a crossfade because two lists swapping in the
  * same box is otherwise a jump cut with nothing to read. The rail and the tree
  * window need no substitute: both change the shape of the layout itself, which

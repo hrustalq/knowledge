@@ -83,6 +83,63 @@ function childrenLoaded(nodes: DocumentTreeNode[], id: string): boolean {
   return node.children.length > 0 || node.childCount === 0
 }
 
+/** The run a node belongs to: its parent's children, or the roots. */
+function runOf(nodes: DocumentTreeNode[], parentId: string | null): DocumentTreeNode[] | null {
+  if (parentId === null) return nodes
+  return walk(nodes, parentId)?.children ?? null
+}
+
+/**
+ * Lift a node out of the tree, reporting where it was so a failed move can put
+ * it back exactly there rather than at the end of the run it came from.
+ */
+function detach(
+  nodes: DocumentTreeNode[],
+  id: string,
+): { node: DocumentTreeNode; parentId: string | null; index: number } | null {
+  type Found = { node: DocumentTreeNode; parentId: string | null; index: number }
+  const search = (run: DocumentTreeNode[], parentId: string | null): Found | null => {
+    const index = run.findIndex((n) => n.documentId === id)
+    if (index !== -1) return { node: run.splice(index, 1)[0]!, parentId, index }
+    for (const child of run) {
+      const hit = search(child.children, child.documentId)
+      if (hit) return hit
+    }
+    return null
+  }
+  const found = search(nodes, null)
+  if (found && found.parentId !== null) {
+    const parent = walk(nodes, found.parentId)
+    // A parent that just lost its last child has to lose its chevron with it,
+    // or the row stays expandable onto nothing.
+    if (parent) parent.childCount = Math.max(0, parent.childCount - 1)
+  }
+  return found
+}
+
+/**
+ * Put a node into a run above `beforeId` (or last). Returns false when the
+ * destination is a collapsed branch we have not loaded: inserting there would
+ * draw the moved page as that branch's only child.
+ */
+function attach(
+  nodes: DocumentTreeNode[],
+  node: DocumentTreeNode,
+  parentId: string | null,
+  beforeId: string | null,
+): boolean {
+  const parent = parentId === null ? null : walk(nodes, parentId)
+  if (parentId !== null && !parent) return false
+  if (parent) parent.childCount += 1
+  if (parent && parent.children.length === 0 && parent.childCount > 1) return false
+  const run = runOf(nodes, parentId)
+  if (!run) return false
+  const at = beforeId === null ? run.length : run.findIndex((n) => n.documentId === beforeId)
+  node.parentId = parentId
+  run.splice(at === -1 ? run.length : at, 0, node)
+  return true
+}
+
 export const useDocumentsStore = defineStore('documents', {
   state: () => ({
     /** Everything loaded so far — the list appends as it is scrolled. */
@@ -104,6 +161,22 @@ export const useDocumentsStore = defineStore('documents', {
     expanding: [] as string[],
     /** Node ids whose children have been fetched — empty branches included. */
     expanded: [] as string[],
+
+    /**
+     * Feature 32. Ids whose move is in flight: the row and everything under it
+     * dims and stops being draggable, while the rest of the tree stays live.
+     * A list rather than one id because nothing stops a second drag starting
+     * elsewhere in the tree before the first answers.
+     */
+    moving: [] as string[],
+    /**
+     * A drag is in progress somewhere. Remote invalidation waits for it — a
+     * refetch mid-drag replaces `tree` wholesale and the row being dragged
+     * stops existing under the cursor.
+     */
+    dragging: false,
+    /** Set while `dragging` was true and something asked to invalidate. */
+    invalidateQueued: false,
 
     /**
      * The whole scope as one relation graph, for the pages landing. Kept beside
@@ -272,6 +345,85 @@ export const useDocumentsStore = defineStore('documents', {
     },
 
     /** Breadcrumb chain (root → … → document) from the loaded tree, or []. */
+    /** The ids of one run, in the order the tree draws it. */
+    siblingIdsOf(parentId: string | null): string[] {
+      return (runOf(this.tree, parentId) ?? []).map((n) => n.documentId)
+    },
+
+    /** Is `candidateId` inside `rootId`'s subtree, as far as we have loaded it? */
+    isDescendantOf(candidateId: string, rootId: string): boolean {
+      const root = walk(this.tree, rootId)
+      if (!root) return false
+      const scan = (nodes: DocumentTreeNode[]): boolean =>
+        nodes.some((n) => n.documentId === candidateId || scan(n.children))
+      return scan(root.children)
+    },
+
+    /** A drag started; hold remote invalidation until it ends. */
+    beginDrag() {
+      this.dragging = true
+    },
+
+    /** A drag ended, whether it dropped or was cancelled. */
+    endDrag() {
+      this.dragging = false
+      if (this.invalidateQueued) {
+        this.invalidateQueued = false
+        void this.invalidate()
+      }
+    },
+
+    /**
+     * Feature 32: move a page in the tree, optimistically.
+     *
+     * The row lands where it was dropped before the request goes out, and only
+     * the moved subtree locks — a tree that froze whole would block navigating
+     * away from a move you no longer care about. On failure the node goes back
+     * to the exact index it left, which is why `detach` reports one.
+     */
+    async moveDocument(documentId: string, parentId: string | null, beforeId: string | null): Promise<void> {
+      // Dropping a page back where it already sits is not a move. Worth
+      // catching here: it is the single most common way a drag ends.
+      const run = this.siblingIdsOf(parentId).filter((id) => id !== documentId)
+      const currentIndex = this.siblingIdsOf(walk(this.tree, documentId)?.parentId ?? null).indexOf(documentId)
+      const sameParent = (walk(this.tree, documentId)?.parentId ?? null) === parentId
+      const targetIndex = beforeId === null ? run.length : run.indexOf(beforeId)
+      if (sameParent && targetIndex === currentIndex) return
+
+      // Dropping into a branch we have not opened yet: load it first, so the
+      // page lands among real siblings instead of appearing to be the only one.
+      if (parentId !== null && !childrenLoaded(this.tree, parentId)) {
+        await this.fetchChildren(parentId)
+      }
+
+      const origin = detach(this.tree, documentId)
+      if (!origin) return
+      if (!attach(this.tree, origin.node, parentId, beforeId)) {
+        // Destination turned out not to be drawable — put it straight back and
+        // let a refetch settle it rather than leaving the page nowhere.
+        attach(this.tree, origin.node, origin.parentId, this.siblingIdsOf(origin.parentId)[origin.index] ?? null)
+        await this.invalidate()
+        return
+      }
+
+      this.moving = [...this.moving, documentId]
+      try {
+        await apiFetch(`/v1/documents/${documentId}/move`, {
+          method: 'POST',
+          body: JSON.stringify({ parentId, beforeId }),
+        })
+      } catch (err) {
+        // Back to the exact slot it came from. `siblingIdsOf` is re-read here
+        // rather than captured, because the run may have shifted while we waited.
+        detach(this.tree, documentId)
+        const back = this.siblingIdsOf(origin.parentId)
+        attach(this.tree, origin.node, origin.parentId, back[origin.index] ?? null)
+        throw err
+      } finally {
+        this.moving = this.moving.filter((id) => id !== documentId)
+      }
+    },
+
     pathTo(documentId: string): DocumentTreeNode[] {
       const find = (nodes: DocumentTreeNode[], trail: DocumentTreeNode[]): DocumentTreeNode[] | null => {
         for (const node of nodes) {
@@ -330,6 +482,13 @@ export const useDocumentsStore = defineStore('documents', {
      * open branch has to appear there, not only in the list.
      */
     async invalidate() {
+      // A refetch replaces `tree` wholesale, so mid-drag it deletes the row
+      // under the cursor and every rect the hit test is holding. Remember that
+      // someone asked and answer it the moment the drag ends.
+      if (this.dragging) {
+        this.invalidateQueued = true
+        return
+      }
       const jobs: Promise<void>[] = []
       // Reset rather than append: a remote change can insert a row anywhere,
       // and the cursor we are holding points into the old ordering.

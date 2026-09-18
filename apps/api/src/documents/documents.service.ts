@@ -41,6 +41,7 @@ import type {
   CreateDocumentDto,
   CreateRevisionDto,
   CreateUploadDto,
+  MoveDocumentDto,
   RelationInputDto,
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
@@ -721,26 +722,22 @@ export class DocumentsService {
     // transaction, so a failure between the two left children in a project
     // their parent had already left.
     const updated = await this.prisma.withTransaction(async () => {
+      // A reparent lands the page at the end of its new siblings. Without this
+      // it kept the index it held under its old parent, which collides with
+      // whoever already holds that index there and leaves the tie to be broken
+      // by title — so a moved page appeared in an arbitrary slot.
+      const position = reparented
+        ? await this.prisma.document.count({
+            where: { projectId: targetProject, parentId: data.parentId ?? null, id: { not: documentId } },
+          })
+        : undefined;
+
       const row = await this.prisma.document.update({
         where: { id: documentId },
-        data: reparented ? { ...data, path: newPath, depth: document.depth + depthDelta } : data,
+        data: reparented ? { ...data, path: newPath, depth: document.depth + depthDelta, position } : data,
       });
 
-      if (reparented && hasRealPath(oldPath)) {
-        // One statement for a subtree of any size. Left-anchored LIKE, so the
-        // (workspace_id, path) index serves it; the old walk could not express
-        // this at all.
-        await this.prisma.$executeRaw`
-          UPDATE "documents"
-             -- The ::int casts are load-bearing: Prisma binds a JS number as
-             -- bigint, and there is no substring(text, bigint) overload, so
-             -- without them this is a 42883 at runtime and never at compile time.
-             SET "path"  = ${newPath} || substring("path" from ${oldPath.length + 1}::int),
-                 "depth" = "depth" + ${depthDelta}::int
-           WHERE "workspace_id" = ${document.workspaceId}::uuid
-             AND "path" LIKE ${`${oldPath}%`}
-             AND "id" <> ${documentId}::uuid`;
-      }
+      if (reparented) await this.repathSubtree(document.workspaceId, documentId, oldPath, newPath, depthDelta);
 
       // Children follow their parent, otherwise they would be orphaned into a
       // project their ancestor no longer belongs to.
@@ -769,6 +766,144 @@ export class DocumentsService {
       patch: Object.fromEntries(
         Object.keys(data).map((k) => [k, (updated as unknown as Record<string, unknown>)[k]]),
       ),
+    });
+    return this.toSummary(updated);
+  }
+
+  /**
+   * Re-point a moved page's descendants at its new path, in one statement for a
+   * subtree of any size. Left-anchored LIKE, so the (workspace_id, path) index
+   * serves it; the old upward walk could not express this at all.
+   *
+   * Both movers call this. It is one implementation because the `substring`
+   * offset and the depth delta have to agree with the path the row itself was
+   * given, and two copies of that arithmetic is how a subtree ends up at a
+   * depth its own parent disagrees with.
+   */
+  private async repathSubtree(
+    workspaceId: string,
+    documentId: string,
+    oldPath: string,
+    newPath: string,
+    depthDelta: number,
+  ): Promise<void> {
+    // A rollback sentinel prefixes no real path, so it would match nothing —
+    // but it would also silently claim the whole workspace if `oldPath` were
+    // ever '/'. Refuse rather than rely on that.
+    if (!hasRealPath(oldPath)) return;
+    await this.prisma.$executeRaw`
+      UPDATE "documents"
+         -- The ::int casts are load-bearing: Prisma binds a JS number as
+         -- bigint, and there is no substring(text, bigint) overload, so
+         -- without them this is a 42883 at runtime and never at compile time.
+         SET "path"  = ${newPath} || substring("path" from ${oldPath.length + 1}::int),
+             "depth" = "depth" + ${depthDelta}::int
+       WHERE "workspace_id" = ${workspaceId}::uuid
+         AND "path" LIKE ${`${oldPath}%`}
+         AND "id" <> ${documentId}::uuid`;
+  }
+
+  /**
+   * Renumber one sibling run to 0..n-1 in the given order, in one statement.
+   *
+   * It rewrites every row in the run rather than shifting a range, because the
+   * run it inherits may already hold duplicate positions — nothing renumbered
+   * on reparent before this route existed — and a shift preserves a collision
+   * instead of resolving it. Moving a page is therefore also the repair.
+   */
+  private async renumberRun(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const positions = ids.map((_, i) => i);
+    await this.prisma.$executeRaw`
+      UPDATE "documents" AS d
+         SET "position" = v."pos"
+        FROM unnest(${ids}::uuid[], ${positions}::int[]) AS v("id", "pos")
+       WHERE d."id" = v."id"`;
+  }
+
+  /**
+   * Feature 32 (docs/features/32): place a page under a parent *and* among its
+   * siblings, which is what a drag in the tree means.
+   *
+   * Separate from `updateDocument` because ordered placement is a multi-row
+   * renumber rather than a scalar write: expressing it as a `position` field on
+   * a partial update would make two concurrent drops each write an index
+   * computed against a tree the other had already changed.
+   */
+  async moveDocument(documentId: string, dto: MoveDocumentDto, actorId?: string): Promise<DocumentSummary> {
+    const document = await this.getDocumentOrThrow(documentId);
+    const parentId = dto.parentId;
+
+    if (parentId === documentId) throw new BadRequestException(t('error.document.selfParent'));
+
+    // Same guard the update path uses, so a drop onto a page's own descendant
+    // is refused by the server and not only by the dragging client.
+    let newParent: { path: string; depth: number } | null = null;
+    if (parentId !== null) newParent = await this.assertValidParent(documentId, parentId, document.projectId);
+
+    const reparented = parentId !== document.parentId;
+    const oldPath = document.path;
+    const newPath = reparented ? `${newParent?.path ?? '/'}${documentId}/` : oldPath;
+    const depthDelta = reparented ? (newParent?.depth ?? -1) + 1 - document.depth : 0;
+
+    const updated = await this.prisma.withTransaction(async () => {
+      // The destination run in the order the tree draws it, read inside the
+      // transaction: that is what makes `beforeId` mean something. A sibling
+      // that left between the client's copy of the tree and this call is a 409
+      // the caller can act on, not a page quietly landing at the end.
+      const siblings = await this.prisma.document.findMany({
+        where: { projectId: document.projectId, parentId, id: { not: documentId } },
+        orderBy: [{ position: 'asc' }, { title: 'asc' }],
+        select: { id: true },
+      });
+
+      let index = siblings.length;
+      if (dto.beforeId !== undefined && dto.beforeId !== null) {
+        index = siblings.findIndex((s) => s.id === dto.beforeId);
+        if (index === -1) {
+          throw new ConflictException({
+            statusCode: 409,
+            message: t('error.document.siblingGone'),
+            beforeId: dto.beforeId,
+            parentId,
+          });
+        }
+      }
+
+      const ordered = siblings.map((s) => s.id);
+      ordered.splice(index, 0, documentId);
+      await this.renumberRun(ordered);
+
+      // The run the page left keeps a hole otherwise. Ordering survives a hole,
+      // but the next insert there would renumber around it anyway, so close it
+      // now and keep the invariant true between calls rather than eventually.
+      if (reparented) {
+        const vacated = await this.prisma.document.findMany({
+          where: { projectId: document.projectId, parentId: document.parentId, id: { not: documentId } },
+          orderBy: [{ position: 'asc' }, { title: 'asc' }],
+          select: { id: true },
+        });
+        await this.renumberRun(vacated.map((r) => r.id));
+      }
+
+      const row = await this.prisma.document.update({
+        where: { id: documentId },
+        data: reparented ? { parentId, path: newPath, depth: document.depth + depthDelta } : { parentId },
+      });
+
+      if (reparented) await this.repathSubtree(document.workspaceId, documentId, oldPath, newPath, depthDelta);
+      return row;
+    });
+
+    await this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: actorId,
+      action: 'document.updated',
+      documentId,
+      metadata: { title: updated.title, changes: ['parentId', 'position'] },
+      // Live patching: a tree open in another session moves the row rather than
+      // refetching (docs/architecture/08-events-live.md).
+      patch: { parentId: updated.parentId, position: updated.position },
     });
     return this.toSummary(updated);
   }

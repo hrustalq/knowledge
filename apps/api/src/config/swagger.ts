@@ -11,7 +11,7 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
     .setTitle('Knowledge API')
     .setDescription('Dynamic Knowledge Platform — documents, revisions, ingestion, search')
-    .setVersion('0.8.0')
+    .setVersion('0.9.0')
     .addBearerAuth(
       { type: 'http', scheme: 'bearer', description: 'kn_ API key or ks_ session token (AUTH_MODE=api-key)' },
       'bearer',

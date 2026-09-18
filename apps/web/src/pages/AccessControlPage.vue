@@ -1,6 +1,23 @@
 <script setup lang="ts">
-// Access control management: workspaces + member roles (RBAC lives in the API;
-// mutations here are admin-only and 403 for everyone else).
+/**
+ * Access — who is in this workspace, what a role grants, and who has an account
+ * at all. One surface, three tabs.
+ *
+ * These were two routes. `/settings/access` held the workspace roster and
+ * `/settings/users` held the platform accounts, which meant the two halves of a
+ * single question — can this person sign in, and what may they do here — sat in
+ * different places in the settings nav, and a workspace admin had a nav row
+ * beside theirs that only ever 403'd. What neither page answered was the
+ * question underneath both: what *is* an editor. That is the Roles tab.
+ *
+ * Accounts renders only for a platform admin. The guard is the API's
+ * (@PlatformAdmin on UsersController) — hiding the tab just stops offering a
+ * door that cannot open, and keeps the nav at one Access row for everybody.
+ *
+ * Tabs are hand-rolled against `usePageTabs`, the same strip the merge-request
+ * and AI pages use: `?tab=` is an opening instruction, replaced rather than
+ * pushed, so Back does not walk every tab you tried on the way here.
+ */
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
@@ -48,6 +65,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { usePageTabs, type PageTab } from '@/components/layout/page/page-chrome'
+import AccessRoles from '@/components/access/AccessRoles.vue'
+import AccessAccounts from '@/components/access/AccessAccounts.vue'
 
 const { t } = useI18n()
 
@@ -248,6 +268,21 @@ async function patchMember(member: WorkspaceMemberEntry, patch: Record<string, u
   }
 }
 
+/**
+ * A bulk role change from the Roles tab.
+ *
+ * Sequential rather than `Promise.all`: each response is the whole roster, so
+ * three concurrent PATCHes would race to be the copy that lands, and the one
+ * that finished first could overwrite the other two's effects. One at a time,
+ * and the last answer is the true one.
+ */
+async function assignRole(userIds: string[], role: WorkspaceRole) {
+  for (const userId of userIds) {
+    const member = members.value.find((m) => m.userId === userId)
+    if (member && member.role !== role) await patchMember(member, { role })
+  }
+}
+
 async function removeMember(member: WorkspaceMemberEntry) {
   try {
     const res = await apiFetch<ListWorkspaceMembersResponse>(
@@ -261,36 +296,76 @@ async function removeMember(member: WorkspaceMemberEntry) {
   }
 }
 
+/* ------------------------------------------------------------------- tabs */
+
+/**
+ * Accounts is platform-admin-only, so it is absent rather than disabled for
+ * everyone else — and `usePageTabs` falls back to Members when `?tab=accounts`
+ * names a tab this caller does not have, which is what keeps a link pasted by
+ * an admin from landing a workspace admin on an empty panel.
+ */
+const canSeeAccounts = computed(() => auth.isAdmin || auth.isDev)
+
+const tabs = computed<PageTab[]>(() => [
+  { key: 'members', label: t('access.tabMembers'), count: members.value.length },
+  { key: 'roles', label: t('access.tabRoles') },
+  ...(canSeeAccounts.value ? [{ key: 'accounts', label: t('access.tabAccounts') }] : []),
+])
+
+const tab = usePageTabs(tabs, 'members')
 </script>
 
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-3">
       <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('access.title') }}</h1>
-      <Button v-if="canManage" size="sm" @click="addOpen = true">
+      <Button v-if="canManage && tab === 'members'" size="sm" @click="addOpen = true">
         <UserPlus class="size-3.5" /> {{ t('access.addMember') }}
       </Button>
-      <Badge v-else variant="outline">{{ t('access.readOnly') }}</Badge>
+      <Badge v-else-if="!canManage" variant="outline">{{ t('access.readOnly') }}</Badge>
     </div>
 
-    <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-      <FilterBar v-model="filters" :fields="filterFields" />
-      <p class="text-muted-foreground text-xs tabular-nums">
-        {{ t('documents.ofMembers', { shown: visibleMembers.length, total: t('count.members', { n: members.length }, members.length) }) }}
+    <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
+      <button
+        v-for="def in tabs"
+        :key="def.key"
+        role="tab"
+        :aria-selected="tab === def.key"
+        class="focus-visible:ring-ring rounded-t-sm border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        :class="
+          tab === def.key
+            ? 'border-primary text-primary font-medium'
+            : 'text-muted-foreground hover:text-foreground hover:border-border border-transparent'
+        "
+        @click="tab = def.key"
+      >
+        {{ def.label }}
+        <span v-if="def.count != null" class="text-muted-foreground ml-1 text-xs tabular-nums">
+          {{ def.count }}
+        </span>
+      </button>
+    </div>
+
+    <!-- Members ------------------------------------------------------------ -->
+    <template v-if="tab === 'members'">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+        <FilterBar v-model="filters" :fields="filterFields" />
+        <p class="text-muted-foreground text-xs tabular-nums">
+          {{ t('documents.ofMembers', { shown: visibleMembers.length, total: t('count.members', { n: members.length }, members.length) }) }}
+        </p>
+      </div>
+
+      <div v-if="loadingMembers" class="space-y-2">
+        <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
+      </div>
+      <p v-else-if="members.length === 0" class="text-muted-foreground py-10 text-center text-sm">
+        {{ t('access.noMembersVisible') }}
       </p>
-    </div>
+      <p v-else-if="visibleMembers.length === 0" class="text-muted-foreground py-10 text-center text-sm">
+        {{ t('access.noMembersMatch') }}
+      </p>
 
-    <div v-if="loadingMembers" class="space-y-2">
-      <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
-    </div>
-    <p v-else-if="members.length === 0" class="text-muted-foreground py-10 text-center text-sm">
-      {{ t('access.noMembersVisible') }}
-    </p>
-    <p v-else-if="visibleMembers.length === 0" class="text-muted-foreground py-10 text-center text-sm">
-      {{ t('access.noMembersMatch') }}
-    </p>
-
-    <Table v-else>
+      <Table v-else>
       <TableHeader>
         <TableRow>
           <TableHead>{{ t('access.member') }}</TableHead>
@@ -337,7 +412,25 @@ async function removeMember(member: WorkspaceMemberEntry) {
           </TableCell>
         </TableRow>
       </TableBody>
-    </Table>
+      </Table>
+    </template>
+
+    <!-- Roles: the same roster, read as a ladder of what each rung grants. -->
+    <div v-else-if="tab === 'roles'">
+      <div v-if="loadingMembers" class="space-y-2">
+        <Skeleton v-for="i in 3" :key="i" class="h-24 w-full" />
+      </div>
+      <AccessRoles
+        v-else
+        :members="members"
+        :roles="ROLES"
+        :can-manage="canManage"
+        @assign="assignRole"
+      />
+    </div>
+
+    <!-- Accounts: the platform layer. Only rendered where it can be used. -->
+    <AccessAccounts v-else-if="tab === 'accounts' && canSeeAccounts" />
 
     <Dialog v-model:open="addOpen">
       <DialogContent class="sm:max-w-md">

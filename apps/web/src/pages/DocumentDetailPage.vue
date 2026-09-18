@@ -128,8 +128,17 @@ let timer: ReturnType<typeof setInterval> | undefined
 
 async function load() {
   try {
-    detail.value = await apiFetch<DocumentDetailResponse>(`/v1/documents/${documentId.value}`)
-    const status = detail.value.revision.status
+    const next = await apiFetch<DocumentDetailResponse>(`/v1/documents/${documentId.value}`)
+    /*
+     * Only when something actually moved. This runs every two seconds while a
+     * revision is in flight, and again on every live event for this page — and
+     * `detail` feeds the title, both badges, the meta line and all eight rail
+     * previews. Assigning an equal-but-new object re-rendered that whole set on
+     * a timer. The response is a handful of scalars, so comparing it whole is
+     * cheaper than the render it avoids.
+     */
+    if (JSON.stringify(detail.value) !== JSON.stringify(next)) detail.value = next
+    const status = next.revision.status
     if (status === 'indexed' || status === 'failed' || status === 'draft') {
       if (timer) clearInterval(timer)
       timer = undefined
@@ -381,11 +390,18 @@ watch(documentId, () => {
 watch(
   () => events.lastEvent,
   (e) => {
-    if (e && e.documentId === documentId.value && e.type.startsWith('revision.')) {
-      void load()
-      void loadRelations()
-      void loadContent()
-    }
+    if (!e || e.documentId !== documentId.value || !e.type.startsWith('revision.')) return
+    const before = detail.value?.revision.revisionId
+    // Relations are re-extracted by any indexing pass, so they are always worth
+    // re-reading. Content is not: a revision's bytes are immutable, so the only
+    // thing that changes what this page says is a *different* head. Re-fetching
+    // it regardless tore down and rebuilt the whole editor — losing the
+    // selection, the scroll position and every comment decoration — each time a
+    // cascade touched this page.
+    void loadRelations()
+    void load().then(() => {
+      if (detail.value?.revision.revisionId !== before) void loadContent()
+    })
   },
 )
 </script>
@@ -521,7 +537,16 @@ watch(
           <template #widget-graph><GraphView :document-id="documentId" /></template>
           <template #widget-workflows><WorkflowRail :document-id="documentId" /></template>
           <template #widget-connectors><ConnectorRail :document-id="documentId" /></template>
-          <template #widget-activity><ActivityFeed :document-id="documentId" /></template>
+          <!-- Bounded to sit inside the widget's own cap rather than past it.
+               Left at the 60vh default, the feed's scrollport was taller than
+               the card holding it, so the rail scrolled the card while the card
+               scrolled the feed — two scrollbars for one list, and the paging
+               sentinel on whichever one you were not using. One scrollport, and
+               the virtualizer keeps it to the rows on screen however long the
+               history gets. -->
+          <template #widget-activity>
+            <ActivityFeed :document-id="documentId" height="18rem" />
+          </template>
 
           <!-- Under the stack rather than in it: this is the way back to a
                passage somebody is waiting on, not a fact about the page. -->
@@ -580,7 +605,9 @@ watch(
         <div class="max-h-[70vh] overflow-auto pr-1">
           <RevisionsView v-if="expanded === 'revisions'" :document-id="documentId" />
           <MergeRequestList v-else-if="expanded === 'merge-requests'" :document-id="documentId" />
-          <ActivityFeed v-else-if="expanded === 'activity'" :document-id="documentId" />
+          <!-- Sized under the dialog's own 70vh so the feed keeps the scroll,
+               for the same reason it does in the rail. -->
+          <ActivityFeed v-else-if="expanded === 'activity'" :document-id="documentId" height="56vh" />
         </div>
       </DialogContent>
     </Dialog>

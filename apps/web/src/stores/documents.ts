@@ -33,6 +33,16 @@ export const EMPTY_FILTERS: DocumentFilters = { categories: [], projectIds: [], 
 export const LIST_PAGE = 50
 
 /**
+ * How long `invalidate` waits for the rest of the burst.
+ *
+ * A dependent re-index emits one event per page it touched and they land within
+ * a few hundred milliseconds of each other, so this is long enough to catch a
+ * cascade and short enough that a single change still lands while the reader is
+ * looking at it.
+ */
+const INVALIDATE_WINDOW = 250
+
+/**
  * In-flight requests, per store instance and keyed by what they are fetching.
  *
  * Several components want the same thing on the same tick — the sidebar pane
@@ -52,6 +62,11 @@ export const LIST_PAGE = 50
 const revealing = new WeakMap<object, Map<string, Promise<DocumentTreeNode[]>>>()
 const childFetches = new WeakMap<object, Map<string, Promise<void>>>()
 const treeFetches = new WeakMap<object, Promise<void>>()
+/** The pending coalesced refresh — see `invalidate`. */
+const invalidations = new WeakMap<
+  object,
+  { timer: ReturnType<typeof setTimeout>; resolve: () => void }
+>()
 
 function inFlight<T>(registry: WeakMap<object, Map<string, T>>, store: object): Map<string, T> {
   let map = registry.get(store)
@@ -69,6 +84,57 @@ function walk(nodes: DocumentTreeNode[], id: string): DocumentTreeNode | null {
     if (hit) return hit
   }
   return null
+}
+
+/**
+ * Fold a freshly fetched level onto the copy we already hold, reusing the node
+ * objects that are still there.
+ *
+ * This is what keeps a re-index from re-rendering the whole tree. The rows are
+ * keyed by `documentId`, so replacing `tree` wholesale hands every row a new
+ * `node` object — and a new prop object is a re-render whether or not a single
+ * field differs. Reusing the object means Vue compares the same reference,
+ * finds nothing changed, and does not touch the row; the two or three pages
+ * whose status actually moved are the only ones that redraw.
+ *
+ * Reusing it also preserves the branch under it. A `depth=1` fetch carries no
+ * grandchildren, so assigning the response outright emptied every open branch —
+ * which each open row then noticed and re-fetched, one request per branch, on
+ * top of the ones the refresh was already making. Children are kept unless the
+ * response actually brings some.
+ *
+ * Returns `prev` itself when nothing moved, so the assignment in the caller is
+ * a no-op rather than a new array reference the tree has to diff.
+ */
+function mergeNodes(prev: DocumentTreeNode[], next: DocumentTreeNode[]): DocumentTreeNode[] {
+  if (prev.length === 0) return next
+  const byId = new Map(prev.map((node) => [node.documentId, node]))
+  let identical = prev.length === next.length
+
+  const merged = next.map((incoming, index) => {
+    const existing = byId.get(incoming.documentId)
+    if (!existing) {
+      identical = false
+      return incoming
+    }
+    if (prev[index] !== existing) identical = false
+    // Assigning an unchanged value is already a no-op in Vue's reactivity, so
+    // these only wake the rows whose facts actually moved.
+    existing.title = incoming.title
+    existing.category = incoming.category
+    existing.parentId = incoming.parentId
+    existing.projectId = incoming.projectId
+    existing.headRevisionId = incoming.headRevisionId
+    existing.headRevisionStatus = incoming.headRevisionStatus
+    existing.childCount = incoming.childCount
+    if (incoming.children.length) {
+      const children = mergeNodes(existing.children, incoming.children)
+      if (children !== existing.children) existing.children = children
+    }
+    return existing
+  })
+
+  return identical ? prev : merged
 }
 
 /**
@@ -269,9 +335,12 @@ export const useDocumentsStore = defineStore('documents', {
         const res = await apiFetch<DocumentTreeResponse>(
           `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1${projectParam()}`,
         )
-        this.tree = res.roots
-        this.expanded = []
-        this.expanding = []
+        // Folded onto what we hold rather than replacing it, so a refresh does
+        // not empty every open branch and re-render every row — see mergeNodes.
+        // `expanded` survives with the children it describes; the one caller
+        // that genuinely changes scope (`rescope`) clears both itself.
+        const merged = mergeNodes(this.tree, res.roots)
+        if (merged !== this.tree) this.tree = merged
         this.treeLoaded = true
       })().finally(() => {
         treeFetches.delete(this)
@@ -286,30 +355,39 @@ export const useDocumentsStore = defineStore('documents', {
      * you have already opened is free, which is what makes collapsing it a
      * cheap thing to do rather than something you learn to avoid.
      */
-    async fetchChildren(parentId: string): Promise<void> {
+    async fetchChildren(parentId: string, opts: { background?: boolean } = {}): Promise<void> {
       const pending = inFlight(childFetches, this)
       const running = pending.get(parentId)
       if (running) return running
       // Fetched *and* still here is what makes re-expanding free. Fetched but
       // gone — the tree was replaced under an open row — is a reason to ask
       // again, not a reason to sit on empty placeholders.
-      if (this.expanded.includes(parentId) && childrenLoaded(this.tree, parentId)) return
+      //
+      // A background refresh asks anyway: nobody pressed anything, and the
+      // reason it is running is that a page may have appeared under this row.
+      if (!opts.background && this.expanded.includes(parentId) && childrenLoaded(this.tree, parentId)) {
+        return
+      }
 
       const job = (async () => {
-        this.expanding = [...new Set([...this.expanding, parentId])]
+        // The spinner answers "your click registered". Nobody clicked on a
+        // background refresh, so putting every open chevron into a spin would
+        // report work the reader did not ask for.
+        if (!opts.background) this.expanding = [...new Set([...this.expanding, parentId])]
         try {
           const res = await apiFetch<DocumentTreeResponse>(
             `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1&parentId=${parentId}${projectParam()}`,
           )
           const node = walk(this.tree, parentId)
           if (node) {
-            node.children = res.roots
+            const children = mergeNodes(node.children, res.roots)
+            if (children !== node.children) node.children = children
             // The server just counted them; trust that over a stale count.
             node.childCount = res.roots.length
           }
-          this.expanded = [...new Set([...this.expanded, parentId])]
+          if (!this.expanded.includes(parentId)) this.expanded = [...this.expanded, parentId]
         } finally {
-          this.expanding = this.expanding.filter((id) => id !== parentId)
+          if (!opts.background) this.expanding = this.expanding.filter((id) => id !== parentId)
         }
       })().finally(() => {
         pending.delete(parentId)
@@ -478,17 +556,59 @@ export const useDocumentsStore = defineStore('documents', {
 
     /**
      * Feature 04: called by the events store when the workspace changed
-     * remotely. Expanded branches are refetched too — a page created under an
-     * open branch has to appear there, not only in the list.
+     * remotely.
+     *
+     * Coalesced, because the events do not arrive one at a time. A dependent
+     * re-index cascades — one `revision.indexed` per page the change touched —
+     * and each one used to run a full refresh of the list, the tree and the
+     * graph. Ten pages re-indexing meant ten rounds of that, overlapping, which
+     * is the stall this window closes. The refresh reads whatever the server
+     * holds at the moment it runs, so within a burst only the last one is worth
+     * running; the calls it supersedes resolve immediately, since the refresh
+     * they asked for is the one about to happen.
      */
-    async invalidate() {
-      // A refetch replaces `tree` wholesale, so mid-drag it deletes the row
-      // under the cursor and every rect the hit test is holding. Remember that
-      // someone asked and answer it the moment the drag ends.
+    invalidate(): Promise<void> {
+      // A refresh mid-drag reorders the run under the cursor and invalidates
+      // every rect the hit test is holding. Remember that someone asked, and
+      // answer it the moment the drag ends. (Feature 32 wrote this against a
+      // refetch that replaced `tree` wholesale; folding the level in place has
+      // made that less violent, but a row that moves out from under the pointer
+      // is still a row you dropped somewhere you did not choose.)
       if (this.dragging) {
         this.invalidateQueued = true
-        return
+        return Promise.resolve()
       }
+      const pending = invalidations.get(this)
+      if (pending) {
+        clearTimeout(pending.timer)
+        pending.resolve()
+      }
+      return new Promise<void>((resolve) => {
+        invalidations.set(this, {
+          resolve,
+          timer: setTimeout(() => {
+            invalidations.delete(this)
+            // A drag that began inside the window: the guard above ran before
+            // it started, so it is checked again here and handed to `endDrag`.
+            if (this.dragging) {
+              this.invalidateQueued = true
+              resolve()
+              return
+            }
+            void this.refresh().then(resolve, resolve)
+          }, INVALIDATE_WINDOW),
+        })
+      })
+    },
+
+    /**
+     * Re-read everything currently in use. Expanded branches are refetched too
+     * — a page created under an open branch has to appear there, not only in
+     * the list — and in parallel: they are independent requests, and awaiting
+     * them one at a time made the tree settle in as many frames as there were
+     * open branches.
+     */
+    async refresh() {
       const jobs: Promise<void>[] = []
       // Reset rather than append: a remote change can insert a row anywhere,
       // and the cursor we are holding points into the old ordering.
@@ -502,9 +622,11 @@ export const useDocumentsStore = defineStore('documents', {
         const reopen = [...this.expanded]
         jobs.push(
           this.fetchTree().then(async () => {
-            for (const id of reopen) {
-              if (walk(this.tree, id)) await this.fetchChildren(id)
-            }
+            await Promise.all(
+              reopen
+                .filter((id) => walk(this.tree, id))
+                .map((id) => this.fetchChildren(id, { background: true })),
+            )
           }),
         )
       }

@@ -139,21 +139,25 @@
  * elements and ignore the properties.
  */
 main,
-.kn-subrail-inner {
+.kn-subrail-inner,
+.kn-widget-rail {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent;
 }
 main::-webkit-scrollbar,
-.kn-subrail-inner::-webkit-scrollbar {
+.kn-subrail-inner::-webkit-scrollbar,
+.kn-widget-rail::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 main::-webkit-scrollbar-track,
-.kn-subrail-inner::-webkit-scrollbar-track {
+.kn-subrail-inner::-webkit-scrollbar-track,
+.kn-widget-rail::-webkit-scrollbar-track {
   background: transparent;
 }
 main::-webkit-scrollbar-thumb,
-.kn-subrail-inner::-webkit-scrollbar-thumb {
+.kn-subrail-inner::-webkit-scrollbar-thumb,
+.kn-widget-rail::-webkit-scrollbar-thumb {
   border-radius: 999px;
   /* The transparent border plus `content-box` is what insets the thumb — there
      is no padding property that reaches a scrollbar part. */
@@ -162,8 +166,57 @@ main::-webkit-scrollbar-thumb,
   background-color: color-mix(in oklch, var(--foreground) 22%, transparent);
 }
 main::-webkit-scrollbar-thumb:hover,
-.kn-subrail-inner::-webkit-scrollbar-thumb:hover {
+.kn-subrail-inner::-webkit-scrollbar-thumb:hover,
+.kn-widget-rail::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in oklch, var(--foreground) 38%, transparent);
+}
+
+/*
+ * The page rail (the widget stack beside a document or a project).
+ *
+ * It was sticky but unbounded, which works only while the stack is shorter than
+ * the screen. Open three widgets on a long page and the stack was taller than
+ * the viewport, so `top` pinned it and everything past the fold — Connectors,
+ * Activity, the jump-to-comment line — sat below the bottom edge with no way to
+ * reach it: scrolling the page moved the document, not the pinned rail. The
+ * fix is the one `.kn-subrail-inner` already uses — bound it to the viewport
+ * and let it scroll itself — with the chrome height asked for rather than
+ * assumed, and 3rem covering the content column's own padding above and below.
+ *
+ * `max-height`, not `height`: a rail with two widgets open should end where its
+ * cards end, not reserve a screen of nothing under them.
+ */
+@media (min-width: 1024px) {
+  .kn-widget-rail {
+    position: sticky;
+    top: 1.5rem;
+    max-height: calc(100vh - var(--kn-chrome-h, 5.75rem) - 3rem);
+    overflow-y: auto;
+    /* The stack's last card would otherwise sit flush against the scrollport. */
+    padding-bottom: 0.25rem;
+  }
+}
+
+/*
+ * The followed-subjects list on /settings/notifications.
+ *
+ * A definite height, for two reasons that happen to agree: the card is one of
+ * a pair, and a card that grows with its contents pushed the page to whatever
+ * length somebody's watch list happened to be — the preference switches beside
+ * it scrolled away behind a list nobody came to read. The virtualizer also
+ * needs a real height to measure against; `max-height` would leave it sizing
+ * from content, which is the thing being avoided.
+ *
+ * The two steps match the rail widget's own 26/32rem pair, so the two bounded
+ * lists in this app stop at the same places.
+ */
+.kn-watchlist {
+  height: 20rem;
+}
+@media (min-width: 1024px) {
+  .kn-watchlist {
+    height: 26rem;
+  }
 }
 
 /*

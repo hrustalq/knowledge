@@ -134,7 +134,10 @@ export function createRouter() {
               { path: ':id?', component: () => import('@/pages/WorkflowDetailPage.vue') },
             ],
           },
-          // Access control (page gates mutations by workspace role)
+          // Access: workspace members, what each role grants, and — for a
+          // platform admin — the accounts themselves. The page gates mutations
+          // by workspace role, and hides the Accounts tab for anyone the API's
+          // @PlatformAdmin guard would refuse.
           { path: 'access', component: () => import('@/pages/AccessControlPage.vue') },
           { path: 'activity', component: () => import('@/pages/ActivityPage.vue') },
           // AI: provider config, skills, MCP plugins, token usage and call log.
@@ -144,8 +147,13 @@ export function createRouter() {
           // Connectors (docs/features/19): workspace administration, so like AI
           // settings it gates on auth.canAdminWorkspace rather than meta.platformAdmin.
           { path: 'connectors', component: () => import('@/pages/ConnectorsPage.vue') },
-          // Users management (platform admin only → /403 otherwise)
-          { path: 'users', component: () => import('@/pages/AdminUsersPage.vue'), meta: { platformAdmin: true } },
+          // Accounts moved into /settings/access as a tab. Kept as a redirect
+          // rather than deleted: it was a nav row and a bookmark for as long as
+          // the settings shell has existed. No `platformAdmin` meta — the
+          // destination decides what to show, and bouncing a workspace admin to
+          // /403 for following their own bookmark is worse than landing them on
+          // the members list.
+          { path: 'users', redirect: '/settings/access?tab=accounts' },
           // Docs: the product manual, bundled with the build it describes.
           // Same shell-plus-roster shape as projects — the rail lives here, the
           // article in the child, so switching articles replaces one pane.
@@ -167,7 +175,7 @@ export function createRouter() {
       { path: '/glossary', redirect: '/settings/glossary' },
       { path: '/activity', redirect: '/settings/activity' },
       { path: '/access', redirect: '/settings/access' },
-      { path: '/admin/users', redirect: '/settings/users' },
+      { path: '/admin/users', redirect: '/settings/access?tab=accounts' },
       { path: '/docs', redirect: '/settings/docs' },
     ],
   })

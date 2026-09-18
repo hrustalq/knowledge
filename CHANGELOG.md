@@ -53,6 +53,23 @@ in the pull request that introduces them — see
   `<folder>.md`; one that does not is transparent, and its pages hang from the
   nearest folder that does.
 
+- **Access is one page again, and it says what a role means.** `/settings/users`
+  folded into `/settings/access` as three tabs: **Members** (the roster as it
+  was), **Roles**, and **Accounts** — the last only for a platform admin, so a
+  workspace admin no longer has a settings row beside theirs that only ever
+  403'd. The Roles tab is new: what viewer, editor and admin each grant,
+  transcribed from the API's own `@Access` decorators rather than from what the
+  names suggest, plus who holds each one and a multi-select to move people
+  between them. It says out loud the two things the names get wrong — an editor
+  can merge, and a viewer can comment and spend the workspace's AI budget — and
+  keeps trusted operator separate, because it is a flag over admin rather than a
+  fourth role. `/settings/users` and `/admin/users` redirect.
+- **The followed-subjects list names what it follows.** `GET
+  /v1/notifications/subscriptions` now returns each subject's title and pages by
+  cursor (`limit` / `cursor` / `nextCursor`, the shape `/v1/activity` uses).
+  A subject that has since been deleted still reports `null`, and the settings
+  page shows its id — the honest thing for something that is gone.
+
 ### Fixed
 
 - **A page moved to a new parent no longer lands in an arbitrary slot.** It kept
@@ -82,6 +99,39 @@ in the pull request that introduces them — see
   updated the page and its subtree in two separate statements outside a
   transaction, so a failure between them left children in a project their parent
   had already left.
+
+- **A re-index no longer redraws the whole page tree.** A dependent re-index
+  emits one event per page it touched, and each one ran a full refresh of the
+  list, the tree and the graph — replacing every tree node, which emptied every
+  open branch, which each open row then noticed and re-fetched. A burst is now
+  collapsed into one refresh, the fetched level is folded onto the nodes already
+  held so only rows whose facts changed redraw, and open branches refresh in
+  parallel without spinning their chevrons at somebody who pressed nothing.
+- **A document page stops rebuilding its editor on every event.** The detail
+  poll replaced its response object every two seconds whether or not anything
+  had changed, re-rendering the title, both badges and all eight rail previews;
+  and any revision event re-fetched the content, tearing down and rebuilding the
+  editor — losing the selection, the scroll position and every comment
+  decoration. Content is re-read only when the head revision actually changes,
+  which is the only thing that can change what the page says.
+- **The page rail is reachable when it is taller than the screen.** It was
+  sticky but unbounded, so opening three widgets on a long page put everything
+  past the fold below the bottom edge with no way to scroll to it. It is now
+  bounded to the viewport and scrolls itself, on the document and project pages
+  alike.
+- **The activity widget keeps its own scroll.** In the document rail its
+  scrollport was taller than the card holding it, so the rail scrolled the card
+  while the card scrolled the feed — two scrollbars for one list, with the
+  paging sentinel on whichever one you were not using.
+- **The followed-subjects list is bounded.** Watching is cumulative and nothing
+  prunes it, so the card grew to whatever length somebody's watch list happened
+  to be and pushed the preference switches above it out of reach. It is now a
+  fixed scrollport, virtualized, that pages in as you approach the end.
+- **`/settings/ai` fills its column.** It capped at 64rem to stop the right-hand
+  edge moving between a form-shaped tab and a table-shaped one, which forced the
+  eight-column call log into a horizontal scroller and left the section visibly
+  narrower than Profile or Notifications in the same shell. The measure moved
+  onto the one panel that is a form.
 
 ### Changed
 
@@ -114,6 +164,12 @@ in the pull request that introduces them — see
   as pages are next indexed; to converge a whole workspace at once, run
   `POST /v1/ingestion/reindex`. Declaring an alias folds existing edges
   immediately and does not wait for a reindex.
+
+- Ships a migration that replaces `notification_subscriptions`'
+  `(workspace_id, user_id)` index with `(workspace_id, user_id, created_at)`, so
+  the newly paged list's keyset scan stays index-only. Index only — no data
+  moves, and the previous release runs against it unchanged, so it is safe under
+  a rollback by retag.
 
 ## [0.8.0] — 2026-09-17
 

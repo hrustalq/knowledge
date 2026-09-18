@@ -99,6 +99,11 @@ in the pull request that introduces them — see
   page shows its id — the honest thing for something that is gone.
 
 ### Fixed
+- **The settings navigation stays put again when the page scrolls.** The sub-rail
+  — settings sections, the project roster, the docs index, the saved
+  merge-request filters — was declared sticky but sat inside a container with
+  hidden overflow, which silently made that container the thing it stuck to
+  rather than the page. (#PR)
 
 - **A page moved to a new parent no longer lands in an arbitrary slot.** It kept
   the position it held under its old parent, which collided with whichever

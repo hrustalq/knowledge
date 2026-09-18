@@ -78,7 +78,7 @@ export class McpService {
   ) {}
 
   async serveStdio(): Promise<void> {
-    const server = new McpServer({ name: 'knowledge', version: '0.8.0' });
+    const server = new McpServer({ name: 'knowledge', version: '0.9.0' });
 
     server.registerTool(
       'knowledge_search',

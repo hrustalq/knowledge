@@ -186,6 +186,38 @@ export interface KnowledgeEvent {
 }
 
 /**
+ * What a connected repository can tell us happened (docs/features/32).
+ *
+ * Its own array, spread into `KNOWN_EVENT_TYPES` below rather than typed out
+ * there, because three consumers read exactly this subset and no other: the
+ * GitHub webhook that maps a delivery onto one of these names, the workflow
+ * trigger picker that offers them under their own heading, and the trigger
+ * service that has to know a repo event resolves its page through a work-item
+ * link rather than through `event.documentId`. A second hand-maintained copy is
+ * how those three drift.
+ *
+ * `repo.` rather than `connector.repo.`: the existing `connector.*` events are
+ * all about a sync run — our machinery — while these are about the far side,
+ * and a trigger author reading a checkbox list should not have to know which
+ * connector row delivered the news.
+ */
+export const REPO_EVENT_TYPES = [
+  'repo.issue.opened',
+  'repo.issue.closed',
+  'repo.issue.reopened',
+  'repo.issue.commented',
+  'repo.issue.assigned',
+  'repo.issue.labeled',
+  'repo.pull-request.opened',
+  'repo.pull-request.closed',
+  /** Distinct from `.closed`: merged means the work landed (see the state vocabulary). */
+  'repo.pull-request.merged',
+  'repo.push',
+  'repo.release.published',
+] as const;
+export type RepoEventType = (typeof REPO_EVENT_TYPES)[number];
+
+/**
  * Event types the platform emits today — the tracking-config vocabulary
  * (`event.type` stays an open string for forward compat).
  *
@@ -305,6 +337,7 @@ export const KNOWN_EVENT_TYPES = [
   // Deliberately outside every notification category, which is what stops a
   // notification from fanning out into another notification.
   'notification.created',
+  ...REPO_EVENT_TYPES,
 ] as const;
 
 // ---------------------------------------------------------------------------

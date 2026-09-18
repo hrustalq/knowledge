@@ -281,6 +281,18 @@ export const envSchema = z.object({
    * as well as a real PEM for the case where this arrives from a file mount.
    */
   GITHUB_APP_PRIVATE_KEY: z.string().optional().default(''),
+  /**
+   * Shared secret for the App-level webhook (docs/features/32).
+   *
+   * Separate from every connector's own `webhook_secret`, and deliberately so:
+   * that one authenticates a repository hook somebody configured per connector,
+   * this one authenticates GitHub itself delivering for the whole installation.
+   * One App has one secret, so one env var is the honest shape.
+   *
+   * Empty is the off switch, matching GITHUB_APP_ID: with no secret the
+   * endpoint refuses every delivery rather than trusting an unsigned one.
+   */
+  GITHUB_APP_WEBHOOK_SECRET: z.string().optional().default(''),
   /** Override for GitHub Enterprise Server. The web UI and OAuth URLs derive from it. */
   GITHUB_API_URL: z.string().default('https://api.github.com'),
 

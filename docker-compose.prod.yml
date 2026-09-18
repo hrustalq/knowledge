@@ -192,6 +192,41 @@ services:
     depends_on:
       - api
 
+  # Web research (docs/features/25). SearXNG metasearches the engines it is
+  # pointed at: no API key, no per-query cost, and — the reason it is the first
+  # backend — it returns URLs and snippets and fetches nothing, so the platform
+  # holds the candidate list and can filter by source policy BEFORE any page is
+  # retrieved. Reached as WEB_SEARCH_URL=http://searxng:8080.
+  #
+  # This service MUST stay in this file, not just on the box: deploy.yml
+  # installs this file over /srv/knowledge/docker-compose.prod.yml and then runs
+  # `up -d --remove-orphans`, so a service that exists only on the box is
+  # deleted by the next release.
+  #
+  # ./searxng is NOT the repo's searxng/ — deploy.yml syncs only this file and
+  # the Caddyfile. /srv/knowledge/searxng/settings.yml is hand-managed beside
+  # .env, because it carries a generated secret_key that must not be the dev
+  # placeholder the repo copy ships.
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    init: true
+    # No host binding, same as the four datastores above: the only callers are
+    # api and worker, over the compose network. Its settings.yml runs with
+    # `limiter: false` (the API is called by this platform, not by browsers), so
+    # a published port would put an unthrottled open metasearch proxy on the
+    # box — which gets abused, and then gets the instance blocked by the very
+    # upstreams it scrapes.
+    environment:
+      SEARXNG_BASE_URL: "http://searxng:8080/"
+    volumes:
+      - ./searxng:/etc/searxng:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
 volumes:
   pgdata:
   redisdata:

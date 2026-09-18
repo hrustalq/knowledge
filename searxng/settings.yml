@@ -12,13 +12,31 @@
 # `use_default_settings: true`, a top-level list only *modifies* the engines it
 # names — it does not narrow the set, so every one of the ~80 defaults stays
 # live. The list below is the whole roster.
+#
+# These are engine NAMES, not module names, and a name that matches nothing is
+# dropped in silence — no warning, the engine simply never appears in /config.
+# `stackexchange` is the module; the engine built from it is `stackoverflow`.
 use_default_settings:
   engines:
     keep_only:
       - google
       - duckduckgo
       - wikipedia
-      - stackexchange
+      - stackoverflow
+
+# `keep_only` narrows the roster but preserves each engine's DEFAULT state, and
+# upstream ships google as `disabled: true`. Kept but disabled, it never fires
+# on a normal query — only on an explicit `?engines=google` — so the instance
+# answers 200 with an empty `results` array and looks like a working backend
+# with nothing to say. A top-level `engines:` list *modifies* what it names, so
+# this turns google on without re-widening the roster keep_only just narrowed.
+#
+# duckduckgo is kept for the day it stops serving a CAPTCHA to datacentre IPs;
+# from a VPS it answers `unresponsive_engines: [[duckduckgo, CAPTCHA]]` and
+# nothing else, which is noise in the response, not a failure.
+engines:
+  - name: google
+    disabled: false
 
 server:
   # Dev-only value. Generate a real one for any shared deployment:

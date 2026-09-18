@@ -58,15 +58,21 @@ export class NotificationsController {
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'subjectType', required: false, enum: ['document', 'merge-request', 'project'] })
   @ApiQuery({ name: 'subjectId', required: false })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, 1-200. Defaults to 50.' })
+  @ApiQuery({ name: 'cursor', required: false, description: "Previous page's nextCursor." })
   listSubscriptions(
     @Query('workspaceId') workspaceId: string,
     @CurrentPrincipal() principal: Principal,
     @Query('subjectType') subjectType?: NotificationSubjectType,
     @Query('subjectId') subjectId?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
   ): Promise<ListNotificationSubscriptionsResponse> {
     return this.notifications.listSubscriptions(workspaceId, principal.userId, {
       subjectType: subjectType || undefined,
       subjectId: subjectId || undefined,
+      limit: limit ? Number(limit) : undefined,
+      cursor: cursor || undefined,
     });
   }
 

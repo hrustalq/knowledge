@@ -565,11 +565,29 @@ export class NotificationsService {
     return this.listSubscriptions(workspaceId, userId, { subjectType, subjectId });
   }
 
+  /**
+   * What the caller watches, newest first.
+   *
+   * Paged like every other list here — `take: limit + 1` and the last row's id
+   * as the cursor. It used to return a flat `take: 500`, which the settings
+   * page rendered in full; the cap meant the 501st subscription was simply
+   * invisible, and the 500 before it were 500 rows of DOM for a panel that
+   * shows eight.
+   *
+   * The pagination options are optional because `setSubscription` calls this
+   * filtered to one subject to answer "what is this button's state now".
+   */
   async listSubscriptions(
     workspaceId: string,
     userId: string,
-    filter: { subjectType?: NotificationSubjectType; subjectId?: string } = {},
+    filter: {
+      subjectType?: NotificationSubjectType;
+      subjectId?: string;
+      limit?: number;
+      cursor?: string;
+    } = {},
   ): Promise<ListNotificationSubscriptionsResponse> {
+    const limit = Math.min(Math.max(filter.limit ?? 50, 1), 200);
     const rows = await this.prisma.notificationSubscription.findMany({
       where: {
         workspaceId,
@@ -578,16 +596,77 @@ export class NotificationsService {
         ...(filter.subjectId ? { subjectId: filter.subjectId } : {}),
       },
       orderBy: { createdAt: 'desc' },
-      take: 500,
+      take: limit + 1,
+      ...(filter.cursor ? { cursor: { id: filter.cursor }, skip: 1 } : {}),
     });
-    const subscriptions: NotificationSubscriptionEntry[] = rows.map((r) => ({
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const titles = await this.titlesOf(page);
+    const subscriptions: NotificationSubscriptionEntry[] = page.map((r) => ({
+      id: r.id,
       subjectType: r.subjectType as NotificationSubjectType,
       subjectId: r.subjectId,
+      title: titles.get(r.subjectId) ?? null,
       state: r.muted ? 'muted' : 'watching',
       reason: r.reason,
       createdAt: r.createdAt.toISOString(),
     }));
-    return { workspaceId, subscriptions };
+    return {
+      workspaceId,
+      subscriptions,
+      nextCursor: hasMore ? page[page.length - 1].id : null,
+    };
+  }
+
+  /**
+   * What each subject on this page is called, in three queries rather than one
+   * per row.
+   *
+   * The titles are not denormalized onto the subscription: a page renamed after
+   * somebody started watching it must show its current name, and a stored copy
+   * would be a second answer to a question the subject already answers. Three
+   * `IN` lookups over at most one page of rows is cheap enough that caching it
+   * would cost more than it saves.
+   *
+   * A subject that no longer exists is simply absent, and the caller renders
+   * the id — the honest thing to show for something that is gone.
+   */
+  private async titlesOf(
+    rows: { subjectType: string; subjectId: string }[],
+  ): Promise<Map<string, string>> {
+    const idsFor = (type: NotificationSubjectType): string[] => [
+      ...new Set(rows.filter((r) => r.subjectType === type).map((r) => r.subjectId)),
+    ];
+    const documentIds = idsFor('document');
+    const mergeRequestIds = idsFor('merge-request');
+    const projectIds = idsFor('project');
+
+    const [documents, mergeRequests, projects] = await Promise.all([
+      documentIds.length
+        ? this.prisma.document.findMany({
+            where: { id: { in: documentIds } },
+            select: { id: true, title: true },
+          })
+        : [],
+      mergeRequestIds.length
+        ? this.prisma.mergeRequest.findMany({
+            where: { id: { in: mergeRequestIds } },
+            select: { id: true, title: true },
+          })
+        : [],
+      projectIds.length
+        ? this.prisma.project.findMany({
+            where: { id: { in: projectIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+    ]);
+
+    const titles = new Map<string, string>();
+    for (const d of documents) titles.set(d.id, d.title);
+    for (const m of mergeRequests) titles.set(m.id, m.title);
+    for (const p of projects) titles.set(p.id, p.name);
+    return titles;
   }
 
   /**

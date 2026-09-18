@@ -193,7 +193,11 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
 </script>
 
 <template>
-  <div v-if="query.isPending.value" class="space-y-6">
+  <!-- A form keeps its own measure now that the page no longer caps at 64rem:
+       a 16rem label rail beside a control column reads as a form up to about
+       56rem and as a scattering of controls past it. The tables and the call
+       log on the sibling tabs fill the column instead. -->
+  <div v-if="query.isPending.value" class="max-w-[56rem] space-y-6">
     <div v-for="i in 3" :key="i" class="grid gap-x-10 gap-y-4 border-b py-6 md:grid-cols-[16rem_minmax(0,1fr)]">
       <Skeleton class="h-4 w-32" />
       <div class="max-w-xl space-y-4">
@@ -203,7 +207,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
     </div>
   </div>
 
-  <form v-else-if="form" @submit.prevent="onSave">
+  <form v-else-if="form" class="max-w-[56rem]" @submit.prevent="onSave">
     <AiProvidersSection
       v-if="settings"
       :can-manage="canManage"

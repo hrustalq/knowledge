@@ -181,6 +181,22 @@ export const envSchema = z.object({
   WORKFLOW_AUTOSTART_MAX_ACTIVE: z.coerce.number().int().min(0).default(5),
 
   /**
+   * How long after a repo-event-triggered run this definition refuses to start
+   * another for the same page (docs/features/32).
+   *
+   * Page events get an absolute "only ever once" guard, because a run's output
+   * edits pages and an edit is itself a page event — the chain would feed
+   * itself forever. A repo event cannot do that on its own: it is caused by a
+   * person on the far side, not by anything this product writes.
+   *
+   * It is not *quite* impossible, which is why this is a cooldown rather than
+   * nothing. A flow that comments on or closes an issue when it finishes makes
+   * the far side move, and that comes back as another `repo.*` event. The
+   * in-flight guard catches the common shape of that; this bounds the rest.
+   */
+  WORKFLOW_REPO_RETRIGGER_COOLDOWN_MINUTES: z.coerce.number().int().min(0).default(60),
+
+  /**
    * How long a workflow node may sit claimed (`running`) before the sweeper
    * assumes the worker that took it died and returns it to the queue.
    * Generous by default: a drafting step with tools legitimately takes minutes,

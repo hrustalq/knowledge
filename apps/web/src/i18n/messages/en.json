@@ -667,7 +667,9 @@
       "runs": "Runs",
       "retired": "Not available to run",
       "openInBuilder": "Open “{name}” in the builder",
-      "actionsFor": "Actions for “{name}”"
+      "actionsFor": "Actions for “{name}”",
+      "afterRepo": "Or when a connected repository reports",
+      "repoHint": "Only reaches this workflow through an issue or pull request attached to a page — attach one on the connector page."
     },
     "runStarted": "Run started",
     "draftSaved": "Draft saved",

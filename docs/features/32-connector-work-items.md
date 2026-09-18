@@ -87,6 +87,24 @@ uses, and an unattached one reaches nothing. That asymmetry is the feature, not
 a gap: a workflow runs *against a page*, and an issue nobody has connected to a
 page has none to offer.
 
+**The "only ever once" guard becomes a cooldown, for repo events only.**
+Feature 17 refuses to auto-start a definition against a page it has *ever* run
+against, and that guard is load-bearing: a run's output edits pages, an edit is
+itself a page event, and without it the chain feeds itself forever. A repo event
+cannot do that on its own — a person on the far side caused it — and an issue
+that opens, closes and reopens over a month is three separate pieces of news
+about the same page, of which the absolute guard would let through exactly one.
+
+Exempt is not unbounded, though. A flow that comments on or closes an issue when
+it finishes *does* make the far side move, and that comes back as another
+`repo.*` event. So the guard is replaced rather than removed:
+`WORKFLOW_REPO_RETRIGGER_COOLDOWN_MINUTES` (default 60) bounds how often one
+definition can re-fire for one page, and the in-flight guard and
+`WORKFLOW_AUTOSTART_MAX_ACTIVE` are untouched. The predicate reads
+`REPO_EVENT_TYPES` rather than testing for a `repo.` prefix, because a guard
+keyed off a naming convention says yes to the first event somebody names
+`repo.something` without meaning this.
+
 **`repo.` rather than `connector.repo.`** The existing `connector.*` events are
 all about a sync run — our machinery. These are about the far side, and somebody
 ticking a checkbox in a trigger picker should not have to know which connector
@@ -176,6 +194,10 @@ connector on the picker, the per-connector webhook.
   the flow doing the writing: a repo event starts a workflow, and the workflow's
   existing steps produce revisions. A lifecycle column would have been a second
   state machine beside feature 17's, disagreeing with it eventually.
+- **No connector filter on a trigger.** A `connectorIds` field was drafted and
+  cut: a repo event only reaches a workflow through a work item attached to a
+  page, and that attachment is already specific to one connector, so the filter
+  would have narrowed something already narrow.
 - **No document-side rail yet.** `listForDocument` exists and is what the
   assistant's task tools will read; the page-side widget is not built.
 - **Work items are not searched or indexed.** An issue is not a page and does

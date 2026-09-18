@@ -732,8 +732,11 @@ export class DocumentsService {
         // this at all.
         await this.prisma.$executeRaw`
           UPDATE "documents"
-             SET "path"  = ${newPath} || substring("path" from ${oldPath.length + 1}),
-                 "depth" = "depth" + ${depthDelta}
+             -- The ::int casts are load-bearing: Prisma binds a JS number as
+             -- bigint, and there is no substring(text, bigint) overload, so
+             -- without them this is a 42883 at runtime and never at compile time.
+             SET "path"  = ${newPath} || substring("path" from ${oldPath.length + 1}::int),
+                 "depth" = "depth" + ${depthDelta}::int
            WHERE "workspace_id" = ${document.workspaceId}::uuid
              AND "path" LIKE ${`${oldPath}%`}
              AND "id" <> ${documentId}::uuid`;

@@ -304,6 +304,8 @@ export class AssistantService {
       throw new NotFoundException(t('error.document.notFoundInWorkspace', { id: dto.documentId }));
     }
     const call = await this.openCall(dto.workspaceId, principal, 'ask');
+    const askTrail = await this.documents.breadcrumbsFor(dto.workspaceId, [document.id]);
+    const groundingTrail = askTrail.get(document.id) ? ` — in ${askTrail.get(document.id)}` : '';
     if (!call) {
       return { enabled: false, answer: t('assistant.disabled'), sources: [] };
     }
@@ -343,7 +345,11 @@ export class AssistantService {
       '- Answer in concise markdown and mention the page titles you relied on.\n' +
       PAGE_LINK_RULE +
       '\n\n' +
-      `Current page: "${document.title}" (documentId: ${document.id})\n\n` +
+      // Where the page sits, not just what it is called. Without this the
+      // model has to go looking for its own location, and a page deep in the
+      // tree is not even reachable in a default-depth tree listing — it
+      // answered with a section two levels up rather than its real parent.
+      `Current page: "${document.title}"${groundingTrail} (documentId: ${document.id})\n\n` +
       `<document title=${JSON.stringify(document.title)}>\n${markdown.slice(0, 30_000) || '(no readable content yet)'}\n</document>`;
 
     const history: ChatCompletionMessageParam[] = (dto.history ?? []).slice(-8).map((t) => ({
@@ -776,10 +782,16 @@ export class AssistantService {
     const groundingDocumentId = dto.documentId ?? thread.documentId ?? undefined;
     let groundingDoc: { id: string; title: string } | null = null;
     let groundingMarkdown = '';
+    // Same reasoning as in `ask`: the chat pane's grounding page carried its
+    // title and nothing about where it lives, so "what section is this in"
+    // could only be answered by hunting for it.
+    let turnTrail = '';
     if (groundingDocumentId) {
       const doc = await this.prisma.document.findUnique({ where: { id: groundingDocumentId } });
       if (doc && doc.workspaceId === thread.workspaceId) {
         groundingDoc = doc;
+        const trail = await this.documents.breadcrumbsFor(thread.workspaceId, [doc.id]);
+        turnTrail = trail.get(doc.id) ? ` — in ${trail.get(doc.id)}` : '';
         try {
           groundingMarkdown = (await this.documents.getContent(groundingDocumentId)).markdown;
         } catch {
@@ -832,7 +844,7 @@ export class AssistantService {
       // Same rule for the repositories: absent when there are none.
       codeResearchClause(repos) +
       (groundingDoc
-        ? `\n\nCurrent page: "${groundingDoc.title}" (documentId: ${groundingDoc.id})\n\n` +
+        ? `\n\nCurrent page: "${groundingDoc.title}"${turnTrail} (documentId: ${groundingDoc.id})\n\n` +
           `<document title=${JSON.stringify(groundingDoc.title)}>\n${groundingMarkdown.slice(0, 30_000) || '(no readable content yet)'}\n</document>`
         : '') +
       (manualDocsBlock

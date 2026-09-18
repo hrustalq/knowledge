@@ -26,9 +26,10 @@ in the pull request that introduces them — see
   frontmatter keys, and relation types accept their Russian spellings
   (`зависит_от`, `описывает`, `реализует`, `связано_с`, `принадлежит`,
   `заменяет`, `противоречит`) alongside the English ones.
-- **The assistant can see where pages live.** A new `list_document_tree` tool
-  browses the page tree, and `read_document` and `search_knowledge` results now
-  carry a breadcrumb. Pages the assistant creates are placed under the section
+- **The assistant can see where pages live.** The page it is looking at now names
+  the section it sits in, so "what is this page filed under" costs no lookup. A
+  new `list_document_tree` tool browses the rest of the tree, and `read_document`
+  and `search_knowledge` results carry a breadcrumb. Pages the assistant creates are placed under the section
   they belong to instead of at the top level, and two pages sharing a title are
   no longer indistinguishable to it.
 - **Markdown/git and codebase connectors import with their structure.** A `docs/`

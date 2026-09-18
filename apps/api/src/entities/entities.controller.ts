@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { normalizeEntityKey } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { EntityAliasService } from '../graph/entity-alias.service.js';
@@ -63,6 +64,12 @@ export class EntitiesController {
     summary: 'Declare one entity key to mean another, folding the edges that already exist',
   })
   async createAlias(@Body() dto: CreateEntityAliasDto, @CurrentPrincipal() principal: Principal) {
+    // Answer in the spelling actually stored, not the one that was sent. The
+    // whole point of this endpoint is that the two differ, so echoing the input
+    // back would hide the only thing the caller needs to see.
+    const alias = normalizeEntityKey(dto.alias);
+    const canonicalKey = normalizeEntityKey(dto.canonicalKey);
+
     const created = await this.aliases.create({
       workspaceId: dto.workspaceId,
       alias: dto.alias,
@@ -74,13 +81,13 @@ export class EntitiesController {
       // hop. Saying so beats reporting a success that resolved nothing.
       throw new ConflictException({
         statusCode: 409,
-        message: t('error.entityAlias.wouldChain'),
-        alias: dto.alias,
-        canonicalKey: dto.canonicalKey,
+        message: t('error.entityAlias.wouldChain', { alias, canonicalKey }),
+        alias,
+        canonicalKey,
       });
     }
-    const moved = await this.graph.mergeEntityKey(dto.workspaceId, dto.alias, dto.canonicalKey);
-    return { alias: dto.alias, canonicalKey: dto.canonicalKey, edgesMoved: moved };
+    const edgesMoved = await this.graph.mergeEntityKey(dto.workspaceId, alias, canonicalKey);
+    return { alias, canonicalKey, edgesMoved };
   }
 
   @Delete('aliases/:alias')

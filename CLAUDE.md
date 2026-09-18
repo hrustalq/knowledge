@@ -118,6 +118,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 27  | Comment editing      | Edit/delete a comment; Comment vs. Start thread                        |
 | 30  | GitHub repo picker   | A GitHub App installation replaces repo URL + PAT for git connectors   |
 | 31  | Code research        | `code_*` tools over a connected repo; the archaeologist drafts pages for undeclared logic |
+| 32  | Tree drag-and-drop   | Reparent + reorder by drag, keyboard and picker; `POST :id/move` places among siblings    |
 
 ## Conventions
 

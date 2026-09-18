@@ -1074,7 +1074,22 @@
   "tree": {
     "collapse": "Collapse",
     "expand": "Expand",
-    "onThisPage": "On this page"
+    "onThisPage": "On this page",
+    "dnd": {
+      "current": "current",
+      "grabbed": "{title} grabbed. Use the arrow keys to choose a place, Enter to move it, Escape to cancel.",
+      "invalid": "{title} cannot be moved inside itself.",
+      "moveConfirm": "Move",
+      "moveDescription": "Choose the page it should sit under. It is added at the end; drag it, or grab it with Space, to order it.",
+      "moveNoMatch": "No page matches that.",
+      "moveSearch": "Search pages",
+      "moveTitle": "Move “{title}”",
+      "moveTo": "Move to…",
+      "positionBefore": "{title}: before {sibling}, in {parent}.",
+      "positionLast": "{title}: last in {parent}.",
+      "rowMenu": "Actions for {title}",
+      "topLevel": "Top level"
+    }
   },
   "graph": {
     "depth": "Depth",

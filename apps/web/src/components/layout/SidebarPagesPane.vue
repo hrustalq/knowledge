@@ -24,6 +24,9 @@ import { useProjectsStore } from '@/stores/projects'
 import { TREE_INDENT, useSidebarStore } from '@/stores/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 import SidebarTreeNode from './SidebarTreeNode.vue'
+import TreeDragLayer from '@/components/knowledge/TreeDragLayer.vue'
+import { provideTreeDnd } from '@/components/knowledge/tree-dnd'
+import { toast } from 'vue-sonner'
 import { TreeWindowKey } from './tree-window'
 
 const { t } = useI18n()
@@ -83,10 +86,16 @@ watch(
   { immediate: true },
 )
 
+// Feature 32. The controller is provided here rather than per row because a
+// drop is resolved against the whole tree, not against the row it started in.
+function reveal(depth: number) {
+  focusDepth.value = depth
+}
+
+provideTreeDnd((message) => toast.error(message), reveal)
+
 provide(TreeWindowKey, {
-  reveal: (depth: number) => {
-    focusDepth.value = depth
-  },
+  reveal,
   retreat: (depth: number) => {
     focusDepth.value = Math.min(focusDepth.value, depth)
   },
@@ -145,6 +154,7 @@ const shift = computed(() => Math.max(0, focusDepth.value - sidebar.treeDepthBud
 
     <div
       class="sidebar-scroll kn-tree-window mt-1 min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4"
+      data-tree-scroll
       :style="{ '--kn-tree-shift': `${shift}px` }"
       :data-windowed="shift > 0"
     >
@@ -166,5 +176,7 @@ const shift = computed(() => Math.max(0, focusDepth.value - sidebar.treeDepthBud
         />
       </ul>
     </div>
+
+    <TreeDragLayer />
   </div>
 </template>

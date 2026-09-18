@@ -24,11 +24,11 @@ in the pull request that introduces them — see
   `?engines=google`, so the instance returned `200 application/json` with an
   empty `results` array and looked like a working backend that had nothing to
   say. A top-level `engines:` block now enables it; that form *modifies* the
-  engines it names rather than re-widening the roster `keep_only` narrowed.
+  engines it names rather than re-widening the roster `keep_only` narrowed. (#52)
 - **One of the four configured engines was never loaded.** `keep_only` matches
   engine names, not module names, and a name matching nothing is dropped in
   silence — no warning, absent from `/config`. `stackexchange` is the module;
-  the engine built from it is `stackoverflow`.
+  the engine built from it is `stackoverflow`. (#52)
 
 ### Operations
 

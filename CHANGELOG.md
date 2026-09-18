@@ -38,6 +38,18 @@ in the pull request that introduces them — see
   folder becomes a page only if it holds a `README.md`, `index.md` or
   `<folder>.md`; one that does not is transparent, and its pages hang from the
   nearest folder that does.
+- **Connectors have a page of their own, and a GitHub connector shows the work on
+  the far side.** `/settings/connectors/:id` carries the connection's status,
+  the pages it has claimed and its sync history without picking it out of a
+  dropdown first — and, for a repository connector, a **Work items** tab listing
+  issues and pull requests. You can open an issue from here and attach it to a
+  page. (#PR)
+- **What happens on a connected repository is now something workflows can react
+  to.** With the GitHub App's webhook switched on, issues, pull requests, pushes
+  and releases arrive as `repo.*` events. A work item attached to a page carries
+  that page with it, which is what lets a workflow trigger fire on, say, an
+  issue being closed against the page it is about. An unattached issue triggers
+  nothing. (#PR)
 
 ### Fixed
 
@@ -93,6 +105,25 @@ in the pull request that introduces them — see
   as pages are next indexed; to converge a whole workspace at once, run
   `POST /v1/ingestion/reindex`. Declaring an alias folds existing edges
   immediately and does not wait for a reindex.
+- **One new environment variable, `GITHUB_APP_WEBHOOK_SECRET`, and it is
+  optional.** Empty is the off switch, matching `GITHUB_APP_ID`: with no secret
+  the new `POST /v1/connectors/github/webhook` endpoint refuses every delivery
+  rather than trusting an unsigned one, and everything else — connectors on a
+  personal access token, connectors on an App installation, the existing
+  per-connector webhook — is unchanged.
+- **Turning the feature on means changing the GitHub App registration**, not
+  just the environment. On `https://github.com/settings/apps/<your-app>`: set
+  Repository permissions → Issues and Pull requests to **Read and write**,
+  Organization permissions → Projects to **Read and write**, switch the Webhook
+  to **Active** with URL `$API_PUBLIC_URL/v1/connectors/github/webhook` and the
+  secret above, and subscribe to Issues, Issue comment, Pull request, Pull
+  request review, Push, Release and Project v2 item. An installed App picks up
+  new permissions only once an org owner approves them. See
+  [docs/features/32](docs/features/32-connector-work-items.md).
+- **One migration, additive and reversible.**
+  `20260918122949_connector_work_items` adds a table and nothing else, so the
+  previous release's image runs against this schema unchanged and a rollback
+  drops no data anything else reads.
 
 ## [0.8.0] — 2026-09-17
 

@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import { htmlToMarkdown } from '../../import/parsers/html-to-markdown.js';
 import { t } from '../../i18n/t.js';
-import { countMacros, safeJson, verifyHubSignature } from './confluence.adapter.js';
+import { countMacros } from './confluence.adapter.js';
+import { safeJson, verifyHubSignature } from '../webhook-payload.js';
 import { markdownToStorageFormat } from './markdown-to-html.js';
 import {
   ConnectorRequestError,

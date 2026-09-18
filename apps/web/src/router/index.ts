@@ -57,6 +57,16 @@ export function createRouter() {
       component: () => import('@/pages/ConnectorRunPage.vue'),
       meta: { fill: true },
     },
+    // One connector, as something you read and operate (docs/features/32) — the
+    // counterpart to the card on /settings/connectors, which is the form you
+    // configure it in. Top-level rather than a settings child for the reason
+    // the run page is: the work-items table wants the width, and the settings
+    // nav beside it would be a column of links nobody follows from here.
+    //
+    // Declared AFTER `runs/:runId` deliberately. vue-router already scores the
+    // literal higher, so this is habit rather than necessity — but the habit is
+    // what keeps the next literal segment from being claimed by `:id`.
+    { path: '/settings/connectors/:id', component: () => import('@/pages/ConnectorDetailPage.vue') },
     { path: '/search', component: () => import('@/pages/SearchPage.vue') },
       // The inbox (docs/features/22). Top-level rather than under /settings:
       // it is a place you read, not a thing you configure — the preferences

@@ -7,10 +7,9 @@ import type { Connector } from '@prisma/client';
 import type { RepoEventType } from '@knowledge/contracts';
 import { Public } from '../../auth/access.decorator.js';
 import type { Env } from '../../config/env.js';
-import { PrismaService } from '../../prisma/prisma.service.js';
 import { t } from '../../i18n/t.js';
-import { safeJson, verifyHubSignature } from '../adapters/confluence.adapter.js';
-import { GITHUB_INSTALLATION_CONFIG_KEY } from '@knowledge/contracts';
+import { safeJson, verifyHubSignature } from '../webhook-payload.js';
+import { ConnectorsService } from '../connectors.service.js';
 import { ConnectorWorkItemsService } from '../connector-work-items.service.js';
 import { toWorkItem } from './github-issues.service.js';
 
@@ -46,7 +45,7 @@ export class GithubWebhookController {
 
   constructor(
     private readonly config: ConfigService<Env, true>,
-    private readonly prisma: PrismaService,
+    private readonly connectors: ConnectorsService,
     private readonly workItems: ConnectorWorkItemsService,
   ) {
     this.secret = this.config.get('GITHUB_APP_WEBHOOK_SECRET', { infer: true }).trim();
@@ -96,30 +95,15 @@ export class GithubWebhookController {
   /**
    * The connectors this delivery is about.
    *
-   * Narrowed in SQL by installation id, then filtered in memory by repository:
-   * `config.repoUrl` is free text an operator typed or the picker wrote, so
-   * matching it with a `LIKE` would mean encoding URL-shape assumptions into a
-   * query. The installation predicate already bounds the row count to one
-   * account's connectors.
+   * The lookup itself lives on ConnectorsService, which owns connector rows:
+   * a controller holding PrismaService is a write with no service to wrap in a
+   * transaction when it grows a second statement, and `make deps` enforces that.
    */
   private async connectorsFor(payload: Record<string, any>): Promise<Connector[]> {
     const installationId = payload.installation?.id;
     const fullName: unknown = payload.repository?.full_name;
     if (installationId === undefined || typeof fullName !== 'string') return [];
-
-    const rows = await this.prisma.connector.findMany({
-      where: {
-        enabled: true,
-        config: { path: [GITHUB_INSTALLATION_CONFIG_KEY], equals: String(installationId) },
-      },
-      take: 50,
-    });
-    const wanted = fullName.toLowerCase();
-    return rows.filter((row) => {
-      const url = (row.config as Record<string, unknown> | null)?.repoUrl;
-      if (typeof url !== 'string') return false;
-      return url.replace(/\.git$/, '').toLowerCase().endsWith(`/${wanted}`);
-    });
+    return this.connectors.forGithubDelivery(String(installationId), fullName);
   }
 
   /** Map one delivery onto our vocabulary and record it. Returns false for events we ignore. */

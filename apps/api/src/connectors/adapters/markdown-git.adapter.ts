@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import matter from 'gray-matter';
-import { safeJson, verifyHubSignature } from './confluence.adapter.js';
+import { safeJson, verifyHubSignature } from '../webhook-payload.js';
 import { safeFetch } from '../../common/safe-fetch.js';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import {

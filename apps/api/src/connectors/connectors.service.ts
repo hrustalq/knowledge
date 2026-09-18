@@ -105,6 +105,35 @@ export class ConnectorsService {
     return row;
   }
 
+  /**
+   * The enabled connectors an App-level webhook delivery is about
+   * (docs/features/32).
+   *
+   * Narrowed in SQL by installation id, then filtered in memory by repository.
+   * `config.repoUrl` is free text — an operator typed it or the picker wrote it
+   * — so matching it with a `LIKE` would bake URL-shape assumptions into a
+   * query; the installation predicate has already bounded the rows to one
+   * account's connectors, so the second pass is over a handful.
+   *
+   * Crosses workspaces on purpose: the same installation can be recorded by two
+   * workspaces, and an issue moving on that repository is news to both.
+   */
+  async forGithubDelivery(installationId: string, repoFullName: string): Promise<Connector[]> {
+    const rows = await this.prisma.connector.findMany({
+      where: {
+        enabled: true,
+        config: { path: [GITHUB_INSTALLATION_CONFIG_KEY], equals: installationId },
+      },
+      take: 50,
+    });
+    const wanted = repoFullName.toLowerCase();
+    return rows.filter((row) => {
+      const url = (row.config as Record<string, unknown> | null)?.repoUrl;
+      if (typeof url !== 'string') return false;
+      return url.replace(/\.git$/, '').toLowerCase().endsWith(`/${wanted}`);
+    });
+  }
+
   // --- writes ---
 
   async create(input: CreateConnectorInput, userId?: string): Promise<ConnectorSummary> {

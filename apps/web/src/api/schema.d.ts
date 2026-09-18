@@ -438,6 +438,23 @@ export interface paths {
         patch: operations["DocumentsController_update"];
         trace?: never;
     };
+    "/v1/documents/{id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Feature 32: place a page under a parent and among its siblings in one call. parentId: null re-roots; beforeId names the sibling it lands above, omitted appends last */
+        post: operations["DocumentsController_move"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/content": {
         parameters: {
             query?: never;
@@ -2963,6 +2980,12 @@ export interface components {
             /** Format: uuid */
             projectId?: string;
         };
+        MoveDocumentDto: {
+            /** Format: uuid */
+            parentId: string | null;
+            /** Format: uuid */
+            beforeId?: string | null;
+        };
         CreateBranchDto: {
             /** @example feature/oauth */
             name: string;
@@ -5386,6 +5409,51 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_move: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveDocumentDto"];
+            };
+        };
+        responses: {
+            /** @description beforeId no longer names a child of parentId — the tree moved */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

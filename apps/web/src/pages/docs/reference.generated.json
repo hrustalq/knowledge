@@ -1192,6 +1192,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/documents/{id}/move",
+      "tag": "documents",
+      "summary": "Feature 32: place a page under a parent and among its siblings in one call. parentId: null re-roots; beforeId names the sibling it lands above, omitted appends last",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/documents/{id}/push",
       "tag": "documents",
       "summary": "Publish this page back to its connector (docs/features/19)",

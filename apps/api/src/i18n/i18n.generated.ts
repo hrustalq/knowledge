@@ -210,6 +210,7 @@ export type I18nTranslations = {
             "parentNotInProject": string;
             "selfParent": string;
             "moveCycle": string;
+            "siblingGone": string;
             "nothingToUpdate": string;
             "contentIsDraft": string;
             "uploadMissing": string;

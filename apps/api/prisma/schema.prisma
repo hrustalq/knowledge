@@ -1636,7 +1636,11 @@ model NotificationSubscription {
   @@unique([userId, subjectType, subjectId])
   // The fan-out's only query: everybody watching this subject.
   @@index([subjectType, subjectId])
-  @@index([workspaceId, userId])
+  // The settings list: one person's subscriptions here, newest first, paged.
+  // `createdAt` is part of the index because it is the sort the cursor walks —
+  // without it the scan sorts in memory, which is what Notification's own
+  // [workspaceId, userId, createdAt] already learned.
+  @@index([workspaceId, userId, createdAt])
   @@map("notification_subscriptions")
 }
 

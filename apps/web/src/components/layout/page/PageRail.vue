@@ -87,7 +87,10 @@ watch(() => route.query.tab, applyUrlTab)
 </script>
 
 <template>
-  <aside class="space-y-3 lg:sticky lg:top-6">
+  <!-- `kn-widget-rail` makes the stack sticky *and* self-scrolling above `lg`:
+       bounded to the viewport, so a rail taller than the screen is reachable
+       without scrolling the document out from under it. See style.css. -->
+  <aside class="kn-widget-rail space-y-3">
     <!-- Above the stack and outside it: the table of contents belongs to the
          page being read, not to the facts about it. -->
     <slot name="before" />

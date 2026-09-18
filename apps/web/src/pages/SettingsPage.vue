@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Settings shell: nested pages (projects / users / access / activity) rendered
-// in the content column, with their own nav rail flush against the left edge.
+// Settings shell: nested pages (projects / access / activity / …) rendered in
+// the content column, with their own nav rail flush against the left edge.
 import { useI18n } from 'vue-i18n'
 import { computed, type Component } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
@@ -14,15 +14,12 @@ import {
   ShieldCheck,
   Sparkles,
   UserRound,
-  Users,
   Workflow,
 } from 'lucide-vue-next'
-import { useAuthStore } from '@/stores/auth'
 import { PageLayout, PageSubRail } from '@/components/layout/page'
 
 const { t } = useI18n()
 
-const auth = useAuthStore()
 const route = useRoute()
 
 interface SettingsLink { to: string; label: string; icon: Component; hint: string }
@@ -33,9 +30,10 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/notifications', label: t('nav.notifications'), icon: Bell, hint: t('settings.notificationsHint') },
   { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
   { to: '/settings/glossary', label: t('nav.glossary'), icon: BookMarked, hint: t('settings.glossaryHint') },
-  ...(auth.isAdmin || auth.isDev
-    ? [{ to: '/settings/users', label: t('nav.users'), icon: Users, hint: t('settings.usersHint') }]
-    : []),
+  // Members, roles and — for a platform admin — the accounts themselves, all
+  // under one row. Accounts used to be a second row beside this one, which put
+  // "can this person sign in" and "what may they do here" in two places and
+  // gave a workspace admin a nav row that only ever 403'd.
   { to: '/settings/access', label: t('nav.access'), icon: ShieldCheck, hint: t('settings.accessHint') },
   { to: '/settings/activity', label: t('nav.activity'), icon: Activity, hint: t('settings.activityHint') },
   { to: '/settings/ai', label: t('nav.ai'), icon: Sparkles, hint: t('settings.aiHint') },

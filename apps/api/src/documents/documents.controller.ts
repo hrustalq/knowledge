@@ -11,7 +11,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
-import { ApiHeader, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { CompareMode, DocumentConnectorResponse, PushDocumentResponse } from '@knowledge/contracts';
 import { ConnectorLinksService } from '../connectors/connector-links.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
@@ -32,6 +32,7 @@ import {
   CreateRevisionDto,
   CreateUploadDto,
   CurateRelationDto,
+  MoveDocumentDto,
   ProposeRelationsDto,
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
@@ -146,6 +147,22 @@ export class DocumentsController {
     @CurrentPrincipal() principal: Principal,
   ) {
     return this.documents.updateDocument(id, dto, principal?.userId);
+  }
+
+  @Post(':id/move')
+  @Access('editor', 'document')
+  @ApiOperation({
+    summary:
+      'Feature 32: place a page under a parent and among its siblings in one call. ' +
+      'parentId: null re-roots; beforeId names the sibling it lands above, omitted appends last',
+  })
+  @ApiResponse({ status: 409, description: 'beforeId no longer names a child of parentId — the tree moved' })
+  move(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MoveDocumentDto,
+    @CurrentPrincipal() principal: Principal,
+  ) {
+    return this.documents.moveDocument(id, dto, principal?.userId);
   }
 
   @Get(':id/content')

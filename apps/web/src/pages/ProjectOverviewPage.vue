@@ -207,7 +207,10 @@ const isActive = computed(() => projectId.value === projects.activeId)
         </section>
       </div>
 
-      <aside class="space-y-3 lg:sticky lg:top-6">
+      <!-- Same rail, same bound as the document page's: sticky and
+           self-scrolling above `lg`, so a stack taller than the viewport is
+           reachable without scrolling the page out from under it. -->
+      <aside class="kn-widget-rail space-y-3">
         <RailSection
           v-for="w in visibleWidgets"
           :key="w.id"

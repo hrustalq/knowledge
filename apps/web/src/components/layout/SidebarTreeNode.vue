@@ -8,8 +8,11 @@ import { ChevronRight, Loader2 } from 'lucide-vue-next'
 import { Collapse } from '@/components/ui/collapse'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { statusDot } from '@/lib/api'
+import { useTreeDndRow } from '@/components/knowledge/tree-dnd'
+import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
-import { useSidebarStore } from '@/stores/sidebar'
+import { TREE_INDENT, useSidebarStore } from '@/stores/sidebar'
+import TreeRowMenu from '@/components/knowledge/TreeRowMenu.vue'
 import { TreeWindowKey } from './tree-window'
 
 defineOptions({ name: 'SidebarTreeNode' })
@@ -18,6 +21,7 @@ const props = defineProps<{ node: TreeNode; depth: number; activeId: string | nu
 
 const store = useDocumentsStore()
 const sidebar = useSidebarStore()
+const auth = useAuthStore()
 
 /**
  * `childCount` rather than `children.length`: the tree loads a level at a time,
@@ -88,18 +92,49 @@ watchEffect(() => {
     void store.fetchChildren(props.node.documentId)
   }
 })
+
+const dnd = useTreeDndRow({
+  id: props.node.documentId,
+  title: () => props.node.title,
+  parentId: () => props.node.parentId,
+  depth: () => props.depth,
+  hasChildren: () => hasChildren.value,
+  open,
+  indent: TREE_INDENT,
+})
+/**
+ * Space on the focused page title grabs it.
+ *
+ * The title link is the row's existing tab stop, so the gesture costs no new
+ * ones — a tree that added a second focusable element per row would double the
+ * length of every tab traversal of the rail to serve one gesture.
+ */
 </script>
 
 <template>
-  <li>
+  <li class="kn-tree-row" :class="{ 'kn-drop-before': dnd.dropBefore.value, 'kn-drop-after': dnd.dropAfter.value }">
     <div
-      class="group flex items-center gap-1 rounded-md pr-2 text-sm transition-colors"
-      :class="isActive
-        ? 'bg-primary/10 font-medium text-primary'
-        : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'"
+      :ref="dnd.setEl"
+      data-tree-row
+      class="group relative flex items-center gap-1 rounded-md pr-1 text-sm transition-[background-color,color,opacity]"
+      :class="[
+        isActive
+          ? 'bg-primary/10 font-medium text-primary'
+          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+        dnd.isSource.value ? 'opacity-40' : '',
+        // A locked subtree is still readable and still navigable — only the
+        // grip is withdrawn. Greying it out entirely would read as an error.
+        dnd.isLocked.value ? 'opacity-60' : '',
+        dnd.dropInside.value ? 'bg-primary/10 ring-primary/40 ring-1' : '',
+      ]"
+      :style="{ '--kn-drop-inset': `${dnd.indicatorInset.value}px` }"
+      :aria-grabbed="dnd.isSource.value || undefined"
+      @pointerdown="dnd.onPointerdown"
+      @keydown="(e: KeyboardEvent) => dnd.onKeydown(e, auth.canEdit)"
     >
       <button
         v-if="hasChildren"
+        data-no-drag
         class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-sidebar-accent"
         :aria-label="open ? t('tree.collapse') : t('tree.expand')"
         :aria-expanded="open"
@@ -119,13 +154,24 @@ watchEffect(() => {
         :to="`/documents/${node.documentId}`"
         class="min-w-0 flex-1 truncate py-1.5"
         :title="node.title"
+        draggable="false"
       >
         {{ node.title }}
       </RouterLink>
+      <!-- The status dot yields its slot to the menu on hover rather than
+           sitting beside it: at 256px a second permanent affordance is the
+           difference between a readable title and an ellipsis. -->
+      <TreeRowMenu
+        v-if="auth.canEdit"
+        :document-id="node.documentId"
+        :title="node.title"
+        :disabled="dnd.isLocked.value"
+        class="hidden group-focus-within:grid group-hover:grid"
+      />
       <span
         v-if="hasChildren"
         class="size-1.5 shrink-0 rounded-full"
-        :class="statusDot(node.headRevisionStatus)"
+        :class="[statusDot(node.headRevisionStatus), auth.canEdit ? 'group-focus-within:hidden group-hover:hidden' : '']"
         :title="node.headRevisionStatus ?? 'draft'"
       />
     </div>

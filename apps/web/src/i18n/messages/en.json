@@ -209,7 +209,7 @@
     "projectsHint": "Organize documents",
     "glossaryHint": "Shared vocabulary",
     "usersHint": "Platform accounts",
-    "accessHint": "Workspace members",
+    "accessHint": "Members, roles and accounts",
     "activityHint": "Workspace timeline",
     "aiHint": "Assistant, skills, usage",
     "workflowsHint": "Document step chains",
@@ -1108,7 +1108,22 @@
   "tree": {
     "collapse": "Collapse",
     "expand": "Expand",
-    "onThisPage": "On this page"
+    "onThisPage": "On this page",
+    "dnd": {
+      "current": "current",
+      "grabbed": "{title} grabbed. Use the arrow keys to choose a place, Enter to move it, Escape to cancel.",
+      "invalid": "{title} cannot be moved inside itself.",
+      "moveConfirm": "Move",
+      "moveDescription": "Choose the page it should sit under. It is added at the end; drag it, or grab it with Space, to order it.",
+      "moveNoMatch": "No page matches that.",
+      "moveSearch": "Search pages",
+      "moveTitle": "Move “{title}”",
+      "moveTo": "Move to…",
+      "positionBefore": "{title}: before {sibling}, in {parent}.",
+      "positionLast": "{title}: last in {parent}.",
+      "rowMenu": "Actions for {title}",
+      "topLevel": "Top level"
+    }
   },
   "graph": {
     "depth": "Depth",
@@ -1762,7 +1777,44 @@
     "inviteTo": "Invite people to {workspace} so they can work in it.",
     "memberAdded": "{email} added as {role}",
     "memberUpdated": "Updated {email}",
-    "memberRemoved": "Removed {email}"
+    "memberRemoved": "Removed {email}",
+    "tabMembers": "Members",
+    "tabRoles": "Roles",
+    "tabAccounts": "Accounts",
+    "rolesHint": "Three roles, each one adding to the one before it. A role is held per workspace.",
+    "rolesNoteMerge": "Merging is an editor’s right, not an admin’s — there is no separate approver rank.",
+    "rolesNoteViewer": "A viewer can comment and can use the AI assistant; neither needs edit access.",
+    "noMembersInRole": "Nobody holds this role yet.",
+    "operatorTitle": "Trusted operator",
+    "operatorHint": "A flag on top of the admin role rather than a rank of its own. It permits read-only graph queries run straight against the store, and every one is written to the audit log.",
+    "operatorNone": "Nobody in this workspace holds it.",
+    "selectedCount": "{n} selected",
+    "changeRoleTo": "Change role to",
+    "clearSelection": "Clear",
+    "selectMember": "Select {name}",
+    "rolesReadOnly": "You can see who holds what, but only an admin can change it.",
+    "grant": {
+      "viewer": {
+        "read": "Read every page, its revision history and the graph around it",
+        "comment": "Comment on any page, and resolve comment threads",
+        "search": "Search, trace relations and run impact analysis",
+        "assistant": "Use the AI assistant, which spends the workspace’s token budget",
+        "follow": "Follow merge requests, and save personal filters"
+      },
+      "editor": {
+        "pages": "Create, edit, move and re-categorize pages, and upload attachments",
+        "relations": "Curate a page’s relations and its glossary links",
+        "merge": "Open, review, approve and merge merge requests",
+        "projects": "Create projects, edit the glossary and import documents",
+        "automation": "Run workflows, connector syncs and AI agents"
+      },
+      "admin": {
+        "members": "Add and remove members, and set their role and operator flag",
+        "ai": "Configure AI providers, skills, plugins and spending budgets",
+        "integrations": "Set up connectors, and define the workflows editors run",
+        "housekeeping": "Delete a project, force re-indexing, and read the audit log"
+      }
+    }
   },
   "users": {
     "title": "Users",
@@ -2409,6 +2461,7 @@
     "watchingTitle": "What I follow",
     "watchingHint": "Pages, projects and reviews you watch, plus anything you have muted.",
     "watchingEmpty": "You are not following anything yet.",
+    "watchingLoaded": "{n} loaded",
     "tab": {
       "all": "All",
       "unread": "Unread"

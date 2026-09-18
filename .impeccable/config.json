@@ -10,7 +10,16 @@
           "apps/web/src/styles/editor.css"
         ],
         "createdAt": "2026-09-10T07:32:01.793Z",
-        "reason": "user confirmed: L105 is a blockquote left rule and L233 is the [data-kn-panel] callout bar that round-trips to GitHub alerts (rich-editor markdown contract) \u2014 both are the typographic form for the element, not a card accent tab"
+        "reason": "user confirmed: L105 is a blockquote left rule and L233 is the [data-kn-panel] callout bar that round-trips to GitHub alerts (rich-editor markdown contract) — both are the typographic form for the element, not a card accent tab"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "apps/web/src/style.css"
+        ],
+        "createdAt": "2026-09-18T13:52:25.301Z",
+        "reason": "user confirmed: the four findings (kn-rail-gap L241, kn-tree-window>ul L343, kn-subrail L674, kn-filters-gap L1047) are pre-existing rail/window animations whose CSS comments document why transform is rejected — it would drag the rail edge and leave a gap"
       }
     ]
   }

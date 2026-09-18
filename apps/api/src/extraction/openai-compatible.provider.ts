@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
-import { AUTHORABLE_RELATION_TYPES } from '@knowledge/contracts';
+import { AUTHORABLE_RELATION_TYPES, normalizeRelationType } from '@knowledge/contracts';
+import { normalizeRelationTarget } from '../common/relations.js';
 import type {
   ExtractionBilling,
   ExtractionChunk,
@@ -159,10 +160,15 @@ export class OpenAICompatibleExtractor implements RelationExtractor {
 
     const out: InferredFact[] = [];
     for (const rel of parsed.relations) {
-      const type = typeof rel.type === 'string' ? rel.type.toUpperCase() : '';
-      if (!(INFERABLE_TYPES as readonly string[]).includes(type)) continue;
-      const key = typeof rel.entity?.key === 'string' ? rel.entity.key.trim() : '';
-      if (!key) continue;
+      // Both fact classes fold through the same pair now. This used to keep its
+      // own `.toUpperCase()` and its own key/name derivation, so a spelling the
+      // model produced could be accepted here and rejected from frontmatter —
+      // and a Russian page's `сервис:биллинг` became a vertex of its own
+      // instead of joining the English page's `service:billing`.
+      const type = typeof rel.type === 'string' ? normalizeRelationType(rel.type) : null;
+      if (!type) continue;
+      const target = normalizeRelationTarget(rel.entity);
+      if (!target) continue;
       // An omitted confidence means the model asserted the relation without
       // scoring it, so it is read as asserted (1). It used to default to 0,
       // which silently dropped EVERY such relation at any threshold above 0 —
@@ -171,19 +177,7 @@ export class OpenAICompatibleExtractor implements RelationExtractor {
       if (confidence < minConfidence) continue;
       out.push({
         type,
-        target: {
-          key,
-          type:
-            typeof rel.entity?.type === 'string' && rel.entity.type.trim()
-              ? rel.entity.type.trim()
-              : key.includes(':')
-                ? key.slice(0, key.indexOf(':'))
-                : 'entity',
-          name:
-            typeof rel.entity?.name === 'string' && rel.entity.name.trim()
-              ? rel.entity.name.trim()
-              : (key.split(':').pop() ?? key),
-        },
+        target,
         confidence,
         sourceChunkId: chunk.chunkId,
         snippet: chunk.text.slice(0, 200),

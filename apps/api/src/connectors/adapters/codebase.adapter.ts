@@ -78,7 +78,7 @@ interface ModuleAnalysis {
 @Injectable()
 export class CodebaseAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'codebase';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: false, webhook: false, tree: false };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: false, webhook: false, tree: true };
 
   private readonly logger = new Logger(CodebaseAdapter.name);
 
@@ -128,6 +128,42 @@ export class CodebaseAdapter implements ConnectorAdapter {
         // The module's own files decide its version, which is what makes a
         // re-sync skip every module except the one somebody touched.
         version: unitInputHash(files, module.files),
+      };
+    }
+  }
+
+  /**
+   * The two-level shape `list()` already implies, said out loud.
+   *
+   * The overview has been "the page everything else hangs under" in the comment
+   * above since this adapter was written, but it was never in the data — so
+   * `seedFlat` imported the overview and every module as siblings, and a repo
+   * with forty modules put forty pages at the destination's top level.
+   */
+  async *children(ctx: ConnectorContext, parent: ExternalRef | null): AsyncIterable<ExternalRef> {
+    const { files, branch } = await downloadRepoArchive(ctx);
+    const map = await this.repoMap(ctx);
+    const host = repoHost(ctx);
+
+    if (!parent) {
+      yield {
+        externalId: OVERVIEW_KEY,
+        title: `${host.repo} — overview`,
+        url: `${host.origin}/${host.owner}/${host.repo}`,
+        version: unitInputHash(files, map.overviewPaths, map.modules.map((m) => m.key)),
+        hasChildren: map.modules.length > 0,
+      };
+      return;
+    }
+    if (parent.externalId !== OVERVIEW_KEY) return;
+
+    for (const module of map.modules) {
+      yield {
+        externalId: module.key,
+        title: module.name,
+        url: blobUrl(ctx, module.path, branch),
+        version: unitInputHash(files, module.files),
+        parentExternalId: OVERVIEW_KEY,
       };
     }
   }

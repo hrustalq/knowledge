@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import matter from 'gray-matter';
 import type {
@@ -28,6 +28,7 @@ import type {
   WorkspaceGraphResponse,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { normalizeRelationTarget, tagFilterKey } from '../common/relations.js';
 import { StorageService } from '../storage/storage.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { IngestionProducer } from '../ingestion/ingestion.producer.js';
@@ -57,6 +58,22 @@ const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
  */
 const WORKSPACE_GRAPH_MAX_EDGES = 4000;
 
+/**
+ * The placeholder `documents.path` carries when an older image wrote the row.
+ *
+ * It exists so a rollback to a release that predates the column can still
+ * insert (docs/versioning.md's expand/contract rule); see
+ * `20260918090000_documents_path_rollback_safe`. Deliberately a prefix of no
+ * real path, so such a row is inert in subtree queries rather than matching
+ * everything the way `''` or `'/'` would.
+ */
+const PENDING_PATH = '/pending/';
+
+/** A path that actually locates a document, rather than the rollback sentinel. */
+function hasRealPath(path: string): boolean {
+  return path !== PENDING_PATH && path.length > 1;
+}
+
 @Injectable()
 export class DocumentsService {
   constructor(
@@ -77,12 +94,22 @@ export class DocumentsService {
     await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
 
     // Feature 08: nested creation — the parent must exist in the same project.
+    let parent: { path: string; depth: number } | null = null;
     if (dto.parentId) {
-      const parent = await this.prisma.document.findUnique({ where: { id: dto.parentId } });
-      if (!parent || parent.projectId !== dto.projectId) {
+      const row = await this.prisma.document.findUnique({ where: { id: dto.parentId } });
+      if (!row || row.projectId !== dto.projectId) {
         throw new BadRequestException(t('error.document.parentNotInProject', { id: dto.parentId }));
       }
+      parent = { path: row.path, depth: row.depth };
     }
+
+    // `path` contains the row's own id, so the id is minted here rather than by
+    // the column default — one insert instead of insert-then-update. The
+    // `@default(uuid())` stays for anyone who does not go through this method.
+    const id = randomUUID();
+    const position = await this.prisma.document.count({
+      where: { projectId: dto.projectId, parentId: dto.parentId ?? null },
+    });
 
     // `withTransaction` so an outer boundary absorbs this one — see the note in
     // finalizeRevision. A raw `$transaction` here commits on its own connection
@@ -91,11 +118,15 @@ export class DocumentsService {
     const { document, revision } = await this.prisma.withTransaction(async () => {
       const document = await this.prisma.document.create({
         data: {
+          id,
           workspaceId: dto.workspaceId,
           projectId: dto.projectId,
           title: dto.title,
           category: dto.category ?? 'other',
           parentId: dto.parentId ?? null,
+          path: `${parent?.path ?? '/'}${id}/`,
+          depth: (parent?.depth ?? -1) + 1,
+          position,
         },
       });
       const branch = await this.prisma.documentBranch.create({
@@ -363,7 +394,7 @@ export class DocumentsService {
     let taggedIds: string[] | null = null;
     if (tags.length) {
       // Accept the bare name or the entity key, like the search filters do.
-      const keys = [...new Set(tags.map((t) => (t.startsWith('tag:') ? t : `tag:${t}`)))];
+      const keys = [...new Set(tags.map(tagFilterKey))];
       const set = await this.graph.getDocumentIdsByTags(workspaceId, keys);
       taggedIds = [...set];
       // No document carries the tag: answer an empty page rather than dropping
@@ -668,22 +699,56 @@ export class DocumentsService {
     }
 
     const targetProject = data.projectId ?? document.projectId;
+    let newParent: { path: string; depth: number } | null = null;
     if (dto.parentId !== undefined) {
       if (dto.parentId === documentId) throw new BadRequestException(t('error.document.selfParent'));
-      if (dto.parentId !== null) await this.assertValidParent(documentId, dto.parentId, targetProject);
+      if (dto.parentId !== null) {
+        newParent = await this.assertValidParent(documentId, dto.parentId, targetProject);
+      }
       data.parentId = dto.parentId;
     }
     if (Object.keys(data).length === 0) throw new BadRequestException(t('error.document.nothingToUpdate'));
 
-    const updated = await this.prisma.document.update({ where: { id: documentId }, data });
-    // Children follow their parent, otherwise they would be orphaned into a
-    // project their ancestor no longer belongs to.
-    if (data.projectId && movedSubtree.length > 0) {
-      await this.prisma.document.updateMany({
-        where: { id: { in: movedSubtree } },
-        data: { projectId: data.projectId },
+    // A project move with no explicit parent re-roots the page (above), which
+    // is a path change too.
+    const reparented = data.parentId !== undefined && data.parentId !== document.parentId;
+    const oldPath = document.path;
+    const newPath = reparented ? `${newParent?.path ?? '/'}${documentId}/` : oldPath;
+    const depthDelta = reparented ? (newParent?.depth ?? -1) + 1 - document.depth : 0;
+
+    // One boundary around the row, its subtree's paths and the subtree's
+    // project. The subtree re-project used to sit outside any explicit
+    // transaction, so a failure between the two left children in a project
+    // their parent had already left.
+    const updated = await this.prisma.withTransaction(async () => {
+      const row = await this.prisma.document.update({
+        where: { id: documentId },
+        data: reparented ? { ...data, path: newPath, depth: document.depth + depthDelta } : data,
       });
-    }
+
+      if (reparented && hasRealPath(oldPath)) {
+        // One statement for a subtree of any size. Left-anchored LIKE, so the
+        // (workspace_id, path) index serves it; the old walk could not express
+        // this at all.
+        await this.prisma.$executeRaw`
+          UPDATE "documents"
+             SET "path"  = ${newPath} || substring("path" from ${oldPath.length + 1}),
+                 "depth" = "depth" + ${depthDelta}
+           WHERE "workspace_id" = ${document.workspaceId}::uuid
+             AND "path" LIKE ${`${oldPath}%`}
+             AND "id" <> ${documentId}::uuid`;
+      }
+
+      // Children follow their parent, otherwise they would be orphaned into a
+      // project their ancestor no longer belongs to.
+      if (data.projectId && movedSubtree.length > 0) {
+        await this.prisma.document.updateMany({
+          where: { id: { in: movedSubtree } },
+          data: { projectId: data.projectId },
+        });
+      }
+      return row;
+    });
     if (data.title && data.title !== document.title) {
       // Keep the graph vertex label in sync (PG stays authoritative).
       await this.graph.upsertDocumentVertex(document.workspaceId, documentId, data.title).catch(() => {
@@ -735,7 +800,7 @@ export class DocumentsService {
       const docs = await this.prisma.document.findMany({
         where: scope,
         include: { branches: true },
-        orderBy: { title: 'asc' },
+        orderBy: [{ position: 'asc' }, { title: 'asc' }],
       });
       const nodes = new Map<string, DocumentTreeNode>();
       for (const d of docs) nodes.set(d.id, await Promise.resolve(this.toTreeNode(d, null)));
@@ -794,7 +859,7 @@ export class DocumentsService {
     const docs = await this.prisma.document.findMany({
       where,
       include: { branches: true },
-      orderBy: { title: 'asc' },
+      orderBy: [{ position: 'asc' }, { title: 'asc' }],
     });
     if (docs.length === 0) return [];
 
@@ -1044,57 +1109,98 @@ export class DocumentsService {
    * not reach the document. The parent must also sit in the same project — the
    * tree is rendered per project, so a cross-project parent would be invisible.
    */
-  private async assertValidParent(documentId: string, parentId: string, projectId: string): Promise<void> {
-    const parent = await this.prisma.document.findUnique({ where: { id: parentId } });
+  /**
+   * "Platform / Billing / Invoices" for each id, ancestors only.
+   *
+   * Two queries whatever the input size: the ancestor ids are already sitting
+   * in each row's `path`, so finding them costs no walk at all — which is what
+   * makes it cheap enough to attach to every search result.
+   *
+   * A page whose ancestor left the workspace is named by the ancestors that
+   * remain rather than dropped; the trail is a reading aid, not an ACL.
+   */
+  async breadcrumbsFor(workspaceId: string, ids: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (ids.length === 0) return out;
+
+    const rows = await this.prisma.document.findMany({
+      where: { workspaceId, id: { in: [...new Set(ids)] } },
+      select: { id: true, path: true },
+    });
+    const ancestorIds = new Set<string>();
+    for (const r of rows) {
+      for (const id of r.path.split('/')) {
+        if (id && id !== r.id) ancestorIds.add(id);
+      }
+    }
+    if (ancestorIds.size === 0) {
+      for (const r of rows) out.set(r.id, '');
+      return out;
+    }
+
+    const titles = new Map(
+      (
+        await this.prisma.document.findMany({
+          where: { workspaceId, id: { in: [...ancestorIds] } },
+          select: { id: true, title: true },
+        })
+      ).map((a) => [a.id, a.title]),
+    );
+    for (const r of rows) {
+      const trail = r.path
+        .split('/')
+        .filter((id) => id && id !== r.id)
+        .map((id) => titles.get(id))
+        .filter((title): title is string => Boolean(title));
+      out.set(r.id, trail.join(' / '));
+    }
+    return out;
+  }
+
+  private async assertValidParent(
+    documentId: string,
+    parentId: string,
+    projectId: string,
+  ): Promise<{ path: string; depth: number }> {
+    const parent = await this.prisma.document.findUnique({
+      where: { id: parentId },
+      select: { projectId: true, path: true, depth: true },
+    });
     if (!parent || parent.projectId !== projectId) {
       throw new BadRequestException(t('error.document.parentNotInProject', { id: parentId }));
     }
-    let cursor: string | null = parent.id;
-    const seen = new Set<string>();
-    while (cursor) {
-      if (cursor === documentId) {
-        throw new BadRequestException(t('error.document.moveCycle'));
-      }
-      if (seen.has(cursor)) break;
-      seen.add(cursor);
-      const next: { parentId: string | null } | null = await this.prisma.document.findUnique({
-        where: { id: cursor },
-        select: { parentId: true },
-      });
-      cursor = next?.parentId ?? null;
+    // A cycle is exactly "the proposed parent already sits below me", which the
+    // parent's own path answers. This replaced an upward walk of up to 32
+    // queries; the `seen` set and the hop bound went with it, because a string
+    // comparison cannot spin the way a walk over a corrupt chain could.
+    if (parent.path.includes(`/${documentId}/`)) {
+      throw new BadRequestException(t('error.document.moveCycle'));
     }
+    return { path: parent.path, depth: parent.depth };
   }
 
   /**
-   * Every document below `documentId` in the tree. One flat query plus an
-   * in-Node walk, matching getTree — workspaces are small enough that this
-   * beats a recursive CTE, and it reuses the same "missing parent = root"
-   * tolerance the rest of the tree code has.
+   * Every document below `documentId` in the tree.
+   *
+   * One indexed prefix match. This used to load every document in the
+   * workspace and BFS them in Node, which the `path` column makes a second
+   * answer to a question the database can now answer directly.
    */
   private async descendantIds(documentId: string, workspaceId: string): Promise<string[]> {
-    const rows = await this.prisma.document.findMany({
-      where: { workspaceId },
-      select: { id: true, parentId: true },
+    const doc = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { path: true },
     });
-    const childrenByParent = new Map<string, string[]>();
-    for (const r of rows) {
-      if (!r.parentId) continue;
-      const siblings = childrenByParent.get(r.parentId) ?? [];
-      siblings.push(r.id);
-      childrenByParent.set(r.parentId, siblings);
-    }
-    const out: string[] = [];
-    const queue = [documentId];
-    const seen = new Set<string>([documentId]);
-    while (queue.length > 0) {
-      for (const child of childrenByParent.get(queue.shift()!) ?? []) {
-        if (seen.has(child)) continue;
-        seen.add(child);
-        out.push(child);
-        queue.push(child);
-      }
-    }
-    return out;
+    // A row written by an older image carries the `/pending/` sentinel rather
+    // than a real path (see 20260918090000_documents_path_rollback_safe). It
+    // shares that string with every other such row, so a prefix match would
+    // claim them as descendants. It has none until its path is repaired.
+    if (!doc || !hasRealPath(doc.path)) return [];
+    const rows = await this.prisma.document.findMany({
+      where: { workspaceId, path: { startsWith: doc.path }, id: { not: documentId } },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
   }
 
   private async toSummary(d: Document): Promise<DocumentSummary> {
@@ -1118,13 +1224,24 @@ export class DocumentsService {
     };
   }
 
+  /**
+   * The REST relations payload, folded the same way frontmatter is.
+   *
+   * This used to pass `r.target.key` through verbatim, so `POST /:id/relations`
+   * was a fourth way into the graph that could mint `Сервис:Биллинг` next to
+   * the `сервис:биллинг` the ingest path had already canonicalized. The DTO is
+   * validated, not normalized — those are different jobs.
+   */
   private toFacts(relations: RelationInputDto[]) {
-    return relations.map((r) => ({
-      type: r.type,
-      target: { key: r.target.key, type: r.target.type, name: r.target.name ?? r.target.key },
-      extractor: 'explicit' as const,
-      confidence: 1,
-    }));
+    return relations.flatMap((r) => {
+      const target = normalizeRelationTarget({
+        key: r.target.key,
+        type: r.target.type,
+        name: r.target.name ?? r.target.key,
+      });
+      if (!target) return [];
+      return [{ type: r.type, target, extractor: 'explicit' as const, confidence: 1 }];
+    });
   }
 
   private toBranchInfo(b: DocumentBranch): BranchInfo {

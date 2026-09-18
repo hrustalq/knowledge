@@ -47,7 +47,7 @@ export interface AssistantToolResult {
 }
 
 /**
- * The four tools that only ever read the workspace. Owned by
+ * The five tools that only ever read the workspace. Owned by
  * AssistantReadToolsService, which re-exports the set; declared here so the
  * parallel-safe union below can be built without importing a service file.
  */
@@ -56,6 +56,7 @@ export const READ_TOOL_NAMES = new Set([
   'read_document',
   'explore_document_graph',
   'list_relations',
+  'list_document_tree',
 ]);
 
 /**

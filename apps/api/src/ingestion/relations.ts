@@ -12,7 +12,7 @@
  *   tags: [security, identity]
  */
 
-import { normalizeRelation as normalizeRelationInput } from '../common/relations.js';
+import { readFrontmatterRelations, readFrontmatterTags, tagEntityKey } from '../common/relations.js';
 
 export interface ExtractedFact {
   type: string;
@@ -26,21 +26,16 @@ export interface ExtractedFact {
 export function extractFrontmatterFacts(frontmatter: Record<string, unknown>): ExtractedFact[] {
   const facts: ExtractedFact[] = [];
 
-  const relations = frontmatter['relations'];
-  if (Array.isArray(relations)) {
-    for (const rel of relations) {
-      const fact = normalizeRelation(rel);
-      if (fact) facts.push(fact);
-    }
+  // Both readers go through the shared normalizer, so `связи:`/`теги:` are read
+  // and every key arrives canonically folded. Reading the raw keys here — which
+  // is what this did — meant the write path and the parse path disagreed about
+  // what a relation was spelled like.
+  for (const rel of readFrontmatterRelations(frontmatter)) {
+    facts.push(rel);
   }
 
-  const tags = frontmatter['tags'];
-  if (Array.isArray(tags)) {
-    for (const tag of tags) {
-      if (typeof tag !== 'string' || !tag.trim()) continue;
-      const name = tag.trim();
-      facts.push({ type: 'TAGGED_WITH', target: { key: `tag:${name}`, type: 'tag', name } });
-    }
+  for (const tag of readFrontmatterTags(frontmatter)) {
+    facts.push({ type: 'TAGGED_WITH', target: { key: tagEntityKey(tag), type: 'tag', name: tag } });
   }
 
   // De-duplicate (type, target.key) pairs.
@@ -51,13 +46,4 @@ export function extractFrontmatterFacts(frontmatter: Record<string, unknown>): E
     seen.add(id);
     return true;
   });
-}
-
-/**
- * Delegates to the shared normalizer so the parse direction and the write
- * direction cannot disagree about what a relation is — the same reasoning that
- * moved the edge-type vocabulary into @knowledge/contracts.
- */
-function normalizeRelation(rel: unknown): ExtractedFact | null {
-  return normalizeRelationInput(rel);
 }

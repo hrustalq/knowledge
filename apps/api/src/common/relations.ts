@@ -1,4 +1,8 @@
-import { isAuthorableRelationType } from '@knowledge/contracts';
+import {
+  FRONTMATTER_KEY_ALIASES,
+  normalizeEntityKey,
+  normalizeRelationType,
+} from '@knowledge/contracts';
 import type { AuthorableRelationType } from '@knowledge/contracts';
 
 /**
@@ -25,25 +29,44 @@ function entityTypeOf(key: string): string {
   return key.includes(':') ? key.slice(0, key.indexOf(':')) : 'entity';
 }
 
-/** `service:identity` → name `identity`, so a vertex is legible in the graph view. */
-function entityNameOf(key: string): string {
-  return key.split(':').pop() ?? key;
+/**
+ * The label a vertex shows, taken from what the author actually typed.
+ *
+ * Deliberately not folded: `normalizeEntityKey` lowercases so that the graph
+ * uniques correctly, and a graph view full of `сервис:биллинг` in lower case
+ * would be the cost of that. Identity is folded, display is not.
+ */
+function displayNameOf(raw: string): string {
+  const trimmed = raw.normalize('NFC').trim();
+  const colon = trimmed.lastIndexOf(':');
+  const tail = (colon === -1 ? trimmed : trimmed.slice(colon + 1)).trim();
+  return tail || trimmed;
+}
+
+/** A key that folded away to punctuation is not a key. */
+function hasContent(key: string): boolean {
+  return /[\p{L}\p{N}]/u.test(key);
 }
 
 /** Accepts both shapes the frontmatter contract allows: `"service:billing"` or `{type,key,name}`. */
 export function normalizeRelationTarget(target: unknown): FrontmatterRelation['target'] | null {
   if (typeof target === 'string' && target.trim()) {
-    const key = target.trim();
-    return { key, type: entityTypeOf(key), name: entityNameOf(key) };
+    const key = normalizeEntityKey(target);
+    if (!hasContent(key)) return null;
+    return { key, type: entityTypeOf(key), name: displayNameOf(target) };
   }
   if (target && typeof target === 'object') {
     const t = target as { type?: unknown; key?: unknown; name?: unknown };
     if (typeof t.key !== 'string' || !t.key.trim()) return null;
-    const key = t.key.trim();
+    const key = normalizeEntityKey(t.key);
+    if (!hasContent(key)) return null;
     return {
       key,
-      type: typeof t.type === 'string' && t.type.trim() ? t.type.trim() : entityTypeOf(key),
-      name: typeof t.name === 'string' && t.name.trim() ? t.name.trim() : entityNameOf(key),
+      type:
+        typeof t.type === 'string' && t.type.trim()
+          ? t.type.normalize('NFC').trim().toLowerCase()
+          : entityTypeOf(key),
+      name: typeof t.name === 'string' && t.name.trim() ? t.name.trim() : displayNameOf(t.key),
     };
   }
   return null;
@@ -57,9 +80,32 @@ export function normalizeRelationTarget(target: unknown): FrontmatterRelation['t
 export function normalizeRelation(value: unknown): FrontmatterRelation | null {
   if (!value || typeof value !== 'object') return null;
   const { type, target } = value as { type?: unknown; target?: unknown };
-  if (typeof type !== 'string' || !isAuthorableRelationType(type)) return null;
+  if (typeof type !== 'string') return null;
+  const canonicalType = normalizeRelationType(type);
+  if (!canonicalType) return null;
   const normalized = normalizeRelationTarget(target);
-  return normalized ? { type, target: normalized } : null;
+  return normalized ? { type: canonicalType, target: normalized } : null;
+}
+
+/**
+ * The value of a frontmatter key under any spelling this workspace accepts.
+ *
+ * The canonical English key wins when a page carries both, so a document with
+ * `relations:` and `связи:` resolves the same way on every re-index rather than
+ * depending on YAML key order.
+ */
+function aliasedValue(
+  frontmatter: Record<string, unknown> | null | undefined,
+  canonical: 'relations' | 'tags',
+): unknown {
+  if (!frontmatter) return undefined;
+  if (frontmatter[canonical] !== undefined) return frontmatter[canonical];
+  for (const [key, value] of Object.entries(frontmatter)) {
+    if (FRONTMATTER_KEY_ALIASES[key.normalize('NFC').trim().toLowerCase()] === canonical) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 /** Identity of a relation for de-duplication: the pair the graph uniques on. */
@@ -81,7 +127,7 @@ export function dedupeRelations(relations: FrontmatterRelation[]): FrontmatterRe
 export function readFrontmatterRelations(
   frontmatter: Record<string, unknown> | null | undefined,
 ): FrontmatterRelation[] {
-  const raw = frontmatter?.relations;
+  const raw = aliasedValue(frontmatter, 'relations');
   if (!Array.isArray(raw)) return [];
   const parsed: FrontmatterRelation[] = [];
   for (const entry of raw) {
@@ -94,13 +140,38 @@ export function readFrontmatterRelations(
 export function readFrontmatterTags(
   frontmatter: Record<string, unknown> | null | undefined,
 ): string[] {
-  const raw = frontmatter?.tags;
+  const raw = aliasedValue(frontmatter, 'tags');
   if (!Array.isArray(raw)) return [];
   const tags: string[] = [];
+  // Dedupe on the canonical form but keep the spelling the author used: a page
+  // tagged both `Безопасность` and `безопасность` is carrying one tag twice,
+  // and used to produce two vertices and two unrelated filter results.
+  const seen = new Set<string>();
   for (const tag of raw) {
     if (typeof tag !== 'string' || !tag.trim()) continue;
-    const trimmed = tag.trim();
-    if (!tags.includes(trimmed)) tags.push(trimmed);
+    const trimmed = tag.normalize('NFC').trim();
+    const canonical = normalizeEntityKey(trimmed);
+    if (!canonical || seen.has(canonical)) continue;
+    seen.add(canonical);
+    tags.push(trimmed);
   }
   return tags;
+}
+
+/** The canonical `tag:<name>` entity key for a tag, however it was spelled. */
+export function tagEntityKey(tag: string): string {
+  return `tag:${normalizeEntityKey(tag)}`;
+}
+
+/**
+ * The same key, from a filter value that may already carry the prefix.
+ *
+ * The read side has to fold exactly as the write side did or the filter misses:
+ * a page tagged `безопасность` was invisible to a reader who typed
+ * `Безопасность`, and the empty result looked like an absence of pages rather
+ * than a casing difference.
+ */
+export function tagFilterKey(input: string): string {
+  const key = normalizeEntityKey(input);
+  return key.startsWith('tag:') ? key : `tag:${key}`;
 }

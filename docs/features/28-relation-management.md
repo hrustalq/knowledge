@@ -136,3 +136,56 @@ the same declared-and-ignored defect feature 20 was written against
 This closes `20-agents-todo.md` item 5's carve-out: `orphan` findings were
 refused for merge-request proposals because "the fix is a relation, not prose",
 and until now could not be acted on at all.
+
+## Update — one spelling per concept, in a ru + en corpus
+
+Relations were being declared and still not showing up, and the cause was identity rather
+than extraction. `Entity` uniques on `(workspaceId, entityKey)` with plain string equality
+and the key was stored as written, so `service:billing`, `service: Billing` and a
+macOS-composed `Сервис:Биллинг` were three vertices for one service. Nothing reported it:
+a forked vertex looks exactly like a sparse graph.
+
+Four spellings now fold through one function.
+
+- **`normalizeEntityKey`** (contracts, beside the vocabulary) — NFC, split on the first
+  colon, trim and case-fold each side, collapse inner whitespace to the kebab the keys
+  already used. NFC matters more than it looks: composed vs. decomposed `й` is invisible on
+  screen and fatal to an equality index.
+- **`normalizeRelationType`** — accepts `depends_on`, `Depends On`, `depends-on` and
+  `зависит_от`. The two fact classes disagreed before this: the inferred extractor
+  uppercased what the model returned while the frontmatter parser demanded the exact
+  constant, so a spelling was valid from a model and silently dropped from a person.
+  `isAuthorableRelationType` stays exact-case — normalization happens *before* the guard,
+  never inside it, the same relationship `assertEdgeType` has with the edge list.
+- **`FRONTMATTER_KEY_ALIASES`** — `связи:` and `теги:` are read. A Russian page using the
+  Russian key used to produce zero edges.
+- **Tag filters** fold too. A page tagged `безопасность` was invisible to a reader who typed
+  `Безопасность`, and the empty result read as an absence of pages rather than a casing
+  difference.
+
+Folding cannot know that `сервис:биллинг` and `service:billing` are the same service — that
+is a workspace's own vocabulary, exactly as `GlossaryTerm.aliases` is for prose, and the
+glossary's schema comment already named the `"Заказ"/"Order"` pair. So `EntityAlias` maps one
+to the other, resolved at **write** time: the graph holds one vertex, and impact analysis,
+traversal, degree counting and the tag filter all keep working unchanged. Read-time
+resolution would have left the fork in place and put a join on five query paths.
+
+Two decisions worth keeping.
+
+**Fold at the top of a write method, not inside `createRelationEdge`.**
+`addExplicitRelations`, `curateRelation` and `deleteRelations` all `DELETE … WHERE targetKey
+= :key` before creating, so folding at the edge writer alone would have left the delete
+hunting a key that is no longer written — duplicating an edge on every re-post.
+`assertCanonicalKey` then throws at the edge writer, so a write path added later fails on its
+first run instead of forking quietly.
+
+**Resolution is one hop, enforced by the insert.** A single guarded `INSERT … WHERE NOT
+EXISTS` refuses an alias whose canonical is itself an alias, and one whose alias is already
+somebody's canonical. With chains impossible, `resolve` needs no loop and no cycle guard.
+
+Declaring an alias folds the edges that already exist (`GraphService.mergeEntityKey`), by
+reading them and re-creating them through the one write path rather than `UPDATE … SET
+targetKey` — an edge holds both the denormalized key and a real vertex link, and setting the
+column alone would leave the link pointing at a vertex about to be deleted. Keys written
+before any of this converge on the next reindex; `POST /v1/ingestion/reindex` already
+re-enqueues every branch head, so no ArcadeDB rewrite belongs in a migration.

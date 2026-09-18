@@ -22,6 +22,21 @@ model Document {
   // Feature 08 nesting: Confluence-style hierarchy; no FK so children of a
   // deleted/legacy parent surface as roots instead of breaking.
   parentId      String?  @map("parent_id") @db.Uuid
+  /// Ancestor ids root-first INCLUDING self, slash-delimited at both ends:
+  /// `/<rootId>/<midId>/<selfId>/`. Ids, not titles — a rename would otherwise
+  /// rewrite a whole subtree. Text, not ltree: the schema installs no Postgres
+  /// extensions, and a left-anchored LIKE needs none.
+  ///
+  /// Delimiters on both ends are load-bearing. They make the cycle check a
+  /// plain `includes('/<id>/')` and stop `/a/ab/` prefix-matching `/a/abc/`.
+  path          String   @default("/pending/")
+  /// Ids in `path` minus one; a root is 0. Denormalized so a breadcrumb costs
+  /// no walk (docs/features/08).
+  depth         Int      @default(0)
+  /// Sort key among siblings. Backfilled from the title order the tree was
+  /// drawn in before this column existed, so the migration changes nothing on
+  /// screen; manual reordering is the upgrade it makes possible.
+  position      Int      @default(0)
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   project       Project            @relation(fields: [projectId], references: [id])
@@ -36,6 +51,8 @@ model Document {
   @@index([projectId, createdAt])
   @@index([projectId, category])
   @@index([parentId])
+  @@index([workspaceId, path])
+  @@index([parentId, position])
   @@map("documents")
 }
 
@@ -959,11 +976,9 @@ model OpsEvent {
 /// document follows on the next render.
 /**
  * One occurrence of one term, on one page, that is not a mention of it.
- *
  * The linker is deterministic and conservative, but it matches words, and a
  * word can be the term everywhere on a page except in the one sentence that
  * uses it as an ordinary word. Per-term rules cannot express that; this can.
- *
  * The anchor is the TextQuoteSelector shape `document_threads` uses, minus the
  * revisionId: an exclusion is about the words, not about a version of them, so
  * it survives every edit that leaves the sentence recognisable — and stops
@@ -1403,8 +1418,8 @@ model ConnectorRun {
 /// what makes a pull revertable — nothing else records which revision an import
 /// replaced.
 model ConnectorRunItem {
-  id    String @id @default(uuid()) @db.Uuid
-  runId String @map("run_id") @db.Uuid
+  id           String  @id @default(uuid()) @db.Uuid
+  runId        String  @map("run_id") @db.Uuid
   /// Self-FK: the external hierarchy as discovered. Cascades with the run.
   parentItemId String? @map("parent_item_id") @db.Uuid
 
@@ -1436,8 +1451,8 @@ model ConnectorRunItem {
   /// the far side actually send" survives every edit and every AI pass.
   incomingKey String? @map("incoming_key")
 
-  documentId String? @map("document_id") @db.Uuid
-  linkId     String? @map("link_id") @db.Uuid
+  documentId         String? @map("document_id") @db.Uuid
+  linkId             String? @map("link_id") @db.Uuid
   /// The revision applying wrote, and the one it replaced. Together these are
   /// what let revert be a forward write rather than a deletion — the revision
   /// DAG is immutable.
@@ -1695,4 +1710,38 @@ model GithubUserToken {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("github_user_tokens")
+}
+
+/// A workspace's canonical spelling for an entity key: `сервис:биллинг` →
+/// `service:billing` (docs/features/28).
+///
+/// `normalizeEntityKey` folds case and Unicode, which collapses `Сервис:Биллинг`
+/// into one vertex — but it cannot know that the Russian and English names for
+/// one service are the same service. That is a workspace's own vocabulary, so
+/// it is data, exactly like GlossaryTerm.aliases is for prose.
+///
+/// No FK on workspace_id (house policy), and none on either key either: an
+/// alias may legitimately be declared before the page that will first use the
+/// canonical key exists.
+model EntityAlias {
+  id          String @id @default(uuid()) @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+
+  /// Both sides are stored already folded by normalizeEntityKey — the unique
+  /// index below only means anything if they are, so the service normalizes
+  /// before it writes.
+  alias        String
+  canonicalKey String @map("canonical_key")
+
+  /// 'manual' | 'merge' — provenance, the same idea as the extractor classes.
+  source    String   @default("manual")
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  /// An alias resolving to two canonicals is the one state that makes
+  /// resolution non-deterministic; the database refuses it so the service
+  /// never has to pick.
+  @@unique([workspaceId, alias])
+  @@index([workspaceId, canonicalKey])
+  @@map("entity_aliases")
 }

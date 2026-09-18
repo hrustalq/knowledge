@@ -70,6 +70,16 @@ in the pull request that introduces them — see
   fire the same workflow for the same page more than once — an issue that opens,
   closes and reopens is three pieces of news — bounded by a cooldown rather than
   by the "only ever once" rule that page events keep. (#PR)
+- **The assistant can see and hand off work.** Four tools — `task_list`,
+  `task_read`, `task_create`, `task_comment` — offered whenever the workspace
+  has a repository connector with issues. Reading is available in both modes;
+  opening an issue and commenting on one are Agent-mode-only and need `editor`,
+  because unlike a page they cannot be withdrawn once they land. Over MCP,
+  `knowledge_list_work_items` reads, and nothing writes. (#PR)
+- **A workflow can report back to the issue it was about.** A new `task.update`
+  step posts its message as a comment on every open issue attached to the run's
+  page. It acts only on already-attached items, so a workflow cannot be used to
+  comment on an arbitrary repository. (#PR)
 
 - **Access is one page again, and it says what a role means.** `/settings/users`
   folded into `/settings/access` as three tabs: **Members** (the roster as it

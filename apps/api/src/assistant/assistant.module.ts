@@ -10,6 +10,7 @@ import { AssistantReadToolsModule } from './assistant-read-tools.module.js';
 import { AssistantToolsService } from './assistant.tools.js';
 import { WebResearchModule } from './web-research.module.js';
 import { CodeResearchModule } from '../connectors/code-research/code-research.module.js';
+import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
 import { AssistantService } from './assistant.service.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
 import { AssistantController } from './assistant.controller.js';
@@ -42,6 +43,12 @@ import { AiModule } from '../ai/ai.module.js';
     // The repository tools (docs/features/31), same shape: controller-free,
     // shared with the agent worker, delegated to by AssistantToolsService.
     CodeResearchModule,
+    // The work item tools (docs/features/32), same shape again. Two of the four
+    // write to somebody else's repository, which is why the module is imported
+    // here and NOT by AgentWorkerModule: a background agent runs unattended, and
+    // "the worker generates, the API publishes" is exactly the rule that keeps
+    // an unattended run from opening an issue on a stranger's repository.
+    ConnectorWorkItemsModule,
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],

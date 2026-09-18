@@ -18,6 +18,7 @@ import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
+import { ConnectorWorkItemsService } from '../connectors/connector-work-items.service.js';
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AUTHOR_ID_STUB } from '../documents/merge-requests.service.js';
@@ -71,6 +72,7 @@ export class McpService {
     private readonly workflows: WorkflowsService,
     private readonly projects: ProjectsService,
     private readonly connectors: ConnectorsService,
+    private readonly workItems: ConnectorWorkItemsService,
     private readonly connectorProducer: ConnectorProducer,
     private readonly agents: AgentRegistryService,
   ) {}
@@ -172,6 +174,34 @@ export class McpService {
         inputSchema: { runId: z.string().uuid() },
       },
       async ({ runId }) => this.json(await this.connectors.getRun(runId)),
+    );
+
+    // Work items (docs/features/32). Reading only: opening an issue is an act
+    // attributed to a person, and stdio has no principal — the same reason
+    // workflow approval is deliberately absent from this surface.
+    server.registerTool(
+      'knowledge_list_work_items',
+      {
+        description:
+          'Issues and pull requests on a connected repository, with the page each one is attached to. Use it to find out what work is open against something before writing about it. A "merged" pull request finished; a "closed" one was abandoned.',
+        inputSchema: {
+          connectorId: z.string().uuid(),
+          state: z
+            .enum(['open', 'closed', 'all'])
+            .optional()
+            .describe("Defaults to 'all'; 'closed' includes merged."),
+        },
+      },
+      async ({ connectorId, state }) => {
+        const row = await this.connectors.require(connectorId);
+        const items = await this.workItems.list(row);
+        const wanted = state ?? 'all';
+        return this.json(
+          items.filter((item) =>
+            wanted === 'all' ? true : wanted === 'closed' ? item.state !== 'open' : item.state === 'open',
+          ),
+        );
+      },
     );
 
     server.registerTool(

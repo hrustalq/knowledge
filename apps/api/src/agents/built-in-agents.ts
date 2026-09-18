@@ -1,4 +1,4 @@
-import { ASSISTANT_CODE_TOOL_NAMES, ASSISTANT_WRITE_TOOL_NAMES } from '@knowledge/contracts';
+import { ASSISTANT_CODE_TOOL_NAMES, ASSISTANT_TASK_READ_TOOL_NAMES, ASSISTANT_WRITE_TOOL_NAMES } from '@knowledge/contracts';
 import type { AgentCapability, AgentSurface, AiPurpose, BuiltInAgentKey } from '@knowledge/contracts';
 
 /**
@@ -137,6 +137,16 @@ const WEB_TOOLS = ['web_search', 'web_fetch'];
  * repository connector — `definitions()` withholds them otherwise.
  */
 const CODE_TOOLS = [...ASSISTANT_CODE_TOOL_NAMES];
+/**
+ * The work on a connected repository (docs/features/32).
+ *
+ * The **read half only** is named for the researcher; the author additionally
+ * gets the write half through WRITE_TOOLS, which already contains
+ * `task_create` and `task_comment`. That asymmetry is the whole point: the
+ * researcher answers questions and must be able to see what work is open, and
+ * opening an issue on somebody's repository is not answering a question.
+ */
+const TASK_READ_TOOLS = [...ASSISTANT_TASK_READ_TOOL_NAMES];
 
 export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefault> = {
   router: {
@@ -168,7 +178,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     // Exactly what definitions('ask', { ui: true }) offers today: read tools,
     // the form, the offer to switch modes, and inline components — plus the two
     // web tools, which `definitions` withholds unless the deployment allows them.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, 'request_agent_mode'],
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, ...TASK_READ_TOOLS, 'request_agent_mode'],
     skillIds: [],
     purpose: 'chat',
     // Interactive only. A researcher with nobody to answer has no job: every
@@ -187,7 +197,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     instructions: CHAT_PREAMBLE + AGENT_CLAUSE + FORM_CLAUSE + CHAT_RULES,
     // definitions('agent', { ui: true }) drops request_agent_mode — offering
     // the switch when the write tools are already on the table is confusing.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, ...WRITE_TOOLS],
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, ...TASK_READ_TOOLS, ...WRITE_TOOLS],
     skillIds: [],
     purpose: 'chat',
     surfaces: ['interactive'],

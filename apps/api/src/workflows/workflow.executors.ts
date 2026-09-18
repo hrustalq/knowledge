@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConnectorWorkItemsService } from '../connectors/connector-work-items.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { WorkflowRun, WorkflowRunNode } from '@prisma/client';
 import { AUTHORABLE_RELATION_TYPES } from '@knowledge/contracts';
@@ -13,6 +14,9 @@ import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
 
 /** Caps on what one draft may declare, so a hallucinated list cannot fill a page's frontmatter. */
+/** A page attached to a dozen issues is a page; a flow should not spam all of them. */
+const MAX_TASK_COMMENTS = 5;
+
 const MAX_DRAFT_RELATIONS = 20;
 const MAX_DRAFT_TAGS = 20;
 
@@ -46,6 +50,7 @@ export class WorkflowExecutors {
     private readonly storage: StorageService,
     private readonly agents: AgentRegistryService,
     private readonly skills: AiSkillsService,
+    private readonly workItems: ConnectorWorkItemsService,
   ) {}
 
   async run(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
@@ -58,7 +63,42 @@ export class WorkflowExecutors {
         return this.runGenerate(step, node, run);
       case 'ai.draft':
         return this.runDraft(step, node, run);
+      case 'task.update':
+        return this.runTaskUpdate(step, node, run);
     }
+  }
+
+  // ------------------------------------------------------------- task.update
+
+  /**
+   * Report back to the issue this run is about (docs/features/32).
+   *
+   * Deterministic — no model call — and it acts only on work items already
+   * attached to the run's **source page**. A definition cannot name an issue
+   * number, which is the one thing that keeps a workflow from being a way to
+   * comment on any repository the workspace can reach.
+   *
+   * It runs in the worker, unlike everything else that reaches outside: the
+   * "worker generates, API publishes" rule is about acts that need a principal
+   * to attribute them to, and a run carries `created_by` precisely so its steps
+   * have one. The processor has already rehydrated it and checked the role.
+   *
+   * A page with no attached work item is a no-op rather than a failure. A flow
+   * that also runs manually, or against a page nobody connected to an issue,
+   * should finish rather than fail on a step that had nothing to say.
+   */
+  private async runTaskUpdate(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
+    const context = await this.gather(node, run);
+    // The comment body is the step's own prompt — trusted text an admin wrote —
+    // with the node's title appended. Nothing here is interpolated into
+    // anything that executes, and the title is the only untrusted half.
+    const body = [step.prompt?.user?.trim(), context.title ? `\n\n— ${context.title}` : '']
+      .filter(Boolean)
+      .join('');
+    if (!body.trim()) return { kind: 'context', context: { commented: 0, reason: 'step has no message' } };
+
+    const commented = await this.workItems.commentOnDocument(run.rootDocumentId, body, MAX_TASK_COMMENTS);
+    return { kind: 'context', context: { commented } };
   }
 
   // ------------------------------------------------------------------ search

@@ -12,14 +12,13 @@ import { ConnectorItemAiService } from './connector-item-ai.service.js';
 import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorQueueModule } from './connector-queue.module.js';
 import { ConnectorWebhookController } from './connector-webhook.controller.js';
-import { ConnectorWorkItemsService } from './connector-work-items.service.js';
+import { ConnectorWorkItemsModule } from './connector-work-items.module.js';
 import { ConnectorsCoreModule } from './connectors-core.module.js';
 import { ConnectorsController } from './connectors.controller.js';
 import { GithubBrowseService } from './github/github-browse.service.js';
 import { GithubCoreModule } from './github/github-core.module.js';
 import { GithubOauthService } from './github/github-oauth.service.js';
 import { GithubController } from './github/github.controller.js';
-import { GithubIssuesService } from './github/github-issues.service.js';
 import { GithubWebhookController } from './github/github-webhook.controller.js';
 
 /**
@@ -36,6 +35,7 @@ import { GithubWebhookController } from './github/github-webhook.controller.js';
 @Module({
   imports: [
     ConnectorsCoreModule,
+    ConnectorWorkItemsModule,
     ConnectorQueueModule,
     ActivityModule,
     DocumentsModule,
@@ -58,12 +58,10 @@ import { GithubWebhookController } from './github/github-webhook.controller.js';
     ConnectorConflictSweeper,
     ConnectorItemsService,
     ConnectorItemAiService,
-    ConnectorWorkItemsService,
-    GithubIssuesService,
     // API-only: both exist to serve a person clicking through the picker.
     GithubOauthService,
     GithubBrowseService,
   ],
-  exports: [ConnectorsCoreModule, ConnectorWorkItemsService],
+  exports: [ConnectorsCoreModule, ConnectorWorkItemsModule],
 })
 export class ConnectorsModule {}

@@ -723,7 +723,23 @@ body.kn-tree-dragging a {
     display: block;
     flex: none;
     width: var(--kn-subrail-w, 14rem);
-    overflow: hidden;
+    /*
+     * `clip-path`, not `overflow: hidden`, and this is the whole reason the
+     * rail stopped sticking.
+     *
+     * The clip is needed because the inner element carries the fixed width (so
+     * labels do not reflow mid-transition, see above), which means it overhangs
+     * while the outer animates to zero. `overflow: hidden` clips it — and also
+     * makes this element a scroll container, which is what a sticky descendant
+     * takes as the thing it sticks to. This element never scrolls, so the
+     * sticky inner had nothing to stick against and travelled with the page.
+     *
+     * `clip-path: inset(0)` clips to the same box without creating a scroll
+     * container, so the inner sticks to <main> as intended. It does clip
+     * anything that would escape the rail's box, which nothing in a sub-rail
+     * does today — a popover added inside one would need to be portalled.
+     */
+    clip-path: inset(0);
     transition: width var(--rail-duration) var(--pane-ease);
   }
   .kn-subrail[data-open='false'] {

@@ -556,7 +556,10 @@
       "searchHint": "No model. Searches the knowledge base and hands what it finds to the next step.",
       "review": "Wait",
       "reviewHint": "Stops and waits for a person. No model call.",
-      "fallback": "Step"
+      "fallback": "Step",
+      "taskUpdate": "Report back to the issue",
+      "taskUpdateShort": "Report back",
+      "taskUpdateHint": "Posts your message as a comment on every open issue attached to this page. No model call."
     },
     "form": {
       "name": "Name",
@@ -2157,6 +2160,22 @@
     "list_document_tree": {
       "running": "Browsing the page tree",
       "done": "Browsed the page tree"
+    },
+    "task_list": {
+      "running": "Listing issues",
+      "done": "Listed issues"
+    },
+    "task_read": {
+      "running": "Reading an issue",
+      "done": "Read an issue"
+    },
+    "task_create": {
+      "running": "Opening an issue",
+      "done": "Opened an issue"
+    },
+    "task_comment": {
+      "running": "Commenting on an issue",
+      "done": "Commented on an issue"
     }
   },
   "entityType": {

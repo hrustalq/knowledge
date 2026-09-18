@@ -385,6 +385,12 @@ export type I18nTranslations = {
         "connector": {
             "notFound": string;
             "runNotFound": string;
+            "workItemNotFound": string;
+            "workItemsUnsupported": string;
+            "workItemsGithubOnly": string;
+            "workItemsNoCredential": string;
+            "workItemsNotVisible": string;
+            "workItemsRequestFailed": string;
             "linkNotFound": string;
             "nameTaken": string;
             "unknownKind": string;

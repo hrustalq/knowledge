@@ -5,6 +5,7 @@ import {
   CircleSlash,
   FileText,
   Loader2,
+  MessageSquarePlus,
   PauseCircle,
   Search,
   Sparkles,
@@ -64,6 +65,13 @@ export const STEP_KINDS: Array<{
     short: 'workflow.stepKind.review',
     hint: 'workflow.stepKind.reviewHint',
     icon: UserCheck,
+  },
+  {
+    value: 'task.update',
+    label: 'workflow.stepKind.taskUpdate',
+    short: 'workflow.stepKind.taskUpdateShort',
+    hint: 'workflow.stepKind.taskUpdateHint',
+    icon: MessageSquarePlus,
   },
 ]
 

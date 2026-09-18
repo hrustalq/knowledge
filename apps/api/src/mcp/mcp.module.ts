@@ -11,6 +11,7 @@ import { EntitiesModule } from '../entities/entities.module.js';
 import { ProjectsModule } from '../projects/projects.module.js';
 import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
+import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
 import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { McpService } from './mcp.service.js';
@@ -34,6 +35,10 @@ import { McpService } from './mcp.service.js';
     ProjectsModule,
     ConnectorsCoreModule,
     ConnectorQueueModule,
+    // Work items (docs/features/32), read-only over this surface: opening an
+    // issue is attributed to a person and stdio has no principal, which is the
+    // same reason workflow approval is not exposed here either.
+    ConnectorWorkItemsModule,
     // Read/start tools only. WorkflowMaterializeModule is deliberately absent —
     // materialisation writes pages and belongs to the API process.
     WorkflowsModule,

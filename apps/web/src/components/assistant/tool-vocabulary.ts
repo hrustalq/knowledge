@@ -2,7 +2,7 @@
 // and the finished transcript can never label the same call differently.
 import {
   FileCode2, FilePlus2, FileText, FolderTree, Globe, LayoutTemplate, Link, ListTree, MessageCircleQuestion, Network,
-  Search, SearchCode, SquarePen, Wand2, Wrench,
+  CircleDot, MessageSquarePlus, Search, SearchCode, SquarePen, TicketPlus, Wand2, Wrench,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -39,6 +39,14 @@ const TOOLS: Record<string, ToolVocabulary> = {
   code_search: { icon: SearchCode, running: 'tool.code_search.running', done: 'tool.code_search.done' },
   code_outline: { icon: ListTree, running: 'tool.code_outline.running', done: 'tool.code_outline.done' },
   code_read: { icon: FileCode2, running: 'tool.code_read.running', done: 'tool.code_read.done' },
+  // docs/features/32. The two writes get their own verbs and their own icons
+  // deliberately: "opened an issue" and "commented on an issue" are things that
+  // happened outside this workspace and cannot be taken back, and the trail is
+  // the only place a reader finds out that they did.
+  task_list: { icon: CircleDot, running: 'tool.task_list.running', done: 'tool.task_list.done' },
+  task_read: { icon: CircleDot, running: 'tool.task_read.running', done: 'tool.task_read.done' },
+  task_create: { icon: TicketPlus, running: 'tool.task_create.running', done: 'tool.task_create.done' },
+  task_comment: { icon: MessageSquarePlus, running: 'tool.task_comment.running', done: 'tool.task_comment.done' },
 }
 
 /**

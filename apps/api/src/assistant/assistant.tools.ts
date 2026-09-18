@@ -22,8 +22,10 @@ import { AiConfigService } from '../ai/ai-config.service.js';
 import { WebResearchService } from './web-research.service.js';
 import { AssistantReadToolsService } from './assistant-read-tools.service.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
+import { WorkItemToolsService } from '../connectors/work-item-tools.service.js';
 import {
   CODE_TOOLS,
+  TASK_TOOLS,
   FREE_TOOLS,
   PARALLEL_SAFE_TOOLS,
   READ_TOOL_NAMES,
@@ -93,6 +95,7 @@ export class AssistantToolsService {
     // The repository tools (docs/features/31), worker-loadable like the read
     // half and reached here the same way — delegated to, never re-implemented.
     private readonly code: CodeResearchService,
+    private readonly tasks: WorkItemToolsService,
   ) {}
 
   /** @param mode 'ask' (default) hides create_document/propose_update from the model entirely,
@@ -106,7 +109,7 @@ export class AssistantToolsService {
    * a repository connector to read — there is nothing to offer otherwise. */
   definitions(
     mode: AssistantChatMode = 'ask',
-    opts: { ui?: boolean; web?: boolean; code?: boolean } = {},
+    opts: { ui?: boolean; web?: boolean; code?: boolean; tasks?: boolean } = {},
   ): ChatCompletionFunctionTool[] {
     const ui = opts.ui ?? true;
     const all: ChatCompletionFunctionTool[] = [
@@ -370,7 +373,11 @@ export class AssistantToolsService {
         : all.filter((t) => !WRITE_TOOLS.has(t.function.name));
     const grounded = opts.web === true ? scoped : scoped.filter((t) => !WEB_TOOLS.has(t.function.name));
     const withCode = opts.code === true ? grounded : grounded.filter((t) => !CODE_TOOLS.has(t.function.name));
-    return ui ? withCode : withCode.filter((t) => !PANE_ONLY_TOOLS.has(t.function.name));
+    // Work items (docs/features/32). Opt-in like the two sets above, and note
+    // the ordering: the write half was already removed in Ask mode by `scoped`,
+    // so this filter only decides whether the READ half is on the table.
+    const withTasks = opts.tasks === true ? withCode : withCode.filter((t) => !TASK_TOOLS.has(t.function.name));
+    return ui ? withTasks : withTasks.filter((t) => !PANE_ONLY_TOOLS.has(t.function.name));
   }
 
   async execute(name: string, args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
@@ -405,6 +412,12 @@ export class AssistantToolsService {
           return await this.webSearch(args, ctx);
         case 'web_fetch':
           return await this.webFetch(args, ctx);
+        // The work item tools (docs/features/32).
+        case 'task_list':
+        case 'task_read':
+        case 'task_create':
+        case 'task_comment':
+          return await this.tasks.execute(name, args, ctx);
         // The repository tools — same implementations a background agent runs.
         case 'code_tree':
         case 'code_read':

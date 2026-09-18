@@ -136,6 +136,41 @@ from claiming a capability by boilerplate. The Work items tab is **absent**
 rather than empty on a connector without it, and the reason is said once on the
 connector — it is a property of the connection, not of this moment.
 
+**The assistant gets four tools, two of which write outside the workspace.**
+`task_list` / `task_read` / `task_create` / `task_comment`, shaped exactly like
+the `code_*` precedent. The difference is that a page the assistant creates can
+be deleted, while a comment it leaves on somebody's issue has already been
+emailed to everyone watching — so the two writes are in
+`ASSISTANT_WRITE_TOOL_NAMES`, which keeps them out of Ask mode entirely, and out
+of `PARALLEL_SAFE_TOOLS`, because batching a write to a stranger's repository is
+the one thing that allowlist exists to prevent. The researcher gets the read
+half; only the author gets the writes.
+
+`ConnectorWorkItemsModule` is **not** imported by `AgentWorkerModule`, which is
+the rest of that decision: a background agent runs unattended, and "the worker
+generates, the API publishes" is exactly the rule that stops an unattended run
+opening an issue on somebody's repository. The one worker-side exception is the
+step kind below, which acts only on issues already attached to its own page.
+
+**A third `wrapUntrusted` origin.** `'repo'` says "cite by path and line", which
+is wrong for an issue. The wrapper branches on **origin** — a fact about where
+bytes came from — and never on policy, so adding `'task'` is consistent with
+what it already is. An issue body is the most open injection surface in the
+product: anyone with an account on that host can write one.
+
+**`task.update` is the only step kind whose effect leaves the workspace**, and
+it acts on the work items already attached to the run's source page rather than
+on a number the definition names. A definition therefore cannot comment on an
+arbitrary issue. It runs in the worker like every other step — the
+"worker generates, API publishes" rule is about acts needing a principal to
+attribute them to, and a run carries `created_by` precisely so its steps have
+one. A page with no attached item is a no-op, not a failure: a flow that also
+runs manually should finish rather than fail on a step that had nothing to say.
+
+**MCP gets the read tool only.** `knowledge_list_work_items` and nothing that
+writes — stdio has no principal, the same reason workflow approval is absent
+from that surface.
+
 ## Surface
 
 ```
@@ -150,6 +185,9 @@ Creating an issue is `editor`, not `admin`, and deliberately a lower bar than
 editing the connector: opening an issue is ordinary work on content this
 workspace already syncs, while changing a credential that reaches an external
 system is not.
+
+Assistant tools: `task_list`, `task_read`, `task_create`, `task_comment`.
+MCP: `knowledge_list_work_items`. Workflow step kind: `task.update`.
 
 New event types, all in `REPO_EVENT_TYPES` and spread into `KNOWN_EVENT_TYPES`
 so the trigger picker and the WS filter see them: `repo.issue.opened|closed|

@@ -376,6 +376,13 @@ export function validateGraph(graph: WorkflowGraph): WorkflowValidationIssue[] {
     if (step.kind === 'ai.generate' || step.kind === 'ai.draft') {
       if (!step.prompt?.user?.trim()) err('missingPrompt', 'An AI step needs a prompt.', step.id);
     }
+    // task.update has no model call, but its prompt IS the comment it posts
+    // (docs/features/32), so an empty one is a step that reaches a repository
+    // and says nothing. Caught on the canvas rather than at run time, where it
+    // would be a silent no-op somebody has to read the logs to discover.
+    if (step.kind === 'task.update' && !step.prompt?.user?.trim()) {
+      err('missingPrompt', 'A task update step needs the message it will post.', step.id);
+    }
     // A fan-out step whose children are never materialised produces drafts that
     // can only ever be read inside the run — usually a mistake, never fatal.
     if (step.produces && !step.produces.category) {
@@ -393,7 +400,7 @@ export function validateGraph(graph: WorkflowGraph): WorkflowValidationIssue[] {
         { type: step.produces.relationToParent },
       );
     }
-    if (!step.produces && step.next.length === 0 && step.kind !== 'review') {
+    if (!step.produces && step.next.length === 0 && step.kind !== 'review' && step.kind !== 'task.update') {
       warn('deadEnd', 'This step produces nothing and leads nowhere.', step.id);
     }
     if (step.maxItems !== undefined && (step.maxItems < 1 || step.maxItems > 50)) {

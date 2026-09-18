@@ -148,6 +148,36 @@ export class ConnectorWorkItemsService {
     await this.publish(row, type, saved);
   }
 
+  /**
+   * Comment on every open work item attached to a page, and say how many were
+   * reached (docs/features/32).
+   *
+   * Here rather than assembled at the call site: the `task.update` workflow
+   * step wanted "comment on this page's issues", and expressing that as a
+   * connector lookup plus a GitHub call meant the worker module had to import
+   * the connector core module for a row it only passes straight back. One
+   * method keeps the dependency at the layer that owns work items — and the
+   * worker fails at boot if that ever stops being true.
+   *
+   * One item refusing does not fail the rest: a comment is a courtesy on top of
+   * whatever the caller already did, and half of it landing beats none.
+   */
+  async commentOnDocument(documentId: string, body: string, max: number): Promise<number> {
+    const open = (await this.listForDocument(documentId)).filter((item) => item.state === 'open');
+    let commented = 0;
+    for (const item of open.slice(0, max)) {
+      try {
+        const row = await this.prisma.connector.findUnique({ where: { id: item.connectorId } });
+        if (!row) continue;
+        await this.github.comment(row, item.number, body);
+        commented += 1;
+      } catch (err) {
+        this.logger.warn(`could not comment on #${item.number}: ${(err as Error).message}`);
+      }
+    }
+    return commented;
+  }
+
   /** Announce something with no work item of its own — a push, a release. */
   async publishBare(row: Connector, type: RepoEventType, title: string): Promise<void> {
     await this.events.publish({ type, workspaceId: row.workspaceId, subjectId: row.id, title });

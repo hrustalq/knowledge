@@ -2601,6 +2601,20 @@
       ]
     },
     {
+      "name": "knowledge_list_work_items",
+      "description": "Issues and pull requests on a connected repository, with the page each one is attached to. Use it to find out what work is open against something before writing about it. A \"merged\" pull request finished; a \"closed\" one was abandoned.",
+      "inputs": [
+        {
+          "name": "connectorId",
+          "optional": false
+        },
+        {
+          "name": "state",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_list_workflows",
       "description": "List workflow definitions in a workspace: configurable step chains (entity → use-cases → API endpoints + pages) that can be run against a page.",
       "inputs": [

@@ -892,6 +892,46 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connectors/{id}/work-items",
+      "tag": "connectors",
+      "summary": "Issues and pull requests on the connected repository",
+      "role": "viewer",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/work-items",
+      "tag": "connectors",
+      "summary": "Open an issue on the connected repository",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/connectors/{id}/work-items/{workItemId}/link",
+      "tag": "connectors",
+      "summary": "Detach a work item from its page; both sides are kept",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/work-items/{workItemId}/link",
+      "tag": "connectors",
+      "summary": "Attach a work item to a page, so its events can reach a workflow",
+      "role": "editor",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/connectors/github/branches",
       "tag": "connectors",
       "summary": "Branches of one repository, its default first",
@@ -1356,6 +1396,36 @@
       "tag": "entities",
       "summary": "Entity neighborhood: edges + entities within N hops (knowledge.find_relations)",
       "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/entities/aliases",
+      "tag": "entities",
+      "summary": "A workspace's canonical entity-key aliases (ru ↔ en)",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/entities/aliases",
+      "tag": "entities",
+      "summary": "Declare one entity key to mean another, folding the edges that already exist",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/entities/aliases/{alias}",
+      "tag": "entities",
+      "summary": "Retire an alias. Edges already folded onto the canonical key stay there.",
+      "role": "editor",
       "source": "query",
       "public": false,
       "platformAdmin": false

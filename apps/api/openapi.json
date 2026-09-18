@@ -6672,6 +6672,185 @@
         ]
       }
     },
+    "/v1/entities/aliases": {
+      "get": {
+        "operationId": "EntitiesController_listAliases",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A workspace's canonical entity-key aliases (ru ↔ en)",
+        "tags": [
+          "entities"
+        ]
+      },
+      "post": {
+        "operationId": "EntitiesController_createAlias",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEntityAliasDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Declare one entity key to mean another, folding the edges that already exist",
+        "tags": [
+          "entities"
+        ]
+      }
+    },
+    "/v1/entities/aliases/{alias}": {
+      "delete": {
+        "operationId": "EntitiesController_removeAlias",
+        "parameters": [
+          {
+            "name": "alias",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Retire an alias. Edges already folded onto the canonical key stay there.",
+        "tags": [
+          "entities"
+        ]
+      }
+    },
     "/v1/entities/trace": {
       "get": {
         "operationId": "EntitiesController_trace",
@@ -12116,6 +12295,266 @@
         ]
       }
     },
+    "/v1/connectors/{id}/work-items": {
+      "get": {
+        "operationId": "ConnectorsController_workItemList",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Issues and pull requests on the connected repository",
+        "tags": [
+          "connectors"
+        ]
+      },
+      "post": {
+        "operationId": "ConnectorsController_workItemCreate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConnectorWorkItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Open an issue on the connected repository",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/v1/connectors/{id}/work-items/{workItemId}/link": {
+      "post": {
+        "operationId": "ConnectorsController_workItemLink",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workItemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkConnectorWorkItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Attach a work item to a page, so its events can reach a workflow",
+        "tags": [
+          "connectors"
+        ]
+      },
+      "delete": {
+        "operationId": "ConnectorsController_workItemUnlink",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workItemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Detach a work item from its page; both sides are kept",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
     "/v1/connectors/github/installations": {
       "get": {
         "operationId": "GithubController_installations",
@@ -13989,7 +14428,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.7.1",
+    "version": "0.8.0",
     "contact": {}
   },
   "tags": [],
@@ -15002,6 +15441,28 @@
         "required": [
           "workspaceId",
           "query"
+        ]
+      },
+      "CreateEntityAliasDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "alias": {
+            "type": "string",
+            "description": "The spelling to retire, e.g. \"сервис:биллинг\". Normalized server-side."
+          },
+          "canonicalKey": {
+            "type": "string",
+            "description": "The spelling to keep, e.g. \"service:billing\". Normalized server-side."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "alias",
+          "canonicalKey"
         ]
       },
       "ImpactAnalysisDto": {
@@ -16388,6 +16849,52 @@
             "description": "Override the connector's own mode for this run only. Defaults to the connector's setting."
           }
         }
+      },
+      "CreateConnectorWorkItemDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Issue title as it will read on the far side"
+          },
+          "body": {
+            "type": "string",
+            "description": "Issue body, markdown as the host renders it"
+          },
+          "labels": {
+            "description": "Label names; unknown ones are created by the host",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assignees": {
+            "description": "Host logins to assign; silently ignored if they lack access",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "documentId": {
+            "type": "string",
+            "description": "Attach the new issue to this page, so events on it can reach a workflow"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "LinkConnectorWorkItemDto": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The page this work item is about"
+          }
+        },
+        "required": [
+          "documentId"
+        ]
       },
       "CreateGlossaryTermDto": {
         "type": "object",

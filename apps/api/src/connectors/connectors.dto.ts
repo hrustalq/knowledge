@@ -300,3 +300,46 @@ export class ConnectorRunEventDto {
   @IsIn(CONNECTOR_RUN_EVENTS)
   type!: ConnectorRunEventType;
 }
+
+/** POST /v1/connectors/:id/work-items (docs/features/32). */
+export class CreateConnectorWorkItemDto {
+  @ApiProperty({ description: 'Issue title as it will read on the far side' })
+  @IsString()
+  @IsNotEmpty({ message: vmsg('isNotEmpty') })
+  @MaxLength(400, { message: vmsg('maxLength') })
+  title!: string;
+
+  @ApiPropertyOptional({ description: 'Issue body, markdown as the host renders it' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60_000, { message: vmsg('maxLength') })
+  body?: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Label names; unknown ones are created by the host' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  labels?: string[];
+
+  @ApiPropertyOptional({ type: [String], description: 'Host logins to assign; silently ignored if they lack access' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsString({ each: true })
+  assignees?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Attach the new issue to this page, so events on it can reach a workflow',
+  })
+  @IsOptional()
+  @IsUUID()
+  documentId?: string;
+}
+
+/** POST /v1/connectors/:id/work-items/:workItemId/link. */
+export class LinkConnectorWorkItemDto {
+  @ApiProperty({ description: 'The page this work item is about' })
+  @IsUUID()
+  documentId!: string;
+}

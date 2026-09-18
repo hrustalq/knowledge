@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { CircleCheck, CircleDashed, CircleX, Plug, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { CircleCheck, CircleDashed, CircleX, Plug, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-vue-next'
 import { connectorKindInfo } from '@knowledge/contracts'
 import type { ConnectorSummary, ListConnectorsResponse } from '@knowledge/contracts'
 import { api } from '@/api/client'
@@ -126,9 +126,16 @@ function statusIcon(connector: ConnectorSummary) {
           <div class="min-w-0">
             <div class="flex items-center gap-2">
               <component :is="statusIcon(connector).icon" class="size-4 shrink-0" :class="statusIcon(connector).class" />
-              <button class="truncate text-sm font-medium hover:underline" @click="openEdit(connector)">
+              <!-- The name opens the connector rather than its settings form
+                   (docs/features/32): reading what a connection is doing is the
+                   common errand, configuring it the rare one, and the detail
+                   page carries Configure as an action of its own. -->
+              <RouterLink
+                :to="`/settings/connectors/${connector.id}`"
+                class="truncate text-sm font-medium hover:underline"
+              >
                 {{ connector.name }}
-              </button>
+              </RouterLink>
               <Badge variant="outline">{{ connectorKindInfo(connector.kind)?.label ?? connector.kind }}</Badge>
               <Badge v-if="!connector.enabled" variant="outline">{{ t('connectors.disabled') }}</Badge>
             </div>
@@ -170,6 +177,17 @@ function statusIcon(connector: ConnectorSummary) {
               @click="runTest(connector)"
             >
               {{ t('connectors.test') }}
+            </Button>
+            <!-- The name now opens the connector, so configuring it needs a
+                 control of its own rather than being the card's default click. -->
+            <Button
+              v-if="canManage"
+              size="sm"
+              variant="ghost"
+              :aria-label="t('connectors.configure')"
+              @click="openEdit(connector)"
+            >
+              <Settings2 class="size-3.5" />
             </Button>
             <Button v-if="canManage" size="sm" variant="ghost" @click="confirmRemove(connector)">
               <Trash2 class="text-destructive size-3.5" />

@@ -460,7 +460,40 @@
       "otherAccountHint": "Searching only the selected account. If the repository belongs to another one, switch accounts above.",
       "noneGranted": "This installation has no repositories.",
       "noneGrantedHint": "The GitHub App is installed on this account but was granted access to zero repositories, so there is nothing to search. Choose which ones it may read."
-    }
+    },
+    "overview": "Overview",
+    "never": "Never",
+    "openExternal": "Open in the external system",
+    "tabWorkItems": "Work items",
+    "tabsLabel": "Connector sections",
+    "fieldDirection": "Direction",
+    "fieldSchedule": "Schedule",
+    "fieldLastSync": "Last sync",
+    "fieldLastRun": "Last run",
+    "manualOnly": "Manual only",
+    "linksEmpty": "This connector has not claimed any pages yet",
+    "runsEmpty": "This connector has never run",
+    "runCounts": "{created} created · {updated} updated · {skipped} skipped",
+    "workItemsUnsupported": "This kind of connector has no issues or pull requests.",
+    "workItemCount": "no work items | {count} work item | {count} work items",
+    "workItemNew": "New issue",
+    "workItemCreate": "Open issue",
+    "workItemCreated": "Issue opened",
+    "workItemsEmptyTitle": "Nothing open",
+    "workItemsEmptyBody": "Issues and pull requests on the connected repository appear here, with the page each one is about.",
+    "workItemAttach": "Attach a page",
+    "workItemAttachHint": "Optional. Attaching a page is what lets events on this issue start a workflow.",
+    "workItemDetach": "Detach this page",
+    "workItemLinkedPage": "Linked page",
+    "workItemTitlePlaceholder": "What needs doing",
+    "workItemBodyPlaceholder": "Context for whoever picks this up",
+    "workItemState": {
+      "open": "Open",
+      "closed": "Closed",
+      "merged": "Merged",
+      "draft": "Draft"
+    },
+    "configure": "Configure"
   },
   "workflow": {
     "nodeStatus": {
@@ -1069,7 +1102,8 @@
     "applyDocuments": "Apply documents",
     "searchByTitle": "Search pages by title…",
     "loadingPages": "Loading pages…",
-    "groundHint": "Ground this message in pages that already exist in the workspace."
+    "groundHint": "Ground this message in pages that already exist in the workspace.",
+    "searchPages": "Search pages"
   },
   "tree": {
     "collapse": "Collapse",

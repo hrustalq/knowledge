@@ -222,6 +222,12 @@
   "connector": {
     "notFound": "Connector {id} not found",
     "runNotFound": "Connector run {id} not found",
+    "workItemNotFound": "Work item {id} is not part of this connector",
+    "workItemsUnsupported": "{kind} connectors have no issues or pull requests",
+    "workItemsGithubOnly": "Work items are only available on GitHub repositories",
+    "workItemsNoCredential": "This connector has no usable GitHub credential",
+    "workItemsNotVisible": "not found, or the credential cannot see it",
+    "workItemsRequestFailed": "GitHub refused the request ({detail})",
     "linkNotFound": "Connector link {id} not found",
     "nameTaken": "A connector named \"{name}\" already exists in this workspace",
     "unknownKind": "\"{kind}\" is not a connector type this workspace can use",

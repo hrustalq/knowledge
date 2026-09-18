@@ -62,6 +62,17 @@ export interface ConnectorCapabilities {
    * hierarchy. False adapters take the flat `list()` path, unchanged.
    */
   tree: boolean;
+  /**
+   * The external system carries units of work — issues, pull requests — that a
+   * page can be attached to (docs/features/32).
+   *
+   * Optional rather than required, unlike the four above: they describe how
+   * content moves and every adapter has an answer, while this describes a
+   * second kind of object most connectors do not have at all. `undefined` reads
+   * as false everywhere, so declaring it only where it is true keeps the six
+   * adapters that have no work items from claiming a capability by boilerplate.
+   */
+  tasks?: boolean;
 }
 
 /** One configurable, non-secret setting an adapter needs (drives the settings form). */
@@ -188,7 +199,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
   {
     kind: 'markdown-git',
     label: 'Markdown / Git',
-    capabilities: { pull: true, push: true, webhook: true, tree: false },
+    capabilities: { pull: true, push: true, webhook: true, tree: false, tasks: true },
     credentialLabel: 'Personal access token',
     fields: [
       {
@@ -223,7 +234,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
     // read — so a webhook could only guess, and every wrong guess seeds an
     // identity-map key for a page that does not exist. Scheduled sync covers the
     // same ground: a module whose files did not change costs a hash, not a call.
-    capabilities: { pull: true, push: false, webhook: false, tree: false },
+    capabilities: { pull: true, push: false, webhook: false, tree: false, tasks: true },
     credentialLabel: 'Personal access token',
     fields: [
       {
@@ -647,4 +658,79 @@ export interface DocumentConnectorLink {
 export interface DocumentConnectorResponse {
   documentId: string;
   links: DocumentConnectorLink[];
+}
+
+// ---------------------------------------------------------------------------
+// Work items (docs/features/32) — the unit of *work* in an external system, as
+// opposed to the unit of *content* a link already maps.
+//
+// A link says "this page is that wiki page". A work item says "this page is
+// what that issue is about", which differs in three ways that matter: a work
+// item need not have a page at all, its interesting state is a lifecycle rather
+// than a content hash, and it is the thing an inbound event is usually about.
+// Folding them into one table would have meant a nullable `document_id` on
+// `connector_links`, and the echo-loop suppression that makes pull idempotent
+// reads that column on every sync.
+// ---------------------------------------------------------------------------
+
+/**
+ * What kind of external work item this is.
+ *
+ * Deliberately no `'board-card'`: a GitHub Projects v2 card is a *view* of an
+ * issue or pull request rather than a third kind of thing, so a card is
+ * recorded as the item it points at and its board membership is a field.
+ */
+export const CONNECTOR_WORK_ITEM_KINDS = ['issue', 'pull-request'] as const;
+export type ConnectorWorkItemKind = (typeof CONNECTOR_WORK_ITEM_KINDS)[number];
+
+/**
+ * The lifecycle, normalised across hosts.
+ *
+ * `merged` is distinct from `closed` because they say opposite things about the
+ * work: a merged pull request finished, a closed one was abandoned. A flow that
+ * reacts to "done" must not fire on the second.
+ */
+export const CONNECTOR_WORK_ITEM_STATES = ['open', 'closed', 'merged', 'draft'] as const;
+export type ConnectorWorkItemState = (typeof CONNECTOR_WORK_ITEM_STATES)[number];
+
+export interface ConnectorWorkItemInfo {
+  id: string;
+  connectorId: string;
+  kind: ConnectorWorkItemKind;
+  /** The host's own number, as a person would cite it ("#412"). */
+  number: number;
+  title: string;
+  state: ConnectorWorkItemState;
+  url: string;
+  /** Host login of whoever opened it. Never resolved against our users. */
+  authorLogin: string | null;
+  assigneeLogins: string[];
+  labels: string[];
+  /** The page this work item is about, when somebody attached one. */
+  documentId: string | null;
+  documentTitle: string | null;
+  /** Names of the Projects v2 boards carrying this item. */
+  boards: string[];
+  externalCreatedAt: string | null;
+  externalUpdatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /v1/connectors/:id/work-items
+export interface ListConnectorWorkItemsResponse {
+  workItems: ConnectorWorkItemInfo[];
+}
+export interface ConnectorWorkItemResponse {
+  workItem: ConnectorWorkItemInfo;
+}
+
+/** POST /v1/connectors/:id/work-items — hand a task to the external system. */
+export interface CreateConnectorWorkItemInput {
+  title: string;
+  body?: string;
+  labels?: string[];
+  assignees?: string[];
+  /** Attach the new issue to this page, so events on it can reach a workflow. */
+  documentId?: string;
 }

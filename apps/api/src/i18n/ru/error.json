@@ -224,6 +224,12 @@
   "connector": {
     "notFound": "Коннектор {id} не найден",
     "runNotFound": "Запуск синхронизации {id} не найден",
+    "workItemNotFound": "Задача {id} не относится к этому коннектору",
+    "workItemsUnsupported": "У коннекторов типа {kind} нет задач и пул-реквестов",
+    "workItemsGithubOnly": "Задачи доступны только для репозиториев GitHub",
+    "workItemsNoCredential": "У этого коннектора нет пригодных учётных данных GitHub",
+    "workItemsNotVisible": "не найдено или недоступно для этих учётных данных",
+    "workItemsRequestFailed": "GitHub отклонил запрос ({detail})",
     "linkNotFound": "Связь коннектора {id} не найдена",
     "nameTaken": "Коннектор с именем «{name}» уже есть в этом рабочем пространстве",
     "unknownKind": "«{kind}» — недоступный тип коннектора",

@@ -8,7 +8,9 @@ import type {
   ConnectorRunItemResponse,
   ConnectorRunResponse,
   ConnectorTestResponse,
+  ConnectorWorkItemResponse,
   ListConnectorLinksResponse,
+  ListConnectorWorkItemsResponse,
   ListConnectorRunItemsResponse,
   ListConnectorRunsResponse,
   ListConnectorsResponse,
@@ -18,6 +20,7 @@ import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ConnectorLinksService } from './connector-links.service.js';
+import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { ConnectorItemAiService } from './connector-item-ai.service.js';
 import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorProducer } from './connector.producer.js';
@@ -29,6 +32,8 @@ import {
   CreateConnectorDto,
   StartConnectorSyncDto,
   UpdateConnectorDto,
+  CreateConnectorWorkItemDto,
+  LinkConnectorWorkItemDto,
   UpdateConnectorRunItemDto,
 } from './connectors.dto.js';
 
@@ -45,6 +50,7 @@ export class ConnectorsController {
   constructor(
     private readonly connectors: ConnectorsService,
     private readonly links: ConnectorLinksService,
+    private readonly workItems: ConnectorWorkItemsService,
     private readonly items: ConnectorItemsService,
     private readonly ai: ConnectorItemAiService,
     private readonly producer: ConnectorProducer,
@@ -262,5 +268,64 @@ export class ConnectorsController {
       metadata: { title: connector.name },
     });
     return { ok: true };
+  }
+
+  // --- work items (docs/features/32) ---
+
+  @Get(':id/work-items')
+  @Access('viewer', 'connector')
+  @ApiOperation({ summary: 'Issues and pull requests on the connected repository' })
+  async workItemList(@Param('id', ParseUUIDPipe) id: string): Promise<ListConnectorWorkItemsResponse> {
+    const connector = await this.connectors.require(id);
+    return { workItems: await this.workItems.list(connector) };
+  }
+
+  /**
+   * `editor`, not `admin`, and deliberately a lower bar than editing the
+   * connector: opening an issue is ordinary work on the content this workspace
+   * already syncs, while changing the connector's credential is not.
+   */
+  @Post(':id/work-items')
+  @Access('editor', 'connector')
+  @ApiOperation({ summary: 'Open an issue on the connected repository' })
+  async workItemCreate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateConnectorWorkItemDto,
+    @CurrentPrincipal() principal?: Principal,
+  ): Promise<ConnectorWorkItemResponse> {
+    const connector = await this.connectors.require(id);
+    const workItem = await this.workItems.create(connector, dto);
+    void this.activity.record({
+      workspaceId: connector.workspaceId,
+      actor: principal?.userId,
+      action: 'connector.work-item.created',
+      subjectId: id,
+      ...(workItem.documentId ? { documentId: workItem.documentId } : {}),
+      metadata: { title: workItem.title, number: workItem.number, url: workItem.url },
+    });
+    return { workItem };
+  }
+
+  @Post(':id/work-items/:workItemId/link')
+  @Access('editor', 'connector')
+  @ApiOperation({ summary: 'Attach a work item to a page, so its events can reach a workflow' })
+  async workItemLink(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('workItemId', ParseUUIDPipe) workItemId: string,
+    @Body() dto: LinkConnectorWorkItemDto,
+  ): Promise<ConnectorWorkItemResponse> {
+    const connector = await this.connectors.require(id);
+    return { workItem: await this.workItems.link(connector, workItemId, dto.documentId) };
+  }
+
+  @Delete(':id/work-items/:workItemId/link')
+  @Access('editor', 'connector')
+  @ApiOperation({ summary: 'Detach a work item from its page; both sides are kept' })
+  async workItemUnlink(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('workItemId', ParseUUIDPipe) workItemId: string,
+  ): Promise<ConnectorWorkItemResponse> {
+    const connector = await this.connectors.require(id);
+    return { workItem: await this.workItems.unlink(connector, workItemId) };
   }
 }

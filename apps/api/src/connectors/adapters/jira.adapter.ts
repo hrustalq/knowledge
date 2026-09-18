@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import { htmlToMarkdown } from '../../import/parsers/html-to-markdown.js';
-import { safeJson, verifyHubSignature } from './confluence.adapter.js';
+import { safeJson, verifyHubSignature } from '../webhook-payload.js';
 import {
   connectorFetch,
   requireConfig,

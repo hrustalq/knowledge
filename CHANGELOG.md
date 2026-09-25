@@ -15,6 +15,52 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Fixed
+
+- **The SearXNG instance answered every search with nothing.** Its config
+  narrowed the engine roster with `keep_only`, which preserves each engine's
+  *default* state — and upstream ships google as `disabled: true`. Kept but
+  disabled, google never fired on a real query, only on an explicit
+  `?engines=google`, so the instance returned `200 application/json` with an
+  empty `results` array and looked like a working backend that had nothing to
+  say. A top-level `engines:` block now enables it; that form *modifies* the
+  engines it names rather than re-widening the roster `keep_only` narrowed. (#52)
+- **One of the four configured engines was never loaded.** `keep_only` matches
+  engine names, not module names, and a name matching nothing is dropped in
+  silence — no warning, absent from `/config`. `stackexchange` is the module;
+  the engine built from it is `stackoverflow`. (#52)
+
+### Operations
+
+- **Web research is on in production**, which is a change of posture, not just
+  of configuration: `WEB_ACCESS_MODE=open` lets the assistant fetch any domain
+  a `source_policies` row does not deny. It was `off`, and both workspaces had
+  been asking for `open` and being clamped — which is what the "installation
+  allows off" banner in AI settings was reporting. Narrow it per workspace in
+  AI settings, or lower the ceiling back to `off` to withdraw it entirely.
+- **Two new production environment variables**, both in
+  `.env.production.example`: `WEB_ACCESS_MODE` (already present, now `open`)
+  and `WEB_SEARCH_URL=http://searxng:8080`. Without the latter, fetching a
+  named URL still works and searching does not. Both are read at container
+  creation through `env_file`, so they need `up -d --force-recreate api worker`
+  — a plain `restart` does not pick them up.
+- **A `searxng` service joins the production stack**, ~90 MB against the box's
+  3.8 GB. It publishes no host port: its `limiter` is off because the caller is
+  this platform rather than a browser, and a published port would put an
+  unthrottled open metasearch proxy on the network. The previous note that
+  SearXNG "does not fit beside a build" applied to OpenSearch's JVM and has
+  been corrected.
+- **`/srv/knowledge/searxng/settings.yml` is hand-managed beside `.env`** and is
+  deliberately *not* synced by `deploy.yml`, because it carries a generated
+  `secret_key` that must not be the dev placeholder this repo ships. The service
+  definition, however, must live in `docker-compose.prod.yml`: deploy installs
+  that file over the box's copy and then runs `up -d --remove-orphans`, so a
+  service existing only on the box is deleted by the next release.
+- **DuckDuckGo serves a CAPTCHA to datacentre IPs** and answers nothing from the
+  VPS. It is kept in the roster for the day that changes; until then every
+  response carries `unresponsive_engines: [[duckduckgo, CAPTCHA]]`, which is
+  noise in the payload, not a failure.
+  
 ### Added
 
 - **Connect Claude, Codex, Gemini CLI, Cursor or any MCP client to the knowledge

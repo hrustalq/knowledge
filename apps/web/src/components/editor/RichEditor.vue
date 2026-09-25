@@ -13,6 +13,7 @@
  * table of contents).
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { Subject, Subscription, animationFrameScheduler, auditTime, distinctUntilChanged, merge } from 'rxjs'
 import { useI18n } from 'vue-i18n'
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { Editor, EditorContent } from '@tiptap/vue-3'
@@ -57,7 +58,7 @@ import {
 import { markdownToHtml } from '@/lib/markdown/render'
 import type { GlossaryExclusion, GlossaryTerm } from '@knowledge/contracts'
 import type { PageRefResolver } from '@/lib/page-refs'
-import { htmlToMarkdown } from '@/lib/markdown/serialize'
+import { fromWatch } from '@/lib/rx-vue'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
 import { Layout, LayoutColumn, Expand, Panel, TableOfContents } from './extensions/blocks'
 import { ApiContract, ApiSection } from './extensions/api'
@@ -75,6 +76,15 @@ import { ListIndentKeymap } from './extensions/list-indent'
 import { CommentAnchors, type CommentAnchor } from './extensions/comment-anchors'
 import { GlossaryTerms } from './extensions/glossary-terms'
 import { useAttachments } from './use-attachments'
+import {
+  EMPTY_FORMAT,
+  createMarkdownSync,
+  docToMarkdown,
+  editorStreams,
+  shallowEqual,
+  type FormatState,
+  type MarkdownSync,
+} from './editor-streams'
 import CommandMenu, { type CommandItem } from './CommandMenu.vue'
 import PagePickerDialog from './PagePickerDialog.vue'
 import LinkDialog from './LinkDialog.vue'
@@ -178,6 +188,8 @@ const emit = defineEmits<{
   'update:modelValue': [string]
   /** Anchors whose passage is no longer in the text, after the last decoration pass. */
   'outdated-anchors': [ids: string[]]
+  /** The editor exists and holds `modelValue`, parsed. */
+  ready: []
 }>()
 
 const editor = shallowRef<Editor | null>(null)
@@ -218,7 +230,17 @@ const lowlight = createLowlight(common)
 
 /** Guards the two-way binding: never re-parse markdown this component just produced. */
 let lastEmitted = ''
-let syncTimer: ReturnType<typeof setTimeout> | undefined
+/** The model half of the binding — see `createMarkdownSync`. */
+let sync: MarkdownSync | null = null
+/** Every stream this instance holds, closed with it. */
+const subscriptions = new Subscription()
+/**
+ * The selection's formatting, for the one control here that shows it (the
+ * link dialog). Read from the shared per-frame stream rather than from
+ * `editor.isActive()` in the template, which would re-render this whole
+ * component on every transaction.
+ */
+const format = shallowRef<FormatState>(EMPTY_FORMAT)
 
 const { uploads, insertFiles, pickFiles } = useAttachments(
   async () => (props.resolveDocumentId ? props.resolveDocumentId() : null),
@@ -421,11 +443,26 @@ const handlePos = ref<number | null>(null)
  */
 const onHandle = ref(false)
 
+/**
+ * The handle's target, as the pointer reports it. Coalesced to one update per
+ * frame: a fast sweep down a long page crosses many blocks between two paints,
+ * and only the last one is ever seen.
+ */
+const handleMoves = new Subject<{ rect: { top: number; left: number; height: number } | null; pos: number | null }>()
+subscriptions.add(
+  handleMoves
+    .pipe(
+      auditTime(0, animationFrameScheduler),
+      distinctUntilChanged((a, b) => a.pos === b.pos && shallowEqual(a.rect, b.rect)),
+    )
+    .subscribe(({ rect, pos }) => {
+      handle.value = rect
+      handlePos.value = pos
+    }),
+)
+
 const DragHandleExtension = createDragHandle({
-  onMove: (rect, pos) => {
-    handle.value = rect
-    handlePos.value = pos
-  },
+  onMove: (rect, pos) => handleMoves.next({ rect, pos }),
   isPointerOnHandle: () => onHandle.value,
 })
 
@@ -501,15 +538,9 @@ function onHandleInsert() {
 
 /* ------------------------------------------------------------ editor */
 
-function syncOut(instance: CoreEditor) {
-  clearTimeout(syncTimer)
-  // Serializing on every keystroke walks the whole document; 200 ms keeps
-  // typing smooth on long pages while still feeling immediate to a save.
-  syncTimer = setTimeout(() => {
-    const markdown = htmlToMarkdown(instance.getHTML())
-    lastEmitted = markdown
-    emit('update:modelValue', markdown)
-  }, 200)
+function emitMarkdown(markdown: string) {
+  lastEmitted = markdown
+  emit('update:modelValue', markdown)
 }
 
 /**
@@ -598,14 +629,33 @@ onMounted(() => {
       },
     },
     onFocus: () => (active.value = true),
-    onUpdate: ({ editor: e }) => {
+    onUpdate: () => {
       blockMenuOpen.value = false
-      syncOut(e)
     },
   })
   editor.value = instance
+  lastEmitted = props.modelValue
+
+  // Serializing walks the whole document, so it waits for a 200 ms pause in
+  // typing: smooth on long pages, still immediate to a save (which flushes).
+  sync = createMarkdownSync(instance, { dueTime: 200 })
+  subscriptions.add(sync.markdown$.subscribe(emitMarkdown))
+  subscriptions.add(editorStreams(instance).format$.subscribe((next) => (format.value = next)))
+
   syncCommentAnchors()
   syncGlossary()
+  // One redraw when the roster and its exclusions land together — they are
+  // usually one response — instead of a full-document decoration pass each.
+  subscriptions.add(
+    merge(
+      fromWatch(() => props.glossaryTerms, { immediate: false }),
+      fromWatch(() => props.glossaryExclusions, { immediate: false }),
+      fromWatch(() => props.editable, { immediate: false }),
+    )
+      .pipe(auditTime(0))
+      .subscribe(syncGlossary),
+  )
+  emit('ready')
 })
 
 /**
@@ -639,9 +689,6 @@ function syncGlossary() {
     props.editable ? [] : props.glossaryExclusions,
   )
 }
-watch(() => props.glossaryTerms, syncGlossary)
-watch(() => props.glossaryExclusions, syncGlossary)
-watch(() => props.editable, syncGlossary)
 
 watch(
   () => props.modelValue,
@@ -649,6 +696,9 @@ watch(
     const instance = editor.value
     if (!instance || next === lastEmitted) return
     // External change (loaded a document, AI appended a suggestion): re-parse.
+    // An edit still waiting out its pause described the text being replaced.
+    sync?.cancel()
+    lastEmitted = next
     instance.commands.setContent(toHtml(next), { emitUpdate: false })
     syncCommentAnchors()
     syncGlossary()
@@ -678,21 +728,25 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  clearTimeout(syncTimer)
+  subscriptions.unsubscribe()
+  sync?.dispose()
   editor.value?.destroy()
 })
 
 defineExpose({
   /** The live editor, for hosts that need to read the document (comment anchoring). */
   editor,
-  /** Flush any pending debounce, so a save never writes stale markdown. */
+  /**
+   * Flush any pending debounce, so a save never writes stale markdown. Always
+   * serializes and emits, even with nothing pending, so the host's model is
+   * the editor's normalised form of the page — what it would publish.
+   */
   flush(): string {
     const instance = editor.value
-    if (!instance) return props.modelValue
-    clearTimeout(syncTimer)
-    const markdown = htmlToMarkdown(instance.getHTML())
-    lastEmitted = markdown
-    emit('update:modelValue', markdown)
+    if (!instance || instance.isDestroyed) return props.modelValue
+    sync?.cancel()
+    const markdown = docToMarkdown(instance.state.doc, instance.schema)
+    emitMarkdown(markdown)
     return markdown
   },
   focus() {
@@ -793,7 +847,7 @@ defineExpose({
       v-if="editor"
       v-model:open="linkOpen"
       :initial-url="linkUrl"
-      :has-link="editor.isActive('link')"
+      :has-link="format.link"
       @apply="editor.chain().focus().extendMarkRange('link').setLink({ href: $event }).run()"
       @remove="editor.chain().focus().extendMarkRange('link').unsetLink().run()"
     />

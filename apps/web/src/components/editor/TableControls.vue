@@ -3,7 +3,7 @@
  * Table row/column controls. Appear only while the caret is inside a table and
  * anchor to that table, so a page full of tables never shows more than one set.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Editor } from '@tiptap/core'
 import {
@@ -14,6 +14,8 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import { useAnchoredFloating, type AnchorRect } from '@/lib/use-anchored'
+import { useSubscription } from '@/lib/rx-vue'
+import { editorStreams } from './editor-streams'
 
 const { t } = useI18n()
 const props = defineProps<{ editor: Editor }>()
@@ -43,14 +45,9 @@ function update() {
   rect.value = { top: box.top, left: box.left, width: box.width, height: box.height }
 }
 
-onMounted(() => {
-  props.editor.on('selectionUpdate', update)
-  props.editor.on('transaction', update)
-})
-onBeforeUnmount(() => {
-  props.editor.off('selectionUpdate', update)
-  props.editor.off('transaction', update)
-})
+// Once per frame: `getBoundingClientRect` forces a layout, and this used to
+// run it on every transaction anywhere in the page, table or not.
+useSubscription(editorStreams(props.editor).frame$.subscribe(update))
 </script>
 
 <template>

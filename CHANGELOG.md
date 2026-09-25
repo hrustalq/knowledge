@@ -15,6 +15,26 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **Unpublished edits survive a reload, a crash or a closed tab.** The page
+  editor keeps its working copy in the browser as you write and restores it when
+  the page is reopened; if the page was published in the meantime it asks before
+  restoring rather than quietly publishing over the newer revision. A header chip
+  shows that there are unstaged changes and opens a diff of what publishing would
+  write, with a way to discard them. The document page marks its Edit button when
+  edits are waiting. Copies stay in the browser they were made in.
+
+### Changed
+
+- **Leaving the editor no longer asks, once your edits are stored.** They are
+  restored when you come back. Cancel still asks — keep and leave, or discard —
+  and the old discard warning remains for a browser that refuses to store them.
+- **Typing in long pages is lighter.** The formatting toolbar no longer
+  re-renders on every keystroke, the selection bubble and table bar measure the
+  page once per frame instead of once per edit, and saving the page to markdown
+  skips a full HTML round trip.
+
 ### Fixed
 
 - **The SearXNG instance answered every search with nothing.** Its config

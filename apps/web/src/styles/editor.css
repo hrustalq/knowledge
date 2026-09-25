@@ -1187,6 +1187,49 @@
   background: var(--kn-panel-warning);
 }
 
+/* Unstaged edits: the state and the way into the review, in one control. */
+.kn-unstaged-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.kn-unstaged-chip:hover { background: var(--muted); color: var(--foreground); }
+.kn-unstaged-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+/* Not stored: the dot turns from "pending" to "at risk". */
+.kn-unstaged-chip[data-failed] { color: var(--destructive); }
+.kn-unstaged-chip[data-failed] .kn-dirty-dot { background: var(--destructive); }
+
+/* A copy kept from before the page was last published: a decision, not a toast. */
+.kn-stale-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 1rem 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--kn-panel-warning);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+@media (max-width: 40rem) { .kn-stale-copy { flex-wrap: wrap; } }
+
+.kn-unstaged-fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  font-size: 0.8rem;
+}
+.kn-unstaged-fields dt { color: var(--muted-foreground); }
+.kn-unstaged-fields dd { display: flex; flex-wrap: wrap; gap: 0.4rem; min-width: 0; }
+.kn-unstaged-fields del { color: var(--muted-foreground); }
+.kn-unstaged-fields ins { text-decoration: none; font-weight: 500; }
+
 /* Page settings: one label style across the sheet, matching the Autocomplete's
    own caption so the fields read as one form rather than two conventions. */
 .kn-field-label {

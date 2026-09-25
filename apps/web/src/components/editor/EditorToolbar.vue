@@ -52,7 +52,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { PANEL_META, PANEL_TYPES, STATUS_COLORS, type PanelType, type StatusColor } from '@/lib/markdown/nodes'
-import { canIndent, canOutdent, indent, outdent } from './extensions/list-indent'
+import { useObservable } from '@/lib/rx-vue'
+import { indent, outdent } from './extensions/list-indent'
+import { editorStreams, readFormatState } from './editor-streams'
 
 const { t } = useI18n()
 
@@ -79,12 +81,17 @@ const TEXT_STYLES = [
   { id: 'h4', label: 'toolbar.heading4', level: 4 },
 ] as const
 
-const currentStyle = computed(() => {
-  for (const style of TEXT_STYLES) {
-    if (style.level > 0 && props.editor.isActive('heading', { level: style.level })) return style
-  }
-  return TEXT_STYLES[0]
-})
+/**
+ * The bar's state, from the editor's shared per-frame stream. The template
+ * used to ask `editor.isActive()` directly, and because `@tiptap/vue-3` makes
+ * the editor state reactive, that re-rendered the whole bar on every
+ * transaction — each keystroke — to find the answers mostly unchanged.
+ */
+const format = useObservable(editorStreams(props.editor).format$, readFormatState(props.editor))
+
+const currentStyle = computed(
+  () => TEXT_STYLES.find((style) => style.level === format.value.heading) ?? TEXT_STYLES[0],
+)
 
 function setStyle(level: number) {
   const chain = props.editor.chain().focus()
@@ -106,7 +113,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.undo')"
-        :disabled="!editor.can().undo()"
+        :disabled="!format.canUndo"
         @click="editor.chain().focus().undo().run()"
       >
         <Undo2 class="size-4" />
@@ -115,7 +122,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.redo')"
-        :disabled="!editor.can().redo()"
+        :disabled="!format.canRedo"
         @click="editor.chain().focus().redo().run()"
       >
         <Redo2 class="size-4" />
@@ -147,7 +154,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.bold')"
-        :aria-pressed="editor.isActive('bold')"
+        :aria-pressed="format.bold"
         @click="editor.chain().focus().toggleBold().run()"
       >
         <Bold class="size-4" />
@@ -156,7 +163,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.italic')"
-        :aria-pressed="editor.isActive('italic')"
+        :aria-pressed="format.italic"
         @click="editor.chain().focus().toggleItalic().run()"
       >
         <Italic class="size-4" />
@@ -165,7 +172,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.underline')"
-        :aria-pressed="editor.isActive('underline')"
+        :aria-pressed="format.underline"
         @click="editor.chain().focus().toggleUnderline().run()"
       >
         <UnderlineIcon class="size-4" />
@@ -174,7 +181,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.strikethrough')"
-        :aria-pressed="editor.isActive('strike')"
+        :aria-pressed="format.strike"
         @click="editor.chain().focus().toggleStrike().run()"
       >
         <Strikethrough class="size-4" />
@@ -183,7 +190,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.inlineCode')"
-        :aria-pressed="editor.isActive('code')"
+        :aria-pressed="format.code"
         @click="editor.chain().focus().toggleCode().run()"
       >
         <Code class="size-4" />
@@ -195,7 +202,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.highlight')"
-        :aria-pressed="editor.isActive('highlight')"
+        :aria-pressed="format.highlight"
         @click="editor.chain().focus().toggleHighlight().run()"
       >
         <Highlighter class="size-4" />
@@ -227,7 +234,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.bulletList')"
-        :aria-pressed="editor.isActive('bulletList')"
+        :aria-pressed="format.bulletList"
         @click="editor.chain().focus().toggleBulletList().run()"
       >
         <List class="size-4" />
@@ -236,7 +243,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.numberedList')"
-        :aria-pressed="editor.isActive('orderedList')"
+        :aria-pressed="format.orderedList"
         @click="editor.chain().focus().toggleOrderedList().run()"
       >
         <ListOrdered class="size-4" />
@@ -245,7 +252,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.taskList')"
-        :aria-pressed="editor.isActive('taskList')"
+        :aria-pressed="format.taskList"
         @click="editor.chain().focus().toggleTaskList().run()"
       >
         <ListTodo class="size-4" />
@@ -254,7 +261,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.outdent')"
-        :disabled="!canOutdent(editor)"
+        :disabled="!format.canOutdent"
         @click="outdent(editor)"
       >
         <Outdent class="size-4" />
@@ -263,7 +270,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.indent')"
-        :disabled="!canIndent(editor)"
+        :disabled="!format.canIndent"
         @click="indent(editor)"
       >
         <Indent class="size-4" />
@@ -292,7 +299,7 @@ const ALIGNMENTS = [
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.link')"
-        :aria-pressed="editor.isActive('link')"
+        :aria-pressed="format.link"
         @click="emit('link')"
       >
         <Link2 class="size-4" />

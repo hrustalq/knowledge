@@ -1920,7 +1920,6 @@
     "noContentChanges": "No content changes — metadata updated",
     "revisionPublished": "Revision published — indexing started",
     "headMoved": "The document head moved while you were editing — reload and compare before retrying",
-    "unsavedChanges": "Unsaved changes",
     "settings": "Settings",
     "pageTitle": "Page title",
     "assistant": "Assistant",
@@ -1987,7 +1986,24 @@
     "attachmentTypeRejected": "{name}: {type} is not an accepted attachment",
     "thisFileType": "this file type",
     "noMentionMatches": "No one and no page matches",
-    "noBlockMatches": "No blocks match"
+    "noBlockMatches": "No blocks match",
+    "unstaged": {
+      "label": "Unstaged changes",
+      "savedLocally": "Kept in this browser · {when}. Click to review.",
+      "notSaved": "This browser refused to keep these changes — publish before leaving. Click to review.",
+      "restored": "Restored unstaged changes from {when}",
+      "staleTitle": "Unstaged changes from {when}",
+      "staleBody": "They were made before this page was last published. Restoring them and publishing would undo that revision — review the diff before you publish.",
+      "restore": "Restore",
+      "discard": "Discard",
+      "discardAll": "Discard all changes",
+      "reviewTitle": "Unstaged changes",
+      "reviewDesc": "What publishing would change, compared with the published page.",
+      "noSourceChanges": "The page text is unchanged.",
+      "leaveTitle": "Leave with unstaged changes?",
+      "leaveBody": "Kept, they stay in this browser and are restored when you reopen the page. Discarded, the page stays as published.",
+      "keepAndLeave": "Keep and leave"
+    }
   },
   "toolbar": {
     "formatting": "Formatting",

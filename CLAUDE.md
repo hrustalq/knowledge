@@ -185,6 +185,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 **Web**
 
 - Tab strips are hand-rolled (no tab library is installed), and `?tab=` is an **opening instruction, not two-way state**.
+- **Never call `editor.isActive()`/`editor.can()` in a template.** `@tiptap/vue-3` makes editor state reactive, so it re-renders the component on every transaction. Editor chrome renders from `editorStreams(editor).format$`, and anything that reads layout listens to `frame$` (once per animation frame).
 - Project-scoped Pinia stores expose `rescope()`, called from `projects.switchProject()`.
 - Search filters are applied post-ranking against PG under the existing 5× over-fetch.
 - `createI18nFor(locale)` is called **inside `createApp()`**, never at module scope, or concurrent SSR renders share a locale.

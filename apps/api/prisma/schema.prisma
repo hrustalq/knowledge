@@ -397,7 +397,8 @@ model User {
   id              String    @id @default(uuid()) @db.Uuid
   email           String    @unique
   displayName     String    @map("display_name")
-  // SHA-256 hex of the API key; the plaintext key is printed once at creation.
+  // Superseded by api_keys (docs/features/33) and no longer read; kept one
+  // release so a rollback still authenticates. Contract step: drop it.
   apiKeyHash      String?   @unique @map("api_key_hash")
   // Auth flow: scrypt hash ("scrypt$N$r$p$salt$hash"); null until the user sets one.
   passwordHash    String?   @map("password_hash")
@@ -420,8 +421,36 @@ model User {
   memberships    WorkspaceMember[]
   sessions       Session[]
   passwordResets PasswordResetToken[]
+  apiKeys        ApiKey[]
 
   @@map("users")
+}
+
+// Named `kn_` API keys, many per person (docs/features/33). Replaces the single
+// users.api_key_hash, which is kept (and no longer read) so the previous image
+// still authenticates after a rollback; the migration copied every one of them
+// here. Only the SHA-256 is stored — the plaintext is shown once, at creation.
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  name        String
+  keyHash     String    @unique @map("key_hash")
+  // First 11 characters of the plaintext (`kn_` + 8 hex): recognisable in a
+  // config file, far too short to be worth anything on its own.
+  prefix      String
+  // 'read' | 'write' — API_KEY_SCOPES in contracts.
+  scope       String    @default("write")
+  // Pinned to one workspace, or null for all of the owner's. No FK, house policy.
+  workspaceId String?   @map("workspace_id") @db.Uuid
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("api_keys")
 }
 
 // Auth flow: opaque `ks_` login session tokens (only the SHA-256 is stored).

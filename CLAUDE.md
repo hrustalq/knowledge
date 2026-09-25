@@ -27,7 +27,7 @@ make setup              # first-time: env files → pnpm install → infra → m
 make dev                # infra + api :3000 (Swagger /docs) + web :5173 + ingestion worker (turbo watch)
 make kill               # kill this repo's dev processes; kill-all also stops infra
 make dev-worker         # only the BullMQ ingestion worker (already part of `make dev`)
-make dev-mcp            # MCP server on stdio (knowledge_* tools) — for agent clients
+make dev-mcp            # MCP server on stdio (knowledge_* tools); the API also serves them at POST /v1/mcp
 
 make verify             # PRE-PUSH GATE: db-generate + lint + typecheck + deps + test (no build)
 make check              # CI gate: lint + typecheck + deps + test + build
@@ -119,6 +119,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 30  | GitHub repo picker   | A GitHub App installation replaces repo URL + PAT for git connectors   |
 | 31  | Code research        | `code_*` tools over a connected repo; the archaeologist drafts pages for undeclared logic |
 | 32  | Tree drag-and-drop   | Reparent + reorder by drag, keyboard and picker; `POST :id/move` places among siblings    |
+| 33  | Connect AI           | MCP over HTTP at `/v1/mcp` per caller, named/narrowed API keys, per-client configs, generated SKILL.md |
 
 ## Conventions
 
@@ -128,6 +129,8 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - Controllers pull `AccessService` and therefore the global `AuthModule`; **a controller-bearing module must never load in the worker.** When the worker needs a service, extract a `*CoreModule` and re-export it from the existing module so no call site changes.
 - **The worker generates, the API publishes.** Anything that creates a page, opens a merge request or attributes an act to a person happens API-side, where a principal exists. The worker stages it and an API-side sweeper finishes it — which doubles as crash recovery.
 - Any service injected into `McpService` must be **exported** by its module.
+- Every MCP tool handler starts with its `guard.*(…, role)` call — the per-tool twin of `@Access`, same role as the REST route it mirrors. A new write tool also joins `WRITE_TOOLS` (`mcp-tools.ts`), which drives `readOnlyHint` and hides it from read-only keys; the spec fails if that list names a missing tool.
+- An API key only narrows (`principal.apiKey`, enforced in `requireRole`). A non-GET route without `@Access` refuses read-only keys unless marked `@ReadKeyOk()`.
 - A provider registered in a module that imports you is invisible — pass it as a call argument, not a DI token.
 - Lift a shared helper into a leaf module rather than closing an import cycle.
 

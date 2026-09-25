@@ -110,6 +110,10 @@ export function createRouter() {
           // Also yours rather than the workspace's, though scoped to one
           // workspace: what you want to hear about here.
           { path: 'notifications', component: () => import('@/pages/NotificationSettingsPage.vue') },
+          // Yours too: API keys, client config snippets and the skill
+          // (docs/features/33). Open to every role — it acts on your own keys,
+          // and each tool a connected client calls is checked on its own.
+          { path: 'connect', component: () => import('@/pages/ConnectAiPage.vue') },
           {
             path: 'projects',
             component: () => import('@/pages/ProjectsPage.vue'),

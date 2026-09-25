@@ -25,6 +25,7 @@ import { WorkflowsModule } from './workflows/workflows.module.js';
 import { WorkflowMaterializeModule } from './workflows/workflow-materialize.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { McpHttpModule } from './mcp/mcp-http.module.js';
 
 @Module({
   imports: [
@@ -54,6 +55,9 @@ import { AppService } from './app.service.js';
     // API-only: materialisation writes pages, so it runs here and not in the
     // MCP process, which imports WorkflowsModule for its read/start tools.
     WorkflowMaterializeModule,
+    // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
+    // server's tools, bound per request to the caller's principal.
+    McpHttpModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -145,7 +145,7 @@ git log --oneline "$(git describe --tags --abbrev=0)..origin/dev"
 # 3. Move [Unreleased] to the new heading, date it, update the compare links,
 #    and bump the version surfaces listed in docs/versioning.md#known-drift:
 #      apps/api/src/config/swagger.ts   .setVersion('X.Y.Z')
-#      apps/api/src/mcp/mcp.service.ts  new McpServer({ version: 'X.Y.Z' })
+#      apps/api/src/mcp/mcp.service.ts  MCP_SERVER_VERSION = 'X.Y.Z'
 #
 #    The bump travels by pull request like every other change — `dev` requires
 #    one plus a passing `check`, so pushing it straight to dev is rejected.

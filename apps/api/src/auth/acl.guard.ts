@@ -6,11 +6,13 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ACCESS_META, PLATFORM_ADMIN_META, PUBLIC_META, type AccessSpec } from './access.decorator.js';
+import { ACCESS_META, PLATFORM_ADMIN_META, PUBLIC_META, READ_KEY_OK_META, type AccessSpec } from './access.decorator.js';
 import { AccessService } from './access.service.js';
 import type { Principal } from './principal.js';
 import { t } from '../i18n/t.js';
 import { bindTrace } from '@knowledge/observability';
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -42,7 +44,18 @@ export class AclGuard implements CanActivate {
     }
 
     const spec = this.reflector.get<AccessSpec | undefined>(ACCESS_META, ctx.getHandler());
-    if (!spec) return true;
+    if (!spec) {
+      // No workspace to check a role in, so requireRole never sees these — a
+      // read-only key would otherwise create workspaces or rename its owner.
+      if (
+        principal.apiKey?.scope === 'read' &&
+        !SAFE_METHODS.has(req.method) &&
+        !this.reflector.getAllAndOverride<boolean>(READ_KEY_OK_META, [ctx.getHandler(), ctx.getClass()])
+      ) {
+        throw new ForbiddenException(t('error.auth.apiKeyReadOnly', { role: t('role.editor') }));
+      }
+      return true;
+    }
     if (principal.mode === 'dev') {
       // AUTH_MODE=none returns before the workspace is ever resolved, so for
       // logging take whatever the request declared. Deliberately no DB lookup:

@@ -268,6 +268,70 @@ export interface RotateApiKeyResponse {
   rotatedAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// API keys (docs/features/33) — many named keys per person, each optionally
+// narrowed. A key can only ever do less than the person who minted it: the
+// narrowing is applied on top of their workspace role, never instead of it.
+// ---------------------------------------------------------------------------
+
+/**
+ * `read` caps every workspace at the viewer role; `write` leaves the owner's
+ * own role in force. Closed: the guard, the form and the MCP tool filter all
+ * read this one list.
+ */
+export const API_KEY_SCOPES = ['read', 'write'] as const;
+export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
+
+export interface ApiKeyInfo {
+  id: string;
+  name: string;
+  /** The first characters of the key (`kn_1a2b3c4d`), enough to recognise it in a config file. */
+  prefix: string;
+  scope: ApiKeyScope;
+  /** Pinned to one workspace, or null for every workspace the owner belongs to. */
+  workspaceId: string | null;
+  expiresAt: string | null;
+  /** Coarse — refreshed at most once a minute, so it answers "is this still in use", not "when exactly". */
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+// GET /v1/me/api-keys
+export interface ListApiKeysResponse {
+  keys: ApiKeyInfo[];
+}
+
+// POST /v1/me/api-keys — the plaintext is in this response and nowhere else, ever.
+export interface CreateApiKeyResponse {
+  key: ApiKeyInfo;
+  /** `kn_…`. Only its SHA-256 is stored. */
+  apiKey: string;
+}
+
+// ---------------------------------------------------------------------------
+// MCP over HTTP (docs/features/33) — what a client needs to connect.
+// ---------------------------------------------------------------------------
+
+export interface McpToolSummary {
+  name: string;
+  description: string;
+  /** Mirrors the tool's MCP `readOnlyHint`: false means it can change the knowledge base. */
+  readOnly: boolean;
+}
+
+// GET /v1/mcp/connection
+export interface McpConnectionInfo {
+  /** Streamable HTTP endpoint, absolute — this is what goes into a client's config. */
+  url: string;
+  /** The server key used in every generated config snippet. */
+  serverName: string;
+  /** 'none' means the server accepts any caller as the dev principal and no key is needed. */
+  authMode: 'none' | 'api-key';
+  version: string;
+  /** Tools the calling credential would be offered. */
+  tools: McpToolSummary[];
+}
+
 
 
 // ---------------------------------------------------------------------------

@@ -359,6 +359,16 @@ export function setRailOpen(open: boolean): void {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await apiRequest(path, init)).json() as Promise<T>
+}
+
+/** apiFetch for a route that answers text rather than JSON (`GET /v1/mcp/skill`). */
+export async function apiFetchText(path: string, init?: RequestInit): Promise<string> {
+  return (await apiRequest(path, init)).text()
+}
+
+/** The one request path — headers, credential, and the error envelope — both readers share. */
+async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken()
   const res = await fetch(`${base}${path}`, {
     ...init,
@@ -388,7 +398,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     if (isApiErrorPayload(parsed)) throw new ApiError(res.status, parsed.message, parsed.code)
     throw new ApiError(res.status, `${res.status} ${res.statusText}: ${text.slice(0, 300)}`)
   }
-  return res.json() as Promise<T>
+  return res
 }
 
 /**

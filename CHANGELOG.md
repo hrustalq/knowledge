@@ -60,6 +60,52 @@ in the pull request that introduces them — see
   VPS. It is kept in the roster for the day that changes; until then every
   response carries `unresponsive_engines: [[duckduckgo, CAPTCHA]]`, which is
   noise in the payload, not a failure.
+  
+### Added
+
+- **Connect Claude, Codex, Gemini CLI, Cursor or any MCP client to the knowledge
+  base.** The `knowledge_*` tools are now served over Streamable HTTP at
+  `POST /v1/mcp`, authenticated with an API key and acting as the key's owner:
+  each tool enforces the same workspace role as the REST route it mirrors, and
+  every page, revision, merge request and comment it writes is attributed to
+  that person. Previously the tools ran only as a local stdio process with full,
+  anonymous access. `knowledge_whoami`, `knowledge_list_documents`,
+  `knowledge_get_document_content` and `knowledge_create_document` are new, so an
+  agent can find its workspaces, browse, read a page in full and add one.
+- **Settings → Connect AI** (`/settings/connect`) gives the exact command and
+  config file for Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude
+  Desktop, Windsurf, opencode and Zed — each in that client's own syntax, with a
+  newly created key already filled in.
+- **API keys can be named, narrowed and revoked one at a time.** Create as many as
+  you need — one per client and machine — each optionally read-only, pinned to one
+  workspace, or expiring, and see when each was last used. A read-only key cannot
+  write anywhere, even when its owner is a platform admin, and a connected client is
+  not offered the write tools at all. `GET|POST /v1/me/api-keys`,
+  `DELETE /v1/me/api-keys/:keyId`
+- **An agent skill generated for you.** `GET /v1/mcp/skill` returns a `SKILL.md`
+  listing your workspaces and project ids, the tools your key is offered, and how
+  to use them — answer with citations, change pages only through merge requests,
+  trace impact. Install it with one command from the Connect AI page; the MCP
+  server also serves it as the resource `knowledge://skill` and the prompt `guide`.
+
+### Deprecated
+
+- `POST /v1/me/api-key` (single-key rotation) still works but now revokes **every**
+  key you hold before minting one. Use `POST /v1/me/api-keys` instead; it will be
+  removed in a later release.
+
+### Operations
+
+- Migration `20260925120000_api_keys` creates `api_keys` and copies every existing
+  `users.api_key_hash` into it, so current keys — including a bootstrapped admin
+  key — keep working unchanged. It is expand-only: `users.api_key_hash` is kept
+  and no longer read, so rolling back to 0.9.0 still authenticates keys that
+  existed before the upgrade. Keys created after the upgrade do not work on 0.9.0.
+- `API_PUBLIC_URL` must be the API's public address as clients reach it
+  (`https://<host>/api` behind the bundled Caddyfile): it is now the base of the
+  MCP URL the Connect AI page hands out, not only of the GitHub OAuth callback.
+- `make auth-bootstrap` now **adds** a key instead of replacing the user's
+  previous one. Revoke old keys from Settings → Connect AI.
 
 ## [0.9.0] — 2026-09-18
 

@@ -14,6 +14,8 @@ import { t } from '../i18n/t.js';
  * the gateway authenticates connections itself with exactly the same rules).
  * AUTH_MODE=none → dev principal; api-key mode resolves `ks_` session tokens
  * and `kn_` API keys (SHA-256 lookups; disabled users refused on both paths).
+ * A key that is revoked or past its expiry is indistinguishable from an
+ * unknown one — the 401 does not confirm the key ever existed.
  */
 @Injectable()
 export class TokenAuthService {
@@ -46,11 +48,17 @@ export class TokenAuthService {
   }
 
   private async resolveApiKey(key: string): Promise<Principal> {
-    const user = await this.prisma.user.findUnique({
-      where: { apiKeyHash: createHash('sha256').update(key).digest('hex') },
+    const row = await this.prisma.apiKey.findUnique({
+      where: { keyHash: createHash('sha256').update(key).digest('hex') },
+      include: { user: true },
     });
-    if (!user) throw new UnauthorizedException(t('error.auth.unknownApiKey'));
+    const now = new Date();
+    if (!row || row.revokedAt || (row.expiresAt && row.expiresAt <= now)) {
+      throw new UnauthorizedException(t('error.auth.unknownApiKey'));
+    }
+    const { user } = row;
     if (user.disabledAt) throw new UnauthorizedException(t('error.auth.accountDisabled'));
+    this.touch(row.id, now);
     return {
       userId: user.id,
       email: user.email,
@@ -59,6 +67,22 @@ export class TokenAuthService {
       mode: 'api-key',
       isAdmin: user.isAdmin,
       locale: asLocale(user.locale),
+      apiKey: { id: row.id, scope: row.scope === 'read' ? 'read' : 'write', workspaceId: row.workspaceId },
     };
+  }
+
+  /**
+   * last_used_at, at most once a minute per key. An MCP client makes several
+   * requests per tool call; writing on every one would turn reads into writes.
+   * One guarded statement, fire-and-forget: bookkeeping never fails a request.
+   */
+  private touch(id: string, now: Date): void {
+    const stale = new Date(now.getTime() - 60_000);
+    void this.prisma.apiKey
+      .updateMany({
+        where: { id, OR: [{ lastUsedAt: null }, { lastUsedAt: { lt: stale } }] },
+        data: { lastUsedAt: now },
+      })
+      .catch(() => undefined);
   }
 }

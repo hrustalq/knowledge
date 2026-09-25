@@ -119,7 +119,7 @@ Three edits, and only these three:
    bottom: point `[unreleased]` at `compare/vX.Y.Z...HEAD` and add
    `[X.Y.Z]: compare/v<prev>...vX.Y.Z`.
 2. `apps/api/src/config/swagger.ts` — `.setVersion('X.Y.Z')`.
-3. `apps/api/src/mcp/mcp.service.ts` — `new McpServer({ ..., version: 'X.Y.Z' })`.
+3. `apps/api/src/mcp/mcp.service.ts` — `export const MCP_SERVER_VERSION = 'X.Y.Z'`.
 
 Those two source files are the known drift listed in
 `docs/versioning.md#known-drift`; every other package stays at `0.0.0` on

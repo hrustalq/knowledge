@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AuthCoreModule } from './auth-core.module.js';
 import { AclGuard } from './acl.guard.js';
+import { ApiKeysService } from './api-keys.service.js';
 import { AuditService } from './audit.service.js';
 import { AuthController } from './auth.controller.js';
 import { AuthFlowController } from './auth-flow.controller.js';
@@ -24,6 +25,7 @@ import { TokenAuthService } from './token-auth.service.js';
   controllers: [AuthController, AuthFlowController, MeController],
   providers: [
     AuditService,
+    ApiKeysService,
     SessionsService,
     TokenAuthService,
     AuthFlowService,

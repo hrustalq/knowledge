@@ -1,13 +1,20 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { BadRequestException, Body, Controller, HttpCode, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { MeResponse, RotateApiKeyResponse, WorkspaceRole } from '@knowledge/contracts';
+import type {
+  CreateApiKeyResponse,
+  ListApiKeysResponse,
+  MeResponse,
+  RotateApiKeyResponse,
+  WorkspaceRole,
+} from '@knowledge/contracts';
 import { CurrentPrincipal } from './access.decorator.js';
 import { AccessService } from './access.service.js';
 import type { Principal } from './principal.js';
 import { UpdateMeDto } from './me.dto.js';
+import { CreateApiKeyDto } from './api-keys.dto.js';
+import { ApiKeysService } from './api-keys.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { t } from '../i18n/t.js';
 
 /**
  * The caller's own account.
@@ -24,6 +31,7 @@ export class MeController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
+    private readonly apiKeys: ApiKeysService,
   ) {}
 
   @Patch()
@@ -58,20 +66,34 @@ export class MeController {
   @Post('api-key')
   @HttpCode(200)
   @ApiOperation({
-    summary: "Mint a fresh API key for the caller, replacing any existing one (shown once)",
+    summary: 'Deprecated — revoke every key the caller has and mint one full-scope key (use /v1/me/api-keys)',
+    deprecated: true,
   })
   async rotateApiKey(@CurrentPrincipal() principal: Principal): Promise<RotateApiKeyResponse> {
-    if (principal.mode === 'dev') throw new BadRequestException(t('error.auth.noApiKeyInDevMode'));
-    // Same shape and storage rule as `make auth-bootstrap`: 24 random bytes,
-    // and only the SHA-256 ever reaches PostgreSQL. Rotating invalidates the
-    // previous key by overwriting its hash — there is one key per user, so
-    // there is nothing to select between.
-    const apiKey = `kn_${randomBytes(24).toString('hex')}`;
-    await this.prisma.user.update({
-      where: { id: principal.userId },
-      data: { apiKeyHash: createHash('sha256').update(apiKey).digest('hex') },
-    });
-    return { apiKey, rotatedAt: new Date().toISOString() };
+    const { apiKey, key } = await this.apiKeys.rotate(principal);
+    return { apiKey, rotatedAt: key.createdAt };
+  }
+
+  @Get('api-keys')
+  @ApiOperation({ summary: "The caller's active API keys (docs/features/33) — names and prefixes, never the keys" })
+  listApiKeys(@CurrentPrincipal() principal: Principal): Promise<ListApiKeysResponse> {
+    return this.apiKeys.list(principal);
+  }
+
+  @Post('api-keys')
+  @ApiOperation({ summary: 'Mint a named API key, optionally read-only, workspace-pinned or expiring (shown once)' })
+  createApiKey(@CurrentPrincipal() principal: Principal, @Body() dto: CreateApiKeyDto): Promise<CreateApiKeyResponse> {
+    return this.apiKeys.create(principal, dto);
+  }
+
+  @Delete('api-keys/:keyId')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Revoke one of the caller\'s API keys; clients using it get 401 from the next request' })
+  async revokeApiKey(
+    @CurrentPrincipal() principal: Principal,
+    @Param('keyId', ParseUUIDPipe) keyId: string,
+  ): Promise<void> {
+    await this.apiKeys.revoke(principal, keyId);
   }
 
   private async meOf(principal: Principal): Promise<MeResponse> {

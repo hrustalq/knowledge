@@ -19,10 +19,10 @@ passes, including the routes you forgot to guard.
 
 ## Two token kinds
 
-| Prefix | Is | Minted by |
-| --- | --- | --- |
-| `ks_` | a session, TTL `AUTH_SESSION_TTL_HOURS` | login |
-| `kn_` | an API key, long-lived | `make auth-bootstrap email=…`, printed once |
+| Prefix | Is                                      | Minted by                                                               |
+| ------ | --------------------------------------- | ----------------------------------------------------------------------- |
+| `ks_`  | a session, TTL `AUTH_SESSION_TTL_HOURS` | login                                                                   |
+| `kn_`  | an API key — named, many per person     | **Settings → Connect AI**, or `make auth-bootstrap email=…`; shown once |
 
 Both are stored as SHA-256 hashes and never in plaintext. Passwords use scrypt from
 `node:crypto` — no dependency. Password reset tokens (`kr_`) are single-use with a short
@@ -31,6 +31,11 @@ production.
 
 Disabling a user, resetting their password or overriding it **revokes their sessions**.
 
+An API key can be **read-only**, **pinned to one workspace** or **expiring**, and each is
+revoked on its own. The narrowing only ever takes rights away: a read-only key held by a
+platform admin still cannot write. Keys are created and revoked from a signed-in
+session — never with another key, so a leaked key cannot mint its own replacement.
+
 ## Where the checks happen
 
 Four layers, in order:
@@ -38,7 +43,7 @@ Four layers, in order:
 1. **AuthGuard** resolves the principal from the bearer token — or from `?token=`, because
    `EventSource` cannot set headers. Failure is **401**.
 2. **AclGuard** reads the route's `@Access(role, source)` and resolves the target workspace
-   *in Postgres, before the handler runs* — so no graph query ever executes for a request
+   _in Postgres, before the handler runs_ — so no graph query ever executes for a request
    that was going to be refused. Failure is **403**.
 3. **Service invariants** handle what ACLs cannot express: the last admin cannot be
    removed, the last project cannot be deleted, a non-empty project cannot be deleted.

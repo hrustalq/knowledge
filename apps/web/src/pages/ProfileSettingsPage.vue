@@ -27,8 +27,8 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { Check, Copy, KeyRound, TriangleAlert } from 'lucide-vue-next'
-import { SUPPORTED_LOCALES, type Locale, type MeResponse, type RotateApiKeyResponse } from '@knowledge/contracts'
+import { KeyRound } from 'lucide-vue-next'
+import { SUPPORTED_LOCALES, type Locale, type MeResponse } from '@knowledge/contracts'
 import { apiFetch, getLocale, setLocale } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -119,40 +119,10 @@ async function savePassword() {
   }
 }
 
-// --- api key -------------------------------------------------------------
-// Shown once and never again: only the SHA-256 reaches PostgreSQL, so there is
-// nothing to come back for. The UI has to say so before the key is minted, not
-// after — a "copy this now" notice that arrives with the value is a warning
-// nobody had the chance to act on.
-
-const rotating = ref(false)
-const freshKey = ref<string | null>(null)
-const copied = ref(false)
-
-async function rotate() {
-  rotating.value = true
-  try {
-    const res = await apiFetch<RotateApiKeyResponse>('/v1/me/api-key', { method: 'POST' })
-    freshKey.value = res.apiKey
-    copied.value = false
-    await auth.reload()
-  } catch {
-    toast.error(t('profileSettings.apiKey.failed'))
-  } finally {
-    rotating.value = false
-  }
-}
-
-async function copyKey() {
-  if (!freshKey.value) return
-  try {
-    await navigator.clipboard.writeText(freshKey.value)
-    copied.value = true
-    setTimeout(() => { copied.value = false }, 2000)
-  } catch {
-    toast.error(t('profileSettings.apiKey.copyFailed'))
-  }
-}
+// --- api keys ------------------------------------------------------------
+// Named keys live on /settings/connect (docs/features/33), beside the client
+// configs that use them. This row is the signpost, not a second editor: two
+// places that mint keys would be two places to forget one.
 </script>
 
 <template>
@@ -314,32 +284,9 @@ async function copyKey() {
                   ? t('profileSettings.apiKey.devMode')
                   : t('profileSettings.apiKey.status') }}</span>
               </span>
-              <Button
-                v-if="auth.me.mode !== 'dev'"
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                :disabled="rotating"
-                @click="rotate"
-              >
-                {{ rotating ? t('profileSettings.apiKey.rotating') : t('profileSettings.apiKey.rotate') }}
+              <Button as-child variant="outline" size="sm" class="shrink-0">
+                <RouterLink to="/settings/connect">{{ t('profileSettings.apiKey.manage') }}</RouterLink>
               </Button>
-            </div>
-
-            <!-- The one and only sighting of the value. -->
-            <div v-if="freshKey" class="mt-3 rounded-lg border border-dashed p-3">
-              <p class="flex items-start gap-2 text-xs text-muted-foreground">
-                <TriangleAlert class="size-3.5 shrink-0 translate-y-0.5" aria-hidden="true" />
-                <span>{{ t('profileSettings.apiKey.onceOnly') }}</span>
-              </p>
-              <div class="mt-2 flex items-center gap-2">
-                <code class="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1.5 font-mono text-xs">{{ freshKey }}</code>
-                <Button variant="outline" size="sm" @click="copyKey">
-                  <Check v-if="copied" class="size-3.5" />
-                  <Copy v-else class="size-3.5" />
-                  {{ copied ? t('common.copied') : t('common.copy') }}
-                </Button>
-              </div>
             </div>
           </li>
         </ul>

@@ -177,9 +177,10 @@ ${endpointsMarkdown()}
 
 ## MCP server
 
-Stdio transport, started with \`make dev-mcp\`. ${mcpTools.length} tools, all prefixed
-\`knowledge_\`. Tools that take a \`workspaceId\` require it — there is no ambient
-workspace on stdio.
+Streamable HTTP at \`POST /v1/mcp\` (bearer API key; each tool runs its REST twin's role
+check as the caller), and stdio via \`make dev-mcp\` (full access). ${mcpTools.length} tools,
+all prefixed \`knowledge_\`. Tools that take a \`workspaceId\` require it — there is no
+ambient workspace; \`knowledge_whoami\` lists the reachable ones.
 
 ${mcpToolsMarkdown()}
 

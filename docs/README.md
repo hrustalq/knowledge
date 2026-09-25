@@ -57,6 +57,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 30  | GitHub repository picker                   | [features/30-github-repo-picker.md](features/30-github-repo-picker.md) | ✅ implemented |
 | 31  | Code research                              | [features/31-code-research.md](features/31-code-research.md)           | ✅ implemented |
 | 32  | Tree drag-and-drop                         | [features/32-tree-drag-and-drop.md](features/32-tree-drag-and-drop.md) | ✅ implemented |
+| 33  | Connect AI (MCP over HTTP, API keys, skill) | [features/33-connect-ai.md](features/33-connect-ai.md)                 | ✅ implemented |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

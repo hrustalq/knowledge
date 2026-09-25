@@ -1,4 +1,4 @@
-import type { AvatarUrl, Locale, WorkspaceRole } from '@knowledge/contracts';
+import type { ApiKeyScope, AvatarUrl, Locale, WorkspaceRole } from '@knowledge/contracts';
 
 /**
  * Resolved caller identity (Phase 5, plan.md §11). Attached to the request by
@@ -32,6 +32,12 @@ export interface Principal {
   locale: Locale;
   /** Set when authenticated via a ks_ session token — lets logout revoke exactly this session. */
   sessionId?: string;
+  /**
+   * Set when authenticated via a `kn_` key (docs/features/33): what that key
+   * narrows the person down to. Enforced in AccessService.requireRole, so every
+   * `@Access` route and every MCP tool applies it without knowing it exists.
+   */
+  apiKey?: { id: string; scope: ApiKeyScope; workspaceId: string | null };
 }
 
 /** AUTH_MODE=none principal. Matches the Phase 1 author stub id on purpose. */

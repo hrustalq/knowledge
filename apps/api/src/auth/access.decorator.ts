@@ -4,6 +4,7 @@ import type { WorkspaceRole } from '@knowledge/contracts';
 export const ACCESS_META = 'knowledge:access';
 export const PUBLIC_META = 'knowledge:public';
 export const PLATFORM_ADMIN_META = 'knowledge:platform-admin';
+export const READ_KEY_OK_META = 'knowledge:read-key-ok';
 
 /** Where AclGuard finds the workspace id for a route (resolved in PostgreSQL). */
 export type WorkspaceSource =
@@ -43,6 +44,14 @@ export const Public = () => SetMetadata(PUBLIC_META, true);
 
 /** Route restricted to platform admins (users.is_admin) — user management surface. */
 export const PlatformAdmin = () => SetMetadata(PLATFORM_ADMIN_META, true);
+
+/**
+ * A route with no `@Access` that a read-only API key may still call with a
+ * non-GET method, because the method is transport rather than intent. The MCP
+ * endpoint is the case: every JSON-RPC call is a POST, and each tool behind it
+ * runs its own `requireRole` (docs/features/33).
+ */
+export const ReadKeyOk = () => SetMetadata(READ_KEY_OK_META, true);
 
 /** Injects the Principal that AuthGuard attached to the request. */
 export const CurrentPrincipal = createParamDecorator(

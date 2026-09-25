@@ -21,6 +21,9 @@ export class AccessService {
     role: WorkspaceRole,
     operator = false,
   ): Promise<void> {
+    // A key narrows its owner before anything widens them: checked ahead of the
+    // platform-admin shortcut, or an admin's read-only key would write anyway.
+    if (principal.apiKey) this.requireKeyAllows(principal.apiKey, workspaceId, role);
     if (principal.mode === 'dev') return; // AUTH_MODE=none — full access
     if (principal.isAdmin) return; // platform admin — implicit admin + operator everywhere
     const member = await this.prisma.workspaceMember.findUnique({
@@ -38,6 +41,20 @@ export class AccessService {
     }
     if (operator && !member.trustedOperator) {
       throw new ForbiddenException(t('error.auth.trustedOperatorRequired'));
+    }
+  }
+
+  /**
+   * The narrowing a `kn_` key carries (docs/features/33). Exposed separately so
+   * a caller with no workspace to resolve (the MCP tool filter) asks the same
+   * question the guard does rather than a copy of it.
+   */
+  requireKeyAllows(key: NonNullable<Principal['apiKey']>, workspaceId: string, role: WorkspaceRole): void {
+    if (key.workspaceId && key.workspaceId !== workspaceId) {
+      throw new ForbiddenException(t('error.auth.apiKeyWorkspace', { workspaceId }));
+    }
+    if (key.scope === 'read' && ROLE_ORDER[role] > ROLE_ORDER.viewer) {
+      throw new ForbiddenException(t('error.auth.apiKeyReadOnly', { role: t(`role.${role}`) }));
     }
   }
 

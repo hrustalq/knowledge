@@ -9,6 +9,7 @@ import {
   Bell,
   BookMarked,
   BookOpen,
+  Bot,
   FolderKanban,
   Plug,
   ShieldCheck,
@@ -28,6 +29,7 @@ const links = computed<SettingsLink[]>(() => [
   // than on the workspace.
   { to: '/settings/profile', label: t('nav.profile'), icon: UserRound, hint: t('settings.profileHint') },
   { to: '/settings/notifications', label: t('nav.notifications'), icon: Bell, hint: t('settings.notificationsHint') },
+  { to: '/settings/connect', label: t('nav.connect'), icon: Bot, hint: t('settings.connectHint') },
   { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
   { to: '/settings/glossary', label: t('nav.glossary'), icon: BookMarked, hint: t('settings.glossaryHint') },
   // Members, roles and — for a platform admin — the accounts themselves, all
@@ -43,6 +45,12 @@ const links = computed<SettingsLink[]>(() => [
   // others did not explain itself.
   { to: '/settings/docs', label: t('nav.docs'), icon: BookOpen, hint: t('settings.docsHint') },
 ])
+
+// A segment match, not a prefix: /settings/connect is a prefix of
+// /settings/connectors, and both rows lit up at once.
+function isActive(to: string): boolean {
+  return route.path === to || route.path.startsWith(`${to}/`)
+}
 </script>
 
 <template>
@@ -65,7 +73,7 @@ const links = computed<SettingsLink[]>(() => [
             <RouterLink
               :to="l.to"
               class="flex items-center gap-2.5 px-3 py-2 text-sm transition-colors lg:rounded-none"
-              :class="route.path.startsWith(l.to)
+              :class="isActive(l.to)
                 ? 'bg-primary/10 font-medium text-primary'
                 : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'"
             >

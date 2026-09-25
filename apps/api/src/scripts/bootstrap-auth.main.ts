@@ -51,8 +51,13 @@ try {
   });
   const user = await prisma.user.upsert({
     where: { email },
-    update: { displayName, apiKeyHash, isAdmin },
-    create: { email, displayName, apiKeyHash, isAdmin },
+    update: { displayName, isAdmin },
+    create: { email, displayName, isAdmin },
+  });
+  // A new named key beside any the user already has (docs/features/33):
+  // bootstrapping twice must not lock out a client configured with the first.
+  await prisma.apiKey.create({
+    data: { userId: user.id, name: 'Bootstrap key', keyHash: apiKeyHash, prefix: key.slice(0, 11), scope: 'write' },
   });
   await prisma.workspaceMember.upsert({
     where: { workspaceId_userId: { workspaceId, userId: user.id } },
@@ -63,7 +68,7 @@ try {
   console.log(
     JSON.stringify({ userId: user.id, email, workspaceId, workspaceName, role, trustedOperator }, null, 2),
   );
-  console.log('\nAPI key (shown once; only its SHA-256 is stored — any previous key for this user is now invalid):');
+  console.log('\nAPI key (shown once; only its SHA-256 is stored — earlier keys stay valid, revoke them under Settings → Connect AI):');
   console.log(`  ${key}`);
   console.log(`\nWith AUTH_MODE=api-key:  curl -H 'Authorization: Bearer ${key}' http://localhost:3000/v1/me`);
 } finally {

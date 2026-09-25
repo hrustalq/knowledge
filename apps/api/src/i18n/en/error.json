@@ -18,7 +18,13 @@
     "roleRequired": "Requires the {role} role in workspace {workspaceId} (current role: {currentRole})",
     "runOwnerUnavailable": "The user this run belongs to no longer exists or is disabled",
     "trustedOperatorRequired": "Requires trusted-operator membership (plan.md §9 query_graph gate)",
-    "noApiKeyInDevMode": "API keys belong to a real account. Run the API with AUTH_MODE=api-key to mint one."
+    "noApiKeyInDevMode": "API keys belong to a real account. Run the API with AUTH_MODE=api-key to mint one.",
+    "apiKeyWorkspace": "This API key is limited to another workspace ({workspaceId} is outside it).",
+    "apiKeyReadOnly": "This API key is read-only; {role} access needs a key with write scope.",
+    "apiKeyNeedsSession": "API keys are managed from a signed-in session, not with another API key.",
+    "apiKeyNotFound": "API key {id} not found.",
+    "apiKeyWorkspaceNotMember": "You can only pin a key to a workspace you belong to ({workspaceId}).",
+    "apiKeyLimit": "You already have {max} active API keys — revoke one before creating another."
   },
   "workspace": {
     "notFound": "Workspace {id} not found",

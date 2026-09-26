@@ -107,8 +107,8 @@ const addable = computed(() =>
 
 const promptPlaceholder = computed(() =>
   props.step.kind === 'ai.generate'
-    ? 'List the use cases this entity takes part in.'
-    : 'Write the API endpoint specification for this use case.',
+    ? t('workflow.promptPlaceholderGenerate')
+    : t('workflow.promptPlaceholderDraft'),
 )
 </script>
 

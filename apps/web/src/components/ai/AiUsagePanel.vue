@@ -217,7 +217,7 @@ function labelFor(userId: string): string {
             class="border-border/70 flex items-end gap-px border-b"
             :style="{ height: `${CHART_H}px` }"
             role="img"
-            :aria-label="`Tokens per day over the last ${days} days, peak ${fmtTokens(chartMax)}`"
+            :aria-label="t('ai.tokensChartLabel', { n: days, peak: fmtTokens(chartMax) })"
           >
             <div
               v-for="point in chart"

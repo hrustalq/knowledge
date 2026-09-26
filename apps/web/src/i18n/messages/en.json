@@ -61,7 +61,17 @@
     "reviewing": "Reviewing…",
     "searching": "Searching…",
     "starting": "Starting…",
-    "ai": "AI"
+    "ai": "AI",
+    "ok": "OK",
+    "failed": "failed",
+    "required": "required",
+    "removeNamed": "Remove {name}",
+    "deleteNamed": "Delete {name}",
+    "noMatches": "No matches",
+    "filterPlaceholder": "Filter…",
+    "searchPlaceholder": "Search…",
+    "openLarger": "Open {title} in a larger view",
+    "assistant": "Assistant"
   },
   "page": {
     "empty": "Nothing here yet",
@@ -145,7 +155,10 @@
     "notifications": "Notifications",
     "connect": "Connect AI",
     "membersSeeEverything": "Members can see everything in {scope}.",
-    "projectGoesInto": "Goes into {scope}. You can add more later."
+    "projectGoesInto": "Goes into {scope}. You can add more later.",
+    "noWorkspacePermission": "You do not have permission to create a workspace here.",
+    "scopeCreated": "{name} created",
+    "invitePeopleTo": "Invite people to {scope} so they can work in it."
   },
   "role": {
     "viewer": "Viewer",
@@ -228,7 +241,8 @@
     "relationsCount": "Relations",
     "commentDeleted": "Comment deleted",
     "revisionNumber": "Revision #{n}",
-    "viewingRevision": "Viewing revision {id} — commenting is off while reading history."
+    "viewingRevision": "Viewing revision {id} — commenting is off while reading history.",
+    "provenance": "{extractor} · confidence {confidence}"
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -594,7 +608,10 @@
       "merged": "Merged",
       "draft": "Draft"
     },
-    "configure": "Configure"
+    "configure": "Configure",
+    "exampleConfluence": "Confluence — https://team.atlassian.net/wiki + space key",
+    "exampleNotion": "Notion — an internal integration secret",
+    "exampleObsidian": "Obsidian vault — its git repository URL"
   },
   "workflow": {
     "nodeStatus": {
@@ -892,7 +909,10 @@
     "auto": "auto",
     "failedN": "{n} failed",
     "publishedOf": "{done}/{total} published",
-    "waitingForYou": "waiting for you"
+    "waitingForYou": "waiting for you",
+    "cancelRunConfirm": "Cancel this run? Steps still queued will be skipped.",
+    "promptPlaceholderGenerate": "List the use cases this entity takes part in.",
+    "promptPlaceholderDraft": "Write the API endpoint specification for this use case."
   },
   "activity": {
     "action": {
@@ -1164,7 +1184,19 @@
     "resolveThread": "Resolve",
     "runReview": "Run review",
     "rerun": "Re-run",
-    "aiCheck": "AI check"
+    "aiCheck": "AI check",
+    "replyToName": "Reply to {name}",
+    "replyToNameEllipsis": "Reply to {name}…",
+    "replyEllipsis": "Reply…",
+    "goToComment": "Go to {name}’s comment",
+    "writeComment": "Write a comment…",
+    "comment": "Comment",
+    "composerHint": "{placeholder} Press {'@'} to mention, / for blocks.",
+    "approvals": "{n} approval | {n} approvals",
+    "threadsUnresolvedOf": "{n} of {total} threads unresolved",
+    "passed": "Passed",
+    "editAssignee": "Edit assignee",
+    "stopEditingAssignee": "Stop editing assignee"
   },
   "assistant": {
     "askAi": "Ask AI",
@@ -1200,7 +1232,10 @@
     "aboutAndRelated": "about “{title}” and related pages",
     "askAnything": "Ask anything about this page — answers are grounded in its content and related pages from the knowledge graph.",
     "reviewDraft": "Review draft",
-    "findRelated": "Find related docs"
+    "findRelated": "Find related docs",
+    "block": {
+      "activity": "Activity"
+    }
   },
   "review": {
     "noLineChanges": "No line changes.",
@@ -1420,7 +1455,11 @@
     "hideSteps": "Hide steps",
     "showSteps": "Show steps",
     "showStepsN": "Show steps ({n})",
-    "deleteChatButton": "Delete chat"
+    "deleteChatButton": "Delete chat",
+    "copyMessage": "Copy message",
+    "copyReply": "Copy reply",
+    "dictateMessage": "Dictate a message",
+    "modelDefault": "Default"
   },
   "ai": {
     "excludesUnpriced": "excludes {calls} with no",
@@ -1745,7 +1784,8 @@
     },
     "openaiCompatible": "OpenAI-compatible",
     "noActivityDays": "No assistant activity in the last {n} day. | No assistant activity in the last {n} days.",
-    "peak": "peak {value}"
+    "peak": "peak {value}",
+    "tokensChartLabel": "Tokens per day over the last {n} days, peak {peak}"
   },
   "search": {
     "activeFilters": "{n} filter | {n} filters",
@@ -1830,7 +1870,15 @@
       "empty": "That file is empty.",
       "cannotImport": "That file cannot be imported."
     },
-    "thingsToCheck": "One thing to check | {n} things to check"
+    "thingsToCheck": "One thing to check | {n} things to check",
+    "step": {
+      "destination": "Destination",
+      "parse": "Parse",
+      "review": "Review"
+    },
+    "couldNotCreatePage": "The page could not be created",
+    "pageCreatedWithAttachment": "Page created — the original file is attached",
+    "pageCreated": "Page created"
   },
   "project": {
     "active": "active",
@@ -1972,7 +2020,9 @@
         "integrations": "Set up connectors, and define the workflows editors run",
         "housekeeping": "Delete a project, force re-indexing, and read the audit log"
       }
-    }
+    },
+    "roleFor": "Role for {name}",
+    "trustedOperatorFor": "Trusted operator for {name}"
   },
   "users": {
     "title": "Users",
@@ -2062,7 +2112,8 @@
     "notATermHere": "Not a term here",
     "cannotExclude": "Could not locate that occurrence in the page.",
     "occurrencesOnPage": "{n}× on the page",
-    "alsoKnownAs": "also: {aliases}"
+    "alsoKnownAs": "also: {aliases}",
+    "linkTermInDocuments": "Link {term} in documents"
   },
   "editor": {
     "pickProjectForFiles": "Pick a project in page settings before attaching files",
@@ -2157,7 +2208,12 @@
     },
     "moreActions": "More actions",
     "publish": "Publish",
-    "createAndIndex": "Create & index"
+    "createAndIndex": "Create & index",
+    "collapseSection": "Collapse section",
+    "expandSection": "Expand section",
+    "mentioned": "Mentioned: {name}",
+    "statusColor": "Status: {color}",
+    "untitledPage": "Untitled page"
   },
   "toolbar": {
     "formatting": "Formatting",
@@ -2271,7 +2327,16 @@
     "active": "Active",
     "disabled": "Disabled",
     "platformAdmin": "Platform admin",
-    "groupText": "Text"
+    "groupText": "Text",
+    "noFiltersLeft": "No filters left",
+    "changeOperator": "Change operator ({options})",
+    "removeFilter": "Remove {field} filter",
+    "operator": {
+      "is": "is",
+      "isNot": "is not",
+      "contains": "contains",
+      "notContains": "excludes"
+    }
   },
   "tool": {
     "search_knowledge": {
@@ -2838,5 +2903,15 @@
     "suggestionActions": "Assistant suggestion",
     "decideBeforePublish": "Keep or discard the assistant's suggestion before publishing | Keep or discard the assistant's {n} suggestions before publishing",
     "placeholder": "Ask about this page, or for a change to it…"
+  },
+  "projects": {
+    "active": "Active project"
+  },
+  "upload": {
+    "failedStatus": "Upload failed ({status})",
+    "connectionDropped": "Upload failed — the connection dropped",
+    "uploadingFile": "Uploading {name}",
+    "file": "file",
+    "waitingForWorker": "Waiting for a worker"
   }
 }

@@ -11,6 +11,7 @@
 // exactly the thing a reader must not be misled about. It wins over `src` for
 // the same reason.
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Bot } from 'lucide-vue-next'
 import { avatarColor, avatarInitials } from '@/lib/avatar'
 import { resolveAssetUrl } from '@/lib/api'
@@ -27,7 +28,8 @@ const props = withDefaults(
   { name: undefined, size: 'md', ai: false, src: null },
 )
 
-const label = computed(() => (props.ai ? 'Assistant' : (props.name ?? props.userId)))
+const { t } = useI18n()
+const label = computed(() => (props.ai ? t('common.assistant') : (props.name ?? props.userId)))
 const initials = computed(() => avatarInitials(label.value))
 
 // A picture that fails to load must not leave a blank disc where a face was.

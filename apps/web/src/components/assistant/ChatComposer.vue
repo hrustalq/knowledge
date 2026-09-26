@@ -283,7 +283,7 @@ function send() {
             <span class="truncate">{{ d.title }}</span>
             <button
               type="button"
-              :aria-label="`Remove ${d.title}`"
+              :aria-label="t('common.removeNamed', { name: d.title })"
               class="rounded-full p-0.5 transition-colors hover:bg-primary/15"
               @click="removeAppliedDoc(i)"
             >
@@ -299,7 +299,7 @@ function send() {
             <span class="truncate">{{ a.filename }}</span>
             <button
               type="button"
-              :aria-label="`Remove ${a.filename}`"
+              :aria-label="t('common.removeNamed', { name: a.filename })"
               class="rounded-full p-0.5 transition-colors hover:bg-foreground/10 hover:text-foreground"
               @click="removeAttachment(i)"
             >
@@ -360,7 +360,7 @@ function send() {
                     size="icon-sm"
                     type="button"
                     :class="isListening ? 'text-primary' : ''"
-                    :aria-label="isListening ? 'Stop dictation' : 'Dictate a message'"
+                    :aria-label="isListening ? t('chat.stopDictation') : t('chat.dictateMessage')"
                     @click="toggleVoice()"
                   >
                     <Mic v-if="!isListening" class="size-4" />

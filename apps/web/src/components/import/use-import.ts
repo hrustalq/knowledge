@@ -73,8 +73,8 @@ export function useImport() {
   })
 
   const stage = computed<string>(() => {
-    if (uploadProgress.value !== null) return `Uploading ${job.value?.sourceFilename ?? 'file'}`
-    return job.value?.stage ?? 'Waiting for a worker'
+    if (uploadProgress.value !== null) return t('upload.uploadingFile', { name: job.value?.sourceFilename ?? t('upload.file') })
+    return job.value?.stage ?? t('upload.waitingForWorker')
   })
 
   async function begin(

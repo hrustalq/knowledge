@@ -6,12 +6,14 @@
  * field), and the last segment removes the filter.
  */
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { X } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
 import FilterPopover from './FilterPopover.vue'
 import { OPERATOR_LABELS, defaultOperators, type ActiveFilter, type FilterField } from './types'
 
 const props = defineProps<{ filter: ActiveFilter; field: FilterField }>()
+const { t } = useI18n()
 const emit = defineEmits<{ update: [ActiveFilter]; remove: [] }>()
 
 const valueMenu = ref<InstanceType<typeof FilterPopover> | null>(null)
@@ -70,15 +72,15 @@ defineExpose({
     <span
       v-if="operatorIsFixed"
       class="text-muted-foreground flex h-full items-center border-l px-2 whitespace-nowrap"
-    >{{ OPERATOR_LABELS[filter.operator] }}</span>
+    >{{ t(OPERATOR_LABELS[filter.operator]) }}</span>
     <button
       v-else
       type="button"
       class="text-muted-foreground hover:bg-accent hover:text-foreground h-full border-l px-2 whitespace-nowrap transition-colors"
-      :title="`Change operator (${operators.map((o) => OPERATOR_LABELS[o]).join(' / ')})`"
+      :title="t('filter.changeOperator', { options: operators.map((o) => t(OPERATOR_LABELS[o])).join(' / ') })"
       @click="cycleOperator"
     >
-      {{ OPERATOR_LABELS[filter.operator] }}
+      {{ t(OPERATOR_LABELS[filter.operator]) }}
     </button>
 
     <!-- Text fields type in place; select fields open the value roster. -->
@@ -123,7 +125,7 @@ defineExpose({
       v-if="!field.pinned"
       type="button"
       class="text-muted-foreground hover:bg-accent hover:text-foreground h-full border-l px-1.5 transition-colors"
-      :aria-label="`Remove ${field.label} filter`"
+      :aria-label="t('filter.removeFilter', { field: field.label })"
       @click="emit('remove')"
     >
       <X class="size-3.5" />

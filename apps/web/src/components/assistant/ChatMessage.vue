@@ -129,7 +129,7 @@ function saveEdit() {
       </div>
 
       <div v-if="canAct" class="kn-msg-actions mt-1 flex items-center gap-0.5">
-        <button type="button" class="kn-msg-action" :aria-label="copied ? 'Copied' : 'Copy message'" @click="copy">
+        <button type="button" class="kn-msg-action" :aria-label="copied ? t('common.copied') : t('chat.copyMessage')" @click="copy">
           <Check v-if="copied" class="size-3.5 text-emerald-500" />
           <Copy v-else class="size-3.5" />
         </button>
@@ -200,7 +200,7 @@ function saveEdit() {
       <!-- No edit here: rewriting a reply would leave the transcript claiming
            the model said something it did not. Reset asks the question again. -->
       <div v-if="canAct" class="kn-msg-actions flex items-center gap-0.5">
-        <button type="button" class="kn-msg-action" :aria-label="copied ? 'Copied' : 'Copy reply'" @click="copy">
+        <button type="button" class="kn-msg-action" :aria-label="copied ? t('common.copied') : t('chat.copyReply')" @click="copy">
           <Check v-if="copied" class="size-3.5 text-emerald-500" />
           <Copy v-else class="size-3.5" />
         </button>

@@ -16,6 +16,7 @@ import type {
 import { ATTACHMENT_CONTENT_TYPES } from '@knowledge/contracts'
 import { apiFetch } from '@/lib/api'
 import { presignedPut } from '@/lib/presigned-put'
+import { errorMessage } from '@/api/errors'
 
 export interface UploadTask {
   id: string
@@ -66,7 +67,7 @@ export function useAttachments(resolveDocumentId: () => Promise<string | null>) 
       return done.attachment
     } catch (e) {
       finish()
-      toast.error(t('editor.attachmentFailed', { name: file.name, error: (e as Error).message }))
+      toast.error(t('editor.attachmentFailed', { name: file.name, error: errorMessage(e, t) }))
       return null
     }
   }

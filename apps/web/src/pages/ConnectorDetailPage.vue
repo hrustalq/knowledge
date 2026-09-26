@@ -209,7 +209,7 @@ watch(connectorId, () => {
                 {{
                   t(
                     `connectors.direction${
-                      connector.direction === 'both' ? 'Both' : connector.direction === 'push' ? 'Push' : 'Pull'
+                      connector.direction === 'both' ? t('connectors.directionBoth') : connector.direction === 'push' ? t('connectors.directionPush') : t('connectors.directionPull')
                     }`,
                   )
                 }}

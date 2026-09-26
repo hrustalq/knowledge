@@ -63,9 +63,9 @@ const props = withDefaults(
     resolveDocumentId?: () => Promise<string | null>
   }>(),
   {
-    placeholder: 'Write a comment…',
+    placeholder: undefined,
     busy: false,
-    submitLabel: 'Comment',
+    submitLabel: undefined,
     autoExpand: false,
     initialBody: '',
     cancellable: false,
@@ -73,6 +73,10 @@ const props = withDefaults(
     resolveDocumentId: undefined,
   },
 )
+// Prop defaults run at module scope, outside any app's i18n (feature 18), so
+// the English fallbacks are resolved here instead.
+const placeholderText = computed(() => props.placeholder ?? t('mr.writeComment'))
+const submitText = computed(() => props.submitLabel ?? t('mr.comment'))
 /**
  * `resolvable` rides along with the body so a host that ignores it (a reply
  * box, an edit) keeps its one-argument handler working unchanged.
@@ -164,7 +168,7 @@ function cancel() {
     class="flex w-full items-center rounded-md border bg-card px-3 py-2 text-left text-sm text-muted-foreground shadow-xs transition-colors hover:border-ring/60 hover:bg-accent/40 hover:text-foreground"
     @click="expand"
   >
-    {{ placeholder }}
+    {{ placeholderText }}
   </button>
 
   <form v-else data-kn-editor-shell class="space-y-2" @submit.prevent="submit()">
@@ -179,7 +183,7 @@ function cancel() {
         :pages="pages"
         :agents="agents"
         :resolve-document-id="resolveDocumentId"
-        :placeholder="`${placeholder} Press @ to mention, / for blocks.`"
+        :placeholder="t('mr.composerHint', { placeholder: placeholderText })"
       />
     </div>
     <div class="flex items-center gap-2">
@@ -214,7 +218,7 @@ function cancel() {
       >
         <Button type="submit" size="sm" class="rounded-r-none" :disabled="busy || isEmpty()">
           <MessageSquare class="size-3.5" />
-          {{ submitLabel }}
+          {{ submitText }}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
@@ -232,7 +236,7 @@ function cancel() {
             <DropdownMenuItem class="items-start gap-2" @select="submit(false)">
               <MessageSquare class="mt-0.5 size-4 shrink-0" />
               <span>
-                <span class="block font-medium">{{ submitLabel }}</span>
+                <span class="block font-medium">{{ submitText }}</span>
                 <span class="block text-xs text-muted-foreground">{{ t('mr.plainRemark') }}</span>
               </span>
             </DropdownMenuItem>
@@ -255,7 +259,7 @@ function cancel() {
         :class="!autoExpand || cancellable ? '' : 'ml-auto'"
         :disabled="busy || isEmpty()"
       >
-        {{ submitLabel }}
+        {{ submitText }}
       </Button>
     </div>
   </form>

@@ -65,7 +65,7 @@ const found = computed(() => {
 })
 
 const destination = computed(() => {
-  const project = projects.items.find((p) => p.projectId === props.projectId)?.name ?? 'Project'
+  const project = projects.items.find((p) => p.projectId === props.projectId)?.name ?? t('import.project')
   const parent = props.parentId
     ? documents.items.find((d) => d.documentId === props.parentId)?.title
     : null

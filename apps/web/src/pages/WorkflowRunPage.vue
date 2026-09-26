@@ -136,7 +136,7 @@ async function persistDraft(draft: WorkflowNodeDraft) {
 }
 
 async function sendRunEvent(type: WorkflowRunEventType) {
-  if (type === 'CANCEL' && !confirm('Cancel this run? Steps still queued will be skipped.')) return
+  if (type === 'CANCEL' && !confirm(t('workflow.cancelRunConfirm'))) return
   try {
     await runEvent.mutateAsync({ path: { id: runId.value }, body: { type } })
     await query.refetch()

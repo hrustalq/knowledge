@@ -121,7 +121,7 @@ watch(branchFilter, () => void load())
               <RadioGroup v-if="r.contentHash" v-model="from">
                 <RadioGroupItem
                   :value="r.revisionId"
-                  :aria-label="`Compare from revision ${r.revisionNumber}`"
+                  :aria-label="t('revisions.compareFrom', { n: r.revisionNumber })"
                 />
               </RadioGroup>
             </td>
@@ -129,7 +129,7 @@ watch(branchFilter, () => void load())
               <RadioGroup v-if="r.contentHash" v-model="to">
                 <RadioGroupItem
                   :value="r.revisionId"
-                  :aria-label="`Compare to revision ${r.revisionNumber}`"
+                  :aria-label="t('revisions.compareTo', { n: r.revisionNumber })"
                 />
               </RadioGroup>
             </td>

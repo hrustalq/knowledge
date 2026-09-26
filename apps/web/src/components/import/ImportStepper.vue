@@ -25,7 +25,7 @@ const props = withDefaults(
 )
 
 const state = computed(() =>
-  (props.steps ?? ['Destination', 'Parse', 'Review']).map((label, i) => ({
+  (props.steps ?? [t('import.step.destination'), t('import.step.parse'), t('import.step.review')]).map((label, i) => ({
     label,
     index: i,
     done: i < props.current,

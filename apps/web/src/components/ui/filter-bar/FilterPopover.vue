@@ -8,6 +8,7 @@
  * first) so callers order a flat array instead of nesting one.
  */
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   ComboboxAnchor,
   ComboboxContent,
@@ -36,7 +37,7 @@ const props = withDefaults(
     emptyLabel?: string
     align?: 'start' | 'center' | 'end'
   }>(),
-  { modelValue: () => [], align: 'start', emptyLabel: 'No matches' },
+  { modelValue: () => [], align: 'start' },
 )
 
 const emit = defineEmits<{
@@ -76,6 +77,8 @@ function onModel(value: unknown) {
 }
 
 defineExpose({ openMenu: () => (open.value = true) })
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -107,14 +110,14 @@ defineExpose({ openMenu: () => (open.value = true) })
         <ComboboxInput
           v-model="search"
           auto-focus
-          :placeholder="searchPlaceholder ?? 'Filter…'"
+          :placeholder="searchPlaceholder ?? t('common.filterPlaceholder')"
           class="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-9 text-[13px] outline-none"
         />
       </div>
 
       <ComboboxViewport class="quiet-scroll min-h-0 flex-1 overflow-y-auto p-1">
         <ComboboxEmpty class="text-muted-foreground px-3 py-6 text-center text-xs">
-          {{ emptyLabel }}
+          {{ emptyLabel ?? t('common.noMatches') }}
         </ComboboxEmpty>
 
         <template v-for="([group, groupItems], i) in sections" :key="group || '_'">

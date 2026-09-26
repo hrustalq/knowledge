@@ -473,6 +473,71 @@
       "noneGranted": "This installation has no repositories.",
       "noneGrantedHint": "The GitHub App is installed on this account but was granted access to zero repositories, so there is nothing to search. Choose which ones it may read."
     },
+    "githubAccess": {
+      "title": "GitHub access",
+      "notConfigured": "No GitHub App is registered on this deployment, so there are no grants to show.",
+      "usesToken": "This connector authenticates with a personal access token. Its scopes are GitHub's to show — connect the repository through the GitHub App to see and manage grants here.",
+      "noCredential": "This connector has no GitHub credential, so it can read only public repositories.",
+      "selection": {
+        "all": "all repositories",
+        "selected": "selected repositories"
+      },
+      "suspended": "This installation is suspended on GitHub — nothing can sync until it is unsuspended.",
+      "permissions": "Permissions",
+      "events": "Webhook events",
+      "problems": "{count} to fix",
+      "none": "none",
+      "level": {
+        "read": "Read",
+        "write": "Read & write",
+        "admin": "Admin"
+      },
+      "status": {
+        "pending": "Needs {level} — requested by the App, not yet accepted for this installation.",
+        "missing": "Needs {level} — the App does not request it yet."
+      },
+      "eventStatus": {
+        "pending": "requested by the App, not yet accepted",
+        "missing": "not subscribed by the App"
+      },
+      "purpose": {
+        "sync": "sync",
+        "push": "publishing to the repository",
+        "work-items": "work items",
+        "drift-check": "drift check",
+        "boards": "project boards",
+        "repo-events": "workflow triggers"
+      },
+      "permission": {
+        "metadata": "Metadata",
+        "contents": "Contents",
+        "issues": "Issues",
+        "pull_requests": "Pull requests",
+        "organization_projects": "Projects (organisation)",
+        "repository_projects": "Projects (repository)",
+        "checks": "Checks",
+        "actions": "Actions",
+        "workflows": "Workflows",
+        "statuses": "Commit statuses"
+      },
+      "pendingHint": "The App asks for more than this installation has accepted. The account's owner approves the new permissions on GitHub.",
+      "missingHint": "Something here needs a permission or event the App does not request. Whoever owns the App registration adds it; every installation then accepts it.",
+      "reviewInstallation": "Review on GitHub",
+      "editApp": "Edit the App",
+      "account": "Your GitHub account",
+      "notLinked": "You have not linked a GitHub account.",
+      "expired": "authorisation lapsed",
+      "accountHint": "Used to browse repositories when setting up a connector. Syncs run as the installation and keep working without it.",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "disconnected": "GitHub account disconnected.",
+      "returned": {
+        "connected": "GitHub account connected.",
+        "auth-failed": "GitHub did not complete the authorisation. Try again.",
+        "install-failed": "GitHub did not confirm the installation. Try again.",
+        "error": "That GitHub link had expired or was not ours. Start again from this page."
+      }
+    },
     "overview": "Overview",
     "never": "Never",
     "openExternal": "Open in the external system",

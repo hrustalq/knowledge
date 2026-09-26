@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Controller, Delete, Get, Query, Res } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
@@ -127,6 +127,22 @@ export class GithubController {
   }
 
   /**
+   * Forget this person's GitHub identity (docs/features/36).
+   *
+   * No `@Access`: an identity belongs to a person, not a workspace — the reason
+   * `github_user_tokens` is keyed by user id — so there is no workspace to check
+   * and nothing anyone else can be refused. Authenticated is the whole rule, and
+   * the only row it can touch is the caller's own. Installations are untouched:
+   * they are the workspace's, and every sync keeps running on them.
+   */
+  @Delete('identity')
+  @ApiOperation({ summary: "Disconnect the caller's GitHub account" })
+  async disconnect(@CurrentPrincipal() principal: Principal): Promise<{ disconnected: boolean }> {
+    await this.oauth.disconnect(principal.userId);
+    return { disconnected: true };
+  }
+
+  /**
    * Where GitHub sends the browser back, for both legs of the flow.
    *
    * `@Public()` because the caller is a redirect from github.com carrying no
@@ -180,14 +196,8 @@ export class GithubController {
     res.redirect(`${web}${state.returnTo}?github=connected`);
   }
 
-  /**
-   * The OAuth redirect URI, which must match what the App registration
-   * declares, byte for byte. Derived rather than configured so there is one
-   * fewer env var to get wrong.
-   */
   private redirectUri(): string {
-    const base = this.config.get('API_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
-    return `${base}/v1/connectors/github/callback`;
+    return this.oauth.redirectUri();
   }
 }
 

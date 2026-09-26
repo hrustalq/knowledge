@@ -452,6 +452,84 @@ export interface GithubBranchesResponse {
   error?: string;
 }
 
+// ---------------------------------------------------------------------------
+// GitHub access — granted permissions and re-authorisation (docs/features/36)
+// ---------------------------------------------------------------------------
+
+/** GitHub's permission levels, weakest first. */
+export type GithubGrantLevel = 'read' | 'write' | 'admin';
+
+/**
+ * What in this product a permission or event is for. Each names a feature a
+ * person can see, so a missing grant reads as "the drift check will not work"
+ * rather than as a GitHub permission name nobody recognises.
+ */
+export type GithubAccessPurpose = 'sync' | 'push' | 'work-items' | 'drift-check' | 'boards' | 'repo-events';
+
+/**
+ * Where one requirement stands.
+ *
+ * - `granted` — the installation has it.
+ * - `pending` — the App asks for it and this installation has not accepted:
+ *   the installation's owner approves it on GitHub.
+ * - `missing` — the App never asks for it: whoever owns the App registration
+ *   adds it there first, and every installation then has to accept.
+ * - `extra` — granted, and nothing here uses it.
+ */
+export type GithubGrantStatus = 'granted' | 'pending' | 'missing' | 'extra';
+
+export interface GithubPermissionRow {
+  /** GitHub's own key, e.g. `pull_requests`. */
+  name: string;
+  granted: GithubGrantLevel | null;
+  /** What the App registration asks every installation for. */
+  requested: GithubGrantLevel | null;
+  /** The level this connector needs, or null when nothing here uses it. */
+  needed: GithubGrantLevel | null;
+  purposes: GithubAccessPurpose[];
+  /** Whether this connector uses any of `purposes` right now — a gap in an unused one is not a problem. */
+  active: boolean;
+  status: GithubGrantStatus;
+}
+
+export interface GithubEventRow {
+  /** GitHub's webhook event name, e.g. `pull_request`. */
+  name: string;
+  subscribed: boolean;
+  requested: boolean;
+  purposes: GithubAccessPurpose[];
+  active: boolean;
+  status: GithubGrantStatus;
+}
+
+// GET /v1/connectors/:id/github
+export interface ConnectorGithubAccessResponse {
+  /** False when no GitHub App is registered on this deployment. */
+  configured: boolean;
+  /** How this connector authenticates to GitHub. Only `app` has grants to list. */
+  auth: 'app' | 'token' | 'none';
+  installation: {
+    installationId: string;
+    accountLogin: string;
+    accountType: 'User' | 'Organization';
+    accountAvatarUrl: string | null;
+    repositorySelection: 'all' | 'selected';
+    suspended: boolean;
+    /** The installation's page on GitHub — where new permissions are accepted. */
+    settingsUrl: string | null;
+  } | null;
+  /** The App registration's settings — where permissions and events are added. */
+  appSettingsUrl: string | null;
+  permissions: GithubPermissionRow[];
+  events: GithubEventRow[];
+  /** The viewing person's linked GitHub account, if any. */
+  identity: { login: string; avatarUrl: string | null; usable: boolean } | null;
+  /** GitHub's authorisation page with the account picker forced, returning here. */
+  reconnectUrl: string | null;
+  /** Why the grants could not be read, when they could not. */
+  error?: string;
+}
+
 // GET /v1/connectors/:id/links
 export interface ConnectorLinkSummary {
   id: string;

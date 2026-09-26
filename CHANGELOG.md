@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.11.0] — 2026-09-26
 
 ### Added
 
@@ -27,14 +27,14 @@ in the pull request that introduces them — see
   page. In *Report* mode it leaves one comment on the pull request listing the
   pages that drifted, updated on every push; in *Propose* mode it also opens a
   merge request here for each drafted correction. Forks and drafts are never
-  checked, and nothing changes a page until a person merges.
+  checked, and nothing changes a page until a person merges. (#61)
 
 ### Fixed
 
 - **Proposing a fix from an agent finding no longer strips the page's tags and
   relations.** The proposed revision was written without the page's frontmatter,
   so merging it deleted `tags:`, `relations:` and `source:` along with their graph
-  edges. The frontmatter is now kept.
+  edges. The frontmatter is now kept. (#61)
 
 ### Operations
 
@@ -827,7 +827,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.10.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/hrustalq/knowledge/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/hrustalq/knowledge/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/hrustalq/knowledge/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/hrustalq/knowledge/compare/v0.8.0...v0.9.0

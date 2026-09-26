@@ -15,14 +15,24 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export class ConnectorLinksService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listForConnector(connectorId: string): Promise<ConnectorLinkSummary[]> {
+  /** Newest first, keyset-paged on the last row's id (the runs list's shape). */
+  async listForConnector(
+    connectorId: string,
+    opts: { limit?: number; cursor?: string } = {},
+  ): Promise<{ links: ConnectorLinkSummary[]; nextCursor: string | null }> {
+    const limit = opts.limit ?? 50;
     const rows = await this.prisma.connectorLink.findMany({
       where: { connectorId },
-      orderBy: { createdAt: 'desc' },
-      take: 500,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
     });
-    const titles = await this.titlesFor(rows.map((r) => r.documentId));
-    return rows.map((row) => toLinkSummary(row, titles.get(row.documentId) ?? null));
+    const page = rows.slice(0, limit);
+    const titles = await this.titlesFor(page.map((r) => r.documentId));
+    return {
+      links: page.map((row) => toLinkSummary(row, titles.get(row.documentId) ?? null)),
+      nextCursor: rows.length > limit ? page[page.length - 1].id : null,
+    };
   }
 
   async listForDocument(documentId: string): Promise<DocumentConnectorLink[]> {

@@ -12435,6 +12435,24 @@
             }
           },
           {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` from the previous page",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size, 1–100. Defaults to 30 for runs, 50 for links",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -12489,6 +12507,24 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` from the previous page",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size, 1–100. Defaults to 30 for runs, 50 for links",
+            "schema": {
+              "type": "number"
             }
           },
           {
@@ -12611,6 +12647,24 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` from the previous page",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size, 1–100. Defaults to 50",
+            "schema": {
+              "type": "number"
             }
           },
           {
@@ -15024,7 +15078,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.11.0",
+    "version": "0.12.0",
     "contact": {}
   },
   "tags": [],

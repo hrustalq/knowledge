@@ -12,12 +12,27 @@
  *
  * Both doors open a new tab and refetch when this one regains focus, the
  * picker's rule: coming back is the moment the answer may have changed.
+ *
+ * Collapsible, like a rail widget: open by default only while something this
+ * connector uses is missing or pending, because a healthy grant list is a
+ * screenful nobody needs to read. Folded, the header still says which of the
+ * two it is. A reader's own choice is remembered for the session, per the
+ * layout store's rail rule.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useQuery } from '@tanstack/vue-query'
-import { CircleAlert, CircleCheck, CircleDashed, CircleX, ExternalLink, Github, RefreshCw } from 'lucide-vue-next'
+import {
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  ExternalLink,
+  Github,
+  RefreshCw,
+} from 'lucide-vue-next'
 import type {
   ConnectorGithubAccessResponse,
   GithubAccessPurpose,
@@ -26,8 +41,10 @@ import type {
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { Button } from '@/components/ui/button'
+import { Collapse } from '@/components/ui/collapse'
 import { Skeleton } from '@/components/ui/skeleton'
 import { labelFor } from '@/lib/labels'
+import { useLayoutStore } from '@/stores/layout'
 
 const props = defineProps<{ connectorId: string }>()
 const { t } = useI18n()
@@ -54,6 +71,27 @@ const anyPending = computed(() =>
 const anyMissing = computed(() =>
   [...(access.value?.permissions ?? []), ...(access.value?.events ?? [])].some((r) => r.active && r.status === 'missing'),
 )
+
+const layout = useLayoutStore()
+const RAIL_SURFACE = 'connector'
+const WIDGET = 'github-access'
+
+const open = computed(() => {
+  const remembered = layout.openWidgets(RAIL_SURFACE)
+  return remembered ? remembered.includes(WIDGET) : problems.value > 0
+})
+
+function toggle() {
+  const current = layout.openWidgets(RAIL_SURFACE) ?? (open.value ? [WIDGET] : [])
+  layout.setWidgetOpen(RAIL_SURFACE, WIDGET, !open.value, current)
+}
+
+/** The one line a folded card carries: what is wrong, or whose installation it is. */
+const preview = computed(() => {
+  if (!access.value?.configured) return null
+  if (problems.value) return t('connectors.githubAccess.problems', { count: problems.value })
+  return access.value.installation?.accountLogin ?? (access.value.identity ? `@${access.value.identity.login}` : null)
+})
 
 const STATUS_ICON: Record<GithubGrantStatus, typeof CircleCheck> = {
   granted: CircleCheck,
@@ -94,14 +132,31 @@ async function forget() {
 </script>
 
 <template>
-  <div class="rounded-lg border p-4">
-    <div class="mb-3 flex items-center justify-between gap-2">
-      <h2 class="flex items-center gap-1.5 text-sm font-medium">
-        <Github class="size-4" /> {{ t('connectors.githubAccess.title') }}
-      </h2>
+  <section class="overflow-hidden rounded-lg border">
+    <div class="flex items-center">
       <button
         type="button"
-        class="text-muted-foreground hover:text-foreground"
+        class="flex min-w-0 flex-1 items-center gap-1.5 px-4 py-3 text-left transition-colors hover:bg-muted/50"
+        :aria-expanded="open"
+        @click="toggle"
+      >
+        <ChevronRight
+          class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150"
+          :class="open ? 'rotate-90' : ''"
+        />
+        <Github class="size-4 shrink-0" />
+        <h2 class="shrink-0 text-sm font-medium">{{ t('connectors.githubAccess.title') }}</h2>
+        <span
+          v-if="!open && preview"
+          class="ml-auto truncate pl-2 text-xs"
+          :class="problems ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'"
+        >
+          {{ preview }}
+        </span>
+      </button>
+      <button
+        type="button"
+        class="mr-3 shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
         :aria-label="t('connectors.github.refresh')"
         @click="query.refetch()"
       >
@@ -109,6 +164,8 @@ async function forget() {
       </button>
     </div>
 
+    <Collapse :open="open">
+    <div class="px-4 pb-4">
     <div v-if="query.isPending.value" class="space-y-2">
       <Skeleton class="h-4 w-40" />
       <Skeleton class="h-20 w-full" />
@@ -255,5 +312,7 @@ async function forget() {
         </div>
       </section>
     </div>
-  </div>
+    </div>
+    </Collapse>
+  </section>
 </template>

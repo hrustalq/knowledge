@@ -3,14 +3,15 @@
 // counts that say what actually happened and the warnings that say what did not.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useQuery } from '@tanstack/vue-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
 import { History } from 'lucide-vue-next'
 import type { ConnectorRunInfo, ListConnectorRunsResponse, ListConnectorsResponse } from '@knowledge/contracts'
-import { apiQueryOptions } from '@/api/queries'
+import { apiInfiniteQueryOptions, apiQueryOptions } from '@/api/queries'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import AiEmptyState from '@/components/ai/AiEmptyState.vue'
+import { PageScrollList } from '@/components/layout/page'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
 import { PHASE_LABEL, RUN_STATUS_LABEL } from './connector-ui'
 
@@ -29,15 +30,21 @@ watch(connectors, (list) => {
   if (!selected.value && list.length) selected.value = list[0].id
 }, { immediate: true })
 
-const runsQuery = useQuery(
+const runsQuery = useInfiniteQuery(
   computed(() => ({
-    ...apiQueryOptions('/v1/connectors/{id}/runs', { path: { id: selected.value } }),
+    ...apiInfiniteQueryOptions('/v1/connectors/{id}/runs', { path: { id: selected.value } }),
     enabled: selected.value !== '',
     // A run in flight advances; this tab is a live view of it.
     refetchInterval: 4000,
   })),
 )
-const runs = computed(() => (runsQuery.data.value as ListConnectorRunsResponse | undefined)?.runs ?? [])
+const runs = computed(() =>
+  ((runsQuery.data.value?.pages ?? []) as ListConnectorRunsResponse[]).flatMap((page) => page.runs),
+)
+
+function loadMore() {
+  if (runsQuery.hasNextPage.value && !runsQuery.isFetchingNextPage.value) void runsQuery.fetchNextPage()
+}
 
 function statusVariant(status: ConnectorRunInfo['status']) {
   if (status === 'failed') return 'destructive'
@@ -68,8 +75,18 @@ function statusVariant(status: ConnectorRunInfo['status']) {
       :body="t('connectors.noRunsBody')"
     />
 
-    <ul v-else class="space-y-3">
-      <li v-for="run in runs" :key="run.id" class="rounded-lg border p-4">
+    <PageScrollList
+      v-else
+      :items="runs"
+      :item-key="(run) => run.id"
+      :estimate-size="110"
+      :has-more="runsQuery.hasNextPage.value"
+      :loading-more="runsQuery.isFetchingNextPage.value"
+      :label="t('connectors.tabRuns')"
+      @load-more="loadMore"
+    >
+      <template #default="{ item: run }">
+      <div class="p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex flex-wrap items-center gap-2">
             <Badge :variant="statusVariant(run.status)">{{ t(RUN_STATUS_LABEL[run.status]) }}</Badge>
@@ -123,7 +140,8 @@ function statusVariant(status: ConnectorRunInfo['status']) {
             </li>
           </ul>
         </details>
-      </li>
-    </ul>
+      </div>
+      </template>
+    </PageScrollList>
   </div>
 </template>

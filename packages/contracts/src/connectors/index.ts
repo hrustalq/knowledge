@@ -547,6 +547,8 @@ export interface ConnectorLinkSummary {
 export interface ListConnectorLinksResponse {
   connectorId: string;
   links: ConnectorLinkSummary[];
+  /** Opaque; pass back as `cursor` for the next page. `null` at the end. */
+  nextCursor: string | null;
 }
 
 /** One thing a run could not carry — never swallowed, always surfaced. */
@@ -592,6 +594,8 @@ export interface ConnectorRunInfo {
 export interface ListConnectorRunsResponse {
   connectorId: string;
   runs: ConnectorRunInfo[];
+  /** Opaque; pass back as `cursor` for the next page. `null` at the end. */
+  nextCursor: string | null;
 }
 export interface ConnectorRunResponse {
   run: ConnectorRunInfo;
@@ -849,6 +853,10 @@ export interface ConnectorWorkItemInfo {
 // GET /v1/connectors/:id/work-items
 export interface ListConnectorWorkItemsResponse {
   workItems: ConnectorWorkItemInfo[];
+  /** Every stored work item on the connector, not just this page. */
+  total: number;
+  /** Opaque; pass back as `cursor` for the next page. `null` at the end. */
+  nextCursor: string | null;
 }
 export interface ConnectorWorkItemResponse {
   workItem: ConnectorWorkItemInfo;

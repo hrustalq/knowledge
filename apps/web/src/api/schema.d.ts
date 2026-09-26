@@ -12231,7 +12231,12 @@ export interface operations {
     };
     ConnectorsController_runs: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `nextCursor` from the previous page */
+                cursor?: string;
+                /** @description Page size, 1–100. Defaults to 30 for runs, 50 for links */
+                limit?: number;
+            };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
                 "Accept-Language"?: "en" | "ru";
@@ -12271,7 +12276,12 @@ export interface operations {
     };
     ConnectorsController_connectorLinks: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `nextCursor` from the previous page */
+                cursor?: string;
+                /** @description Page size, 1–100. Defaults to 30 for runs, 50 for links */
+                limit?: number;
+            };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
                 "Accept-Language"?: "en" | "ru";
@@ -12352,7 +12362,12 @@ export interface operations {
     };
     ConnectorsController_workItemList: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `nextCursor` from the previous page */
+                cursor?: string;
+                /** @description Page size, 1–100. Defaults to 50 */
+                limit?: number;
+            };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
                 "Accept-Language"?: "en" | "ru";

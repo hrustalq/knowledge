@@ -372,7 +372,7 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
     const space = body.results?.[0];
     // v1 answers 200 with an empty list for a space that does not exist *and*
     // for one this token cannot see, so the message has to cover both.
-    if (!space) throw new Error(`space ${key} not found, or not visible to this token`);
+    if (!space) throw new Error(t('error.connector.spaceNotVisible', { key }, ctx.locale));
     return space;
   }
 }

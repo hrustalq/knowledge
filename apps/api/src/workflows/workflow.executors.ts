@@ -12,6 +12,7 @@ import { AssistantClient } from '../assistant/assistant.client.js';
 import { SearchService } from '../search/search.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
+import { t } from '../i18n/t.js';
 
 /** Caps on what one draft may declare, so a hallucinated list cannot fill a page's frontmatter. */
 /** A page attached to a dozen issues is a page; a flow should not spam all of them. */
@@ -131,7 +132,7 @@ export class WorkflowExecutors {
     // model back pins it on the step or on the drafter agent.
     const planner = await this.agents.resolve(run.workspaceId, 'planner', step.providerId ?? undefined);
     const config = planner.config;
-    if (!planner.enabled || !config.enabled) throw new Error('The AI assistant is disabled for this workspace');
+    if (!planner.enabled || !config.enabled) throw new Error(t('error.assistant.providerDisabled'));
 
     const context = await this.gather(node, run);
     const cap = Math.min(step.maxItems ?? 8, 50);
@@ -167,7 +168,7 @@ export class WorkflowExecutors {
     );
 
     const items = this.parseItems(raw).slice(0, cap);
-    if (items.length === 0) throw new Error('The model returned no items for this step');
+    if (items.length === 0) throw new Error(t('error.workflow.noItems'));
     return { kind: 'items', items };
   }
 
@@ -176,7 +177,7 @@ export class WorkflowExecutors {
   private async runDraft(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
     const drafter = await this.agents.resolve(run.workspaceId, 'drafter', step.providerId ?? undefined);
     const config = drafter.config;
-    if (!drafter.enabled || !config.enabled) throw new Error('The AI assistant is disabled for this workspace');
+    if (!drafter.enabled || !config.enabled) throw new Error(t('error.assistant.providerDisabled'));
 
     const context = await this.gather(node, run);
     const title = context.parentTitle || context.title;
@@ -221,7 +222,7 @@ export class WorkflowExecutors {
 
     const parsed = this.parseObject(raw);
     const markdown = typeof parsed.markdown === 'string' ? parsed.markdown : '';
-    if (!markdown.trim()) throw new Error('The model returned an empty page');
+    if (!markdown.trim()) throw new Error(t('error.workflow.emptyPage'));
 
     // Until now these two fields were declared on WorkflowNodeDraft, validated by
     // the DTO and written by the materializer — and no executor ever produced

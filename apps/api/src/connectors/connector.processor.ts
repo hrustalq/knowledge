@@ -6,7 +6,7 @@ import type { Job } from 'bullmq';
 import type { Env } from '../config/env.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { asLocale } from '../i18n/locale.js';
-import { withLocale } from '../i18n/t.js';
+import { t, withLocale } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CONNECTOR_QUEUE } from './connector.constants.js';
 import { ConnectorProducer, type ConnectorJobData, type ConnectorTask } from './connector.producer.js';
@@ -90,7 +90,7 @@ export class ConnectorProcessor extends WorkerHost {
       // Written to the run's warnings rather than failing it: a task is work
       // beside the run, and losing a fill must not mark a paused walk failed.
       const message = abort.signal.aborted
-        ? `the ${task.kind} pass exceeded ${Math.round(this.timeoutMs / 1000)}s and was stopped`
+        ? t('error.connector.taskTimedOut', { task: task.kind, seconds: Math.round(this.timeoutMs / 1000) })
         : (err as Error).message;
       this.logger.error(`Connector run ${runId} ${task.kind} task failed: ${message}`);
       await this.warn(runId, message);

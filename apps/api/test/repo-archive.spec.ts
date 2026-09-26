@@ -14,6 +14,26 @@ const { safeFetch } = await import('../src/common/safe-fetch.js');
 const { downloadRepoArchive, resolveBranch } = await import('../src/connectors/adapters/repo-archive.js');
 const mockFetch = vi.mocked(safeFetch);
 
+// The 404 messages are translated (#85): load the real catalogs so these
+// assertions still read the English text a user sees, parameters included.
+{
+  const { join } = await import('node:path');
+  const { Test } = await import('@nestjs/testing');
+  const { I18nJsonLoader, I18nModule } = await import('nestjs-i18n');
+  const { I18nRegistry } = await import('../src/i18n/t.js');
+  const moduleRef = await Test.createTestingModule({
+    imports: [
+      I18nModule.forRoot({
+        fallbackLanguage: 'en',
+        loader: I18nJsonLoader,
+        loaderOptions: { path: join(import.meta.dirname, '../src/i18n'), watch: false },
+      }),
+    ],
+    providers: [I18nRegistry],
+  }).compile();
+  await moduleRef.init();
+}
+
 /**
  * A context is one object per connector row per run, and both caches in
  * repo-archive are keyed on its `config`. Building a fresh one per test is what
@@ -125,7 +145,7 @@ describe('downloadRepoArchive 404 classification', () => {
     // The exact case in the report: a connector pinned to `main` against a
     // repository whose default is `dev`.
     await expect(downloadRepoArchive(ctx({ ...GH, branch: 'main' }))).rejects.toThrow(
-      /branch "main" does not exist.*default branch is "dev"/s,
+      /Branch "main" does not exist.*default branch is "dev"/s,
     );
   });
 

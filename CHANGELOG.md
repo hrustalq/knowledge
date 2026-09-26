@@ -13,6 +13,32 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Search, the graph and agents only see what a page says now.** Text removed
+  from a page, tags and relations dropped from its frontmatter, and drafts on a
+  branch that was never merged used to keep turning up — in search results and
+  snippets, the tag filter, graph view, entity pages, impact analysis, the
+  relations panel and the context handed to agents and MCP clients. Every
+  revision is still kept for the revision diff and the facts history; only the
+  current published revision of each page is served. The same page also no
+  longer comes back once per old revision. (#83)
+
+### Operations
+
+- **Run `make graph-live-backfill` once after deploying.** New indexing stamps
+  which revision is live, but data indexed before this release carries no flag
+  and is still served as before — stale revisions included — until the
+  backfill stamps it. It is idempotent, safe while the worker runs, takes
+  `ARGS="--workspace <id>"` and `ARGS="--dry-run"`, and touches ArcadeDB and
+  (with `FULLTEXT_PROVIDER=opensearch`) the OpenSearch index. No PostgreSQL
+  migration.
+- **Re-run `make backtest ARGS="--generate"` for a new baseline.** Recall and
+  MRR measured before this release counted stale revisions as matches, so the
+  numbers will move and are not comparable with earlier runs.
+
 ## [0.12.0] — 2026-09-27
 
 ### Added

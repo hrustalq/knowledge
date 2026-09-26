@@ -128,6 +128,11 @@ backtest: ## Retrieval/pipeline backtest. ARGS="--generate --limit 120" or ARGS=
 	$(API) run build
 	$(API) exec node dist/scripts/backtest.main.js $(ARGS)
 
+.PHONY: graph-live-backfill
+graph-live-backfill: ## One-time (#83): stamp each page's live revision in ArcadeDB/OpenSearch. ARGS="--workspace <id>" | "--dry-run"
+	$(API) run build
+	$(API) exec node dist/scripts/graph-live-backfill.main.js $(ARGS)
+
 .PHONY: clean
 clean: ## Remove build artifacts and turbo cache
 	rm -rf .turbo apps/api/dist apps/web/dist

@@ -45,7 +45,7 @@ const state = computed(() => mrIcon(mr.value))
         <span
           v-if="mr.approvedBy.length > 0"
           class="flex items-center gap-1 text-emerald-600"
-          :title="`${mr.approvedBy.length} approval(s)`"
+          :title="t('mr.approvals', { n: mr.approvedBy.length }, mr.approvedBy.length)"
         >
           <ThumbsUp class="size-3.5" />{{ mr.approvedBy.length }}
         </span>
@@ -53,7 +53,7 @@ const state = computed(() => mrIcon(mr.value))
           v-if="mr.threadStats.total > 0"
           class="flex items-center gap-1"
           :class="mr.threadStats.unresolved > 0 ? 'text-amber-600' : ''"
-          :title="`${mr.threadStats.unresolved} of ${mr.threadStats.total} threads unresolved`"
+          :title="t('mr.threadsUnresolvedOf', { n: mr.threadStats.unresolved, total: mr.threadStats.total })"
         >
           <MessageSquare class="size-3.5" />{{ mr.threadStats.unresolved }}/{{ mr.threadStats.total }}
         </span>

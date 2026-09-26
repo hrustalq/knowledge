@@ -10,6 +10,7 @@ import {
 } from '@knowledge/contracts'
 import { apiFetch } from '@/lib/api'
 import { presignedPut } from '@/lib/presigned-put'
+import { errorMessage } from '@/api/errors'
 
 /**
  * Uploading a picture for a person or a project (docs/features/23).
@@ -73,7 +74,7 @@ export function useAvatarUpload(base: () => string) {
       toast.success(t('avatar.updated'))
       return done.avatarUrl
     } catch (e) {
-      toast.error(t('avatar.failed', { error: (e as Error).message }))
+      toast.error(t('avatar.failed', { error: errorMessage(e, t) }))
       return undefined
     } finally {
       busy.value = false
@@ -87,7 +88,7 @@ export function useAvatarUpload(base: () => string) {
       toast.success(t('avatar.removed'))
       return true
     } catch (e) {
-      toast.error(t('avatar.failed', { error: (e as Error).message }))
+      toast.error(t('avatar.failed', { error: errorMessage(e, t) }))
       return false
     } finally {
       busy.value = false

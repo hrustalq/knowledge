@@ -249,7 +249,7 @@ const mentionablePages = computed(() =>
 )
 
 const projectName = computed(
-  () => projects.items.find((p) => p.projectId === projectId.value)?.name ?? 'Project',
+  () => projects.items.find((p) => p.projectId === projectId.value)?.name ?? t('import.project'),
 )
 
 /* ------------------------------------------------------ working copy */
@@ -477,7 +477,7 @@ async function ensureDocumentId(): Promise<string | null> {
       body: JSON.stringify({
         workspaceId: getWorkspaceId(),
         projectId: projectId.value,
-        title: title.value.trim() || 'Untitled page',
+        title: title.value.trim() || t('editor.untitledPage'),
         category: category.value,
         ...(parentId.value ? { parentId: parentId.value } : {}),
       }),

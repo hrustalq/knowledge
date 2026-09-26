@@ -129,7 +129,7 @@ async function onCreated(created: ScopeCreated) {
               <span
                 class="size-1.5 shrink-0 rounded-full"
                 :class="p.projectId === store.activeId ? 'bg-primary' : 'bg-muted-foreground/30'"
-                :title="p.projectId === store.activeId ? 'Active project' : undefined"
+                :title="p.projectId === store.activeId ? t('projects.active') : undefined"
               />
               <span class="min-w-0 flex-1 truncate">{{ p.name }}</span>
               <span class="shrink-0 text-xs text-muted-foreground">{{ p.documentCount }}</span>

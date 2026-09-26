@@ -251,7 +251,7 @@ function submit() {
       <div v-for="field in prompt.fields" :key="field.name" class="space-y-1.5">
         <p class="text-xs font-medium text-muted-foreground">
           {{ field.label }}
-          <span v-if="field.required" class="text-primary" aria-label="required">*</span>
+          <span v-if="field.required" class="text-primary" :aria-label="t('common.required')">*</span>
         </p>
 
         <!-- Radios: exactly one. -->

@@ -61,7 +61,17 @@
     "reviewing": "Проверка…",
     "searching": "Поиск…",
     "starting": "Запуск…",
-    "ai": "ИИ"
+    "ai": "ИИ",
+    "ok": "Успешно",
+    "failed": "ошибка",
+    "required": "обязательно",
+    "removeNamed": "Убрать {name}",
+    "deleteNamed": "Удалить {name}",
+    "noMatches": "Нет совпадений",
+    "filterPlaceholder": "Фильтр…",
+    "searchPlaceholder": "Поиск…",
+    "openLarger": "Открыть «{title}» в увеличенном виде",
+    "assistant": "Ассистент"
   },
   "page": {
     "empty": "Здесь пока ничего нет",
@@ -145,7 +155,10 @@
     "notifications": "Уведомления",
     "connect": "Подключить ИИ",
     "membersSeeEverything": "Участники видят всё в {scope}.",
-    "projectGoesInto": "Будет создан в {scope}. Позже можно добавить ещё."
+    "projectGoesInto": "Будет создан в {scope}. Позже можно добавить ещё.",
+    "noWorkspacePermission": "У вас нет прав на создание рабочего пространства здесь.",
+    "scopeCreated": "«{name}» создано",
+    "invitePeopleTo": "Пригласите людей в {scope}, чтобы они могли в нём работать."
   },
   "role": {
     "viewer": "Читатель",
@@ -228,7 +241,8 @@
     "relationsCount": "Связи",
     "commentDeleted": "Комментарий удалён",
     "revisionNumber": "Ревизия №{n}",
-    "viewingRevision": "Просмотр ревизии {id} — пока вы читаете историю, комментарии отключены."
+    "viewingRevision": "Просмотр ревизии {id} — пока вы читаете историю, комментарии отключены.",
+    "provenance": "{extractor} · уверенность {confidence}"
   },
   "settings": {
     "projectsHint": "Организация документов",
@@ -594,7 +608,10 @@
       "merged": "Влита",
       "draft": "Черновик"
     },
-    "configure": "Настроить"
+    "configure": "Настроить",
+    "exampleConfluence": "Confluence — https://team.atlassian.net/wiki + ключ пространства",
+    "exampleNotion": "Notion — секрет внутренней интеграции",
+    "exampleObsidian": "Хранилище Obsidian — URL его git-репозитория"
   },
   "workflow": {
     "nodeStatus": {
@@ -892,7 +909,10 @@
     "auto": "авто",
     "failedN": "с ошибкой: {n}",
     "publishedOf": "опубликовано {done}/{total}",
-    "waitingForYou": "ждут вас"
+    "waitingForYou": "ждут вас",
+    "cancelRunConfirm": "Отменить запуск? Шаги в очереди будут пропущены.",
+    "promptPlaceholderGenerate": "Перечислите сценарии использования, в которых участвует эта сущность.",
+    "promptPlaceholderDraft": "Напишите спецификацию API-эндпоинта для этого сценария."
   },
   "activity": {
     "action": {
@@ -1164,7 +1184,19 @@
     "resolveThread": "Решено",
     "runReview": "Запустить проверку",
     "rerun": "Перезапустить",
-    "aiCheck": "ИИ-проверка"
+    "aiCheck": "ИИ-проверка",
+    "replyToName": "Ответить {name}",
+    "replyToNameEllipsis": "Ответить {name}…",
+    "replyEllipsis": "Ответить…",
+    "goToComment": "Перейти к комментарию {name}",
+    "writeComment": "Напишите комментарий…",
+    "comment": "Комментировать",
+    "composerHint": "{placeholder} Нажмите {'@'}, чтобы упомянуть, / — чтобы вставить блок.",
+    "approvals": "{n} одобрений | {n} одобрение | {n} одобрения | {n} одобрений",
+    "threadsUnresolvedOf": "Не решено обсуждений: {n} из {total}",
+    "passed": "Пройдено",
+    "editAssignee": "Изменить исполнителя",
+    "stopEditingAssignee": "Закончить изменение исполнителя"
   },
   "assistant": {
     "askAi": "Спросить ИИ",
@@ -1200,7 +1232,10 @@
     "aboutAndRelated": "о «{title}» и связанных страницах",
     "askAnything": "Спрашивайте что угодно об этой странице — ответы опираются на её содержимое и связанные страницы из графа знаний.",
     "reviewDraft": "Проверить черновик",
-    "findRelated": "Найти связанные документы"
+    "findRelated": "Найти связанные документы",
+    "block": {
+      "activity": "Активность"
+    }
   },
   "review": {
     "noLineChanges": "Изменений в строках нет.",
@@ -1420,7 +1455,11 @@
     "hideSteps": "Скрыть шаги",
     "showSteps": "Показать шаги",
     "showStepsN": "Показать шаги ({n})",
-    "deleteChatButton": "Удалить чат"
+    "deleteChatButton": "Удалить чат",
+    "copyMessage": "Копировать сообщение",
+    "copyReply": "Копировать ответ",
+    "dictateMessage": "Надиктовать сообщение",
+    "modelDefault": "По умолчанию"
   },
   "ai": {
     "excludesUnpriced": "не включает {calls} без",
@@ -1745,7 +1784,8 @@
     },
     "openaiCompatible": "Совместимый с OpenAI",
     "noActivityDays": "Нет активности ассистента за последние {n} дней. | Нет активности ассистента за последний {n} день. | Нет активности ассистента за последние {n} дня. | Нет активности ассистента за последние {n} дней.",
-    "peak": "пик {value}"
+    "peak": "пик {value}",
+    "tokensChartLabel": "Токенов в день за последние {n} дн., пик {peak}"
   },
   "search": {
     "activeFilters": "{n} фильтров | {n} фильтр | {n} фильтра | {n} фильтров",
@@ -1830,7 +1870,15 @@
       "empty": "Файл пустой.",
       "cannotImport": "Этот файл нельзя импортировать."
     },
-    "thingsToCheck": "{n} пунктов для проверки | {n} пункт для проверки | {n} пункта для проверки | {n} пунктов для проверки"
+    "thingsToCheck": "{n} пунктов для проверки | {n} пункт для проверки | {n} пункта для проверки | {n} пунктов для проверки",
+    "step": {
+      "destination": "Куда",
+      "parse": "Разбор",
+      "review": "Проверка"
+    },
+    "couldNotCreatePage": "Не удалось создать страницу",
+    "pageCreatedWithAttachment": "Страница создана — исходный файл прикреплён",
+    "pageCreated": "Страница создана"
   },
   "project": {
     "active": "активный",
@@ -1972,7 +2020,9 @@
         "integrations": "Подключать коннекторы и описывать сценарии, которые запускают редакторы",
         "housekeeping": "Удалять проект, принудительно переиндексировать, читать журнал аудита"
       }
-    }
+    },
+    "roleFor": "Роль пользователя {name}",
+    "trustedOperatorFor": "Доверенный оператор: {name}"
   },
   "users": {
     "title": "Пользователи",
@@ -2062,7 +2112,8 @@
     "notATermHere": "Здесь не термин",
     "cannotExclude": "Не удалось найти это вхождение на странице.",
     "occurrencesOnPage": "{n}× на странице",
-    "alsoKnownAs": "также: {aliases}"
+    "alsoKnownAs": "также: {aliases}",
+    "linkTermInDocuments": "Связывать «{term}» в документах"
   },
   "editor": {
     "pickProjectForFiles": "Выберите проект в настройках страницы, прежде чем прикреплять файлы",
@@ -2157,7 +2208,12 @@
     },
     "moreActions": "Ещё действия",
     "publish": "Опубликовать",
-    "createAndIndex": "Создать и проиндексировать"
+    "createAndIndex": "Создать и проиндексировать",
+    "collapseSection": "Свернуть раздел",
+    "expandSection": "Развернуть раздел",
+    "mentioned": "Упомянут: {name}",
+    "statusColor": "Статус: {color}",
+    "untitledPage": "Страница без названия"
   },
   "toolbar": {
     "formatting": "Форматирование",
@@ -2271,7 +2327,16 @@
     "active": "Активен",
     "disabled": "Отключён",
     "platformAdmin": "Администратор платформы",
-    "groupText": "Текст"
+    "groupText": "Текст",
+    "noFiltersLeft": "Фильтров больше нет",
+    "changeOperator": "Сменить оператор ({options})",
+    "removeFilter": "Убрать фильтр «{field}»",
+    "operator": {
+      "is": "равно",
+      "isNot": "не равно",
+      "contains": "содержит",
+      "notContains": "исключает"
+    }
   },
   "tool": {
     "search_knowledge": {
@@ -2838,5 +2903,15 @@
     "suggestionActions": "Предложение ассистента",
     "decideBeforePublish": "Оставьте или отклоните предложение ассистента перед публикацией | Оставьте или отклоните {n} предложения ассистента перед публикацией | Оставьте или отклоните {n} предложений ассистента перед публикацией",
     "placeholder": "Спросите о странице или попросите её изменить…"
+  },
+  "projects": {
+    "active": "Активный проект"
+  },
+  "upload": {
+    "failedStatus": "Загрузка не удалась ({status})",
+    "connectionDropped": "Загрузка не удалась — соединение прервалось",
+    "uploadingFile": "Загрузка {name}",
+    "file": "файла",
+    "waitingForWorker": "Ожидание обработчика"
   }
 }

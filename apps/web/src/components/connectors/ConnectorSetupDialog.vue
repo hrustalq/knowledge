@@ -43,6 +43,7 @@ import ImportStepper from '@/components/import/ImportStepper.vue'
 import { getWorkspaceId } from '@/lib/api'
 import { useProjectsStore } from '@/stores/projects'
 import {
+  COULD_NOT_CONNECT,
   clearSetup,
   createSetupActor,
   kindStepMeta,
@@ -452,7 +453,7 @@ function startOver() {
               <CircleAlert class="text-destructive mt-0.5 size-4 shrink-0" />
               <div class="min-w-0">
                 <p class="text-sm font-medium">{{ t('connectors.testFailed') }}</p>
-                <p class="text-muted-foreground mt-1 text-xs wrap-break-word">{{ context?.error }}</p>
+                <p class="text-muted-foreground mt-1 text-xs wrap-break-word">{{ context?.error === COULD_NOT_CONNECT ? t('connectors.testFailed') : context?.error }}</p>
               </div>
             </div>
           </div>
@@ -608,7 +609,7 @@ function startOver() {
             </label>
           </template>
 
-          <p v-if="context?.error" class="text-destructive text-xs">{{ context.error }}</p>
+          <p v-if="context?.error" class="text-destructive text-xs">{{ context.error === COULD_NOT_CONNECT ? t('connectors.testFailed') : context.error }}</p>
         </div>
       </div>
 

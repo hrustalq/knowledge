@@ -14,6 +14,7 @@
  * nobody asked to see.
  */
 import type { Component } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ChevronRight, Maximize2 } from 'lucide-vue-next'
 import { Collapse } from '@/components/ui/collapse'
 
@@ -27,6 +28,8 @@ defineProps<{
   expandable?: boolean
 }>()
 const emit = defineEmits<{ 'update:open': [boolean]; expand: [] }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -54,8 +57,8 @@ const emit = defineEmits<{ 'update:open': [boolean]; expand: [] }>()
         <button
           v-if="open && expandable"
           class="mr-1.5 shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          :title="`Open ${title} in a larger view`"
-          :aria-label="`Open ${title} in a larger view`"
+          :title="t('common.openLarger', { title })"
+          :aria-label="t('common.openLarger', { title })"
           @click="emit('expand')"
         >
           <Maximize2 class="size-3.5" />

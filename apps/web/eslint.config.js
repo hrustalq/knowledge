@@ -19,6 +19,8 @@ const RAW_TEXT_IGNORE = [
   'Knowledge', 'MCP', 'GitHub', 'GitLab', 'Markdown', 'DeepSeek', 'GenAPI (gen-api.ru)', 'Streamable HTTP', 'URL', 'SKILL.md',
   // env assignments shown verbatim to operators
   'ASSISTANT_PROVIDER=openai-compatible', 'ASSISTANT_PROVIDER=none',
+  // example names in placeholders
+  'Jira', 'DeepSeek prod', 'Authorization',
 ]
 
 
@@ -55,8 +57,14 @@ export default [
       '@intlify/vue-i18n/no-raw-text': [
         'error',
         {
-          ignorePattern: '^[\\s\\d.,:;!?·→←—–×/…•|()+\\-#@%&*=<>\\[\\]{}"\'`]*$',
+          // Punctuation-only, or an example value in a placeholder: an address,
+          // a URL, a slug or an entity key (`service:identity`) — the same in
+          // every language (#85 keeps them English on purpose).
+          ignorePattern:
+            '^(?:[\\s\\d.,:;!?·→←—–×/…•|()+\\-#@%&*=<>\\[\\]{}"\'`]*|\\S+@example\\.com|https?://\\S+|[a-z0-9.-]+\\.example\\.com|[a-z]+(?:[-:][a-z0-9-]+)+|[a-z]+(?:, [a-z]+)+)$',
           ignoreText: RAW_TEXT_IGNORE,
+          // Static attributes a reader or a screen reader sees.
+          attributes: { '/.+/': ['title', 'aria-label', 'placeholder', 'alt'] },
         },
       ],
       '@intlify/vue-i18n/no-missing-keys': 'error',

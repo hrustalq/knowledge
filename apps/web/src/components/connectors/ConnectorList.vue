@@ -109,7 +109,7 @@ function statusIcon(connector: ConnectorSummary) {
       :body="t('connectors.emptyBody')"
       :example="{
         label: t('connectors.emptyExampleLabel'),
-        lines: ['Confluence — https://team.atlassian.net/wiki + space key', 'Notion — an internal integration secret', 'Obsidian vault — its git repository URL'],
+        lines: [t('connectors.exampleConfluence'), t('connectors.exampleNotion'), t('connectors.exampleObsidian')],
       }"
     >
       <template #action>

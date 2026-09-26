@@ -534,7 +534,7 @@ watch(
                   v-for="(r, i) in visibleRelations"
                   :key="i"
                   class="inline-flex items-baseline gap-1.5 rounded-full border bg-background px-2 py-0.5 text-xs"
-                  :title="`${r.provenance.extractor} · confidence ${r.provenance.confidence}`"
+                  :title="t('documents.provenance', { extractor: r.provenance.extractor, confidence: r.provenance.confidence })"
                 >
                   <span class="text-muted-foreground">{{ r.type }}</span>
                   <span class="font-medium">{{ r.to.name }}</span>

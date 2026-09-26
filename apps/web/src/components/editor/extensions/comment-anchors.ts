@@ -51,10 +51,10 @@ const MAX_FACES = 3
 const BOT_MASK =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2M20 14h2M15 13v2M9 13v2'/%3E%3C/svg%3E\")"
 
-function faceEl(author: AnchorAuthor): HTMLElement {
+function faceEl(author: AnchorAuthor, t: CommentAnchorsOptions['t']): HTMLElement {
   const face = document.createElement('span')
   face.className = 'kn-anchor-face'
-  face.title = author.ai ? 'Assistant' : author.name
+  face.title = author.ai ? t('common.assistant') : author.name
   if (author.ai) {
     face.classList.add('kn-anchor-face-ai')
     const glyph = document.createElement('span')
@@ -351,7 +351,7 @@ export const CommentAnchors = Extension.create<CommentAnchorsOptions, CommentAnc
                 if (faces.length > 0) {
                   const stack = document.createElement('span')
                   stack.className = 'kn-anchor-faces'
-                  for (const author of faces) stack.append(faceEl(author))
+                  for (const author of faces) stack.append(faceEl(author, options.t))
                   pin.append(stack)
                 }
                 const count = document.createElement('span')

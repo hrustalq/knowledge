@@ -473,7 +473,7 @@ watch(highlighted, (id) => {
             <Checkbox
               :model-value="term.enabled"
               :disabled="!canEdit"
-              :aria-label="`Link ${term.term} in documents`"
+              :aria-label="t('glossary.linkTermInDocuments', { term: term.term })"
               @update:model-value="toggle(term, $event === true)"
             />
           </TableCell>
@@ -482,7 +482,7 @@ watch(highlighted, (id) => {
               v-if="canEdit"
               variant="ghost"
               size="sm"
-              :aria-label="`Delete ${term.term}`"
+              :aria-label="t('common.deleteNamed', { name: term.term })"
               @click="remove(term)"
             >
               <Trash2 class="size-3.5" />

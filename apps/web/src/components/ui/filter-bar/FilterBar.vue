@@ -112,8 +112,8 @@ function removeAt(index: number) {
 
     <FilterPopover
       :items="pickerItems"
-      search-placeholder="Filter…"
-      empty-label="No filters left"
+      :search-placeholder="t('common.filterPlaceholder')"
+      :empty-label="t('filter.noFiltersLeft')"
       @select="addField"
     >
       <template #trigger="{ toggle }">

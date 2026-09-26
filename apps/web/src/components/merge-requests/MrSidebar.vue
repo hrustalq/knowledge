@@ -208,7 +208,7 @@ const revisionRows = computed(() =>
               : aiCounts.issues > 0
                 ? 'bg-amber-500/15 text-amber-600'
                 : 'bg-emerald-500/15 text-emerald-600'"
-            :aria-label="aiCounts.issues > 0 ? `${aiCounts.issues} findings` : 'Passed'"
+            :aria-label="aiCounts.issues > 0 ? t('count.findings', { n: aiCounts.issues }, aiCounts.issues) : t('mr.passed')"
           >
             <template v-if="aiCounts.issues > 0">{{ aiCounts.issues }}</template>
             <Check v-else class="size-3" />
@@ -225,7 +225,7 @@ const revisionRows = computed(() =>
             <button
               v-if="!readonly"
               class="ml-auto text-muted-foreground transition-colors hover:text-foreground"
-              :aria-label="editingAssignee ? 'Stop editing assignee' : 'Edit assignee'"
+              :aria-label="editingAssignee ? t('mr.stopEditingAssignee') : t('mr.editAssignee')"
               @click="editingAssignee = !editingAssignee"
             >
               <component :is="editingAssignee ? X : Pencil" class="size-3" />

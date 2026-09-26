@@ -1173,6 +1173,14 @@
 .kn-page-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .kn-page-main .kn-editor { flex: 1; min-height: 0; }
 .kn-page-main .kn-editor-surface { overflow-y: auto; }
+/* The editor spends the column it is given. The reading measure (46rem,
+ * centred) left a third of a wide screen on either side of the page while
+ * writing it — tables, layouts and diagrams cramped beside empty margin — so
+ * here the title and the prose run edge to edge, inset by a gutter that grows
+ * with the window and keeps room on the left for the block handles and the
+ * assistant's margin rule. The read view keeps its measure. */
+.kn-page-editor { --kn-measure: none; }
+.kn-page-editor .kn-editor-content { padding-inline: clamp(1.75rem, 3.5vw, 3.5rem); }
 .kn-dirty-dot {
   width: 0.45rem;
   height: 0.45rem;
@@ -1767,10 +1775,10 @@
 
 .kn-page-editor { --kn-ai-w: 24rem; --kn-ai: var(--kn-panel-important); }
 
-/* The panel takes the rail's place and moves on the rail's curve: the rail
- * slides out as this slot opens, so the page column shifts once, not twice.
- * The panel is pinned to the slot's right edge, so it arrives sliding in from
- * the left rather than being uncovered left to right. */
+/* The panel docks on the right edge and moves on the rail's curve, so the
+ * page column narrows in one motion as it opens. The panel is pinned to the
+ * slot's left edge, so it arrives sliding in from the right rather than being
+ * uncovered from the left. */
 .kn-ai-slot {
   position: relative;
   flex: none;
@@ -1783,13 +1791,13 @@
 .kn-ai-panel {
   position: absolute;
   inset-block: 0;
-  right: 0;
+  left: 0;
   width: var(--kn-ai-w);
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: var(--background);
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
 }
 
 .kn-ai-panel-head {
@@ -1889,18 +1897,18 @@
 .kn-ai-dock-enter-from,
 .kn-ai-dock-leave-to { opacity: 0; transform: translateY(0.5rem); }
 
-/* Below the shell's hinge there is no rail to replace: the panel floats over
- * the page as a drawer, and the scrim is the way back. */
+/* Below the shell's hinge the page has no width to give: the panel floats
+ * over it as a drawer from the same edge, and the scrim is the way back. */
 .kn-ai-scrim { display: none; }
 @media (max-width: 1023.98px) {
   .kn-ai-slot {
     position: absolute;
     inset-block: 0;
-    left: 0;
+    right: 0;
     z-index: 30;
     width: min(var(--kn-ai-w), 92vw);
     overflow: visible;
-    transform: translateX(-100%);
+    transform: translateX(100%);
     transition: transform var(--rail-duration) var(--pane-ease), box-shadow var(--rail-duration);
   }
   [data-ai-open='true'] > .kn-ai-slot {

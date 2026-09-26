@@ -83,14 +83,31 @@ export class GithubOauthService {
 
   // --- the authorization code flow ---
 
-  authorizeUrl(state: string, redirectUri: string): string | null {
+  /**
+   * `selectAccount` forces GitHub's account picker (docs/features/36). Without
+   * it a person who already authorised is waved straight through as whichever
+   * account the browser is signed in to — which is exactly wrong for a
+   * reconnect whose point may be to switch to a different one.
+   */
+  authorizeUrl(state: string, redirectUri: string, options: { selectAccount?: boolean } = {}): string | null {
     if (!this.configured) return null;
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: redirectUri,
       state,
+      ...(options.selectAccount ? { prompt: 'select_account' } : {}),
     });
     return `https://github.com/login/oauth/authorize?${params.toString()}`;
+  }
+
+  /**
+   * The OAuth redirect URI, which must match what the App registration
+   * declares, byte for byte. Derived rather than configured so there is one
+   * fewer env var to get wrong.
+   */
+  redirectUri(): string {
+    const base = this.config.get('API_PUBLIC_URL', { infer: true }).replace(/\/+$/, '');
+    return `${base}/v1/connectors/github/callback`;
   }
 
   /**

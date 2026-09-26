@@ -43,9 +43,10 @@ function setTab(key: TabKey) {
 </script>
 
 <template>
-  <!-- One measure for the whole page, as on /settings/ai: otherwise every tab
-       switch moves the right-hand edge. -->
-  <div class="flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-5">
+  <!-- Fills the column, as /settings/ai does: the connection rows, the run
+       table and the link list are all row-shaped, and a row spends width on
+       the things it lists rather than on a gutter beside them. -->
+  <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('nav.connectors') }}</h1>

@@ -872,6 +872,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connectors/{id}/github",
+      "tag": "connectors",
+      "summary": "The connector's GitHub App grants and the viewer's GitHub identity",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/connectors/{id}/links",
       "tag": "connectors",
       "summary": "The external item <-> page identity map",
@@ -967,6 +977,16 @@
       "summary": "Branches of one repository, its default first",
       "role": "admin",
       "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/connectors/github/identity",
+      "tag": "connectors",
+      "summary": "Disconnect the caller's GitHub account",
+      "role": null,
+      "source": null,
       "public": false,
       "platformAdmin": false
     },
@@ -2462,7 +2482,7 @@
     },
     {
       "name": "knowledge_create_revision",
-      "description": "Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it.",
+      "description": "Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it. Content without a frontmatter block keeps the branch head's frontmatter (tags, relations); include a block to replace it.",
       "inputs": [
         {
           "name": "documentId",
@@ -2534,7 +2554,7 @@
     },
     {
       "name": "knowledge_get_document_content",
-      "description": "The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page.",
+      "description": "The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page. `markdown` is the body without its frontmatter block; posting it back as-is keeps the frontmatter.",
       "inputs": [
         {
           "name": "documentId",

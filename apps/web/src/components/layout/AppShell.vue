@@ -49,26 +49,11 @@ const chromeHeight = computed(
  */
 const mobileOpen = ref(false)
 
-/**
- * The editor's assistant panel takes the rail's place on the left edge
- * (docs/features/34). Derived here from the route and the panel's cookie-backed
- * state rather than set by the page, because the shell renders before the page
- * does: a page that hid the rail from its own setup would be too late for the
- * server's frame, and the rail would slide shut on every load.
- */
-const railYielded = computed(() => route.meta.assistantPanel === true && sidebar.aiPanelOpen)
-const railOpen = computed(() => sidebar.open && !railYielded.value)
+const railOpen = computed(() => sidebar.open)
 
 function toggleSidebar() {
   if (!window.matchMedia('(min-width: 1024px)').matches) {
     mobileOpen.value = !mobileOpen.value
-    return
-  }
-  // Asking for the rail while the panel holds its place means "give me
-  // navigation back": the panel closes and the rail returns as it was left.
-  if (railYielded.value) {
-    sidebar.setAiPanel(false)
-    if (!sidebar.open) sidebar.setOpen(true)
     return
   }
   sidebar.toggle()

@@ -7,14 +7,16 @@ functionality similar to assistant page»
 
 ## What
 
-- **A panel on the left of the editor**, toggled from the header's Assistant
+- **A panel on the right of the editor**, toggled from the header's Assistant
   button or `⌘J` / `Ctrl+J`. It is the assistant page's chat (`ChatPane`,
   mounted `embedded`): same composer, modes, agents, skills, models and threads,
   so nothing the assistant page can do is missing here.
-- **It takes the navigation rail's place.** While open on an editor route the
-  shell yields the rail (`meta.assistantPanel`); asking for the rail from the
-  topbar closes the panel and brings the rail back as it was left. Below `lg`
-  there is no rail to replace, so the panel is a drawer over the page.
+- **It opens on the right, beside the page.** It first took the navigation
+  rail's place on the left (the shell yielded the rail through
+  `meta.assistantPanel`). That put the conversation on the edge people reach
+  for navigation, and opening it moved the rail as well as the page, so it moved
+  to the right edge and the rail now stays as the author left it. Below `lg` the
+  panel is a drawer over the page from the right.
 - **It reads the draft, not the published page.** Every turn sent while the
   editor is mounted carries `draft: { title, markdown }` — unstaged edits
   included — and the prompt grounds the model in that instead of the head
@@ -88,8 +90,8 @@ accent. Under `prefers-reduced-motion` the panel crossfades, the reveal is
 dropped, and the gutter alone marks new text.
 
 **Open state is a cookie** (`kn_aipanel`, unset = closed), read during SSR like
-the rail's, because while it is open the rail is not — a page that painted the
-rail and then swapped it would do so on every load.
+the rail's, so the server paints the panel where the author left it rather than
+sliding it in on every load.
 
 **Threads.** Opening the panel reopens the most recent chat about this page
 (`openForDocument`), or starts blank; "New chat" is `startBlank()`, so a thread

@@ -14,7 +14,7 @@
  * issues is a column of links nobody follows from here.
  */
 import { computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useQuery } from '@tanstack/vue-query'
@@ -33,6 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs } from '@/components/layout/page'
 import type { PageTab } from '@/components/layout/page'
 import ConnectorWorkItems from '@/components/connectors/ConnectorWorkItems.vue'
+import GithubAccessCard from '@/components/connectors/GithubAccessCard.vue'
 import { RUN_STATUS_CLASS, RUN_STATUS_LABEL } from '@/components/connectors/connector-ui'
 import { useAuthStore } from '@/stores/auth'
 import { relativeTime } from '@/lib/api'
@@ -41,6 +42,7 @@ import { formatDateTime } from '@/lib/format'
 type TabKey = 'work-items' | 'links' | 'runs'
 
 const route = useRoute()
+const router = useRouter()
 const { t } = useI18n()
 const auth = useAuthStore()
 
@@ -101,6 +103,30 @@ async function startSync(direction: 'pull' | 'push') {
     toast.error(errorMessage(e, t))
   }
 }
+
+/**
+ * A repository on github.com (docs/features/36). The access card is about the
+ * GitHub App and GitHub's OAuth, so a GitLab or self-hosted remote has nothing
+ * for it to show — absent, not empty, the Work items tab rule.
+ */
+const onGithub = computed(() => /^https:\/\/github\.com\//i.test(connector.value?.config.repoUrl ?? ''))
+
+/**
+ * GitHub's OAuth callback lands the browser back here with `?github=<outcome>`
+ * (the card's Reconnect sets this page as the return path). Said once as a
+ * toast, then removed from the URL so a reload does not say it again.
+ */
+watch(
+  () => route.query.github,
+  (outcome) => {
+    if (typeof outcome !== 'string') return
+    if (outcome === 'connected') toast.success(t('connectors.githubAccess.returned.connected'))
+    else toast.error(t(`connectors.githubAccess.returned.${outcome === 'auth-failed' || outcome === 'install-failed' ? outcome : 'error'}`))
+    const { github: _dropped, ...rest } = route.query
+    void router.replace({ query: rest })
+  },
+  { immediate: true },
+)
 
 // The route component is reused across ids, so a navigation between two
 // connectors has to reset the tab-scoped queries rather than show the last one's.
@@ -206,6 +232,8 @@ watch(connectorId, () => {
             {{ connector.lastRun.error.message }}
           </p>
         </div>
+
+        <GithubAccessCard v-if="canManage && onGithub" :connector-id="connectorId" />
 
         <!-- Said once, on the connector, rather than as an empty state inside a
              tab that is not offered: the reason there is no Work items tab is a

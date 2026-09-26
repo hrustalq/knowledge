@@ -122,6 +122,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 33  | Connect AI           | MCP over HTTP at `/v1/mcp` per caller, named/narrowed API keys, per-client configs, generated SKILL.md |
 | 34  | Editor assistant     | Left sidebar chat that reads the draft and streams `edit_draft` suggestions into the page |
 | 35  | PR drift check       | A pull/merge request queues the `sentinel`; it judges the tied pages, and the API proposes fixes and comments once |
+| 36  | GitHub access        | Connector card listing installation grants vs App requests vs feature needs; OAuth reconnect/disconnect |
 
 ## Conventions
 

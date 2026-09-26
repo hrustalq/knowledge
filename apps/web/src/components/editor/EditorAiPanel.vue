@@ -9,12 +9,12 @@
 // the assistant writes into the page is summarized in the dock above the
 // composer, where the author accepts or discards it without hunting.
 //
-// It takes the navigation rail's place on the left edge (AppShell yields the
-// rail while this is open): the page stays the widest thing on screen, and the
-// conversation sits where navigation was — beside what it is changing.
+// It opens on the right edge, beside the page it is changing. The navigation
+// rail on the left stays as the author left it: the conversation is a second
+// thing to look at, not a replacement for getting somewhere else.
 import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
-import { History, PanelLeftClose, Sparkles, SquarePen } from 'lucide-vue-next'
+import { History, PanelRightClose, Sparkles, SquarePen } from 'lucide-vue-next'
 import { useAssistantStore } from '@/stores/assistant'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -120,7 +120,7 @@ defineExpose({ focus: () => pane.value?.focus() })
         <Tooltip>
           <TooltipTrigger as-child>
             <Button variant="ghost" size="icon-sm" :aria-label="t('editorAi.close')" @click="emit('close')">
-              <PanelLeftClose class="size-4" />
+              <PanelRightClose class="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>

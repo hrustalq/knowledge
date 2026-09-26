@@ -32,14 +32,12 @@ export function createRouter() {
       {
         path: '/documents/:id/edit',
         component: () => import('@/pages/EditorPage.vue'),
-        // `assistantPanel`: this route hosts the editor's assistant panel, which
-        // takes the rail's place on the left edge while open (docs/features/34).
-        meta: { fill: true, bare: true, assistantPanel: true },
+        meta: { fill: true, bare: true },
       },
       {
         path: '/create',
         component: () => import('@/pages/EditorPage.vue'),
-        meta: { fill: true, bare: true, assistantPanel: true },
+        meta: { fill: true, bare: true },
       },
       // /upload keeps its path so every existing link, bookmark and sidebar
       // shortcut still lands; /import is the name the flow now goes by.

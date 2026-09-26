@@ -10,8 +10,8 @@
 // tags — lives in a settings sheet rather than a form above the content, so
 // what is on screen while you write is the page and nothing else.
 //
-// The assistant lives in a panel on the left (docs/features/34) that takes the
-// navigation rail's place while open. It reads the draft as it stands and
+// The assistant lives in a panel on the right (docs/features/34), beside the
+// page it is changing. It reads the draft as it stands and
 // writes into it as suggestions — see EditorAiPanel and extensions/ai-suggestions.
 //
 // Edits are a working copy until published (lib/working-copy): kept in this
@@ -21,7 +21,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { onKeyStroke } from '@vueuse/core'
+import { onKeyStroke, useStorage } from '@vueuse/core'
 import { History, MoreHorizontal, Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
@@ -59,6 +59,7 @@ import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 import {
@@ -490,8 +491,14 @@ async function ensureDocumentId(): Promise<string | null> {
     workingCopy.flush()
     removeWorkingCopy(workingCopyKey(getWorkspaceId(), null))
     void store.fetchList()
-    // Keep the URL honest without unmounting the editor mid-upload.
-    await router.replace(`/documents/${res.documentId}/edit`)
+    // Keep the URL honest without unmounting the editor mid-upload. Not a
+    // leave, so the leave question must not interrupt it.
+    leaving = true
+    try {
+      await router.replace(`/documents/${res.documentId}/edit`)
+    } finally {
+      leaving = false
+    }
     toast.success(t('editor.draftCreatedForFiles'))
     return res.documentId
   } catch (e) {
@@ -613,9 +620,26 @@ async function save() {
 
 /* ------------------------------------------------- leaving the editor */
 
+/**
+ * Whether leaving with stored edits asks first. Per browser, like the working
+ * copy it guards; `useStorage` never reads localStorage during SSR, so the
+ * server keeps the default and nothing leaks between requests.
+ */
+const confirmLeave = useStorage('kn_editor_confirm_leave', true)
+
 const confirmOpen = ref(false)
 /** Where the interrupted navigation was heading, replayed once confirmed. */
-let pendingLeave: (() => void) | null = null
+let pendingLeave: (() => Promise<unknown>) | null = null
+/** Set while a confirmed leave replays its navigation, so the guard lets it by. */
+let leaving = false
+/**
+ * The question can be skipped only where it is a courtesy: the edits are
+ * stored and the exit is not Cancel. Set per prompt, not derived, so the
+ * checkbox does not appear mid-dialog if a write starts failing.
+ */
+const leaveOptional = ref(false)
+/** The dialog's "don't ask again", committed only by leaving — not by staying. */
+const stopAsking = ref(false)
 
 function destination(): string {
   return editId.value ? `/documents/${editId.value}` : '/documents'
@@ -631,15 +655,23 @@ function cancel() {
     return
   }
   workingCopy.flush()
-  pendingLeave = () => void router.push(destination())
+  pendingLeave = () => router.push(destination())
+  leaveOptional.value = false
   confirmOpen.value = true
 }
 
 function leave() {
   confirmOpen.value = false
+  if (leaveOptional.value && stopAsking.value) confirmLeave.value = false
   const go = pendingLeave
   pendingLeave = null
-  go?.()
+  if (!go) return
+  // Cleared once the replay settles: a navigation another guard refuses must
+  // not leave this one waving every later exit through.
+  leaving = true
+  void go().finally(() => {
+    leaving = false
+  })
 }
 
 function discardAndLeave() {
@@ -651,22 +683,27 @@ function keepAndLeave() {
   if (workingCopy.flush()) leave()
 }
 
-// Any other in-app navigation leaves without asking once the edits are stored
-// — nothing is lost, and they are restored on return. Only a browser that
-// refused the write still gets the discard question.
+// Any other in-app navigation asks too, even though the edits are already
+// stored and restored on return: leaving a page mid-edit is worth a beat
+// before it happens. The dialog's "don't ask again" turns that off
+// (`kn_editor_confirm_leave`); a refused write asks regardless, since there
+// leaving really would lose the edits.
 onBeforeRouteLeave((to) => {
-  if (!unstaged.value || busy.value) return true
-  if (workingCopy.flush()) return true
-  pendingLeave = () => void router.push(to.fullPath)
+  if (leaving || !unstaged.value || busy.value) return true
+  const stored = workingCopy.flush()
+  if (stored && !confirmLeave.value) return true
+  pendingLeave = () => router.push(to.fullPath)
+  leaveOptional.value = stored
+  stopAsking.value = false
   confirmOpen.value = true
   return false
 })
 
-// Closing the tab or reloading: write the copy and let it go. The browser's
-// own prompt — a custom one cannot be shown there — is for the case where the
-// write failed and leaving really would lose the edits.
+// Closing the tab or reloading: write the copy, then the browser's own prompt
+// — a custom one cannot be shown there — under the same rule as above.
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (!unstaged.value || workingCopy.flush()) return
+  if (!unstaged.value) return
+  if (workingCopy.flush() && !confirmLeave.value) return
   event.preventDefault()
   event.returnValue = ''
 }
@@ -678,26 +715,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="kn-page-editor" :data-ai-open="aiOpen ? 'true' : 'false'">
-    <!-- The assistant takes the rail's place on the left edge. The slot's width
-         is what animates, on the rail's own curve, so as the rail slides out the
-         panel slides in and the page column barely moves. -->
-    <div class="kn-ai-slot" :inert="!aiOpen || undefined">
-      <EditorAiPanel
-        v-if="aiMounted"
-        ref="aiPanel"
-        :document-id="editId"
-        :pending="aiPending"
-        :blank="!body.trim()"
-        :mod="modKey"
-        @close="setAiOpen(false)"
-        @accept="editorRef?.acceptAi()"
-        @discard="editorRef?.discardAi()"
-        @reveal="editorRef?.revealAi()"
-      />
-    </div>
-    <!-- Below lg the panel floats over the page; this is how you get back. -->
-    <div class="kn-ai-scrim" aria-hidden="true" @click="setAiOpen(false)" />
-
     <div class="kn-page-column">
       <header class="kn-page-head">
         <div class="kn-page-crumb">
@@ -807,11 +824,34 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <!-- The assistant opens on the right edge, after the page in reading and
+         tab order. The slot's width is what animates, on the rail's curve, so
+         the page column narrows in the same motion as the panel arrives. -->
+    <div class="kn-ai-slot" :inert="!aiOpen || undefined">
+      <EditorAiPanel
+        v-if="aiMounted"
+        ref="aiPanel"
+        :document-id="editId"
+        :pending="aiPending"
+        :blank="!body.trim()"
+        :mod="modKey"
+        @close="setAiOpen(false)"
+        @accept="editorRef?.acceptAi()"
+        @discard="editorRef?.discardAi()"
+        @reveal="editorRef?.revealAi()"
+      />
+    </div>
+    <!-- Below lg the panel floats over the page; this is how you get back. -->
+    <div class="kn-ai-scrim" aria-hidden="true" @click="setAiOpen(false)" />
+
     <!-- Leaving with unstaged edits. Normally they are kept and this asks only
          whether to keep them; when the browser refused to store them, keeping is
          not on offer and this is the old discard question. -->
+    <!-- Three actions, and Russian runs them long: the dialog is wider than
+         the default, the row wraps rather than overflowing, and staying is
+         set apart on the left from the two ways of leaving. -->
     <AlertDialog v-model:open="confirmOpen">
-      <AlertDialogContent>
+      <AlertDialogContent class="sm:max-w-2xl">
         <AlertDialogHeader>
           <AlertDialogTitle>
             {{ workingCopy.persistFailed.value ? t('editor.discardChanges') : t('editor.unstaged.leaveTitle') }}
@@ -820,8 +860,14 @@ onBeforeUnmount(() => {
             {{ workingCopy.persistFailed.value ? t('editor.discardBody') : t('editor.unstaged.leaveBody') }}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel @click="pendingLeave = null">{{ t('editor.keepEditing') }}</AlertDialogCancel>
+        <!-- Only on a navigation that would keep the edits: Cancel and a refused
+             write are questions about losing them, and those always ask. -->
+        <label v-if="leaveOptional" class="flex items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox v-model="stopAsking" />
+          {{ t('editor.unstaged.dontAskAgain') }}
+        </label>
+        <AlertDialogFooter class="sm:flex-wrap">
+          <AlertDialogCancel class="sm:mr-auto" @click="pendingLeave = null">{{ t('editor.keepEditing') }}</AlertDialogCancel>
           <AlertDialogAction
             class="bg-destructive text-white hover:bg-destructive/90"
             @click="discardAndLeave"

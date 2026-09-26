@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.12.0] — 2026-09-27
 
 ### Added
 
@@ -24,34 +24,34 @@ in the pull request that introduces them — see
   says whose job it is: *pending* permissions are accepted by the installation's
   owner (**Review on GitHub**), *missing* ones must first be added to the App
   registration (**Edit the App**). Gaps in features the connector does not use
-  are shown but not flagged.
+  are shown but not flagged. (#64)
 - **Reconnect or disconnect your GitHub account.** The same card shows which
   GitHub account you are linked as and whether its authorisation has lapsed.
   **Reconnect** runs GitHub's authorisation again with the account picker, so
   you can switch accounts; **Disconnect** forgets your link without touching the
-  workspace's installations or any sync.
+  workspace's installations or any sync. (#64)
 
 ### Changed
 
 - **The editor's assistant opens on the right.** It used to take the navigation
   rail's place on the left; it now docks beside the page on the right, and the
-  rail stays as you left it.
+  rail stays as you left it. (#84)
 - **The editor uses the width of the window.** The title and text used to sit in
   a narrow centred column with wide empty margins; they now fill the editor,
-  with a margin that grows with the window. Reading a page is unchanged.
+  with a margin that grows with the window. Reading a page is unchanged. (#84)
 - **Leaving the editor with unpublished changes asks first.** Changes are still
   kept in the browser and restored when you come back, but following a link away
   now asks whether to keep or discard them. Tick **Don't ask again** to go back
   to leaving without the question; a browser that refuses to keep the changes
-  always asks.
+  always asks. (#84)
 - **Settings → AI and Settings → Connectors fill the page** instead of stopping at
-  a fixed width, and the AI form's fields sit side by side on wide screens.
+  a fixed width, and the AI form's fields sit side by side on wide screens. (#84)
 
 ### Fixed
 
 - **The description on a merge request's overview no longer sits in an
-  oversized box.** Its padding now matches the merge panel above it.
-- **The leave dialog's buttons no longer overflow the dialog** in Russian.
+  oversized box.** Its padding now matches the merge panel above it. (#84)
+- **The leave dialog's buttons no longer overflow the dialog** in Russian. (#84)
 
 ## [0.11.0] — 2026-09-26
 
@@ -867,7 +867,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.11.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/hrustalq/knowledge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/hrustalq/knowledge/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/hrustalq/knowledge/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/hrustalq/knowledge/compare/v0.9.0...v0.10.0

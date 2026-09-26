@@ -267,6 +267,16 @@
     "pushOnPublishHint": "Push a linked page back whenever a new revision is indexed.",
     "webhookSecret": "Webhook secret",
     "webhookHint": "Set a secret to accept change notifications from the external system. Requests are rejected unless they are signed with it.",
+    "driftCheck": "Drift check",
+    "driftCheckMode": {
+      "off": "Off",
+      "report": "Report on the pull request",
+      "propose": "Report and propose page updates"
+    },
+    "driftCheckHint": "When a pull or merge request opens or gets new commits, the Sentinel agent checks the pages it may make wrong and comments on it once, updating that comment on every push. Propose also opens a merge request here for every page it drafted a fix for.",
+    "webhookSecretKeep": "Leave empty to keep the current secret",
+    "driftWebhookHint": "GitLab, or a GitHub repository hook added by hand: send Merge request / Pull request events to this connector's webhook, signed with this secret.",
+    "driftWebhookApp": "This repository is connected through the GitHub App, whose webhook already delivers pull requests — a secret is only needed for a hook added by hand.",
     "test": "Test",
     "testOk": "Connected",
     "testFailed": "Could not connect",
@@ -1420,7 +1430,8 @@
       },
       "trigger": {
         "manual": "manual",
-        "schedule": "scheduled"
+        "schedule": "scheduled",
+        "webhook": "pull request"
       },
       "stage": {
         "scanning": "Scanning pages",
@@ -1431,7 +1442,10 @@
         "snapshot": "Downloading the repository",
         "docs": "Reading what is already declared",
         "candidates": "Ranking source files",
-        "reading": "Reading source files"
+        "reading": "Reading source files",
+        "diff": "Reading the change",
+        "related": "Finding related pages",
+        "judging": "Checking pages against the change"
       },
       "warnings": "no warnings | {count} warning | {count} warnings",
       "sources": "Web sources",

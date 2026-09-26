@@ -219,6 +219,18 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         placeholder: 'docs',
         help: 'Only markdown under this path is synced. An Obsidian vault is just a folder.',
       },
+      {
+        key: 'driftCheck',
+        label: 'Drift check',
+        kind: 'select',
+        required: false,
+        help: 'When a pull or merge request opens or gets new commits, check the pages it may make wrong. Needs a webhook.',
+        options: [
+          { value: 'off', label: 'Off' },
+          { value: 'report', label: 'Report on the pull request' },
+          { value: 'propose', label: 'Report and propose page updates' },
+        ],
+      },
     ],
   },
   {
@@ -261,6 +273,18 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         required: false,
         placeholder: '24',
         help: 'At most this many module pages, largest first. Defaults to 24.',
+      },
+      {
+        key: 'driftCheck',
+        label: 'Drift check',
+        kind: 'select',
+        required: false,
+        help: 'When a pull or merge request opens or gets new commits, check the pages it may make wrong. Needs a webhook.',
+        options: [
+          { value: 'off', label: 'Off' },
+          { value: 'report', label: 'Report on the pull request' },
+          { value: 'propose', label: 'Report and propose page updates' },
+        ],
       },
     ],
   },
@@ -324,6 +348,33 @@ export interface ConnectorTestResponse {
   ok: boolean;
   /** Upstream's own message on failure, or a one-line summary of what was reached. */
   detail: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Drift check on pull / merge requests (docs/features/35)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a repository connector does when a pull or merge request opens or moves.
+ *
+ * - `off` — nothing. The default, and what an absent key reads as, so every
+ *   connector created before this feature behaves exactly as it did.
+ * - `report` — check the pages the change touches and say which ones drift:
+ *   findings on an agent run, and one comment on the pull request, kept up to
+ *   date rather than restacked on every push.
+ * - `propose` — `report`, plus a merge request in the knowledge base for every
+ *   page the check drafted a fix for.
+ *
+ * A config field rather than a column: `Connector.config` is free-form, and
+ * the catalogue below is what makes the form, the guard and the trigger agree.
+ */
+export const DRIFT_CHECK_MODES = ['off', 'report', 'propose'] as const;
+export type DriftCheckMode = (typeof DRIFT_CHECK_MODES)[number];
+export const DRIFT_CHECK_CONFIG_KEY = 'driftCheck';
+
+export function driftCheckMode(config: Record<string, unknown> | null | undefined): DriftCheckMode {
+  const value = config?.[DRIFT_CHECK_CONFIG_KEY];
+  return (DRIFT_CHECK_MODES as readonly unknown[]).includes(value) ? (value as DriftCheckMode) : 'off';
 }
 
 // ---------------------------------------------------------------------------

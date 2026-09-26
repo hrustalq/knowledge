@@ -76,9 +76,15 @@ const repositoryName = (run: AgentRunSummary): string | null => {
  * cites source files, not pages, so there is nothing to rewrite or declare — it
  * is *created*, as a new page. A created finding then cites its page, which
  * is why a draft finding is never proposable even once it has a document.
+ *
+ * Except one: a sentinel finding (docs/features/35) carries a draft *and*
+ * cites a page from the start — the draft is the corrected page, and proposing
+ * publishes it as a merge request without a second model call. The two are
+ * told apart by the claim: creating a page leaves `proposedAt` set for good.
  */
 function canPropose(f: AgentFinding): boolean {
-  return !f.mergeRequestId && !f.draft && f.kind !== 'orphan' && f.kind !== 'relation' && f.documentIds.length > 0
+  if (f.mergeRequestId || f.kind === 'orphan' || f.kind === 'relation' || f.documentIds.length === 0) return false
+  return !f.draft || !f.proposedAt
 }
 
 function canApplyRelations(f: AgentFinding): boolean {
@@ -195,6 +201,12 @@ const severityClass = (f: AgentFinding) =>
               <span class="font-medium">{{ run.agentName }}</span>
               <Badge variant="secondary" class="font-normal">{{ t(`ai.runs.trigger.${run.trigger}`) }}</Badge>
               <Badge v-if="repositoryName(run)" variant="outline" class="font-normal">{{ repositoryName(run) }}</Badge>
+              <!-- The change a sentinel run checked (docs/features/35). Text, not
+                   a link: this sits inside the row's toggle button, where a link
+                   is invalid markup — each finding's source chip links out. -->
+              <Badge v-if="run.input?.pullRequest" variant="outline" class="max-w-64 truncate font-normal">
+                #{{ run.input.pullRequest.number }} {{ run.input.pullRequest.title }}
+              </Badge>
               <span v-if="run.findingCount" class="text-muted-foreground text-xs">
                 {{ t('ai.runs.findings', { count: run.findingCount }) }}
               </span>

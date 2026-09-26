@@ -198,6 +198,7 @@
     "agentRunInFlight": "A run of \"{key}\" is already in progress.",
     "agentNeedsConnector": "Agent \"{key}\" reads one repository — pick which connector it should run against.",
     "agentConnectorInvalid": "{id} is not an enabled repository connector in this workspace.",
+    "agentNeedsPullRequest": "Agent \"{key}\" checks one pull or merge request, and this run names none.",
     "findingNoDraft": "This finding carries no page draft to create.",
     "findingAlreadyCreated": "This finding's page has already been created."
   },

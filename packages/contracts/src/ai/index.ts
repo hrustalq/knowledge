@@ -721,6 +721,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'cartographer',
   /** Reverse-documents a connected repository's undeclared business logic (docs/features/31). */
   'archaeologist',
+  /** Checks the pages a pull or merge request may have made wrong (docs/features/35). */
+  'sentinel',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -739,11 +741,37 @@ export function isConnectorScopedAgent(key: string): boolean {
 
 /**
  * What a run was asked to do — `agent_runs.input`. `note` seeds an extra
- * instruction; `connectorId` scopes a connector-scoped agent to one repository.
+ * instruction; `connectorId` scopes a connector-scoped agent to one repository;
+ * `pullRequest` names the change a sentinel run checks (docs/features/35).
  */
 export interface AgentRunInput {
   note?: string;
   connectorId?: string;
+  pullRequest?: AgentRunPullRequest;
+  /**
+   * Set once the API has acted on a finished sentinel run — proposals opened,
+   * the pull request commented on. The claim that stops two sweeps doing it
+   * twice; never set by anything else.
+   */
+  publishedAt?: string;
+}
+
+/**
+ * The pull request (GitHub) or merge request (GitLab) a sentinel run checks.
+ *
+ * `number` is the host's per-repository number — GitHub's `number`, GitLab's
+ * `iid` — because that is what every API call and every URL is keyed on.
+ * `headSha` is what makes a run specific: a push to the branch is a new head
+ * and a new check, a redelivery of the same head is the same one.
+ */
+export interface AgentRunPullRequest {
+  number: number;
+  title: string;
+  url: string;
+  headSha: string;
+  headRef: string | null;
+  baseRef: string | null;
+  author: string | null;
 }
 
 /**
@@ -940,8 +968,17 @@ export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
  * nothing produces is the defect this feature was written against
  * (`WorkflowStep.tools`, declared and ignored). Add `'event'` back together
  * with the service that emits it, and with WorkflowTriggerService's guards.
+ *
+ * `'webhook'` is not that `'event'`: it is emitted by exactly one service,
+ * `DriftTriggerService`, for exactly one agent, and never from the event bus —
+ * so none of the re-trigger guards a bus-driven run would need apply to it.
  */
-export const AGENT_RUN_TRIGGERS = ['manual', 'schedule'] as const;
+export const AGENT_RUN_TRIGGERS = [
+  'manual',
+  'schedule',
+  /** A pull or merge request webhook started a sentinel run (docs/features/35). */
+  'webhook',
+] as const;
 export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
 
 export const AGENT_FINDING_KINDS = [

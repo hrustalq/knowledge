@@ -101,18 +101,7 @@ export class AgentFindingsService {
     }
 
     try {
-      const drafter = await this.registry.resolve(workspaceId, 'drafter');
-      if (!drafter.enabled || !drafter.config.enabled) {
-        throw new BadRequestException(t('error.ai.assistantDisabled'));
-      }
-      if (drafter.missing.length > 0) {
-        throw new BadRequestException(
-          t('error.ai.drafterCannot', { capabilities: drafter.missing.join(', ') }),
-        );
-      }
-      await this.usage.assertWithinBudget(workspaceId, principal.userId);
-
-      const markdown = await this.draft(finding, document, drafter, principal, run.locale as Locale);
+      const markdown = await this.replacementFor(finding, document, workspaceId, principal, run.locale as Locale);
       const title = `${finding.title.slice(0, 200)}`;
       const branch = `agent/${run.agentKey}-${Date.now()}`;
 
@@ -145,8 +134,14 @@ export class AgentFindingsService {
             {
               sourceBranch: branch,
               title,
-              description:
-                `Proposed from a ${run.agentKey} run.\n\n**${finding.kind}** — ${finding.detail}`.slice(0, 4_000),
+              // The evidence travels with the proposal: a reviewer deciding
+              // whether a page drifted wants the pull request that moved it.
+              description: (
+                `Proposed from a ${run.agentKey} run.\n\n**${finding.kind}** — ${finding.detail}` +
+                (finding.sources?.length
+                  ? `\n\n${finding.sources.map((src) => `- [${src.title}](${src.url})`).join('\n')}`
+                  : '')
+              ).slice(0, 4_000),
             },
             principal.userId,
           );
@@ -349,6 +344,45 @@ export class AgentFindingsService {
       });
       throw error;
     }
+  }
+
+  /**
+   * The page's new source: the body the run already wrote, or one the drafter
+   * writes now — with the page's frontmatter put back either way.
+   *
+   * A sentinel finding (docs/features/35) arrives carrying its corrected page,
+   * written while the run had the diff in front of it. Handing that to the
+   * drafter would pay a second model call to re-derive, without the diff, what
+   * the first already said — so a drafted finding is published as drafted,
+   * the create-page rule applied to an existing page. No model call means no
+   * budget check either: nothing is spent.
+   *
+   * The frontmatter matters because both bodies are written without it — the
+   * drafter is shown `markdown`, the sentinel the same — and the revision is
+   * the whole file. Writing the body alone silently dropped `relations:`,
+   * `tags:` and `source:` from every page a proposal touched.
+   */
+  private async replacementFor(
+    finding: AgentFinding,
+    document: { id: string; title: string; workspaceId: string },
+    workspaceId: string,
+    principal: Principal,
+    locale: Locale,
+  ): Promise<string> {
+    const current = await this.documents.getContent(document.id).catch(() => null);
+    let body = finding.draft?.markdown?.trim() ?? '';
+    if (!body) {
+      const drafter = await this.registry.resolve(workspaceId, 'drafter');
+      if (!drafter.enabled || !drafter.config.enabled) {
+        throw new BadRequestException(t('error.ai.assistantDisabled'));
+      }
+      if (drafter.missing.length > 0) {
+        throw new BadRequestException(t('error.ai.drafterCannot', { capabilities: drafter.missing.join(', ') }));
+      }
+      await this.usage.assertWithinBudget(workspaceId, principal.userId);
+      body = await this.draft(finding, document, drafter, principal, locale);
+    }
+    return composeFrontmatter(body, current?.frontmatter ?? {});
   }
 
   /** The replacement page body, grounded in what the page says now. */

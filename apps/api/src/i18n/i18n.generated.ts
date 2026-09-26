@@ -32,6 +32,8 @@ export type I18nTranslations = {
         "cartographerDesc": string;
         "archaeologist": string;
         "archaeologistDesc": string;
+        "sentinel": string;
+        "sentinelDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -98,6 +100,25 @@ export type I18nTranslations = {
             "noCandidates": string;
             "budgetSpent": string;
             "summary": string;
+        };
+        "drift": {
+            "truncated": string;
+            "noFiles": string;
+            "noRelated": string;
+            "noModel": string;
+            "mayDriftTitle": string;
+            "mayDriftDetail": string;
+            "summaryNoModel": string;
+            "budgetSpent": string;
+            "searchFailed": string;
+            "summary": string;
+            "comment": {
+                "heading": string;
+                "clean": string;
+                "intro": string;
+                "proposed": string;
+                "footer": string;
+            };
         };
         "warning": {
             "fileNotRead": string;
@@ -359,6 +380,7 @@ export type I18nTranslations = {
             "agentRunInFlight": string;
             "agentNeedsConnector": string;
             "agentConnectorInvalid": string;
+            "agentNeedsPullRequest": string;
             "findingNoDraft": string;
             "findingAlreadyCreated": string;
         };

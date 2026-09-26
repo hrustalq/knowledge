@@ -43,6 +43,8 @@ import { AiUsageController } from './ai-usage.controller.js';
   ],
   controllers: [AiController, AiUsageController],
   providers: [AiAgentsService, AgentRunsService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],
-  exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService],
+  // AgentFindingsService for the drift check's publisher (docs/features/35),
+  // which proposes through the very path the Propose button takes.
+  exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService, AgentFindingsService],
 })
 export class AiModule {}

@@ -40,6 +40,15 @@ const MANIFESTS: Record<string, ManifestKind> = {
   Gemfile: 'ruby',
 };
 
+/**
+ * Whether a path is a manifest — the file that makes its directory a module.
+ * The drift check (docs/features/35) reads a changed one as a change to the
+ * repository's shape, which is what the hub page describes.
+ */
+export function isManifestPath(path: string): boolean {
+  return Object.hasOwn(MANIFESTS, path.slice(path.lastIndexOf('/') + 1));
+}
+
 /** Conventional entrypoint filenames, checked against a module's own files. */
 const ENTRYPOINT_NAMES = new Set([
   'main.go',

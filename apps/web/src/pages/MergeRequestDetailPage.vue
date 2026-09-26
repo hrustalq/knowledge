@@ -391,9 +391,16 @@ function refresh() {
 
         <!-- overview: description, then one timeline -->
         <template v-if="tab === 'overview'">
-          <Card v-if="mr.description">
-            <CardContent class="pt-4"><MarkdownView :markdown="mr.description" /></CardContent>
-          </Card>
+          <!-- The merge widget's box, not a Card: a Card's own 1.5rem inset
+               plus its content's put 2.5rem above a one-line description. The
+               first and last block margins go too, so the text sits in the
+               box the way the widget's rows do. -->
+          <div
+            v-if="mr.description"
+            class="rounded-lg border bg-card px-4 py-3 [&_.markdown-body>:first-child]:mt-0 [&_.markdown-body>:last-child]:mb-0"
+          >
+            <MarkdownView :markdown="mr.description" />
+          </div>
 
           <MrActivityFeed
             :merge-request-id="mr.mergeRequestId"

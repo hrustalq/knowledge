@@ -193,21 +193,21 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
 </script>
 
 <template>
-  <!-- A form keeps its own measure now that the page no longer caps at 64rem:
-       a 16rem label rail beside a control column reads as a form up to about
-       56rem and as a scattering of controls past it. The tables and the call
-       log on the sibling tabs fill the column instead. -->
-  <div v-if="query.isPending.value" class="max-w-[56rem] space-y-6">
-    <div v-for="i in 3" :key="i" class="grid gap-x-10 gap-y-4 border-b py-6 md:grid-cols-[16rem_minmax(0,1fr)]">
+  <!-- Fills the column like the sibling tabs. It used to cap at 56rem, which
+       left the form a narrow strip beside empty page on any wide screen; the
+       width now goes to the controls, whose field groups gain columns as it
+       grows (AiSettingsSection) instead of stretching one input across it. -->
+  <div v-if="query.isPending.value" class="space-y-6">
+    <div v-for="i in 3" :key="i" class="grid gap-x-10 gap-y-4 border-b py-6 md:grid-cols-[16rem_minmax(0,1fr)] xl:grid-cols-[20rem_minmax(0,1fr)]">
       <Skeleton class="h-4 w-32" />
-      <div class="max-w-xl space-y-4">
+      <div class="space-y-4">
         <Skeleton class="h-9 w-full" />
         <Skeleton class="h-9 w-full" />
       </div>
     </div>
   </div>
 
-  <form v-else-if="form" class="max-w-[56rem]" @submit.prevent="onSave">
+  <form v-else-if="form" @submit.prevent="onSave">
     <AiProvidersSection
       v-if="settings"
       :can-manage="canManage"
@@ -219,20 +219,21 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
       :title="t('ai.defaultProvider')"
       :description="t('ai.defaultProviderDesc')"
     >
-      <label class="block space-y-1.5">
-        <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
-          {{ t('ai.provider') }}
-          <span v-if="overridden('provider')" class="text-primary/70">{{ t('ai.overridden') }}</span>
-        </span>
-        <Select v-model="form.provider" :disabled="!canManage">
-          <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="p in PROVIDERS" :key="p.value" :value="p.value">{{ p.label }}</SelectItem>
-          </SelectContent>
-        </Select>
-      </label>
-
-      <div class="grid gap-4 sm:grid-cols-2">
+      <!-- One row at full width: provider, endpoint and model are read
+           together, and three columns keep each input input-sized. -->
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <label class="block space-y-1.5 sm:col-span-2 xl:col-span-1">
+          <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+            {{ t('ai.provider') }}
+            <span v-if="overridden('provider')" class="text-primary/70">{{ t('ai.overridden') }}</span>
+          </span>
+          <Select v-model="form.provider" :disabled="!canManage">
+            <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="p in PROVIDERS" :key="p.value" :value="p.value">{{ p.label }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </label>
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
             {{ t('ai.baseUrl') }}
@@ -249,7 +250,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
         </label>
       </div>
 
-      <div class="space-y-1.5">
+      <div class="space-y-1.5 xl:max-w-[66%]">
         <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
           {{ t('ai.apiKey') }}
           <span v-if="overridden('apiKey')" class="text-primary/70">· overridden</span>
@@ -295,7 +296,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
       :title="t('ai.behavior')"
       :description="t('ai.behaviorDesc')"
     >
-      <div class="grid gap-4 sm:grid-cols-3">
+      <div class="grid gap-4 sm:grid-cols-3 xl:grid-cols-4">
         <label class="block space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('ai.temperature') }}</span>
           <Input v-model.number="form.temperature" type="number" min="0" max="2" step="0.1" :disabled="!canManage" />
@@ -330,7 +331,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
       :title="t('ai.extraction')"
       :description="t('ai.extractionDesc')"
     >
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <label class="block space-y-1.5">
           <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
             {{ t('ai.extractionMinConfidence') }}
@@ -365,7 +366,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
       :title="t('ai.budgets')"
       :description="t('ai.budgetsDesc')"
     >
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <label class="block space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('ai.workspaceTokensPerMonth') }}</span>
           <Input v-model="form.workspaceMonthlyTokenBudget" :disabled="!canManage" :placeholder="t('ai.unlimited')" />
@@ -395,7 +396,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
       :title="t('ai.costEstimate')"
       :description="t('ai.costEstimateDesc')"
     >
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <label class="block space-y-1.5">
           <span class="text-muted-foreground text-xs font-medium">{{ t('ai.prompt') }}</span>
           <Input v-model="form.pricePromptPerMTok" :disabled="!canManage" placeholder="0.27" />

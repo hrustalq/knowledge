@@ -2078,7 +2078,8 @@
       "noSourceChanges": "The page text is unchanged.",
       "leaveTitle": "Leave with unstaged changes?",
       "leaveBody": "Kept, they stay in this browser and are restored when you reopen the page. Discarded, the page stays as published.",
-      "keepAndLeave": "Keep and leave"
+      "keepAndLeave": "Keep and leave",
+      "dontAskAgain": "Don’t ask again"
     },
     "moreActions": "More actions"
   },

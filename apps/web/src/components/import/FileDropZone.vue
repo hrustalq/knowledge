@@ -21,7 +21,8 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { FileUp, X } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
-import { ACCEPT_ATTR, PARSER_ICONS, formatBytes, inspectFile } from './formats'
+import { ACCEPT_ATTR, PARSER_ICONS, inspectFile, type Message } from './formats'
+import { formatBytes } from '@/lib/format'
 import { IMPORT_FORMATS } from '@knowledge/contracts'
 
 const { t } = useI18n()
@@ -31,7 +32,7 @@ const emit = defineEmits<{ 'update:modelValue': [File | null] }>()
 
 const input = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
-const rejection = ref<string | null>(null)
+const rejection = ref<Message | null>(null)
 
 const verdict = computed(() => (props.modelValue ? inspectFile(props.modelValue, props.maxBytes) : null))
 const Icon = computed(() => (verdict.value?.parser ? PARSER_ICONS[verdict.value.parser] : FileUp))
@@ -43,7 +44,7 @@ function take(file: File | undefined): void {
   if (!file) return
   const result = inspectFile(file, props.maxBytes)
   if (!result.ok) {
-    rejection.value = result.reason ?? 'That file cannot be imported.'
+    rejection.value = result.reason ?? { key: 'import.verdict.cannotImport' }
     emit('update:modelValue', null)
     return
   }
@@ -105,7 +106,7 @@ function clear(): void {
         <FileUp class="kn-drop-icon mb-2 size-8 text-muted-foreground" aria-hidden="true" />
         <span class="text-base font-medium">{{ t('import.dropFile') }}</span>
         <span class="mt-0.5 max-w-sm text-sm text-muted-foreground">{{ offered }}</span>
-        <span class="text-xs text-muted-foreground">Up to {{ formatBytes(maxBytes) }}</span>
+        <span class="text-xs text-muted-foreground">{{ t('import.upTo', { size: formatBytes(maxBytes) }) }}</span>
       </button>
 
       <input
@@ -118,7 +119,7 @@ function clear(): void {
       />
     </div>
 
-    <p v-if="rejection" class="text-sm text-destructive" role="alert">{{ rejection }}</p>
+    <p v-if="rejection" class="text-sm text-destructive" role="alert">{{ t(rejection.key, rejection.params ?? {}) }}</p>
   </div>
 </template>
 

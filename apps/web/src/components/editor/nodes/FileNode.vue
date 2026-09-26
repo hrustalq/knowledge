@@ -7,7 +7,8 @@ import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { Download, ExternalLink, File, FileText, Maximize2, Minimize2, Trash2 } from 'lucide-vue-next'
 import { Collapse } from '@/components/ui/collapse'
 import { resolveAssetUrl } from '@/lib/api'
-import { attachmentKind, formatBytes } from '@/lib/markdown/nodes'
+import { attachmentKind } from '@/lib/markdown/nodes'
+import { formatBytes } from '@/lib/format'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()

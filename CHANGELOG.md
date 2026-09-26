@@ -13,6 +13,27 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Agent edits no longer strip a page's tags and relations.** An agent that read
+  a page and posted it back through `knowledge_create_revision` or the assistant's
+  `propose_update` got the body without its frontmatter, so the merge request
+  quietly deleted the page's `tags:` and `relations:` and, once merged, its graph
+  edges. A body sent without a frontmatter block now keeps the current one; send a
+  block to change it. (#PR)
+- **Relations written as `targetKey:` reach the graph.** Frontmatter relations
+  spelled `{type, targetKey, name}` — the shape every tool schema uses, and so the
+  one agents write — were dropped at indexing without an error. They are now read
+  like `target:`. (#PR)
+
+### Operations
+
+- Pages already written with `targetKey:` need a reindex to gain their edges
+  (`knowledge_ingest` on the workspace). Pages an agent already stripped are not
+  repaired automatically — their frontmatter is still in the revision history.
+
 ## [0.10.0] — 2026-09-26
 
 

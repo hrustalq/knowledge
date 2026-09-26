@@ -14,6 +14,7 @@ import type {
   DocumentCategory,
 } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
+import { keepFrontmatter } from '../common/frontmatter.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { DocumentRelationsService } from '../documents/document-relations.service.js';
@@ -324,7 +325,8 @@ export class AssistantToolsService {
           description:
             'Propose a change to an EXISTING document: drafts the new markdown on a fresh branch and opens a merge ' +
             'request against its default branch for a human to review and merge — this NEVER edits the live page ' +
-            'directly. Use read_document first so the new markdown is a complete replacement, not a partial diff.',
+            'directly. Use read_document first so the new markdown is a complete replacement, not a partial diff. ' +
+            'The page keeps its frontmatter (tags, relations); change those with edit_relations instead.',
           parameters: {
             type: 'object',
             properties: {
@@ -639,6 +641,9 @@ export class AssistantToolsService {
     const branchName = `assistant/${Date.now()}`;
 
     try {
+      // read_document hands the model the body alone, so a bare body keeps the
+      // live page's frontmatter — otherwise every edit drops its relations.
+      const base = await this.documents.getContent(documentId).catch(() => null);
       await this.documents.createBranch(documentId, { name: branchName });
       const revision = await this.documents.createRevision(
         documentId,
@@ -648,7 +653,7 @@ export class AssistantToolsService {
       );
       const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
       if (!row) return this.fail('Draft revision disappeared before it could be written');
-      await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
+      await this.storage.putObjectText(row.s3Key, keepFrontmatter(markdown, base?.frontmatter), 'text/markdown');
       await this.documents.finalizeRevision(documentId, revision.revisionId);
 
       const description = typeof args.description === 'string' ? args.description.slice(0, 4_000) : undefined;

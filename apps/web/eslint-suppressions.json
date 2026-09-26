@@ -1,0 +1,222 @@
+{
+  "src/components/ai/AiAgentsPanel.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/ai/AiConfigPanel.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/ai/AiLogsPanel.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 5
+    }
+  },
+  "src/components/ai/AiPluginsPanel.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 6
+    }
+  },
+  "src/components/ai/AiProvidersSection.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 3
+    }
+  },
+  "src/components/ai/AiUsagePanel.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 4
+    }
+  },
+  "src/components/assistant/ChatComposer.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/assistant/ChatPane.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 6
+    }
+  },
+  "src/components/assistant/ChatRail.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/assistant/ThinkingTrail.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/assistant/ThreadDialogs.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 4
+    }
+  },
+  "src/components/docs/SkillPanel.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/editor/EditorAiPanel.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/editor/LinkDialog.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/editor/PagePickerDialog.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/editor/RichEditor.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/editor/TableControls.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/editor/Whiteboard.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 3
+    }
+  },
+  "src/components/import/FileDropZone.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/import/ImportReview.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/knowledge/ActivityFeed.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 4
+    }
+  },
+  "src/components/knowledge/AskAssistant.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/knowledge/AssistantPanel.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 6
+    }
+  },
+  "src/components/knowledge/DiffView.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/components/knowledge/DocumentPickerWidget.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/knowledge/RevisionsView.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 4
+    }
+  },
+  "src/components/knowledge/SearchResults.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/layout/AddMembersStep.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 3
+    }
+  },
+  "src/components/layout/CreateProjectStep.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 4
+    }
+  },
+  "src/components/layout/SwitcherCreateDialog.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/merge-requests/AiCheckPane.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/merge-requests/MrActivityFeed.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/merge-requests/MrSidebar.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/merge-requests/ThreadCard.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/ui/combobox/Combobox.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 2
+    }
+  },
+  "src/components/workflows/WorkflowRail.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 3
+    }
+  },
+  "src/components/workflows/WorkflowRunCard.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 4
+    }
+  },
+  "src/pages/AccessControlPage.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 3
+    }
+  },
+  "src/pages/AiSettingsPage.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/pages/DocumentDetailPage.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 4
+    }
+  },
+  "src/pages/EditorPage.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  },
+  "src/pages/GlossaryPage.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 4
+    }
+  },
+  "src/pages/MergeRequestDetailPage.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 3
+    }
+  },
+  "src/pages/WorkflowRunPage.vue": {
+    "@intlify/vue-i18n/no-raw-text": {
+      "count": 1
+    }
+  }
+}

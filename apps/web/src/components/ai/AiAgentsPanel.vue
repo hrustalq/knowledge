@@ -356,7 +356,7 @@ async function remove(agent: AiAgentSummary) {
           </SelectContent>
         </Select>
         <DialogFooter>
-          <Button variant="outline" @click="runOpen = false">{{ t('cancel') }}</Button>
+          <Button variant="outline" @click="runOpen = false">{{ t('common.cancel') }}</Button>
           <Button
             :disabled="!runConnectorId || runAgent.isPending.value"
             @click="runTarget && start(runTarget, runConnectorId)"

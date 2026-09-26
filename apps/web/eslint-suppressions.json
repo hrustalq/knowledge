@@ -89,11 +89,6 @@
       "count": 3
     }
   },
-  "src/components/import/FileDropZone.vue": {
-    "@intlify/vue-i18n/no-raw-text": {
-      "count": 1
-    }
-  },
   "src/components/import/ImportReview.vue": {
     "@intlify/vue-i18n/no-raw-text": {
       "count": 1

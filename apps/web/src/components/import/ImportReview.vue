@@ -25,7 +25,8 @@ import { Collapse } from '@/components/ui/collapse'
 import RichEditor from '@/components/editor/RichEditor.vue'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
-import { PARSER_ICONS, formatBytes } from './formats'
+import { PARSER_ICONS } from './formats'
+import { formatBytes } from '@/lib/format'
 
 const { t } = useI18n()
 

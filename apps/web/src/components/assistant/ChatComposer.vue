@@ -13,6 +13,7 @@ import { onKeyStroke, useDropZone, useFileDialog, useSpeechRecognition, useTexta
 import { CornerDownLeft, FileText, Mic, MicOff, Paperclip, SendHorizontal, Square, Upload, X } from 'lucide-vue-next'
 import type { AssistantChatAttachment, AssistantChatMode } from '@knowledge/contracts'
 import { ASSISTANT_MESSAGE_MAX_CHARS } from '@knowledge/contracts'
+import { formatNumber } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -423,7 +424,7 @@ function send() {
               class="ml-auto pr-1 text-[11px] tabular-nums"
               :class="tooLong ? 'text-destructive' : 'text-muted-foreground'"
             >
-              {{ draft.length.toLocaleString() }} / {{ ASSISTANT_MESSAGE_MAX_CHARS.toLocaleString() }}
+              {{ formatNumber(draft.length) }} / {{ formatNumber(ASSISTANT_MESSAGE_MAX_CHARS) }}
             </span>
 
             <span

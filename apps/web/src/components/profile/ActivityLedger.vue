@@ -21,9 +21,9 @@
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ActivityCalendarDay, ActivityCalendarResponse, ActivityKind } from '@knowledge/contracts'
+import type { ActivityCalendarDay, ActivityCalendarResponse, ActivityKind, Locale } from '@knowledge/contracts'
 import { ACTIVITY_KIND_STYLES } from '@/lib/activity-kinds'
-import { formatDate } from '@/lib/format'
+import { formatCalendarPart, formatDate } from '@/lib/format'
 
 const props = defineProps<{
   calendar: ActivityCalendarResponse | null
@@ -122,10 +122,7 @@ const monthLabels = computed(() => {
     if (week > weekCount.value - 3) return
     out.push({
       week,
-      label: new Intl.DateTimeFormat(locale.value === 'ru' ? 'ru-RU' : 'en-GB', {
-        month: 'short',
-        timeZone: 'UTC',
-      }).format(new Date(`${cell.date}T00:00:00.000Z`)),
+      label: formatCalendarPart(cell.date, 'month', locale.value as Locale),
     })
   })
   return out
@@ -138,12 +135,8 @@ const WEEKDAY_ROWS = [0, 2, 4]
 const weekdayLabels = computed(() =>
   Array.from({ length: 7 }, (_, i) =>
     WEEKDAY_ROWS.includes(i)
-      ? new Intl.DateTimeFormat(locale.value === 'ru' ? 'ru-RU' : 'en-GB', {
-          weekday: 'short',
-          timeZone: 'UTC',
-        })
-          // 2024-01-01 was a Monday, so +i lands on the weekday this row shows.
-          .format(new Date(`2024-01-0${1 + i}T00:00:00.000Z`))
+      ? // 2024-01-01 was a Monday, so +i lands on the weekday this row shows.
+        formatCalendarPart(`2024-01-0${1 + i}`, 'weekday', locale.value as Locale)
       : '',
   ),
 )

@@ -93,14 +93,6 @@ export function attachmentKind(mime: string): 'image' | 'pdf' | 'file' {
   return 'file';
 }
 
-export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
-  const n = bytes / 1024 ** i;
-  return `${n >= 10 || i === 0 ? Math.round(n) : n.toFixed(1)} ${units[i]}`;
-}
-
 /** Escape for interpolation into an HTML attribute or text node. */
 export function escapeHtml(value: string): string {
   return value

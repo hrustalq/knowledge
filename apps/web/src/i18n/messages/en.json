@@ -1759,7 +1759,15 @@
     "creatingPage": "Creating the page…",
     "createPage": "Create page",
     "tryAnotherFile": "Try another file",
-    "writeInstead": "Write the page instead"
+    "writeInstead": "Write the page instead",
+    "upTo": "Up to {size}",
+    "verdict": {
+      "unsupported": "{ext} files can’t be imported yet. Try {formats}.",
+      "noExtension": "That file has no extension, so there’s no way to tell what it is. Try {formats}.",
+      "tooLarge": "That file is {size} — the limit is {limit}.",
+      "empty": "That file is empty.",
+      "cannotImport": "That file cannot be imported."
+    }
   },
   "project": {
     "active": "active",

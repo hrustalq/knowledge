@@ -13,6 +13,22 @@ import vueParser from 'vue-eslint-parser'
 // Symbols and brand names that are the same in every language.
 const RAW_TEXT_IGNORE = ['·', '→', '←', '—', '–', '×', '/', '…', '•', '|', ':', '(', ')', '+', '-', '#', '@', 'Esc', 'Knowledge', 'MCP', 'GitHub', 'GitLab', 'Markdown']
 
+
+// Dates, numbers, sizes and lists go through lib/format.ts: a locale-less
+// `toLocale*()` follows the host (the server, during SSR — a hydration
+// mismatch), and a second `new Intl.*` is a second place deciding the locale.
+const LOCALE_FORMATTING = [
+  'error',
+  {
+    selector: "CallExpression[callee.property.name=/^toLocale(String|DateString|TimeString)$/]",
+    message: 'Use the lib/format.ts wrappers (formatNumber, formatDate, …) — a locale-less toLocale*() is a hydration mismatch.',
+  },
+  {
+    selector: "NewExpression[callee.object.name='Intl']",
+    message: 'Add a helper to lib/format.ts instead of building Intl formatters here.',
+  },
+]
+
 export default [
   // Pre-existing disable comments belong to no configured rule here.
   { linterOptions: { reportUnusedDisableDirectives: 'off' } },
@@ -36,6 +52,7 @@ export default [
         },
       ],
       '@intlify/vue-i18n/no-missing-keys': 'error',
+      'no-restricted-syntax': LOCALE_FORMATTING,
     },
   },
   {
@@ -48,6 +65,12 @@ export default [
     },
     rules: {
       '@intlify/vue-i18n/no-missing-keys': 'error',
+      'no-restricted-syntax': LOCALE_FORMATTING,
     },
+  },
+  {
+    // The one place allowed to build Intl formatters.
+    files: ['src/lib/format.ts'],
+    rules: { 'no-restricted-syntax': 'off' },
   },
 ]

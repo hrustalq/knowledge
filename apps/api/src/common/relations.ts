@@ -79,11 +79,21 @@ export function normalizeRelationTarget(target: unknown): FrontmatterRelation['t
  */
 export function normalizeRelation(value: unknown): FrontmatterRelation | null {
   if (!value || typeof value !== 'object') return null;
-  const { type, target } = value as { type?: unknown; target?: unknown };
+  const { type, target, targetKey, name } = value as {
+    type?: unknown;
+    target?: unknown;
+    targetKey?: unknown;
+    name?: unknown;
+  };
   if (typeof type !== 'string') return null;
   const canonicalType = normalizeRelationType(type);
   if (!canonicalType) return null;
-  const normalized = normalizeRelationTarget(target);
+  // `targetKey:` (+ a sibling `name:`) is the spelling every tool schema and
+  // fact listing uses, so it is what agents write back into frontmatter. Reading
+  // only `target:` dropped those relations at ingestion with no error.
+  const normalized = normalizeRelationTarget(
+    target ?? (typeof targetKey === 'string' ? { key: targetKey, ...(typeof name === 'string' ? { name } : {}) } : undefined),
+  );
   return normalized ? { type: canonicalType, target: normalized } : null;
 }
 

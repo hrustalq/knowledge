@@ -85,6 +85,8 @@ export function renderSkill(input: SkillInput): string {
 2. ${toolRef('knowledge_create_branch')} with a descriptive name (\`agent/fix-billing-retry-docs\`).
 3. ${toolRef('knowledge_create_revision')} on that branch with the **complete** new markdown, a one-line \`message\`, and
    \`baseRevisionId\` set to the base from step 1. A revision replaces the page; it is never a patch.
+   Step 1's \`markdown\` has the frontmatter split off into \`frontmatter\`. Send the body alone and the page keeps its
+   current \`tags\` and \`relations\`; send a \`---\` block only to change them, and then send all of it.
 4. ${toolRef('knowledge_create_merge_request')} from your branch to the default branch, with a description of what changed and why.
 5. Give the user the link: \`${webUrl}/merge-requests/<mergeRequestId>\`.
 

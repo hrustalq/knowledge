@@ -56,6 +56,21 @@ export function composeFrontmatter(body: string, data: Record<string, unknown>):
   return Object.keys(present).length > 0 ? matter.stringify(body, present) : body;
 }
 
+/**
+ * The page an agent submits as a full revision, with the base revision's
+ * frontmatter put back when the agent sent a bare body.
+ *
+ * Every read an agent gets (`getContent`) hands it the body with the block split
+ * off, and every write asks for "the complete markdown" — so posting back what it
+ * read silently deleted the page's `relations:` and `tags:`, and with them its
+ * graph edges. A submission that carries its own block, even an empty
+ * `---\n---`, is taken as written: that is how an agent changes or clears it.
+ */
+export function keepFrontmatter(next: string, base: Record<string, unknown> | null | undefined): string {
+  if (!base || Object.keys(base).length === 0 || matter.test(next)) return next;
+  return composeFrontmatter(next, base);
+}
+
 export function writeFrontmatter(raw: string, patch: Record<string, unknown>): string {
   const { data, body } = parseMarkdown(raw);
   const merged: Record<string, unknown> = { ...data };

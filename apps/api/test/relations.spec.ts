@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeEntityKey, normalizeRelationType } from '@knowledge/contracts';
-import { composeFrontmatter, parseMarkdown, writeFrontmatter } from '../src/common/frontmatter.js';
+import { composeFrontmatter, keepFrontmatter, parseMarkdown, writeFrontmatter } from '../src/common/frontmatter.js';
 import {
   dedupeRelations,
   normalizeRelation,
@@ -66,6 +66,24 @@ describe('frontmatter round trip', () => {
   it('composes a body with no frontmatter as the bare body', () => {
     expect(composeFrontmatter('# Title\n', {})).toBe('# Title\n');
   });
+
+  it('keeps the base frontmatter when an agent posts back the bare body it read', () => {
+    // getContent splits the block off, and every revision tool asks for "the
+    // complete markdown" — so a read-edit-write loop used to strip relations.
+    const base = parseMarkdown(PAGE);
+    const next = keepFrontmatter(`${base.body}\nMore text.\n`, base.data);
+    const { data, body } = parseMarkdown(next);
+
+    expect(data).toEqual(base.data);
+    expect(body).toContain('More text.');
+  });
+
+  it('takes a submitted block as written, including an emptied one', () => {
+    const base = parseMarkdown(PAGE).data;
+    expect(parseMarkdown(keepFrontmatter('---\ntags: [x]\n---\n# T\n', base)).data).toEqual({ tags: ['x'] });
+    expect(parseMarkdown(keepFrontmatter('---\n---\n# T\n', base)).data).toEqual({});
+    expect(keepFrontmatter('# T\n', null)).toBe('# T\n');
+  });
 });
 
 describe('relation normalization', () => {
@@ -77,6 +95,19 @@ describe('relation normalization', () => {
     expect(
       normalizeRelation({ type: 'DESCRIBES', target: { type: 'service', key: 'service:identity', name: 'Identity' } }),
     ).toEqual({ type: 'DESCRIBES', target: { key: 'service:identity', type: 'service', name: 'Identity' } });
+  });
+
+  it('accepts the targetKey spelling agents copy from tool schemas', () => {
+    // A page written as `{type, targetKey, name}` used to lose the relation at
+    // ingestion without an error — the entity simply never appeared.
+    expect(normalizeRelation({ type: 'RELATED_TO', targetKey: 'product:Babbler', name: 'Babbler' })).toEqual({
+      type: 'RELATED_TO',
+      target: { key: 'product:babbler', type: 'product', name: 'Babbler' },
+    });
+    expect(normalizeRelation({ type: 'RELATED_TO', targetKey: 'product:babbler' })?.target.name).toBe('babbler');
+    expect(
+      normalizeRelation({ type: 'DEPENDS_ON', target: 'service:a', targetKey: 'service:b' })?.target.key,
+    ).toBe('service:a');
   });
 
   it('refuses TAGGED_WITH and anything outside the allowlist', () => {

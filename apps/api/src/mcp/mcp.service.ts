@@ -24,6 +24,7 @@ import { ConnectorWorkItemsService } from '../connectors/connector-work-items.se
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
+import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
 import { renderSkill, type McpWhoami } from './skill.js';
@@ -32,7 +33,7 @@ import { renderSkill, type McpWhoami } from './skill.js';
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.10.0';
+export const MCP_SERVER_VERSION = '0.10.1';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -441,7 +442,8 @@ export class McpService {
       'knowledge_get_document_content',
       {
         description:
-          'The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page.',
+          'The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page. ' +
+          '`markdown` is the body without its frontmatter block; posting it back as-is keeps the frontmatter.',
         inputSchema: {
           documentId: z.string().uuid(),
           revisionId: z.string().uuid().optional(),
@@ -512,7 +514,8 @@ export class McpService {
       'knowledge_create_revision',
       {
         description:
-          'Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it.',
+          'Create a new markdown revision on a branch (immutable; parented on the branch head), upload the content and finalize it for indexing. Pass baseRevisionId for optimistic concurrency: the call is rejected if the branch head has moved past it. ' +
+          'Content without a frontmatter block keeps the branch head\'s frontmatter (tags, relations); include a block to replace it.',
         inputSchema: {
           documentId: z.string().uuid(),
           branch: z.string().optional(),
@@ -929,10 +932,10 @@ export class McpService {
     if (!document) throw new Error(`Document ${documentId} not found`);
 
     const branchName = opts.branch ?? document.defaultBranch;
+    const branchRow = await this.prisma.documentBranch.findUnique({
+      where: { documentId_name: { documentId, name: branchName } },
+    });
     if (opts.baseRevisionId) {
-      const branchRow = await this.prisma.documentBranch.findUnique({
-        where: { documentId_name: { documentId, name: branchName } },
-      });
       if (!branchRow) throw new Error(`Branch ${branchName} not found on document ${documentId}`);
       if (branchRow.headRevisionId !== opts.baseRevisionId) {
         // plan.md §7 optimistic concurrency: equivalent of HTTP 409 + comparison link.
@@ -943,6 +946,13 @@ export class McpService {
       }
     }
 
+    // The new revision parents on the branch head, so that is whose frontmatter
+    // a bare body keeps. A head with no readable content has none to keep.
+    const base = branchRow?.headRevisionId
+      ? await this.documents.getContent(documentId, branchRow.headRevisionId).catch(() => null)
+      : null;
+    const content = keepFrontmatter(opts.content, base?.frontmatter);
+
     const draft = await this.documents.createRevision(
       documentId,
       { branch: branchName, message: opts.message, contentType: 'text/markdown' },
@@ -950,7 +960,7 @@ export class McpService {
       authorId,
     );
     const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
-    await this.storage.putObjectText(row.s3Key, opts.content, 'text/markdown');
+    await this.storage.putObjectText(row.s3Key, content, 'text/markdown');
     return this.documents.finalizeRevision(documentId, draft.revisionId);
   }
 

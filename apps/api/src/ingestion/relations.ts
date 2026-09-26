@@ -9,6 +9,9 @@
  *       target: service:identity            # "type:key" shorthand
  *     - type: DESCRIBES
  *       target: { type: service, key: service:billing, name: Billing }
+ *     - type: RELATED_TO
+ *       targetKey: product:babbler          # the tool-schema spelling
+ *       name: Babbler
  *   tags: [security, identity]
  */
 

@@ -1,5 +1,6 @@
 import type { ConnectorCapabilities, ConnectorKind, Locale } from '@knowledge/contracts';
 import { safeFetch } from '../../common/safe-fetch.js';
+import { t } from '../../i18n/t.js';
 
 /**
  * The connector adapter interface (docs/features/19).
@@ -150,7 +151,7 @@ export interface ConnectorAdapter {
 export function requireConfig(config: Record<string, unknown>, key: string): string {
   const value = config[key];
   if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(`missing config field: ${key}`);
+    throw new Error(t('error.connector.missingConfig', { field: key }));
   }
   return value.trim();
 }

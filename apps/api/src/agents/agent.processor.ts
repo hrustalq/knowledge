@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
-import { withLocale } from '../i18n/t.js';
+import { t, withLocale } from '../i18n/t.js';
 import { asLocale } from '../i18n/locale.js';
 import { AGENT_QUEUE, MAX_RUN_WARNINGS } from './agent.constants.js';
 import { AgentExecutor, type AgentReporter } from './agent.executor.js';
@@ -107,7 +107,7 @@ export class AgentProcessor extends WorkerHost {
         await this.usage.assertWithinBudget(row.workspaceId, row.createdBy);
 
         const agent = await this.registry.resolve(row.workspaceId, row.agentKey);
-        if (!agent.enabled) throw new Error(`Agent "${row.agentKey}" is disabled.`);
+        if (!agent.enabled) throw new Error(t('error.agent.disabled', { key: row.agentKey }));
 
         await this.events.publish({
           type: 'agent.run.started',

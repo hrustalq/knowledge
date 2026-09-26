@@ -149,7 +149,10 @@
     "imageNotFound": "Image {index} not found in import {importId}",
     "revisionVanished": "Revision {id} vanished mid-import",
     "parentNotInProject": "Parent page {id} is not in this project",
-    "needsVisionModel": "Reading text from images needs an AI provider with vision support. Configure one under Settings → AI, then run this import again."
+    "needsVisionModel": "Reading text from images needs an AI provider with vision support. Configure one under Settings → AI, then run this import again.",
+    "noParser": "No parser handles {filename}",
+    "failed": "Import failed",
+    "timedOut": "Parsing {filename} took longer than {seconds}s and was stopped"
   },
   "ingestionJob": {
     "notFound": "Ingestion job {id} not found"
@@ -208,7 +211,10 @@
     "threadNotFound": "Assistant thread {id} not found",
     "messageNotFound": "Message {messageId} not found in thread {threadId}",
     "budgetUser": "Your monthly AI token budget for this workspace is spent. Ask a workspace admin to raise it.",
-    "budgetWorkspace": "This workspace's monthly AI token budget is spent. Ask a workspace admin to raise it."
+    "budgetWorkspace": "This workspace's monthly AI token budget is spent. Ask a workspace admin to raise it.",
+    "upstreamStatus": "The AI provider responded with an error ({status})",
+    "upstreamError": "The AI provider responded with an error",
+    "unreachable": "The AI provider is unreachable"
   },
   "workflow": {
     "notFound": "Workflow {id} not found",
@@ -224,7 +230,10 @@
     "runInFlightForPage": "A run of this workflow is already in flight for this page",
     "nodeNotAwaitingReview": "Only a node awaiting review can be edited (this one is {status})",
     "stepGone": "Step \"{stepId}\" is no longer part of this run",
-    "invalidGraph": "The workflow graph is not valid"
+    "invalidGraph": "The workflow graph is not valid",
+    "noItems": "The model returned no items for this step",
+    "emptyPage": "The model returned an empty page",
+    "noDraft": "This step has no draft to publish"
   },
   "connector": {
     "notFound": "Connector {id} not found",
@@ -261,7 +270,23 @@
     "revertHasChildren": "This page now has {count} child page(s) that this import did not create. Move or delete them first.",
     "revertNoPrevious": "The revision this import replaced is no longer available, so it cannot be restored",
     "aiEmpty": "The model returned nothing, so the staged document was left as it was",
-    "mergeNotAConflict": "Merging is only offered when both sides changed"
+    "mergeNotAConflict": "Merging is only offered when both sides changed",
+    "taskTimedOut": "The {task} pass exceeded {seconds}s and was stopped",
+    "nothingStaged": "This item has nothing staged to apply",
+    "missingConfig": "Missing config field: {field}",
+    "spaceNotFound": "Space {key} not found",
+    "spaceNotVisible": "Space {key} not found, or not visible to this token",
+    "fileGone": "{path} is no longer in the repository",
+    "moduleGone": "{path} is no longer part of this repository",
+    "publishGitOnly": "Only GitHub and GitLab repositories can be published to",
+    "notionDatabaseRequired": "A database id is required to create Notion pages",
+    "pullRequestsReadGitOnly": "Pull requests can only be read from GitHub and GitLab repositories",
+    "pullRequestsCommentGitOnly": "Pull requests can only be commented on in GitHub and GitLab repositories",
+    "repoUrlShape": "Repository URL must look like https://host/owner/repo",
+    "repoNotFound": "{slug} was not found, or the credential cannot read it — check that the repository exists and that the token or GitHub App installation has read access to it",
+    "repoNotFoundNoCredential": "{slug} was not found, and no credential is configured — a private repository needs a token or a GitHub App installation with read access",
+    "branchMissingDefault": "Branch \"{branch}\" does not exist in {slug} — its default branch is \"{actual}\". Leave the Branch field empty to follow the default.",
+    "branchMissing": "Branch \"{branch}\" does not exist in {slug}"
   },
   "routeNotFound": "Cannot {method} {path}",
   "validationFailed": "Validation failed",
@@ -315,5 +340,8 @@
   },
   "entityAlias": {
     "wouldChain": "An alias must point straight at a canonical key: \"{alias}\" or \"{canonicalKey}\" is already one side of another alias."
+  },
+  "agent": {
+    "disabled": "Agent \"{key}\" is disabled."
   }
 }

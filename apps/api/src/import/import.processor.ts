@@ -15,7 +15,7 @@ import { extensionFor } from './parsers/docx.parser.js';
 import { stripLeadingTitle } from './parsers/parser.types.js';
 import type { ParsedImage, ParseResult } from './parsers/parser.types.js';
 import { asLocale } from '../i18n/locale.js';
-import { withLocale } from '../i18n/t.js';
+import { t, withLocale } from '../i18n/t.js';
 
 interface ImportJobData {
   importJobId: string;
@@ -78,7 +78,7 @@ export class ImportProcessor extends WorkerHost {
 
     try {
       const parser = this.parsers.resolve(row.sourceFilename, row.contentType);
-      if (!parser) throw new Error(`No parser handles ${row.sourceFilename}`);
+      if (!parser) throw new Error(t('error.import.noParser', { filename: row.sourceFilename }));
 
       const bytes = await this.storage.getObjectBytes(row.s3Key);
 
@@ -150,7 +150,7 @@ export class ImportProcessor extends WorkerHost {
         title: row.sourceFilename,
       });
     } catch (e) {
-      const message = (e as Error).message ?? 'Import failed';
+      const message = (e as Error).message || t('error.import.failed');
       this.logger.warn(`Import ${row.id} failed: ${message}`);
       await this.prisma.importJob.update({
         where: { id: row.id },
@@ -185,7 +185,7 @@ export class ImportProcessor extends WorkerHost {
   private withTimeout(work: Promise<ParseResult>, filename: string): Promise<ParseResult> {
     return new Promise<ParseResult>((resolve, reject) => {
       const timer = setTimeout(
-        () => reject(new Error(`Parsing ${filename} took longer than ${Math.round(this.timeoutMs / 1000)}s and was stopped`)),
+        () => reject(new Error(t('error.import.timedOut', { filename, seconds: Math.round(this.timeoutMs / 1000) }))),
         this.timeoutMs,
       );
       work.then(resolve, reject).finally(() => clearTimeout(timer));

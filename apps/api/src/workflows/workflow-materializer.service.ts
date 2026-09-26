@@ -4,6 +4,7 @@ import type { RelationInput, WorkflowNodeDraft, WorkflowStep } from '@knowledge/
 import { PrismaService } from '../prisma/prisma.service.js';
 import { writeFrontmatter } from '../common/frontmatter.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { t } from '../i18n/t.js';
 
 /**
  * Turns an approved draft into a real page (docs/features/17).
@@ -42,7 +43,7 @@ export class WorkflowMaterializerService {
 
     const draft = node.draft as unknown as WorkflowNodeDraft | null;
     if (!draft?.title?.trim()) {
-      throw new Error('This step has no draft to publish');
+      throw new Error(t('error.workflow.noDraft'));
     }
 
     // The parent page: the node's parent if it was itself materialised,

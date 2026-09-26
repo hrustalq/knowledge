@@ -260,7 +260,7 @@ export class ConfluenceAdapter implements ConnectorAdapter {
       await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
     ).json()) as ConfluenceList<{ id: string; name: string }>;
     const space = body.results?.[0];
-    if (!space) throw new Error(`space ${key} not found`);
+    if (!space) throw new Error(t('error.connector.spaceNotFound', { key }, ctx.locale));
     return space;
   }
 }

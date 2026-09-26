@@ -649,9 +649,11 @@ export class AssistantClient {
   private upstreamError(err: unknown): ServiceUnavailableException {
     if (err instanceof OpenAI.APIError) {
       this.logger.warn(`Assistant upstream ${err.status}: ${String(err.message).slice(0, 300)}`);
-      return new ServiceUnavailableException(`Assistant provider responded ${err.status ?? 'with an error'}`);
+      return new ServiceUnavailableException(
+        err.status ? t('error.assistant.upstreamStatus', { status: err.status }) : t('error.assistant.upstreamError'),
+      );
     }
     this.logger.warn(`Assistant request failed: ${err instanceof Error ? err.message : String(err)}`);
-    return new ServiceUnavailableException('Assistant provider unreachable');
+    return new ServiceUnavailableException(t('error.assistant.unreachable'));
   }
 }

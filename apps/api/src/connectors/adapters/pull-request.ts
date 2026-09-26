@@ -1,5 +1,6 @@
 import { connectorFetch, ConnectorRequestError, type ConnectorContext } from './connector.types.js';
 import { githubHeaders, gitlabHeaders, repoHost, type RepoHost } from './repo-archive.js';
+import { t } from '../../i18n/t.js';
 
 /**
  * A pull or merge request on a connected repository: what it changes, and one
@@ -42,7 +43,7 @@ export async function fetchPullRequestFiles(ctx: ConnectorContext, number: numbe
   const host = repoHost(ctx);
   if (host.kind === 'github') return githubFiles(ctx, host, number);
   if (host.kind === 'gitlab') return gitlabFiles(ctx, host, number);
-  throw new Error('pull requests can only be read from GitHub and GitLab repositories');
+  throw new Error(t('error.connector.pullRequestsReadGitOnly', {}, ctx.locale));
 }
 
 /**
@@ -112,7 +113,7 @@ export async function upsertPullRequestComment(
     return 'created';
   }
 
-  throw new Error('pull requests can only be commented on in GitHub and GitLab repositories');
+  throw new Error(t('error.connector.pullRequestsCommentGitOnly', {}, ctx.locale));
 }
 
 // --- internals ---

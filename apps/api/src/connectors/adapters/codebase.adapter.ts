@@ -205,7 +205,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
       // A module that was renamed or dropped upstream. The item fails and is
       // reported; the next full sync will not rediscover it, and the link is
       // left for a person to decide about.
-      throw new Error(`${ref.externalId} is no longer part of this repository`);
+      throw new Error(t('error.connector.moduleGone', { path: ref.externalId }, ctx.locale));
     }
 
     const analysis = await this.analyse(ctx, module, files);

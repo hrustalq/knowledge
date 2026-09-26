@@ -172,7 +172,7 @@ export class ConnectorStagingService {
    */
   async apply(row: Connector, run: ConnectorRun, item: ConnectorRunItem): Promise<void> {
     if (item.documentId && item.status === 'applied') return; // idempotent
-    if (!item.stagedKey) throw new Error('this item has nothing staged to apply');
+    if (!item.stagedKey) throw new Error(t('error.connector.nothingStaged'));
 
     const markdown = await this.storage.getObjectText(item.stagedKey);
     const hash = sha256(markdown);

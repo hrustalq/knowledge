@@ -23,7 +23,7 @@ in the pull request that introduces them — see
   return up to 500 rows in one response, work items up to 200. Work items also
   carry `total`, the count across every page.
   **Migration:** a caller that needs everything keeps requesting with
-  `cursor=<nextCursor>` until it is `null`; `limit` takes 1–100.
+  `cursor=<nextCursor>` until it is `null`; `limit` takes 1–100. (#88)
 
 ### Changed
 
@@ -32,11 +32,11 @@ in the pull request that introduces them — see
   their own, loading more as you reach the end, so a connector with hundreds of
   linked pages no longer makes the whole page one very long scroll. The same
   applies to the Runs and Links tabs under **Settings → Connectors**, which also
-  used to stop silently at the first 20 runs or 500 links.
+  used to stop silently at the first 20 runs or 500 links. (#88)
 - **The GitHub access card folds.** It starts folded when nothing is wrong,
   showing whose installation it is, and open when a permission is missing or
   pending, showing how many. Your choice is remembered while you move between
-  connectors.
+  connectors. (#88)
 
 ## [0.12.0] — 2026-09-27
 

@@ -389,16 +389,16 @@ watch(highlighted, (id) => {
           <div class="min-w-0 flex-1">
             <p class="flex flex-wrap items-center gap-2 text-sm font-medium">
               {{ s.term }}
-              <Badge variant="secondary" class="font-normal">{{ s.occurrences }}× on the page</Badge>
+              <Badge variant="secondary" class="font-normal">{{ t('glossary.occurrencesOnPage', { n: s.occurrences }) }}</Badge>
               <Badge v-if="s.existingTermId" variant="outline">{{ t('glossary.alreadyDefined') }}</Badge>
             </p>
             <p class="text-muted-foreground text-sm">{{ s.definition }}</p>
             <p v-if="s.aliases.length" class="text-muted-foreground mt-1 text-xs">
-              also: {{ s.aliases.join(', ') }}
+              {{ t('glossary.alsoKnownAs', { aliases: s.aliases.join(', ') }) }}
             </p>
           </div>
           <div class="flex shrink-0 gap-1">
-            <Button size="xs" :disabled="busy || !!s.existingTermId" @click="accept(s)">Add</Button>
+            <Button size="xs" :disabled="busy || !!s.existingTermId" @click="accept(s)">{{ t('common.add') }}</Button>
             <Button size="xs" variant="ghost" @click="openNew(s)">{{ t('glossary.editEllipsis') }}</Button>
             <Button size="xs" variant="ghost" @click="dismiss(s)">{{ t('glossary.skip') }}</Button>
           </div>
@@ -454,7 +454,7 @@ watch(highlighted, (id) => {
                 {{ term.aliases.join(', ') }}
               </span>
             </button>
-            <Badge v-if="term.source === 'ai'" variant="outline" class="mt-1 font-normal">AI</Badge>
+            <Badge v-if="term.source === 'ai'" variant="outline" class="mt-1 font-normal">{{ t('common.ai') }}</Badge>
           </TableCell>
           <TableCell class="align-top text-sm">
             <MarkdownView :markdown="term.definition" />

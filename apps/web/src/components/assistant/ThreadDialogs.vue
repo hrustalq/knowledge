@@ -83,7 +83,7 @@ defineExpose({ rename, remove })
       <Input v-model="renameDraft" :placeholder="t('chat.chatName')" autofocus @keyup.enter="confirmRename" />
       <DialogFooter>
         <Button variant="ghost" @click="renaming = null">{{ t('common.cancel') }}</Button>
-        <Button :disabled="busy" @click="confirmRename">{{ busy ? 'Saving…' : 'Save' }}</Button>
+        <Button :disabled="busy" @click="confirmRename">{{ busy ? t('common.saving') : t('common.save') }}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
@@ -99,7 +99,7 @@ defineExpose({ rename, remove })
       <DialogFooter>
         <Button variant="ghost" @click="deleting = null">{{ t('common.cancel') }}</Button>
         <Button variant="destructive" :disabled="busy" @click="confirmDelete">
-          {{ busy ? 'Deleting…' : 'Delete chat' }}
+          {{ busy ? t('common.deleting') : t('chat.deleteChatButton') }}
         </Button>
       </DialogFooter>
     </DialogContent>

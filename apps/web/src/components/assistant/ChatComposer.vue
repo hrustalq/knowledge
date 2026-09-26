@@ -340,8 +340,8 @@ function send() {
                 <TooltipContent>
                   {{
                     attachments.length >= MAX_ATTACHMENTS
-                      ? `${MAX_ATTACHMENTS} files is the limit for one message`
-                      : 'Attach a text file to this message'
+                      ? t('chat.attachLimit', { n: MAX_ATTACHMENTS })
+                      : t('chat.attachTextFileToMessage')
                   }}
                 </TooltipContent>
               </Tooltip>
@@ -410,7 +410,7 @@ function send() {
                     {{
                       canEdit
                         ? t('chat.canAlsoWrite')
-                        : 'Needs the editor role in this workspace.'
+                        : t('chat.needsEditorRole')
                     }}
                   </TooltipContent>
                 </Tooltip>

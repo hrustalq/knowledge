@@ -37,15 +37,15 @@ const progress = computed(() => {
           <span class="truncate">{{ run.rootDocumentTitle ?? run.rootDocumentId }}</span>
           <span>· {{ t(RUN_STATUS_LABEL[run.status]) }}</span>
           <span>· {{ relativeTime(run.startedAt ?? run.createdAt) }}</span>
-          <span v-if="run.startedBy === 'trigger'" class="bg-muted rounded px-1">auto</span>
+          <span v-if="run.startedBy === 'trigger'" class="bg-muted rounded px-1">{{ t('workflow.auto') }}</span>
         </p>
       </div>
       <div class="text-muted-foreground shrink-0 text-right text-xs">
         <p v-if="progress.awaitingReview" class="text-amber-600 dark:text-amber-500">
-          {{ progress.awaitingReview }} to review
+          {{ t('workflow.toReview', { n: progress.awaitingReview }) }}
         </p>
-        <p v-if="progress.failed" class="text-destructive">{{ progress.failed }} failed</p>
-        <p>{{ progress.materialized }}/{{ progress.total }} published</p>
+        <p v-if="progress.failed" class="text-destructive">{{ t('workflow.failedN', { n: progress.failed }) }}</p>
+        <p>{{ t('workflow.publishedOf', { done: progress.materialized, total: progress.total }) }}</p>
       </div>
     </div>
   </RouterLink>

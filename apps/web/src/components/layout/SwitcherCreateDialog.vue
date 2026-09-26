@@ -243,7 +243,7 @@ async function finish() {
               role="status"
             >
               <Loader2 class="text-primary size-5 animate-spin" />
-              <p>Creating “{{ name.trim() }}”…</p>
+              <p>{{ t('common.creatingNamed', { name: name.trim() }) }}</p>
             </div>
 
             <template v-else>

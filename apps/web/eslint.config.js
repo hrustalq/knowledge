@@ -11,7 +11,15 @@ import tseslint from 'typescript-eslint'
 import vueParser from 'vue-eslint-parser'
 
 // Symbols and brand names that are the same in every language.
-const RAW_TEXT_IGNORE = ['·', '→', '←', '—', '–', '×', '/', '…', '•', '|', ':', '(', ')', '+', '-', '#', '@', 'Esc', 'Knowledge', 'MCP', 'GitHub', 'GitLab', 'Markdown']
+const RAW_TEXT_IGNORE = [
+  // punctuation and keycaps
+  '·', '→', '←', '—', '–', '−', '×', '/', '/ −', '…', '•', '|', ':', '(', ')', '+', '-', '#', '@', '~', '“', '”', '↵',
+  'Esc', 'H', 'J', 'P', 'V',
+  // brand, protocol and file names
+  'Knowledge', 'MCP', 'GitHub', 'GitLab', 'Markdown', 'DeepSeek', 'GenAPI (gen-api.ru)', 'Streamable HTTP', 'URL', 'SKILL.md',
+  // env assignments shown verbatim to operators
+  'ASSISTANT_PROVIDER=openai-compatible', 'ASSISTANT_PROVIDER=none',
+]
 
 
 // Dates, numbers, sizes and lists go through lib/format.ts: a locale-less

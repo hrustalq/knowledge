@@ -773,7 +773,7 @@ onBeforeUnmount(() => {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button size="sm" :disabled="busy || loading" @click="save">
-            {{ busy ? 'Saving…' : isEdit ? 'Publish' : 'Create & index' }}
+            {{ busy ? t('common.saving') : isEdit ? t('editor.publish') : t('editor.createAndIndex') }}
           </Button>
         </div>
       </header>

@@ -477,7 +477,7 @@ watch(
 
       <template #meta>
         <p class="text-xs text-muted-foreground">
-          Revision #{{ detail.revision.revisionNumber }}
+          {{ t('documents.revisionNumber', { n: detail.revision.revisionNumber }) }}
           <span class="font-mono">({{ detail.revision.revisionId.slice(0, 8) }})</span>
           <template v-if="detail.revision.finalizedAt">
             · {{ t('documents.finalizedAt', { when: formatDateTime(detail.revision.finalizedAt) }) }}
@@ -544,7 +544,7 @@ watch(
                   class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                   @click="showAllRelations = !showAllRelations"
                 >
-                  {{ showAllRelations ? 'Show fewer' : `+${relations.length - RELATION_PREVIEW} more` }}
+                  {{ showAllRelations ? t('common.showFewer') : t('common.andNMore', { n: relations.length - RELATION_PREVIEW }) }}
                 </button>
               </div>
             </div>
@@ -585,7 +585,7 @@ watch(
       <!-- Main column: what this is, what it says, what was said about it -->
       <section class="space-y-2">
         <p v-if="viewingRevision" class="text-xs text-muted-foreground">
-          Viewing revision {{ viewingRevision.slice(0, 8) }} — commenting is off while reading history.
+          {{ t('documents.viewingRevision', { id: viewingRevision.slice(0, 8) }) }}
           <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
         </p>
         <PageState v-if="contentError" state="error" :description="contentError" />

@@ -103,7 +103,7 @@ function open(threadId: string) {
     </div>
 
     <p v-else-if="threads.length === 0" class="p-3 text-xs leading-relaxed text-muted-foreground">
-      {{ query ? `No chats match “${query}”.` : 'No chats yet — start one below.' }}
+      {{ query ? t('chat.noChatsMatch', { query }) : t('chat.noChatsYet') }}
     </p>
 
     <!-- Virtualized roster: the only part of the rail that scrolls. -->

@@ -253,7 +253,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
       <div class="space-y-1.5 xl:max-w-[66%]">
         <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
           {{ t('ai.apiKey') }}
-          <span v-if="overridden('apiKey')" class="text-primary/70">· overridden</span>
+          <span v-if="overridden('apiKey')" class="text-primary/70">{{ t('ai.overridden') }}</span>
         </span>
         <div class="flex items-center gap-2">
           <Input

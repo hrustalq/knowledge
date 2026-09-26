@@ -34,6 +34,20 @@ export interface ChunkHit {
 const CHUNK_SCAN_LIMIT = 5000;
 
 /**
+ * The live-projection predicate (#83). A chunk or revision-scoped edge is
+ * `live` when it belongs to the indexed head of its document's default branch;
+ * everything else — older revisions, unmerged branches — is history, kept for
+ * the revision diff and `revisionEmbeddingShift` but never served by a
+ * workspace-wide read. `IS NULL` keeps rows written before the flag existed
+ * visible until `make graph-live-backfill` stamps them, so shipping this
+ * changes nothing until the data is reconciled.
+ */
+const LIVE = '(live IS NULL OR live = true)';
+
+/** Fact classes whose edges belong to one revision and so follow its liveness. */
+const REVISION_SCOPED_EXTRACTORS = ['frontmatter', 'inferred'] as const;
+
+/**
  * Relation edge types allowed in the graph (plan.md §6). Edge type names are
  * interpolated into SQL, so everything MUST be validated against this list.
  *
@@ -55,6 +69,12 @@ export interface FactInput {
   /** Inferred facts carry their source span (plan.md §5). */
   sourceChunkId?: string;
   snippet?: string;
+  /**
+   * Whether the edge belongs to the live projection (#83). Only meaningful
+   * for revision-scoped classes (frontmatter / inferred); explicit and
+   * curated edges are document-level and always live. Defaults to true.
+   */
+  live?: boolean;
 }
 
 export interface DocumentRelation {
@@ -67,6 +87,8 @@ export interface DocumentRelation {
   confidence: number;
   sourceChunkId?: string;
   snippet?: string;
+  /** False for edges of a retired revision; legacy rows read as live. */
+  live: boolean;
 }
 
 /** One row of the workspace-wide relation graph (Phase 4 traversal). */
@@ -149,6 +171,11 @@ export class GraphService {
    * Idempotent (re)index of a revision: previous chunks for the revision are
    * dropped, then the Document/Revision vertices and chunk vertices+edges are
    * recreated. Safe to run on BullMQ retries.
+   *
+   * `live` stamps the chunks as part of the live projection (#83): true only
+   * for the head of the document's default branch. A non-live revision's
+   * chunks are still written — the MR diff and `revisionEmbeddingShift` read
+   * them by revision id — but no workspace-wide read returns them.
    */
   async upsertRevisionChunks(input: {
     workspaceId: string;
@@ -156,8 +183,9 @@ export class GraphService {
     revisionId: string;
     title: string;
     chunks: ChunkInput[];
+    live: boolean;
   }): Promise<void> {
-    const { workspaceId, documentId, revisionId, title, chunks } = input;
+    const { workspaceId, documentId, revisionId, title, chunks, live } = input;
 
     await this.arcade.command('sql', 'DELETE FROM Chunk WHERE revisionId = :revisionId', { revisionId });
     await this.arcade.command('sql', 'DELETE FROM DocumentRevision WHERE revisionId = :revisionId', { revisionId });
@@ -182,7 +210,7 @@ export class GraphService {
       await this.arcade.command(
         'sql',
         `CREATE VERTEX Chunk SET chunkId = :chunkId, idx = :idx, workspaceId = :workspaceId,
-         documentId = :documentId, revisionId = :revisionId, text = :text,
+         documentId = :documentId, revisionId = :revisionId, live = :live, text = :text,
          headingPath = :headingPath, embedding = :embedding`,
         {
           chunkId: chunk.chunkId,
@@ -190,6 +218,7 @@ export class GraphService {
           workspaceId,
           documentId,
           revisionId,
+          live,
           text: chunk.text,
           headingPath: chunk.headingPath,
           embedding: chunk.embedding,
@@ -291,8 +320,10 @@ export class GraphService {
     revisionId: string;
     title: string;
     facts: FactInput[];
+    /** Part of the live projection (#83) — see `upsertRevisionChunks`. */
+    live: boolean;
   }): Promise<void> {
-    const { workspaceId, documentId, revisionId, title } = input;
+    const { workspaceId, documentId, revisionId, title, live } = input;
     const facts = await this.canonicalFacts(workspaceId, input.facts);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
@@ -307,7 +338,50 @@ export class GraphService {
     if (facts.length === 0) return;
     await this.upsertDocumentVertex(workspaceId, documentId, title);
     for (const fact of facts) {
-      await this.createRelationEdge(workspaceId, documentId, revisionId, fact);
+      await this.createRelationEdge(workspaceId, documentId, revisionId, { ...fact, live });
+    }
+  }
+
+  /**
+   * Make `liveRevisionId` the document's live projection (#83): its chunks and
+   * revision-scoped edges (frontmatter / inferred) become live, every other
+   * revision's become history. Explicit and curated edges are document-level
+   * and untouched.
+   *
+   * Stamps rather than deletes: a branch revision's chunks and edges are what
+   * the MR diff and `revisionEmbeddingShift` read, by revision id, and they
+   * must survive the page's head moving on.
+   *
+   * The new revision is raised before the old ones are lowered, so a
+   * concurrent read sees a duplicate for a moment rather than a missing page.
+   * Idempotent — the ingestion processor calls it after every job, whichever
+   * revision finished last, so an out-of-order finish still converges on the
+   * current head.
+   */
+  async setLiveRevision(workspaceId: string, documentId: string, liveRevisionId: string | null): Promise<void> {
+    // `null` retires the whole document — a page whose default branch has no
+    // indexed revision yet has nothing live. No revision id is the empty
+    // string, so the raise below matches nothing and the lower matches all.
+    const params = { workspaceId, documentId, revisionId: liveRevisionId ?? '' };
+    const scope = 'workspaceId = :workspaceId AND documentId = :documentId';
+    const scoped = `extractor IN [${REVISION_SCOPED_EXTRACTORS.map((e) => `'${e}'`).join(', ')}]`;
+
+    await this.arcade.command('sql', `UPDATE Chunk SET live = true WHERE ${scope} AND revisionId = :revisionId`, params);
+    for (const type of RELATION_EDGE_TYPES) {
+      await this.arcade
+        .command('sql', `UPDATE ${type} SET live = true WHERE ${scope} AND ${scoped} AND revisionId = :revisionId`, params)
+        .catch(() => {
+          /* edge type may hold no rows yet */
+        });
+    }
+
+    await this.arcade.command('sql', `UPDATE Chunk SET live = false WHERE ${scope} AND revisionId <> :revisionId`, params);
+    for (const type of RELATION_EDGE_TYPES) {
+      await this.arcade
+        .command('sql', `UPDATE ${type} SET live = false WHERE ${scope} AND ${scoped} AND revisionId <> :revisionId`, params)
+        .catch(() => {
+          /* edge type may hold no rows yet */
+        });
     }
   }
 
@@ -337,18 +411,29 @@ export class GraphService {
     }
   }
 
-  /** All relation edges of a document, with provenance (workspace-scoped). */
-  async getDocumentRelations(workspaceId: string, documentId: string): Promise<DocumentRelation[]> {
+  /**
+   * Relation edges of a document, with provenance (workspace-scoped).
+   *
+   * `liveOnly` (#83) restricts to the live projection — what the page asserts
+   * now. Leave it off where revision history is the point: the semantic diff
+   * and the facts timeline filter by revision id themselves.
+   */
+  async getDocumentRelations(
+    workspaceId: string,
+    documentId: string,
+    opts: { liveOnly?: boolean } = {},
+  ): Promise<DocumentRelation[]> {
     const out: DocumentRelation[] = [];
+    const liveClause = opts.liveOnly ? ` AND ${LIVE}` : '';
     for (const type of RELATION_EDGE_TYPES) {
       const rows = await this.arcade
-        .query<{ targetKey: string; revisionId: string | null; extractor: string; confidence: number; sourceChunkId?: string | null; snippet?: string | null }>(
+        .query<{ targetKey: string; revisionId: string | null; extractor: string; confidence: number; sourceChunkId?: string | null; snippet?: string | null; live?: boolean | null }>(
           'sql',
-          `SELECT targetKey, revisionId, extractor, confidence, sourceChunkId, snippet FROM ${type} WHERE workspaceId = :workspaceId AND documentId = :documentId`,
+          `SELECT targetKey, revisionId, extractor, confidence, sourceChunkId, snippet, live FROM ${type} WHERE workspaceId = :workspaceId AND documentId = :documentId${liveClause}`,
           { workspaceId, documentId },
         )
         .catch(() => []);
-      for (const r of rows) out.push({ type, targetKey: r.targetKey, entityType: '', name: '', revisionId: r.revisionId ?? null, extractor: r.extractor, confidence: r.confidence, sourceChunkId: r.sourceChunkId ?? undefined, snippet: r.snippet ?? undefined });
+      for (const r of rows) out.push({ type, targetKey: r.targetKey, entityType: '', name: '', revisionId: r.revisionId ?? null, extractor: r.extractor, confidence: r.confidence, sourceChunkId: r.sourceChunkId ?? undefined, snippet: r.snippet ?? undefined, live: r.live !== false });
     }
     if (out.length === 0) return out;
 
@@ -399,9 +484,10 @@ export class GraphService {
           confidence: number;
           sourceChunkId?: string | null;
           snippet?: string | null;
+          live?: boolean | null;
         }>(
           'sql',
-          `SELECT documentId, revisionId, extractor, confidence, sourceChunkId, snippet FROM ${type} WHERE workspaceId = :workspaceId AND targetKey = :targetKey`,
+          `SELECT documentId, revisionId, extractor, confidence, sourceChunkId, snippet, live FROM ${type} WHERE workspaceId = :workspaceId AND targetKey = :targetKey`,
           { workspaceId, targetKey: from },
         )
         .catch(() => []);
@@ -424,6 +510,8 @@ export class GraphService {
           confidence: r.confidence,
           ...(r.sourceChunkId ? { sourceChunkId: r.sourceChunkId } : {}),
           ...(r.snippet ? { snippet: r.snippet } : {}),
+          // A retired edge stays retired when its target is re-keyed.
+          live: r.live !== false,
         });
         moved += 1;
       }
@@ -455,12 +543,13 @@ export class GraphService {
     );
     await this.arcade.command(
       'sql',
-      `CREATE EDGE ${fact.type} FROM (SELECT FROM Document WHERE documentId = :documentId) TO (SELECT FROM Entity WHERE entityKey = :key AND workspaceId = :workspaceId) SET workspaceId = :workspaceId, documentId = :documentId, revisionId = :revisionId, targetKey = :key, extractor = :extractor, confidence = :confidence, sourceChunkId = :sourceChunkId, snippet = :snippet`,
+      `CREATE EDGE ${fact.type} FROM (SELECT FROM Document WHERE documentId = :documentId) TO (SELECT FROM Entity WHERE entityKey = :key AND workspaceId = :workspaceId) SET workspaceId = :workspaceId, documentId = :documentId, revisionId = :revisionId, live = :live, targetKey = :key, extractor = :extractor, confidence = :confidence, sourceChunkId = :sourceChunkId, snippet = :snippet`,
       {
         documentId,
         key: fact.target.key,
         workspaceId,
         revisionId,
+        live: fact.live ?? true,
         extractor: fact.extractor,
         confidence: fact.confidence,
         sourceChunkId: fact.sourceChunkId ?? null,
@@ -526,8 +615,10 @@ export class GraphService {
     revisionId: string;
     title: string;
     facts: FactInput[];
+    /** Part of the live projection (#83) — see `upsertRevisionChunks`. */
+    live: boolean;
   }): Promise<void> {
-    const { workspaceId, documentId, revisionId, title } = input;
+    const { workspaceId, documentId, revisionId, title, live } = input;
     const facts = await this.canonicalFacts(workspaceId, input.facts);
     for (const type of RELATION_EDGE_TYPES) {
       await this.arcade
@@ -551,7 +642,7 @@ export class GraphService {
     await this.upsertDocumentVertex(workspaceId, documentId, title);
     for (const fact of facts) {
       if (protectedPairs.has(`${fact.type} ${fact.target.key}`)) continue;
-      await this.createRelationEdge(workspaceId, documentId, revisionId, fact);
+      await this.createRelationEdge(workspaceId, documentId, revisionId, { ...fact, live });
     }
   }
 
@@ -618,7 +709,7 @@ export class GraphService {
     const rows = await this.arcade
       .query<{ documentId: string }>(
         'sql',
-        'SELECT documentId FROM TAGGED_WITH WHERE workspaceId = :workspaceId AND targetKey IN :keys LIMIT 20000',
+        `SELECT documentId FROM TAGGED_WITH WHERE workspaceId = :workspaceId AND targetKey IN :keys AND ${LIVE} LIMIT 20000`,
         { workspaceId, keys: tagKeys },
       )
       // ArcadeDB throws when the edge type holds no rows yet; "no tag edges"
@@ -638,7 +729,7 @@ export class GraphService {
       const rows = await this.arcade
         .query<{ documentId: string; targetKey: string; extractor: string; confidence: number }>(
           'sql',
-          `SELECT documentId, targetKey, extractor, confidence FROM ${type} WHERE workspaceId = :workspaceId LIMIT 20000`,
+          `SELECT documentId, targetKey, extractor, confidence FROM ${type} WHERE workspaceId = :workspaceId AND ${LIVE} LIMIT 20000`,
           { workspaceId },
         )
         .catch(() => []);
@@ -676,7 +767,7 @@ export class GraphService {
       embedding: number[];
     }>(
       'sql',
-      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId LIMIT ${CHUNK_SCAN_LIMIT}`,
+      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND ${LIVE} LIMIT ${CHUNK_SCAN_LIMIT}`,
       { workspaceId },
     );
 

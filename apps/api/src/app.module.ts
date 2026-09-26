@@ -18,6 +18,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { EventsApiModule } from './events/events-api.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { ConnectorsModule } from './connectors/connectors.module.js';
+import { DriftModule } from './connectors/drift/drift.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { GlossaryModule } from './glossary/glossary.module.js';
 import { ImportModule } from './import/import.module.js';
@@ -49,6 +50,8 @@ import { McpHttpModule } from './mcp/mcp-http.module.js';
     AssistantModule,
     AiModule,
     ConnectorsModule,
+    // Publishes finished drift checks (docs/features/35); API-only, sweeper.
+    DriftModule,
     GlossaryModule,
     ImportModule,
     WorkflowsModule,

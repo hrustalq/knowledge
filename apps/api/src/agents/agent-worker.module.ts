@@ -10,6 +10,7 @@ import { WebResearchModule } from '../assistant/web-research.module.js';
 import { CodeResearchModule } from '../connectors/code-research/code-research.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
+import { SearchCoreModule } from '../search/search-core.module.js';
 import { AgentCoreModule } from './agent-core.module.js';
 import { AgentQueueModule } from './agent-queue.module.js';
 import { AgentExecutor } from './agent.executor.js';
@@ -63,6 +64,9 @@ import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
     // reason — and, unlike the web pair, about to be used: the archaeologist
     // reads a codebase from here.
     CodeResearchModule,
+    // The sentinel (docs/features/35) searches once per run for the pages a
+    // change reads like — the hand-written ones no connector link reaches.
+    SearchCoreModule,
     DocumentsCoreModule,
     GlossaryCoreModule,
   ],

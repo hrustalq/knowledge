@@ -12,6 +12,8 @@ import { safeJson, verifyHubSignature } from '../webhook-payload.js';
 import { ConnectorsService } from '../connectors.service.js';
 import { ConnectorWorkItemsService } from '../connector-work-items.service.js';
 import { toWorkItem } from './github-issues.service.js';
+import { DriftTriggerService } from '../drift/drift-trigger.service.js';
+import { readGithubPullRequest } from '../drift/pull-request-delivery.js';
 
 /**
  * The App-level webhook (docs/features/32).
@@ -47,6 +49,7 @@ export class GithubWebhookController {
     private readonly config: ConfigService<Env, true>,
     private readonly connectors: ConnectorsService,
     private readonly workItems: ConnectorWorkItemsService,
+    private readonly drift: DriftTriggerService,
   ) {
     this.secret = this.config.get('GITHUB_APP_WEBHOOK_SECRET', { infer: true }).trim();
   }
@@ -134,7 +137,12 @@ export class GithubWebhookController {
       let type: RepoEventType | null = null;
       if (action === 'opened' || action === 'reopened') type = 'repo.pull-request.opened';
       else if (action === 'closed') type = pr.merged ? 'repo.pull-request.merged' : 'repo.pull-request.closed';
-      if (!type) return false;
+      // The drift check (docs/features/35) listens to more of this event than
+      // the work-item projection does — `synchronize` above all, a push to the
+      // branch — and decides for itself whether the connector opted in.
+      const drift = readGithubPullRequest(event, payload);
+      const queued = drift ? await this.drift.request(row, drift) : null;
+      if (!type) return queued !== null;
       // `toWorkItem` discriminates on a nested `pull_request` key, which a pull
       // request *payload* does not have — it is the pull request. Re-nesting the
       // one field it reads keeps a single state mapping for both shapes.

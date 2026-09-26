@@ -121,6 +121,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 32  | Tree drag-and-drop   | Reparent + reorder by drag, keyboard and picker; `POST :id/move` places among siblings    |
 | 33  | Connect AI           | MCP over HTTP at `/v1/mcp` per caller, named/narrowed API keys, per-client configs, generated SKILL.md |
 | 34  | Editor assistant     | Left sidebar chat that reads the draft and streams `edit_draft` suggestions into the page |
+| 35  | PR drift check       | A pull/merge request queues the `sentinel`; it judges the tied pages, and the API proposes fixes and comments once |
 
 ## Conventions
 

@@ -25,6 +25,8 @@
   "cartographerDesc": "Proposes the relations a page should declare, grounded in what it says.",
   "archaeologist": "Archaeologist",
   "archaeologistDesc": "Reads a connected repository and drafts pages for the business logic no document declares.",
+  "sentinel": "Sentinel",
+  "sentinelDesc": "Checks the pages a pull or merge request may make wrong, and drafts the corrections.",
   "route": {
     "explicit": "Explicitly requested.",
     "disabled": "disabled",
@@ -85,6 +87,25 @@
     "noCandidates": "Read {docs} documents and {pages} pages for \"{repository}\"; every source file that decides something is already covered.",
     "budgetSpent": "Stopped after {files} of {candidates} files: the workspace AI budget is spent.",
     "summary": "Read {docs} documents and {pages} pages for \"{repository}\", then {files} source files nothing declares; proposes {findings} new pages."
+  },
+  "drift": {
+    "truncated": "The change touches more files than are read in one check; only the first {files} were considered.",
+    "noFiles": "Change #{number} touches nothing this connector reads.",
+    "noRelated": "Change #{number} touches {files} files, and no page is tied to any of them.",
+    "noModel": "No model is configured for the sentinel, so the pages tied to the change are listed without a verdict.",
+    "mayDriftTitle": "\"{title}\" may be affected",
+    "mayDriftDetail": "Change #{number} touches files this page is tied to: {files}.",
+    "summaryNoModel": "Change #{number}: {pages} pages are tied to the changed files; none was read.",
+    "budgetSpent": "Stopped after {checked} of {pages} pages: the workspace AI budget is spent.",
+    "searchFailed": "Searching for pages about the change failed, so only linked and naming pages were checked.",
+    "summary": "Change #{number} touches {files} files; checked {pages}, {drifted} drifted.",
+    "comment": {
+      "heading": "Documentation drift check",
+      "clean": "No page in {connector} drifts from this change as of {sha}.",
+      "intro": "As of {sha}, {count} page(s) in {connector} may need updating after this change:",
+      "proposed": "proposed update",
+      "footer": "Updated on every push. Pages are only changed through the merge requests linked above."
+    }
   },
   "warning": {
     "fileNotRead": "{path} could not be read: {error}",

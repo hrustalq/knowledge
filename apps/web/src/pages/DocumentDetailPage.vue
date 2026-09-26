@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/lib/format'
 import { errorMessage } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
+import { hasWorkingCopy } from '@/lib/working-copy'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -86,6 +87,22 @@ const RAIL_WIDGETS = [
 type RailWidget = (typeof RAIL_WIDGETS)[number]['id']
 
 const documentId = computed(() => route.params.id as string)
+
+/**
+ * Edits to this page kept in this browser and not yet published — the way
+ * back to them from where people actually arrive. Read after mount: the SSR
+ * pass has no storage, and deciding during render would not hydrate.
+ */
+const hasUnstaged = ref(false)
+onMounted(() => {
+  watch(
+    documentId,
+    (id) => {
+      hasUnstaged.value = hasWorkingCopy(getWorkspaceId(), id)
+    },
+    { immediate: true },
+  )
+})
 
 /**
  * Which widgets are open, and the `?tab=` opening instruction that seeds them,
@@ -446,9 +463,14 @@ watch(
              while editing is not, so a viewer still sees a balanced row. -->
         <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
         <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
-          <RouterLink :to="`/documents/${detail.document.documentId}/edit`">
+          <RouterLink
+            :to="`/documents/${detail.document.documentId}/edit`"
+            :title="hasUnstaged ? t('editor.unstaged.label') : undefined"
+          >
             <Pencil class="size-3.5" />
             {{ t('common.edit') }}
+            <span v-if="hasUnstaged" class="kn-dirty-dot" aria-hidden="true" />
+            <span v-if="hasUnstaged" class="sr-only">{{ t('editor.unstaged.label') }}</span>
           </RouterLink>
         </Button>
       </template>

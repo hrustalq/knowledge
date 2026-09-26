@@ -3,7 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
-import { ASSISTANT_MESSAGE_MAX_CHARS } from '@knowledge/contracts';
+import { ASSISTANT_DRAFT_MAX_CHARS, ASSISTANT_MESSAGE_MAX_CHARS } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 export class AssistantReviewDto {
@@ -143,6 +143,19 @@ export class ChatAttachmentDto {
   content!: string;
 }
 
+/** The page as it stands in the author's editor (docs/features/34). */
+export class AssistantDraftDto {
+  @ApiProperty({ description: 'The title field as typed, which may differ from the published title' })
+  @IsString()
+  @MaxLength(300, { message: vmsg('maxLength') })
+  title!: string;
+
+  @ApiProperty({ maxLength: ASSISTANT_DRAFT_MAX_CHARS, description: 'The body markdown, unstaged edits included' })
+  @IsString()
+  @MaxLength(ASSISTANT_DRAFT_MAX_CHARS, { message: vmsg('maxLength') })
+  markdown!: string;
+}
+
 export class PostAssistantMessageDto {
   @ApiProperty({
     example: 'Draft a short onboarding page for new hires',
@@ -210,6 +223,17 @@ export class PostAssistantMessageDto {
   @ArrayMaxSize(5, { message: vmsg('arrayMaxSize') })
   @IsUUID(undefined, { each: true })
   skillIds?: string[];
+
+  @ApiPropertyOptional({
+    type: AssistantDraftDto,
+    description:
+      "The author's working copy, sent from the editor. Grounds the turn in it instead of the published page " +
+      'and offers edit_draft, whose edits stream back as draft-edit frames and are never saved server-side.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AssistantDraftDto)
+  draft?: AssistantDraftDto;
 }
 
 export class AssistantAskDto {

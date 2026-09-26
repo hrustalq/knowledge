@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import type { AiAgentChoice } from '@knowledge/contracts';
+import { DOCUMENT_CATEGORIES } from '@knowledge/contracts';
+import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -21,7 +23,16 @@ import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.j
 import { ConnectorWorkItemsService } from '../connectors/connector-work-items.service.js';
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
-import { AUTHOR_ID_STUB } from '../documents/merge-requests.service.js';
+import { AccessService } from '../auth/access.service.js';
+import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
+import { MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
+import { renderSkill, type McpWhoami } from './skill.js';
+
+/**
+ * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
+ * Named because the connection page and the skill report it too.
+ */
+export const MCP_SERVER_VERSION = '0.10.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -50,9 +61,20 @@ import { AUTHOR_ID_STUB } from '../documents/merge-requests.service.js';
  *   knowledge_get_connector_run → knowledge.get_connector_run
  *   knowledge_list_agents       → knowledge.list_agents       (agents, feature 20)
  *
- * Merge-request tools (create/list/get/approve/close/comment/merge) act as
- * the zeros AUTHOR_ID_STUB — stdio has no principal, so authorship/approvals
- * from MCP are attributed to the stub identity.
+ *   knowledge_whoami            → identity, key narrowing, workspaces + projects (feature 33)
+ *   knowledge_list_documents    → the page tree of a workspace/project
+ *   knowledge_get_document_content → a page's full markdown (read before revising)
+ *   knowledge_create_document   → a new page with inline markdown
+ *
+ * Two transports, one tool set (docs/features/33). `buildServer(principal)`
+ * binds every tool to a caller: each one runs the same `requireRole` its REST
+ * twin's `@Access` does, and every write is attributed to that caller.
+ *
+ *   stdio (mcp.main.ts)      → DEV_PRINCIPAL: full access, writes attributed to
+ *                              the zeros stub. Local process access is the trust.
+ *   HTTP  (POST /v1/mcp)     → the bearer's principal, narrowed by its key's
+ *                              scope and workspace pin. A read-only key is not
+ *                              even offered the write tools.
  */
 @Injectable()
 export class McpService {
@@ -75,10 +97,31 @@ export class McpService {
     private readonly workItems: ConnectorWorkItemsService,
     private readonly connectorProducer: ConnectorProducer,
     private readonly agents: AgentRegistryService,
+    private readonly access: AccessService,
+    private readonly config: ConfigService,
   ) {}
 
   async serveStdio(): Promise<void> {
-    const server = new McpServer({ name: 'knowledge', version: '0.9.0' });
+    await this.buildServer(DEV_PRINCIPAL).server.connect(new StdioServerTransport());
+  }
+
+  /** What `principal` would be offered — the connection page's list and the skill's catalogue. */
+  toolsFor(principal: Principal): McpToolSummary[] {
+    return this.buildServer(principal).tools;
+  }
+
+  /**
+   * A server whose every tool acts as `principal`. Cheap enough to build per
+   * HTTP request (registration is a map insert per tool), which is what lets
+   * the HTTP transport stay stateless: no session to pin a principal to.
+   */
+  buildServer(principal: Principal): { server: McpServer; tools: McpToolSummary[] } {
+    const server = new McpServer(
+      { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
+      { instructions: MCP_INSTRUCTIONS },
+    );
+    const handles = trackTools(server);
+    const guard = this.guardFor(principal);
 
     server.registerTool(
       'knowledge_search',
@@ -104,6 +147,7 @@ export class McpService {
         },
       },
       async ({ workspaceId, query, limit, projectIds, tags }) => {
+        await guard.ws(workspaceId, 'viewer');
         // One merged object: separate spreads would clobber each other.
         const filters = {
           ...(projectIds?.length ? { projectIds } : {}),
@@ -127,7 +171,10 @@ export class McpService {
           'List the projects in a workspace. Workspace > Project > Document — every document belongs to exactly one project.',
         inputSchema: { workspaceId: z.string().uuid() },
       },
-      async ({ workspaceId }) => this.json(await this.projects.list({ workspaceId })),
+      async ({ workspaceId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.projects.list({ workspaceId }));
+      },
     );
 
     server.registerTool(
@@ -137,7 +184,10 @@ export class McpService {
           'List the external systems this workspace syncs with (Confluence, Jira, Notion, markdown/git). Each entry says which direction it moves content, how many pages it has claimed, and how its last sync went.',
         inputSchema: { workspaceId: z.string().uuid() },
       },
-      async ({ workspaceId }) => this.json(await this.connectors.list(workspaceId)),
+      async ({ workspaceId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.connectors.list(workspaceId));
+      },
     );
 
     server.registerTool(
@@ -159,6 +209,7 @@ export class McpService {
         },
       },
       async ({ connectorId, direction, externalIds }) => {
+        await guard.connector(connectorId, 'editor');
         const row = await this.connectors.require(connectorId);
         const run = await this.connectors.createRun(row, direction ?? 'pull', 'manual', { externalIds });
         await this.connectorProducer.enqueue(run.id);
@@ -173,12 +224,15 @@ export class McpService {
           'One sync run: status, current stage, and how many pages were created, updated, skipped, failed or left as conflicts. Warnings list what a run could not carry.',
         inputSchema: { runId: z.string().uuid() },
       },
-      async ({ runId }) => this.json(await this.connectors.getRun(runId)),
+      async ({ runId }) => {
+        await guard.connectorRun(runId, 'viewer');
+        return this.json(await this.connectors.getRun(runId));
+      },
     );
 
     // Work items (docs/features/32). Reading only: opening an issue is an act
-    // attributed to a person, and stdio has no principal — the same reason
-    // workflow approval is deliberately absent from this surface.
+    // attributed to a person, and on stdio that person is the anonymous stub —
+    // the same reason workflow approval is deliberately absent from this surface.
     server.registerTool(
       'knowledge_list_work_items',
       {
@@ -193,6 +247,7 @@ export class McpService {
         },
       },
       async ({ connectorId, state }) => {
+        await guard.connector(connectorId, 'viewer');
         const row = await this.connectors.require(connectorId);
         const items = await this.workItems.list(row);
         const wanted = state ?? 'all';
@@ -214,15 +269,18 @@ export class McpService {
           projectId: z.string().uuid().optional().describe('Restrict the graph to one project'),
         },
       },
-      async ({ workspaceId, projectId }) =>
-        this.json(await this.documents.getWorkspaceGraph(workspaceId, projectId)),
+      async ({ workspaceId, projectId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.documents.getWorkspaceGraph(workspaceId, projectId));
+      },
     );
 
     // ------------------------------------------------------------ workflows
     // Dynamic document workflows (docs/features/17). Starting a run is exposed
-    // but approving one is not: approval writes pages into the knowledge base,
-    // and stdio has no principal to attribute that to. An agent can kick a
-    // chain off and watch it; a person still decides what gets published.
+    // but approving one is not: approval publishes pages, and an agent should
+    // not be the thing that decides what gets published — over HTTP it has a
+    // principal, but it is still not the person. It can kick a chain off and
+    // watch it; a person approves.
     server.registerTool(
       'knowledge_list_workflows',
       {
@@ -233,8 +291,10 @@ export class McpService {
           projectId: z.string().uuid().optional().describe('Adds this project\'s definitions to the workspace-wide ones'),
         },
       },
-      async ({ workspaceId, projectId }) =>
-        this.json(await this.workflows.list({ workspaceId, ...(projectId ? { projectId } : {}) })),
+      async ({ workspaceId, projectId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.workflows.list({ workspaceId, ...(projectId ? { projectId } : {}) }));
+      },
     );
 
     server.registerTool(
@@ -249,14 +309,17 @@ export class McpService {
           note: z.string().max(4000).optional().describe('Extra instructions for this run only'),
         },
       },
-      async ({ workspaceId, definitionId, rootDocumentId, note }) =>
-        this.json(
-          await this.workflows.startRun(
-            { workspaceId, definitionId, rootDocumentId, ...(note ? { note } : {}) },
-            AUTHOR_ID_STUB,
-            'mcp',
-          ),
-        ),
+      async ({ workspaceId, definitionId, rootDocumentId, note }) => {
+        await guard.ws(workspaceId, 'editor');
+        await guard.doc(rootDocumentId, 'editor');
+        return this.json(
+            await this.workflows.startRun(
+              { workspaceId, definitionId, rootDocumentId, ...(note ? { note } : {}) },
+              principal.userId,
+              'mcp',
+            ),
+          );
+      },
     );
 
     server.registerTool(
@@ -269,6 +332,7 @@ export class McpService {
         inputSchema: { workspaceId: z.string().uuid() },
       },
       async ({ workspaceId }) => {
+        await guard.ws(workspaceId, 'viewer');
         const agents = await this.agents.list(workspaceId);
         return this.json({
           agents: agents
@@ -282,11 +346,10 @@ export class McpService {
 
     // There is deliberately no knowledge_run_agent. A background run stores
     // `created_by` NOT NULL precisely so it always has an owner to authorise
-    // and bill as, and stdio has no principal — every other write tool here
-    // settles for AUTHOR_ID_STUB, but starting unattended AI is the one place
-    // where an unauthenticated transport should not be the thing that starts
-    // it. Runs begin from the Agents tab or from a schedule, both of which name
-    // a real user. (docs/features/20-agents-todo.md item 3.)
+    // and bill as, and the stdio transport runs as the anonymous stub. The two
+    // transports offer one tool set, so the tool is absent from both. Runs
+    // begin from the Agents tab or from a schedule, both of which name a real
+    // user. (docs/features/20-agents-todo.md item 3.)
 
     server.registerTool(
       'knowledge_get_workflow_run',
@@ -295,7 +358,10 @@ export class McpService {
           'A workflow run with its frozen step graph and its node tree — every intermediate result, including drafts still awaiting review.',
         inputSchema: { runId: z.string().uuid() },
       },
-      async ({ runId }) => this.json(await this.workflows.getRun(runId)),
+      async ({ runId }) => {
+        await guard.workflowRun(runId, 'viewer');
+        return this.json(await this.workflows.getRun(runId));
+      },
     );
 
     server.registerTool(
@@ -310,10 +376,12 @@ export class McpService {
           depth: z.number().int().min(1).max(3).optional(),
         },
       },
-      async ({ workspaceId, entity, relationship, depth }) =>
-        this.json(
-          await this.entities.neighbors(workspaceId, entity, depth ?? 1, relationship ? [relationship] : undefined),
-        ),
+      async ({ workspaceId, entity, relationship, depth }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(
+            await this.entities.neighbors(workspaceId, entity, depth ?? 1, relationship ? [relationship] : undefined),
+          );
+      },
     );
 
     server.registerTool(
@@ -328,8 +396,10 @@ export class McpService {
           maxDepth: z.number().int().min(1).max(5).optional(),
         },
       },
-      async ({ workspaceId, entityId, direction, maxDepth }) =>
-        this.json(await this.entities.impactAnalysis(workspaceId, entityId, direction ?? 'dependents', maxDepth ?? 3)),
+      async ({ workspaceId, entityId, direction, maxDepth }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.entities.impactAnalysis(workspaceId, entityId, direction ?? 'dependents', maxDepth ?? 3));
+      },
     );
 
     server.registerTool(
@@ -343,8 +413,10 @@ export class McpService {
           maxDepth: z.number().int().min(1).max(6).optional(),
         },
       },
-      async ({ workspaceId, fromEntityId, toEntityId, maxDepth }) =>
-        this.json(await this.entities.trace(workspaceId, fromEntityId, toEntityId, maxDepth ?? 4)),
+      async ({ workspaceId, fromEntityId, toEntityId, maxDepth }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.entities.trace(workspaceId, fromEntityId, toEntityId, maxDepth ?? 4));
+      },
     );
 
     server.registerTool(
@@ -356,8 +428,29 @@ export class McpService {
           revisionId: z.string().uuid().optional(),
         },
       },
-      async ({ documentId, revisionId }) =>
-        this.json(await this.documents.getDocument(documentId, revisionId)),
+      async ({ documentId, revisionId }) => {
+        await guard.doc(documentId, 'viewer');
+        return this.json(await this.documents.getDocument(documentId, revisionId));
+      },
+    );
+
+    // The whole page, as its author wrote it. get_document answers "what is
+    // this page and is it indexed"; editing needs the text itself, because a
+    // revision is the full document and never a patch.
+    server.registerTool(
+      'knowledge_get_document_content',
+      {
+        description:
+          'The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          revisionId: z.string().uuid().optional(),
+        },
+      },
+      async ({ documentId, revisionId }) => {
+        await guard.doc(documentId, 'viewer');
+        return this.json(await this.documents.getContent(documentId, revisionId));
+      },
     );
 
     server.registerTool(
@@ -369,8 +462,10 @@ export class McpService {
           branch: z.string().optional(),
         },
       },
-      async ({ documentId, branch }) =>
-        this.json(await this.documents.listRevisions(documentId, branch)),
+      async ({ documentId, branch }) => {
+        await guard.doc(documentId, 'viewer');
+        return this.json(await this.documents.listRevisions(documentId, branch));
+      },
     );
 
     server.registerTool(
@@ -386,13 +481,15 @@ export class McpService {
           includeSemanticDiff: z.boolean().optional(),
         },
       },
-      async ({ documentId, fromRevisionId, toRevisionId, mode, includeSemanticDiff }) =>
-        this.json(
-          await this.compare.compare(documentId, fromRevisionId, toRevisionId, mode ?? 'direct', {
-            structural: true,
-            semantic: includeSemanticDiff ?? false,
-          }),
-        ),
+      async ({ documentId, fromRevisionId, toRevisionId, mode, includeSemanticDiff }) => {
+        await guard.doc(documentId, 'viewer');
+        return this.json(
+            await this.compare.compare(documentId, fromRevisionId, toRevisionId, mode ?? 'direct', {
+              structural: true,
+              semantic: includeSemanticDiff ?? false,
+            }),
+          );
+      },
     );
 
     server.registerTool(
@@ -405,8 +502,10 @@ export class McpService {
           fromRevisionId: z.string().uuid().optional(),
         },
       },
-      async ({ documentId, name, fromRevisionId }) =>
-        this.json(await this.documents.createBranch(documentId, { name, fromRevisionId })),
+      async ({ documentId, name, fromRevisionId }) => {
+        await guard.doc(documentId, 'editor');
+        return this.json(await this.documents.createBranch(documentId, { name, fromRevisionId }));
+      },
     );
 
     server.registerTool(
@@ -422,8 +521,10 @@ export class McpService {
           message: z.string().optional(),
         },
       },
-      async ({ documentId, branch, baseRevisionId, content, message }) =>
-        this.json(await this.createRevision(documentId, { branch, baseRevisionId, content, message })),
+      async ({ documentId, branch, baseRevisionId, content, message }) => {
+        await guard.doc(documentId, 'editor');
+        return this.json(await this.createRevision(documentId, { branch, baseRevisionId, content, message }, principal.userId));
+      },
     );
 
     server.registerTool(
@@ -439,8 +540,10 @@ export class McpService {
           description: z.string().optional(),
         },
       },
-      async ({ documentId, sourceBranch, targetBranch, title, description }) =>
-        this.json(await this.mergeRequests.create(documentId, { sourceBranch, targetBranch, title, description })),
+      async ({ documentId, sourceBranch, targetBranch, title, description }) => {
+        await guard.doc(documentId, 'editor');
+        return this.json(await this.mergeRequests.create(documentId, { sourceBranch, targetBranch, title, description }, principal.userId));
+      },
     );
 
     server.registerTool(
@@ -460,7 +563,10 @@ export class McpService {
           limit: z.number().int().min(1).max(100).optional(),
         },
       },
-      async (query) => this.json(await this.mergeRequests.listWorkspace(query)),
+      async (query) => {
+        await guard.ws(query.workspaceId, 'viewer');
+        return this.json(await this.mergeRequests.listWorkspace(query));
+      },
     );
 
     server.registerTool(
@@ -475,23 +581,28 @@ export class McpService {
           semantic: z.boolean().optional(),
         },
       },
-      async ({ mergeRequestId, includeDiff, semantic }) =>
-        this.json(
-          includeDiff
-            ? await this.mergeRequests.diff(mergeRequestId, { semantic })
-            : await this.mergeRequests.get(mergeRequestId),
-        ),
+      async ({ mergeRequestId, includeDiff, semantic }) => {
+        await guard.mr(mergeRequestId, 'viewer');
+        return this.json(
+            includeDiff
+              ? await this.mergeRequests.diff(mergeRequestId, { semantic })
+              : await this.mergeRequests.get(mergeRequestId),
+          );
+      },
     );
 
     server.registerTool(
       'knowledge_approve_merge_request',
       {
         description:
-          'Approve an open merge request. NOTE: approval is recorded for the MCP stub identity — it counts toward ' +
-          'the MR_REQUIRED_APPROVALS merge gate unless the merge request was also authored via MCP (self-approvals never count).',
+          'Approve an open merge request as the connected user. Counts toward the MR_REQUIRED_APPROVALS merge gate ' +
+          'unless that user also authored it (self-approvals never count). Only approve when the user asks you to.',
         inputSchema: { mergeRequestId: z.string().uuid() },
       },
-      async ({ mergeRequestId }) => this.json(await this.mergeRequests.approve(mergeRequestId)),
+      async ({ mergeRequestId }) => {
+        await guard.mr(mergeRequestId, 'editor');
+        return this.json(await this.mergeRequests.approve(mergeRequestId, principal.userId));
+      },
     );
 
     server.registerTool(
@@ -500,7 +611,10 @@ export class McpService {
         description: 'Close an open merge request without merging (reopenable via the REST API).',
         inputSchema: { mergeRequestId: z.string().uuid() },
       },
-      async ({ mergeRequestId }) => this.json(await this.mergeRequests.close(mergeRequestId)),
+      async ({ mergeRequestId }) => {
+        await guard.mr(mergeRequestId, 'editor');
+        return this.json(await this.mergeRequests.close(mergeRequestId, principal.userId));
+      },
     );
 
     server.registerTool(
@@ -515,12 +629,14 @@ export class McpService {
           threadId: z.string().uuid().optional(),
         },
       },
-      async ({ mergeRequestId, body, threadId }) =>
-        this.json(
-          threadId
-            ? await this.mergeRequestThreads.reply(mergeRequestId, threadId, body)
-            : await this.mergeRequestThreads.createThread(mergeRequestId, { body }),
-        ),
+      async ({ mergeRequestId, body, threadId }) => {
+        await guard.mr(mergeRequestId, 'editor');
+        return this.json(
+            threadId
+              ? await this.mergeRequestThreads.reply(mergeRequestId, threadId, body, principal.userId)
+              : await this.mergeRequestThreads.createThread(mergeRequestId, { body }, principal.userId),
+          );
+      },
     );
 
     server.registerTool(
@@ -535,8 +651,10 @@ export class McpService {
           strategy: z.enum(['merge-commit', 'squash']).optional(),
         },
       },
-      async ({ mergeRequestId, strategy }) =>
-        this.json(await this.mergeRequests.merge(mergeRequestId, strategy ?? 'merge-commit')),
+      async ({ mergeRequestId, strategy }) => {
+        await guard.mr(mergeRequestId, 'editor');
+        return this.json(await this.mergeRequests.merge(mergeRequestId, strategy ?? 'merge-commit', principal));
+      },
     );
 
     server.registerTool(
@@ -552,10 +670,11 @@ export class McpService {
         },
       },
       async ({ workspaceId, query, limit }) => {
+        await guard.ws(workspaceId, 'admin', true);
         const started = Date.now();
         const base = {
           workspaceId,
-          actor: 'mcp-operator',
+          actor: principal.mode === 'dev' ? 'mcp-operator' : principal.userId,
           action: 'graph.query',
           params: { query, limit: limit ?? 200 },
         };
@@ -588,6 +707,7 @@ export class McpService {
         },
       },
       async ({ workspaceId, entityId, atRevisionId }) => {
+        await guard.ws(workspaceId, 'viewer');
         const revision = await this.prisma.documentRevision.findUnique({
           where: { id: atRevisionId },
           include: { document: true },
@@ -619,17 +739,191 @@ export class McpService {
           documentId: z.string().uuid().optional(),
         },
       },
-      async ({ workspaceId, documentId }) => this.json(await this.ingestionAdmin.reindex(workspaceId, documentId)),
+      async ({ workspaceId, documentId }) => {
+        await guard.ws(workspaceId, 'admin');
+        return this.json(await this.ingestionAdmin.reindex(workspaceId, documentId));
+      },
     );
 
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+    // ------------------------------------------------------------ orientation
+    // The three tools an agent needs before any other: who am I, where can I
+    // look, and how do I add a page. Without whoami a remote client has no way
+    // to learn a workspaceId except by being told one.
+    server.registerTool(
+      'knowledge_whoami',
+      {
+        description:
+          'Start here. Who this connection acts as, what its API key is limited to, and every workspace it can reach with your role in it and its projects (ids included). Every other tool takes one of these workspaceIds.',
+        inputSchema: {},
+      },
+      async () => this.json(await this.whoami(principal)),
+    );
+
+    server.registerTool(
+      'knowledge_list_documents',
+      {
+        description:
+          'The page tree of a workspace, optionally one project: titles, ids, categories and nesting. Use it to browse; use knowledge_search to find.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          projectId: z.string().uuid().optional().describe('Restrict to one project'),
+          parentId: z.string().uuid().optional().describe('Children of this page; omit for the top level'),
+          depth: z.number().int().min(1).max(10).optional().describe('Levels to load; omit for the whole tree'),
+        },
+      },
+      async ({ workspaceId, projectId, parentId, depth }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(
+          await this.documents.getTree(workspaceId, projectId, {
+            parentId: parentId ?? null,
+            ...(depth ? { depth } : {}),
+          }),
+        );
+      },
+    );
+
+    server.registerTool(
+      'knowledge_create_document',
+      {
+        description:
+          'Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status "indexed"). To change an existing page, branch and open a merge request instead.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          projectId: z.string().uuid().describe('From knowledge_whoami or knowledge_list_projects'),
+          title: z.string().min(1).max(300),
+          content: z.string().min(1).describe('Markdown body; YAML frontmatter is allowed and indexed'),
+          parentId: z.string().uuid().optional().describe('Nest under this page'),
+          category: z.enum(DOCUMENT_CATEGORIES).optional(),
+        },
+      },
+      async ({ workspaceId, projectId, title, content, parentId, category }) => {
+        await guard.ws(workspaceId, 'editor');
+        return this.json(
+          await this.documents.createDocument(
+            {
+              workspaceId,
+              projectId,
+              title,
+              content: { mode: 'inline', format: 'markdown', text: content },
+              ...(parentId ? { parentId } : {}),
+              ...(category ? { category } : {}),
+            },
+            principal.userId,
+          ),
+        );
+      },
+    );
+
+    // ------------------------------------------------------------ the skill
+    // The same SKILL.md the connection page hands out, served where a client
+    // that has no skills directory can still reach it: as a resource to read,
+    // and as a prompt to invoke (`/mcp__knowledge__guide` in Claude Code).
+    server.registerResource(
+      'skill',
+      'knowledge://skill',
+      {
+        title: 'Knowledge platform skill',
+        description: 'How to use this knowledge base well: the workspaces you can reach, the tools, and the flows.',
+        mimeType: 'text/markdown',
+      },
+      async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: await this.skillFor(principal) }] }),
+    );
+    server.registerPrompt(
+      'guide',
+      {
+        title: 'Knowledge platform guide',
+        description: 'Load the knowledge-platform skill into the conversation before working with this knowledge base.',
+      },
+      async () => ({
+        messages: [{ role: 'user', content: { type: 'text', text: await this.skillFor(principal) } }],
+      }),
+    );
+
+    return { server, tools: settleTools(handles, principal) };
+  }
+
+  /** The SKILL.md for `principal` — see skill.ts. `url` overrides the endpoint it names. */
+  async skillFor(principal: Principal, url?: string): Promise<string> {
+    return renderSkill({
+      url: url ?? this.publicUrl(),
+      serverName: MCP_SERVER_NAME,
+      version: MCP_SERVER_VERSION,
+      authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
+      webUrl: String(this.config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(/\/+$/, ''),
+      whoami: await this.whoami(principal),
+      tools: this.toolsFor(principal),
+    });
+  }
+
+  /** `$API_PUBLIC_URL/v1/mcp` — what every generated config points at. */
+  publicUrl(): string {
+    const base = String(this.config.get('API_PUBLIC_URL') ?? 'http://localhost:3000').replace(/\/+$/, '');
+    return `${base}/v1/mcp`;
+  }
+
+  async whoami(principal: Principal): Promise<McpWhoami> {
+    // WorkspacesService.list's rule (dev and platform admins see every
+    // workspace), read directly: WorkspacesModule carries a controller and so
+    // cannot load in the stdio process.
+    const pinned = principal.apiKey?.workspaceId ?? null;
+    const seesAll = principal.mode === 'dev' || principal.isAdmin;
+    const memberships = await this.prisma.workspaceMember.findMany({ where: { userId: principal.userId } });
+    const roleOf = new Map(memberships.map((m) => [m.workspaceId, m.role as WorkspaceRole]));
+    const ids = pinned ? [pinned] : seesAll ? undefined : [...roleOf.keys()];
+    const reachable = await this.prisma.workspace.findMany({
+      where: ids ? { id: { in: ids } } : {},
+      orderBy: { createdAt: 'asc' },
+    });
+    const projects = await Promise.all(reachable.map((w) => this.projects.list({ workspaceId: w.id })));
+    const readOnly = principal.apiKey?.scope === 'read';
+    return {
+      userId: principal.userId,
+      email: principal.email,
+      displayName: principal.displayName,
+      mode: principal.mode,
+      apiKey: principal.apiKey
+        ? { scope: principal.apiKey.scope, workspaceId: principal.apiKey.workspaceId }
+        : null,
+      workspaces: reachable
+        // A key pinned to a workspace its owner has since left reaches nothing.
+        .filter((w) => seesAll || roleOf.has(w.id))
+        .map((w) => ({
+          workspaceId: w.id,
+          name: w.name,
+          // What this connection may actually do, not merely the membership
+          // row: a read-only key caps it, and dev/platform admin has no row.
+          role: readOnly ? 'viewer' : (roleOf.get(w.id) ?? 'admin'),
+          projects: projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),
+        })),
+    };
+  }
+
+  /**
+   * The per-tool twin of AclGuard: resolve the tool's target to its workspace
+   * in PG, then the same `requireRole` a REST route runs — key narrowing
+   * included. The dev principal skips the lookup exactly as AclGuard does.
+   */
+  private guardFor(principal: Principal) {
+    const check = async (resolve: () => Promise<string>, role: WorkspaceRole, operator = false) => {
+      if (principal.mode === 'dev') return;
+      await this.access.requireRole(principal, await resolve(), role, operator);
+    };
+    return {
+      ws: (workspaceId: string, role: WorkspaceRole, operator = false) =>
+        check(() => this.access.workspaceExists(workspaceId), role, operator),
+      doc: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfDocument(id), role),
+      mr: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfMergeRequest(id), role),
+      connector: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnector(id), role),
+      connectorRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnectorRun(id), role),
+      workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfWorkflowRun(id), role),
+    };
   }
 
   /** Inline-content revision flow: draft on branch head → put bytes → finalize. */
   private async createRevision(
     documentId: string,
     opts: { branch?: string; baseRevisionId?: string; content: string; message?: string },
+    authorId: string,
   ) {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!document) throw new Error(`Document ${documentId} not found`);
@@ -649,11 +943,12 @@ export class McpService {
       }
     }
 
-    const draft = await this.documents.createRevision(documentId, {
-      branch: branchName,
-      message: opts.message,
-      contentType: 'text/markdown',
-    });
+    const draft = await this.documents.createRevision(
+      documentId,
+      { branch: branchName, message: opts.message, contentType: 'text/markdown' },
+      undefined,
+      authorId,
+    );
     const row = await this.prisma.documentRevision.findUniqueOrThrow({ where: { id: draft.revisionId } });
     await this.storage.putObjectText(row.s3Key, opts.content, 'text/markdown');
     return this.documents.finalizeRevision(documentId, draft.revisionId);

@@ -124,6 +124,13 @@ const WRITE_TOOLS = [...ASSISTANT_WRITE_TOOL_NAMES];
 /** Asking the user a question, and rendering a real component inline. */
 const UI_TOOLS = ['ask_user', 'render_component'];
 /**
+ * The draft open in the author's editor (docs/features/34). Named for both
+ * conversational agents: it changes nothing until the author accepts it, so it
+ * is not a write, and `definitions()` withholds it from any turn that did not
+ * send a draft — the name here is inert on the assistant page.
+ */
+const DRAFT_TOOLS = ['edit_draft'];
+/**
  * The open web (docs/features/25). Named in the two conversational lists only —
  * allowlists intersect rather than union, so listing a tool here cannot hand it
  * to the other nine agents, and a workspace on WEB_ACCESS_MODE=off is offered
@@ -178,7 +185,15 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     // Exactly what definitions('ask', { ui: true }) offers today: read tools,
     // the form, the offer to switch modes, and inline components — plus the two
     // web tools, which `definitions` withholds unless the deployment allows them.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, ...TASK_READ_TOOLS, 'request_agent_mode'],
+    tools: [
+      ...READ_TOOLS,
+      ...UI_TOOLS,
+      ...WEB_TOOLS,
+      ...CODE_TOOLS,
+      ...TASK_READ_TOOLS,
+      ...DRAFT_TOOLS,
+      'request_agent_mode',
+    ],
     skillIds: [],
     purpose: 'chat',
     // Interactive only. A researcher with nobody to answer has no job: every
@@ -197,7 +212,7 @@ export const BUILT_IN_AGENT_DEFAULTS: Record<BuiltInAgentKey, BuiltInAgentDefaul
     instructions: CHAT_PREAMBLE + AGENT_CLAUSE + FORM_CLAUSE + CHAT_RULES,
     // definitions('agent', { ui: true }) drops request_agent_mode — offering
     // the switch when the write tools are already on the table is confusing.
-    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, ...TASK_READ_TOOLS, ...WRITE_TOOLS],
+    tools: [...READ_TOOLS, ...UI_TOOLS, ...WEB_TOOLS, ...CODE_TOOLS, ...TASK_READ_TOOLS, ...DRAFT_TOOLS, ...WRITE_TOOLS],
     skillIds: [],
     purpose: 'chat',
     surfaces: ['interactive'],

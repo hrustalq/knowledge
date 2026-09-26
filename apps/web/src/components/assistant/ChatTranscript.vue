@@ -289,7 +289,7 @@ defineExpose({ scrollToEnd })
       @touchstart.passive="onTouchStart"
       @touchmove.passive="onTouchMove"
     >
-      <div ref="contentEl" class="mx-auto w-full max-w-4xl px-4 py-6 lg:px-8">
+      <div ref="contentEl" class="mx-auto w-full max-w-4xl px-4 py-6 @3xl:px-8">
         <!-- Loading a thread: shaped placeholders, not a spinner over nothing. -->
         <div v-if="loading" class="space-y-6" aria-hidden="true">
           <div class="flex justify-end"><Skeleton class="h-10 w-64 rounded-2xl" /></div>
@@ -304,6 +304,7 @@ defineExpose({ scrollToEnd })
         </div>
 
         <!-- Empty state that teaches the two modes rather than saying "no messages". -->
+        <slot v-else-if="rows.length === 0 && $slots.empty" name="empty" />
         <div v-else-if="rows.length === 0" class="flex min-h-[24rem] flex-col justify-center py-10">
           <span
             class="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15"

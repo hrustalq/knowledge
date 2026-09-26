@@ -18,7 +18,13 @@
     "roleRequired": "Требуется роль «{role}» в рабочем пространстве {workspaceId} (текущая роль: «{currentRole}»)",
     "runOwnerUnavailable": "Пользователь, которому принадлежит запуск, удалён или отключён",
     "trustedOperatorRequired": "Требуется статус доверенного оператора (plan.md §9, доступ к query_graph)",
-    "noApiKeyInDevMode": "API-ключи принадлежат реальной учётной записи. Запустите API с AUTH_MODE=api-key, чтобы создать ключ."
+    "noApiKeyInDevMode": "API-ключи принадлежат реальной учётной записи. Запустите API с AUTH_MODE=api-key, чтобы создать ключ.",
+    "apiKeyWorkspace": "Этот API-ключ ограничен другим рабочим пространством ({workspaceId} в него не входит).",
+    "apiKeyReadOnly": "Этот API-ключ только для чтения; для доступа «{role}» нужен ключ с правом записи.",
+    "apiKeyNeedsSession": "API-ключами управляют из сеанса входа, а не с помощью другого API-ключа.",
+    "apiKeyNotFound": "API-ключ {id} не найден.",
+    "apiKeyWorkspaceNotMember": "Ключ можно привязать только к рабочему пространству, в котором вы состоите ({workspaceId}).",
+    "apiKeyLimit": "У вас уже {max} активных API-ключей — отзовите один, прежде чем создавать новый."
   },
   "workspace": {
     "notFound": "Рабочее пространство {id} не найдено",

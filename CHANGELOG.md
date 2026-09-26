@@ -13,6 +13,129 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.10.0] — 2026-09-26
+
+
+### Added
+
+- **The editor's assistant is a sidebar that writes into the page.** Press the
+  Assistant button or `⌘J` / `Ctrl+J`: the chat opens on the left in place of
+  the navigation rail, with everything the assistant page has. It reads your
+  draft as it is on screen, unsaved edits included, and when you ask for a change
+  the text streams straight into the page as a suggestion you keep or discard
+  (`⌘↵` keeps them all). Nothing is saved until you keep it and publish; publish
+  asks you to decide on pending suggestions first. Chat replies now fade in word
+  by word too.
+
+- **Unpublished edits survive a reload, a crash or a closed tab.** The page
+  editor keeps its working copy in the browser as you write and restores it when
+  the page is reopened; if the page was published in the meantime it asks before
+  restoring rather than quietly publishing over the newer revision. A header chip
+  shows that there are unstaged changes and opens a diff of what publishing would
+  write, with a way to discard them. The document page marks its Edit button when
+  edits are waiting. Copies stay in the browser they were made in.
+- **Connect Claude, Codex, Gemini CLI, Cursor or any MCP client to the knowledge
+  base.** The `knowledge_*` tools are now served over Streamable HTTP at
+  `POST /v1/mcp`, authenticated with an API key and acting as the key's owner:
+  each tool enforces the same workspace role as the REST route it mirrors, and
+  every page, revision, merge request and comment it writes is attributed to
+  that person. Previously the tools ran only as a local stdio process with full,
+  anonymous access. `knowledge_whoami`, `knowledge_list_documents`,
+  `knowledge_get_document_content` and `knowledge_create_document` are new, so an
+  agent can find its workspaces, browse, read a page in full and add one.
+- **Settings → Connect AI** (`/settings/connect`) gives the exact command and
+  config file for Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude
+  Desktop, Windsurf, opencode and Zed — each in that client's own syntax, with a
+  newly created key already filled in.
+- **API keys can be named, narrowed and revoked one at a time.** Create as many as
+  you need — one per client and machine — each optionally read-only, pinned to one
+  workspace, or expiring, and see when each was last used. A read-only key cannot
+  write anywhere, even when its owner is a platform admin, and a connected client is
+  not offered the write tools at all. `GET|POST /v1/me/api-keys`,
+  `DELETE /v1/me/api-keys/:keyId`
+- **An agent skill generated for you.** `GET /v1/mcp/skill` returns a `SKILL.md`
+  listing your workspaces and project ids, the tools your key is offered, and how
+  to use them — answer with citations, change pages only through merge requests,
+  trace impact. Install it with one command from the Connect AI page; the MCP
+  server also serves it as the resource `knowledge://skill` and the prompt `guide`.
+
+### Changed
+
+- **The editor's toolbar and header no longer overflow on narrow screens.** The
+  toolbar folds its less-used controls into a "More" menu as it narrows —
+  including when the assistant panel is open — and on a phone the header keeps
+  the assistant, a menu for Settings and Cancel, and Publish.
+
+- **Leaving the editor no longer asks, once your edits are stored.** They are
+  restored when you come back. Cancel still asks — keep and leave, or discard —
+  and the old discard warning remains for a browser that refuses to store them.
+- **Typing in long pages is lighter.** The formatting toolbar no longer
+  re-renders on every keystroke, the selection bubble and table bar measure the
+  page once per frame instead of once per edit, and saving the page to markdown
+  skips a full HTML round trip.
+
+### Deprecated
+
+- `POST /v1/me/api-key` (single-key rotation) still works but now revokes **every**
+  key you hold before minting one. Use `POST /v1/me/api-keys` instead; it will be
+  removed in a later release.
+
+### Fixed
+
+- **The SearXNG instance answered every search with nothing.** Its config
+  narrowed the engine roster with `keep_only`, which preserves each engine's
+  *default* state — and upstream ships google as `disabled: true`. Kept but
+  disabled, google never fired on a real query, only on an explicit
+  `?engines=google`, so the instance returned `200 application/json` with an
+  empty `results` array and looked like a working backend that had nothing to
+  say. A top-level `engines:` block now enables it; that form *modifies* the
+  engines it names rather than re-widening the roster `keep_only` narrowed. (#52)
+- **One of the four configured engines was never loaded.** `keep_only` matches
+  engine names, not module names, and a name matching nothing is dropped in
+  silence — no warning, absent from `/config`. `stackexchange` is the module;
+  the engine built from it is `stackoverflow`. (#52)
+
+### Operations
+
+- **Web research is on in production**, which is a change of posture, not just
+  of configuration: `WEB_ACCESS_MODE=open` lets the assistant fetch any domain
+  a `source_policies` row does not deny. It was `off`, and both workspaces had
+  been asking for `open` and being clamped — which is what the "installation
+  allows off" banner in AI settings was reporting. Narrow it per workspace in
+  AI settings, or lower the ceiling back to `off` to withdraw it entirely.
+- **Two new production environment variables**, both in
+  `.env.production.example`: `WEB_ACCESS_MODE` (already present, now `open`)
+  and `WEB_SEARCH_URL=http://searxng:8080`. Without the latter, fetching a
+  named URL still works and searching does not. Both are read at container
+  creation through `env_file`, so they need `up -d --force-recreate api worker`
+  — a plain `restart` does not pick them up.
+- **A `searxng` service joins the production stack**, ~90 MB against the box's
+  3.8 GB. It publishes no host port: its `limiter` is off because the caller is
+  this platform rather than a browser, and a published port would put an
+  unthrottled open metasearch proxy on the network. The previous note that
+  SearXNG "does not fit beside a build" applied to OpenSearch's JVM and has
+  been corrected.
+- **`/srv/knowledge/searxng/settings.yml` is hand-managed beside `.env`** and is
+  deliberately *not* synced by `deploy.yml`, because it carries a generated
+  `secret_key` that must not be the dev placeholder this repo ships. The service
+  definition, however, must live in `docker-compose.prod.yml`: deploy installs
+  that file over the box's copy and then runs `up -d --remove-orphans`, so a
+  service existing only on the box is deleted by the next release.
+- **DuckDuckGo serves a CAPTCHA to datacentre IPs** and answers nothing from the
+  VPS. It is kept in the roster for the day that changes; until then every
+  response carries `unresponsive_engines: [[duckduckgo, CAPTCHA]]`, which is
+  noise in the payload, not a failure.
+- Migration `20260925120000_api_keys` creates `api_keys` and copies every existing
+  `users.api_key_hash` into it, so current keys — including a bootstrapped admin
+  key — keep working unchanged. It is expand-only: `users.api_key_hash` is kept
+  and no longer read, so rolling back to 0.9.0 still authenticates keys that
+  existed before the upgrade. Keys created after the upgrade do not work on 0.9.0.
+- `API_PUBLIC_URL` must be the API's public address as clients reach it
+  (`https://<host>/api` behind the bundled Caddyfile): it is now the base of the
+  MCP URL the Connect AI page hands out, not only of the GitHub OAuth callback.
+- `make auth-bootstrap` now **adds** a key instead of replacing the user's
+  previous one. Revoke old keys from Settings → Connect AI.
+
 ## [0.9.0] — 2026-09-18
 
 ### Added
@@ -649,7 +772,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.9.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/hrustalq/knowledge/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/hrustalq/knowledge/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/hrustalq/knowledge/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/hrustalq/knowledge/compare/v0.7.0...v0.7.1

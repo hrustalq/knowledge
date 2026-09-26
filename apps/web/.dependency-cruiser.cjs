@@ -71,7 +71,7 @@ module.exports = {
       from: {
         orphan: true,
         pathNot:
-          '\\.d\\.ts$|^src/(main|entry-client|entry-server)\\.ts$|\\.css$|^src/assets/|^src/pages/docs/content/',
+          '\\.d\\.ts$|\\.spec\\.ts$|^src/(main|entry-client|entry-server)\\.ts$|\\.css$|^src/assets/|^src/pages/docs/content/',
       },
       to: {},
     },

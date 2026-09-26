@@ -81,10 +81,17 @@ Everything is hashed; nothing reversible is stored.
 | --------------- | ------ | --------------------------------------------- |
 | Password        | —      | **scrypt** via `node:crypto`, no dependencies |
 | Session token   | `ks_`  | SHA-256 in `sessions`                          |
-| API key         | `kn_`  | SHA-256 in `users.api_key_hash`                |
+| API key         | `kn_`  | SHA-256 in `api_keys` (many per user)          |
 | Reset token     | `kr_`  | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN`  |
 
-API keys are **printed once** at bootstrap and never retrievable. Disabled users
+API keys are **shown once** — at bootstrap, or on Settings → Connect AI — and
+never retrievable. A key may be **read-only**, **pinned to one workspace**, or
+**expiring**; that narrowing rides on the principal (`principal.apiKey`) and is
+enforced inside `requireRole`, ahead of the platform-admin shortcut, so it can
+only ever take rights away. A read-only key is also refused any non-GET route
+without `@Access` unless the route is `@ReadKeyOk()` (only `POST /v1/mcp`). Keys
+are managed from a session only — never with another key. See
+[features/33](../features/33-connect-ai.md). Disabled users
 401 on both token kinds. Resetting a password, disabling a user, or an admin
 overriding a password all **revoke sessions**.
 

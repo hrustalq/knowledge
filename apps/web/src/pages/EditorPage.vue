@@ -9,14 +9,24 @@
 // Metadata that is not the page itself — project, parent, category, relations,
 // tags — lives in a settings sheet rather than a form above the content, so
 // what is on screen while you write is the page and nothing else.
+//
+// The assistant lives in a panel on the left (docs/features/34) that takes the
+// navigation rail's place while open. It reads the draft as it stands and
+// writes into it as suggestions — see EditorAiPanel and extensions/ai-suggestions.
+//
+// Edits are a working copy until published (lib/working-copy): kept in this
+// browser as they are made, restored when the page is reopened, reviewable as
+// a diff against the published head, and discarded only on request.
 import { useI18n } from 'vue-i18n'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { Settings2, Sparkles, X } from 'lucide-vue-next'
+import { onKeyStroke } from '@vueuse/core'
+import { History, MoreHorizontal, Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
+  type CompareResponse,
   type CreateDocumentResponse,
   type CreateUploadResponse,
   type DocumentCategory,
@@ -29,6 +39,21 @@ import { ApiError, apiFetch, getWorkspaceId } from '@/lib/api'
 import { errorMessage } from '@/api/errors'
 import { presignedPut } from '@/lib/presigned-put'
 import { labelFor } from '@/lib/labels'
+import { formatDateTime } from '@/lib/format'
+import { lineDiff } from '@/lib/line-diff'
+import {
+  buildSource,
+  readFrontmatter,
+  samePage,
+  type PageFields,
+  type RelationRow,
+} from '@/lib/page-source'
+import {
+  readWorkingCopy,
+  removeWorkingCopy,
+  workingCopyKey,
+  type WorkingCopy,
+} from '@/lib/working-copy'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
@@ -53,16 +78,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import RichEditor from '@/components/editor/RichEditor.vue'
-import ChatPane from '@/components/assistant/ChatPane.vue'
+import { useWorkingCopy } from '@/components/editor/use-working-copy'
+import DiffView from '@/components/knowledge/DiffView.vue'
+import EditorAiPanel from '@/components/editor/EditorAiPanel.vue'
+import { connectDraft } from '@/stores/assistant'
+import { useSidebarStore } from '@/stores/sidebar'
 
 const { t } = useI18n()
-
-interface RelationRow {
-  type: string
-  key: string
-  name: string
-}
 
 const route = useRoute()
 const router = useRouter()
@@ -104,11 +141,68 @@ const headRevisionId = ref<string | null>(null)
  */
 const pendingRevisionId = ref<string | null>(null)
 const busy = ref(false)
-const loading = ref(false)
-const dirty = ref(false)
+/**
+ * Starts true on an edit route. It used to start false and flip in
+ * `onMounted`, so the editor mounted once with an empty page, was torn down for
+ * the skeleton and mounted again — and the working copy would take that empty
+ * first mount for the published baseline.
+ */
+const loading = ref(isEdit.value)
 const settingsOpen = ref(false)
-const assistantOpen = ref(false)
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
+
+/* ------------------------------------------------------- assistant */
+
+const sidebar = useSidebarStore()
+/** Cookie-backed, so the server paints the panel where the author left it. */
+const aiOpen = computed(() => sidebar.aiPanelOpen)
+/**
+ * Mounted on first open and kept after: closing keeps the conversation and its
+ * scroll where they were, and a page whose panel was never opened never loads
+ * the chat roster.
+ */
+const aiMounted = ref(aiOpen.value)
+const aiPanel = ref<InstanceType<typeof EditorAiPanel> | null>(null)
+
+function setAiOpen(open: boolean) {
+  if (open) aiMounted.value = true
+  sidebar.setAiPanel(open)
+  if (open) void nextTick(() => aiPanel.value?.focus())
+}
+
+// ⌘J / Ctrl+J, from anywhere on the page — the chord Notion and Confluence
+// both use for their writing assistant, so a hand that knows one finds it here.
+onKeyStroke('j', (event) => {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
+  event.preventDefault()
+  setAiOpen(!aiOpen.value)
+})
+
+/** Server renders Ctrl; the browser corrects it after hydration rather than mismatching. */
+const modKey = ref('Ctrl+')
+onMounted(() => {
+  if (/Mac|iPhone|iPad/.test(navigator.platform)) modKey.value = '⌘'
+})
+
+const EMPTY_PENDING = { count: 0, streaming: false }
+const aiPending = computed(() => editorRef.value?.aiPending ?? EMPTY_PENDING)
+
+// While the editor is mounted every turn the store sends carries the draft,
+// and every edit it streams back lands here — whichever control started the
+// turn. Registered on mount, so a server render never holds one.
+let disconnectDraft: (() => void) | null = null
+onMounted(() => {
+  disconnectDraft = connectDraft({
+    read: () => ({ title: title.value, markdown: editorRef.value?.flush() ?? body.value }),
+    edit: (edit) => {
+      // The author asked for this; make sure they can watch it happen.
+      if (!aiOpen.value) setAiOpen(true)
+      editorRef.value?.applyAiEdit(edit)
+    },
+    settle: () => editorRef.value?.settleAi(),
+  })
+})
+onBeforeUnmount(() => disconnectDraft?.())
 
 // The settings fields are the same Autocomplete the search filters use, so a
 // long project or page roster is typed-into rather than scrolled — and the
@@ -157,8 +251,171 @@ const projectName = computed(
   () => projects.items.find((p) => p.projectId === projectId.value)?.name ?? 'Project',
 )
 
-watch([body, title], () => {
-  if (!loading.value) dirty.value = true
+/* ------------------------------------------------------ working copy */
+
+/** The page as the editor holds it right now. Reads every field, so a watch tracks all of them. */
+function currentFields(): PageFields {
+  return {
+    title: title.value,
+    body: body.value,
+    category: category.value,
+    parentId: parentId.value,
+    projectId: projectId.value,
+    relations: relationRows.value.map((r) => ({ type: r.type, key: r.key, name: r.name })),
+    tags: tags.value,
+    message: message.value,
+  }
+}
+
+function applyFields(fields: PageFields) {
+  title.value = fields.title
+  body.value = fields.body
+  category.value = fields.category as DocumentCategory
+  parentId.value = fields.parentId
+  projectId.value = fields.projectId
+  relationRows.value = fields.relations.map((r) => ({ ...r }))
+  tags.value = fields.tags
+  message.value = fields.message
+}
+
+/**
+ * The published page, as the editor normalises it — captured once the editor
+ * has parsed it (`onEditorReady`), so a page whose stored markdown is not the
+ * editor's own spelling of it does not read as changed the moment it opens.
+ */
+const baseFields = ref<PageFields | null>(null)
+
+const storageKey = computed(() => workingCopyKey(getWorkspaceId(), editId.value))
+
+const workingCopy = useWorkingCopy({
+  key: () => storageKey.value,
+  fields: currentFields,
+  base: () => {
+    const base = baseFields.value
+    // A page that does not exist yet has no project to move from: picking one
+    // (or the active one arriving late) is placement, not an edit worth keeping.
+    return base && !isEdit.value ? { ...base, projectId: projectId.value } : base
+  },
+  documentId: () => editId.value,
+  baseRevisionId: () => headRevisionId.value,
+  beforeFlush: () => editorRef.value?.flush(),
+})
+const unstaged = workingCopy.unstaged
+
+/** A stored copy made against an older head, waiting for the author to decide. */
+const staleCopy = ref<WorkingCopy | null>(null)
+
+function onEditorReady() {
+  if (baseFields.value) return
+  // Flushing sets `body` to the editor's normalised form of what was loaded.
+  editorRef.value?.flush()
+  baseFields.value = { ...currentFields(), message: '' }
+  offerWorkingCopy()
+}
+
+/**
+ * Put back the edits this browser was keeping — automatically when they were
+ * made against the page as it is now, and only on request when it has been
+ * published since: restoring those silently and publishing would quietly undo
+ * whoever published in between.
+ */
+function offerWorkingCopy() {
+  const stored = readWorkingCopy(storageKey.value)
+  const base = baseFields.value
+  if (!stored || !base) return
+  if (samePage(stored, base)) {
+    removeWorkingCopy(storageKey.value)
+    return
+  }
+  if (stored.baseRevisionId === headRevisionId.value) {
+    applyFields(stored)
+    workingCopy.adopt(stored)
+    toast.info(t('editor.unstaged.restored', { when: formatDateTime(new Date(stored.savedAt)) }))
+    return
+  }
+  staleCopy.value = stored
+}
+
+function restoreStale() {
+  const stored = staleCopy.value
+  staleCopy.value = null
+  if (!stored) return
+  applyFields(stored)
+  workingCopy.adopt(stored)
+}
+
+function discardStale() {
+  staleCopy.value = null
+  removeWorkingCopy(storageKey.value)
+}
+
+/** Back to the published page: the fields, and the stored copy with them. */
+function discardUnstaged() {
+  if (baseFields.value) applyFields(baseFields.value)
+  workingCopy.discard()
+  reviewOpen.value = false
+}
+
+/* ---------------------------------------------------------- review */
+
+const reviewOpen = ref(false)
+
+function openReview() {
+  // The model trails typing by the editor's pause; the diff must not.
+  editorRef.value?.flush()
+  reviewOpen.value = true
+}
+
+/** Placement and title changes: not in the source file, so not in the diff. */
+const reviewFieldChanges = computed(() => {
+  const base = baseFields.value
+  if (!reviewOpen.value || !base) return []
+  const now = currentFields()
+  const pageTitle = (id: string) =>
+    id ? (store.items.find((d) => d.documentId === id)?.title ?? id) : t('documents.topLevel')
+  const project = (id: string) => projects.items.find((p) => p.projectId === id)?.name ?? id
+  const rows: { label: string; from: string; to: string }[] = []
+  if (now.title.trim() !== base.title.trim()) rows.push({ label: t('editor.pageTitle'), from: base.title, to: now.title })
+  if (now.category !== base.category) {
+    rows.push({
+      label: t('editor.category'),
+      from: labelFor(t, 'category', base.category),
+      to: labelFor(t, 'category', now.category),
+    })
+  }
+  if (now.parentId !== base.parentId) {
+    rows.push({ label: t('editor.parentPage'), from: pageTitle(base.parentId), to: pageTitle(now.parentId) })
+  }
+  if (isEdit.value && now.projectId !== base.projectId) {
+    rows.push({ label: t('editor.project'), from: project(base.projectId), to: project(now.projectId) })
+  }
+  return rows
+})
+
+/**
+ * The source file publishing would write, against the one it replaces — the
+ * same `DiffView` a revision comparison renders, fed by the local line diff
+ * the connector review uses, since neither side exists as a revision to ask
+ * the compare endpoint about.
+ */
+const reviewCompare = computed<CompareResponse | null>(() => {
+  const base = baseFields.value
+  if (!reviewOpen.value || !base) return null
+  const before = buildSource(base, otherFrontmatter.value)
+  const after = buildSource(currentFields(), otherFrontmatter.value)
+  const { hunks, additions, deletions } = lineDiff(before, after)
+  const side = (revisionId: string) => ({ revisionId, revisionNumber: 0, branch: null, contentHash: null })
+  return {
+    documentId: editId.value ?? '',
+    from: side(headRevisionId.value ?? 'new'),
+    to: side('unstaged'),
+    comparisonMode: 'direct',
+    mergeBaseRevisionId: null,
+    summary: { additions, deletions },
+    hunks,
+    structural: null,
+    semantic: null,
+  }
 })
 
 onMounted(async () => {
@@ -181,58 +438,21 @@ onMounted(async () => {
     projectId.value = detail.document.projectId
     headRevisionId.value = detail.document.headRevisionId
     body.value = content.markdown
-    const fm = content.frontmatter ?? {}
-    otherFrontmatter.value = Object.fromEntries(
-      Object.entries(fm).filter(([key]) => key !== 'relations' && key !== 'tags'),
-    )
-    if (Array.isArray(fm.relations)) {
-      relationRows.value = (fm.relations as Array<Record<string, unknown>>)
-        .map((r) => {
-          const target = r.target
-          if (typeof target === 'string') return { type: String(r.type ?? ''), key: target, name: '' }
-          if (target && typeof target === 'object') {
-            const t = target as Record<string, unknown>
-            return { type: String(r.type ?? ''), key: String(t.key ?? ''), name: String(t.name ?? '') }
-          }
-          return null
-        })
-        .filter((r): r is RelationRow => r !== null && !!r.type && !!r.key)
-    }
-    if (Array.isArray(fm.tags)) tags.value = (fm.tags as string[]).join(', ')
+    const fm = readFrontmatter(content.frontmatter)
+    otherFrontmatter.value = fm.other
+    relationRows.value = fm.relations
+    tags.value = fm.tags
   } catch (e) {
     toast.error((e as Error).message)
   } finally {
+    // Mounts the editor, whose `ready` captures the published baseline.
     loading.value = false
-    dirty.value = false
   }
 })
 
-/** Frontmatter `relations:`/`tags:` become graph edges via the deterministic extractor (worker step 7). */
-function buildSource(markdown: string): string {
-  const rows = relationRows.value.filter((r) => r.type && r.key.trim())
-  const tagList = tags.value.split(',').map((t) => t.trim()).filter(Boolean)
-  const preserved = Object.entries(otherFrontmatter.value).filter(([, v]) => v !== undefined)
-  if (rows.length === 0 && tagList.length === 0 && preserved.length === 0) return markdown
-  const lines: string[] = ['---']
-  // Keys the editor does not model, put back exactly as they arrived. JSON is
-  // valid YAML flow style, so anything gray-matter parsed round-trips without
-  // this file needing a YAML emitter of its own.
-  for (const [key, value] of preserved) lines.push(`${key}: ${JSON.stringify(value)}`)
-  if (rows.length > 0) {
-    lines.push('relations:')
-    for (const r of rows) {
-      const key = r.key.trim()
-      const entityType = key.includes(':') ? key.slice(0, key.indexOf(':')) : 'entity'
-      const name = r.name.trim() || key.split(':').pop() || key
-      lines.push(`  - type: ${r.type}`)
-      lines.push(`    target: { type: ${JSON.stringify(entityType)}, key: ${JSON.stringify(key)}, name: ${JSON.stringify(name)} }`)
-    }
-  }
-  if (tagList.length > 0) {
-    lines.push(`tags: [${tagList.map((t) => JSON.stringify(t)).join(', ')}]`)
-  }
-  lines.push('---', '')
-  return `${lines.join('\n')}${markdown}`
+/** The source file for the page as it stands — see `buildSource`. */
+function pageSource(markdown: string): string {
+  return buildSource({ body: markdown, relations: relationRows.value, tags: tags.value }, otherFrontmatter.value)
 }
 
 /**
@@ -265,6 +485,10 @@ async function ensureDocumentId(): Promise<string | null> {
     headRevisionId.value = res.revisionId
     // Claimed by the next save instead of opening a second revision.
     pendingRevisionId.value = res.revisionId
+    // The edits now belong to a page: store them under its id, then free the
+    // new-page slot, in that order so a crash between the two loses nothing.
+    workingCopy.flush()
+    removeWorkingCopy(workingCopyKey(getWorkspaceId(), null))
     void store.fetchList()
     // Keep the URL honest without unmounting the editor mid-upload.
     await router.replace(`/documents/${res.documentId}/edit`)
@@ -303,6 +527,14 @@ async function publishRevision(
 }
 
 async function save() {
+  // Publishing would drop them silently — the serializer skips suggestions — so
+  // they are decided first, where the author can see what they are deciding.
+  if (aiPending.value.count > 0) {
+    toast.error(t('editorAi.decideBeforePublish', { n: aiPending.value.count }, aiPending.value.count))
+    setAiOpen(true)
+    editorRef.value?.revealAi()
+    return
+  }
   const markdown = editorRef.value?.flush() ?? body.value
   if (!title.value.trim() || !markdown.trim()) {
     toast.error(t('editor.titleAndContentRequired'))
@@ -315,7 +547,7 @@ async function save() {
   }
   busy.value = true
   try {
-    const text = buildSource(markdown)
+    const text = pageSource(markdown)
     if (!isEdit.value) {
       const res = await apiFetch<CreateDocumentResponse>('/v1/documents', {
         method: 'POST',
@@ -329,7 +561,7 @@ async function save() {
       })
       // The body goes to storage, not through the API — see publishRevision.
       await publishRevision(res.documentId, res.revisionId, text)
-      dirty.value = false
+      workingCopy.settle()
       toast.success(t('editor.documentCreated'))
       await router.push(`/documents/${res.documentId}`)
       return
@@ -362,7 +594,7 @@ async function save() {
         })
       ).revisionId
     const fin = await publishRevision(editId.value as string, revisionId, text)
-    dirty.value = false
+    workingCopy.settle()
     toast.success(fin.deduplicated ? t('editor.noContentChanges') : t('editor.revisionPublished'))
     await router.push(`/documents/${editId.value}`)
   } catch (e) {
@@ -379,7 +611,7 @@ async function save() {
   }
 }
 
-/* ------------------------------------------------- unsaved-changes guard */
+/* ------------------------------------------------- leaving the editor */
 
 const confirmOpen = ref(false)
 /** Where the interrupted navigation was heading, replayed once confirmed. */
@@ -389,37 +621,52 @@ function destination(): string {
   return editId.value ? `/documents/${editId.value}` : '/documents'
 }
 
+/**
+ * Cancel is the one exit that asks even when the edits are safe: it reads as
+ * "throw this away", and they are kept unless the author says so.
+ */
 function cancel() {
-  if (!dirty.value) {
+  if (!unstaged.value) {
     void router.push(destination())
     return
   }
+  workingCopy.flush()
   pendingLeave = () => void router.push(destination())
   confirmOpen.value = true
 }
 
-function discardAndLeave() {
-  dirty.value = false
+function leave() {
   confirmOpen.value = false
   const go = pendingLeave
   pendingLeave = null
   go?.()
 }
 
-// In-app navigation: the router asks first. Publishing clears `dirty`, so a
-// successful save never triggers this.
+function discardAndLeave() {
+  workingCopy.settle()
+  leave()
+}
+
+function keepAndLeave() {
+  if (workingCopy.flush()) leave()
+}
+
+// Any other in-app navigation leaves without asking once the edits are stored
+// — nothing is lost, and they are restored on return. Only a browser that
+// refused the write still gets the discard question.
 onBeforeRouteLeave((to) => {
-  if (!dirty.value || busy.value) return true
+  if (!unstaged.value || busy.value) return true
+  if (workingCopy.flush()) return true
   pendingLeave = () => void router.push(to.fullPath)
   confirmOpen.value = true
   return false
 })
 
-// Closing the tab or hitting reload is the browser's own dialog — a custom one
-// cannot be shown there, and suppressing the native prompt would mean losing
-// the draft silently.
+// Closing the tab or reloading: write the copy and let it go. The browser's
+// own prompt — a custom one cannot be shown there — is for the case where the
+// write failed and leaving really would lose the edits.
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (!dirty.value) return
+  if (!unstaged.value || workingCopy.flush()) return
   event.preventDefault()
   event.returnValue = ''
 }
@@ -430,81 +677,147 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="kn-page-editor">
-    <header class="kn-page-head">
-      <div class="kn-page-crumb">
-        <strong>{{ projectName }}</strong>
-        <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
-        <span v-if="dirty" class="kn-dirty-dot" :title="t('editor.unsavedChanges')" />
-      </div>
+  <div class="kn-page-editor" :data-ai-open="aiOpen ? 'true' : 'false'">
+    <!-- The assistant takes the rail's place on the left edge. The slot's width
+         is what animates, on the rail's own curve, so as the rail slides out the
+         panel slides in and the page column barely moves. -->
+    <div class="kn-ai-slot" :inert="!aiOpen || undefined">
+      <EditorAiPanel
+        v-if="aiMounted"
+        ref="aiPanel"
+        :document-id="editId"
+        :pending="aiPending"
+        :blank="!body.trim()"
+        :mod="modKey"
+        @close="setAiOpen(false)"
+        @accept="editorRef?.acceptAi()"
+        @discard="editorRef?.discardAi()"
+        @reveal="editorRef?.revealAi()"
+      />
+    </div>
+    <!-- Below lg the panel floats over the page; this is how you get back. -->
+    <div class="kn-ai-scrim" aria-hidden="true" @click="setAiOpen(false)" />
 
-      <div class="ml-auto flex items-center gap-1.5">
-        <Button variant="ghost" size="sm" @click="assistantOpen = !assistantOpen">
-          <Sparkles class="size-4" /> <span class="hidden sm:inline">AI</span>
-        </Button>
-        <Button variant="ghost" size="sm" @click="settingsOpen = true">
-          <Settings2 class="size-4" /> <span class="hidden sm:inline">{{ t('editor.settings') }}</span>
-        </Button>
-        <Button variant="ghost" size="sm" @click="cancel">{{ t('common.cancel') }}</Button>
-        <Button size="sm" :disabled="busy || loading" @click="save">
-          {{ busy ? 'Saving…' : isEdit ? 'Publish' : 'Create & index' }}
-        </Button>
-      </div>
-    </header>
-
-    <div class="kn-page-body">
-      <div class="kn-page-main">
-        <div v-if="loading" class="space-y-3 p-8">
-          <Skeleton class="h-10 w-2/3" />
-          <Skeleton class="h-4 w-full" />
-          <Skeleton class="h-4 w-5/6" />
-          <Skeleton class="h-64 w-full" />
+    <div class="kn-page-column">
+      <header class="kn-page-head">
+        <div class="kn-page-crumb">
+          <strong>{{ projectName }}</strong>
+          <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
+          <!-- The working copy's state, and the way into what it holds. -->
+          <button
+            v-if="unstaged"
+            type="button"
+            class="kn-unstaged-chip"
+            :data-failed="workingCopy.persistFailed.value ? 'true' : undefined"
+            :title="
+              workingCopy.persistFailed.value
+                ? t('editor.unstaged.notSaved')
+                : workingCopy.savedAt.value
+                  ? t('editor.unstaged.savedLocally', { when: formatDateTime(new Date(workingCopy.savedAt.value)) })
+                  : t('editor.unstaged.label')
+            "
+            @click="openReview"
+          >
+            <span class="kn-dirty-dot" aria-hidden="true" />
+            <span class="kn-unstaged-label">{{ t('editor.unstaged.label') }}</span>
+          </button>
         </div>
 
-        <RichEditor
-          v-else
-          ref="editorRef"
-          v-model="body"
-          :pages="mentionablePages"
-          :resolve-document-id="ensureDocumentId"
-        >
-          <template #lede>
-            <textarea
-              v-model="title"
-              class="kn-title-input"
-              rows="1"
-              :placeholder="t('editor.pageTitle')"
-              :aria-label="t('editor.pageTitle')"
-              spellcheck="false"
-              @keydown.enter.prevent="editorRef?.focus()"
-            />
-          </template>
-        </RichEditor>
-      </div>
-
-      <!-- The assistant page's own chat, pinned to this page: same composer,
-           same modes, same thread history — an editor-only variant would drift
-           from it within a release. -->
-      <aside v-if="assistantOpen" class="kn-page-rail">
-        <div class="kn-rail-head">
-          <h2 class="text-sm font-semibold">{{ t('editor.assistant') }}</h2>
-          <Button variant="ghost" size="icon-sm" :aria-label="t('editor.closeAssistant')" @click="assistantOpen = false">
-            <X class="size-4" />
+        <div class="ml-auto flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="kn-ai-toggle"
+            :aria-pressed="aiOpen"
+            :title="`${t('editorAi.toggle')} (${modKey}J)`"
+            @click="setAiOpen(!aiOpen)"
+          >
+            <Sparkles class="size-4" /> <span class="hidden sm:inline">{{ t('editorAi.button') }}</span>
+          </Button>
+          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" @click="settingsOpen = true">
+            <Settings2 class="size-4" /> {{ t('editor.settings') }}
+          </Button>
+          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" @click="cancel">{{ t('common.cancel') }}</Button>
+          <!-- Below sm the row holds the assistant, this, and Publish: the two
+               controls you reach for least fold into one menu. -->
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="ghost" size="icon-sm" class="sm:hidden" :aria-label="t('editor.moreActions')">
+                <MoreHorizontal class="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-44">
+              <DropdownMenuItem @select="settingsOpen = true">
+                <Settings2 class="size-4" /> {{ t('editor.settings') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="cancel">
+                <X class="size-4" /> {{ t('common.cancel') }}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" :disabled="busy || loading" @click="save">
+            {{ busy ? 'Saving…' : isEdit ? 'Publish' : 'Create & index' }}
           </Button>
         </div>
-        <ChatPane v-if="editId" :document-id="editId" class="kn-rail-chat" />
-        <p v-else class="p-4 text-sm text-muted-foreground">
-          {{ t('editor.saveFirstForAssistant') }}
-        </p>
-      </aside>
+      </header>
+
+      <div class="kn-page-body">
+        <div class="kn-page-main">
+          <div v-if="loading" class="space-y-3 p-8">
+            <Skeleton class="h-10 w-2/3" />
+            <Skeleton class="h-4 w-full" />
+            <Skeleton class="h-4 w-5/6" />
+            <Skeleton class="h-64 w-full" />
+          </div>
+
+          <template v-else>
+            <div v-if="staleCopy" class="kn-stale-copy" role="status">
+              <History class="size-4 shrink-0" aria-hidden="true" />
+              <div class="min-w-0 flex-1">
+                <p class="font-medium">
+                  {{ t('editor.unstaged.staleTitle', { when: formatDateTime(new Date(staleCopy.savedAt)) }) }}
+                </p>
+                <p class="text-muted-foreground">{{ t('editor.unstaged.staleBody') }}</p>
+              </div>
+              <Button size="sm" variant="ghost" @click="discardStale">{{ t('editor.unstaged.discard') }}</Button>
+              <Button size="sm" variant="outline" @click="restoreStale">{{ t('editor.unstaged.restore') }}</Button>
+            </div>
+
+            <RichEditor
+              ref="editorRef"
+              v-model="body"
+              :pages="mentionablePages"
+              :resolve-document-id="ensureDocumentId"
+              @ready="onEditorReady"
+            >
+              <template #lede>
+                <textarea
+                  v-model="title"
+                  class="kn-title-input"
+                  rows="1"
+                  :placeholder="t('editor.pageTitle')"
+                  :aria-label="t('editor.pageTitle')"
+                  spellcheck="false"
+                  @keydown.enter.prevent="editorRef?.focus()"
+                />
+              </template>
+            </RichEditor>
+          </template>
+        </div>
+      </div>
     </div>
 
+    <!-- Leaving with unstaged edits. Normally they are kept and this asks only
+         whether to keep them; when the browser refused to store them, keeping is
+         not on offer and this is the old discard question. -->
     <AlertDialog v-model:open="confirmOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{{ t('editor.discardChanges') }}</AlertDialogTitle>
+          <AlertDialogTitle>
+            {{ workingCopy.persistFailed.value ? t('editor.discardChanges') : t('editor.unstaged.leaveTitle') }}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            {{ t('editor.discardBody') }}
+            {{ workingCopy.persistFailed.value ? t('editor.discardBody') : t('editor.unstaged.leaveBody') }}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -515,9 +828,43 @@ onBeforeUnmount(() => {
           >
             {{ t('editor.discardChangesAction') }}
           </AlertDialogAction>
+          <AlertDialogAction v-if="!workingCopy.persistFailed.value" @click="keepAndLeave">
+            {{ t('editor.unstaged.keepAndLeave') }}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <!-- What publishing would change, before it does. -->
+    <Dialog v-model:open="reviewOpen">
+      <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{{ t('editor.unstaged.reviewTitle') }}</DialogTitle>
+          <DialogDescription>{{ t('editor.unstaged.reviewDesc') }}</DialogDescription>
+        </DialogHeader>
+
+        <dl v-if="reviewFieldChanges.length" class="kn-unstaged-fields">
+          <template v-for="row in reviewFieldChanges" :key="row.label">
+            <dt>{{ row.label }}</dt>
+            <dd>
+              <del>{{ row.from || '—' }}</del>
+              <span aria-hidden="true">→</span>
+              <ins>{{ row.to || '—' }}</ins>
+            </dd>
+          </template>
+        </dl>
+
+        <DiffView v-if="reviewCompare && reviewCompare.hunks.length" :compare="reviewCompare" />
+        <p v-else class="text-sm text-muted-foreground">{{ t('editor.unstaged.noSourceChanges') }}</p>
+
+        <DialogFooter>
+          <Button variant="ghost" class="text-destructive" @click="discardUnstaged">
+            {{ t('editor.unstaged.discardAll') }}
+          </Button>
+          <Button @click="reviewOpen = false">{{ t('editor.keepEditing') }}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <!-- Page settings: everything that is metadata rather than the page. -->
     <Sheet v-model:open="settingsOpen">

@@ -24,6 +24,8 @@ const RAIL_OPEN_KEY = 'kn_railopen'
 const FILTER_RAIL_KEY = 'kn_filterrail'
 /** Whether glossary terms are linked in page content (docs/features/14). */
 const GLOSSARY_KEY = 'kn_glossary'
+/** Whether the editor's assistant panel is open (docs/features/34). */
+const AI_PANEL_KEY = 'kn_aipanel'
 /** Which branches of the sidebar page tree are open. */
 const TREE_OPEN_KEY = 'kn_tree'
 /**
@@ -71,6 +73,7 @@ interface SsrRequestContext {
   railOpen: string | null
   filterRail: string | null
   glossary: string | null
+  aiPanel: string | null
   treeOpen: string | null
   locale: Locale | null
   traceId: string | null
@@ -111,6 +114,7 @@ let clientRail: string | null = null
 let clientRailOpen: string | null = null
 let clientFilterRail: string | null = null
 let clientGlossary: string | null = null
+let clientAiPanel: string | null = null
 let clientTreeOpen: string | null = null
 let clientLocale: Locale | null = null
 if (!import.meta.env.SSR) {
@@ -123,6 +127,7 @@ if (!import.meta.env.SSR) {
     clientRailOpen = localStorage.getItem(RAIL_OPEN_KEY)
     clientFilterRail = localStorage.getItem(FILTER_RAIL_KEY)
     clientGlossary = localStorage.getItem(GLOSSARY_KEY)
+    clientAiPanel = localStorage.getItem(AI_PANEL_KEY)
     clientTreeOpen = localStorage.getItem(TREE_OPEN_KEY)
     const storedLocale = localStorage.getItem(LANG_KEY)
     if (isLocale(storedLocale)) clientLocale = storedLocale
@@ -297,6 +302,31 @@ export function setGlossaryLinks(on: boolean): void {
 }
 
 /**
+ * The editor's assistant panel (docs/features/34). Server-read for the reason
+ * the rail is: while it is open the navigation rail is not, and a page that
+ * painted the rail and then swapped it for the panel would do so on every load.
+ *
+ * Unset means closed — `kn_filterrail`'s polarity. It is a tool you reach for;
+ * the page is what you came to write.
+ */
+export function getAiPanelOpen(): boolean {
+  const raw = import.meta.env.SSR ? ssrContext()?.aiPanel : clientAiPanel
+  return raw === '1'
+}
+
+export function setAiPanelOpen(open: boolean): void {
+  if (import.meta.env.SSR) return
+  const value = open ? '1' : '0'
+  clientAiPanel = value
+  try {
+    localStorage.setItem(AI_PANEL_KEY, value)
+    document.cookie = `${AI_PANEL_KEY}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
  * Which branches of the page tree are open, oldest first — or null when nobody
  * has ever opened or closed one, which is what lets a first visit fall back to
  * "the top level, expanded" instead of to a tree with every branch shut.
@@ -359,6 +389,16 @@ export function setRailOpen(open: boolean): void {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await apiRequest(path, init)).json() as Promise<T>
+}
+
+/** apiFetch for a route that answers text rather than JSON (`GET /v1/mcp/skill`). */
+export async function apiFetchText(path: string, init?: RequestInit): Promise<string> {
+  return (await apiRequest(path, init)).text()
+}
+
+/** The one request path — headers, credential, and the error envelope — both readers share. */
+async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken()
   const res = await fetch(`${base}${path}`, {
     ...init,
@@ -388,7 +428,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     if (isApiErrorPayload(parsed)) throw new ApiError(res.status, parsed.message, parsed.code)
     throw new ApiError(res.status, `${res.status} ${res.statusText}: ${text.slice(0, 300)}`)
   }
-  return res.json() as Promise<T>
+  return res
 }
 
 /**

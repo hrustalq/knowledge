@@ -180,6 +180,12 @@ export type I18nTranslations = {
             "runOwnerUnavailable": string;
             "trustedOperatorRequired": string;
             "noApiKeyInDevMode": string;
+            "apiKeyWorkspace": string;
+            "apiKeyReadOnly": string;
+            "apiKeyNeedsSession": string;
+            "apiKeyNotFound": string;
+            "apiKeyWorkspaceNotMember": string;
+            "apiKeyLimit": string;
         };
         "workspace": {
             "notFound": string;

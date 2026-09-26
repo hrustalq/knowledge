@@ -13,6 +13,8 @@ import { defineStore } from 'pinia'
 import type {
   AssistantChatAttachment,
   AssistantChatMode,
+  AssistantDraft,
+  AssistantDraftEdit,
   AssistantMessageInfo,
   AssistantPrompt,
   AssistantSource,
@@ -28,6 +30,33 @@ import type {
 import { assistantSourceKey } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { streamAssistantTurn } from '@/lib/assistant-stream'
+
+/**
+ * The editor's side of a turn (docs/features/34): what the page says right now,
+ * and where the edits the assistant makes to it go.
+ *
+ * Module state rather than store state, deliberately. It holds functions, which
+ * Pinia would try to serialize into the SSR payload, and it is only ever set by
+ * a mounted editor — in the browser, never during a server render. While one is
+ * registered, every turn this store sends carries the draft: a typed question,
+ * an answered form, a reset or an edit alike, so none of them can ground the
+ * model in a page the author has already changed.
+ */
+export interface DraftBridge {
+  read: () => AssistantDraft
+  edit: (edit: AssistantDraftEdit) => void
+  /** The turn ended — finished, failed or stopped. Whatever is still streaming stops here. */
+  settle: () => void
+}
+let draftBridge: DraftBridge | null = null
+
+/** Registered by the editor while it is mounted; returns the unregister. */
+export function connectDraft(bridge: DraftBridge): () => void {
+  draftBridge = bridge
+  return () => {
+    if (draftBridge === bridge) draftBridge = null
+  }
+}
 
 const PAGE_SIZE = 40
 /** How long to wait for `assistant.turn.finished` after a Stop before re-reading anyway. */
@@ -160,6 +189,36 @@ export const useAssistantStore = defineStore('assistant', {
     },
 
     // ---- Thread lifecycle -------------------------------------------------
+
+    /**
+     * The editor's opening move: the most recent chat about this page, or none
+     * yet — a thread is created when the first message is sent, so opening the
+     * panel on a page nobody has asked about leaves no empty chat behind.
+     *
+     * Only the loaded roster is searched. A page whose last chat is older than
+     * the first page of threads starts fresh, which is the right default for a
+     * conversation that old.
+     */
+    async openForDocument(documentId: string | null) {
+      if (!this.threadsLoaded) await this.fetchThreads()
+      if (this.activeThread && this.activeThread.documentId === documentId) return
+      const existing = documentId ? this.threads.find((t) => t.documentId === documentId) : undefined
+      if (existing) return this.openThread(existing.id)
+      this.startBlank()
+    },
+
+    /**
+     * A new chat that does not exist yet: the next message creates it. What the
+     * editor's panel offers as "New chat", so trying the button and walking
+     * away leaves nothing behind in the roster.
+     */
+    startBlank() {
+      if (this.sending) return
+      this.activeThread = null
+      this.messages = []
+      this.live = null
+      this.error = null
+    },
 
     /** Opens the most recently active thread for this workspace, creating one if none exists. */
     async openOrCreateThread(documentId?: string) {
@@ -347,8 +406,10 @@ export const useAssistantStore = defineStore('assistant', {
       }
       this.messages.push(placeholder)
 
+      const bridge = draftBridge
       const body = {
         content,
+        ...(bridge ? { draft: bridge.read() } : {}),
         ...(documentId ? { documentId } : {}),
         ...(opts.mode ? { mode: opts.mode } : {}),
         ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
@@ -411,6 +472,9 @@ export const useAssistantStore = defineStore('assistant', {
               case 'sources':
                 if (live) live.sources = frame.sources
                 break
+              case 'draft-edit':
+                bridge?.edit(frame.edit)
+                break
               case 'done':
                 settled = true
                 this.messages.push(frame.message)
@@ -429,6 +493,7 @@ export const useAssistantStore = defineStore('assistant', {
       } catch (e) {
         this.error = (e as Error).message
       } finally {
+        bridge?.settle()
         this.abort = null
         this.sending = false
         if (!settled) {

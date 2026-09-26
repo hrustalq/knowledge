@@ -10,6 +10,9 @@ import type { CreateUserDto, UpdateUserDto } from './users.dto.js';
 import { t } from '../i18n/t.js';
 
 /** Users management (platform admin surface — AclGuard enforces @PlatformAdmin). */
+
+/** One unrevoked key is enough to answer `hasApiKey` (docs/features/33). */
+const ACTIVE_KEY = { where: { revokedAt: null }, select: { id: true }, take: 1 } as const;
 @Injectable()
 export class UsersService {
   constructor(
@@ -20,7 +23,7 @@ export class UsersService {
   async list(): Promise<ListUsersResponse> {
     const users = await this.prisma.user.findMany({
       orderBy: { createdAt: 'asc' },
-      include: { memberships: true },
+      include: { memberships: true, apiKeys: ACTIVE_KEY },
     });
     return { users: users.map((u) => this.toSummary(u)) };
   }
@@ -36,7 +39,7 @@ export class UsersService {
         isAdmin: dto.isAdmin ?? false,
         passwordHash: dto.password ? await hashPassword(dto.password) : null,
       },
-      include: { memberships: true },
+      include: { memberships: true, apiKeys: ACTIVE_KEY },
     });
     return this.toSummary(user);
   }
@@ -62,7 +65,7 @@ export class UsersService {
     const updated = await this.prisma.user.update({
       where: { id: userId },
       data,
-      include: { memberships: true },
+      include: { memberships: true, apiKeys: ACTIVE_KEY },
     });
     // Disabling or overriding the password invalidates existing logins.
     if (dto.disabled === true || dto.password !== undefined) {
@@ -71,7 +74,7 @@ export class UsersService {
     return this.toSummary(updated);
   }
 
-  private toSummary(user: User & { memberships: WorkspaceMember[] }): UserSummary {
+  private toSummary(user: User & { memberships: WorkspaceMember[]; apiKeys: { id: string }[] }): UserSummary {
     return {
       userId: user.id,
       email: user.email,
@@ -80,7 +83,7 @@ export class UsersService {
       isAdmin: user.isAdmin,
       disabled: user.disabledAt !== null,
       hasPassword: user.passwordHash !== null,
-      hasApiKey: user.apiKeyHash !== null,
+      hasApiKey: user.apiKeys.length > 0,
       createdAt: user.createdAt.toISOString(),
       memberships: user.memberships.map((m) => ({
         workspaceId: m.workspaceId,

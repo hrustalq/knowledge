@@ -19,12 +19,12 @@ git tag `vX.Y.Z`. Nothing else is authoritative.
 
 Four surfaces declare a version, and none of them derives it from the tag:
 
-| Surface                                           | Declares  | Should be          |
-| ------------------------------------------------- | --------- | ------------------ |
-| `apps/api/src/config/swagger.ts` `.setVersion()`  | `0.6.0`   | the tag            |
-| `apps/api/src/mcp/mcp.service.ts` `new McpServer` | `0.6.0`   | the tag            |
-| `apps/api/package.json`                           | `0.0.1`   | `0.0.0` (internal) |
-| root `package.json`                               | _(unset)_ | the tag, or unset  |
+| Surface                                                | Declares  | Should be          |
+| ------------------------------------------------------ | --------- | ------------------ |
+| `apps/api/src/config/swagger.ts` `.setVersion()`       | `0.6.0`   | the tag            |
+| `apps/api/src/mcp/mcp.service.ts` `MCP_SERVER_VERSION` | `0.6.0`   | the tag            |
+| `apps/api/package.json`                                | `0.0.1`   | `0.0.0` (internal) |
+| root `package.json`                                    | _(unset)_ | the tag, or unset  |
 
 The first two match `v0.6.0` today, and that is the drift rather than the cure:
 they are correct only because the release runbook in

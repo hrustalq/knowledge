@@ -122,7 +122,8 @@
     "yourProfile": "Your profile",
     "accountSettings": "Account settings",
     "accountMenu": "Account menu",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "connect": "Connect AI"
   },
   "role": {
     "viewer": "Viewer",
@@ -216,7 +217,8 @@
     "connectorsHint": "Bring pages in from other systems, and publish them back.",
     "docsHint": "How all of this works",
     "profileHint": "Name, language, password",
-    "notificationsHint": "Mentions, reviews, what you follow"
+    "notificationsHint": "Mentions, reviews, what you follow",
+    "connectHint": "MCP clients, API keys, skill"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -1918,11 +1920,8 @@
     "noContentChanges": "No content changes — metadata updated",
     "revisionPublished": "Revision published — indexing started",
     "headMoved": "The document head moved while you were editing — reload and compare before retrying",
-    "unsavedChanges": "Unsaved changes",
     "settings": "Settings",
     "pageTitle": "Page title",
-    "assistant": "Assistant",
-    "closeAssistant": "Close assistant",
     "discardChanges": "Discard unpublished changes?",
     "keepEditing": "Keep editing",
     "pageSettings": "Page settings",
@@ -1956,7 +1955,6 @@
     "pdfUnsupported": "This browser cannot display PDFs inline.",
     "previewOf": "Preview of {name}",
     "tocEmpty": "Headings you add will appear here.",
-    "saveFirstForAssistant": "Save the page once and the assistant can read it, edit it, and answer questions about it.",
     "discardBody": "This page has edits that were never published, so they exist only in this tab. Leaving now throws them away.",
     "discardChangesAction": "Discard changes",
     "settingsDesc": "Placement and the deterministic facts this page asserts into the graph.",
@@ -1985,7 +1983,25 @@
     "attachmentTypeRejected": "{name}: {type} is not an accepted attachment",
     "thisFileType": "this file type",
     "noMentionMatches": "No one and no page matches",
-    "noBlockMatches": "No blocks match"
+    "noBlockMatches": "No blocks match",
+    "unstaged": {
+      "label": "Unstaged changes",
+      "savedLocally": "Kept in this browser · {when}. Click to review.",
+      "notSaved": "This browser refused to keep these changes — publish before leaving. Click to review.",
+      "restored": "Restored unstaged changes from {when}",
+      "staleTitle": "Unstaged changes from {when}",
+      "staleBody": "They were made before this page was last published. Restoring them and publishing would undo that revision — review the diff before you publish.",
+      "restore": "Restore",
+      "discard": "Discard",
+      "discardAll": "Discard all changes",
+      "reviewTitle": "Unstaged changes",
+      "reviewDesc": "What publishing would change, compared with the published page.",
+      "noSourceChanges": "The page text is unchanged.",
+      "leaveTitle": "Leave with unstaged changes?",
+      "leaveBody": "Kept, they stay in this browser and are restored when you reopen the page. Discarded, the page stays as published.",
+      "keepAndLeave": "Keep and leave"
+    },
+    "moreActions": "More actions"
   },
   "toolbar": {
     "formatting": "Formatting",
@@ -2062,7 +2078,8 @@
     "insertMenu": "Insert",
     "heading4": "Heading 4",
     "left": "Left",
-    "right": "Right"
+    "right": "Right",
+    "more": "More formatting"
   },
   "hints": {
     "noProjects": "No projects in this workspace yet.",
@@ -2176,6 +2193,10 @@
     "task_comment": {
       "running": "Commenting on an issue",
       "done": "Commented on an issue"
+    },
+    "edit_draft": {
+      "running": "Writing into the page",
+      "done": "Wrote into the page"
     }
   },
   "entityType": {
@@ -2418,15 +2439,11 @@
       "failed": "The password could not be changed — check your current one."
     },
     "apiKey": {
-      "title": "API key",
-      "hint": "For agents and scripts calling this workspace as you. Only its hash is stored, so a key is shown once and never again.",
-      "status": "One key per account. Rotating replaces the current one immediately.",
+      "title": "API keys",
+      "hint": "For AI clients and scripts acting as you. Create one per client, each optionally read-only, pinned to a workspace or expiring.",
+      "status": "Keys, client configs and the agent skill live together under Connect AI.",
       "devMode": "Not applicable while the API runs with AUTH_MODE=none.",
-      "rotate": "Rotate key",
-      "rotating": "Rotating…",
-      "onceOnly": "Copy this now. It cannot be shown again — only its hash is stored.",
-      "failed": "The key could not be rotated.",
-      "copyFailed": "Copying failed — select the key and copy it manually."
+      "manage": "Manage keys"
     }
   },
   "mention": {
@@ -2548,5 +2565,122 @@
       "import.failed": "an import failed",
       "connector.run.failed": "a sync failed"
     }
+  },
+  "connect": {
+    "title": "Connect AI",
+    "subtitle": "Give Claude, Codex, Gemini CLI, Cursor or any MCP client access to this knowledge base — as you, and never more than you. Create a key, add the server to your client, then install the skill that teaches its model how to use it.",
+    "loadFailed": "The connection details could not be loaded.",
+    "copyFailed": "Copy failed",
+    "endpoint": {
+      "title": "MCP endpoint",
+      "hint": "Streamable HTTP. Every client below points here; the key decides what it may do.",
+      "meta": "server v{version} · {tools} tools"
+    },
+    "keys": {
+      "title": "Create an API key",
+      "hint": "One key per client and machine, so revoking one never breaks the others. A key only ever narrows what your account can do.",
+      "devMode": "This server runs with AUTH_MODE=none: every caller has full access and no key is needed. Skip to step 2.",
+      "name": "Name",
+      "namePlaceholder": "Claude Code on my laptop",
+      "scope": "Access",
+      "scopes": {
+        "read": "Read-only",
+        "write": "Read & write"
+      },
+      "scopeHint": {
+        "read": "Search, read and trace relations. The client is not even offered the tools that write.",
+        "write": "Also create pages, branches, revisions and merge requests — within your own role in each workspace."
+      },
+      "workspace": "Workspace",
+      "allWorkspaces": "All my workspaces",
+      "expiry": "Expires",
+      "never": "Never",
+      "days": "In {n} days",
+      "create": "Create key",
+      "creating": "Creating…",
+      "createFailed": "The key could not be created.",
+      "onceOnly": "“{name}” is ready. Copy it now — only its hash is stored, so it cannot be shown again. The snippets below already include it.",
+      "shellProfile": "~/.zshrc or ~/.bashrc",
+      "active": "Active keys ({n})",
+      "empty": "No keys yet. Create one for each client you connect.",
+      "lastUsed": "used {when}",
+      "neverUsed": "never used",
+      "expires": "expires {when}",
+      "noExpiry": "no expiry",
+      "revoke": "Revoke",
+      "revokeTitle": "Revoke “{name}”?",
+      "revokeBody": "Any client configured with this key gets 401 from its next request. This cannot be undone — create a new key to reconnect.",
+      "revoked": "“{name}” revoked.",
+      "revokeFailed": "The key could not be revoked."
+    },
+    "clients": {
+      "title": "Add the server to your client",
+      "docs": "Client docs",
+      "orEdit": "…or add it to the config file by hand:",
+      "placeholder": "This client cannot read the key from an environment variable. Replace <your-api-key>, or create a key above and it is filled in.",
+      "step": {
+        "env": "Shell profile — the variable the config reads",
+        "command": "Terminal"
+      },
+      "notes": {
+        "claudeCode": "Use single quotes so the ${'{'}KNOWLEDGE_API_KEY{'}'} placeholder is stored, not the key itself. Check with `claude mcp list`, then `/mcp` inside a session.",
+        "codex": "Codex reads the key from the variable named in bearer_token_env_var — no interpolation syntax. Verify with `codex mcp list`.",
+        "gemini": "Streamable HTTP needs httpUrl; plain url means SSE. The CLI defaults to project scope, hence --scope user. Check with `/mcp` in a session.",
+        "cursor": "Cursor expands ${'{'}env:VAR{'}'} in headers. Restart Cursor after exporting the variable so it inherits it, then enable the server under Settings → MCP.",
+        "vscode": "VS Code asks for the key once and stores it encrypted. ${'{'}env:…{'}'} in headers is currently sent literally by VS Code, so this uses a prompted input instead.",
+        "claudeDesktop": "Claude Desktop's config file runs local servers only, so mcp-remote bridges to this endpoint (Node.js required). The key is written into the file — keep it private. Restart Claude after saving.",
+        "windsurf": "Newer builds read ~/.config/devin/mcp_config.json; older Windsurf builds ~/.codeium/windsurf/mcp_config.json. Refresh the MCP list in Cascade after saving.",
+        "opencode": "oauth: false stops opencode trying OAuth against a key-authenticated server. Place it in opencode.json at the project root, or globally.",
+        "zed": "Zed has no environment-variable expansion in headers, so the key is written into settings.json. Or add it from Settings → AI → MCP Servers.",
+        "http": "Any MCP client that speaks Streamable HTTP works: POST JSON-RPC with the bearer header. This call answers who the key acts as — a quick way to test a key."
+      }
+    },
+    "skill": {
+      "title": "Install the skill",
+      "hint": "A SKILL.md that teaches the model how to use this knowledge base: your workspaces and project ids, the tools this key is offered, and the playbooks — answer with citations, propose edits as merge requests, trace impact. Generated for you; re-run the command after you join a workspace.",
+      "download": "Download SKILL.md",
+      "preview": "Preview ({n} lines)",
+      "hide": "Hide preview",
+      "installFor": "{client} → {path}",
+      "noSkillDir": "{client} has no skills directory. Use the server's “guide” prompt instead, or paste the skill into the conversation or a project's instructions.",
+      "alsoServed": "The same skill is served by the MCP server itself — as the resource knowledge://skill and the prompt “guide” — so any client can load it without installing a file."
+    },
+    "tools": {
+      "title": "What a connected client gets",
+      "hint": "Tools your current sign-in would be offered. Every call is checked against your role in the workspace it touches, exactly like the web app.",
+      "read": "Read ({n})",
+      "write": "Write ({n})",
+      "noneForKey": "None."
+    }
+  },
+  "editorAi": {
+    "title": "Assistant",
+    "button": "Assistant",
+    "toggle": "Toggle the assistant",
+    "close": "Close the assistant",
+    "history": "Chats",
+    "allChats": "All chats",
+    "newChat": "New chat",
+    "emptyTitle": "Work on this page together",
+    "emptyTitleBlank": "Start this page together",
+    "emptyBody": "The assistant reads your draft as it is right now, unsaved edits included. When it changes the page, the edit is written in as a suggestion for you to keep or discard. Nothing is published until you publish.",
+    "startersLabel": "Things to ask",
+    "starter": {
+      "tighten": "Tighten the wording of this page without changing what it says",
+      "gaps": "What is missing from this page? Add the sections it needs",
+      "summary": "Add a short summary at the top",
+      "outline": "Draft an outline for this page from its title",
+      "draftFromTitle": "Write a first draft of this page from its title",
+      "template": "Set up this page with the sections a page like it usually has"
+    },
+    "writing": "Writing into the page…",
+    "pending": "{n} suggestion | {n} suggestions",
+    "acceptAll": "Keep all",
+    "discardAll": "Discard all",
+    "accept": "Keep",
+    "discard": "Discard",
+    "suggestionActions": "Assistant suggestion",
+    "decideBeforePublish": "Keep or discard the assistant's suggestion before publishing | Keep or discard the assistant's {n} suggestions before publishing",
+    "placeholder": "Ask about this page, or for a change to it…"
   }
 }

@@ -29,7 +29,10 @@ export class ProfilesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async get(principal: Principal, workspaceId: string, userId: string): Promise<UserProfileResponse> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { apiKeys: { where: { revokedAt: null }, select: { id: true }, take: 1 } },
+    });
     // AUTH_MODE=none has no users row — DEV_PRINCIPAL is synthetic, which is
     // the point. Without this the default development mode 404s on its own
     // profile, so the one link the avatar menu always shows would dead-end.
@@ -62,7 +65,7 @@ export class ProfilesService {
       memberSince: membership?.createdAt.toISOString() ?? null,
       isSelf: principal.userId === userId,
       hasPassword: user.passwordHash !== null,
-      hasApiKey: user.apiKeyHash !== null,
+      hasApiKey: user.apiKeys.length > 0,
       pages,
       pageCount,
       openWork,

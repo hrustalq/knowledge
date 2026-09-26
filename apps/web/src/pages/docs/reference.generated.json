@@ -704,7 +704,37 @@
       "method": "POST",
       "path": "/v1/me/api-key",
       "tag": "auth",
-      "summary": "Mint a fresh API key for the caller, replacing any existing one (shown once)",
+      "summary": "Deprecated — revoke every key the caller has and mint one full-scope key (use /v1/me/api-keys)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/api-keys",
+      "tag": "auth",
+      "summary": "The caller's active API keys (docs/features/33) — names and prefixes, never the keys",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/me/api-keys",
+      "tag": "auth",
+      "summary": "Mint a named API key, optionally read-only, workspace-pinned or expiring (shown once)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/me/api-keys/{keyId}",
+      "tag": "auth",
+      "summary": "Revoke one of the caller's API keys; clients using it get 401 from the next request",
       "role": null,
       "source": null,
       "public": false,
@@ -1621,6 +1651,56 @@
       "platformAdmin": false
     },
     {
+      "method": "DELETE",
+      "path": "/v1/mcp",
+      "tag": "mcp",
+      "summary": "Not supported: there are no sessions to end (405)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mcp",
+      "tag": "mcp",
+      "summary": "Not supported: the server is stateless and opens no SSE stream (405, per the MCP spec)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/mcp",
+      "tag": "mcp",
+      "summary": "MCP Streamable HTTP endpoint (JSON-RPC). Point an MCP client here with a Bearer API key",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mcp/connection",
+      "tag": "mcp",
+      "summary": "What an MCP client needs to connect: endpoint URL, auth mode, and the tools it would get",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mcp/skill",
+      "tag": "mcp",
+      "summary": "SKILL.md for an AI agent using this knowledge base over MCP, generated for the caller (workspaces, projects, offered tools)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/documents/{id}/merge-requests",
       "tag": "merge-requests",
@@ -2244,7 +2324,7 @@
   "mcpTools": [
     {
       "name": "knowledge_approve_merge_request",
-      "description": "Approve an open merge request. NOTE: approval is recorded for the MCP stub identity — it counts toward the MR_REQUIRED_APPROVALS merge gate unless the merge request was also authored via MCP (self-approvals never count).",
+      "description": "Approve an open merge request as the connected user. Counts toward the MR_REQUIRED_APPROVALS merge gate unless that user also authored it (self-approvals never count). Only approve when the user asks you to.",
       "inputs": [
         {
           "name": "mergeRequestId",
@@ -2320,6 +2400,36 @@
         },
         {
           "name": "fromRevisionId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_create_document",
+      "description": "Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status \"indexed\"). To change an existing page, branch and open a merge request instead.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": false
+        },
+        {
+          "name": "title",
+          "optional": false
+        },
+        {
+          "name": "content",
+          "optional": false
+        },
+        {
+          "name": "parentId",
+          "optional": true
+        },
+        {
+          "name": "category",
           "optional": true
         }
       ]
@@ -2411,6 +2521,20 @@
     {
       "name": "knowledge_get_document",
       "description": "Get a document, its head (or a given) revision and indexed chunk summaries.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "revisionId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_document_content",
+      "description": "The full markdown (and parsed frontmatter) of a document at its default-branch head or a given revision. Read this before writing a revision: a revision replaces the whole page.",
       "inputs": [
         {
           "name": "documentId",
@@ -2535,6 +2659,28 @@
         {
           "name": "workspaceId",
           "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_documents",
+      "description": "The page tree of a workspace, optionally one project: titles, ids, categories and nesting. Use it to browse; use knowledge_search to find.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        },
+        {
+          "name": "parentId",
+          "optional": true
+        },
+        {
+          "name": "depth",
+          "optional": true
         }
       ]
     },
@@ -2747,6 +2893,11 @@
           "optional": true
         }
       ]
+    },
+    {
+      "name": "knowledge_whoami",
+      "description": "Start here. Who this connection acts as, what its API key is limited to, and every workspace it can reach with your role in it and its projects (ids included). Every other tool takes one of these workspaceIds.",
+      "inputs": []
     }
   ]
 }

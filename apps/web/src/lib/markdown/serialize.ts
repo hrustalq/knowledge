@@ -272,7 +272,12 @@ turndown.addRule('knCodeBlock', {
   },
 });
 
-export function htmlToMarkdown(html: string): string {
+/**
+ * Accepts a DOM node as well as a string: turndown parses a string into a DOM
+ * before converting it, so a caller that already holds one (the editor's model
+ * sync) skips a full serialize-and-reparse of the page.
+ */
+export function htmlToMarkdown(html: string | HTMLElement): string {
   return turndown
     .turndown(html)
     .replace(/\n{3,}/g, '\n\n')

@@ -780,6 +780,11 @@
   justify-content: space-between;
 }
 .kn-tb-select:hover { background: var(--accent); }
+/* Folded down to the essentials, the style picker gives back the width it
+   reserved for "Normal text" in Russian — the row it was protecting is gone. */
+.kn-toolbar[data-tier='2'] .kn-tb-select { min-width: 0; }
+.kn-toolbar[data-tier='2'] .kn-tb-group + .kn-tb-group::before,
+.kn-toolbar[data-tier='2'] .kn-tb-group + .kn-tb-select::before { margin: 0 0.2rem; }
 .kn-tb-insert { color: var(--primary); }
 .kn-tb-status-dot { width: 0.7rem; height: 0.7rem; border-radius: 999px; background: var(--kn-panel-tip); }
 .kn-style-preview.kn-style-h1 { font-size: 1.1rem; font-weight: 700; }
@@ -1128,7 +1133,9 @@
  * directly beneath it already draws one, and two parallel rules 40px apart
  * read as a mistake rather than as structure. One line, one meaning.
  */
-.kn-page-editor { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.kn-page-editor { position: relative; display: flex; height: 100%; min-height: 0; }
+/* Everything but the assistant: header over body, as the editor always was. */
+.kn-page-column { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .kn-page-head {
   display: flex;
   align-items: center;
@@ -1143,7 +1150,15 @@
   min-width: 0;
   font-size: 0.85rem;
 }
-.kn-page-crumb strong { color: var(--foreground); font-weight: 600; }
+.kn-page-crumb strong { color: var(--foreground); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A phone's header has room for the page's name and its three controls. The
+   state chip goes, and "unstaged changes" keeps its dot — still the way into
+   the review, still labelled for assistive tech by its title. */
+@media (max-width: 639.98px) {
+  .kn-page-head { gap: 0.35rem; padding-inline: 0.75rem 0.5rem; }
+  .kn-page-state { display: none; }
+  .kn-unstaged-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .kn-page-state {
   font-size: 0.7rem;
   font-weight: 600;
@@ -1158,34 +1173,55 @@
 .kn-page-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .kn-page-main .kn-editor { flex: 1; min-height: 0; }
 .kn-page-main .kn-editor-surface { overflow-y: auto; }
-.kn-page-rail {
-  width: 28rem;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-left: 1px solid var(--border);
-  background: var(--background);
-}
-.kn-rail-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.6rem 0.5rem 0.6rem 1rem;
-  border-bottom: 1px solid var(--border);
-}
-/* The chat pane is a full column in its own right; let it own the remainder. */
-.kn-rail-chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.kn-rail-chat > * { min-width: 0; }
-@media (max-width: 72rem) { .kn-page-rail { display: none; } }
-
 .kn-dirty-dot {
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 999px;
   background: var(--kn-panel-warning);
 }
+
+/* Unstaged edits: the state and the way into the review, in one control. */
+.kn-unstaged-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.kn-unstaged-chip:hover { background: var(--muted); color: var(--foreground); }
+.kn-unstaged-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+/* Not stored: the dot turns from "pending" to "at risk". */
+.kn-unstaged-chip[data-failed] { color: var(--destructive); }
+.kn-unstaged-chip[data-failed] .kn-dirty-dot { background: var(--destructive); }
+
+/* A copy kept from before the page was last published: a decision, not a toast. */
+.kn-stale-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 1rem 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--kn-panel-warning);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+@media (max-width: 40rem) { .kn-stale-copy { flex-wrap: wrap; } }
+
+.kn-unstaged-fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  font-size: 0.8rem;
+}
+.kn-unstaged-fields dt { color: var(--muted-foreground); }
+.kn-unstaged-fields dd { display: flex; flex-wrap: wrap; gap: 0.4rem; min-width: 0; }
+.kn-unstaged-fields del { color: var(--muted-foreground); }
+.kn-unstaged-fields ins { text-decoration: none; font-weight: 500; }
 
 /* Page settings: one label style across the sheet, matching the Autocomplete's
    own caption so the fields read as one form rather than two conventions. */
@@ -1717,4 +1753,264 @@
   .kn-comment-actions:focus-within {
     opacity: 1;
   }
+}
+
+
+/* ======================================================================
+ * The editor's assistant (docs/features/34)
+ *
+ * Machine authorship wears the important-panel violet everywhere in this
+ * product (the AI avatar, the bot glyph), so the assistant's writing does
+ * too: indigo stays the structure accent, and violet means "a model made
+ * this". It is kept to tints and one hairline — the page is still the page.
+ * ==================================================================== */
+
+.kn-page-editor { --kn-ai-w: 24rem; --kn-ai: var(--kn-panel-important); }
+
+/* The panel takes the rail's place and moves on the rail's curve: the rail
+ * slides out as this slot opens, so the page column shifts once, not twice.
+ * The panel is pinned to the slot's right edge, so it arrives sliding in from
+ * the left rather than being uncovered left to right. */
+.kn-ai-slot {
+  position: relative;
+  flex: none;
+  width: 0;
+  overflow: hidden;
+  transition: width var(--rail-duration) var(--pane-ease);
+}
+[data-ai-open='true'] > .kn-ai-slot { width: var(--kn-ai-w); }
+
+.kn-ai-panel {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: var(--kn-ai-w);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--background);
+  border-right: 1px solid var(--border);
+}
+
+.kn-ai-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 3rem;
+  flex: none;
+  padding: 0 0.5rem 0 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.kn-ai-panel-head > div { margin-left: 0.4rem; }
+
+/* The mark: the bot glyph's violet, as a tint — same treatment as the AI face. */
+.kn-ai-glyph {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  border-radius: 6px;
+  color: var(--kn-ai);
+  background: color-mix(in oklch, var(--kn-ai) 12%, transparent);
+}
+
+.kn-ai-threads { min-height: 0; flex: 1; }
+
+.kn-ai-kbd {
+  margin-left: 0.3rem;
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  opacity: 0.75;
+  border: 1px solid currentColor;
+  border-color: color-mix(in oklch, currentColor 30%, transparent);
+}
+
+.kn-ai-toggle[aria-pressed='true'] { background: var(--accent); color: var(--primary); }
+
+/* Empty state: what this panel is for, and three things worth asking. */
+.kn-ai-empty { padding: 1.25rem 0.25rem 0; }
+.kn-ai-starter {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  text-align: left;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--foreground);
+  transition: border-color 150ms, background-color 150ms;
+}
+.kn-ai-starter:hover { border-color: color-mix(in oklch, var(--kn-ai) 40%, var(--border)); background: color-mix(in oklch, var(--kn-ai) 5%, var(--card)); }
+.kn-ai-starter:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); border-color: var(--ring); }
+
+/* The dock: what the assistant has written into the page, decided here. */
+.kn-ai-dock {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: none;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.75rem 0.35rem 1rem;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklch, var(--kn-ai) 6%, var(--background));
+  font-size: 0.78rem;
+}
+.kn-ai-dock-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--kn-ai);
+}
+.kn-ai-dock-label {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 150ms;
+}
+.kn-ai-dock-label:hover { text-decoration-color: color-mix(in oklch, currentColor 40%, transparent); }
+.kn-ai-dock[data-streaming] .kn-ai-dock-label { color: var(--muted-foreground); }
+.kn-ai-accept-all .kn-ai-kbd { opacity: 0.85; }
+
+.kn-ai-dock-enter-active,
+.kn-ai-dock-leave-active { transition: opacity 180ms ease-out, transform 220ms cubic-bezier(0.16, 1, 0.3, 1); }
+.kn-ai-dock-enter-from,
+.kn-ai-dock-leave-to { opacity: 0; transform: translateY(0.5rem); }
+
+/* Below the shell's hinge there is no rail to replace: the panel floats over
+ * the page as a drawer, and the scrim is the way back. */
+.kn-ai-scrim { display: none; }
+@media (max-width: 1023.98px) {
+  .kn-ai-slot {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    z-index: 30;
+    width: min(var(--kn-ai-w), 92vw);
+    overflow: visible;
+    transform: translateX(-100%);
+    transition: transform var(--rail-duration) var(--pane-ease), box-shadow var(--rail-duration);
+  }
+  [data-ai-open='true'] > .kn-ai-slot {
+    width: min(var(--kn-ai-w), 92vw);
+    transform: none;
+    box-shadow: 0 16px 48px -12px color-mix(in oklch, var(--foreground) 20%, transparent);
+  }
+  .kn-ai-panel { width: 100%; }
+  .kn-ai-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 29;
+    background: rgb(0 0 0 / 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--rail-duration) var(--pane-ease);
+  }
+  [data-ai-open='true'] > .kn-ai-scrim { opacity: 1; pointer-events: auto; }
+}
+
+/* ---- In the page: suggestions ----------------------------------------- */
+
+/* A suggested block carries one hairline in the left gutter, run long enough
+ * to meet its neighbour's: consecutive blocks of one suggestion read as a
+ * single marked passage, the way a reviewer's margin line does, rather than a
+ * stack of boxes. Nothing in the layout moves when it is kept. */
+.kn-prose .kn-ai-block { position: relative; }
+.kn-prose .kn-ai-block::after {
+  content: '';
+  position: absolute;
+  left: -0.85rem;
+  top: -0.75rem;
+  bottom: -0.75rem;
+  width: 1px;
+  background: color-mix(in oklch, var(--kn-panel-important) 70%, transparent);
+  pointer-events: none;
+}
+.kn-prose .kn-ai-block[data-ai-state='streaming']::after {
+  background: color-mix(in oklch, var(--kn-panel-important) 40%, transparent);
+}
+
+/* The authored moment: each new run of text resolves out of a violet blur
+ * into ink. Chat replies draw the same class (lib/stream-reveal), so the
+ * answer and the page it writes into arrive the same way. The delay is set
+ * negative per run, so a span re-created mid-fade resumes rather than
+ * restarts. */
+.kn-reveal { animation: kn-reveal 640ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes kn-reveal {
+  from { opacity: 0; filter: blur(4px); color: var(--kn-panel-important); }
+  45% { opacity: 1; }
+  to { opacity: 1; filter: blur(0); }
+}
+
+.kn-ai-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  background: var(--kn-panel-important);
+  animation: md-caret 1s steps(2, jump-none) infinite;
+}
+
+/* Keep / discard, under the suggestion it decides. */
+.kn-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.55rem 0 0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  user-select: none;
+}
+.kn-ai-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.6rem;
+  padding: 0 0.55rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+.kn-ai-actions button:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); }
+.kn-ai-accept { background: var(--primary); color: var(--primary-foreground); border: 1px solid transparent; }
+.kn-ai-accept:hover { background: color-mix(in oklch, var(--primary) 90%, transparent); }
+.kn-ai-discard { background: var(--background); color: var(--muted-foreground); border: 1px solid var(--border); }
+.kn-ai-discard:hover { color: var(--foreground); background: var(--accent); }
+/* A suggested deletion has nothing in the page to tint: what would go is shown here. */
+.kn-ai-removed {
+  flex-basis: 100%;
+  margin-bottom: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+  text-decoration-color: color-mix(in oklch, var(--kn-panel-caution) 60%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No travel and no blur: the panel crossfades, and new text simply appears
+   * in the wash — the tint alone still says which words are new. */
+  .kn-ai-slot, .kn-ai-scrim { transition: opacity 120ms linear; }
+  .kn-ai-slot .kn-ai-panel { transition: opacity 120ms linear; }
+  [data-ai-open='false'] > .kn-ai-slot .kn-ai-panel { opacity: 0; }
+  .kn-reveal { animation: none; }
+  .kn-ai-caret { animation: none; opacity: 0.6; }
+  .kn-ai-dock-enter-active, .kn-ai-dock-leave-active { transition: opacity 120ms linear; }
+  .kn-ai-dock-enter-from, .kn-ai-dock-leave-to { transform: none; }
 }

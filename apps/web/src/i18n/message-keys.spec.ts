@@ -57,4 +57,43 @@ describe('web i18n message keys', () => {
     expect(checked).toBeGreaterThan(500)
     expect(missing).toEqual([])
   })
+
+  /**
+   * The reverse: every catalog message is reachable from the source, so a
+   * removed screen takes its copy with it (#85, finding E).
+   *
+   * A key counts as referenced when it appears as a quoted literal anywhere —
+   * which also covers maps that hold keys (`RUN_STATUS_LABEL`) and
+   * `<i18n-t keypath>` — or when it sits under a prefix built at runtime:
+   * `` `activity.action.${x}` `` or `labelFor(t, 'category', x)`. An unused key
+   * is deleted from both catalogs, never allowlisted here.
+   */
+  it('every en.json key is referenced from the source', () => {
+    const source = sourceFiles(SRC)
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
+    const literals = new Set(Array.from(source.matchAll(/['"`]([a-zA-Z][\w-]*(?:\.[\w-]+)+)['"`]/g), (m) => m[1]!))
+    const prefixes = [
+      ...Array.from(source.matchAll(/`([a-zA-Z][\w-]*(?:\.[\w-]+)*\.?)\$\{/g), (m) => m[1]!),
+      ...Array.from(source.matchAll(/['"]([a-zA-Z][\w-]*(?:\.[\w-]+)*\.)['"]\s*\+/g), (m) => m[1]!),
+      ...Array.from(source.matchAll(/labelFor\([^,]*,\s*'([^']+)'/g), (m) => `${m[1]!}.`),
+    ]
+
+    const unused = leafKeys(en).filter(
+      (key) =>
+        !literals.has(key) &&
+        !prefixes.some((prefix) => key.startsWith(prefix)) &&
+        // `tm('a.b')` / `rt()` read a whole subtree
+        !Array.from(literals).some((literal) => key.startsWith(`${literal}.`)),
+    )
+    expect(unused).toEqual([])
+  })
 })
+
+function leafKeys(node: Record<string, unknown>, prefix = ''): string[] {
+  return Object.entries(node).flatMap(([key, value]) =>
+    value !== null && typeof value === 'object'
+      ? leafKeys(value as Record<string, unknown>, `${prefix}${key}.`)
+      : [`${prefix}${key}`],
+  )
+}

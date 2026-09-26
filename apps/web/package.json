@@ -17,8 +17,7 @@
     "test": "vitest run",
     "generate:api": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts",
     "generate:docs": "node scripts/generate-docs-reference.mjs",
-    "lint:i18n-baseline": "eslint src --prune-suppressions",
-    "lint:i18n-unused": "eslint -c eslint.unused-keys.config.js src/i18n/messages/en.json"
+    "lint:i18n-baseline": "eslint src --prune-suppressions"
   },
   "dependencies": {
     "@floating-ui/vue": "^1.1.11",
@@ -81,7 +80,6 @@
     "@vue/tsconfig": "^0.9.1",
     "cross-env": "^10.1.0",
     "eslint": "^9.39.5",
-    "jsonc-eslint-parser": "^3.3.0",
     "openapi-typescript": "^7.13.0",
     "openapi-typescript-helpers": "^0.1.0",
     "shadcn-vue": "^2.8.2",

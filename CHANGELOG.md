@@ -22,11 +22,11 @@ in the pull request that introduces them — see
   `propose_update` got the body without its frontmatter, so the merge request
   quietly deleted the page's `tags:` and `relations:` and, once merged, its graph
   edges. A body sent without a frontmatter block now keeps the current one; send a
-  block to change it. (#PR)
+  block to change it. (#58)
 - **Relations written as `targetKey:` reach the graph.** Frontmatter relations
   spelled `{type, targetKey, name}` — the shape every tool schema uses, and so the
   one agents write — were dropped at indexing without an error. They are now read
-  like `target:`. (#PR)
+  like `target:`. (#58)
 
 ### Operations
 
@@ -201,29 +201,29 @@ in the pull request that introduces them — see
   the pages it has claimed and its sync history without picking it out of a
   dropdown first — and, for a repository connector, a **Work items** tab listing
   issues and pull requests. You can open an issue from here and attach it to a
-  page. (#PR)
+  page. (#58)
 - **What happens on a connected repository is now something workflows can react
   to.** With the GitHub App's webhook switched on, issues, pull requests, pushes
   and releases arrive as `repo.*` events. A work item attached to a page carries
   that page with it, which is what lets a workflow trigger fire on, say, an
   issue being closed against the page it is about. An unattached issue triggers
-  nothing. (#PR)
+  nothing. (#58)
 - **Workflows can be started by what happens on a connected repository.** The
   trigger picker offers the `repo.*` events under their own heading, beside the
   page and revision events it already had. Unlike a page event, a repo event may
   fire the same workflow for the same page more than once — an issue that opens,
   closes and reopens is three pieces of news — bounded by a cooldown rather than
-  by the "only ever once" rule that page events keep. (#PR)
+  by the "only ever once" rule that page events keep. (#58)
 - **The assistant can see and hand off work.** Four tools — `task_list`,
   `task_read`, `task_create`, `task_comment` — offered whenever the workspace
   has a repository connector with issues. Reading is available in both modes;
   opening an issue and commenting on one are Agent-mode-only and need `editor`,
   because unlike a page they cannot be withdrawn once they land. Over MCP,
-  `knowledge_list_work_items` reads, and nothing writes. (#PR)
+  `knowledge_list_work_items` reads, and nothing writes. (#58)
 - **A workflow can report back to the issue it was about.** A new `task.update`
   step posts its message as a comment on every open issue attached to the run's
   page. It acts only on already-attached items, so a workflow cannot be used to
-  comment on an arbitrary repository. (#PR)
+  comment on an arbitrary repository. (#58)
 
 - **Access is one page again, and it says what a role means.** `/settings/users`
   folded into `/settings/access` as three tabs: **Members** (the roster as it
@@ -247,7 +247,7 @@ in the pull request that introduces them — see
   — settings sections, the project roster, the docs index, the saved
   merge-request filters — was declared sticky but sat inside a container with
   hidden overflow, which silently made that container the thing it stuck to
-  rather than the page. (#PR)
+  rather than the page. (#58)
 
 - **A page moved to a new parent no longer lands in an arbitrary slot.** It kept
   the position it held under its old parent, which collided with whichever

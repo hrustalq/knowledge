@@ -56,7 +56,7 @@ import {
   Workflow,
 } from 'lucide-vue-next'
 import { markdownToHtml } from '@/lib/markdown/render'
-import type { GlossaryExclusion, GlossaryTerm } from '@knowledge/contracts'
+import type { AssistantDraftEdit, GlossaryExclusion, GlossaryTerm } from '@knowledge/contracts'
 import type { PageRefResolver } from '@/lib/page-refs'
 import { fromWatch } from '@/lib/rx-vue'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
@@ -75,6 +75,7 @@ import {
 import { ListIndentKeymap } from './extensions/list-indent'
 import { CommentAnchors, type CommentAnchor } from './extensions/comment-anchors'
 import { GlossaryTerms } from './extensions/glossary-terms'
+import { AiSuggestions, pendingSuggestions, withoutSuggestions } from './extensions/ai-suggestions'
 import { useAttachments } from './use-attachments'
 import {
   EMPTY_FORMAT,
@@ -241,6 +242,23 @@ const subscriptions = new Subscription()
  * component on every transaction.
  */
 const format = shallowRef<FormatState>(EMPTY_FORMAT)
+
+/**
+ * What the assistant has suggested into the page and not yet been kept or
+ * discarded (docs/features/34), for the host's summary bar. Streamed rather
+ * than read in a template, for the reason `format` is.
+ */
+const aiPending = shallowRef<{ count: number; streaming: boolean }>({ count: 0, streaming: false })
+
+/**
+ * The page as the author has it — every pending suggestion put back to what
+ * it replaced. The one serializer: the model binding, a save's flush and the
+ * draft a turn is grounded in all read this, so a suggestion reaches none of
+ * them until it is accepted.
+ */
+function serializeKept(instance: CoreEditor): string {
+  return docToMarkdown(withoutSuggestions(instance.state), instance.schema)
+}
 
 const { uploads, insertFiles, pickFiles } = useAttachments(
   async () => (props.resolveDocumentId ? props.resolveDocumentId() : null),
@@ -608,6 +626,8 @@ onMounted(() => {
       // The extension builds aria-labels, so it needs this app's translator.
       CommentAnchors.configure({ t }),
       GlossaryTerms,
+      // Its accept/discard bar builds labels, so it needs the translator too.
+      AiSuggestions.configure({ t }),
     ],
     editorProps: {
       attributes: { class: 'kn-prose', spellcheck: 'true' },
@@ -638,9 +658,23 @@ onMounted(() => {
 
   // Serializing walks the whole document, so it waits for a 200 ms pause in
   // typing: smooth on long pages, still immediate to a save (which flushes).
-  sync = createMarkdownSync(instance, { dueTime: 200 })
+  sync = createMarkdownSync(instance, { dueTime: 200, serialize: serializeKept })
   subscriptions.add(sync.markdown$.subscribe(emitMarkdown))
   subscriptions.add(editorStreams(instance).format$.subscribe((next) => (format.value = next)))
+  subscriptions.add(
+    editorStreams(instance).transaction$.subscribe(({ transaction }) => {
+      const items = pendingSuggestions(instance.state)
+      const next = { count: items.length, streaming: items.some((i) => i.state === 'streaming') }
+      if (!shallowEqual(next, aiPending.value)) aiPending.value = next
+      // Accepting changes what the page *is* without changing the document —
+      // the text was already there — so no update event fires and the model
+      // would never hear about it. Say it now: the author just made a decision.
+      if (transaction.getMeta('knAiResolved')) {
+        sync?.cancel()
+        emitMarkdown(serializeKept(instance))
+      }
+    }),
+  )
 
   syncCommentAnchors()
   syncGlossary()
@@ -695,9 +729,11 @@ watch(
   (next) => {
     const instance = editor.value
     if (!instance || next === lastEmitted) return
-    // External change (loaded a document, AI appended a suggestion): re-parse.
-    // An edit still waiting out its pause described the text being replaced.
+    // External change (loaded a document, restored a working copy): re-parse.
+    // An edit still waiting out its pause described the text being replaced,
+    // and a suggestion made against that text has nothing left to suggest into.
     sync?.cancel()
+    instance.commands.discardAiSuggestions()
     lastEmitted = next
     instance.commands.setContent(toHtml(next), { emitUpdate: false })
     syncCommentAnchors()
@@ -745,9 +781,32 @@ defineExpose({
     const instance = editor.value
     if (!instance || instance.isDestroyed) return props.modelValue
     sync?.cancel()
-    const markdown = docToMarkdown(instance.state.doc, instance.schema)
+    const markdown = serializeKept(instance)
     emitMarkdown(markdown)
     return markdown
+  },
+  /** Suggestions the assistant has written into the page and nobody has decided on yet. */
+  aiPending,
+  /** One streamed `draft-edit` frame from the assistant, applied as a suggestion. */
+  applyAiEdit(edit: AssistantDraftEdit) {
+    editor.value?.commands.applyAiEdit(edit)
+  },
+  /** The turn ended: stop anything still writing. */
+  settleAi() {
+    editor.value?.commands.settleAiSuggestions()
+  },
+  acceptAi() {
+    editor.value?.chain().acceptAiSuggestions().focus().run()
+  },
+  discardAi() {
+    editor.value?.chain().discardAiSuggestions().focus().run()
+  },
+  /** Bring the first pending suggestion into view. */
+  revealAi() {
+    const instance = editor.value
+    const first = instance ? pendingSuggestions(instance.state)[0] : undefined
+    if (!instance || !first) return
+    instance.chain().setTextSelection(first.from).scrollIntoView().run()
   },
   focus() {
     editor.value?.commands.focus()

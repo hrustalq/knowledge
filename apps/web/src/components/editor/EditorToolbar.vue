@@ -3,9 +3,16 @@
  * The persistent formatting bar. Confluence's shape: one row, grouped by what
  * the control does to the text, with the rarer inserts folded behind a single
  * "+" so the row does not become a wall of glyphs at narrow widths.
+ *
+ * Narrower still, the row sheds whole groups into a "More" menu rather than
+ * scrolling sideways — a toolbar you have to scroll to find Bold in is a broken
+ * one. It measures itself, not the viewport: the assistant panel narrows the
+ * editor on a wide screen just as a phone does, and the dropdown is teleported
+ * out of reach of any container query, so the tier is a number both halves read.
  */
 import { useI18n } from 'vue-i18n'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useElementSize } from '@vueuse/core'
 import type { Editor } from '@tiptap/core'
 import {
   AlignCenter,
@@ -28,6 +35,7 @@ import {
   ListOrdered,
   ListTodo,
   Minus,
+  MoreHorizontal,
   Outdent,
   Paperclip,
   PenLine,
@@ -49,6 +57,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { PANEL_META, PANEL_TYPES, STATUS_COLORS, type PanelType, type StatusColor } from '@/lib/markdown/nodes'
@@ -99,6 +110,24 @@ function setStyle(level: number) {
   else chain.toggleHeading({ level: level as 1 | 2 | 3 | 4 }).run()
 }
 
+/**
+ * How much of the row folds into "More". 0: nothing. 1: the page furniture —
+ * status, indent, alignment, links, panels. 2: the secondary marks and lists
+ * too, leaving undo, text style, bold, italic, bullets and insert: what a
+ * paragraph written on a phone actually needs. Thresholds are the widths at
+ * which the row stopped fitting, measured with the Russian labels, which run
+ * longest.
+ */
+const bar = ref<HTMLElement | null>(null)
+const { width } = useElementSize(bar)
+const tier = computed(() => {
+  // 0 before the first measurement (and during SSR): the full row, as before.
+  if (width.value === 0) return 0
+  if (width.value < (props.compact ? 300 : 480)) return 2
+  if (width.value < (props.compact ? 0 : 760)) return 1
+  return 0
+})
+
 const ALIGNMENTS = [
   { id: 'left', icon: AlignLeft, label: 'toolbar.left' },
   { id: 'center', icon: AlignCenter, label: 'toolbar.center' },
@@ -107,7 +136,14 @@ const ALIGNMENTS = [
 </script>
 
 <template>
-  <div class="kn-toolbar" :data-compact="compact ? 'true' : undefined" role="toolbar" :aria-label="t('toolbar.formatting')">
+  <div
+    ref="bar"
+    class="kn-toolbar"
+    :data-compact="compact ? 'true' : undefined"
+    :data-tier="tier"
+    role="toolbar"
+    :aria-label="t('toolbar.formatting')"
+  >
     <div class="kn-tb-group">
       <button
         type="button"
@@ -169,6 +205,7 @@ const ALIGNMENTS = [
         <Italic class="size-4" />
       </button>
       <button
+        v-if="tier < 2"
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.underline')"
@@ -178,6 +215,7 @@ const ALIGNMENTS = [
         <UnderlineIcon class="size-4" />
       </button>
       <button
+        v-if="tier < 2"
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.strikethrough')"
@@ -187,6 +225,7 @@ const ALIGNMENTS = [
         <Strikethrough class="size-4" />
       </button>
       <button
+        v-if="tier < 2"
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.inlineCode')"
@@ -197,7 +236,7 @@ const ALIGNMENTS = [
       </button>
     </div>
 
-    <div class="kn-tb-group">
+    <div v-if="tier < 2" class="kn-tb-group">
       <button
         type="button"
         class="kn-tb-btn"
@@ -207,7 +246,7 @@ const ALIGNMENTS = [
       >
         <Highlighter class="size-4" />
       </button>
-      <DropdownMenu v-if="!compact">
+      <DropdownMenu v-if="!compact && tier < 1">
         <DropdownMenuTrigger as-child>
           <button type="button" class="kn-tb-btn" :title="t('toolbar.statusLozenge')">
             <span class="kn-tb-status-dot" />
@@ -240,6 +279,7 @@ const ALIGNMENTS = [
         <List class="size-4" />
       </button>
       <button
+        v-if="tier < 2"
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.numberedList')"
@@ -249,6 +289,7 @@ const ALIGNMENTS = [
         <ListOrdered class="size-4" />
       </button>
       <button
+        v-if="tier < 2"
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.taskList')"
@@ -258,6 +299,7 @@ const ALIGNMENTS = [
         <ListTodo class="size-4" />
       </button>
       <button
+        v-if="tier < 1"
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.outdent')"
@@ -267,6 +309,7 @@ const ALIGNMENTS = [
         <Outdent class="size-4" />
       </button>
       <button
+        v-if="tier < 1"
         type="button"
         class="kn-tb-btn"
         :title="t('toolbar.indent')"
@@ -277,7 +320,7 @@ const ALIGNMENTS = [
       </button>
     </div>
 
-    <div class="kn-tb-group">
+    <div v-if="tier < 1" class="kn-tb-group">
       <DropdownMenu v-if="!compact">
         <DropdownMenuTrigger as-child>
           <button type="button" class="kn-tb-btn" :title="t('toolbar.alignment')">
@@ -309,7 +352,7 @@ const ALIGNMENTS = [
       </button>
     </div>
 
-    <DropdownMenu v-if="!compact">
+    <DropdownMenu v-if="!compact && tier < 1">
       <DropdownMenuTrigger as-child>
         <button type="button" class="kn-tb-btn" :title="t('toolbar.insertPanel')">
           <Info class="size-4" />
@@ -325,6 +368,103 @@ const ALIGNMENTS = [
         >
           <span class="kn-panel-dot" :data-kn-panel="type" /> {{ t(PANEL_META[type].label) }}
         </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+
+    <!-- Whatever the row had no room for, in the row's own order. -->
+    <DropdownMenu v-if="tier > 0">
+      <DropdownMenuTrigger as-child>
+        <button type="button" class="kn-tb-btn" :title="t('toolbar.more')" :aria-label="t('toolbar.more')">
+          <MoreHorizontal class="size-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" class="w-56">
+        <template v-if="tier > 1">
+          <DropdownMenuItem @select="editor.chain().focus().toggleUnderline().run()">
+            <UnderlineIcon class="size-4" /> {{ t('toolbar.underline') }}
+            <Check v-if="format.underline" class="ml-auto size-3.5 opacity-70" />
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="editor.chain().focus().toggleStrike().run()">
+            <Strikethrough class="size-4" /> {{ t('toolbar.strikethrough') }}
+            <Check v-if="format.strike" class="ml-auto size-3.5 opacity-70" />
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="editor.chain().focus().toggleCode().run()">
+            <Code class="size-4" /> {{ t('toolbar.inlineCode') }}
+            <Check v-if="format.code" class="ml-auto size-3.5 opacity-70" />
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="editor.chain().focus().toggleHighlight().run()">
+            <Highlighter class="size-4" /> {{ t('toolbar.highlight') }}
+            <Check v-if="format.highlight" class="ml-auto size-3.5 opacity-70" />
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem @select="editor.chain().focus().toggleOrderedList().run()">
+            <ListOrdered class="size-4" /> {{ t('toolbar.numberedList') }}
+            <Check v-if="format.orderedList" class="ml-auto size-3.5 opacity-70" />
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="editor.chain().focus().toggleTaskList().run()">
+            <ListTodo class="size-4" /> {{ t('toolbar.taskList') }}
+            <Check v-if="format.taskList" class="ml-auto size-3.5 opacity-70" />
+          </DropdownMenuItem>
+        </template>
+        <DropdownMenuItem :disabled="!format.canOutdent" @select="outdent(editor)">
+          <Outdent class="size-4" /> {{ t('toolbar.outdent') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem :disabled="!format.canIndent" @select="indent(editor)">
+          <Indent class="size-4" /> {{ t('toolbar.indent') }}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem @select="emit('link')">
+          <Link2 class="size-4" /> {{ t('toolbar.link') }}
+          <Check v-if="format.link" class="ml-auto size-3.5 opacity-70" />
+        </DropdownMenuItem>
+        <DropdownMenuItem @select="emit('linkPage')">
+          <FileText class="size-4" /> {{ t('toolbar.linkToPageHint') }}
+        </DropdownMenuItem>
+        <template v-if="!compact">
+          <DropdownMenuSeparator />
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger><AlignLeft class="size-4" /> {{ t('toolbar.alignment') }}</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem
+                v-for="a in ALIGNMENTS"
+                :key="a.id"
+                @select="editor.chain().focus().setTextAlign(a.id).run()"
+              >
+                <component :is="a.icon" class="size-4" /> {{ t(a.label) }}
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <span class="kn-tb-status-dot" /> {{ t('toolbar.statusLozenge') }}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem
+                v-for="color in STATUS_COLORS"
+                :key="color"
+                @select="editor.chain().focus().toggleStatus(color as StatusColor).run()"
+              >
+                <span class="kn-status-sample" :data-kn-status="color">{{ color }}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem @select="editor.chain().focus().unsetStatus().run()">
+                {{ t('toolbar.removeStatus') }}
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger><Info class="size-4" /> {{ t('toolbar.insertPanel') }}</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem
+                v-for="type in PANEL_TYPES"
+                :key="type"
+                @select="editor.chain().focus().toggledPanel(type as PanelType).run()"
+              >
+                <span class="kn-panel-dot" :data-kn-panel="type" /> {{ t(PANEL_META[type].label) }}
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </template>
       </DropdownMenuContent>
     </DropdownMenu>
 

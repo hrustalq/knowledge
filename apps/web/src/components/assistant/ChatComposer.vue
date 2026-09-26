@@ -255,7 +255,7 @@ function send() {
   <!-- shrink-0: the dock is the one thing that must never be compressed or
        pushed out of view by a long transcript — the transcript scrolls, this
        stays. -->
-  <div class="shrink-0 border-t bg-background px-4 pt-3 pb-4 lg:px-8">
+  <div class="shrink-0 border-t bg-background px-4 pt-3 pb-4 @3xl:px-8">
     <div class="mx-auto w-full max-w-4xl">
       <div
         ref="dropZoneEl"
@@ -319,7 +319,9 @@ function send() {
             @keydown="onKeydown"
           />
 
-          <div class="flex items-center gap-1 px-2 pb-2">
+          <!-- Wraps rather than overflows: in the editor's 24rem panel the mode
+               switch and send drop to a second line instead of off the edge. -->
+          <div class="flex flex-wrap items-center gap-1 px-2 pb-2">
             <TooltipProvider :delay-duration="400">
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -425,7 +427,7 @@ function send() {
             </span>
 
             <span
-              class="hidden items-center gap-1 pr-1 text-[11px] text-muted-foreground sm:inline-flex"
+              class="hidden items-center gap-1 pr-1 text-[11px] text-muted-foreground @lg:inline-flex"
               :class="showCount ? '' : 'ml-auto'"
             >
               <CornerDownLeft class="size-3" />
@@ -438,13 +440,21 @@ function send() {
               v-if="sending"
               type="button"
               size="icon-sm"
+              class="ml-auto @lg:ml-0"
               variant="outline"
               :aria-label="t('chat.stopGenerating')"
               @click="emit('stop')"
             >
               <Square class="size-3 fill-current" />
             </Button>
-            <Button v-else type="submit" size="icon-sm" :disabled="!canSend" :aria-label="t('chat.sendMessage')">
+            <Button
+              v-else
+              type="submit"
+              size="icon-sm"
+              class="ml-auto @lg:ml-0"
+              :disabled="!canSend"
+              :aria-label="t('chat.sendMessage')"
+            >
               <SendHorizontal class="size-4" />
             </Button>
           </div>

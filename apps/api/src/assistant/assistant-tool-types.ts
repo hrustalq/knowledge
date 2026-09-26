@@ -69,7 +69,15 @@ export const READ_TOOL_NAMES = new Set([
  * what the options were, then had no tool left to offer them with, and wrote
  * the question out as prose for the user to answer by hand.
  */
-export const FREE_TOOLS = new Set(['ask_user', 'request_agent_mode']);
+export const FREE_TOOLS = new Set([
+  'ask_user',
+  'request_agent_mode',
+  // docs/features/34. Costs no call upstream and reaches nothing: an edit is
+  // text the author decides about. Rationing it would make a model that read
+  // three pages unable to write the section it read them for. Serial, not
+  // parallel-safe — each edit is checked against the draft the last one left.
+  'edit_draft',
+]);
 
 /**
  * The two tools that leave the workspace (docs/features/25).

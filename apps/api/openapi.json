@@ -16331,6 +16331,24 @@
           "content"
         ]
       },
+      "AssistantDraftDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title field as typed, which may differ from the published title"
+          },
+          "markdown": {
+            "type": "string",
+            "maxLength": 100000,
+            "description": "The body markdown, unstaged edits included"
+          }
+        },
+        "required": [
+          "title",
+          "markdown"
+        ]
+      },
       "PostAssistantMessageDto": {
         "type": "object",
         "properties": {
@@ -16379,6 +16397,14 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "draft": {
+            "description": "The author's working copy, sent from the editor. Grounds the turn in it instead of the published page and offers edit_draft, whose edits stream back as draft-edit frames and are never saved server-side.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssistantDraftDto"
+              }
+            ]
           }
         },
         "required": [

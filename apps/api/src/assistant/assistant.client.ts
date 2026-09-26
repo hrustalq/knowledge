@@ -140,7 +140,12 @@ export interface ToolExecutionResult {
   ok?: boolean;
 }
 
-export type ToolExecutor = (name: string, args: Record<string, unknown>) => Promise<ToolExecutionResult>;
+/** `callId` is the model's id for this call — what lets a streamed preview and its execution be matched up. */
+export type ToolExecutor = (
+  name: string,
+  args: Record<string, unknown>,
+  callId?: string,
+) => Promise<ToolExecutionResult>;
 
 /**
  * Thin wrapper around the official OpenAI SDK: one place that knows how a
@@ -349,6 +354,13 @@ export class AssistantClient {
       toolStart: (tool: string, args: string) => Promise<void> | void;
       toolEnd: (tool: string, ok: boolean) => Promise<void> | void;
       roundEnd: (text: string) => void;
+      /**
+       * A tool call's arguments grew. Fires per fragment, before the call has
+       * finished arriving — for a caller that can use half an argument list
+       * (`edit_draft` streams its text into the editor). Optional; nothing
+       * else in the harness reads arguments before they are complete.
+       */
+      toolArgs?: (call: { id: string; name: string; arguments: string }) => void;
     },
     /** Aborted when the client hangs up — see the controller's Stop handling. */
     signal?: AbortSignal,
@@ -379,6 +391,7 @@ export class AssistantClient {
         },
         on.delta,
         signal,
+        on.toolArgs,
       );
 
       if (round.cancelled) return { content: stripToolMarkup(round.content), trace, cancelled: true };
@@ -418,7 +431,7 @@ export class AssistantClient {
         }
         let result: ToolExecutionResult;
         try {
-          result = await execute(call.name, args);
+          result = await execute(call.name, args, call.id);
         } catch (err) {
           this.logger.warn(`Tool ${call.name} failed: ${err instanceof Error ? err.message : err}`);
           result = { content: JSON.stringify({ error: 'Tool execution failed' }), ok: false };
@@ -479,6 +492,7 @@ export class AssistantClient {
     params: Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming, 'model' | 'temperature' | 'stream'>,
     onDelta: (text: string) => void,
     signal?: AbortSignal,
+    onToolArgs?: (call: { id: string; name: string; arguments: string }) => void,
   ): Promise<{
     content: string;
     toolCalls: Array<{ id: string; name: string; arguments: string }>;
@@ -518,6 +532,11 @@ export class AssistantClient {
           if (call.function?.name) slot.name = call.function.name;
           if (call.function?.arguments) slot.arguments += call.function.arguments;
           partial.set(call.index, slot);
+          // Some providers send the id only on the first fragment and some not
+          // at all; the index is stable within a round either way.
+          if (onToolArgs && call.function?.arguments && slot.name) {
+            onToolArgs({ ...slot, id: slot.id || `call-${call.index}` });
+          }
         }
       }
     } catch (err) {
@@ -533,7 +552,10 @@ export class AssistantClient {
       if (cancelled) return { content, toolCalls: [], cancelled: true };
       throw this.upstreamError(err);
     }
-    const toolCalls = [...partial.values()].filter((c) => c.name);
+    // Same id fallback the argument stream used, so a preview and its execution agree.
+    const toolCalls = [...partial.entries()]
+      .map(([index, c]) => ({ ...c, id: c.id || `call-${index}` }))
+      .filter((c) => c.name);
     this.bill(ctx, reported ?? estimateFor(params.messages, content), startedAt, {
       ok: true,
       toolCallCount: toolCalls.length,

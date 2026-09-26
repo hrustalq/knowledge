@@ -17,6 +17,15 @@ in the pull request that introduces them — see
 
 ### Added
 
+- **The editor's assistant is a sidebar that writes into the page.** Press the
+  Assistant button or `⌘J` / `Ctrl+J`: the chat opens on the left in place of
+  the navigation rail, with everything the assistant page has. It reads your
+  draft as it is on screen, unsaved edits included, and when you ask for a change
+  the text streams straight into the page as a suggestion you keep or discard
+  (`⌘↵` keeps them all). Nothing is saved until you keep it and publish; publish
+  asks you to decide on pending suggestions first. Chat replies now fade in word
+  by word too.
+
 - **Unpublished edits survive a reload, a crash or a closed tab.** The page
   editor keeps its working copy in the browser as you write and restores it when
   the page is reopened; if the page was published in the meantime it asks before
@@ -26,6 +35,11 @@ in the pull request that introduces them — see
   edits are waiting. Copies stay in the browser they were made in.
 
 ### Changed
+
+- **The editor's toolbar and header no longer overflow on narrow screens.** The
+  toolbar folds its less-used controls into a "More" menu as it narrows —
+  including when the assistant panel is open — and on a phone the header keeps
+  the assistant, a menu for Settings and Cancel, and Publish.
 
 - **Leaving the editor no longer asks, once your edits are stored.** They are
   restored when you come back. Cancel still asks — keep and leave, or discard —

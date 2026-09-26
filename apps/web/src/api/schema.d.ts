@@ -3428,6 +3428,12 @@ export interface components {
             filename: string;
             content: string;
         };
+        AssistantDraftDto: {
+            /** @description The title field as typed, which may differ from the published title */
+            title: string;
+            /** @description The body markdown, unstaged edits included */
+            markdown: string;
+        };
         PostAssistantMessageDto: {
             /** @example Draft a short onboarding page for new hires */
             content: string;
@@ -3450,6 +3456,8 @@ export interface components {
             documentRefs?: string[];
             /** @description Skills (docs/features/12) explicitly applied to this turn; enabled skills also join on trigger match */
             skillIds?: string[];
+            /** @description The author's working copy, sent from the editor. Grounds the turn in it instead of the published page and offers edit_draft, whose edits stream back as draft-edit frames and are never saved server-side. */
+            draft?: components["schemas"]["AssistantDraftDto"];
         };
         UpdateAiSettingsDto: {
             /** Format: uuid */

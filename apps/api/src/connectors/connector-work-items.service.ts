@@ -51,6 +51,12 @@ export class ConnectorWorkItemsService {
    * outage degrades to the stored projection rather than an error page.
    */
   async list(row: Connector): Promise<ConnectorWorkItemInfo[]> {
+    await this.refresh(row);
+    return this.stored(row.id);
+  }
+
+  /** Pull the far side into the stored projection; never fatal (see `list`). */
+  private async refresh(row: Connector): Promise<void> {
     this.assertSupported(row);
     try {
       const fetched = await this.github.list(row);
@@ -67,7 +73,42 @@ export class ConnectorWorkItemsService {
       // more use than one that renders an error.
       this.logger.warn(`work item refresh failed for connector ${row.id}: ${(err as Error).message}`);
     }
-    return this.stored(row.id);
+  }
+
+  /**
+   * One page of the tab's list. Only the first page refreshes from the far
+   * side: a later page is the reader scrolling through what that refresh just
+   * wrote, and asking GitHub again per page would make scrolling cost an API
+   * round trip each time.
+   *
+   * Offset-paged rather than keyset, because the order leads with `state` and a
+   * nullable timestamp — a keyset over those would have to spell out NULL
+   * handling Prisma's cursor does not. A refresh can shift a row across a page
+   * boundary; the client drops the duplicate by id.
+   */
+  async page(
+    row: Connector,
+    opts: { limit?: number; cursor?: string } = {},
+  ): Promise<{ workItems: ConnectorWorkItemInfo[]; total: number; nextCursor: string | null }> {
+    const offset = opts.cursor ? Number(opts.cursor) : 0;
+    if (offset === 0) await this.refresh(row);
+    else this.assertSupported(row);
+    const limit = opts.limit ?? 50;
+    const [rows, total] = await Promise.all([
+      this.prisma.connectorWorkItem.findMany({
+        where: { connectorId: row.id },
+        orderBy: [{ state: 'asc' }, { externalUpdatedAt: 'desc' }, { id: 'asc' }],
+        skip: offset,
+        take: limit + 1,
+      }),
+      this.prisma.connectorWorkItem.count({ where: { connectorId: row.id } }),
+    ]);
+    const page = rows.slice(0, limit);
+    return {
+      workItems: await this.decorate(page),
+      total,
+      nextCursor: rows.length > limit ? String(offset + limit) : null,
+    };
   }
 
   /** What is stored, without touching the network — the webhook's read path. */

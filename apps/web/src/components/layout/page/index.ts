@@ -4,6 +4,7 @@ export { default as PageTabs } from './PageTabs.vue'
 export { default as PageRail } from './PageRail.vue'
 export { default as PageSubRail } from './PageSubRail.vue'
 export { default as PageState } from './PageState.vue'
+export { default as PageScrollList } from './PageScrollList.vue'
 
 export {
   PAGE_MEASURE,

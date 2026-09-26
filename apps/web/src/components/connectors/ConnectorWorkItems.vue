@@ -11,17 +11,17 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useQuery } from '@tanstack/vue-query'
+import { useInfiniteQuery } from '@tanstack/vue-query'
 import { CircleDot, ExternalLink, GitMerge, GitPullRequest, Plus, X } from 'lucide-vue-next'
 import type { ConnectorWorkItemInfo, ListConnectorWorkItemsResponse } from '@knowledge/contracts'
-import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import { apiInfiniteQueryOptions, useApiMutation } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { PageState } from '@/components/layout/page'
+import { PageScrollList, PageState } from '@/components/layout/page'
 import { Autocomplete } from '@/components/ui/autocomplete'
 import type { AutocompleteOption } from '@/components/ui/autocomplete'
 import { useDocumentsStore } from '@/stores/documents'
@@ -47,10 +47,24 @@ async function loadPages(q: string): Promise<AutocompleteOption[]> {
     .map((doc) => ({ value: doc.documentId, label: doc.title }))
 }
 
-const query = useQuery(
-  computed(() => apiQueryOptions('/v1/connectors/{id}/work-items', { path: { id: props.connectorId } })),
+const query = useInfiniteQuery(
+  computed(() => apiInfiniteQueryOptions('/v1/connectors/{id}/work-items', { path: { id: props.connectorId } })),
 )
-const items = computed(() => (query.data.value as ListConnectorWorkItemsResponse | undefined)?.workItems ?? [])
+const pages = computed(() => (query.data.value?.pages ?? []) as ListConnectorWorkItemsResponse[])
+/**
+ * Offset pages over a projection a refresh can reorder, so a row can arrive
+ * twice across a page boundary — first sighting wins, and the virtualizer's
+ * keys stay unique.
+ */
+const items = computed(() => {
+  const seen = new Set<string>()
+  return pages.value.flatMap((page) => page.workItems).filter((item) => !seen.has(item.id) && !!seen.add(item.id))
+})
+const total = computed(() => pages.value[0]?.total ?? 0)
+
+function loadMore() {
+  if (query.hasNextPage.value && !query.isFetchingNextPage.value) void query.fetchNextPage()
+}
 
 const invalidates = () => [['/v1/connectors/{id}/work-items']]
 const createItem = useApiMutation('post', '/v1/connectors/{id}/work-items', { invalidates })
@@ -123,7 +137,7 @@ function stateMark(item: ConnectorWorkItemInfo) {
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <p class="text-muted-foreground text-sm">
-        {{ t('connectors.workItemCount', { count: items.length }, items.length) }}
+        {{ t('connectors.workItemCount', { count: total }, total) }}
       </p>
       <Button v-if="canManage" size="sm" @click="composerOpen = true">
         <Plus class="size-3.5" /> {{ t('connectors.workItemNew') }}
@@ -139,8 +153,18 @@ function stateMark(item: ConnectorWorkItemInfo) {
       :body="t('connectors.workItemsEmptyBody')"
     />
 
-    <ul v-else class="divide-y rounded-lg border">
-      <li v-for="item in items" :key="item.id" class="flex flex-wrap items-start gap-3 p-3">
+    <PageScrollList
+      v-else
+      :items="items"
+      :item-key="(item) => item.id"
+      :estimate-size="84"
+      :has-more="query.hasNextPage.value"
+      :loading-more="query.isFetchingNextPage.value"
+      :label="t('connectors.tabWorkItems')"
+      @load-more="loadMore"
+    >
+      <template #default="{ item }">
+      <div class="flex flex-wrap items-start gap-3 p-3">
         <component :is="stateMark(item).icon" class="mt-0.5 size-4 shrink-0" :class="stateMark(item).class" />
 
         <div class="min-w-0 flex-1">
@@ -214,8 +238,9 @@ function stateMark(item: ConnectorWorkItemInfo) {
         >
           <ExternalLink class="size-3.5" />
         </a>
-      </li>
-    </ul>
+      </div>
+      </template>
+    </PageScrollList>
 
     <Dialog v-model:open="composerOpen">
       <DialogContent class="sm:max-w-lg">

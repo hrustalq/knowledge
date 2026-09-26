@@ -34,6 +34,7 @@
     "clear": "Очистить",
     "previous": "Назад",
     "loadMore": "Показать ещё",
+    "loadingMore": "Загрузка…",
     "searchIn": "Поиск: {label}…",
     "noneYet": "Пока пусто: {label}.",
     "noMatchFor": "Ничего не найдено по запросу {query}",

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -342,4 +343,39 @@ export class LinkConnectorWorkItemDto {
   @ApiProperty({ description: 'The page this work item is about' })
   @IsUUID()
   documentId!: string;
+}
+
+/**
+ * GET /v1/connectors/:id/runs and /links — keyset pages, the cursor being the
+ * last row's id.
+ */
+export class ConnectorPageQueryDto {
+  @ApiPropertyOptional({ description: '`nextCursor` from the previous page' })
+  @IsOptional()
+  @IsUUID()
+  cursor?: string;
+
+  @ApiPropertyOptional({ description: 'Page size, 1–100. Defaults to 30 for runs, 50 for links' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1, { message: vmsg('min') })
+  @Max(100, { message: vmsg('max') })
+  limit?: number;
+}
+
+/** GET /v1/connectors/:id/work-items — offset pages (see ConnectorWorkItemsService.page). */
+export class ConnectorWorkItemsQueryDto {
+  @ApiPropertyOptional({ description: '`nextCursor` from the previous page' })
+  @IsOptional()
+  @Matches(/^\d{1,6}$/)
+  cursor?: string;
+
+  @ApiPropertyOptional({ description: 'Page size, 1–100. Defaults to 50' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1, { message: vmsg('min') })
+  @Max(100, { message: vmsg('max') })
+  limit?: number;
 }

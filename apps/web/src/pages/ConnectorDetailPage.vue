@@ -17,7 +17,7 @@ import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useQuery } from '@tanstack/vue-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
 import { CircleAlert, GitPullRequest, Link2, RefreshCw, ScrollText } from 'lucide-vue-next'
 import { connectorKindInfo } from '@knowledge/contracts'
 import type {
@@ -25,12 +25,20 @@ import type {
   ListConnectorLinksResponse,
   ListConnectorRunsResponse,
 } from '@knowledge/contracts'
-import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import { apiInfiniteQueryOptions, apiQueryOptions, useApiMutation } from '@/api/queries'
 import { errorMessage } from '@/api/errors'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { PageLayout, PageState, PageTabs, panelId, tabId, usePageTabs } from '@/components/layout/page'
+import {
+  PageLayout,
+  PageScrollList,
+  PageState,
+  PageTabs,
+  panelId,
+  tabId,
+  usePageTabs,
+} from '@/components/layout/page'
 import type { PageTab } from '@/components/layout/page'
 import ConnectorWorkItems from '@/components/connectors/ConnectorWorkItems.vue'
 import GithubAccessCard from '@/components/connectors/GithubAccessCard.vue'
@@ -73,23 +81,34 @@ const tab = usePageTabs<TabKey>(tabs, 'links')
 
 // Links and runs load only when their tab is open: this page's reason to exist
 // is the work-items table, and two list requests nobody asked for would delay it.
-const links = useQuery(
+// Both page in as the list scrolls (PageScrollList), keyset on the last row id.
+const links = useInfiniteQuery(
   computed(() => ({
-    ...apiQueryOptions('/v1/connectors/{id}/links', { path: { id: connectorId.value } }),
+    ...apiInfiniteQueryOptions('/v1/connectors/{id}/links', { path: { id: connectorId.value } }),
     enabled: tab.value === 'links',
   })),
 )
-const linkRows = computed(() => (links.data.value as ListConnectorLinksResponse | undefined)?.links ?? [])
+const linkRows = computed(() =>
+  ((links.data.value?.pages ?? []) as ListConnectorLinksResponse[]).flatMap((page) => page.links),
+)
 
-const runs = useQuery(
+const runs = useInfiniteQuery(
   computed(() => ({
-    ...apiQueryOptions('/v1/connectors/{id}/runs', { path: { id: connectorId.value } }),
+    ...apiInfiniteQueryOptions('/v1/connectors/{id}/runs', { path: { id: connectorId.value } }),
     enabled: tab.value === 'runs',
     // A run in flight advances; this is a live view of it, like the Runs tab.
+    // A refetch walks every loaded page, which is what keeps the keyset cursors
+    // honest when a new run lands at the head.
     refetchInterval: 4000,
   })),
 )
-const runRows = computed(() => (runs.data.value as ListConnectorRunsResponse | undefined)?.runs ?? [])
+const runRows = computed(() =>
+  ((runs.data.value?.pages ?? []) as ListConnectorRunsResponse[]).flatMap((page) => page.runs),
+)
+
+function nextPage(query: typeof links | typeof runs) {
+  if (query.hasNextPage.value && !query.isFetchingNextPage.value) void query.fetchNextPage()
+}
 
 const sync = useApiMutation('post', '/v1/connectors/{id}/sync', {
   invalidates: () => [['/v1/connectors'], ['/v1/connectors/{id}/runs']],
@@ -178,7 +197,9 @@ watch(connectorId, () => {
     </template>
 
     <template #rail>
-      <aside class="space-y-3">
+      <!-- kn-widget-rail: sticky and bounded to the viewport above lg, so the
+           rail scrolls itself beside a list that already fills the page. -->
+      <aside class="kn-widget-rail space-y-3">
         <div class="rounded-lg border p-4">
           <h2 class="mb-3 text-sm font-medium">{{ t('connectors.overview') }}</h2>
           <dl class="space-y-2 text-sm">
@@ -250,8 +271,18 @@ watch(connectorId, () => {
       <div v-else-if="tab === 'links'">
         <PageState v-if="links.isPending.value" state="loading" />
         <PageState v-else-if="!linkRows.length" state="empty" :title="t('connectors.linksEmpty')" />
-        <ul v-else class="divide-y rounded-lg border">
-          <li v-for="link in linkRows" :key="link.id" class="flex items-center justify-between gap-3 p-3 text-sm">
+        <PageScrollList
+          v-else
+          :items="linkRows"
+          :item-key="(link) => link.id"
+          :estimate-size="45"
+          :has-more="links.hasNextPage.value"
+          :loading-more="links.isFetchingNextPage.value"
+          :label="t('connectors.tabLinks')"
+          @load-more="nextPage(links)"
+        >
+          <template #default="{ item: link }">
+          <div class="flex items-center justify-between gap-3 p-3 text-sm">
             <RouterLink :to="`/documents/${link.documentId}`" class="min-w-0 truncate hover:underline">
               {{ link.documentTitle ?? link.externalTitle ?? link.externalId }}
             </RouterLink>
@@ -264,15 +295,26 @@ watch(connectorId, () => {
             >
               {{ t('connectors.openExternal') }}
             </a>
-          </li>
-        </ul>
+          </div>
+          </template>
+        </PageScrollList>
       </div>
 
       <div v-else>
         <PageState v-if="runs.isPending.value" state="loading" />
         <PageState v-else-if="!runRows.length" state="empty" :title="t('connectors.runsEmpty')" />
-        <ul v-else class="divide-y rounded-lg border">
-          <li v-for="run in runRows" :key="run.id" class="flex items-center justify-between gap-3 p-3 text-sm">
+        <PageScrollList
+          v-else
+          :items="runRows"
+          :item-key="(run) => run.id"
+          :estimate-size="45"
+          :has-more="runs.hasNextPage.value"
+          :loading-more="runs.isFetchingNextPage.value"
+          :label="t('connectors.tabRuns')"
+          @load-more="nextPage(runs)"
+        >
+          <template #default="{ item: run }">
+          <div class="flex items-center justify-between gap-3 p-3 text-sm">
             <RouterLink :to="`/settings/connectors/runs/${run.id}`" class="min-w-0 hover:underline">
               <span :class="RUN_STATUS_CLASS[run.status]">{{ t(RUN_STATUS_LABEL[run.status]) }}</span>
               <span class="text-muted-foreground ml-2 text-xs">
@@ -282,8 +324,9 @@ watch(connectorId, () => {
             <span class="text-muted-foreground shrink-0 text-xs" :title="formatDateTime(run.createdAt)">
               {{ relativeTime(run.createdAt) }}
             </span>
-          </li>
-        </ul>
+          </div>
+          </template>
+        </PageScrollList>
       </div>
     </div>
   </PageLayout>

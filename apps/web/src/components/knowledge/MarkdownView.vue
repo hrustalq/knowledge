@@ -20,6 +20,7 @@ import { mayContainPageRef } from '@/lib/page-refs'
 import { usePageRefsStore } from '@/stores/page-refs'
 import { resolveAssetUrl } from '@/lib/api'
 import { useTheme } from '@/lib/theme'
+import { createRevealTracker, wrapRuns } from '@/lib/stream-reveal'
 
 interface MarkdownHeading { id: string; text: string; level: number }
 
@@ -62,12 +63,24 @@ async function pageRefResolver(markdown: string) {
   return pageRefsStore.resolve
 }
 
+/**
+ * What the reader has already seen of a streaming reply, so each render can
+ * mark only the characters that are new (lib/stream-reveal). Reset when a
+ * stream ends: a finished reply renders plain, and the next one starts over.
+ */
+const reveal = createRevealTracker()
+
 async function render() {
   const markdown = props.markdown ?? ''
   const resolvePage = await pageRefResolver(markdown)
   html.value = DOMPurify.sanitize(markdownToHtml(markdown, { resolvePage }), { ...SANITIZE_CONFIG })
   await nextTick()
-  if (props.streaming) return
+  if (props.streaming) {
+    const root = host.value
+    if (root) wrapRuns(root, reveal.advance(root.textContent?.length ?? 0))
+    return
+  }
+  reveal.reset()
   const headings = collectHeadings()
   wrapTables()
   resolveAssets()

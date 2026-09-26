@@ -36,7 +36,16 @@ import { threadLabel } from './thread-label'
 
 const { t } = useI18n()
 
-const props = defineProps<{ documentId?: string }>()
+const props = defineProps<{
+  documentId?: string
+  /**
+   * Mounted inside another surface's chrome — the editor's assistant panel
+   * (docs/features/34). The host draws the header, so this draws none, and the
+   * whole column sizes itself by its container rather than the viewport: a
+   * 24rem panel on a wide screen is still a narrow chat.
+   */
+  embedded?: boolean
+}>()
 // Rename/delete are confirmed by the page, which owns one set of dialogs
 // shared with the rail's row menu.
 const emit = defineEmits<{
@@ -54,7 +63,9 @@ const transcriptEl = ref<InstanceType<typeof ChatTranscript> | null>(null)
 const title = computed(() => (assistant.activeThread ? threadLabel(assistant.activeThread) : t('chat.newChat')))
 
 const placeholder = computed(() =>
-  props.documentId
+  props.embedded
+    ? t('editorAi.placeholder')
+    : props.documentId
     ? 'Ask about this page, or ask for a change to it…'
     : t('chat.askPlaceholderWorkspace'),
 )
@@ -160,6 +171,13 @@ async function handleEdit(payload: { message: AssistantMessageInfo; content: str
   void nextTick(() => composerEl.value?.focus())
 }
 
+/** For a host's empty state: put a suggestion in the composer, ready to send or reword. */
+function prefill(text: string) {
+  composerEl.value?.setDraft(text)
+}
+
+defineExpose({ prefill, focus: () => composerEl.value?.focus() })
+
 async function startNewThread() {
   try {
     await assistant.newThread(props.documentId)
@@ -171,8 +189,8 @@ async function startNewThread() {
 </script>
 
 <template>
-  <section class="flex min-h-0 min-w-0 flex-1 flex-col">
-    <header class="flex h-14 shrink-0 items-center gap-2 border-b px-4 lg:px-8">
+  <section class="@container flex min-h-0 min-w-0 flex-1 flex-col">
+    <header v-if="!embedded" class="flex h-14 shrink-0 items-center gap-2 border-b px-4 @3xl:px-8">
       <!-- The rail is a sheet below lg, so the way back to the chat list has
            to live in the header there. -->
       <Button
@@ -227,7 +245,15 @@ async function startNewThread() {
       @switch-mode="handleModeSwitch"
       @reset="resetting = $event"
       @edit="handleEdit"
-    />
+    >
+      <template v-if="$slots.empty" #empty>
+        <slot name="empty" :prefill="prefill" />
+      </template>
+    </ChatTranscript>
+
+    <!-- Whatever the host needs said between the conversation and the input —
+         the editor's panel puts its pending-suggestions bar here. -->
+    <slot name="dock" />
 
     <ChatComposer
       ref="composerEl"

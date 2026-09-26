@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia'
 import {
+  getAiPanelOpen,
   getOpenTreeNodes,
   getRailOpen,
   getRailWidth,
   persistOpenTreeNodes,
+  setAiPanelOpen,
   setRailOpen,
   setRailWidth,
 } from '@/lib/api'
@@ -79,6 +81,14 @@ export const useSidebarStore = defineStore('sidebar', {
      * up closed.
      */
     openRestored: getOpenTreeNodes() !== null,
+    /**
+     * The editor's assistant panel (docs/features/34). It lives beside the
+     * rail's own state because on a route that hosts it, the two share the
+     * left edge: while the panel is open the rail steps aside. Stepping aside
+     * is not closing — `open` is untouched, so the rail comes back as the
+     * reader left it, and the assistant page never inherits a collapsed rail.
+     */
+    aiPanelOpen: getAiPanelOpen(),
   }),
   getters: {
     widthPx: (s) => `${s.width}px`,
@@ -109,6 +119,10 @@ export const useSidebarStore = defineStore('sidebar', {
 
     toggle() {
       this.setOpen(!this.open)
+    },
+    setAiPanel(open: boolean) {
+      this.aiPanelOpen = open
+      setAiPanelOpen(open)
     },
     setOpen(open: boolean) {
       this.open = open

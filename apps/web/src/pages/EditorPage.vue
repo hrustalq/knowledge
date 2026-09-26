@@ -10,14 +10,19 @@
 // tags — lives in a settings sheet rather than a form above the content, so
 // what is on screen while you write is the page and nothing else.
 //
+// The assistant lives in a panel on the left (docs/features/34) that takes the
+// navigation rail's place while open. It reads the draft as it stands and
+// writes into it as suggestions — see EditorAiPanel and extensions/ai-suggestions.
+//
 // Edits are a working copy until published (lib/working-copy): kept in this
 // browser as they are made, restored when the page is reopened, reviewable as
 // a diff against the published head, and discarded only on request.
 import { useI18n } from 'vue-i18n'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { History, Settings2, Sparkles, X } from 'lucide-vue-next'
+import { onKeyStroke } from '@vueuse/core'
+import { History, MoreHorizontal, Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
@@ -81,10 +86,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import RichEditor from '@/components/editor/RichEditor.vue'
 import { useWorkingCopy } from '@/components/editor/use-working-copy'
 import DiffView from '@/components/knowledge/DiffView.vue'
-import ChatPane from '@/components/assistant/ChatPane.vue'
+import EditorAiPanel from '@/components/editor/EditorAiPanel.vue'
+import { connectDraft } from '@/stores/assistant'
+import { useSidebarStore } from '@/stores/sidebar'
 
 const { t } = useI18n()
 
@@ -136,8 +149,60 @@ const busy = ref(false)
  */
 const loading = ref(isEdit.value)
 const settingsOpen = ref(false)
-const assistantOpen = ref(false)
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
+
+/* ------------------------------------------------------- assistant */
+
+const sidebar = useSidebarStore()
+/** Cookie-backed, so the server paints the panel where the author left it. */
+const aiOpen = computed(() => sidebar.aiPanelOpen)
+/**
+ * Mounted on first open and kept after: closing keeps the conversation and its
+ * scroll where they were, and a page whose panel was never opened never loads
+ * the chat roster.
+ */
+const aiMounted = ref(aiOpen.value)
+const aiPanel = ref<InstanceType<typeof EditorAiPanel> | null>(null)
+
+function setAiOpen(open: boolean) {
+  if (open) aiMounted.value = true
+  sidebar.setAiPanel(open)
+  if (open) void nextTick(() => aiPanel.value?.focus())
+}
+
+// ⌘J / Ctrl+J, from anywhere on the page — the chord Notion and Confluence
+// both use for their writing assistant, so a hand that knows one finds it here.
+onKeyStroke('j', (event) => {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
+  event.preventDefault()
+  setAiOpen(!aiOpen.value)
+})
+
+/** Server renders Ctrl; the browser corrects it after hydration rather than mismatching. */
+const modKey = ref('Ctrl+')
+onMounted(() => {
+  if (/Mac|iPhone|iPad/.test(navigator.platform)) modKey.value = '⌘'
+})
+
+const EMPTY_PENDING = { count: 0, streaming: false }
+const aiPending = computed(() => editorRef.value?.aiPending ?? EMPTY_PENDING)
+
+// While the editor is mounted every turn the store sends carries the draft,
+// and every edit it streams back lands here — whichever control started the
+// turn. Registered on mount, so a server render never holds one.
+let disconnectDraft: (() => void) | null = null
+onMounted(() => {
+  disconnectDraft = connectDraft({
+    read: () => ({ title: title.value, markdown: editorRef.value?.flush() ?? body.value }),
+    edit: (edit) => {
+      // The author asked for this; make sure they can watch it happen.
+      if (!aiOpen.value) setAiOpen(true)
+      editorRef.value?.applyAiEdit(edit)
+    },
+    settle: () => editorRef.value?.settleAi(),
+  })
+})
+onBeforeUnmount(() => disconnectDraft?.())
 
 // The settings fields are the same Autocomplete the search filters use, so a
 // long project or page roster is typed-into rather than scrolled — and the
@@ -462,6 +527,14 @@ async function publishRevision(
 }
 
 async function save() {
+  // Publishing would drop them silently — the serializer skips suggestions — so
+  // they are decided first, where the author can see what they are deciding.
+  if (aiPending.value.count > 0) {
+    toast.error(t('editorAi.decideBeforePublish', { n: aiPending.value.count }, aiPending.value.count))
+    setAiOpen(true)
+    editorRef.value?.revealAi()
+    return
+  }
   const markdown = editorRef.value?.flush() ?? body.value
   if (!title.value.trim() || !markdown.trim()) {
     toast.error(t('editor.titleAndContentRequired'))
@@ -604,104 +677,134 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="kn-page-editor">
-    <header class="kn-page-head">
-      <div class="kn-page-crumb">
-        <strong>{{ projectName }}</strong>
-        <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
-        <!-- The working copy's state, and the way into what it holds. -->
-        <button
-          v-if="unstaged"
-          type="button"
-          class="kn-unstaged-chip"
-          :data-failed="workingCopy.persistFailed.value ? 'true' : undefined"
-          :title="
-            workingCopy.persistFailed.value
-              ? t('editor.unstaged.notSaved')
-              : workingCopy.savedAt.value
-                ? t('editor.unstaged.savedLocally', { when: formatDateTime(new Date(workingCopy.savedAt.value)) })
-                : t('editor.unstaged.label')
-          "
-          @click="openReview"
-        >
-          <span class="kn-dirty-dot" aria-hidden="true" />
-          {{ t('editor.unstaged.label') }}
-        </button>
-      </div>
+  <div class="kn-page-editor" :data-ai-open="aiOpen ? 'true' : 'false'">
+    <!-- The assistant takes the rail's place on the left edge. The slot's width
+         is what animates, on the rail's own curve, so as the rail slides out the
+         panel slides in and the page column barely moves. -->
+    <div class="kn-ai-slot" :inert="!aiOpen || undefined">
+      <EditorAiPanel
+        v-if="aiMounted"
+        ref="aiPanel"
+        :document-id="editId"
+        :pending="aiPending"
+        :blank="!body.trim()"
+        :mod="modKey"
+        @close="setAiOpen(false)"
+        @accept="editorRef?.acceptAi()"
+        @discard="editorRef?.discardAi()"
+        @reveal="editorRef?.revealAi()"
+      />
+    </div>
+    <!-- Below lg the panel floats over the page; this is how you get back. -->
+    <div class="kn-ai-scrim" aria-hidden="true" @click="setAiOpen(false)" />
 
-      <div class="ml-auto flex items-center gap-1.5">
-        <Button variant="ghost" size="sm" @click="assistantOpen = !assistantOpen">
-          <Sparkles class="size-4" /> <span class="hidden sm:inline">AI</span>
-        </Button>
-        <Button variant="ghost" size="sm" @click="settingsOpen = true">
-          <Settings2 class="size-4" /> <span class="hidden sm:inline">{{ t('editor.settings') }}</span>
-        </Button>
-        <Button variant="ghost" size="sm" @click="cancel">{{ t('common.cancel') }}</Button>
-        <Button size="sm" :disabled="busy || loading" @click="save">
-          {{ busy ? 'Saving…' : isEdit ? 'Publish' : 'Create & index' }}
-        </Button>
-      </div>
-    </header>
-
-    <div class="kn-page-body">
-      <div class="kn-page-main">
-        <div v-if="loading" class="space-y-3 p-8">
-          <Skeleton class="h-10 w-2/3" />
-          <Skeleton class="h-4 w-full" />
-          <Skeleton class="h-4 w-5/6" />
-          <Skeleton class="h-64 w-full" />
+    <div class="kn-page-column">
+      <header class="kn-page-head">
+        <div class="kn-page-crumb">
+          <strong>{{ projectName }}</strong>
+          <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
+          <!-- The working copy's state, and the way into what it holds. -->
+          <button
+            v-if="unstaged"
+            type="button"
+            class="kn-unstaged-chip"
+            :data-failed="workingCopy.persistFailed.value ? 'true' : undefined"
+            :title="
+              workingCopy.persistFailed.value
+                ? t('editor.unstaged.notSaved')
+                : workingCopy.savedAt.value
+                  ? t('editor.unstaged.savedLocally', { when: formatDateTime(new Date(workingCopy.savedAt.value)) })
+                  : t('editor.unstaged.label')
+            "
+            @click="openReview"
+          >
+            <span class="kn-dirty-dot" aria-hidden="true" />
+            <span class="kn-unstaged-label">{{ t('editor.unstaged.label') }}</span>
+          </button>
         </div>
 
-        <template v-else>
-          <div v-if="staleCopy" class="kn-stale-copy" role="status">
-            <History class="size-4 shrink-0" aria-hidden="true" />
-            <div class="min-w-0 flex-1">
-              <p class="font-medium">
-                {{ t('editor.unstaged.staleTitle', { when: formatDateTime(new Date(staleCopy.savedAt)) }) }}
-              </p>
-              <p class="text-muted-foreground">{{ t('editor.unstaged.staleBody') }}</p>
-            </div>
-            <Button size="sm" variant="ghost" @click="discardStale">{{ t('editor.unstaged.discard') }}</Button>
-            <Button size="sm" variant="outline" @click="restoreStale">{{ t('editor.unstaged.restore') }}</Button>
-          </div>
-
-          <RichEditor
-            ref="editorRef"
-            v-model="body"
-            :pages="mentionablePages"
-            :resolve-document-id="ensureDocumentId"
-            @ready="onEditorReady"
+        <div class="ml-auto flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="kn-ai-toggle"
+            :aria-pressed="aiOpen"
+            :title="`${t('editorAi.toggle')} (${modKey}J)`"
+            @click="setAiOpen(!aiOpen)"
           >
-            <template #lede>
-              <textarea
-                v-model="title"
-                class="kn-title-input"
-                rows="1"
-                :placeholder="t('editor.pageTitle')"
-                :aria-label="t('editor.pageTitle')"
-                spellcheck="false"
-                @keydown.enter.prevent="editorRef?.focus()"
-              />
-            </template>
-          </RichEditor>
-        </template>
-      </div>
-
-      <!-- The assistant page's own chat, pinned to this page: same composer,
-           same modes, same thread history — an editor-only variant would drift
-           from it within a release. -->
-      <aside v-if="assistantOpen" class="kn-page-rail">
-        <div class="kn-rail-head">
-          <h2 class="text-sm font-semibold">{{ t('editor.assistant') }}</h2>
-          <Button variant="ghost" size="icon-sm" :aria-label="t('editor.closeAssistant')" @click="assistantOpen = false">
-            <X class="size-4" />
+            <Sparkles class="size-4" /> <span class="hidden sm:inline">{{ t('editorAi.button') }}</span>
+          </Button>
+          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" @click="settingsOpen = true">
+            <Settings2 class="size-4" /> {{ t('editor.settings') }}
+          </Button>
+          <Button variant="ghost" size="sm" class="hidden sm:inline-flex" @click="cancel">{{ t('common.cancel') }}</Button>
+          <!-- Below sm the row holds the assistant, this, and Publish: the two
+               controls you reach for least fold into one menu. -->
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="ghost" size="icon-sm" class="sm:hidden" :aria-label="t('editor.moreActions')">
+                <MoreHorizontal class="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-44">
+              <DropdownMenuItem @select="settingsOpen = true">
+                <Settings2 class="size-4" /> {{ t('editor.settings') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="cancel">
+                <X class="size-4" /> {{ t('common.cancel') }}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" :disabled="busy || loading" @click="save">
+            {{ busy ? 'Saving…' : isEdit ? 'Publish' : 'Create & index' }}
           </Button>
         </div>
-        <ChatPane v-if="editId" :document-id="editId" class="kn-rail-chat" />
-        <p v-else class="p-4 text-sm text-muted-foreground">
-          {{ t('editor.saveFirstForAssistant') }}
-        </p>
-      </aside>
+      </header>
+
+      <div class="kn-page-body">
+        <div class="kn-page-main">
+          <div v-if="loading" class="space-y-3 p-8">
+            <Skeleton class="h-10 w-2/3" />
+            <Skeleton class="h-4 w-full" />
+            <Skeleton class="h-4 w-5/6" />
+            <Skeleton class="h-64 w-full" />
+          </div>
+
+          <template v-else>
+            <div v-if="staleCopy" class="kn-stale-copy" role="status">
+              <History class="size-4 shrink-0" aria-hidden="true" />
+              <div class="min-w-0 flex-1">
+                <p class="font-medium">
+                  {{ t('editor.unstaged.staleTitle', { when: formatDateTime(new Date(staleCopy.savedAt)) }) }}
+                </p>
+                <p class="text-muted-foreground">{{ t('editor.unstaged.staleBody') }}</p>
+              </div>
+              <Button size="sm" variant="ghost" @click="discardStale">{{ t('editor.unstaged.discard') }}</Button>
+              <Button size="sm" variant="outline" @click="restoreStale">{{ t('editor.unstaged.restore') }}</Button>
+            </div>
+
+            <RichEditor
+              ref="editorRef"
+              v-model="body"
+              :pages="mentionablePages"
+              :resolve-document-id="ensureDocumentId"
+              @ready="onEditorReady"
+            >
+              <template #lede>
+                <textarea
+                  v-model="title"
+                  class="kn-title-input"
+                  rows="1"
+                  :placeholder="t('editor.pageTitle')"
+                  :aria-label="t('editor.pageTitle')"
+                  spellcheck="false"
+                  @keydown.enter.prevent="editorRef?.focus()"
+                />
+              </template>
+            </RichEditor>
+          </template>
+        </div>
+      </div>
     </div>
 
     <!-- Leaving with unstaged edits. Normally they are kept and this asks only

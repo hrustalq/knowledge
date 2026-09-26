@@ -3,6 +3,7 @@ import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completio
 import {
   ASSISTANT_WRITE_TOOL_NAMES,
   AUTHORABLE_RELATION_TYPES,
+  DRAFT_EDIT_OPS,
   isAuthorableRelationType,
 } from '@knowledge/contracts';
 import type {
@@ -67,6 +68,14 @@ const PROMPT_FIELD_TYPES = new Set(['choice', 'checklist', 'text']);
 const PANE_ONLY_TOOLS = new Set(['render_component', 'ask_user', 'request_agent_mode']);
 
 /**
+ * Tools that act on the draft open in the author's editor (docs/features/34).
+ * Offered only on a turn that sent one — without a draft there is nowhere for
+ * the edit to land. Executed by AssistantService, which holds the draft, not
+ * here: this service never sees it.
+ */
+export const DRAFT_TOOLS = new Set(['edit_draft']);
+
+/**
  * The assistant's tool surface (docs/features/09). Three read-only tools, all
  * scoped to the caller's session:
  *  - every execution re-checks workspace membership via AccessService (a
@@ -106,10 +115,12 @@ export class AssistantToolsService {
    * to have an effect through.
    * @param opts.web offer the web pair; the caller decides from the workspace's effective mode.
    * @param opts.code offer the repository tools; the caller decides from whether the workspace has
-   * a repository connector to read — there is nothing to offer otherwise. */
+   * a repository connector to read — there is nothing to offer otherwise.
+   * @param opts.draft offer `edit_draft`; the caller decides from whether the turn carries a draft
+   * and can stream the edit back to it. */
   definitions(
     mode: AssistantChatMode = 'ask',
-    opts: { ui?: boolean; web?: boolean; code?: boolean; tasks?: boolean } = {},
+    opts: { ui?: boolean; web?: boolean; code?: boolean; tasks?: boolean; draft?: boolean } = {},
   ): ChatCompletionFunctionTool[] {
     const ui = opts.ui ?? true;
     const all: ChatCompletionFunctionTool[] = [
@@ -329,6 +340,44 @@ export class AssistantToolsService {
       {
         type: 'function',
         function: {
+          name: 'edit_draft',
+          description:
+            'Change the page the user has open in the editor. The edit streams into their editor as a suggestion ' +
+            'they accept or discard — nothing is saved until they do and then publish. This is the ONLY way to ' +
+            'change the open page: never use propose_update for it. One call per contiguous change; call again ' +
+            'for a change somewhere else. Arguments must be written in this order: op, anchor, markdown.',
+          parameters: {
+            type: 'object',
+            properties: {
+              op: {
+                type: 'string',
+                enum: [...DRAFT_EDIT_OPS],
+                description:
+                  'replace: swap the block(s) containing the anchor for the markdown. insert_after / ' +
+                  'insert_before: add the markdown beside the block(s) containing the anchor. append: add at the ' +
+                  'end of the page. rewrite: replace the whole page (only when asked to rewrite it).',
+              },
+              anchor: {
+                type: 'string',
+                description:
+                  'For replace / insert_after / insert_before: text copied EXACTLY from the draft, identifying the ' +
+                  'block(s) to act on — a whole line or a distinctive sentence. To replace several consecutive ' +
+                  'blocks, quote from the first through the last. Omit for append and rewrite.',
+              },
+              markdown: {
+                type: 'string',
+                description:
+                  'The new markdown. For replace it is the complete replacement for every block the anchor ' +
+                  'touches, not a fragment of one.',
+              },
+            },
+            required: ['op', 'markdown'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'web_search',
           description:
             'Search the open web for pages that could answer the question, when this workspace does not already ' +
@@ -377,7 +426,8 @@ export class AssistantToolsService {
     // the ordering: the write half was already removed in Ask mode by `scoped`,
     // so this filter only decides whether the READ half is on the table.
     const withTasks = opts.tasks === true ? withCode : withCode.filter((t) => !TASK_TOOLS.has(t.function.name));
-    return ui ? withTasks : withTasks.filter((t) => !PANE_ONLY_TOOLS.has(t.function.name));
+    const withDraft = opts.draft === true ? withTasks : withTasks.filter((t) => !DRAFT_TOOLS.has(t.function.name));
+    return ui ? withDraft : withDraft.filter((t) => !PANE_ONLY_TOOLS.has(t.function.name));
   }
 
   async execute(name: string, args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {

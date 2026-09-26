@@ -1922,8 +1922,6 @@
     "headMoved": "The document head moved while you were editing — reload and compare before retrying",
     "settings": "Settings",
     "pageTitle": "Page title",
-    "assistant": "Assistant",
-    "closeAssistant": "Close assistant",
     "discardChanges": "Discard unpublished changes?",
     "keepEditing": "Keep editing",
     "pageSettings": "Page settings",
@@ -1957,7 +1955,6 @@
     "pdfUnsupported": "This browser cannot display PDFs inline.",
     "previewOf": "Preview of {name}",
     "tocEmpty": "Headings you add will appear here.",
-    "saveFirstForAssistant": "Save the page once and the assistant can read it, edit it, and answer questions about it.",
     "discardBody": "This page has edits that were never published, so they exist only in this tab. Leaving now throws them away.",
     "discardChangesAction": "Discard changes",
     "settingsDesc": "Placement and the deterministic facts this page asserts into the graph.",
@@ -2003,7 +2000,8 @@
       "leaveTitle": "Leave with unstaged changes?",
       "leaveBody": "Kept, they stay in this browser and are restored when you reopen the page. Discarded, the page stays as published.",
       "keepAndLeave": "Keep and leave"
-    }
+    },
+    "moreActions": "More actions"
   },
   "toolbar": {
     "formatting": "Formatting",
@@ -2080,7 +2078,8 @@
     "insertMenu": "Insert",
     "heading4": "Heading 4",
     "left": "Left",
-    "right": "Right"
+    "right": "Right",
+    "more": "More formatting"
   },
   "hints": {
     "noProjects": "No projects in this workspace yet.",
@@ -2194,6 +2193,10 @@
     "task_comment": {
       "running": "Commenting on an issue",
       "done": "Commented on an issue"
+    },
+    "edit_draft": {
+      "running": "Writing into the page",
+      "done": "Wrote into the page"
     }
   },
   "entityType": {
@@ -2649,5 +2652,35 @@
       "write": "Write ({n})",
       "noneForKey": "None."
     }
+  },
+  "editorAi": {
+    "title": "Assistant",
+    "button": "Assistant",
+    "toggle": "Toggle the assistant",
+    "close": "Close the assistant",
+    "history": "Chats",
+    "allChats": "All chats",
+    "newChat": "New chat",
+    "emptyTitle": "Work on this page together",
+    "emptyTitleBlank": "Start this page together",
+    "emptyBody": "The assistant reads your draft as it is right now, unsaved edits included. When it changes the page, the edit is written in as a suggestion for you to keep or discard. Nothing is published until you publish.",
+    "startersLabel": "Things to ask",
+    "starter": {
+      "tighten": "Tighten the wording of this page without changing what it says",
+      "gaps": "What is missing from this page? Add the sections it needs",
+      "summary": "Add a short summary at the top",
+      "outline": "Draft an outline for this page from its title",
+      "draftFromTitle": "Write a first draft of this page from its title",
+      "template": "Set up this page with the sections a page like it usually has"
+    },
+    "writing": "Writing into the page…",
+    "pending": "{n} suggestion | {n} suggestions",
+    "acceptAll": "Keep all",
+    "discardAll": "Discard all",
+    "accept": "Keep",
+    "discard": "Discard",
+    "suggestionActions": "Assistant suggestion",
+    "decideBeforePublish": "Keep or discard the assistant's suggestion before publishing | Keep or discard the assistant's {n} suggestions before publishing",
+    "placeholder": "Ask about this page, or for a change to it…"
   }
 }

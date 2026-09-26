@@ -48,9 +48,30 @@ const chromeHeight = computed(
  * by the server on the first frame — see lib/api's rail accessors.
  */
 const mobileOpen = ref(false)
+
+/**
+ * The editor's assistant panel takes the rail's place on the left edge
+ * (docs/features/34). Derived here from the route and the panel's cookie-backed
+ * state rather than set by the page, because the shell renders before the page
+ * does: a page that hid the rail from its own setup would be too late for the
+ * server's frame, and the rail would slide shut on every load.
+ */
+const railYielded = computed(() => route.meta.assistantPanel === true && sidebar.aiPanelOpen)
+const railOpen = computed(() => sidebar.open && !railYielded.value)
+
 function toggleSidebar() {
-  if (window.matchMedia('(min-width: 1024px)').matches) sidebar.toggle()
-  else mobileOpen.value = !mobileOpen.value
+  if (!window.matchMedia('(min-width: 1024px)').matches) {
+    mobileOpen.value = !mobileOpen.value
+    return
+  }
+  // Asking for the rail while the panel holds its place means "give me
+  // navigation back": the panel closes and the rail returns as it was left.
+  if (railYielded.value) {
+    sidebar.setAiPanel(false)
+    if (!sidebar.open) sidebar.setOpen(true)
+    return
+  }
+  sidebar.toggle()
 }
 watch(
   () => route.fullPath,
@@ -65,7 +86,7 @@ watch(
     class="relative flex h-screen overflow-hidden bg-background text-foreground"
     :class="sidebar.resizing ? 'kn-resizing' : ''"
     :style="{ '--kn-rail-w': sidebar.widthPx, '--kn-chrome-h': chromeHeight }"
-    :data-rail-open="sidebar.open"
+    :data-rail-open="railOpen"
   >
     <!--
       The rail collapses as two elements moving on one curve: a flex spacer
@@ -80,7 +101,7 @@ watch(
     <div class="kn-rail-gap hidden shrink-0 lg:block" aria-hidden="true" />
     <div
       class="kn-rail absolute inset-y-0 left-0 z-20 hidden lg:block"
-      :inert="!sidebar.open || undefined"
+      :inert="!railOpen || undefined"
     >
       <AppSidebar />
     </div>

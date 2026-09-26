@@ -164,6 +164,57 @@ export interface PostAssistantMessageRequest {
    * in addition to (or instead of) the thread's default grounding document. Full content is fetched
    * server-side from the documentId — the model never receives raw pasted text for these. */
   documentRefs?: string[];
+  /**
+   * The page as it stands in the author's editor right now, unstaged edits and
+   * all (docs/features/34). Grounds the turn in what is on screen rather than
+   * the published head, and is what offers the model `edit_draft` — an edit to
+   * a draft nobody sent would have nowhere to land.
+   */
+  draft?: AssistantDraft;
+}
+
+/** Longest draft the editor may send — a long page, not a book. The prompt still slices it. */
+export const ASSISTANT_DRAFT_MAX_CHARS = 100_000;
+
+export interface AssistantDraft {
+  title: string;
+  markdown: string;
+}
+
+/**
+ * Where an `edit_draft` lands. Block-level on purpose: the model quotes text to
+ * find the block(s) it means, and the edit replaces or sits beside those whole
+ * blocks — the unit an author accepts or discards, and the one a markdown quote
+ * can find again in a rich document.
+ */
+export const DRAFT_EDIT_OPS = ['replace', 'insert_after', 'insert_before', 'append', 'rewrite'] as const;
+export type DraftEditOp = (typeof DRAFT_EDIT_OPS)[number];
+
+/** Ops that need an `anchor` quote; `append` and `rewrite` address the whole page. */
+export function draftEditNeedsAnchor(op: DraftEditOp): boolean {
+  return op !== 'append' && op !== 'rewrite';
+}
+
+/**
+ * One suggested change to the author's draft, as it streams.
+ *
+ * The same `id` arrives many times: `streaming` while the model is still
+ * writing the tool call's arguments (`markdown` grows, never shrinks), then
+ * exactly one terminal state. Nothing is written anywhere by this — the editor
+ * shows it as a suggestion the author accepts or discards.
+ */
+export interface AssistantDraftEdit {
+  id: string;
+  op: DraftEditOp;
+  /** A quote from the draft's markdown naming the block(s) to act on; null for append/rewrite. */
+  anchor: string | null;
+  markdown: string;
+  /**
+   * `ready`: the arguments are complete and the anchor was found.
+   * `rejected`: refused server-side (anchor not in the draft, bad op) — the
+   * editor drops whatever it previewed, and the model is told to try again.
+   */
+  state: 'streaming' | 'ready' | 'rejected';
 }
 export interface PostAssistantMessageResponse {
   /** False when ASSISTANT_PROVIDER=none — UI degrades instead of erroring. */
@@ -206,6 +257,8 @@ export type AssistantStreamFrame =
   | { type: 'prompt'; prompt: AssistantPrompt }
   /** Grounding documents accumulated so far — the sidebar can fill in mid-turn. */
   | { type: 'sources'; sources: AssistantSource[] }
+  /** A suggested edit to the draft the turn was sent with, streaming into the editor (docs/features/34). */
+  | { type: 'draft-edit'; edit: AssistantDraftEdit }
   /** Terminal success: the persisted assistant message, authoritative over every delta. */
   | { type: 'done'; message: AssistantMessageInfo }
   /** Terminal failure. The user message is already persisted; the turn is not. */
@@ -749,6 +802,13 @@ export const ASSISTANT_TOOL_NAMES = [
   'propose_update',
   /** Edits the page's frontmatter relations, as a merge request (docs/features/28). */
   'edit_relations',
+  /**
+   * Suggests an edit to the draft open in the author's editor (docs/features/34).
+   * Offered only on a turn that carries a draft, and not a write: nothing is
+   * stored until the author accepts it and publishes, which is why it is
+   * available in Ask mode too.
+   */
+  'edit_draft',
   /** Read a connected repository (docs/features/31). Opt-in, like the web pair. */
   'code_tree',
   'code_read',

@@ -7,6 +7,10 @@ import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { t } from '../i18n/t.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService } from './connectors.service.js';
+import { REPO_CONNECTOR_KINDS } from './code-research/repo-snapshot.service.js';
+import { DriftTriggerService } from './drift/drift-trigger.service.js';
+import { isPullRequestEvent, readPullRequestDelivery, verifyRepoDelivery } from './drift/pull-request-delivery.js';
+import { safeJson } from './webhook-payload.js';
 
 /**
  * Inbound webhooks from external systems (docs/features/19).
@@ -18,13 +22,17 @@ import { ConnectorsService } from './connectors.service.js';
  * handler runs, and re-serialising the parsed object would not reproduce them.
  *
  * The handler does no work beyond verifying and enqueueing: a webhook endpoint
- * that syncs inline is a denial-of-service surface with a public URL.
+ * that syncs inline is a denial-of-service surface with a public URL. The one
+ * exception in shape is a pull or merge request on a repository connector,
+ * which queues a drift check (docs/features/35) instead of a sync — still one
+ * insert at most, and the model work is the worker's.
  */
 @Controller('v1/connectors')
 export class ConnectorWebhookController {
   constructor(
     private readonly connectors: ConnectorsService,
     private readonly producer: ConnectorProducer,
+    private readonly drift: DriftTriggerService,
   ) {}
 
   @Post(':id/webhook')
@@ -41,12 +49,31 @@ export class ConnectorWebhookController {
       throw new UnauthorizedException(t('error.connector.webhookNotConfigured'));
     }
 
+    const ctx = await this.connectors.contextFor(row, async () => undefined);
+    const rawBody = req.rawBody?.toString('utf8') ?? '';
+    const lower = lowercaseKeys(headers);
+
+    // A pull or merge request is not content moving, so it is not the
+    // adapter's to verify (docs/features/35): `codebase` has no webhook at all,
+    // and `markdown-git`'s would read the missing `commits` as nothing to sync.
+    // Verified here with the same secret, then handed to the drift check —
+    // which does its own bounded work and never starts a sync.
+    if (REPO_CONNECTOR_KINDS.has(row.kind)) {
+      const payload = safeJson(rawBody);
+      if (isPullRequestEvent(lower, payload)) {
+        if (!ctx.webhookSecret || !verifyRepoDelivery(lower, rawBody, ctx.webhookSecret)) {
+          throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
+        }
+        const delivery = readPullRequestDelivery(lower, payload);
+        const runId = delivery ? await this.drift.request(row, delivery) : null;
+        return { accepted: true, runId };
+      }
+    }
+
     const adapter = this.connectors.adapterFor(row);
     if (!adapter.verifyWebhook) throw new UnauthorizedException(t('error.connector.webhookNotConfigured'));
 
-    const ctx = await this.connectors.contextFor(row, async () => undefined);
-    const rawBody = req.rawBody?.toString('utf8') ?? '';
-    const refs = adapter.verifyWebhook(ctx, lowercaseKeys(headers), rawBody);
+    const refs = adapter.verifyWebhook(ctx, lower, rawBody);
 
     // null = the signature did not verify. Answering 401 without touching
     // anything else is the whole point of doing verification first.

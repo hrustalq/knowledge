@@ -20,6 +20,9 @@ import { AssistantReadToolsService } from '../assistant/assistant-read-tools.ser
 import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
 import { RepoSnapshotService } from '../connectors/code-research/repo-snapshot.service.js';
+import { PullRequestService } from '../connectors/code-research/pull-request.service.js';
+import { wrapUntrusted } from '../common/untrusted.js';
+import { SearchService } from '../search/search.service.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -41,6 +44,21 @@ import {
   selectRepoDocs,
   type Candidate,
 } from './archaeology.js';
+import {
+  DRIFT_OUTPUT_CONTRACT,
+  MAX_DIFF_CHARS,
+  MAX_DRIFT_PAGES,
+  MAX_PAGE_CHARS,
+  MAX_SEARCHED_PAGES,
+  diffExcerpt,
+  linkedCandidates,
+  mentionedFiles,
+  readDriftVerdict,
+  scopeFiles,
+  searchQueryFor,
+  subdirOf,
+  type DriftCandidate,
+} from './drift.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
@@ -121,6 +139,8 @@ export class AgentExecutor {
     private readonly glossary: GlossaryService,
     private readonly code: CodeResearchService,
     private readonly snapshots: RepoSnapshotService,
+    private readonly pullRequests: PullRequestService,
+    private readonly search: SearchService,
   ) {}
 
   /**
@@ -146,6 +166,11 @@ export class AgentExecutor {
         return this.mapRelations(run, agent, principal, report);
       case 'archaeologist':
         return this.excavate(run, agent, principal, report);
+      // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
+      // the Run button and feeds the schedule sweeper, and a sentinel run with
+      // no pull request has nothing to check. Only DriftTriggerService starts one.
+      case 'sentinel':
+        return this.checkDrift(run, agent, principal, report);
       default:
         // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
         // here got past that check, so failing loudly beats running an agent as
@@ -703,6 +728,251 @@ export class AgentExecutor {
       summary: t('agent.archaeology.summary', { ...counts, files: filesRead, findings: kept.length }),
       findings: kept,
     };
+  }
+
+  // ----------------------------------------------------------------- sentinel
+
+  /**
+   * Checks the pages one pull or merge request may make wrong
+   * (docs/features/35).
+   *
+   * Three stages, two of them queries. `diff` reads what the change touches
+   * from the host. `related` ties pages to it without a model: the pages the
+   * connector itself wrote about the changed modules, the pages under its
+   * destination that name a changed file, and a few search hits for the
+   * change's title — strongest tie first, capped. Only `judging` is a model:
+   * one call per page, shown the page and the part of the diff that tied it,
+   * returning whether a statement on it is now untrue and, when the diff says
+   * enough, the corrected page.
+   *
+   * Nothing here writes. The corrected page rides on the finding as a draft;
+   * `DriftPublishSweeper` turns it into a merge request and comments on the
+   * pull request, API-side, as the connector's owner — the worker generates,
+   * the API publishes.
+   */
+  private async checkDrift(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const input = (run.input ?? {}) as AgentRunInput;
+    const pr = input.pullRequest;
+    const connectorId = input.connectorId;
+    if (!pr || !connectorId) throw new Error(t('error.ai.agentNeedsPullRequest', { key: agent.key }));
+
+    // --- what the change touches
+    await report({ stage: 'diff', progress: 0.05 });
+    const connector = await this.prisma.connector.findFirst({
+      where: { id: connectorId, workspaceId: run.workspaceId },
+      select: { id: true, name: true, kind: true, config: true, projectId: true, parentId: true },
+    });
+    if (!connector) throw new Error(t('error.connector.notFound', { id: connectorId }));
+    const changed = await this.pullRequests.files(connectorId, run.workspaceId, pr.number);
+    if (changed.truncated) await report({ warning: t('agent.drift.truncated', { files: changed.files.length }) });
+    const files = scopeFiles(changed.files, subdirOf(connector.config));
+    if (files.length === 0) return { summary: t('agent.drift.noFiles', { number: pr.number }), findings: [] };
+
+    // --- which pages it touches, strongest tie first
+    await report({ stage: 'related', progress: 0.2 });
+    const candidates = await this.driftCandidates(run.workspaceId, connector, pr, files, report);
+    if (candidates.length === 0) {
+      return { summary: t('agent.drift.noRelated', { number: pr.number, files: files.length }), findings: [] };
+    }
+
+    // 'tools' is a preference, not a prerequisite — the curator's rule.
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    if (!agent.config.enabled || blocking.length > 0) {
+      // No model: the ties are still facts worth a reader's attention, so the
+      // strong ones become heads-up findings with no verdict and no draft. A
+      // search hit is not strong enough to say anything about without reading.
+      await report({ warning: t('agent.drift.noModel') });
+      const findings: AgentFinding[] = candidates
+        .filter((c) => c.tie !== 'searched')
+        .map((c) => ({
+          kind: 'stale',
+          severity: 'info',
+          title: t('agent.drift.mayDriftTitle', { title: c.title }),
+          detail: t('agent.drift.mayDriftDetail', { number: pr.number, files: c.files.slice(0, 5).join(', ') }),
+          documentIds: [c.documentId],
+          documentTitles: [c.title],
+        }));
+      return {
+        summary: t('agent.drift.summaryNoModel', { number: pr.number, pages: findings.length }),
+        findings,
+      };
+    }
+
+    // --- the judgement: one call per page
+    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const call = {
+      config: agent.config,
+      userId: run.createdBy,
+      operation: 'agent' as const,
+      locale: run.locale as Locale,
+    };
+    const tools = [...this.readTools.definitions(), ...this.code.definitions()];
+    const toolCtx = { principal, workspaceId: run.workspaceId };
+    // The run reads one repository, whatever connectorId the model writes —
+    // the archaeologist's rule. The code tools read the connector's branch, not
+    // the change; the change itself is in the prompt.
+    const execute = (name: string, args: Record<string, unknown>) =>
+      CODE_TOOLS.has(name)
+        ? this.code.execute(name, { ...args, connectorId }, toolCtx)
+        : this.readTools.execute(name, args, toolCtx);
+    const byPath = new Map(files.map((f) => [f.path, f]));
+
+    const findings: AgentFinding[] = [];
+    let checked = 0;
+    for (const [at, candidate] of candidates.entries()) {
+      await report({ stage: 'judging', progress: 0.3 + (0.65 * at) / candidates.length });
+      const content = await this.documents.getContent(candidate.documentId).catch(() => null);
+      if (!content || !content.markdown.trim()) continue;
+
+      // A searched page has no file of its own to be shown; it sees the change.
+      const shown = candidate.files.length
+        ? candidate.files.map((p) => byPath.get(p)).filter((f): f is (typeof files)[number] => !!f)
+        : files;
+      const messages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: `${agent.instructions}
+
+${DRIFT_OUTPUT_CONTRACT}${skills}` },
+        {
+          role: 'user',
+          content:
+            `Repository: ${connector.name}. Code tools read its configured branch, which does NOT yet contain ` +
+            `this change; connectorId is ${connectorId}.
+
+` +
+            `Change #${pr.number}${pr.headRef ? ` (${pr.headRef} → ${pr.baseRef ?? '?'})` : ''}, not merged yet.
+` +
+            `Why this page may be affected: ${candidate.reasons.join('; ')}.
+
+` +
+            wrapUntrusted(
+              `Title: ${pr.title}
+
+${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
+              'pull_request',
+              'repo',
+            ) +
+            `
+
+<page title=${JSON.stringify(candidate.title)} documentId="${candidate.documentId}">
+` +
+            `${content.markdown.slice(0, MAX_PAGE_CHARS)}
+</page>`,
+        },
+      ];
+
+      try {
+        const raw = agent.missing.includes('tools')
+          ? await this.client.chat(call, messages, { json: true })
+          : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
+        checked += 1;
+        const finding = readDriftVerdict(
+          safeJson(raw),
+          { id: candidate.documentId, title: candidate.title, markdown: content.markdown },
+          pr,
+        );
+        if (finding) findings.push(finding);
+      } catch (error) {
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          await report({ warning: t('agent.drift.budgetSpent', { checked, pages: candidates.length }) });
+          break;
+        }
+        this.logger.warn(`Sentinel could not judge "${candidate.title}": ${String(error)}`);
+        await report({ warning: t('agent.warning.pageNotReviewed', { title: candidate.title, error: String(error) }) });
+      }
+    }
+
+    return {
+      summary: t('agent.drift.summary', {
+        number: pr.number,
+        files: files.length,
+        pages: t('agent.count.pages', { count: checked }),
+        drifted: findings.length,
+      }),
+      findings: findings.slice(0, MAX_FINDINGS),
+    };
+  }
+
+  /**
+   * The pages a change is tied to, and why. Linked beats mentioned beats
+   * searched, because each is a weaker claim than the one before: the
+   * connector wrote the first about exactly that code, a person named the file
+   * in the second, and the third merely reads like the change's title.
+   */
+  private async driftCandidates(
+    workspaceId: string,
+    connector: { id: string; kind: string; projectId: string; parentId: string | null },
+    pr: NonNullable<AgentRunInput['pullRequest']>,
+    files: ReturnType<typeof scopeFiles>,
+    report: AgentReporter,
+  ): Promise<DriftCandidate[]> {
+    const links = await this.prisma.connectorLink.findMany({
+      where: { connectorId: connector.id },
+      select: { externalId: true, documentId: true },
+    });
+    const { ties, inChange } = linkedCandidates(connector.kind, links, files);
+    const out = new Map<string, DriftCandidate>();
+
+    const titles = new Map(
+      (
+        await this.prisma.document.findMany({
+          where: { id: { in: [...ties.keys()] }, workspaceId },
+          select: { id: true, title: true },
+        })
+      ).map((d) => [d.id, d.title]),
+    );
+    for (const [documentId, tie] of ties) {
+      const title = titles.get(documentId);
+      if (title) out.set(documentId, { documentId, title, tie: 'linked', ...tie });
+    }
+
+    for (const page of await this.destinationPages(workspaceId, connector)) {
+      if (inChange.has(page.id) || out.has(page.id)) continue;
+      const named = mentionedFiles(`${page.title}
+${page.markdown}`, files);
+      if (named.length === 0) continue;
+      out.set(page.id, {
+        documentId: page.id,
+        title: page.title,
+        tie: 'mentioned',
+        reasons: [`names ${named.slice(0, 3).join(', ')}${named.length > 3 ? ` and ${named.length - 3} more` : ''}`],
+        files: named,
+      });
+    }
+
+    // A page outside the connector's destination — a hand-written design doc —
+    // is the one most likely to drift and least likely to be tied above. One
+    // search, few hits; a failure costs the weakest tie, never the run.
+    try {
+      const res = await this.search.search({
+        workspaceId,
+        query: searchQueryFor(pr, files),
+        mode: 'hybrid',
+        limit: MAX_SEARCHED_PAGES * 3,
+      });
+      let added = 0;
+      for (const hit of res.results) {
+        if (added >= MAX_SEARCHED_PAGES) break;
+        if (out.has(hit.documentId) || inChange.has(hit.documentId)) continue;
+        out.set(hit.documentId, {
+          documentId: hit.documentId,
+          title: hit.title,
+          tie: 'searched',
+          reasons: ['reads like the change (search)'],
+          files: [],
+        });
+        added += 1;
+      }
+    } catch (error) {
+      this.logger.warn(`Sentinel search failed: ${String(error)}`);
+      await report({ warning: t('agent.drift.searchFailed') });
+    }
+
+    return [...out.values()].slice(0, MAX_DRIFT_PAGES);
   }
 
   /** The one enabled repository connector, when there is exactly one to mean. */

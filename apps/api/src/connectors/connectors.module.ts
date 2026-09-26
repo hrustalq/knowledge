@@ -20,6 +20,8 @@ import { GithubCoreModule } from './github/github-core.module.js';
 import { GithubOauthService } from './github/github-oauth.service.js';
 import { GithubController } from './github/github.controller.js';
 import { GithubWebhookController } from './github/github-webhook.controller.js';
+import { AgentQueueModule } from '../agents/agent-queue.module.js';
+import { DriftTriggerService } from './drift/drift-trigger.service.js';
 
 /**
  * API side (docs/features/19). Holds the controllers and the conflict sweeper,
@@ -43,6 +45,9 @@ import { GithubWebhookController } from './github/github-webhook.controller.js';
     StorageModule,
     EventsModule,
     AgentCoreModule,
+    // Producer only: a pull or merge request queues a drift check
+    // (docs/features/35); the executor is the worker's.
+    AgentQueueModule,
     AiCoreModule,
     AssistantClientModule,
     GithubCoreModule,
@@ -61,6 +66,8 @@ import { GithubWebhookController } from './github/github-webhook.controller.js';
     // API-only: both exist to serve a person clicking through the picker.
     GithubOauthService,
     GithubBrowseService,
+    // Both webhook controllers hand pull and merge requests to it.
+    DriftTriggerService,
   ],
   exports: [ConnectorsCoreModule, ConnectorWorkItemsModule],
 })

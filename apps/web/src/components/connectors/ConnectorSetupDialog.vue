@@ -19,7 +19,13 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useQueryClient } from '@tanstack/vue-query'
 import { ArrowLeft, Check, CircleAlert, History, Loader2, Plug, X } from 'lucide-vue-next'
-import { CONNECTOR_KIND_INFO, connectorKindInfo } from '@knowledge/contracts'
+import {
+  CONNECTOR_KIND_INFO,
+  DRIFT_CHECK_CONFIG_KEY,
+  DRIFT_CHECK_MODES,
+  connectorKindInfo,
+  driftCheckMode,
+} from '@knowledge/contracts'
 import type {
   ConnectorConflictPolicy,
   ConnectorDirection,
@@ -84,6 +90,15 @@ const fieldsFor = computed(() =>
 
 /** The two kinds that download a repository archive (docs/features/27, 28). */
 const isGitKind = computed(() => kind.value === 'codebase' || kind.value === 'markdown-git')
+
+/**
+ * The drift check setting (docs/features/35). Rendered only where the kind's
+ * catalogue declares it — the catalogue, not this file, says which connectors
+ * have one — and read through the same `driftCheckMode` the API reads, so an
+ * absent key shows as Off here exactly as it behaves as off there.
+ */
+const driftField = computed(() => info.value?.fields.find((f) => f.key === DRIFT_CHECK_CONFIG_KEY) ?? null)
+const driftMode = computed(() => driftCheckMode(context.value?.config))
 
 /**
  * The installation this connector authenticates as, if any.
@@ -549,6 +564,49 @@ function startOver() {
               <span class="text-muted-foreground block text-xs">{{ t('connectors.pushOnPublishHint') }}</span>
             </span>
           </label>
+
+          <!-- Drift check on pull / merge requests (docs/features/35). Here and
+               not with branch and folder: it says what the connection should
+               do, which is this step's question. The secret is asked for only
+               once the check is on, because only then is a hand-configured
+               hook something this connector reads. -->
+          <template v-if="isGitKind && driftField">
+            <label class="block space-y-1.5">
+              <span class="text-sm font-medium">{{ t('connectors.driftCheck') }}</span>
+              <Select
+                :model-value="driftMode"
+                @update:model-value="setField(DRIFT_CHECK_CONFIG_KEY, String($event))"
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="mode in DRIFT_CHECK_MODES" :key="mode" :value="mode">
+                    {{ t(`connectors.driftCheckMode.${mode}`) }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <span class="text-muted-foreground block text-xs">{{ t('connectors.driftCheckHint') }}</span>
+            </label>
+
+            <label v-if="driftMode !== 'off'" class="block space-y-1.5">
+              <span class="text-sm font-medium">
+                {{ t('connectors.webhookSecret') }}
+                <span v-if="pickedInstallation" class="text-muted-foreground font-normal">
+                  — {{ t('connectors.optional') }}
+                </span>
+              </span>
+              <Input
+                :model-value="context?.webhookSecret ?? ''"
+                type="password"
+                autocomplete="off"
+                :placeholder="editing?.hasWebhookSecret ? t('connectors.webhookSecretKeep') : ''"
+                @update:model-value="patch({ webhookSecret: String($event) })"
+              />
+              <span class="text-muted-foreground block text-xs">
+                {{ pickedInstallation ? t('connectors.driftWebhookApp') : t('connectors.driftWebhookHint') }}
+                <code v-if="editing?.webhookPath" class="bg-muted rounded px-1">{{ editing.webhookPath }}</code>
+              </span>
+            </label>
+          </template>
 
           <p v-if="context?.error" class="text-destructive text-xs">{{ context.error }}</p>
         </div>

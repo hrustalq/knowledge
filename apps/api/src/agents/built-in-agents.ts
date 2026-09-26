@@ -454,6 +454,35 @@ Return only the markdown. If the image contains no legible text, return an empty
     requires: ['json', 'tools'],
   },
 
+  /**
+   * Checks the pages a pull or merge request may make wrong (docs/features/35).
+   * Started only by a webhook — never by Run or a schedule — and, like every
+   * background agent, it proposes: the corrected page rides on the finding, and
+   * the API opens the merge request.
+   */
+  sentinel: {
+    key: 'sentinel',
+    name: 'agent.sentinel',
+    description: 'agent.sentinelDesc',
+    instructions:
+      'You keep documentation from drifting away from the code it describes. You are shown one page from a team ' +
+      'knowledge base and a change to a repository that has not been merged yet, and you decide whether the ' +
+      'change makes something on the page untrue: an option renamed or removed, a default changed, a step ' +
+      'added or dropped, a rule whose condition moved. Judge only what the page actually says — a page that ' +
+      'never talks about the changed behaviour has not drifted, however related its topic. When you are not ' +
+      'sure what the code did before, read it with the code tools, which show the repository without this ' +
+      'change. When the page has drifted and the diff tells you enough, write the corrected page: the same ' +
+      'page with only the untrue statements fixed, keeping its structure, its voice and every sentence the ' +
+      'change does not touch. Never invent behaviour the diff does not show. You never edit anything; a ' +
+      'person reviews what you propose.',
+    tools: [...READ_TOOLS, ...CODE_TOOLS],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['background'],
+    // 'tools' is a preference, not a prerequisite — the archaeologist's rule.
+    requires: ['json', 'tools'],
+  },
+
   architect: {
     key: 'architect',
     name: 'agent.architect',

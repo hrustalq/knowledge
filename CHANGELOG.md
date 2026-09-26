@@ -13,6 +13,40 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.11.0] — 2026-09-26
+
+### Added
+
+- **Pull and merge requests are checked for documentation drift.** Turn on
+  **Drift check** on a GitHub or GitLab repository connector (Codebase or
+  Markdown / Git), and every pull or merge request that opens, leaves draft or
+  gets new commits is read by a new background agent, the **Sentinel**. It finds
+  the pages about the code the change touches — pages the connector derived,
+  pages that name a changed file, and a few search hits — decides page by page
+  whether the change makes something on it untrue, and drafts the corrected
+  page. In *Report* mode it leaves one comment on the pull request listing the
+  pages that drifted, updated on every push; in *Propose* mode it also opens a
+  merge request here for each drafted correction. Forks and drafts are never
+  checked, and nothing changes a page until a person merges. (#61)
+
+### Fixed
+
+- **Proposing a fix from an agent finding no longer strips the page's tags and
+  relations.** The proposed revision was written without the page's frontmatter,
+  so merging it deleted `tags:`, `relations:` and `source:` along with their graph
+  edges. The frontmatter is now kept. (#61)
+
+### Operations
+
+- Off by default; nothing changes for existing connectors. The GitHub App needs
+  no new permission or event — it already receives *Pull request* events and has
+  *Pull requests* / *Issues: Read and write* since 0.9.0. A connector using a
+  token, and every GitLab connector, needs a **Webhook secret** set on the
+  connector and a repository webhook pointed at
+  `$API_PUBLIC_URL/v1/connectors/<id>/webhook` with *Pull requests* (GitHub) or
+  *Merge request events* (GitLab) selected. See
+  [docs/features/35](docs/features/35-pr-drift-check.md#setup).
+
 ## [0.10.1] — 2026-09-26
 
 ### Fixed
@@ -793,7 +827,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.10.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/hrustalq/knowledge/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/hrustalq/knowledge/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/hrustalq/knowledge/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/hrustalq/knowledge/compare/v0.8.0...v0.9.0

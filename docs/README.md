@@ -59,6 +59,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 32  | Tree drag-and-drop                         | [features/32-tree-drag-and-drop.md](features/32-tree-drag-and-drop.md) | ✅ implemented |
 | 33  | Connect AI (MCP over HTTP, API keys, skill) | [features/33-connect-ai.md](features/33-connect-ai.md)                 | ✅ implemented |
 | 34  | The editor's assistant                     | [features/34-editor-assistant.md](features/34-editor-assistant.md)     | ✅ implemented |
+| 35  | Drift check on pull / merge requests       | [features/35-pr-drift-check.md](features/35-pr-drift-check.md)         | ✅ implemented |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

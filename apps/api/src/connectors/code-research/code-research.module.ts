@@ -4,6 +4,7 @@ import { PrismaModule } from '../../prisma/prisma.module.js';
 import { ConnectorAdaptersModule } from '../adapters/adapters.module.js';
 import { ConnectorsCoreModule } from '../connectors-core.module.js';
 import { CodeResearchService } from './code-research.service.js';
+import { PullRequestService } from './pull-request.service.js';
 import { RepoSnapshotService } from './repo-snapshot.service.js';
 
 /**
@@ -19,11 +20,13 @@ import { RepoSnapshotService } from './repo-snapshot.service.js';
  *
  * `ConnectorsCoreModule` (not `ConnectorsModule`) for the connector rows and
  * the credential resolution, and `ConnectorAdaptersModule` for the one parser
- * instance it exports. Nothing here can write a page or a repository.
+ * instance it exports. Nothing here can write a page or a repository — which
+ * is why reading a pull request's diff lives here (docs/features/35) and
+ * commenting on one does not.
  */
 @Module({
   imports: [PrismaModule, AuthCoreModule, ConnectorsCoreModule, ConnectorAdaptersModule],
-  providers: [RepoSnapshotService, CodeResearchService],
-  exports: [RepoSnapshotService, CodeResearchService],
+  providers: [RepoSnapshotService, CodeResearchService, PullRequestService],
+  exports: [RepoSnapshotService, CodeResearchService, PullRequestService],
 })
 export class CodeResearchModule {}

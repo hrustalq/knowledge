@@ -13,6 +13,24 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **See what GitHub has granted a connector, and fix it from there.** A connector
+  on a github.com repository now has a **GitHub access** card (admins only)
+  listing every permission and webhook event its App installation has, next to
+  what each feature needs — sync, publishing, work items, the drift check. A gap
+  says whose job it is: *pending* permissions are accepted by the installation's
+  owner (**Review on GitHub**), *missing* ones must first be added to the App
+  registration (**Edit the App**). Gaps in features the connector does not use
+  are shown but not flagged.
+- **Reconnect or disconnect your GitHub account.** The same card shows which
+  GitHub account you are linked as and whether its authorisation has lapsed.
+  **Reconnect** runs GitHub's authorisation again with the account picker, so
+  you can switch accounts; **Disconnect** forgets your link without touching the
+  workspace's installations or any sync.
+
 ## [0.11.0] — 2026-09-26
 
 ### Added

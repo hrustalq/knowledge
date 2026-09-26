@@ -22,6 +22,7 @@ import { GithubController } from './github/github.controller.js';
 import { GithubWebhookController } from './github/github-webhook.controller.js';
 import { AgentQueueModule } from '../agents/agent-queue.module.js';
 import { DriftTriggerService } from './drift/drift-trigger.service.js';
+import { GithubAccessService } from './github/github-access.service.js';
 
 /**
  * API side (docs/features/19). Holds the controllers and the conflict sweeper,
@@ -66,6 +67,8 @@ import { DriftTriggerService } from './drift/drift-trigger.service.js';
     // API-only: both exist to serve a person clicking through the picker.
     GithubOauthService,
     GithubBrowseService,
+    // The connector page's GitHub access card (docs/features/36).
+    GithubAccessService,
     // Both webhook controllers hand pull and merge requests to it.
     DriftTriggerService,
   ],

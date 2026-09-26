@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type {
+  ConnectorGithubAccessResponse,
   ConnectorItemEventResponse,
   ConnectorResponse,
   ConnectorRunEventResponse,
@@ -25,6 +26,7 @@ import { ConnectorItemAiService } from './connector-item-ai.service.js';
 import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService, toRunInfo } from './connectors.service.js';
+import { GithubAccessService } from './github/github-access.service.js';
 import {
   ConnectorItemAiDto,
   ConnectorItemEventDto,
@@ -55,6 +57,7 @@ export class ConnectorsController {
     private readonly ai: ConnectorItemAiService,
     private readonly producer: ConnectorProducer,
     private readonly activity: ActivityService,
+    private readonly githubAccess: GithubAccessService,
   ) {}
 
   @Get()
@@ -168,6 +171,22 @@ export class ConnectorsController {
   @ApiOperation({ summary: 'Read one connector' })
   async get(@Param('id', ParseUUIDPipe) id: string): Promise<ConnectorResponse> {
     return { connector: await this.connectors.get(id) };
+  }
+
+  /**
+   * What GitHub has granted this connector's installation, against what the
+   * App asks for and what its features need, plus the way back through OAuth
+   * (docs/features/36). `admin`, like browsing the picker: it is the shape of a
+   * credential's reach.
+   */
+  @Get(':id/github')
+  @Access('admin', 'connector')
+  @ApiOperation({ summary: "The connector's GitHub App grants and the viewer's GitHub identity" })
+  async github(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ConnectorGithubAccessResponse> {
+    return this.githubAccess.forConnector(await this.connectors.require(id), principal.userId);
   }
 
   @Patch(':id')

@@ -124,7 +124,51 @@ export class GithubAppService {
     return toAccount((await res.json()) as RawInstallation);
   }
 
-  /** A request authenticated as the App itself, for the two calls above. */
+  /**
+   * What one installation has actually granted, beside the account it belongs
+   * to (docs/features/36). `html_url` is the installation's own settings page
+   * on GitHub, which is where an owner accepts permissions the App added later.
+   */
+  async installationGrant(installationId: string): Promise<InstallationGrant | null> {
+    if (!this.configured) return null;
+    const res = await this.appRequest(`/app/installations/${encodeURIComponent(installationId)}`);
+    if (!res.ok) return null;
+    const raw = (await res.json()) as RawInstallation;
+    return {
+      account: toAccount(raw),
+      permissions: raw.permissions ?? {},
+      events: Array.isArray(raw.events) ? raw.events : [],
+      settingsUrl: typeof raw.html_url === 'string' ? raw.html_url : null,
+    };
+  }
+
+  /**
+   * What the App registration asks every installation for, and where it is
+   * edited. Not cached: it is read when an admin opens the access card, and a
+   * cached copy would hide the permission they have just added.
+   */
+  async registration(): Promise<AppRegistration | null> {
+    if (!this.configured) return null;
+    const res = await this.appRequest('/app');
+    if (!res.ok) return null;
+    const raw = (await res.json()) as RawApp;
+    const slug = raw.slug ?? this.slug;
+    const owner = raw.owner?.login;
+    // GitHub has no API field for the registration's settings page; its path
+    // differs for an App a person owns and one an organisation owns.
+    const settingsUrl = !slug
+      ? null
+      : raw.owner?.type === 'Organization' && owner
+        ? `https://github.com/organizations/${encodeURIComponent(owner)}/settings/apps/${encodeURIComponent(slug)}`
+        : `https://github.com/settings/apps/${encodeURIComponent(slug)}`;
+    return {
+      permissions: raw.permissions ?? {},
+      events: Array.isArray(raw.events) ? raw.events : [],
+      settingsUrl,
+    };
+  }
+
+  /** A request authenticated as the App itself, for the calls above. */
   private appRequest(path: string, init: RequestInit = {}): Promise<Response> {
     const jwt = appJwt(this.appId, this.privateKey!);
     return safeFetch(
@@ -146,11 +190,34 @@ export class GithubAppService {
   }
 }
 
+export interface InstallationGrant {
+  account: InstallationAccount;
+  permissions: Record<string, unknown>;
+  events: string[];
+  settingsUrl: string | null;
+}
+
+export interface AppRegistration {
+  permissions: Record<string, unknown>;
+  events: string[];
+  settingsUrl: string | null;
+}
+
 interface RawInstallation {
   id: number;
   account?: { login?: string; type?: string; avatar_url?: string } | null;
   repository_selection?: string;
   suspended_at?: string | null;
+  permissions?: Record<string, unknown>;
+  events?: string[];
+  html_url?: string;
+}
+
+interface RawApp {
+  slug?: string;
+  owner?: { login?: string; type?: string } | null;
+  permissions?: Record<string, unknown>;
+  events?: string[];
 }
 
 export function toAccount(raw: RawInstallation): InstallationAccount {

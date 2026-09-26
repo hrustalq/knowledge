@@ -137,7 +137,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
       >
         <p class="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
           <AlertTriangle class="size-4 shrink-0" aria-hidden="true" />
-          {{ warnings.length === 1 ? 'One thing to check' : `${warnings.length} things to check` }}
+          {{ t('import.thingsToCheck', { n: warnings.length }, warnings.length) }}
         </p>
         <ul class="mt-2 space-y-1.5 text-amber-900/90 dark:text-amber-100/80">
           <li v-for="w in warnings.slice(0, 2)" :key="w" class="flex gap-2">

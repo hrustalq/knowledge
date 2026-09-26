@@ -167,7 +167,7 @@ const filteredAll = computed(() => {
             v-if="filteredRecent.length === 0 && filteredAll.length === 0"
             class="text-muted-foreground px-2 py-1.5 text-xs"
           >
-            No pages match “{{ query }}”.
+            {{ t('common.noPagesMatch', { query }) }}
           </p>
         </template>
       </div>

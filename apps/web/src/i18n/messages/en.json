@@ -42,7 +42,26 @@
     "send": "Send",
     "tooLarge": "That is too large to send. Split it up, or attach it as a file instead of pasting it.",
     "unknownError": "Something went wrong. Try again.",
-    "typeAtLeast": "Type at least {n} characters"
+    "typeAtLeast": "Type at least {n} characters",
+    "adding": "Adding…",
+    "creating": "Creating…",
+    "deleting": "Deleting…",
+    "loadEarlier": "Load earlier",
+    "details": "Details",
+    "enabled": "enabled",
+    "added": "added",
+    "edited": "edited",
+    "editedAt": "Edited {time}",
+    "loadedN": "{n} loaded",
+    "loadedEndOfLog": "{n} loaded — end of log",
+    "loadedEndOfFeed": "{n} loaded — end of feed",
+    "showFewer": "Show fewer",
+    "noPagesMatch": "No pages match “{query}”.",
+    "creatingNamed": "Creating “{name}”…",
+    "reviewing": "Reviewing…",
+    "searching": "Searching…",
+    "starting": "Starting…",
+    "ai": "AI"
   },
   "page": {
     "empty": "Nothing here yet",
@@ -124,7 +143,9 @@
     "accountSettings": "Account settings",
     "accountMenu": "Account menu",
     "notifications": "Notifications",
-    "connect": "Connect AI"
+    "connect": "Connect AI",
+    "membersSeeEverything": "Members can see everything in {scope}.",
+    "projectGoesInto": "Goes into {scope}. You can add more later."
   },
   "role": {
     "viewer": "Viewer",
@@ -205,7 +226,9 @@
     "noPagesForFilters": "No pages match these filters.",
     "topLevel": "Top level",
     "relationsCount": "Relations",
-    "commentDeleted": "Comment deleted"
+    "commentDeleted": "Comment deleted",
+    "revisionNumber": "Revision #{n}",
+    "viewingRevision": "Viewing revision {id} — commenting is off while reading history."
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -863,7 +886,13 @@
     "whatItDoes": "What it does",
     "doesNotAutoStart": "It never starts on its own.",
     "version": "version {n}",
-    "updated": "updated {when}"
+    "updated": "updated {when}",
+    "toReview": "{n} to review",
+    "configureOne": "Configure a workflow",
+    "auto": "auto",
+    "failedN": "{n} failed",
+    "publishedOf": "{done}/{total} published",
+    "waitingForYou": "waiting for you"
   },
   "activity": {
     "action": {
@@ -1132,7 +1161,10 @@
     "posted": "Posted",
     "post": "Post",
     "reopenThread": "Reopen",
-    "resolveThread": "Resolve"
+    "resolveThread": "Resolve",
+    "runReview": "Run review",
+    "rerun": "Re-run",
+    "aiCheck": "AI check"
   },
   "assistant": {
     "askAi": "Ask AI",
@@ -1166,7 +1198,9 @@
     "suggestionsDisabled": "Suggestions are disabled — set {setting}.",
     "go": "Go",
     "aboutAndRelated": "about “{title}” and related pages",
-    "askAnything": "Ask anything about this page — answers are grounded in its content and related pages from the knowledge graph."
+    "askAnything": "Ask anything about this page — answers are grounded in its content and related pages from the knowledge graph.",
+    "reviewDraft": "Review draft",
+    "findRelated": "Find related docs"
   },
   "review": {
     "noLineChanges": "No line changes.",
@@ -1256,7 +1290,11 @@
     "parents": "Parents",
     "created": "Created",
     "compareFrom": "Compare from revision {n}",
-    "compareTo": "Compare to revision {n}"
+    "compareTo": "Compare to revision {n}",
+    "structural": "Structural ({source})",
+    "view": "view",
+    "compareTitle": "Compare {from} → {to}",
+    "mergeBaseAt": "merge base {id}"
   },
   "count": {
     "messages": "{n} message | {n} messages",
@@ -1285,7 +1323,8 @@
     "people": "nobody | {n} person | {n} people",
     "open": "{n} open | {n} open",
     "connected": "{n} connected | {n} connected",
-    "workflows": "no workflows | {n} workflow | {n} workflows"
+    "workflows": "no workflows | {n} workflow | {n} workflows",
+    "tools": "no tools | {n} tool | {n} tools"
   },
   "chat": {
     "willBeRemovedFrom": "will be removed from this chat, and the",
@@ -1366,7 +1405,22 @@
     "deleteChatBody": "“{name}” and its whole message history will be removed, and this cannot be undone. Pages the assistant created and merge requests it opened are not affected.",
     "sourcesTitle": "Sources",
     "fromTheWeb": "From the web",
-    "webNotSaved": "Web pages were read for this answer only. Nothing here was added to the workspace."
+    "webNotSaved": "Web pages were read for this answer only. Nothing here was added to the workspace.",
+    "attachLimit": "{n} files is the limit for one message",
+    "attachTextFileToMessage": "Attach a text file to this message",
+    "needsEditorRole": "Needs the editor role in this workspace.",
+    "resetTitle": "Reset to before this message?",
+    "askAgainTitle": "Ask this question again?",
+    "resetBodyUser": "{count} will be removed from this chat, and the text comes back to the composer. This cannot be undone.",
+    "resetBodyAssistant": "{count} will be removed and the question above asked again. This cannot be undone, and the new turn runs in {mode} mode without any files the original carried.",
+    "rewinding": "Rewinding…",
+    "reset": "Reset",
+    "noChatsMatch": "No chats match “{query}”.",
+    "noChatsYet": "No chats yet — start one below.",
+    "hideSteps": "Hide steps",
+    "showSteps": "Show steps",
+    "showStepsN": "Show steps ({n})",
+    "deleteChatButton": "Delete chat"
   },
   "ai": {
     "excludesUnpriced": "excludes {calls} with no",
@@ -1582,7 +1636,10 @@
       "toolsOffered": "Tools offered to the assistant ({on} of {total})",
       "dialogDesc": "The server must speak MCP over HTTP. Streamable HTTP is the current transport; SSE is for older servers that have not migrated yet.",
       "authConfigured": "configured — leave empty to keep",
-      "rosterTitle": "MCP servers"
+      "rosterTitle": "MCP servers",
+      "authenticated": "authenticated",
+      "checkedAt": "checked {time}",
+      "sseLegacy": "SSE (legacy)"
     },
     "range": {
       "d7": "7 days",
@@ -1685,7 +1742,10 @@
       },
       "inForce": "in force",
       "addLabel": "Add a domain"
-    }
+    },
+    "openaiCompatible": "OpenAI-compatible",
+    "noActivityDays": "No assistant activity in the last {n} day. | No assistant activity in the last {n} days.",
+    "peak": "peak {value}"
   },
   "search": {
     "activeFilters": "{n} filter | {n} filters",
@@ -1720,7 +1780,9 @@
     "searchEveryPagePlaceholder": "Search every page…",
     "sheetDescription": "Semantic, keyword and graph-expanded search across the workspace.",
     "openAsPage": "Open as page",
-    "filtersClearedForWorkspace": "Project and tag filters were cleared for the new workspace."
+    "filtersClearedForWorkspace": "Project and tag filters were cleared for the new workspace.",
+    "failedCheckConnection": "{error} — check your connection and try again.",
+    "via": "via {path}"
   },
   "import": {
     "project": "Project",
@@ -1767,7 +1829,8 @@
       "tooLarge": "That file is {size} — the limit is {limit}.",
       "empty": "That file is empty.",
       "cannotImport": "That file cannot be imported."
-    }
+    },
+    "thingsToCheck": "One thing to check | {n} things to check"
   },
   "project": {
     "active": "active",
@@ -1997,7 +2060,9 @@
     "caseSensitive": "Match this exact casing",
     "maxLinksPerPage": "Max links per page",
     "notATermHere": "Not a term here",
-    "cannotExclude": "Could not locate that occurrence in the page."
+    "cannotExclude": "Could not locate that occurrence in the page.",
+    "occurrencesOnPage": "{n}× on the page",
+    "alsoKnownAs": "also: {aliases}"
   },
   "editor": {
     "pickProjectForFiles": "Pick a project in page settings before attaching files",
@@ -2090,7 +2155,9 @@
       "keepAndLeave": "Keep and leave",
       "dontAskAgain": "Don’t ask again"
     },
-    "moreActions": "More actions"
+    "moreActions": "More actions",
+    "publish": "Publish",
+    "createAndIndex": "Create & index"
   },
   "toolbar": {
     "formatting": "Formatting",

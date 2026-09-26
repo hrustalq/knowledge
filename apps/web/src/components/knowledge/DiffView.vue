@@ -37,7 +37,7 @@ function commentOn(line: { new?: number; text: string }) {
 <template>
   <div class="space-y-4">
     <div v-if="compare.structural && compare.structural.changes.length" class="rounded-md border p-3 text-sm">
-      <p class="mb-1 text-xs font-medium text-muted-foreground">Structural ({{ compare.structural.source }})</p>
+      <p class="mb-1 text-xs font-medium text-muted-foreground">{{ t('revisions.structural', { source: compare.structural.source }) }}</p>
       <p v-for="(c, i) in compare.structural.changes" :key="i" class="font-mono text-xs">
         <span :class="c.kind === 'added' ? 'text-green-600' : c.kind === 'removed' ? 'text-red-600' : 'text-amber-600'">{{ c.kind }}</span>
         {{ c.path || '(root)' }}

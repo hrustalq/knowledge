@@ -199,7 +199,7 @@ const revisionRows = computed(() =>
             : 'text-muted-foreground hover:text-foreground'"
           @click="pane = p"
         >
-          {{ p === 'details' ? 'Details' : 'AI check' }}
+          {{ p === 'details' ? t('common.details') : t('mr.aiCheck') }}
           <span
             v-if="p === 'ai' && aiCounts"
             class="grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] tabular-nums"

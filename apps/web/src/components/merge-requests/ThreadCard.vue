@@ -248,7 +248,7 @@ const replyTarget = computed(() =>
           class="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-violet-500/12 px-1.5 py-px font-medium text-violet-700 dark:text-violet-300"
           :title="t('mr.fromAssistantReview')"
         >
-          <Bot class="size-3" /> AI
+          <Bot class="size-3" /> {{ t('common.ai') }}
         </span>
         <span
           v-if="thread.resolved"
@@ -348,9 +348,9 @@ const replyTarget = computed(() =>
                 <span
                   v-if="comment.updatedAt"
                   class="shrink-0 italic"
-                  :title="`Edited ${fullTime(comment.updatedAt)}`"
+                  :title="t('common.editedAt', { time: fullTime(comment.updatedAt) })"
                 >
-                  · edited
+                  · {{ t('common.edited') }}
                 </span>
                 <!-- Actions ride the row rather than a menu: three of them, and
                      a discussion is read far more often than it is corrected. -->

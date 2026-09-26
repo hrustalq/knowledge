@@ -81,10 +81,10 @@ async function runSuggest() {
 
     <div class="flex flex-wrap gap-2">
       <Button size="sm" variant="outline" :disabled="busy !== null || !markdown.trim()" @click="runReview">
-        {{ busy === 'review' ? 'Reviewing…' : 'Review draft' }}
+        {{ busy === 'review' ? t('common.reviewing') : t('assistant.reviewDraft') }}
       </Button>
       <Button size="sm" variant="outline" :disabled="busy !== null || !(markdown.trim() || title.trim())" @click="runRelated">
-        {{ busy === 'related' ? 'Searching…' : 'Find related docs' }}
+        {{ busy === 'related' ? t('common.searching') : t('assistant.findRelated') }}
       </Button>
     </div>
 

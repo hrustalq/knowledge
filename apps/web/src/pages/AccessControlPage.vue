@@ -405,7 +405,7 @@ const tab = usePageTabs(tabs, 'members')
               :aria-label="`Trusted operator for ${member.displayName}`"
               @update:model-value="patchMember(member, { trustedOperator: $event === true })"
             />
-            <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? 'yes' : 'no' }}</span>
+            <span v-else class="text-muted-foreground text-sm">{{ member.trustedOperator ? t('common.yes') : t('common.no') }}</span>
           </TableCell>
           <TableCell class="text-right">
             <Button v-if="canManage" size="sm" variant="destructive" @click="removeMember(member)">{{ t('access.remove') }}</Button>
@@ -467,7 +467,7 @@ const tab = usePageTabs(tabs, 'members')
         </form>
         <DialogFooter>
           <Button variant="ghost" @click="addOpen = false">{{ t('common.cancel') }}</Button>
-          <Button type="submit" form="add-member" :disabled="!pickedUser">Add</Button>
+          <Button type="submit" form="add-member" :disabled="!pickedUser">{{ t('common.add') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

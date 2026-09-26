@@ -177,7 +177,7 @@ function labelFor(userId: string): string {
 
     <template v-else-if="data">
       <p v-if="data.totals.calls === 0" class="text-muted-foreground py-10 text-center text-sm">
-        No assistant activity in the last {{ days }} days.
+        {{ t('ai.noActivityDays', { n: days }, days) }}
       </p>
 
       <template v-else>
@@ -199,7 +199,6 @@ function labelFor(userId: string): string {
             <!-- Without this the total silently reads as the whole bill. -->
             <dd v-if="data.totals.unpricedCalls > 0" class="text-muted-foreground mt-0.5 text-xs">
               {{ t('ai.excludesCalls', { calls: t('count.calls', { n: data.totals.unpricedCalls }, data.totals.unpricedCalls) }) }}
-              price set
             </dd>
           </div>
           <div v-if="data.totals.errors > 0">
@@ -212,7 +211,7 @@ function labelFor(userId: string): string {
         <div v-if="chart.length > 0">
           <div class="mb-2 flex items-baseline justify-between">
             <p class="text-muted-foreground text-xs font-medium">{{ t('ai.tokensPerDay') }}</p>
-            <p class="text-muted-foreground text-xs tabular-nums">peak {{ fmtTokens(chartMax) }}</p>
+            <p class="text-muted-foreground text-xs tabular-nums">{{ t('ai.peak', { value: fmtTokens(chartMax) }) }}</p>
           </div>
           <div
             class="border-border/70 flex items-end gap-px border-b"

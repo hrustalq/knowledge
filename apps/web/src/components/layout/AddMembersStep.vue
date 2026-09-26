@@ -127,7 +127,7 @@ async function add() {
         :disabled="!picked || adding"
         @click="add"
       >
-        {{ adding ? 'Adding…' : 'Add' }}
+        {{ adding ? t('common.adding') : t('common.add') }}
       </Button>
     </div>
 
@@ -144,7 +144,7 @@ async function add() {
       </li>
     </ul>
     <p v-else class="text-muted-foreground text-xs">
-      Members can see everything in {{ workspaceName ?? t('nav.thisWorkspace') }}.
+      {{ t('nav.membersSeeEverything', { scope: workspaceName ?? t('nav.thisWorkspace') }) }}
     </p>
 
     <DialogFooter class="pt-2">

@@ -153,7 +153,7 @@ function fmtDuration(ms: number): string {
       </div>
 
       <div class="text-muted-foreground flex items-center gap-3 px-2 text-xs">
-        <span>{{ entries.length }} loaded{{ page?.nextCursor ? '' : ' — end of log' }}</span>
+        <span>{{ t(page?.nextCursor ? 'common.loadedN' : 'common.loadedEndOfLog', { n: entries.length }) }}</span>
         <Button
           v-if="page?.nextCursor"
           variant="outline"
@@ -161,7 +161,7 @@ function fmtDuration(ms: number): string {
           :disabled="query.isFetching.value"
           @click="loadMore"
         >
-          {{ query.isFetching.value ? 'Loading…' : 'Load more' }}
+          {{ query.isFetching.value ? t('common.loading') : t('common.loadMore') }}
         </Button>
       </div>
     </template>

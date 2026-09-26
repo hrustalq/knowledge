@@ -113,7 +113,7 @@ function onKeydown(event: KeyboardEvent) {
         </li>
       </ul>
       <p v-if="matches.length === 0" class="py-4 text-center text-sm text-muted-foreground">
-        No pages match “{{ query }}”.
+        {{ t('common.noPagesMatch', { query }) }}
       </p>
     </DialogContent>
   </Dialog>

@@ -67,7 +67,7 @@ async function submit() {
         autocomplete="off"
       />
       <p class="text-muted-foreground text-xs">
-        Goes into {{ workspaceName ?? t('nav.theNewWorkspace') }}. You can add more later.
+        {{ t('nav.projectGoesInto', { scope: workspaceName ?? t('nav.theNewWorkspace') }) }}
       </p>
     </div>
 
@@ -79,7 +79,7 @@ async function submit() {
       </Button>
       <Button type="submit" :disabled="submitting || !name.trim()">
         <Loader2 v-if="submitting" class="size-4 animate-spin" />
-        {{ submitting ? 'Creating…' : 'Create project' }}
+        {{ submitting ? t('common.creating') : t('nav.createProject') }}
       </Button>
     </DialogFooter>
   </form>

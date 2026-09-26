@@ -217,12 +217,12 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
               <CircleDashed v-else class="text-muted-foreground size-4 shrink-0" />
               <button class="font-medium" :disabled="!canManage" @click="openEdit(plugin)">{{ plugin.name }}</button>
               <Badge variant="outline" class="font-normal">{{ plugin.transport }}</Badge>
-              <Badge v-if="plugin.hasAuthValue" variant="secondary" class="font-normal">authenticated</Badge>
+              <Badge v-if="plugin.hasAuthValue" variant="secondary" class="font-normal">{{ t('ai.plugins.authenticated') }}</Badge>
             </div>
             <p class="text-muted-foreground truncate font-mono text-xs">{{ plugin.url }}</p>
             <p v-if="plugin.lastError" class="text-destructive mt-1 text-xs">{{ plugin.lastError }}</p>
             <p v-else-if="plugin.lastCheckedAt" class="text-muted-foreground mt-1 text-xs">
-              checked {{ relativeTime(plugin.lastCheckedAt) }}
+              {{ t('ai.plugins.checkedAt', { time: relativeTime(plugin.lastCheckedAt) }) }}
             </p>
           </div>
           <div class="flex items-center gap-2">
@@ -232,7 +232,7 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
                 :disabled="!canManage"
                 @update:model-value="toggleEnabled(plugin, $event === true)"
               />
-              enabled
+              {{ t('common.enabled') }}
             </label>
             <Button
               variant="outline"
@@ -295,7 +295,7 @@ async function toggleEnabled(plugin: AiPluginSummary, enabled: boolean) {
               <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="streamable-http">Streamable HTTP</SelectItem>
-                <SelectItem value="sse">SSE (legacy)</SelectItem>
+                <SelectItem value="sse">{{ t('ai.plugins.sseLegacy') }}</SelectItem>
               </SelectContent>
             </Select>
           </label>

@@ -80,7 +80,7 @@ async function start(definitionId: string) {
               <span class="text-muted-foreground block text-[11px]">
                 {{ t(RUN_STATUS_LABEL[run.status]) }} · {{ relativeTime(run.startedAt ?? run.createdAt) }}
                 <template v-if="run.nodeStats.awaitingReview">
-                  · {{ run.nodeStats.awaitingReview }} to review
+                  · {{ t('workflow.toReview', { n: run.nodeStats.awaitingReview }) }}
                 </template>
               </span>
             </span>
@@ -104,7 +104,7 @@ async function start(definitionId: string) {
           @click="start(workflow.id)"
         >
           <Play class="mr-1.5 size-3.5" />
-          {{ starting === workflow.id ? 'Starting…' : workflow.name }}
+          {{ starting === workflow.id ? t('common.starting') : workflow.name }}
         </Button>
       </div>
 
@@ -113,7 +113,7 @@ async function start(definitionId: string) {
         to="/settings/workflows"
         class="text-primary block text-xs hover:underline"
       >
-        Configure a workflow
+        {{ t('workflow.configureOne') }}
       </RouterLink>
     </template>
   </div>

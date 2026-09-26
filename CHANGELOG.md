@@ -13,6 +13,31 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Breaking
+
+- **A connector's links, runs and work items come back a page at a time.**
+  `GET /v1/connectors/:id/links`, `/runs` and `/work-items` now return one page
+  (50 links, 30 runs, 50 work items by default) and a `nextCursor`; links used to
+  return up to 500 rows in one response, work items up to 200. Work items also
+  carry `total`, the count across every page.
+  **Migration:** a caller that needs everything keeps requesting with
+  `cursor=<nextCursor>` until it is `null`; `limit` takes 1–100. (#88)
+
+### Changed
+
+- **Long connector lists scroll inside the page.** On a connector's page the Work
+  items, Links and Runs tabs now end at the bottom of the window and scroll on
+  their own, loading more as you reach the end, so a connector with hundreds of
+  linked pages no longer makes the whole page one very long scroll. The same
+  applies to the Runs and Links tabs under **Settings → Connectors**, which also
+  used to stop silently at the first 20 runs or 500 links. (#88)
+- **The GitHub access card folds.** It starts folded when nothing is wrong,
+  showing whose installation it is, and open when a permission is missing or
+  pending, showing how many. Your choice is remembered while you move between
+  connectors. (#88)
+
 ## [0.12.0] — 2026-09-27
 
 ### Added

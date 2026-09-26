@@ -34,6 +34,7 @@
     "clear": "Clear",
     "previous": "Previous",
     "loadMore": "Load more",
+    "loadingMore": "Loading more…",
     "searchIn": "Search {label}…",
     "noneYet": "No {label} yet.",
     "noMatchFor": "No match for {query}",

@@ -5,10 +5,10 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useQuery } from '@tanstack/vue-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
 import { ExternalLink, Link2Off, Unlink } from 'lucide-vue-next'
 import type { ListConnectorLinksResponse, ListConnectorsResponse } from '@knowledge/contracts'
-import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import { apiInfiniteQueryOptions, apiQueryOptions, useApiMutation } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -29,13 +29,17 @@ watch(connectors, (list) => {
   if (!selected.value && list.length) selected.value = list[0].id
 }, { immediate: true })
 
-const linksQuery = useQuery(
+const linksQuery = useInfiniteQuery(
   computed(() => ({
-    ...apiQueryOptions('/v1/connectors/{id}/links', { path: { id: selected.value } }),
+    ...apiInfiniteQueryOptions('/v1/connectors/{id}/links', { path: { id: selected.value } }),
     enabled: selected.value !== '',
   })),
 )
-const links = computed(() => (linksQuery.data.value as ListConnectorLinksResponse | undefined)?.links ?? [])
+const links = computed(() =>
+  ((linksQuery.data.value?.pages ?? []) as ListConnectorLinksResponse[]).flatMap((page) => page.links),
+)
+/** The connector's own claim count — the loaded rows are only the pages fetched so far. */
+const linkTotal = computed(() => connectors.value.find((c) => c.id === selected.value)?.linkCount ?? links.value.length)
 
 const unlink = useApiMutation('delete', '/v1/connectors/{id}/links/{linkId}', {
   invalidates: () => [['/v1/connectors']],
@@ -62,7 +66,7 @@ async function removeLink(linkId: string) {
         </SelectContent>
       </Select>
       <p class="text-muted-foreground text-sm">
-        {{ t('connectors.linkCount', { count: links.length }, links.length) }}
+        {{ t('connectors.linkCount', { count: linkTotal }, linkTotal) }}
       </p>
     </div>
 
@@ -128,6 +132,19 @@ async function removeLink(linkId: string) {
           </TableRow>
         </TableBody>
       </Table>
+      <!-- A table's columns size from every row, so this one pages by button
+           rather than virtualizing: a windowed table re-flows its columns as
+           rows recycle. -->
+      <div v-if="linksQuery.hasNextPage.value" class="flex justify-center border-t p-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          :disabled="linksQuery.isFetchingNextPage.value"
+          @click="linksQuery.fetchNextPage()"
+        >
+          {{ linksQuery.isFetchingNextPage.value ? t('common.loadingMore') : t('common.loadMore') }}
+        </Button>
+      </div>
     </div>
   </div>
 </template>

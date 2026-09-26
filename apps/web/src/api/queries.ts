@@ -69,6 +69,31 @@ export function apiQueryOptions<P extends PathsWithMethod<ApiPaths, 'get'>>(
 }
 
 /**
+ * Spreadable `useInfiniteQuery` options for a GET that pages by `cursor` and
+ * answers with `nextCursor`:
+ *   useInfiniteQuery(apiInfiniteQueryOptions('/v1/connectors/{id}/runs', { path: { id } }))
+ * The key carries a trailing `'pages'` so the paged cache entry never collides
+ * with a plain `apiQueryOptions` entry for the same url — the two hold different
+ * shapes — while an invalidation by url prefix still reaches both.
+ */
+export function apiInfiniteQueryOptions<P extends PathsWithMethod<ApiPaths, 'get'>>(
+  url: P,
+  opts?: RequestOptions<Op<P, 'get'>>,
+) {
+  return {
+    queryKey: [url, opts?.path ?? null, opts?.query ?? null, 'pages'] as const,
+    queryFn: ({ signal, pageParam }: { signal: AbortSignal; pageParam: string | null }) =>
+      api.get(url, {
+        ...opts,
+        query: { ...opts?.query, ...(pageParam ? { cursor: pageParam } : {}) } as RequestOptions<Op<P, 'get'>>['query'],
+        signal,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last: unknown) => (last as { nextCursor?: string | null }).nextCursor ?? null,
+  }
+}
+
+/**
  * Spreadable mutation options for a write operation:
  *   const save = useMutation(apiMutationOptions('post', '/v1/documents'))
  *   save.mutate({ body: { … } })

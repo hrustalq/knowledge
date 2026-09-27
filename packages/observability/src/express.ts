@@ -1,5 +1,5 @@
 import type { HttpRequestEvent } from '@knowledge/contracts/observability';
-import { startTrace, withTrace } from '@knowledge/observability/trace';
+import { redactUrl, startTrace, withTrace } from '@knowledge/observability/trace';
 import { emitBacktest } from '@knowledge/observability/backtest';
 
 /**
@@ -48,7 +48,8 @@ export function traceMiddleware(req: TracedRequest, res: TracedResponse, next: (
   const ctx = startTrace('http', {
     traceId: inbound,
     method: req.method,
-    route: req.originalUrl ?? req.url,
+    // Redacted at the source: every record in this scope inherits `route`.
+    route: redactUrl(req.originalUrl ?? req.url),
   });
 
   // Set immediately, not on finish: a client that never gets a response still

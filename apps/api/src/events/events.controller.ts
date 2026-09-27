@@ -2,7 +2,7 @@ import { Controller, Query, Sse } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Observable } from 'rxjs';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, QueryTokenOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { EventsSubscriber } from './events.subscriber.js';
 
@@ -13,6 +13,7 @@ export class EventsController {
 
   @Sse()
   @Access('viewer', 'query')
+  @QueryTokenOk() // EventSource cannot set headers
   @ApiOperation({ summary: 'Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<key>.' })
   @ApiQuery({ name: 'workspaceId', required: true })
   events(

@@ -78,8 +78,9 @@ filters that subject by workspace, drops frames addressed to somebody else (see
 below), and merges in a 30-second `{ type: 'ping' }` heartbeat so proxies do not
 close an idle connection.
 
-`EventSource` cannot set headers, so `AuthGuard` also accepts `?token=` — the
-same accommodation `<img>` tags need for attachments.
+`EventSource` cannot set headers, so the route is marked `@QueryTokenOk()` and
+`AuthGuard` accepts `?token=` on it — the same accommodation `<img>` tags need
+for attachments. No other HTTP route reads a query token (#102).
 
 Two ordering rules inside the subscriber are load-bearing and were both bugs
 first. The `message` listener is registered **before** the subscribe and outside

@@ -96,7 +96,10 @@ execution step to check.
 - No credential ever goes into a URL. Every hint, curl example and generated
   snippet uses `Authorization: Bearer $KNOWLEDGE_API_KEY`. The web tier forwards
   an `Authorization` header or the session cookie and **does not forward
-  `?token=`** — a credential in a URL leaks into logs and history.
+  `?token=`** — a credential in a URL leaks into logs and history. The API
+  does not accept one on these routes either: `?token=` is limited to the
+  `@QueryTokenOk()` routes (SSE and `<img>` redirects), so
+  `/v1/documents/:id/markdown?token=kn_…` is a 401 (#102).
 - "Open in ChatGPT / Claude / Cursor" puts page text into a link to that vendor;
   that is why it has an admin switch and an env ceiling, and why pages longer
   than `AI_ACTION_INLINE_MAX_CHARS` are copied to the clipboard instead.

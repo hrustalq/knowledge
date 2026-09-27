@@ -5,6 +5,7 @@ export const ACCESS_META = 'knowledge:access';
 export const PUBLIC_META = 'knowledge:public';
 export const PLATFORM_ADMIN_META = 'knowledge:platform-admin';
 export const READ_KEY_OK_META = 'knowledge:read-key-ok';
+export const QUERY_TOKEN_OK_META = 'knowledge:query-token-ok';
 
 /** Where AclGuard finds the workspace id for a route (resolved in PostgreSQL). */
 export type WorkspaceSource =
@@ -52,6 +53,17 @@ export const PlatformAdmin = () => SetMetadata(PLATFORM_ADMIN_META, true);
  * runs its own `requireRole` (docs/features/33).
  */
 export const ReadKeyOk = () => SetMetadata(READ_KEY_OK_META, true);
+
+/**
+ * A route that may authenticate with `?token=` instead of an `Authorization`
+ * header (#102). Only for callers that cannot set headers: `EventSource` (the
+ * SSE stream) and `<img>` / `<object>` (attachment, import-image and avatar
+ * redirects). Everywhere else AuthGuard ignores the query token, so a key
+ * pasted into a URL authenticates nothing: URLs end up in access logs,
+ * browser history and `Referer` headers. The allowlist is pinned by
+ * test/query-token.spec.ts, so adding a route here is a reviewed decision.
+ */
+export const QueryTokenOk = () => SetMetadata(QUERY_TOKEN_OK_META, true);
 
 /** Injects the Principal that AuthGuard attached to the request. */
 export const CurrentPrincipal = createParamDecorator(

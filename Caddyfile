@@ -31,8 +31,18 @@ knowledge.hrustalq.dev {
 		reverse_proxy web:5173
 	}
 
+	# `?token=` still authenticates SSE and <img> requests (the @QueryTokenOk
+	# routes, #102), so mask its value before the URI reaches the access log.
+	# Authorization and Cookie headers are already redacted by Caddy's default.
 	log {
 		output stderr
-		format console
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					replace token REDACTED
+				}
+			}
+		}
 	}
 }

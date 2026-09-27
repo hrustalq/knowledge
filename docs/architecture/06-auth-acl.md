@@ -30,8 +30,14 @@ permanently empty).
 is execution order**: `AuthGuard` → `AclGuard`.
 
 1. **`AuthGuard`** resolves the principal, or 401. `@Public()` opts a route out
-   (signup, login, forgot/reset password). It also accepts `?token=`, because
-   `EventSource` cannot set headers.
+   (signup, login, forgot/reset password). A `?token=` query credential is read
+   **only on routes marked `@QueryTokenOk()`**, because `EventSource` and
+   `<img>` cannot set headers: the SSE stream and the attachment, import-image
+   and avatar redirects. Anywhere else the query token is ignored as if absent,
+   so the request is a 401 (#102). `test/query-token.spec.ts` pins that list,
+   so a new route cannot opt in without a reviewed spec change. Query values
+   named `token` are masked in the API's request and error logs
+   (`redactUrl`) and in the bundled Caddy access log.
 2. **`AclGuard`** reads `@Access(role, source)` metadata, resolves the target
    **workspace in PostgreSQL**, and 403s on failure.
 

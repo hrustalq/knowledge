@@ -10,6 +10,8 @@ import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { McpService } from '../src/mcp/mcp.service.js';
 import { WRITE_TOOLS } from '../src/mcp/mcp-tools.js';
 import { renderSkill } from '../src/mcp/skill.js';
+import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
+import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
 
 /**
  * MCP over HTTP and named API keys (docs/features/33).
@@ -84,7 +86,7 @@ describe('AccessService key narrowing', () => {
 });
 
 /** An McpService whose collaborators are spies; only what a test touches is real. */
-function service(access: AccessService) {
+function service(access: AccessService, aiReadable: unknown = { enabled: () => true }) {
   const search = { search: vi.fn(async () => ({ results: [] })) };
   const documents = {
     createDocument: vi.fn(async () => ({ documentId: 'd' })),
@@ -112,6 +114,7 @@ function service(access: AccessService) {
     agents: {},
     access,
     config,
+    aiReadable,
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return { mcp, search, documents };
@@ -171,6 +174,151 @@ describe('McpService over a principal', () => {
 
   it('points configs at API_PUBLIC_URL', () => {
     expect(service(accessWith(null)).mcp.publicUrl()).toBe('https://kb.example.com/api/v1/mcp');
+  });
+});
+
+/**
+ * AI-readable resources (issue #68, phase 5). One fake PG backs both the
+ * AccessService (guard) and a real AiReadableService, so the MCP read and the
+ * REST route run the same code over the same rows.
+ */
+const DOC_A = '44444444-4444-4444-8444-444444444444';
+const DOC_B = '55555555-5555-4555-8555-555555555555';
+const PROJ_A = '66666666-6666-4666-8666-666666666666';
+const PROJ_B = '77777777-7777-4777-8777-777777777777';
+
+function readableWorld(opts: { enabled?: boolean } = {}) {
+  const docs = [
+    { id: DOC_A, workspaceId: WS_A, projectId: PROJ_A, title: 'Billing', rev: 'rA' },
+    { id: DOC_B, workspaceId: WS_B, projectId: PROJ_B, title: 'Secret', rev: 'rB' },
+  ];
+  const projects = [
+    { id: PROJ_A, workspaceId: WS_A, name: 'Platform' },
+    { id: PROJ_B, workspaceId: WS_B, name: 'Other' },
+  ];
+  const docRow = (d: (typeof docs)[number]) => ({
+    ...d,
+    category: null,
+    parentId: null,
+    position: 0,
+    defaultBranch: 'main',
+    branches: [{ name: 'main', headRevisionId: d.rev }],
+    project: { name: projects.find((p) => p.id === d.projectId)!.name },
+  });
+  const revRow = (id: string) => {
+    const d = docs.find((x) => x.rev === id);
+    return d
+      ? { id, documentId: d.id, status: 'indexed', revisionNumber: 2, s3Key: `k/${id}`, finalizedAt: new Date(0), createdAt: new Date(0) }
+      : null;
+  };
+  const matches = (d: (typeof docs)[number], w: Record<string, string>) =>
+    (!w.workspaceId || d.workspaceId === w.workspaceId) && (!w.projectId || d.projectId === w.projectId) && (!w.id || d.id === w.id);
+  const prisma = {
+    workspaceMember: { findUnique: vi.fn(async () => ({ role: 'viewer', trustedOperator: false })) },
+    workspace: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({ id: where.id, name: `WS ${where.id.slice(0, 2)}` })) },
+    project: {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => projects.find((p) => p.id === where.id) ?? null),
+      findMany: vi.fn(async ({ where }: { where: { workspaceId: string } }) => projects.filter((p) => p.workspaceId === where.workspaceId)),
+    },
+    document: {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => docs.find((d) => d.id === where.id) ?? null),
+      findFirst: vi.fn(async ({ where }: { where: { id: string } }) => {
+        const d = docs.find((x) => x.id === where.id);
+        return d ? docRow(d) : null;
+      }),
+      count: vi.fn(async ({ where }: { where: Record<string, string> }) => docs.filter((d) => matches(d, where)).length),
+      findMany: vi.fn(async ({ where }: { where: Record<string, string> }) => docs.filter((d) => matches(d, where)).map(docRow)),
+    },
+    documentRevision: {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => revRow(where.id)),
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map(revRow).filter(Boolean)),
+    },
+  };
+  const documents = {
+    getContent: vi.fn(async (id: string) => ({ markdown: `Body of ${id}.\n`, frontmatter: { tags: ['t'] } })),
+  };
+  const env: Record<string, unknown> = {
+    AI_READABLE_ENABLED: opts.enabled ?? true,
+    WEB_BASE_URL: 'https://kb.example.com',
+    API_PUBLIC_URL: 'https://kb.example.com/api',
+  };
+  const config = { get: (key: string) => env[key] };
+  const aiReadable = new AiReadableService(prisma as never, documents as never, config as never);
+  const access = new AccessService(prisma as never);
+  return { aiReadable, access, documents, prisma };
+}
+
+describe('MCP AI-readable resources', () => {
+  const pinnedToA = () => keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
+
+  it('offers the three templates, and no llms-full', async () => {
+    const world = readableWorld();
+    const client = await connect(service(world.access, world.aiReadable).mcp, pinnedToA());
+    const { resourceTemplates } = await client.listResourceTemplates();
+    const uris = resourceTemplates.map((t) => t.uriTemplate);
+    expect(uris).toEqual(
+      expect.arrayContaining([
+        'knowledge://documents/{documentId}.md',
+        'knowledge://workspaces/{workspaceId}/llms.txt',
+        'knowledge://projects/{projectId}/llms.txt',
+      ]),
+    );
+    expect(uris.some((u) => u.includes('llms-full'))).toBe(false);
+    expect(resourceTemplates.find((t) => t.uriTemplate.endsWith('.md'))?.mimeType).toBe('text/markdown');
+  });
+
+  it('reads a page byte-identical to GET /v1/documents/:id/markdown', async () => {
+    const world = readableWorld();
+    const client = await connect(service(world.access, world.aiReadable).mcp, pinnedToA());
+    const read = await client.readResource({ uri: `knowledge://documents/${DOC_A}.md` });
+    const content = read.contents[0] as { text: string; mimeType: string };
+    expect(content.mimeType).toBe('text/markdown');
+
+    const res = { setHeader: vi.fn(), status: vi.fn() };
+    const rest = await new AiReadableController(world.aiReadable).markdown(
+      DOC_A,
+      { headers: {} } as never,
+      res as never,
+    );
+    expect(rest).toBeTruthy();
+    expect(content.text).toBe(rest);
+    expect(content.text).toContain(`Body of ${DOC_A}.`);
+  });
+
+  it('reads workspace and project llms.txt through the same service', async () => {
+    const world = readableWorld();
+    const client = await connect(service(world.access, world.aiReadable).mcp, pinnedToA());
+    const ws = await client.readResource({ uri: `knowledge://workspaces/${WS_A}/llms.txt` });
+    const expected = await world.aiReadable.workspaceIndex(WS_A);
+    expect(expected.status).toBe(200);
+    expect((ws.contents[0] as { text: string }).text).toBe(expected.status === 200 ? expected.body : '');
+    expect((ws.contents[0] as { text: string }).text).toContain(`https://kb.example.com/documents/${DOC_A}.md`);
+
+    const proj = await client.readResource({ uri: `knowledge://projects/${PROJ_A}/llms.txt` });
+    const expectedProj = await world.aiReadable.projectIndex(PROJ_A);
+    expect((proj.contents[0] as { text: string }).text).toBe(expectedProj.status === 200 ? expectedProj.body : '');
+  });
+
+  it('refuses a key pinned to workspace A every workspace-B resource, before any content is read', async () => {
+    const world = readableWorld();
+    const client = await connect(service(world.access, world.aiReadable).mcp, pinnedToA());
+    for (const uri of [
+      `knowledge://documents/${DOC_B}.md`,
+      `knowledge://workspaces/${WS_B}/llms.txt`,
+      `knowledge://projects/${PROJ_B}/llms.txt`,
+    ]) {
+      await expect(client.readResource({ uri }), uri).rejects.toThrow(/apiKeyWorkspace/);
+    }
+    expect(world.documents.getContent).not.toHaveBeenCalled();
+    expect(world.prisma.documentRevision.findMany).not.toHaveBeenCalled();
+  });
+
+  it('is not offered when AI_READABLE_ENABLED=false', async () => {
+    const world = readableWorld({ enabled: false });
+    const client = await connect(service(world.access, world.aiReadable).mcp, pinnedToA());
+    const { resourceTemplates } = await client.listResourceTemplates();
+    expect(resourceTemplates).toEqual([]);
+    await expect(client.readResource({ uri: `knowledge://documents/${DOC_A}.md` })).rejects.toThrow();
   });
 });
 
@@ -254,6 +402,15 @@ describe('renderSkill', () => {
     expect(md).toContain('Ada \\| Ops');
     expect(md).toContain('| `knowledge_search` | read | Semantic search. |');
     expect(md).toContain('Change an existing page');
+  });
+
+  it('lists plain-markdown URLs per workspace with a header-auth curl, never a key in a URL', () => {
+    const md = renderSkill(base);
+    expect(md).toContain('## Plain-markdown access');
+    expect(md).toContain(`https://kb.example.com/workspaces/${WS_A}/llms.txt`);
+    expect(md).toContain('https://kb.example.com/documents/<documentId>.md');
+    expect(md).toContain('curl -H "Authorization: Bearer $KNOWLEDGE_API_KEY"');
+    expect(md).not.toMatch(/[?&]token=/);
   });
 
   it('does not describe edits to a read-only key', () => {

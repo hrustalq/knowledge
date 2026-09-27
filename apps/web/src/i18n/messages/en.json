@@ -2803,6 +2803,15 @@
       "noSkillDir": "{client} has no skills directory. Use the server's “guide” prompt instead, or paste the skill into the conversation or a project's instructions.",
       "alsoServed": "The same skill is served by the MCP server itself — as the resource knowledge://skill and the prompt “guide” — so any client can load it without installing a file."
     },
+    "llms": {
+      "title": "llms.txt and markdown",
+      "hint": "For tools that fetch URLs instead of speaking MCP. Every page is also plain markdown at /documents/<id>.md. These URLs need the same credential as the app: send the API key as an Authorization header, never in the URL.",
+      "root": "All your workspaces",
+      "workspace": "Workspace {name}",
+      "project": "Project {name}",
+      "full": "{scope} — every page in one file",
+      "curl": "Terminal"
+    },
     "tools": {
       "title": "What a connected client gets",
       "hint": "Tools your current sign-in would be offered. Every call is checked against your role in the workspace it touches, exactly like the web app.",

@@ -19,7 +19,7 @@ import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from '@knowledge/contracts';
  * here — apps/api is native ESM).
  *
  * Resolution order is deliberate: an explicit ?lang= wins (EventSource cannot
- * set headers, exactly like the ?token= escape hatch in AuthGuard), then the
+ * set headers, exactly like the @QueryTokenOk ?token= escape hatch), then the
  * kn_lang cookie, which mirrors users.locale and is therefore the user's actual
  * choice, and only then Accept-Language, which is the browser's default rather
  * than a decision anyone made in this app.

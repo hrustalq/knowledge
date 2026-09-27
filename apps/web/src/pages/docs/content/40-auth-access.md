@@ -40,8 +40,9 @@ session — never with another key, so a leaked key cannot mint its own replacem
 
 Four layers, in order:
 
-1. **AuthGuard** resolves the principal from the bearer token — or from `?token=`, because
-   `EventSource` cannot set headers. Failure is **401**.
+1. **AuthGuard** resolves the principal from the bearer token. Only routes marked
+   `@QueryTokenOk()` (the SSE stream and the `<img>` redirects, which cannot set
+   headers) also read `?token=`; elsewhere it is ignored. Failure is **401**.
 2. **AclGuard** reads the route's `@Access(role, source)` and resolves the target workspace
    _in Postgres, before the handler runs_ — so no graph query ever executes for a request
    that was going to be refused. Failure is **403**.

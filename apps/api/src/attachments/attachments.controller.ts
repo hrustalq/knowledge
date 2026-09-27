@@ -26,8 +26,8 @@ import { AttachmentsService } from './attachments.service.js';
  * attachment id from another tenant cannot be reached even by guessing.
  *
  * Reads are a redirect rather than a proxy: `<img>` and `<object>` cannot send
- * an Authorization header, so the API authorizes the request (AuthGuard also
- * accepts `?token=`, same as SSE) and then hands the browser a short-lived
+ * an Authorization header, so the API authorizes the request (the content route
+ * is `@QueryTokenOk()`, same as SSE) and then hands the browser a short-lived
  * presigned URL instead of streaming megabytes through Node.
  */
 @ApiTags('attachments')

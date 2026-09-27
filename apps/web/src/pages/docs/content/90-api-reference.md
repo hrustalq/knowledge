@@ -17,8 +17,9 @@ Authorization: Bearer kn_…    # an API key, from `make auth-bootstrap`
 ```
 
 With `AUTH_MODE=none` no header is required and every request is a full-access dev
-principal. `GET /v1/events` also accepts `?token=`, because `EventSource` cannot set
-headers.
+principal. `?token=` works only where a header cannot be sent: `GET /v1/events`
+(`EventSource`) and the attachment, import-image and avatar redirects (`<img>`). On
+every other route a token in the URL is ignored and the request is **401**.
 
 ## Errors
 

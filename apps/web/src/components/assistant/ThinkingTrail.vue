@@ -87,7 +87,7 @@ const hasTrail = computed(
         @click="expanded = !expanded"
       >
         <ChevronRight class="size-3 transition-transform duration-200" :class="expanded ? 'rotate-90' : ''" />
-        {{ expanded ? 'Hide steps' : `Show steps${stepCount ? ` (${stepCount})` : ''}` }}
+        {{ expanded ? t('chat.hideSteps') : stepCount ? t('chat.showStepsN', { n: stepCount }) : t('chat.showSteps') }}
       </button>
     </div>
 

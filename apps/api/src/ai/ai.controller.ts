@@ -22,6 +22,7 @@ import type {
   AiPluginSummary,
   AiPluginTestResponse,
   AiProviderSummary,
+  AiPageActionsResponse,
   AiSettingsResponse,
   AiSkillSummary,
   ListAiPluginsResponse,
@@ -97,6 +98,18 @@ export class AiController {
   @ApiOperation({ summary: 'Effective assistant configuration (DB overrides ∪ env). Never returns the API key.' })
   getSettings(@Query('workspaceId', ParseUUIDPipe) workspaceId: string): Promise<AiSettingsResponse> {
     return this.settings.get(workspaceId);
+  }
+
+  @Get('page-actions')
+  @Access('viewer', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({
+    summary:
+      'What the page AI actions menu may offer (issue #68): the external "Open in…" switch, clamped by ' +
+      'AI_EXTERNAL_ACTIONS_ENABLED, and the inline-prompt size limit. Readable by every member.',
+  })
+  getPageActions(@Query('workspaceId', ParseUUIDPipe) workspaceId: string): Promise<AiPageActionsResponse> {
+    return this.settings.pageActions(workspaceId);
   }
 
   @Patch('settings')

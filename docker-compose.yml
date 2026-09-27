@@ -15,13 +15,15 @@ services:
       retries: 10
 
   minio:
-    # quay.io, not Docker Hub. docker.io/minio/minio no longer exists: the Hub
-    # API answers 404 "object not found" and a pull fails with "pull access
-    # denied ... repository does not exist or may require 'docker login'".
-    # Verified from two networks, so this is the repo being gone, not a local
-    # registry or rate-limit problem. An existing machine keeps working off its
-    # image cache, which is why this stayed invisible until a fresh pull.
-    image: quay.io/minio/minio:latest
+    # pgsty/minio: Pigsty's community rebuild of upstream MinIO, same binary
+    # and CLI, published to Docker Hub for anonymous pulls (#104). Upstream
+    # stopped publishing: docker.io/minio/minio is gone (Hub API 404) and
+    # quay.io/minio/* answers 401 to anonymous pulls since 2026-09. An existing
+    # machine kept working off its cache, which is why both breaks stayed
+    # invisible until a fresh pull. Pinned by tag AND digest, never :latest, so
+    # a republished tag cannot change what we run. The image also ships `mc`,
+    # which the healthcheck below uses. Bump both lines together.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
     command: server /data --console-address ":9001"
     ports: ["9000:9000", "9001:9001"]
     environment:
@@ -36,8 +38,8 @@ services:
       retries: 10
 
   minio-init:
-    # Same reason as minio above: docker.io/minio/mc is gone too.
-    image: quay.io/minio/mc:latest
+    # Same source and pinning rule as minio above (#104).
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd
     depends_on:
       minio:
         condition: service_healthy

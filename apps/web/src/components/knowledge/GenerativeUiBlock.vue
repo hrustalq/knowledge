@@ -7,16 +7,19 @@
 // existing Card chrome around whichever component the backend picked.
 import type { AssistantUiBlock } from '@knowledge/contracts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useI18n } from 'vue-i18n'
 import GraphView from '@/components/knowledge/GraphView.vue'
 import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import SearchWidget from '@/components/knowledge/SearchWidget.vue'
 
 const props = defineProps<{ block: AssistantUiBlock }>()
+const { t } = useI18n()
 
+/** Message keys — resolved with `t()` at render. */
 const TITLES: Record<AssistantUiBlock['component'], string> = {
-  graph: 'Dependency graph',
-  activity: 'Activity',
-  search: 'Search',
+  graph: 'graph.dependencyGraph',
+  activity: 'assistant.block.activity',
+  search: 'common.search',
 }
 </script>
 
@@ -24,7 +27,7 @@ const TITLES: Record<AssistantUiBlock['component'], string> = {
   <Card class="overflow-hidden">
     <CardHeader class="pb-2">
       <CardTitle class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {{ TITLES[props.block.component] }}
+        {{ t(TITLES[props.block.component]) }}
       </CardTitle>
     </CardHeader>
     <CardContent>

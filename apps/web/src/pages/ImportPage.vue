@@ -168,10 +168,10 @@ async function create(): Promise<void> {
     parentId: parentId.value || null,
   })
   if (!res) {
-    toast.error(error.value ?? 'The page could not be created')
+    toast.error(error.value ?? t('import.couldNotCreatePage'))
     return
   }
-  toast.success(res.attachmentId ? 'Page created — the original file is attached' : 'Page created')
+  toast.success(res.attachmentId ? t('import.pageCreatedWithAttachment') : t('import.pageCreated'))
   void documents.fetchList()
   await router.push(`/documents/${res.documentId}`)
 }

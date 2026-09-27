@@ -270,24 +270,21 @@ async function startNewThread() {
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
         <DialogTitle>
-          {{ resetting?.role === 'user' ? 'Reset to before this message?' : 'Ask this question again?' }}
+          {{ resetting?.role === 'user' ? t('chat.resetTitle') : t('chat.askAgainTitle') }}
         </DialogTitle>
         <DialogDescription>
           <template v-if="resetting?.role === 'user'">
-            {{ t('count.messages', { n: resetCount }, resetCount) }} {{ t('chat.willBeRemovedFrom') }}
-            text comes back to the composer. This cannot be undone.
+            {{ t('chat.resetBodyUser', { count: t('count.messages', { n: resetCount }, resetCount) }) }}
           </template>
           <template v-else>
-            {{ t('count.messages', { n: resetCount }, resetCount) }} {{ t('chat.willBeRemovedAnd') }}
-            asked again. This cannot be undone, and the new turn runs in {{ assistantMode }} mode without any
-            files the original carried.
+            {{ t('chat.resetBodyAssistant', { count: t('count.messages', { n: resetCount }, resetCount), mode: assistantMode }) }}
           </template>
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>
         <Button variant="ghost" @click="resetting = null">{{ t('common.cancel') }}</Button>
         <Button variant="destructive" :disabled="rewinding" @click="confirmReset">
-          {{ rewinding ? 'Rewinding…' : resetting?.role === 'user' ? 'Reset' : 'Ask again' }}
+          {{ rewinding ? t('chat.rewinding') : resetting?.role === 'user' ? t('chat.reset') : t('chat.askAgain') }}
         </Button>
       </DialogFooter>
     </DialogContent>

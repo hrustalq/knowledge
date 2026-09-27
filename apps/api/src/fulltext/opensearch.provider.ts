@@ -32,6 +32,7 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
               workspaceId: { type: 'keyword' },
               documentId: { type: 'keyword' },
               revisionId: { type: 'keyword' },
+              live: { type: 'boolean' },
               chunkId: { type: 'keyword' },
               index: { type: 'integer' },
               headingPath: { type: 'keyword' },
@@ -51,7 +52,12 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
     return this.ready;
   }
 
-  async indexRevisionChunks(workspaceId: string, revisionId: string, chunks: FulltextChunk[]): Promise<void> {
+  async indexRevisionChunks(
+    workspaceId: string,
+    revisionId: string,
+    chunks: FulltextChunk[],
+    live = true,
+  ): Promise<void> {
     await this.ensureIndex();
     await this.deleteRevision(revisionId);
     if (chunks.length === 0) return;
@@ -59,7 +65,7 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
       chunks
         .flatMap((c) => [
           JSON.stringify({ index: { _index: this.index, _id: c.chunkId } }),
-          JSON.stringify({ ...c, workspaceId }),
+          JSON.stringify({ ...c, workspaceId, live }),
         ])
         .join('\n') + '\n';
     const res = await fetch(`${this.baseUrl}/_bulk?refresh=true`, {
@@ -86,6 +92,41 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
     }
   }
 
+  /**
+   * #83: two update_by_query passes, raise then lower, so a concurrent search
+   * sees a duplicate for a moment rather than a missing page. Documents
+   * indexed before the `live` field existed have no value and read as live
+   * (see `search`) until this runs for their document.
+   */
+  async setLiveRevision(workspaceId: string, documentId: string, revisionId: string | null): Promise<void> {
+    await this.ensureIndex();
+    const scope = [{ term: { workspaceId } }, { term: { documentId } }];
+    const passes: Array<{ live: boolean; query: unknown }> = [
+      ...(revisionId
+        ? [{ live: true, query: { bool: { filter: [...scope, { term: { revisionId } }] } } }]
+        : []),
+      {
+        live: false,
+        query: {
+          bool: { filter: scope, ...(revisionId ? { must_not: [{ term: { revisionId } }] } : {}) },
+        },
+      },
+    ];
+    for (const pass of passes) {
+      const res = await fetch(`${this.baseUrl}/${this.index}/_update_by_query?refresh=true&conflicts=proceed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: pass.query,
+          script: { source: 'ctx._source.live = params.live', lang: 'painless', params: { live: pass.live } },
+        }),
+      });
+      if (!res.ok && res.status !== 404) {
+        throw new Error(`OpenSearch update_by_query failed (${res.status}) for document ${documentId}`);
+      }
+    }
+  }
+
   async search(workspaceId: string, query: string, k: number): Promise<FulltextHit[]> {
     await this.ensureIndex();
     const res = await fetch(`${this.baseUrl}/${this.index}/_search`, {
@@ -98,6 +139,9 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
             must: [{ match: { text: { query } } }],
             // Mandatory server-side workspace predicate (plan.md §6).
             filter: [{ term: { workspaceId } }],
+            // #83: only the live projection. must_not rather than a term on
+            // true, so documents indexed before the field existed still match.
+            must_not: [{ term: { live: false } }],
           },
         },
       }),

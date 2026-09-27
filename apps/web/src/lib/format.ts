@@ -76,6 +76,22 @@ export function formatRelative(iso: string | Date, locale?: Locale): string {
   return formatDayMonth(iso, locale)
 }
 
+/**
+ * "PDF, Word or Markdown" / "PDF, Word или Markdown". `disjunction` for a
+ * choice, `conjunction` for a set; duplicates are dropped.
+ */
+export function formatList(values: readonly string[], type: 'conjunction' | 'disjunction' = 'conjunction', locale?: Locale): string {
+  return new Intl.ListFormat(tag(locale), { style: 'long', type }).format([...new Set(values)])
+}
+
+/**
+ * Month or weekday name for a calendar day (`YYYY-MM-DD`), read in UTC so the
+ * label never shifts a day across the reader's offset.
+ */
+export function formatCalendarPart(day: string, part: 'month' | 'weekday', locale?: Locale): string {
+  return dateFormat(tag(locale), { [part]: 'short', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00.000Z`))
+}
+
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
 
 /** Byte size with a locale-formatted number (the unit stays SI, untranslated). */

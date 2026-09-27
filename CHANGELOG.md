@@ -13,6 +13,137 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+## [0.13.0] — 2026-09-27
+
+### Added
+
+- **A page as plain markdown for agents.** `GET /v1/documents/:id/markdown`
+  returns the page as `text/markdown` (`# title` + body; `?frontmatter=1` adds
+  the page's YAML with provenance under `knowledge:`), and
+  `GET /v1/documents/:id/content` answers the same when the request prefers
+  `Accept: text/markdown`. Same access as reading the page, read-only API keys
+  included; `ETag` / `If-None-Match` answers `304` without re-reading storage.
+  First part of AI-readable output (#68).
+- **`llms.txt` for your knowledge base.** `GET /v1/llms.txt` lists the
+  workspaces your key can read; `/v1/workspaces/:id/llms.txt` and
+  `/v1/projects/:id/llms.txt` index their pages (tree order, links to each
+  page's markdown); the matching `llms-full.txt` streams every page's text in
+  one response, capped and recorded in the audit log. Drafts and unmerged
+  branches never appear. (#68)
+- **Page and llms.txt URLs on the web origin.** `/documents/<id>.md` returns a
+  page as plain markdown, and `/documents/<id>` does too when the request sends
+  `Accept: text/markdown` (a browser still gets the app). `/llms.txt`,
+  `/workspaces/<id>/llms(-full).txt` and `/projects/<id>/llms(-full).txt` work
+  on the same host. A logged-in tab is authenticated by its session; an agent
+  sends its API key as a bearer token, and without one gets a plain-text 401
+  that says where to create a key. (#68)
+- **Admins decide whether pages may be opened in ChatGPT, Claude or Cursor.** A
+  new switch under AI settings controls whether a page's upcoming AI actions
+  menu offers "Open in ChatGPT / Claude / Cursor", which put the page's text
+  into a link to that vendor. Copying a page as Markdown is never affected.
+  Members can read what the menu may offer from `GET /v1/ai/page-actions`. (#68)
+- **Hand a page to an AI tool from its header.** Every page now has a
+  **Copy page** button that copies it as Markdown, with a menu beside it:
+  view the raw Markdown, open the page in ChatGPT, Claude or Cursor (when the
+  workspace allows it), copy the MCP install config for your AI client, or
+  copy an agent link. No link or snippet ever contains an API key. (#68)
+- **Pages and llms.txt over MCP, and llms.txt links on Connect AI.** MCP
+  clients can read a page as markdown (`knowledge://documents/<id>.md`) and a
+  workspace's or project's `llms.txt` as resources, with the same access checks
+  as the app. Settings → Connect AI gains an "llms.txt and markdown" card with
+  copyable links for your workspace and current project plus a curl example,
+  and the generated skill lists each workspace's `llms.txt`. (#68)
+
+### Operations
+
+- **MinIO now comes from `pgsty/minio` and `pgsty/mc`, pinned by tag and
+  digest.** Upstream stopped publishing pullable images:
+  `docker.io/minio/minio` is gone, and `quay.io/minio/*` answers `401` to
+  anonymous pulls. Until now a fresh machine or a prod deploy that pulls
+  could not start `minio` / `minio-init`.
+  - Both images are Pigsty's community rebuild of the same MinIO server and
+    `mc` client.
+  - Existing data volumes are read as-is: versioned buckets and version ids
+    are kept. No migration and no env change.
+  - `docker compose pull` on a deploy is enough.
+  - If you pinned `quay.io/minio/*` in an override file, drop it. (#104)
+- `AI_READABLE_ENABLED` (default `true`) — kill switch for the markdown and
+  `llms.txt` routes and the matching MCP resources.
+- `LLMS_FULL_MAX_DOCS` (2000), `LLMS_FULL_MAX_BYTES` (20 MB) and
+  `AI_READABLE_FETCH_CONCURRENCY` (8) bound one `llms-full.txt` response.
+- `AI_EXTERNAL_ACTIONS_ENABLED` (default `true`) is a ceiling for that switch:
+  `false` turns the external actions off in every workspace, and the settings
+  page says the deployment turned them off. `AI_ACTION_INLINE_MAX_CHARS`
+  (default `6000`) is the longest page put inline into such a link; a longer
+  page is copied to the clipboard instead. Migration
+  `ai_settings_external_ai_actions` adds one nullable column. (#68)
+- **Run `make graph-live-backfill` once after deploying.** New indexing stamps
+  which revision is live, but data indexed before this release carries no flag
+  and is still served as before — stale revisions included — until the
+  backfill stamps it. It is idempotent, safe while the worker runs, takes
+  `ARGS="--workspace <id>"` and `ARGS="--dry-run"`, and touches ArcadeDB and
+  (with `FULLTEXT_PROVIDER=opensearch`) the OpenSearch index. No PostgreSQL
+  migration.
+- **Re-run `make backtest ARGS="--generate"` for a new baseline.** Recall and
+  MRR measured before this release counted stale revisions as matches, so the
+  numbers will move and are not comparable with earlier runs.
+- **Query tokens are masked in logs.** The API's request log and error log
+  write `token=[REDACTED]`, and the bundled `Caddyfile` filters the access log
+  to `token=REDACTED`. Pull the new `Caddyfile` when you deploy; a proxy of
+  your own in front of the API needs the same filter. (#102)
+
+### Fixed
+
+- **Search, the graph and agents only see what a page says now.** Text removed
+  from a page, tags and relations dropped from its frontmatter, and drafts on a
+  branch that was never merged used to keep turning up — in search results and
+  snippets, the tag filter, graph view, entity pages, impact analysis, the
+  relations panel and the context handed to agents and MCP clients. Every
+  revision is still kept for the revision diff and the facts history; only the
+  current published revision of each page is served. The same page also no
+  longer comes back once per old revision. (#83)
+- **The Russian interface is fully Russian.** Template copy, button labels,
+  tooltips, placeholders, import verdicts and errors raised by background jobs
+  used to show in English whatever the UI language was; they are translated
+  now, and a failed run reports in the language it was started in. Dates,
+  numbers and sizes follow the UI language instead of the server's, and CI
+  rejects new untranslated text or unused message keys. (#85)
+- **Fresh installs can pull MinIO again** — see Operations. (#104)
+
+### Breaking
+
+- **`?token=` authenticates only the routes that cannot send a header.** An API
+  key or session token in the query string used to work on every route, so a
+  key pasted into a URL (a `.md` link, `llms-full.txt`, even a write) was a
+  live credential in access logs, browser history and `Referer` headers. It is
+  now accepted only on the SSE stream (`GET /v1/events`) and the `<img>`
+  redirects (attachment content, import images, user and project avatars);
+  anywhere else it is ignored and the request is a `401`. The live WebSocket
+  (`/v1/events/ws`) is unchanged.
+  **Migration:** send `Authorization: Bearer <key>` instead. (#102)
+- **A connector's links, runs and work items come back a page at a time.**
+  `GET /v1/connectors/:id/links`, `/runs` and `/work-items` now return one page
+  (50 links, 30 runs, 50 work items by default) and a `nextCursor`; links used to
+  return up to 500 rows in one response, work items up to 200. Work items also
+  carry `total`, the count across every page.
+  **Migration:** a caller that needs everything keeps requesting with
+  `cursor=<nextCursor>` until it is `null`; `limit` takes 1–100. (#88)
+
+### Changed
+
+- **Long connector lists scroll inside the page.** On a connector's page the Work
+  items, Links and Runs tabs now end at the bottom of the window and scroll on
+  their own, loading more as you reach the end, so a connector with hundreds of
+  linked pages no longer makes the whole page one very long scroll. The same
+  applies to the Runs and Links tabs under **Settings → Connectors**, which also
+  used to stop silently at the first 20 runs or 500 links. (#88)
+- **The GitHub access card folds.** It starts folded when nothing is wrong,
+  showing whose installation it is, and open when a permission is missing or
+  pending, showing how many. Your choice is remembered while you move between
+  connectors. (#88)
+
 ## [0.12.0] — 2026-09-27
 
 ### Added
@@ -867,7 +998,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.12.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/hrustalq/knowledge/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/hrustalq/knowledge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/hrustalq/knowledge/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/hrustalq/knowledge/compare/v0.10.0...v0.10.1

@@ -66,6 +66,7 @@ import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
+import PageAiActions from '@/components/knowledge/PageAiActions.vue'
 
 const { t } = useI18n()
 
@@ -461,6 +462,13 @@ watch(
         </Button>
         <!-- Watch sits before Edit: following a page is open to every reader,
              while editing is not, so a viewer still sees a balanced row. -->
+        <!-- Every reader can hand the page to an AI tool (issue #68); it sits
+             with Watch, before the editor-only Edit. -->
+        <PageAiActions
+          :document-id="detail.document.documentId"
+          :title="detail.document.title"
+          :revision-id="viewingRevision"
+        />
         <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
         <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
           <RouterLink
@@ -477,7 +485,7 @@ watch(
 
       <template #meta>
         <p class="text-xs text-muted-foreground">
-          Revision #{{ detail.revision.revisionNumber }}
+          {{ t('documents.revisionNumber', { n: detail.revision.revisionNumber }) }}
           <span class="font-mono">({{ detail.revision.revisionId.slice(0, 8) }})</span>
           <template v-if="detail.revision.finalizedAt">
             · {{ t('documents.finalizedAt', { when: formatDateTime(detail.revision.finalizedAt) }) }}
@@ -534,7 +542,7 @@ watch(
                   v-for="(r, i) in visibleRelations"
                   :key="i"
                   class="inline-flex items-baseline gap-1.5 rounded-full border bg-background px-2 py-0.5 text-xs"
-                  :title="`${r.provenance.extractor} · confidence ${r.provenance.confidence}`"
+                  :title="t('documents.provenance', { extractor: r.provenance.extractor, confidence: r.provenance.confidence })"
                 >
                   <span class="text-muted-foreground">{{ r.type }}</span>
                   <span class="font-medium">{{ r.to.name }}</span>
@@ -544,7 +552,7 @@ watch(
                   class="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                   @click="showAllRelations = !showAllRelations"
                 >
-                  {{ showAllRelations ? 'Show fewer' : `+${relations.length - RELATION_PREVIEW} more` }}
+                  {{ showAllRelations ? t('common.showFewer') : t('common.andNMore', { n: relations.length - RELATION_PREVIEW }) }}
                 </button>
               </div>
             </div>
@@ -585,7 +593,7 @@ watch(
       <!-- Main column: what this is, what it says, what was said about it -->
       <section class="space-y-2">
         <p v-if="viewingRevision" class="text-xs text-muted-foreground">
-          Viewing revision {{ viewingRevision.slice(0, 8) }} — commenting is off while reading history.
+          {{ t('documents.viewingRevision', { id: viewingRevision.slice(0, 8) }) }}
           <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
         </p>
         <PageState v-if="contentError" state="error" :description="contentError" />

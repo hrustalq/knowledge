@@ -30,7 +30,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
     </div>
 
     <p v-else-if="error" class="text-sm text-destructive">
-      {{ error }} — check your connection and try again.
+      {{ t('search.failedCheckConnection', { error }) }}
     </p>
 
     <!-- First run: name what the filters do rather than showing a blank panel. -->
@@ -117,7 +117,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
                 </span>
               </div>
               <p class="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                via {{ r.via.map((v) => `${v.relationType} ${v.entityKey}`).join(', ') }}
+                {{ t('search.via', { path: r.via.map((v) => `${v.relationType} ${v.entityKey}`).join(', ') }) }}
               </p>
             </RouterLink>
           </li>

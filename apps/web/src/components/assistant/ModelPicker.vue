@@ -32,9 +32,9 @@ const pinned = computed(() => assistant.activeThread?.providerId ?? null)
 const label = computed(() => {
   if (!pinned.value) {
     const fallback = choices.value.find((c) => c.id === defaultId.value)
-    return fallback ? fallback.name : 'Default'
+    return fallback ? fallback.name : t('chat.modelDefault')
   }
-  return choices.value.find((c) => c.id === pinned.value)?.name ?? 'Default'
+  return choices.value.find((c) => c.id === pinned.value)?.name ?? t('chat.modelDefault')
 })
 
 async function pick(providerId: string | null) {

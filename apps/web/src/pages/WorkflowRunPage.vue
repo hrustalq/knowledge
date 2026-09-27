@@ -136,7 +136,7 @@ async function persistDraft(draft: WorkflowNodeDraft) {
 }
 
 async function sendRunEvent(type: WorkflowRunEventType) {
-  if (type === 'CANCEL' && !confirm('Cancel this run? Steps still queued will be skipped.')) return
+  if (type === 'CANCEL' && !confirm(t('workflow.cancelRunConfirm'))) return
   try {
     await runEvent.mutateAsync({ path: { id: runId.value }, body: { type } })
     await query.refetch()
@@ -169,7 +169,7 @@ const RUN_ACTION = {
             class="mt-1 text-sm font-medium text-amber-600 dark:text-amber-500"
           >
             {{ t('count.cards', { n: data.run.nodeStats.awaitingReview }, data.run.nodeStats.awaitingReview) }}
-            waiting for you
+            {{ t('workflow.waitingForYou') }}
           </p>
           <p class="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
             <component

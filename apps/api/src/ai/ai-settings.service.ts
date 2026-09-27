@@ -1,5 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import type { AiConnectionTestResponse, AiProvider, AiSettingsResponse, WebAccessMode } from '@knowledge/contracts';
+import { ConfigService } from '@nestjs/config';
+import { visibleAiActions } from '@knowledge/contracts/content';
+import type {
+  AiConnectionTestResponse,
+  AiPageActionsResponse,
+  AiProvider,
+  AiSettingsResponse,
+  WebAccessMode,
+} from '@knowledge/contracts';
+import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AiConfigService } from './ai-config.service.js';
@@ -27,6 +36,8 @@ export interface UpdateAiSettingsInput {
   agentModeEnabled?: boolean;
   /** docs/features/25 — null clears the override and inherits the env ceiling. */
   webAccessMode?: WebAccessMode | null;
+  /** Issue #68 — null clears the override and inherits AI_EXTERNAL_ACTIONS_ENABLED. */
+  externalAiActions?: boolean | null;
   pricePromptPerMTok?: number | null;
   priceCompletionPerMTok?: number | null;
   workspaceMonthlyTokenBudget?: number | null;
@@ -50,7 +61,22 @@ export class AiSettingsService {
     private readonly aiConfig: AiConfigService,
     private readonly sourcePolicies: SourcePolicyService,
     private readonly client: AssistantClient,
+    private readonly config: ConfigService<Env, true>,
   ) {}
+
+  /**
+   * The page AI actions menu, for any reader (issue #68). Reads the same
+   * resolved config the admin page shows, so the menu and the toggle cannot
+   * disagree about whether the external actions are on.
+   */
+  async pageActions(workspaceId: string): Promise<AiPageActionsResponse> {
+    const { externalAiActions } = await this.aiConfig.resolve(workspaceId);
+    return {
+      externalAiActions: externalAiActions.effective,
+      actions: visibleAiActions(externalAiActions.effective),
+      inlineMaxChars: this.config.get('AI_ACTION_INLINE_MAX_CHARS', { infer: true }),
+    };
+  }
 
   async get(workspaceId: string): Promise<AiSettingsResponse> {
     const [row, effective] = await Promise.all([
@@ -71,6 +97,7 @@ export class AiSettingsService {
       extractionMaxChunks: effective.extractionMaxChunks,
       agentModeEnabled: effective.agentModeEnabled,
       webAccess: effective.webAccess,
+      externalAiActions: effective.externalAiActions,
       pricePromptPerMTok: effective.pricePromptPerMTok,
       priceCompletionPerMTok: effective.priceCompletionPerMTok,
       workspaceMonthlyTokenBudget:
@@ -116,6 +143,7 @@ export class AiSettingsService {
       ...pick(input, 'extractionProviderId'),
       ...(input.agentModeEnabled === undefined ? {} : { agentModeEnabled: input.agentModeEnabled }),
       ...pick(input, 'webAccessMode'),
+      ...pick(input, 'externalAiActions'),
       ...(input.enforceBudget === undefined ? {} : { enforceBudget: input.enforceBudget }),
       ...(input.apiKey === undefined ? {} : { apiKeyCipher: this.encryptKey(input.apiKey) }),
       updatedBy: actorId ?? null,

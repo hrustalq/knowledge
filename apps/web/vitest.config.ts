@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['src/**/*.spec.ts'],
+    // server/ is server.js's unbundled Node helpers (plain JS).
+    include: ['src/**/*.spec.ts', 'server/**/*.spec.js'],
   },
 })

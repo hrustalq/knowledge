@@ -585,7 +585,9 @@ export class DocumentsService {
 
   async listRelations(documentId: string): Promise<ListDocumentRelationsResponse> {
     const document = await this.getDocumentOrThrow(documentId);
-    const rels = await this.graph.getDocumentRelations(document.workspaceId, documentId);
+    // What the page asserts now (#83): a relation dropped from the frontmatter
+    // must leave the relations panel once the new revision is indexed.
+    const rels = await this.graph.getDocumentRelations(document.workspaceId, documentId, { liveOnly: true });
     return {
       documentId,
       relations: rels.map((r) => ({

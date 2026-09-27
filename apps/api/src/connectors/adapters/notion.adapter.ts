@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
 import { safeJson } from '../webhook-payload.js';
+import { t } from '../../i18n/t.js';
 import {
   connectorFetch,
   optionalConfig,
@@ -105,7 +106,7 @@ export class NotionAdapter implements ConnectorAdapter {
 
     if (!doc.ref) {
       const parentId = optionalConfig(ctx.config, 'databaseId');
-      if (!parentId) throw new Error('a database id is required to create Notion pages');
+      if (!parentId) throw new Error(t('error.connector.notionDatabaseRequired', {}, ctx.locale));
       const created = (await (
         await connectorFetch(`${API}/pages`, {
           method: 'POST',

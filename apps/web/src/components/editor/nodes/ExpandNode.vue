@@ -3,11 +3,13 @@
 // input: an input inside ProseMirror steals selection and breaks undo, and the
 // label needs to look exactly like the heading it replaces.
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { ChevronRight } from 'lucide-vue-next'
 import { Collapse } from '@/components/ui/collapse'
 
 const props = defineProps(nodeViewProps)
+const { t } = useI18n()
 const open = ref<boolean>(props.node.attrs.open !== false)
 
 function commitSummary(event: Event) {
@@ -28,7 +30,7 @@ function toggle() {
         type="button"
         class="kn-expand-toggle"
         :aria-expanded="open"
-        :aria-label="open ? 'Collapse section' : 'Expand section'"
+        :aria-label="open ? t('editor.collapseSection') : t('editor.expandSection')"
         @click="toggle"
       >
         <ChevronRight class="size-4 transition-transform duration-200" :class="open ? 'rotate-90' : ''" />

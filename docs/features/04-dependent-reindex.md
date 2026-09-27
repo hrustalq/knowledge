@@ -48,7 +48,8 @@ posture as fulltext/inference steps).
 ## Notes
 
 - SSE + `AUTH_MODE=api-key`: `EventSource` cannot set headers; the endpoint
-  accepts the key via `?token=` as well (resolved by the same guard path).
+  accepts the key via `?token=` as well: the route is marked `@QueryTokenOk()`,
+  one of the few that may be (#102, [06-auth-acl.md](../architecture/06-auth-acl.md)).
 - Events are best-effort delivery (no replay); the UI still refetches on
   navigation, so a missed event never corrupts state.
 

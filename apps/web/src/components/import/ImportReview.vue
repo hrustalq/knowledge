@@ -25,7 +25,8 @@ import { Collapse } from '@/components/ui/collapse'
 import RichEditor from '@/components/editor/RichEditor.vue'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
-import { PARSER_ICONS, formatBytes } from './formats'
+import { PARSER_ICONS } from './formats'
+import { formatBytes } from '@/lib/format'
 
 const { t } = useI18n()
 
@@ -64,7 +65,7 @@ const found = computed(() => {
 })
 
 const destination = computed(() => {
-  const project = projects.items.find((p) => p.projectId === props.projectId)?.name ?? 'Project'
+  const project = projects.items.find((p) => p.projectId === props.projectId)?.name ?? t('import.project')
   const parent = props.parentId
     ? documents.items.find((d) => d.documentId === props.parentId)?.title
     : null
@@ -136,7 +137,7 @@ const empty = computed(() => markdown.value.trim().length === 0)
       >
         <p class="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
           <AlertTriangle class="size-4 shrink-0" aria-hidden="true" />
-          {{ warnings.length === 1 ? 'One thing to check' : `${warnings.length} things to check` }}
+          {{ t('import.thingsToCheck', { n: warnings.length }, warnings.length) }}
         </p>
         <ul class="mt-2 space-y-1.5 text-amber-900/90 dark:text-amber-100/80">
           <li v-for="w in warnings.slice(0, 2)" :key="w" class="flex gap-2">

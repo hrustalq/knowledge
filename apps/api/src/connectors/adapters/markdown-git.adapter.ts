@@ -4,6 +4,7 @@ import matter from 'gray-matter';
 import { safeJson, verifyHubSignature } from '../webhook-payload.js';
 import { safeFetch } from '../../common/safe-fetch.js';
 import type { ConnectorCapabilities, ConnectorKind } from '@knowledge/contracts';
+import { t } from '../../i18n/t.js';
 import {
   blobUrl,
   downloadRepoArchive,
@@ -105,7 +106,7 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
   async fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument> {
     const files = await this.markdownFiles(ctx);
     const bytes = files.get(ref.externalId);
-    if (!bytes) throw new Error(`${ref.externalId} is no longer in the repository`);
+    if (!bytes) throw new Error(t('error.connector.fileGone', { path: ref.externalId }, ctx.locale));
 
     const raw = Buffer.from(bytes).toString('utf8');
     const parsed = matter(raw);
@@ -185,7 +186,7 @@ export class MarkdownGitAdapter implements ConnectorAdapter {
       return { externalId: path, title: doc.title, url: blobUrl(ctx, path, branch) };
     }
 
-    throw new Error('only GitHub and GitLab repositories can be published to');
+    throw new Error(t('error.connector.publishGitOnly', {}, ctx.locale));
   }
 
   verifyWebhook(ctx: ConnectorContext, headers: Record<string, string>, rawBody: string): ExternalRef[] | null {

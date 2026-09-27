@@ -231,7 +231,7 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
         :disabled="activityQuery.isFetching.value"
         @click="loadEarlier"
       >
-        {{ activityQuery.isFetching.value ? 'Loading…' : 'Load earlier' }}
+        {{ activityQuery.isFetching.value ? t('common.loading') : t('common.loadEarlier') }}
       </Button>
     </div>
 

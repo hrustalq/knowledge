@@ -440,9 +440,9 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
  * environment prefix and the credential are added here, at render time.
  *
  * `<img>` and `<object>` cannot send an Authorization header, so the token
- * rides in the query string; the API's AuthGuard already accepts `?token=` for
- * exactly this reason (it is how SSE authenticates too), and the request is
- * same-origin through the proxy.
+ * rides in the query string. Only the asset routes marked `@QueryTokenOk()` in
+ * the API accept it (as the SSE stream does), and the request is same-origin
+ * through the proxy. Point this at any other route and it 401s (#102).
  */
 export function resolveAssetUrl(path: string): string {
   if (!path.startsWith('/v1/')) return path

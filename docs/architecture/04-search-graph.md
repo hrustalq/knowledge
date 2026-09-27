@@ -15,6 +15,30 @@ for the mandatory workspace predicate ([plan.md §6](../../plan.md) security
 note) — there is no second path to ArcadeDB, and adding one would remove the
 only guarantee that a query cannot cross a tenant boundary.
 
+## Only the live projection is served
+
+Every revision gets its own chunks and its own frontmatter/inferred edges, and
+they are kept: the MR diff, `revisionEmbeddingShift`, `factsAt` and the facts
+timeline all read them by revision id. What a **workspace-wide** read may see is
+narrower (#83) — the **live projection**, meaning the chunks and
+revision-scoped edges of the indexed head of each document's default branch.
+
+- Chunks and relation edges carry a `live` flag. The worker decides it before
+  writing (`live` only for the default-branch head) and, after every job,
+  `GraphService.setLiveRevision` raises the current head and lowers every other
+  revision of the page. Raise-then-lower, so a concurrent read sees a duplicate
+  for a moment rather than a missing page; re-read the head each time, so jobs
+  finishing out of order still converge.
+- A head that is not yet indexed does not take over: the previous live revision
+  keeps serving until it is, so a page never drops out of search mid-edit.
+- `searchChunks`, `getWorkspaceRelationGraph`, `getDocumentIdsByTags`, the
+  relations panel (`liveOnly`) and the OpenSearch query all filter on it.
+  Removed text, dropped tags and relations, and unmerged branch drafts are
+  therefore not found, not expanded and not handed to an agent.
+- Explicit and curated edges are document-level and always live.
+- `live IS NULL` reads as live, so rows written before the flag existed stay
+  visible until `make graph-live-backfill` stamps them.
+
 ## Vector search
 
 Phase 1 similarity is **cosine computed in Node**, inside

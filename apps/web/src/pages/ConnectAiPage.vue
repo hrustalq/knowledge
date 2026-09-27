@@ -21,7 +21,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { Download, ExternalLink, KeyRound, Plus, TriangleAlert } from 'lucide-vue-next'
+import { Download, ExternalLink, FileText, KeyRound, Plus, TriangleAlert } from 'lucide-vue-next'
 import type {
   ApiKeyInfo,
   ApiKeyScope,
@@ -30,10 +30,11 @@ import type {
   McpConnectionInfo,
 } from '@knowledge/contracts'
 import { API_KEY_SCOPES } from '@knowledge/contracts'
-import { apiFetch, apiFetchText } from '@/lib/api'
+import { apiFetch, apiFetchText, getProjectId, getWorkspaceId } from '@/lib/api'
 import { formatDate, formatRelative } from '@/lib/format'
 import { KEY_ENV, SKILL_NAME, mcpClients, skillInstallCommand } from '@/lib/mcp-clients'
 import { useWorkspacesStore } from '@/stores/workspaces'
+import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -55,6 +56,7 @@ import CopyBlock from '@/components/connect/CopyBlock.vue'
 const { t } = useI18n()
 const route = useRoute()
 const workspaces = useWorkspacesStore()
+const projects = useProjectsStore()
 
 const connection = ref<McpConnectionInfo | null>(null)
 const keys = ref<ApiKeyInfo[]>([])
@@ -65,6 +67,7 @@ const loading = ref(true)
 const needsKey = computed(() => connection.value?.authMode === 'api-key')
 
 onMounted(async () => {
+  origin.value = window.location.origin
   workspaces.ensureLoaded()
   try {
     const [info, md] = await Promise.all([
@@ -186,6 +189,44 @@ function downloadSkill() {
   a.click()
   URL.revokeObjectURL(href)
 }
+
+/* ---------------------------------------------------------------- llms.txt */
+
+// The web origin serves llms.txt and `.md` pages (issue #68). Set on mount —
+// the SSR pass has no `window` and renders the card without URLs.
+const origin = ref('')
+
+interface LlmsUrl {
+  label: string
+  url: string
+}
+
+const llmsUrls = computed<LlmsUrl[]>(() => {
+  if (!origin.value) return []
+  const ws = getWorkspaceId()
+  const proj = getProjectId()
+  const wsLabel = t('connect.llms.workspace', { name: workspaceName(ws) })
+  const out: LlmsUrl[] = [
+    { label: t('connect.llms.root'), url: `${origin.value}/llms.txt` },
+    { label: wsLabel, url: `${origin.value}/workspaces/${ws}/llms.txt` },
+    { label: t('connect.llms.full', { scope: wsLabel }), url: `${origin.value}/workspaces/${ws}/llms-full.txt` },
+  ]
+  if (proj) {
+    const projLabel = t('connect.llms.project', { name: projects.active?.name ?? proj.slice(0, 8) })
+    out.push(
+      { label: projLabel, url: `${origin.value}/projects/${proj}/llms.txt` },
+      { label: t('connect.llms.full', { scope: projLabel }), url: `${origin.value}/projects/${proj}/llms-full.txt` },
+    )
+  }
+  return out
+})
+
+// The key rides in a header, never in the URL, where it would end up in logs.
+const llmsCurl = computed(() =>
+  origin.value
+    ? `curl -H "Authorization: Bearer $${KEY_ENV}" ${origin.value}/workspaces/${getWorkspaceId()}/llms.txt`
+    : '',
+)
 
 const readTools = computed(() => connection.value?.tools.filter((tool) => tool.readOnly) ?? [])
 const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool.readOnly) ?? [])
@@ -375,6 +416,18 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
           <p class="text-[11px] text-muted-foreground">{{ t('connect.skill.alsoServed') }}</p>
 
           <CopyBlock v-if="showSkill && skill" :code="skill" label="SKILL.md" />
+        </div>
+      </section>
+
+      <!-- Plain HTTP for tools that fetch URLs instead of speaking MCP. ------ -->
+      <section class="min-w-0 rounded-xl border bg-card px-5 py-4">
+        <h2 class="flex items-center gap-2 font-display text-[15px] font-semibold tracking-tight">
+          <FileText class="size-4 text-muted-foreground" aria-hidden="true" />{{ t('connect.llms.title') }}
+        </h2>
+        <p class="mt-0.5 max-w-3xl text-xs text-muted-foreground">{{ t('connect.llms.hint') }}</p>
+        <div v-if="llmsUrls.length" class="mt-3 grid gap-2">
+          <CopyBlock v-for="u in llmsUrls" :key="u.url" :code="u.url" :label="u.label" />
+          <CopyBlock v-if="needsKey" :code="llmsCurl" :label="t('connect.llms.curl')" />
         </div>
       </section>
 

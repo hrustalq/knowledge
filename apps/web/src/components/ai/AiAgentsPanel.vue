@@ -294,7 +294,7 @@ async function remove(agent: AiAgentSummary) {
           </TableCell>
           <TableCell>
             <span class="text-xs">{{ agent.providerName ?? t('ai.agents.routed', { purpose: agent.purpose }) }}</span>
-            <span class="text-muted-foreground block font-mono text-[11px]">{{ agent.tools.length }} tools</span>
+            <span class="text-muted-foreground block font-mono text-[11px]">{{ t('count.tools', { n: agent.tools.length }, agent.tools.length) }}</span>
           </TableCell>
           <TableCell>
             <Checkbox
@@ -356,7 +356,7 @@ async function remove(agent: AiAgentSummary) {
           </SelectContent>
         </Select>
         <DialogFooter>
-          <Button variant="outline" @click="runOpen = false">{{ t('cancel') }}</Button>
+          <Button variant="outline" @click="runOpen = false">{{ t('common.cancel') }}</Button>
           <Button
             :disabled="!runConnectorId || runAgent.isPending.value"
             @click="runTarget && start(runTarget, runConnectorId)"

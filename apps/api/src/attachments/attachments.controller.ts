@@ -15,7 +15,7 @@ import type {
   CreateAttachmentResponse,
   ListAttachmentsResponse,
 } from '@knowledge/contracts';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, QueryTokenOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CreateAttachmentDto } from './attachments.dto.js';
 import { AttachmentsService } from './attachments.service.js';
@@ -26,8 +26,8 @@ import { AttachmentsService } from './attachments.service.js';
  * attachment id from another tenant cannot be reached even by guessing.
  *
  * Reads are a redirect rather than a proxy: `<img>` and `<object>` cannot send
- * an Authorization header, so the API authorizes the request (AuthGuard also
- * accepts `?token=`, same as SSE) and then hands the browser a short-lived
+ * an Authorization header, so the API authorizes the request (the content route
+ * is `@QueryTokenOk()`, same as SSE) and then hands the browser a short-lived
  * presigned URL instead of streaming megabytes through Node.
  */
 @ApiTags('attachments')
@@ -65,6 +65,7 @@ export class AttachmentsController {
 
   @Get(':attachmentId/content')
   @Access('viewer', 'document')
+  @QueryTokenOk() // <img> / <object> cannot set headers
   @Redirect(undefined, 302)
   @ApiExcludeEndpoint() // binary redirect; not useful in the generated client
   async content(

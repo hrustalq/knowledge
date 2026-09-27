@@ -650,6 +650,12 @@ model AiSettings {
   /// the two: a settings row must never widen what the model can reach.
   webAccessMode String? @map("web_access_mode")
 
+  /// Issue #68 — whether the page AI actions menu may hand content to external
+  /// AI vendors (Open in ChatGPT/Claude/Cursor with inline content). Null
+  /// inherits AI_EXTERNAL_ACTIONS_ENABLED; the effective value is the NARROWER
+  /// of the two.
+  externalAiActions Boolean? @map("external_ai_actions")
+
   updatedBy String?  @map("updated_by") @db.Uuid
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 

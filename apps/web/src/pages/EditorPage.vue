@@ -249,7 +249,7 @@ const mentionablePages = computed(() =>
 )
 
 const projectName = computed(
-  () => projects.items.find((p) => p.projectId === projectId.value)?.name ?? 'Project',
+  () => projects.items.find((p) => p.projectId === projectId.value)?.name ?? t('import.project'),
 )
 
 /* ------------------------------------------------------ working copy */
@@ -477,7 +477,7 @@ async function ensureDocumentId(): Promise<string | null> {
       body: JSON.stringify({
         workspaceId: getWorkspaceId(),
         projectId: projectId.value,
-        title: title.value.trim() || 'Untitled page',
+        title: title.value.trim() || t('editor.untitledPage'),
         category: category.value,
         ...(parentId.value ? { parentId: parentId.value } : {}),
       }),
@@ -773,7 +773,7 @@ onBeforeUnmount(() => {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button size="sm" :disabled="busy || loading" @click="save">
-            {{ busy ? 'Saving…' : isEdit ? 'Publish' : 'Create & index' }}
+            {{ busy ? t('common.saving') : isEdit ? t('editor.publish') : t('editor.createAndIndex') }}
           </Button>
         </div>
       </header>

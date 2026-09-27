@@ -35,7 +35,7 @@ export type AvatarOwner = 'users' | 'projects';
  *
  * Reads go out as a 302 to a short-lived presigned GET rather than a proxy —
  * `<img>` cannot send an Authorization header, so the API authorizes the request
- * (AuthGuard also accepts `?token=`, the same way SSE does) and then hands the
+ * (the read routes are `@QueryTokenOk()`, the same way SSE is) and then hands the
  * browser a URL it can fetch directly.
  */
 @Injectable()

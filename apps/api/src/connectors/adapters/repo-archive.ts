@@ -1,5 +1,6 @@
 import { unzipSync } from 'fflate';
 import { safeFetch } from '../../common/safe-fetch.js';
+import { t } from '../../i18n/t.js';
 import {
   connectorFetch,
   ConnectorRequestError,
@@ -70,7 +71,7 @@ export function repoHost(ctx: ConnectorContext): RepoHost {
   const raw = trimBaseUrl(requireConfig(ctx.config, 'repoUrl')).replace(/\.git$/, '');
   const url = new URL(raw);
   const [owner, repo] = url.pathname.replace(/^\/+/, '').split('/');
-  if (!owner || !repo) throw new Error('repository URL must look like https://host/owner/repo');
+  if (!owner || !repo) throw new Error(t('error.connector.repoUrlShape', {}, ctx.locale));
   const kind = url.hostname === 'github.com' ? 'github' : url.hostname.includes('gitlab') ? 'gitlab' : 'other';
   return { kind, origin: url.origin, owner, repo };
 }
@@ -278,16 +279,16 @@ async function explain404(ctx: ConnectorContext, err: unknown, branch: string): 
   if (!meta) {
     return new Error(
       ctx.credential
-        ? `${slug} was not found, or the credential cannot read it — check that the repository exists and that the token or GitHub App installation has read access to it`
-        : `${slug} was not found, and no credential is configured — a private repository needs a token or a GitHub App installation with read access`,
+        ? t('error.connector.repoNotFound', { slug }, ctx.locale)
+        : t('error.connector.repoNotFoundNoCredential', { slug }, ctx.locale),
     );
   }
 
   const actual = meta.default_branch;
   return new Error(
     actual
-      ? `branch "${branch}" does not exist in ${slug} — its default branch is "${actual}". Leave the Branch field empty to follow the default.`
-      : `branch "${branch}" does not exist in ${slug}`,
+      ? t('error.connector.branchMissingDefault', { branch, slug, actual }, ctx.locale)
+      : t('error.connector.branchMissing', { branch, slug }, ctx.locale),
   );
 }
 

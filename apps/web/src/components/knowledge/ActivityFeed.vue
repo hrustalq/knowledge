@@ -269,9 +269,9 @@ watch(() => events.revision, () => void refreshHead())
             </RouterLink>
           </template>
           <template v-else>
-            <span>{{ entries.length }} loaded{{ nextCursor ? '' : ' — end of feed' }}</span>
+            <span>{{ t(nextCursor ? 'common.loadedN' : 'common.loadedEndOfFeed', { n: entries.length }) }}</span>
             <Button v-if="nextCursor" variant="outline" size="sm" :disabled="busy" @click="loadMore">
-              {{ busy ? 'Loading…' : 'Load more' }}
+              {{ busy ? t('common.loading') : t('common.loadMore') }}
             </Button>
           </template>
         </div>

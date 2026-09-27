@@ -241,7 +241,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
                 v-if="m.accepted?.includes(s.term)"
                 class="flex shrink-0 items-center gap-1 pt-0.5 text-xs text-emerald-600"
               >
-                <Check class="size-3.5" /> added
+                <Check class="size-3.5" /> {{ t('common.added') }}
               </span>
               <Button
                 v-else-if="canBuildGlossary && !s.existingTermId"
@@ -250,7 +250,7 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
                 class="shrink-0"
                 @click="acceptTerm(m, s)"
               >
-                Add
+                {{ t('common.add') }}
               </Button>
             </li>
           </ul>

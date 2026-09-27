@@ -418,13 +418,24 @@ export class ConnectorsService {
     });
   }
 
-  async listRuns(connectorId: string, limit = 20): Promise<ConnectorRunInfo[]> {
+  /**
+   * Runs newest first, a page at a time — the activity feed's keyset shape: the
+   * cursor is the last row's id, so a run started while someone scrolls lands at
+   * the head instead of shifting every later page by one.
+   */
+  async listRuns(
+    connectorId: string,
+    opts: { limit?: number; cursor?: string } = {},
+  ): Promise<{ runs: ConnectorRunInfo[]; nextCursor: string | null }> {
+    const limit = opts.limit ?? 30;
     const rows = await this.prisma.connectorRun.findMany({
       where: { connectorId },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
     });
-    return rows.map(toRunInfo);
+    const page = rows.slice(0, limit);
+    return { runs: page.map(toRunInfo), nextCursor: rows.length > limit ? page[page.length - 1].id : null };
   }
 
   async getRun(runId: string): Promise<ConnectorRunInfo> {

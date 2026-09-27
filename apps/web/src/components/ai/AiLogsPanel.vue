@@ -120,8 +120,8 @@ function fmtDuration(ms: number): string {
               <!-- Status leads the row rather than trailing 900px behind it: a
                    failed call is why anyone opens this tab. -->
               <TableCell>
-                <CircleCheck v-if="e.ok" class="size-3.5 text-emerald-600" aria-label="ok" />
-                <CircleX v-else class="text-destructive size-3.5" aria-label="failed" />
+                <CircleCheck v-if="e.ok" class="size-3.5 text-emerald-600" :aria-label="t('common.ok')" />
+                <CircleX v-else class="text-destructive size-3.5" :aria-label="t('common.failed')" />
               </TableCell>
               <TableCell class="text-muted-foreground whitespace-nowrap" :title="e.createdAt">
                 {{ relativeTime(e.createdAt) }}
@@ -153,7 +153,7 @@ function fmtDuration(ms: number): string {
       </div>
 
       <div class="text-muted-foreground flex items-center gap-3 px-2 text-xs">
-        <span>{{ entries.length }} loaded{{ page?.nextCursor ? '' : ' — end of log' }}</span>
+        <span>{{ t(page?.nextCursor ? 'common.loadedN' : 'common.loadedEndOfLog', { n: entries.length }) }}</span>
         <Button
           v-if="page?.nextCursor"
           variant="outline"
@@ -161,7 +161,7 @@ function fmtDuration(ms: number): string {
           :disabled="query.isFetching.value"
           @click="loadMore"
         >
-          {{ query.isFetching.value ? 'Loading…' : 'Load more' }}
+          {{ query.isFetching.value ? t('common.loading') : t('common.loadMore') }}
         </Button>
       </div>
     </template>

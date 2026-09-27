@@ -1,6 +1,7 @@
 import type { ApiErrorCode } from '@knowledge/contracts'
 import { ApiError } from '@/lib/api'
 import { ApiRequestError } from '@/api/http'
+import { UploadError } from '@/lib/presigned-put'
 
 /**
  * One place that turns any thrown request error into something to show a user.
@@ -17,7 +18,7 @@ import { ApiRequestError } from '@/api/http'
  */
 
 /** The translator, narrowed to what this needs — avoids a vue-i18n type import. */
-type Translate = (key: string) => string
+type Translate = (key: string, params?: Record<string, unknown>) => string
 
 function codeOf(error: unknown): ApiErrorCode | undefined {
   if (error instanceof ApiRequestError) return error.code
@@ -32,6 +33,7 @@ function firstValidationError(error: unknown): string | undefined {
 }
 
 export function errorMessage(error: unknown, t: Translate): string {
+  if (error instanceof UploadError) return t(error.key, error.params)
   switch (codeOf(error)) {
     case 'PAYLOAD_TOO_LARGE':
       // The server's own wording is accurate but generic; the UI can say the

@@ -103,6 +103,11 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       stepStart = now;
     };
 
+    // #83: only the head of the default branch is served by workspace-wide
+    // reads. Decided before writing so a branch or superseded revision never
+    // enters the live projection, not even between the write and `setLive`.
+    const live = (await this.defaultBranchHeadId(revision.documentId)) === revision.id;
+
     try {
       // 1. Fetch raw bytes
       const raw = await this.storage.getObjectText(revision.s3Key);
@@ -156,6 +161,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           headingPath: c.headingPath,
           embedding: embeddingsOut[i],
         })),
+        live,
       });
       mark('graph', drafts.length);
 
@@ -174,6 +180,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
             text: c.text,
             headingPath: c.headingPath,
           })),
+          live,
         );
       } catch (e) {
         this.logger.warn(`Fulltext indexing failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
@@ -189,6 +196,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         revisionId: revision.id,
         title: revision.document.title,
         facts: facts.map((f) => ({ ...f, extractor: 'frontmatter' as const, confidence: 1 })),
+        live,
       });
       mark('relations', facts.length);
 
@@ -224,6 +232,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           revisionId: revision.id,
           title: revision.document.title,
           facts: inferred.map((f) => ({ ...f, extractor: 'inferred' as const })),
+          live,
         });
         if (inferred.length > 0) {
           this.logger.log(`Inferred ${inferred.length} relation(s) for revision ${revision.id}`);
@@ -232,6 +241,13 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         this.logger.warn(`Inferred extraction failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
       }
       mark('inferred');
+
+      // 9. #83: retire the previous revisions' projection now that this one is
+      //    written. Re-reads the head rather than trusting `live` above — the
+      //    head may have moved while this job ran. Inside the try on purpose:
+      //    a failure here leaves stale rows served, so the job must retry.
+      await this.reconcileLive(revision.document.workspaceId, revision.documentId, revision.id);
+      mark('live');
 
       await this.prisma.$transaction([
         this.prisma.ingestionJob.update({
@@ -318,6 +334,41 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         title: revision.document.title,
       });
       throw e; // let BullMQ retry with backoff
+    }
+  }
+
+  private async defaultBranchHeadId(documentId: string): Promise<string | null> {
+    const doc = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { defaultBranch: true, branches: { select: { name: true, headRevisionId: true } } },
+    });
+    return doc?.branches.find((b) => b.name === doc.defaultBranch)?.headRevisionId ?? null;
+  }
+
+  /**
+   * Point the document's live projection (#83) at its default-branch head,
+   * once that head is indexed (or is the revision this job just wrote). Until then the previous live revision keeps
+   * serving, so a page never drops out of search while its new revision is in
+   * flight. Called after every job, so jobs finishing out of order converge on
+   * the current head whichever lands last.
+   *
+   * Graph first, fulltext second, and the fulltext half is non-fatal like
+   * every other BM25 write: the vector index stays authoritative.
+   */
+  private async reconcileLive(workspaceId: string, documentId: string, justWritten: string): Promise<void> {
+    const headId = await this.defaultBranchHeadId(documentId);
+    if (!headId) return;
+    // The revision this job just wrote counts as indexed: its row flips to
+    // `indexed` only after this returns.
+    if (headId !== justWritten) {
+      const head = await this.prisma.documentRevision.findUnique({ where: { id: headId }, select: { status: true } });
+      if (head?.status !== 'indexed') return;
+    }
+    await this.graph.setLiveRevision(workspaceId, documentId, headId);
+    try {
+      await this.fulltext.setLiveRevision(workspaceId, documentId, headId);
+    } catch (e) {
+      this.logger.warn(`Fulltext live update failed for document ${documentId} (non-fatal): ${(e as Error).message}`);
     }
   }
 

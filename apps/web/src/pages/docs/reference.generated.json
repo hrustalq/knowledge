@@ -182,6 +182,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/ai/page-actions",
+      "tag": "ai",
+      "summary": "What the page AI actions menu may offer (issue #68): the external \"Open in…\" switch, clamped by AI_EXTERNAL_ACTIONS_ENABLED, and the inline-prompt size limit. Readable by every member.",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/ai/plugins",
       "tag": "ai",
       "summary": "MCP plugins in the workspace (admin — rows carry endpoints and credential metadata)",
@@ -437,6 +447,56 @@
       "summary": "The caller's own usage this month and remaining budget",
       "role": "viewer",
       "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/llms.txt",
+      "tag": "ai-readable",
+      "summary": "Hub: one section per workspace the caller can read, linking to its llms.txt files (issue #68)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/llms-full.txt",
+      "tag": "ai-readable",
+      "summary": "Every readable page of one project concatenated, streamed and capped. Audited (issue #68)",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/llms.txt",
+      "tag": "ai-readable",
+      "summary": "llms.txt index of one project, pages in tree order (issue #68)",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/llms-full.txt",
+      "tag": "ai-readable",
+      "summary": "Every readable page of a workspace concatenated, streamed and capped (LLMS_FULL_MAX_DOCS / _BYTES). Audited (issue #68)",
+      "role": "viewer",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/llms.txt",
+      "tag": "ai-readable",
+      "summary": "llms.txt index of a workspace: a section per project, pages in tree order (issue #68)",
+      "role": "viewer",
+      "source": "workspace",
       "public": false,
       "platformAdmin": false
     },
@@ -1235,6 +1295,16 @@
       "path": "/v1/documents/{id}/graph",
       "tag": "documents",
       "summary": "Document neighbourhood in the knowledge graph (feature 06); depth = entity hops (1-3)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/markdown",
+      "tag": "documents",
+      "summary": "A page as plain markdown for agents and AI tools (issue #68). Head of the default branch by default; frontmatter=1 prepends the page YAML plus provenance under `knowledge:`. ETag / If-None-Match → 304",
       "role": "viewer",
       "source": "document",
       "public": false,

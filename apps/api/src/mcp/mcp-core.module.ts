@@ -13,6 +13,7 @@ import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
 import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
 import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -44,6 +45,9 @@ import { McpService } from './mcp.service.js';
     // The registry only — AiAgentsService is API-only (it validates tool lists
     // against the plugin roster) and the agent tools here are read-only anyway.
     AgentCoreModule,
+    // Resource templates over the same service as the /markdown and llms.txt
+    // routes (issue #68). Controller-free.
+    AiReadableCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

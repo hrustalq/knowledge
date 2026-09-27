@@ -884,7 +884,7 @@ defineExpose({
             <Heading2 class="size-3.5" /> {{ t('toolbar.heading2') }}
           </button>
           <button type="button" role="menuitem" @click="runBlockAction(3)">
-            <Heading3 class="size-3.5" /> Heading 3
+            <Heading3 class="size-3.5" /> {{ t('toolbar.heading3') }}
           </button>
         </div>
       </div>

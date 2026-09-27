@@ -151,6 +151,13 @@ type KindMachine = ReturnType<typeof kindMachine>
  * file reads: the machine, the stepper and the field renderer are all derived
  * from it, so adding a step to one connector is one entry here.
  */
+/**
+ * Sentinel for a failed connection test with no server detail. Machines hold no
+ * translator (they run outside any app instance), so the dialog swaps this for
+ * `connectors.testFailed` at render.
+ */
+export const COULD_NOT_CONNECT = 'connector.could-not-connect'
+
 export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
   // Which site, then which space. The token is asked for with the site, because
   // that is the pair the connection test actually needs.
@@ -363,7 +370,7 @@ export const connectorSetupMachine = setup({
           },
           {
             target: 'testFailed',
-            actions: assign({ error: ({ event }) => event.output.detail ?? 'Could not connect' }),
+            actions: assign({ error: ({ event }) => event.output.detail ?? COULD_NOT_CONNECT }),
           },
         ],
         onError: {

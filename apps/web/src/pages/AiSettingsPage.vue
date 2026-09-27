@@ -64,7 +64,7 @@ function setTab(key: TabKey) {
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 class="font-display text-2xl font-bold tracking-tight">AI</h1>
+        <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('common.ai') }}</h1>
         <p class="text-muted-foreground mt-0.5 text-sm">
           {{ t('ai.pageSubtitle') }}
         </p>

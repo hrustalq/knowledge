@@ -92,6 +92,18 @@ export const envSchema = z.object({
 
   /** Phase 5 stale-doc detection & reindex scheduling (worker sweeper). */
   STALE_SWEEP_ENABLED: boolish(true),
+  /**
+   * AI-readable output (issue #68): `GET /v1/documents/:id/markdown` and
+   * `Accept: text/markdown` on `/content`. Kill switch — false 404s the routes
+   * and `/content` stays JSON-only.
+   */
+  AI_READABLE_ENABLED: boolish(true),
+  /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
+  LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
+  /** Cap on bytes streamed in one llms-full.txt (20 MB). */
+  LLMS_FULL_MAX_BYTES: z.coerce.number().int().positive().default(20_000_000),
+  /** Parallel S3 reads while streaming llms-full.txt. */
+  AI_READABLE_FETCH_CONCURRENCY: z.coerce.number().int().positive().default(8),
   // Background agent schedules (docs/features/20). Off by default: the failure
   // mode of unattended AI is an avalanche, not a slow queue.
   AGENT_SCHEDULE_ENABLED: boolish(false),
@@ -160,6 +172,21 @@ export const envSchema = z.object({
    * set in its settings.yml or every query comes back as HTML.
    */
   WEB_SEARCH_URL: z.string().optional().default(''),
+
+  /**
+   * Ceiling for `ai_settings.external_ai_actions` (issue #68): whether a page's
+   * AI actions menu may offer "Open in ChatGPT / Claude / Cursor", which put the
+   * page's content into a vendor URL. false removes them for every workspace,
+   * whatever the workspace setting says; the admin page shows the clamp.
+   */
+  AI_EXTERNAL_ACTIONS_ENABLED: boolish(true),
+
+  /**
+   * Largest page (in characters) "Open in ChatGPT / Claude / Cursor" puts
+   * inline into the vendor URL. A longer page is copied to the clipboard
+   * instead, with a toast telling the reader to paste it (issue #68).
+   */
+  AI_ACTION_INLINE_MAX_CHARS: z.coerce.number().int().positive().default(6000),
 
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),

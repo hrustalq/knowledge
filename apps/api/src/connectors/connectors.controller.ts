@@ -30,11 +30,13 @@ import { GithubAccessService } from './github/github-access.service.js';
 import {
   ConnectorItemAiDto,
   ConnectorItemEventDto,
+  ConnectorPageQueryDto,
   ConnectorRunEventDto,
   CreateConnectorDto,
   StartConnectorSyncDto,
   UpdateConnectorDto,
   CreateConnectorWorkItemDto,
+  ConnectorWorkItemsQueryDto,
   LinkConnectorWorkItemDto,
   UpdateConnectorRunItemDto,
 } from './connectors.dto.js';
@@ -258,15 +260,21 @@ export class ConnectorsController {
   @Get(':id/runs')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'Recent sync runs, newest first' })
-  async runs(@Param('id', ParseUUIDPipe) id: string): Promise<ListConnectorRunsResponse> {
-    return { connectorId: id, runs: await this.connectors.listRuns(id) };
+  async runs(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ConnectorPageQueryDto,
+  ): Promise<ListConnectorRunsResponse> {
+    return { connectorId: id, ...(await this.connectors.listRuns(id, query)) };
   }
 
   @Get(':id/links')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'The external item <-> page identity map' })
-  async connectorLinks(@Param('id', ParseUUIDPipe) id: string): Promise<ListConnectorLinksResponse> {
-    return { connectorId: id, links: await this.links.listForConnector(id) };
+  async connectorLinks(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ConnectorPageQueryDto,
+  ): Promise<ListConnectorLinksResponse> {
+    return { connectorId: id, ...(await this.links.listForConnector(id, query)) };
   }
 
   @Delete(':id/links/:linkId')
@@ -294,9 +302,12 @@ export class ConnectorsController {
   @Get(':id/work-items')
   @Access('viewer', 'connector')
   @ApiOperation({ summary: 'Issues and pull requests on the connected repository' })
-  async workItemList(@Param('id', ParseUUIDPipe) id: string): Promise<ListConnectorWorkItemsResponse> {
+  async workItemList(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ConnectorWorkItemsQueryDto,
+  ): Promise<ListConnectorWorkItemsResponse> {
     const connector = await this.connectors.require(id);
-    return { workItems: await this.workItems.list(connector) };
+    return this.workItems.page(connector, query);
   }
 
   /**

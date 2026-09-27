@@ -56,6 +56,8 @@ type Form = {
   extractionMinConfidence: string
   extractionMaxChunks: string
   agentModeEnabled: boolean
+  /** What the workspace asks for, or the ceiling it inherits (issue #68). */
+  externalAiActions: boolean
   pricePromptPerMTok: string
   priceCompletionPerMTok: string
   workspaceMonthlyTokenBudget: string
@@ -83,6 +85,7 @@ function formFrom(s: AiSettingsResponse): Form {
       s.sources.extractionMinConfidence === 'db' ? s.extractionMinConfidence.toString() : '',
     extractionMaxChunks: s.sources.extractionMaxChunks === 'db' ? s.extractionMaxChunks.toString() : '',
     agentModeEnabled: s.agentModeEnabled,
+    externalAiActions: s.externalAiActions.requested ?? s.externalAiActions.ceiling,
     pricePromptPerMTok: s.pricePromptPerMTok?.toString() ?? '',
     priceCompletionPerMTok: s.priceCompletionPerMTok?.toString() ?? '',
     workspaceMonthlyTokenBudget: s.workspaceMonthlyTokenBudget?.toString() ?? '',
@@ -149,6 +152,9 @@ async function onSave() {
       extractionMinConfidence: num(f.extractionMinConfidence),
       extractionMaxChunks: num(f.extractionMaxChunks),
       agentModeEnabled: f.agentModeEnabled,
+      // Sent only once touched: an inherited switch stays inherited, so a later
+      // change to the env ceiling still reaches this workspace.
+      ...(f.externalAiActions === loaded.value?.externalAiActions ? {} : { externalAiActions: f.externalAiActions }),
       pricePromptPerMTok: num(f.pricePromptPerMTok),
       priceCompletionPerMTok: num(f.priceCompletionPerMTok),
       workspaceMonthlyTokenBudget: num(f.workspaceMonthlyTokenBudget),
@@ -190,6 +196,9 @@ async function onTest() {
 function overridden(field: keyof AiSettingsResponse['sources']): boolean {
   return settings.value?.sources[field] === 'db'
 }
+
+/** AI_EXTERNAL_ACTIONS_ENABLED — false takes "Open in…" away from every workspace. */
+const externalCeiling = computed(() => settings.value?.externalAiActions.ceiling ?? true)
 </script>
 
 <template>
@@ -253,7 +262,7 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
       <div class="space-y-1.5 xl:max-w-[66%]">
         <span class="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
           {{ t('ai.apiKey') }}
-          <span v-if="overridden('apiKey')" class="text-primary/70">· overridden</span>
+          <span v-if="overridden('apiKey')" class="text-primary/70">{{ t('ai.overridden') }}</span>
         </span>
         <div class="flex items-center gap-2">
           <Input
@@ -322,6 +331,29 @@ function overridden(field: keyof AiSettingsResponse['sources']): boolean {
           {{ t('ai.allowAgentMode') }}
           <span class="text-muted-foreground mt-0.5 block text-xs">
             {{ t('ai.agentModeDesc') }}
+          </span>
+        </span>
+      </label>
+      <label class="flex items-start gap-2.5">
+        <!-- The env ceiling can only take the actions away, so under a false
+             ceiling the box is disabled and the note below says why rather than
+             showing a setting that does nothing. -->
+        <Checkbox
+          class="mt-0.5"
+          :model-value="form.externalAiActions && externalCeiling"
+          :disabled="!canManage || !externalCeiling"
+          @update:model-value="form.externalAiActions = $event === true"
+        />
+        <span class="text-sm leading-snug">
+          {{ t('aiSettings.externalActions.label') }}
+          <span v-if="overridden('externalAiActions')" class="text-primary/70 ml-1.5 text-xs">
+            {{ t('ai.overridden') }}
+          </span>
+          <span class="text-muted-foreground mt-0.5 block text-xs">
+            {{ t('aiSettings.externalActions.hint') }}
+          </span>
+          <span v-if="!externalCeiling" class="text-muted-foreground mt-0.5 block text-xs">
+            {{ t('aiSettings.externalActions.clampedByEnv') }}
           </span>
         </span>
       </label>

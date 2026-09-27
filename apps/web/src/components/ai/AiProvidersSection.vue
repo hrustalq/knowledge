@@ -254,7 +254,7 @@ function purposesServedBy(id: string): string[] {
                 <SelectContent>
                   <SelectItem value="deepseek">DeepSeek</SelectItem>
                   <SelectItem value="gen-api">GenAPI (gen-api.ru)</SelectItem>
-                  <SelectItem value="openai-compatible">OpenAI-compatible</SelectItem>
+                  <SelectItem value="openai-compatible">{{ t('ai.openaiCompatible') }}</SelectItem>
                 </SelectContent>
               </Select>
             </label>

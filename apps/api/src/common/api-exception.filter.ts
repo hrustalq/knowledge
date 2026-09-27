@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { type ApiErrorCode, type ApiErrorPayload, API_ERROR_CODES, errorCodeForStatus } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
-import { currentTrace } from '@knowledge/observability';
+import { currentTrace, redactUrl } from '@knowledge/observability';
 
 /**
  * Global HTTP exception filter: normalizes EVERY error — HttpException,
@@ -92,7 +92,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
         msg: 'Request body too large',
         code,
         method: req.method,
-        route: req.originalUrl ?? req.url,
+        route: redactUrl(req.originalUrl ?? req.url),
       });
     } else {
       // Unexpected throw: never leak internals to the client, always log them.
@@ -100,7 +100,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
         msg: 'Unhandled exception',
         code: 'UNHANDLED_EXCEPTION',
         method: req.method,
-        route: req.originalUrl ?? req.url,
+        route: redactUrl(req.originalUrl ?? req.url),
         err: exception instanceof Error ? exception : { message: String(exception) },
       });
     }
@@ -114,7 +114,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
         code: code ?? errorCodeForStatus(status),
         status,
         method: req.method,
-        route: req.originalUrl ?? req.url,
+        route: redactUrl(req.originalUrl ?? req.url),
         err: exception,
       });
     }
@@ -124,7 +124,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
       code: code ?? errorCodeForStatus(status),
       message,
       ...(details ? { details } : {}),
-      path: req.originalUrl ?? req.url,
+      path: redactUrl(req.originalUrl ?? req.url),
       timestamp: new Date().toISOString(),
       requestId,
     };

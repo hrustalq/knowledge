@@ -1,6 +1,6 @@
 import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PUBLIC_META } from './access.decorator.js';
+import { PUBLIC_META, QUERY_TOKEN_OK_META } from './access.decorator.js';
 import { TokenAuthService } from './token-auth.service.js';
 import { bindTrace } from '@knowledge/observability';
 
@@ -29,8 +29,15 @@ export class AuthGuard implements CanActivate {
 
     const header: string | undefined = req.headers['authorization'];
     const bearer = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : undefined;
-    // SSE: EventSource cannot set headers — accept the token via ?token= (docs/features/04).
-    const queryToken = typeof req.query?.token === 'string' && req.query.token ? req.query.token : undefined;
+    // EventSource and <img> cannot set headers, so the routes they call opt in
+    // to ?token= with @QueryTokenOk (#102). Anywhere else the query token is
+    // ignored as if absent: the request is unauthenticated, not quietly let in.
+    const queryTokenOk = this.reflector.getAllAndOverride<boolean>(QUERY_TOKEN_OK_META, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
+    const queryToken =
+      queryTokenOk && typeof req.query?.token === 'string' && req.query.token ? req.query.token : undefined;
 
     req.principal = await this.tokenAuth.resolve(bearer ?? queryToken);
     // Every record emitted downstream carries the caller, without a single

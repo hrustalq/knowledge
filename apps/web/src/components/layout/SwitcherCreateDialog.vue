@@ -110,8 +110,8 @@ const header = computed(() => {
   if (stage.value === 'members') {
     return {
       icon: Check,
-      title: `${result.value?.name} created`,
-      body: `Invite people to ${workspaceName.value} so they can work in it.`,
+      title: t('nav.scopeCreated', { name: result.value?.name ?? '' }),
+      body: t('nav.invitePeopleTo', { scope: workspaceName.value }),
     }
   }
   return isWorkspace.value
@@ -158,7 +158,7 @@ async function submit() {
   } catch (e) {
     error.value =
       e instanceof ApiError && e.status === 403
-        ? `You do not have permission to create a ${props.kind} here.`
+        ? t(props.kind === 'workspace' ? 'nav.noWorkspacePermission' : 'nav.noProjectPermission')
         : (e as Error).message
   } finally {
     busy.value = false
@@ -243,7 +243,7 @@ async function finish() {
               role="status"
             >
               <Loader2 class="text-primary size-5 animate-spin" />
-              <p>Creating “{{ name.trim() }}”…</p>
+              <p>{{ t('common.creatingNamed', { name: name.trim() }) }}</p>
             </div>
 
             <template v-else>

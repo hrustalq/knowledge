@@ -332,6 +332,9 @@ export type I18nTranslations = {
             "revisionVanished": string;
             "parentNotInProject": string;
             "needsVisionModel": string;
+            "noParser": string;
+            "failed": string;
+            "timedOut": string;
         };
         "ingestionJob": {
             "notFound": string;
@@ -391,6 +394,9 @@ export type I18nTranslations = {
             "messageNotFound": string;
             "budgetUser": string;
             "budgetWorkspace": string;
+            "upstreamStatus": string;
+            "upstreamError": string;
+            "unreachable": string;
         };
         "workflow": {
             "notFound": string;
@@ -409,6 +415,9 @@ export type I18nTranslations = {
             "nodeNotAwaitingReview": string;
             "stepGone": string;
             "invalidGraph": string;
+            "noItems": string;
+            "emptyPage": string;
+            "noDraft": string;
         };
         "connector": {
             "notFound": string;
@@ -446,6 +455,22 @@ export type I18nTranslations = {
             "revertNoPrevious": string;
             "aiEmpty": string;
             "mergeNotAConflict": string;
+            "taskTimedOut": string;
+            "nothingStaged": string;
+            "missingConfig": string;
+            "spaceNotFound": string;
+            "spaceNotVisible": string;
+            "fileGone": string;
+            "moduleGone": string;
+            "publishGitOnly": string;
+            "notionDatabaseRequired": string;
+            "pullRequestsReadGitOnly": string;
+            "pullRequestsCommentGitOnly": string;
+            "repoUrlShape": string;
+            "repoNotFound": string;
+            "repoNotFoundNoCredential": string;
+            "branchMissingDefault": string;
+            "branchMissing": string;
         };
         "routeNotFound": string;
         "validationFailed": string;
@@ -499,6 +524,9 @@ export type I18nTranslations = {
         };
         "entityAlias": {
             "wouldChain": string;
+        };
+        "agent": {
+            "disabled": string;
         };
     };
     "import": {

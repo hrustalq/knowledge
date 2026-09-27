@@ -13,6 +13,7 @@ import { onKeyStroke, useDropZone, useFileDialog, useSpeechRecognition, useTexta
 import { CornerDownLeft, FileText, Mic, MicOff, Paperclip, SendHorizontal, Square, Upload, X } from 'lucide-vue-next'
 import type { AssistantChatAttachment, AssistantChatMode } from '@knowledge/contracts'
 import { ASSISTANT_MESSAGE_MAX_CHARS } from '@knowledge/contracts'
+import { formatNumber } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -282,7 +283,7 @@ function send() {
             <span class="truncate">{{ d.title }}</span>
             <button
               type="button"
-              :aria-label="`Remove ${d.title}`"
+              :aria-label="t('common.removeNamed', { name: d.title })"
               class="rounded-full p-0.5 transition-colors hover:bg-primary/15"
               @click="removeAppliedDoc(i)"
             >
@@ -298,7 +299,7 @@ function send() {
             <span class="truncate">{{ a.filename }}</span>
             <button
               type="button"
-              :aria-label="`Remove ${a.filename}`"
+              :aria-label="t('common.removeNamed', { name: a.filename })"
               class="rounded-full p-0.5 transition-colors hover:bg-foreground/10 hover:text-foreground"
               @click="removeAttachment(i)"
             >
@@ -339,8 +340,8 @@ function send() {
                 <TooltipContent>
                   {{
                     attachments.length >= MAX_ATTACHMENTS
-                      ? `${MAX_ATTACHMENTS} files is the limit for one message`
-                      : 'Attach a text file to this message'
+                      ? t('chat.attachLimit', { n: MAX_ATTACHMENTS })
+                      : t('chat.attachTextFileToMessage')
                   }}
                 </TooltipContent>
               </Tooltip>
@@ -359,7 +360,7 @@ function send() {
                     size="icon-sm"
                     type="button"
                     :class="isListening ? 'text-primary' : ''"
-                    :aria-label="isListening ? 'Stop dictation' : 'Dictate a message'"
+                    :aria-label="isListening ? t('chat.stopDictation') : t('chat.dictateMessage')"
                     @click="toggleVoice()"
                   >
                     <Mic v-if="!isListening" class="size-4" />
@@ -409,7 +410,7 @@ function send() {
                     {{
                       canEdit
                         ? t('chat.canAlsoWrite')
-                        : 'Needs the editor role in this workspace.'
+                        : t('chat.needsEditorRole')
                     }}
                   </TooltipContent>
                 </Tooltip>
@@ -423,7 +424,7 @@ function send() {
               class="ml-auto pr-1 text-[11px] tabular-nums"
               :class="tooLong ? 'text-destructive' : 'text-muted-foreground'"
             >
-              {{ draft.length.toLocaleString() }} / {{ ASSISTANT_MESSAGE_MAX_CHARS.toLocaleString() }}
+              {{ formatNumber(draft.length) }} / {{ formatNumber(ASSISTANT_MESSAGE_MAX_CHARS) }}
             </span>
 
             <span

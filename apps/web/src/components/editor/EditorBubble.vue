@@ -103,8 +103,8 @@ useSubscription(
       type="button"
       class="kn-bubble-status"
       :data-kn-status="color"
-      :title="`Status: ${color}`"
-      :aria-label="`Status ${color}`"
+      :title="t('editor.statusColor', { color })"
+      :aria-label="t('editor.statusColor', { color })"
       @mousedown.prevent="editor.chain().focus().toggleStatus(color as StatusColor).run()"
     />
   </div>

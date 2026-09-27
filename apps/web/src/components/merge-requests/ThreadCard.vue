@@ -248,7 +248,7 @@ const replyTarget = computed(() =>
           class="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-violet-500/12 px-1.5 py-px font-medium text-violet-700 dark:text-violet-300"
           :title="t('mr.fromAssistantReview')"
         >
-          <Bot class="size-3" /> AI
+          <Bot class="size-3" /> {{ t('common.ai') }}
         </span>
         <span
           v-if="thread.resolved"
@@ -348,9 +348,9 @@ const replyTarget = computed(() =>
                 <span
                   v-if="comment.updatedAt"
                   class="shrink-0 italic"
-                  :title="`Edited ${fullTime(comment.updatedAt)}`"
+                  :title="t('common.editedAt', { time: fullTime(comment.updatedAt) })"
                 >
-                  · edited
+                  · {{ t('common.edited') }}
                 </span>
                 <!-- Actions ride the row rather than a menu: three of them, and
                      a discussion is read far more often than it is corrected. -->
@@ -361,8 +361,8 @@ const replyTarget = computed(() =>
                   <button
                     type="button"
                     class="rounded p-1 hover:bg-accent hover:text-foreground"
-                    :title="`Reply to ${nameOf(comment.authorId)}`"
-                    :aria-label="`Reply to ${nameOf(comment.authorId)}`"
+                    :title="t('mr.replyToName', { name: nameOf(comment.authorId) })"
+                    :aria-label="t('mr.replyToName', { name: nameOf(comment.authorId) })"
                     @click="focusReply(comment.commentId)"
                   >
                     <Reply class="size-3.5" />
@@ -395,7 +395,7 @@ const replyTarget = computed(() =>
                 v-if="parentOf(comment)"
                 type="button"
                 class="kn-reply-ref"
-                :title="`Go to ${nameOf(parentOf(comment)!.authorId)}’s comment`"
+                :title="t('mr.goToComment', { name: nameOf(parentOf(comment)!.authorId) })"
                 @click="jumpTo(parentOf(comment)!.commentId)"
                 @mouseenter="linked = parentOf(comment)!.commentId"
                 @mouseleave="linked = null"
@@ -459,7 +459,7 @@ const replyTarget = computed(() =>
           </div>
           <CommentComposer
             ref="replyBox"
-            :placeholder="replyTarget ? `Reply to ${nameOf(replyTarget.authorId)}…` : 'Reply…'"
+            :placeholder="replyTarget ? t('mr.replyToNameEllipsis', { name: nameOf(replyTarget.authorId) }) : t('mr.replyEllipsis')"
             :submit-label="t('mr.reply')"
             :busy="busy"
             :resolve-document-id="resolveDocumentId"

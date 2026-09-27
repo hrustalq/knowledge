@@ -72,7 +72,7 @@ const props = withDefaults(
      */
     query?: string
   }>(),
-  { multiple: true, placeholder: 'Search…' },
+  { multiple: true, placeholder: undefined },
 )
 
 const emit = defineEmits<{
@@ -418,7 +418,7 @@ const listId = useId()
         autocomplete="off"
         :aria-expanded="open"
         :aria-controls="listId"
-        :placeholder="placeholder"
+        :placeholder="placeholder ?? t('common.searchPlaceholder')"
         :disabled="disabled || (!load && isEmptyRoster)"
         :class="bare
           ? 'h-6 w-full bg-transparent pr-6 text-xs outline-none placeholder:text-muted-foreground disabled:opacity-50'
@@ -552,7 +552,7 @@ const listId = useId()
         <button
           type="button"
           class="rounded-full p-0.5 transition-colors hover:bg-primary/20"
-          :aria-label="`Remove ${o.label}`"
+          :aria-label="t('common.removeNamed', { name: o.label })"
           @click="remove(o.value)"
         >
           <X class="size-3" />

@@ -185,7 +185,7 @@ function postFindings() {
         >
           <RefreshCw v-if="state !== 'idle'" class="size-3.5" :class="state === 'running' ? 'animate-spin' : ''" />
           <Sparkles v-else class="size-3.5" />
-          {{ state === 'running' ? 'Reviewing…' : state === 'idle' ? 'Run review' : 'Re-run' }}
+          {{ state === 'running' ? t('common.reviewing') : state === 'idle' ? t('mr.runReview') : t('mr.rerun') }}
         </Button>
 
         <Button

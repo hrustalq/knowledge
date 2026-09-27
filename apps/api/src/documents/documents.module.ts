@@ -24,6 +24,7 @@ import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { MentionRepliesService } from './mention-replies.service.js';
 import { MentionReplySweeper } from './mention-reply.sweeper.js';
+import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
 
 /**
  * API side. DocumentsService itself lives in DocumentsCoreModule (worker-safe);
@@ -56,6 +57,9 @@ import { MentionReplySweeper } from './mention-reply.sweeper.js';
     // GlossaryCoreModule reaches for DocumentsCoreModule rather than this
     // module, so there is no cycle.
     GlossaryCoreModule,
+    // `Accept: text/markdown` on GET :id/content (issue #68). Core-only and it
+    // reaches for DocumentsCoreModule, not this module, so there is no cycle.
+    AiReadableCoreModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [

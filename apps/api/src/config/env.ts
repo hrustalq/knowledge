@@ -92,6 +92,12 @@ export const envSchema = z.object({
 
   /** Phase 5 stale-doc detection & reindex scheduling (worker sweeper). */
   STALE_SWEEP_ENABLED: boolish(true),
+  /**
+   * AI-readable output (issue #68): `GET /v1/documents/:id/markdown` and
+   * `Accept: text/markdown` on `/content`. Kill switch — false 404s the routes
+   * and `/content` stays JSON-only.
+   */
+  AI_READABLE_ENABLED: boolish(true),
   // Background agent schedules (docs/features/20). Off by default: the failure
   // mode of unattended AI is an avalanche, not a slow queue.
   AGENT_SCHEDULE_ENABLED: boolish(false),

@@ -15,6 +15,20 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **A page as plain markdown for agents.** `GET /v1/documents/:id/markdown`
+  returns the page as `text/markdown` (`# title` + body; `?frontmatter=1` adds
+  the page's YAML with provenance under `knowledge:`), and
+  `GET /v1/documents/:id/content` answers the same when the request prefers
+  `Accept: text/markdown`. Same access as reading the page, read-only API keys
+  included; `ETag` / `If-None-Match` answers `304` without re-reading storage.
+  First part of AI-readable output (#68).
+
+### Operations
+
+- `AI_READABLE_ENABLED` (default `true`) — kill switch for the markdown routes.
+
 ### Fixed
 
 - **Search, the graph and agents only see what a page says now.** Text removed

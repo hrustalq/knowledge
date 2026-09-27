@@ -2478,6 +2478,24 @@
             }
           },
           {
+            "name": "frontmatter",
+            "required": false,
+            "in": "query",
+            "description": "With Accept: text/markdown, 1 to include the YAML block",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept",
+            "in": "header",
+            "description": "text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -14830,6 +14848,80 @@
         "summary": "Runs rooted at this page, plus the workflows that may be started against it",
         "tags": [
           "workflows"
+        ]
+      }
+    },
+    "/v1/documents/{id}/markdown": {
+      "get": {
+        "operationId": "AiReadableController_markdown",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revision",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "frontmatter",
+            "required": false,
+            "in": "query",
+            "description": "1 to include the YAML block",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "304": {
+            "description": "Unchanged since the ETag sent in If-None-Match"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A page as plain markdown for agents and AI tools (issue #68). Head of the default branch by default; frontmatter=1 prepends the page YAML plus provenance under `knowledge:`. ETag / If-None-Match → 304",
+        "tags": [
+          "documents"
         ]
       }
     },

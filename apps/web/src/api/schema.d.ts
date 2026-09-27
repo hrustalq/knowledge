@@ -2909,6 +2909,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{id}/markdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page as plain markdown for agents and AI tools (issue #68). Head of the default branch by default; frontmatter=1 prepends the page YAML plus provenance under `knowledge:`. ETag / If-None-Match → 304 */
+        get: operations["AiReadableController_markdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp": {
         parameters: {
             query?: never;
@@ -5752,8 +5769,12 @@ export interface operations {
         parameters: {
             query?: {
                 revision?: string;
+                /** @description With Accept: text/markdown, 1 to include the YAML block */
+                frontmatter?: string;
             };
             header?: {
+                /** @description text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68) */
+                Accept?: string;
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
                 "Accept-Language"?: "en" | "ru";
             };
@@ -13770,6 +13791,51 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiReadableController_markdown: {
+        parameters: {
+            query?: {
+                revision?: string;
+                /** @description 1 to include the YAML block */
+                frontmatter?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unchanged since the ETag sent in If-None-Match */
+            304: {
                 headers: {
                     [name: string]: unknown;
                 };

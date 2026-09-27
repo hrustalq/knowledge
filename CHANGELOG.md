@@ -15,6 +15,8 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-09-27
+
 ### Added
 
 - **A page as plain markdown for agents.** `GET /v1/documents/:id/markdown`
@@ -102,6 +104,13 @@ in the pull request that introduces them — see
   revision is still kept for the revision diff and the facts history; only the
   current published revision of each page is served. The same page also no
   longer comes back once per old revision. (#83)
+- **The Russian interface is fully Russian.** Template copy, button labels,
+  tooltips, placeholders, import verdicts and errors raised by background jobs
+  used to show in English whatever the UI language was; they are translated
+  now, and a failed run reports in the language it was started in. Dates,
+  numbers and sizes follow the UI language instead of the server's, and CI
+  rejects new untranslated text or unused message keys. (#85)
+- **Fresh installs can pull MinIO again** — see Operations. (#104)
 
 ### Breaking
 
@@ -989,7 +998,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.12.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/hrustalq/knowledge/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/hrustalq/knowledge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/hrustalq/knowledge/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/hrustalq/knowledge/compare/v0.10.0...v0.10.1

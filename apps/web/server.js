@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import express from 'express'
 import { configureBacktest, createRootLogger, envLogLevel } from '@knowledge/observability'
 import { traceMiddleware } from '@knowledge/observability/express'
+import { aiReadableMiddleware } from './server/ai-readable.js'
 
 // Constants
 const isProduction = process.env.NODE_ENV === 'production'
@@ -39,6 +40,18 @@ const app = express()
 // Registered first, so Vite's middlewares and the SSR handler both run inside
 // the scope and every response carries x-request-id — static asset 404s included.
 app.use(traceMiddleware)
+
+// AI-readable URLs (issue #68): /documents/:id.md, Accept: text/markdown on
+// /documents/:id, /llms.txt and the per-workspace/project llms files, proxied
+// to the API. Mounted before Vite and the static handler so neither claims a
+// `.md`/`.txt` path first, and in both branches (dev and production) alike.
+app.use(
+  aiReadableMiddleware({
+    apiBase: process.env.API_URL_INTERNAL ?? 'http://localhost:3000',
+    readCookie,
+    logger,
+  }),
+)
 
 // Add Vite or respective production middlewares
 /** @type {import('vite').ViteDevServer | undefined} */

@@ -284,3 +284,38 @@ export interface SubmitImportResponse {
 
 // ---------------------------------------------------------------------------
 // Dynamic document workflows (docs/features/17)
+
+// ---- Page AI actions (issue #68) -------------------------------------------
+
+/**
+ * Every entry in a page's AI actions menu. The menu, the admin setting and
+ * their specs read these, so what the setting gates cannot drift from what the
+ * menu hides.
+ */
+export const AI_ACTION_IDS = [
+  'copy-markdown',
+  'view-markdown',
+  'open-chatgpt',
+  'open-claude',
+  'open-cursor',
+  'copy-mcp-config',
+  'copy-agent-link',
+] as const;
+export type AiActionId = (typeof AI_ACTION_IDS)[number];
+
+/**
+ * The actions that hand page content to a third-party AI vendor through a URL.
+ * Only these are gated by `ai_settings.external_ai_actions` and its
+ * `AI_EXTERNAL_ACTIONS_ENABLED` ceiling; copying to the reader's own clipboard
+ * is never gated.
+ */
+export const EXTERNAL_AI_ACTIONS: ReadonlySet<AiActionId> = new Set<AiActionId>([
+  'open-chatgpt',
+  'open-claude',
+  'open-cursor',
+]);
+
+/** The actions a reader is offered, given whether external actions are allowed. */
+export function visibleAiActions(externalAllowed: boolean): AiActionId[] {
+  return AI_ACTION_IDS.filter((id) => externalAllowed || !EXTERNAL_AI_ACTIONS.has(id));
+}

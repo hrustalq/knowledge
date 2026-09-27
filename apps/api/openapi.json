@@ -8970,6 +8970,63 @@
         ]
       }
     },
+    "/v1/ai/page-actions": {
+      "get": {
+        "operationId": "AiController_getPageActions",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What the page AI actions menu may offer (issue #68): the external \"Open in…\" switch, clamped by AI_EXTERNAL_ACTIONS_ENABLED, and the inline-prompt size limit. Readable by every member.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/settings/test": {
       "post": {
         "operationId": "AiController_testConnection",
@@ -17041,6 +17098,11 @@
             ],
             "nullable": true,
             "description": "How much of the open web the assistant may reach. Clamped by the WEB_ACCESS_MODE ceiling — a value wider than the ceiling is accepted and stored, but the effective mode stays the ceiling and the response reports source=clamped. null = inherit the ceiling."
+          },
+          "externalAiActions": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether the page AI actions menu may offer \"Open in ChatGPT / Claude / Cursor\" (issue #68). Clamped by the AI_EXTERNAL_ACTIONS_ENABLED ceiling: true under a false ceiling is stored, but the effective value stays false and the response reports source=clamped. null = inherit the ceiling."
           },
           "chatProviderId": {
             "type": "string",

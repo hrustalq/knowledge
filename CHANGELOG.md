@@ -37,6 +37,11 @@ in the pull request that introduces them — see
   on the same host. A logged-in tab is authenticated by its session; an agent
   sends its API key as a bearer token, and without one gets a plain-text 401
   that says where to create a key. (#68)
+- **Admins decide whether pages may be opened in ChatGPT, Claude or Cursor.** A
+  new switch under AI settings controls whether a page's upcoming AI actions
+  menu offers "Open in ChatGPT / Claude / Cursor", which put the page's text
+  into a link to that vendor. Copying a page as Markdown is never affected.
+  Members can read what the menu may offer from `GET /v1/ai/page-actions`. (#68)
 
 ### Operations
 
@@ -44,6 +49,12 @@ in the pull request that introduces them — see
   `llms.txt` routes.
 - `LLMS_FULL_MAX_DOCS` (2000), `LLMS_FULL_MAX_BYTES` (20 MB) and
   `AI_READABLE_FETCH_CONCURRENCY` (8) bound one `llms-full.txt` response.
+- `AI_EXTERNAL_ACTIONS_ENABLED` (default `true`) is a ceiling for that switch:
+  `false` turns the external actions off in every workspace, and the settings
+  page says the deployment turned them off. `AI_ACTION_INLINE_MAX_CHARS`
+  (default `6000`) is the longest page put inline into such a link; a longer
+  page is copied to the clipboard instead. Migration
+  `ai_settings_external_ai_actions` adds one nullable column. (#68)
 
 ### Fixed
 

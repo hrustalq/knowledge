@@ -181,6 +181,19 @@ export class UpdateAiSettingsDto {
   @IsIn(WEB_ACCESS_MODES)
   webAccessMode?: WebAccessMode | null;
 
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    description:
+      'Whether the page AI actions menu may offer "Open in ChatGPT / Claude / Cursor" (issue #68). ' +
+      'Clamped by the AI_EXTERNAL_ACTIONS_ENABLED ceiling: true under a false ceiling is stored, but ' +
+      'the effective value stays false and the response reports source=clamped. null = inherit the ceiling.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('externalAiActions')
+  @IsBoolean()
+  externalAiActions?: boolean | null;
+
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Provider profile serving chat and agent turns' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('chatProviderId')

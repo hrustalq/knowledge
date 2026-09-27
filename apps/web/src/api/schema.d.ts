@@ -1759,6 +1759,23 @@ export interface paths {
         patch: operations["AiController_updateSettings"];
         trace?: never;
     };
+    "/v1/ai/page-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the page AI actions menu may offer (issue #68): the external "Open in…" switch, clamped by AI_EXTERNAL_ACTIONS_ENABLED, and the inline-prompt size limit. Readable by every member. */
+        get: operations["AiController_getPageActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/settings/test": {
         parameters: {
             query?: never;
@@ -3630,6 +3647,8 @@ export interface components {
              * @enum {string|null}
              */
             webAccessMode?: "off" | "allowlist" | "open" | null;
+            /** @description Whether the page AI actions menu may offer "Open in ChatGPT / Claude / Cursor" (issue #68). Clamped by the AI_EXTERNAL_ACTIONS_ENABLED ceiling: true under a false ceiling is stored, but the effective value stays false and the response reports source=clamped. null = inherit the ceiling. */
+            externalAiActions?: boolean | null;
             /**
              * Format: uuid
              * @description Provider profile serving chat and agent turns
@@ -10000,6 +10019,46 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateAiSettingsDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_getPageActions: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

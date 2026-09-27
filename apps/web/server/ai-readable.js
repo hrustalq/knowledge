@@ -182,15 +182,15 @@ export function aiReadableMiddleware({ apiBase, readCookie, fetch = globalThis.f
     res.setHeader('X-Content-Type-Options', 'nosniff')
     appendVary(res, 'Accept, Authorization, Cookie')
 
+    // No credential is not a 401 here: whether one is needed is the API's call
+    // (AUTH_MODE=none accepts anonymous requests). An upstream 401 becomes the
+    // same plain-text hint below.
     const auth = forwardedAuthorization(req.headers.authorization, readCookie(req.headers.cookie, 'kn_token'))
-    if (!auth) {
-      res.status(401).set({ 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
-      return res.end(UNAUTHORIZED_HINT)
-    }
 
     const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : ''
     /** @type {Record<string, string>} */
-    const headers = { authorization: auth, accept: 'text/markdown, text/plain;q=0.9, */*;q=0.1' }
+    const headers = { accept: 'text/markdown, text/plain;q=0.9, */*;q=0.1' }
+    if (auth) headers.authorization = auth
     for (const h of ['if-none-match', 'accept-language', 'x-request-id']) {
       const v = req.headers[h]
       if (typeof v === 'string' && v) headers[h] = v

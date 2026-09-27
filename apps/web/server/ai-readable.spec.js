@@ -173,13 +173,22 @@ describe('aiReadableMiddleware', () => {
     expect(calls[0].headers.authorization).toBe('Bearer ks_session')
   })
 
-  it('answers 401 in plain text with the API-key hint, without calling the API', async () => {
-    const { base, calls } = await start(() => md('never'))
+  it('forwards an anonymous request without an Authorization header (AUTH_MODE=none serves it)', async () => {
+    const { base, calls } = await start(() => md('# Open\n'))
+    const res = await fetch(`${base}/documents/${ID}.md`)
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('# Open\n')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].headers.authorization).toBeUndefined()
+  })
+
+  it('answers an anonymous request the API refuses with the plain-text API-key hint', async () => {
+    const { base } = await start(() => new Response(JSON.stringify({ statusCode: 401, message: 'Unauthorized' }), { status: 401 }))
     const res = await fetch(`${base}/documents/${ID}.md`)
     expect(res.status).toBe(401)
     expect(res.headers.get('content-type')).toMatch(/^text\/plain/)
+    expect(res.headers.get('cache-control')).toBe('no-store')
     expect(await res.text()).toMatch(/\/settings\/connect/)
-    expect(calls).toHaveLength(0)
   })
 
   it('turns an upstream 401 into the same hint, and other errors into one text line', async () => {

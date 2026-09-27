@@ -30,6 +30,13 @@ in the pull request that introduces them — see
   page's markdown); the matching `llms-full.txt` streams every page's text in
   one response, capped and recorded in the audit log. Drafts and unmerged
   branches never appear. (#68)
+- **Page and llms.txt URLs on the web origin.** `/documents/<id>.md` returns a
+  page as plain markdown, and `/documents/<id>` does too when the request sends
+  `Accept: text/markdown` (a browser still gets the app). `/llms.txt`,
+  `/workspaces/<id>/llms(-full).txt` and `/projects/<id>/llms(-full).txt` work
+  on the same host. A logged-in tab is authenticated by its session; an agent
+  sends its API key as a bearer token, and without one gets a plain-text 401
+  that says where to create a key. (#68)
 
 ### Operations
 

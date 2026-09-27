@@ -87,6 +87,7 @@ COPY --chown=node:node package.json pnpm-workspace.yaml ./
 COPY --chown=node:node packages/ ./packages/
 # server.js is unbundled Node and imports @knowledge/observability at runtime.
 COPY --chown=node:node apps/web/package.json apps/web/server.js ./apps/web/
+COPY --chown=node:node apps/web/server/ ./apps/web/server/
 
 COPY --from=builder --chown=node:node /app/apps/web/dist ./apps/web/dist
 
@@ -98,6 +99,7 @@ WORKDIR /app/apps/web
 RUN node --input-type=module -e "\
 await import('@knowledge/observability'); \
 await import('@knowledge/observability/express'); \
+await import('./server/ai-readable.js'); \
 console.log('type stripping OK');"
 
 EXPOSE 5173

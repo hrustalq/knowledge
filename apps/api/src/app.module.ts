@@ -27,6 +27,7 @@ import { WorkflowMaterializeModule } from './workflows/workflow-materialize.modu
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { McpHttpModule } from './mcp/mcp-http.module.js';
+import { AiReadableModule } from './ai-readable/ai-readable.module.js';
 
 @Module({
   imports: [
@@ -58,6 +59,8 @@ import { McpHttpModule } from './mcp/mcp-http.module.js';
     // API-only: materialisation writes pages, so it runs here and not in the
     // MCP process, which imports WorkflowsModule for its read/start tools.
     WorkflowMaterializeModule,
+    // Plain-markdown reads for agents (issue #68). API-only: carries a controller.
+    AiReadableModule,
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,

@@ -9,7 +9,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  Res,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { CompareMode, DocumentConnectorResponse, PushDocumentResponse } from '@knowledge/contracts';
@@ -38,6 +41,9 @@ import {
 } from './dto/documents.dto.js';
 import { CreateCommentDto, CreateThreadDto, ResolveThreadDto } from './dto/merge-requests.dto.js';
 import { t } from '../i18n/t.js';
+import { AiReadableService } from '../ai-readable/ai-readable.service.js';
+import { sendPageMarkdown } from '../ai-readable/ai-readable.http.js';
+import { prefersMarkdown, wantsFrontmatter } from '../ai-readable/render.js';
 
 /** Query facets arrive comma-separated; a singular alias folds in beside them. */
 function csv(value?: string, single?: string): string[] {
@@ -59,6 +65,7 @@ export class DocumentsController {
     private readonly history: HistoryService,
     private readonly threads: DocumentThreadsService,
     private readonly glossary: GlossaryService,
+    private readonly aiReadable: AiReadableService,
   ) {}
 
   @Post()
@@ -169,7 +176,33 @@ export class DocumentsController {
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Full raw content of a revision (feature 01; head of the default branch by default)' })
   @ApiQuery({ name: 'revision', required: false })
-  content(@Param('id', ParseUUIDPipe) id: string, @Query('revision') revision?: string) {
+  @ApiQuery({ name: 'frontmatter', required: false, description: 'With Accept: text/markdown, 1 to include the YAML block' })
+  @ApiHeader({
+    name: 'Accept',
+    required: false,
+    description: 'text/markdown (ranked above application/json) answers with the same body as GET :id/markdown (issue #68)',
+  })
+  async content(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Query('revision') revision?: string,
+    @Query('frontmatter') frontmatter?: string,
+  ) {
+    // Read off the request rather than via @Headers(): that decorator emits the
+    // header as a *required* parameter in openapi.json and so in the web client.
+    const accept = req.headers.accept;
+    const ifNoneMatch = req.headers['if-none-match'];
+    // The representation depends on Accept either way, so both branches say so.
+    res.setHeader('Vary', 'Accept');
+    if (this.aiReadable.enabled() && prefersMarkdown(accept)) {
+      const result = await this.aiReadable.pageMarkdown(id, {
+        revisionId: revision || undefined,
+        frontmatter: wantsFrontmatter(frontmatter),
+        ifNoneMatch,
+      });
+      return sendPageMarkdown(res, result);
+    }
     return this.documents.getContent(id, revision);
   }
 

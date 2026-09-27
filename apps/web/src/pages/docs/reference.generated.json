@@ -1241,6 +1241,16 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/documents/{id}/markdown",
+      "tag": "documents",
+      "summary": "A page as plain markdown for agents and AI tools (issue #68). Head of the default branch by default; frontmatter=1 prepends the page YAML plus provenance under `knowledge:`. ETag / If-None-Match → 304",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/documents/{id}/move",
       "tag": "documents",

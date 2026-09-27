@@ -56,10 +56,10 @@ services:
       retries: 10
 
   minio:
-    # quay.io, not Docker Hub: docker.io/minio/minio no longer exists (the Hub
-    # API returns 404 "object not found" and a pull fails with "pull access
-    # denied ... repository does not exist"). MinIO publishes to quay.io.
-    image: quay.io/minio/minio:latest
+    # pgsty/minio, pinned by tag and digest: upstream no longer publishes
+    # anonymously pullable images (docker.io/minio/minio 404, quay.io/minio 401).
+    # Full reasoning in docker-compose.yml (#104). Keep both files in step.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -76,8 +76,8 @@ services:
   # One-shot: creates the bucket and enables versioning, which the revision
   # store depends on. Exits 0; `up -d` does not wait for it beyond completion.
   minio-init:
-    # Same reason as minio above: docker.io/minio/mc is gone too.
-    image: quay.io/minio/mc:latest
+    # Same source and pinning rule as minio above (#104).
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd
     depends_on:
       minio:
         condition: service_healthy

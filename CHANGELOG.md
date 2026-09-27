@@ -56,6 +56,17 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- **MinIO now comes from `pgsty/minio` and `pgsty/mc`, pinned by tag and
+  digest.** Upstream stopped publishing pullable images:
+  `docker.io/minio/minio` is gone, and `quay.io/minio/*` answers `401` to
+  anonymous pulls. Until now a fresh machine or a prod deploy that pulls
+  could not start `minio` / `minio-init`.
+  - Both images are Pigsty's community rebuild of the same MinIO server and
+    `mc` client.
+  - Existing data volumes are read as-is: versioned buckets and version ids
+    are kept. No migration and no env change.
+  - `docker compose pull` on a deploy is enough.
+  - If you pinned `quay.io/minio/*` in an override file, drop it. (#104)
 - `AI_READABLE_ENABLED` (default `true`) — kill switch for the markdown and
   `llms.txt` routes and the matching MCP resources.
 - `LLMS_FULL_MAX_DOCS` (2000), `LLMS_FULL_MAX_BYTES` (20 MB) and

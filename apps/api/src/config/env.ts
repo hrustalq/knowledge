@@ -173,6 +173,21 @@ export const envSchema = z.object({
    */
   WEB_SEARCH_URL: z.string().optional().default(''),
 
+  /**
+   * Ceiling for `ai_settings.external_ai_actions` (issue #68): whether a page's
+   * AI actions menu may offer "Open in ChatGPT / Claude / Cursor", which put the
+   * page's content into a vendor URL. false removes them for every workspace,
+   * whatever the workspace setting says; the admin page shows the clamp.
+   */
+  AI_EXTERNAL_ACTIONS_ENABLED: boolish(true),
+
+  /**
+   * Largest page (in characters) "Open in ChatGPT / Claude / Cursor" puts
+   * inline into the vendor URL. A longer page is copied to the clipboard
+   * instead, with a toast telling the reader to paste it (issue #68).
+   */
+  AI_ACTION_INLINE_MAX_CHARS: z.coerce.number().int().positive().default(6000),
+
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),
 

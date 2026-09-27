@@ -2850,5 +2850,12 @@
     "uploadingFile": "Uploading {name}",
     "file": "file",
     "waitingForWorker": "Waiting for a worker"
+  },
+  "aiSettings": {
+    "externalActions": {
+      "label": "Offer “Open in ChatGPT / Claude / Cursor” on pages",
+      "hint": "Adds these to each page’s AI actions menu. They send the page’s text to that vendor inside a link. Copying the page as Markdown is always available.",
+      "clampedByEnv": "Turned off for this deployment by AI_EXTERNAL_ACTIONS_ENABLED=false, so this workspace cannot turn it on."
+    }
   }
 }

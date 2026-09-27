@@ -5,6 +5,7 @@ import type {
   AssistantWebSource,
 } from '@knowledge/contracts/core';
 import type { RelationInput } from '@knowledge/contracts/documents';
+import type { AiActionId } from '@knowledge/contracts/content';
 
 // (docs/features/09 follow-up). The chat is an append-only intent log; the
 // sidebar materializes from each assistant message's toolCalls trace rather
@@ -290,6 +291,27 @@ export interface AiSettingsSourceMap {
   extractionMaxChunks: AiSettingsSource;
   /** docs/features/25 — 'clamped' when the ceiling overrode the workspace. */
   webAccessMode: AiSettingsSource;
+  /** Issue #68 — 'clamped' when AI_EXTERNAL_ACTIONS_ENABLED=false overrode the workspace. */
+  externalAiActions: AiSettingsSource;
+}
+
+/**
+ * Whether a page's AI actions menu may offer "Open in ChatGPT / Claude /
+ * Cursor", which send the page to a vendor inside a URL (issue #68).
+ *
+ * The env flag is a ceiling, not a default: `effective` is the narrower of the
+ * two, and `requested` survives beside it so the admin page can say that the
+ * deployment overrode the workspace rather than silently showing "off".
+ */
+export interface ExternalAiActionsSettings {
+  /** What the workspace asked for. Null = inherit the ceiling. */
+  requested: boolean | null;
+  /** The deployment ceiling (AI_EXTERNAL_ACTIONS_ENABLED). */
+  ceiling: boolean;
+  /** What applies: `requested ?? ceiling`, never above `ceiling`. */
+  effective: boolean;
+  /** 'clamped' when the workspace asked for true and the ceiling said false. */
+  source: AiSettingsSource;
 }
 
 // ---- Web research: access mode and source policies (docs/features/25) ------
@@ -412,12 +434,29 @@ export interface AiSettingsResponse {
   sources: AiSettingsSourceMap;
   /** How much of the open web the assistant may reach (docs/features/25). */
   webAccess: WebAccessSettings;
+  /** Whether the page AI actions menu may open external AI vendors (issue #68). */
+  externalAiActions: ExternalAiActionsSettings;
   /** Per-purpose routing into the workspace's provider profiles. */
   routing: AiRouting;
   /** False when SETTINGS_ENCRYPTION_KEY is unset — the UI must disable key entry. */
   canStoreSecrets: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
+}
+
+/**
+ * GET /v1/ai/page-actions?workspaceId= — what a page's AI actions menu may
+ * offer (issue #68). Viewer-readable, unlike the admin-only settings: every
+ * reader sees the menu, and the menu must not offer what the workspace has
+ * switched off.
+ */
+export interface AiPageActionsResponse {
+  /** The effective external-actions switch, already clamped by the env ceiling. */
+  externalAiActions: boolean;
+  /** Menu entries, in menu order; the external ones are absent when switched off. */
+  actions: AiActionId[];
+  /** Inline-prompt size before "Open in…" falls back to the clipboard (AI_ACTION_INLINE_MAX_CHARS). */
+  inlineMaxChars: number;
 }
 
 // ---- Provider profiles & routing -------------------------------------------

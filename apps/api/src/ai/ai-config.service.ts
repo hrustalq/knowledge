@@ -1,11 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { AiPurpose, AiSettingsSourceMap, WebAccessSettings } from '@knowledge/contracts';
+import type {
+  AiPurpose,
+  AiSettingsSourceMap,
+  ExternalAiActionsSettings,
+  WebAccessSettings,
+} from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiProvidersService } from './ai-providers.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { decryptSecret, parseKey } from './secret-box.js';
+import { resolveExternalAiActions } from './external-ai-actions.js';
 
 /**
  * Per-provider defaults so `provider=deepseek` works with nothing but an API
@@ -73,6 +79,8 @@ export interface ResolvedAiConfig {
    * Clamped by the env ceiling, never inherited from it.
    */
   webAccess: WebAccessSettings;
+  /** Whether the page AI actions menu may open external vendors (issue #68). */
+  externalAiActions: ExternalAiActionsSettings;
   /** The named profile serving this call, when one is routed. */
   providerId: string | null;
   providerName: string | null;
@@ -143,6 +151,11 @@ export class AiConfigService {
     const model = row?.model || (row?.provider ? '' : envModel) || defaults?.model || '';
     const baseUrl = (row?.baseUrl || (row?.provider ? '' : envBaseUrl) || defaults?.baseUrl || '').replace(/\/$/, '');
 
+    const externalAiActions = resolveExternalAiActions(
+      row?.externalAiActions,
+      this.config.get('AI_EXTERNAL_ACTIONS_ENABLED', { infer: true }),
+    );
+
     const config: ResolvedAiConfig = {
       workspaceId,
       enabled: provider !== 'none',
@@ -160,6 +173,7 @@ export class AiConfigService {
       extractionMaxChunks: row?.extractionMaxChunks ?? this.config.get('EXTRACTOR_MAX_CHUNKS', { infer: true }),
       agentModeEnabled: row?.agentModeEnabled ?? true,
       webAccess: this.sourcePolicies.webAccess(row?.webAccessMode),
+      externalAiActions,
       pricePromptPerMTok: row?.pricePromptPerMTok ? Number(row.pricePromptPerMTok) : null,
       priceCompletionPerMTok: row?.priceCompletionPerMTok ? Number(row.priceCompletionPerMTok) : null,
       providerId: null,
@@ -178,6 +192,7 @@ export class AiConfigService {
         // deployment refuses, and the third value is the only honest report of
         // that. `webAccess()` works it out; the map just mirrors it.
         webAccessMode: this.sourcePolicies.webAccess(row?.webAccessMode).source,
+        externalAiActions: externalAiActions.source,
       },
     };
 

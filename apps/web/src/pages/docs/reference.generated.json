@@ -182,6 +182,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/ai/page-actions",
+      "tag": "ai",
+      "summary": "What the page AI actions menu may offer (issue #68): the external \"Open in…\" switch, clamped by AI_EXTERNAL_ACTIONS_ENABLED, and the inline-prompt size limit. Readable by every member.",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/ai/plugins",
       "tag": "ai",
       "summary": "MCP plugins in the workspace (admin — rows carry endpoints and credential metadata)",

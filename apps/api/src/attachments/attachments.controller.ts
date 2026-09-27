@@ -15,7 +15,7 @@ import type {
   CreateAttachmentResponse,
   ListAttachmentsResponse,
 } from '@knowledge/contracts';
-import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal, QueryTokenOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { CreateAttachmentDto } from './attachments.dto.js';
 import { AttachmentsService } from './attachments.service.js';
@@ -65,6 +65,7 @@ export class AttachmentsController {
 
   @Get(':attachmentId/content')
   @Access('viewer', 'document')
+  @QueryTokenOk() // <img> / <object> cannot set headers
   @Redirect(undefined, 302)
   @ApiExcludeEndpoint() // binary redirect; not useful in the generated client
   async content(

@@ -87,6 +87,10 @@ in the pull request that introduces them — see
 - **Re-run `make backtest ARGS="--generate"` for a new baseline.** Recall and
   MRR measured before this release counted stale revisions as matches, so the
   numbers will move and are not comparable with earlier runs.
+- **Query tokens are masked in logs.** The API's request log and error log
+  write `token=[REDACTED]`, and the bundled `Caddyfile` filters the access log
+  to `token=REDACTED`. Pull the new `Caddyfile` when you deploy; a proxy of
+  your own in front of the API needs the same filter. (#102)
 
 ### Fixed
 
@@ -101,6 +105,15 @@ in the pull request that introduces them — see
 
 ### Breaking
 
+- **`?token=` authenticates only the routes that cannot send a header.** An API
+  key or session token in the query string used to work on every route, so a
+  key pasted into a URL (a `.md` link, `llms-full.txt`, even a write) was a
+  live credential in access logs, browser history and `Referer` headers. It is
+  now accepted only on the SSE stream (`GET /v1/events`) and the `<img>`
+  redirects (attachment content, import images, user and project avatars);
+  anywhere else it is ignored and the request is a `401`. The live WebSocket
+  (`/v1/events/ws`) is unchanged.
+  **Migration:** send `Authorization: Bearer <key>` instead. (#102)
 - **A connector's links, runs and work items come back a page at a time.**
   `GET /v1/connectors/:id/links`, `/runs` and `/work-items` now return one page
   (50 links, 30 runs, 50 work items by default) and a `nextCursor`; links used to

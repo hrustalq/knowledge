@@ -27,7 +27,7 @@ actually arrived rather than what the caller claimed. The old object is deleted
 reader mid-request is entitled to it.
 
 Reads are a redirect because `<img>` cannot send an `Authorization` header. The
-API authorizes (AuthGuard already accepts `?token=`, the SSE mechanism) and hands
+API authorizes (the route is `@QueryTokenOk()`, the SSE mechanism) and hands
 the browser a URL it can fetch directly. Disposition and content type are decided
 server-side, so an upload can never talk the browser into treating it as
 something executable — the attachments rule.

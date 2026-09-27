@@ -42,6 +42,23 @@ export function newTraceId(): string {
   return randomUUID();
 }
 
+/**
+ * A request URL with credential-bearing query values masked, for logs (#102).
+ *
+ * `?token=` is still how EventSource and `<img>` authenticate, so the value
+ * reaches the access log unless it is taken out here. Only the value goes: the
+ * key stays, so a log still shows that a query token was sent. Case-insensitive
+ * on the key; a malformed URL comes back with the same regex applied rather
+ * than throwing, because a logging path must never fail a request.
+ */
+const SECRET_QUERY_KEYS = /([?&](?:token|access_token|api_key)=)[^&#]*/gi;
+
+export function redactUrl(url: string): string;
+export function redactUrl(url: string | undefined): string | undefined;
+export function redactUrl(url: string | undefined): string | undefined {
+  return url?.replace(SECRET_QUERY_KEYS, '$1[REDACTED]');
+}
+
 /** Build a context for a unit of work starting now. */
 export function startTrace(source: TraceSource, init: Partial<TraceContext> = {}): TraceContext {
   return { ...init, traceId: init.traceId ?? newTraceId(), source };

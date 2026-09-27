@@ -47,11 +47,17 @@ in the pull request that introduces them — see
   view the raw Markdown, open the page in ChatGPT, Claude or Cursor (when the
   workspace allows it), copy the MCP install config for your AI client, or
   copy an agent link. No link or snippet ever contains an API key. (#68)
+- **Pages and llms.txt over MCP, and llms.txt links on Connect AI.** MCP
+  clients can read a page as markdown (`knowledge://documents/<id>.md`) and a
+  workspace's or project's `llms.txt` as resources, with the same access checks
+  as the app. Settings → Connect AI gains an "llms.txt and markdown" card with
+  copyable links for your workspace and current project plus a curl example,
+  and the generated skill lists each workspace's `llms.txt`. (#68)
 
 ### Operations
 
 - `AI_READABLE_ENABLED` (default `true`) — kill switch for the markdown and
-  `llms.txt` routes.
+  `llms.txt` routes and the matching MCP resources.
 - `LLMS_FULL_MAX_DOCS` (2000), `LLMS_FULL_MAX_BYTES` (20 MB) and
   `AI_READABLE_FETCH_CONCURRENCY` (8) bound one `llms-full.txt` response.
 - `AI_EXTERNAL_ACTIONS_ENABLED` (default `true`) is a ceiling for that switch:
@@ -60,6 +66,16 @@ in the pull request that introduces them — see
   (default `6000`) is the longest page put inline into such a link; a longer
   page is copied to the clipboard instead. Migration
   `ai_settings_external_ai_actions` adds one nullable column. (#68)
+- **Run `make graph-live-backfill` once after deploying.** New indexing stamps
+  which revision is live, but data indexed before this release carries no flag
+  and is still served as before — stale revisions included — until the
+  backfill stamps it. It is idempotent, safe while the worker runs, takes
+  `ARGS="--workspace <id>"` and `ARGS="--dry-run"`, and touches ArcadeDB and
+  (with `FULLTEXT_PROVIDER=opensearch`) the OpenSearch index. No PostgreSQL
+  migration.
+- **Re-run `make backtest ARGS="--generate"` for a new baseline.** Recall and
+  MRR measured before this release counted stale revisions as matches, so the
+  numbers will move and are not comparable with earlier runs.
 
 ### Fixed
 
@@ -72,18 +88,6 @@ in the pull request that introduces them — see
   current published revision of each page is served. The same page also no
   longer comes back once per old revision. (#83)
 
-### Operations
-
-- **Run `make graph-live-backfill` once after deploying.** New indexing stamps
-  which revision is live, but data indexed before this release carries no flag
-  and is still served as before — stale revisions included — until the
-  backfill stamps it. It is idempotent, safe while the worker runs, takes
-  `ARGS="--workspace <id>"` and `ARGS="--dry-run"`, and touches ArcadeDB and
-  (with `FULLTEXT_PROVIDER=opensearch`) the OpenSearch index. No PostgreSQL
-  migration.
-- **Re-run `make backtest ARGS="--generate"` for a new baseline.** Recall and
-  MRR measured before this release counted stale revisions as matches, so the
-  numbers will move and are not comparable with earlier runs.
 ### Breaking
 
 - **A connector's links, runs and work items come back a page at a time.**

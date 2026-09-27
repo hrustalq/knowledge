@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { DOCUMENT_CATEGORIES } from '@knowledge/contracts';
@@ -24,6 +24,7 @@ import { ConnectorWorkItemsService } from '../connectors/connector-work-items.se
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
+import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
@@ -100,6 +101,7 @@ export class McpService {
     private readonly agents: AgentRegistryService,
     private readonly access: AccessService,
     private readonly config: ConfigService,
+    private readonly aiReadable: AiReadableService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -842,6 +844,61 @@ export class McpService {
       }),
     );
 
+    // ------------------------------------------------- AI-readable (#68)
+    // The /markdown and llms.txt representations as resource templates. Reads,
+    // not tools, so WRITE_TOOLS is untouched. Each read goes through
+    // AiReadableService — the REST code path — so the text is byte-identical,
+    // and each starts with the same guard as the REST route's @Access.
+    // AI_READABLE_ENABLED=false: the templates are simply not offered.
+    // No llms-full resource: too large for one read; use search + page reads.
+    if (this.aiReadable.enabled()) {
+      server.registerResource(
+        'document-markdown',
+        new ResourceTemplate('knowledge://documents/{documentId}.md', { list: undefined }),
+        {
+          title: 'Page as markdown',
+          description: 'One page (default-branch head) as plain markdown — the same text as GET /v1/documents/:id/markdown.',
+          mimeType: 'text/markdown',
+        },
+        async (uri, { documentId }) => {
+          const id = String(documentId);
+          await guard.doc(id, 'viewer');
+          const result = await this.aiReadable.pageMarkdown(id, { frontmatter: false });
+          return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: result.status === 200 ? result.body : '' }] };
+        },
+      );
+      server.registerResource(
+        'workspace-llms-txt',
+        new ResourceTemplate('knowledge://workspaces/{workspaceId}/llms.txt', { list: undefined }),
+        {
+          title: 'Workspace llms.txt',
+          description: 'llms.txt index of a workspace: a section per project, pages in tree order.',
+          mimeType: 'text/plain',
+        },
+        async (uri, { workspaceId }) => {
+          const id = String(workspaceId);
+          await guard.ws(id, 'viewer');
+          const result = await this.aiReadable.workspaceIndex(id);
+          return { contents: [{ uri: uri.href, mimeType: 'text/plain', text: result.status === 200 ? result.body : '' }] };
+        },
+      );
+      server.registerResource(
+        'project-llms-txt',
+        new ResourceTemplate('knowledge://projects/{projectId}/llms.txt', { list: undefined }),
+        {
+          title: 'Project llms.txt',
+          description: 'llms.txt index of one project, pages in tree order.',
+          mimeType: 'text/plain',
+        },
+        async (uri, { projectId }) => {
+          const id = String(projectId);
+          await guard.project(id, 'viewer');
+          const result = await this.aiReadable.projectIndex(id);
+          return { contents: [{ uri: uri.href, mimeType: 'text/plain', text: result.status === 200 ? result.body : '' }] };
+        },
+      );
+    }
+
     return { server, tools: settleTools(handles, principal) };
   }
 
@@ -915,6 +972,7 @@ export class McpService {
       ws: (workspaceId: string, role: WorkspaceRole, operator = false) =>
         check(() => this.access.workspaceExists(workspaceId), role, operator),
       doc: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfDocument(id), role),
+      project: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfProject(id), role),
       mr: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfMergeRequest(id), role),
       connector: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnector(id), role),
       connectorRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnectorRun(id), role),

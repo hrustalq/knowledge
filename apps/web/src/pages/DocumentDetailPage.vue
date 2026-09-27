@@ -66,6 +66,7 @@ import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
+import PageAiActions from '@/components/knowledge/PageAiActions.vue'
 
 const { t } = useI18n()
 
@@ -461,6 +462,13 @@ watch(
         </Button>
         <!-- Watch sits before Edit: following a page is open to every reader,
              while editing is not, so a viewer still sees a balanced row. -->
+        <!-- Every reader can hand the page to an AI tool (issue #68); it sits
+             with Watch, before the editor-only Edit. -->
+        <PageAiActions
+          :document-id="detail.document.documentId"
+          :title="detail.document.title"
+          :revision-id="viewingRevision"
+        />
         <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
         <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
           <RouterLink

@@ -2857,5 +2857,22 @@
       "hint": "Adds these to each page’s AI actions menu. They send the page’s text to that vendor inside a link. Copying the page as Markdown is always available.",
       "clampedByEnv": "Turned off for this deployment by AI_EXTERNAL_ACTIONS_ENABLED=false, so this workspace cannot turn it on."
     }
+  },
+  "aiActions": {
+    "menu": "AI actions",
+    "copyPage": "Copy page",
+    "copyMarkdown": "Copy as Markdown",
+    "viewMarkdown": "View as Markdown",
+    "openChatgpt": "Open in ChatGPT",
+    "openClaude": "Open in Claude",
+    "openCursor": "Open in Cursor",
+    "copyMcpConfig": "Copy MCP install config",
+    "installCursor": "Install in Cursor",
+    "manageKeys": "Manage API keys",
+    "copyAgentLink": "Copy agent link",
+    "copied": "Copied",
+    "copyFailed": "Could not copy to the clipboard",
+    "tooLongCopied": "The page is too long for a link, so it was copied. Paste it into the chat.",
+    "failed": "Could not load the page"
   }
 }

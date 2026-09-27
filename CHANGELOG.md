@@ -42,6 +42,11 @@ in the pull request that introduces them — see
   menu offers "Open in ChatGPT / Claude / Cursor", which put the page's text
   into a link to that vendor. Copying a page as Markdown is never affected.
   Members can read what the menu may offer from `GET /v1/ai/page-actions`. (#68)
+- **Hand a page to an AI tool from its header.** Every page now has a
+  **Copy page** button that copies it as Markdown, with a menu beside it:
+  view the raw Markdown, open the page in ChatGPT, Claude or Cursor (when the
+  workspace allows it), copy the MCP install config for your AI client, or
+  copy an agent link. No link or snippet ever contains an API key. (#68)
 
 ### Operations
 

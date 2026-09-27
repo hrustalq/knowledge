@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { StorageModule } from '../storage/storage.module.js';
 import { AiReadableService } from './ai-readable.service.js';
 
 /**
@@ -9,7 +10,7 @@ import { AiReadableService } from './ai-readable.service.js';
  * for resource templates. Never reaches for AccessService.
  */
 @Module({
-  imports: [PrismaModule, DocumentsCoreModule],
+  imports: [PrismaModule, StorageModule, DocumentsCoreModule],
   providers: [AiReadableService],
   exports: [AiReadableService],
 })

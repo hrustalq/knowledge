@@ -442,6 +442,56 @@
     },
     {
       "method": "GET",
+      "path": "/v1/llms.txt",
+      "tag": "ai-readable",
+      "summary": "Hub: one section per workspace the caller can read, linking to its llms.txt files (issue #68)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/llms-full.txt",
+      "tag": "ai-readable",
+      "summary": "Every readable page of one project concatenated, streamed and capped. Audited (issue #68)",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/llms.txt",
+      "tag": "ai-readable",
+      "summary": "llms.txt index of one project, pages in tree order (issue #68)",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/llms-full.txt",
+      "tag": "ai-readable",
+      "summary": "Every readable page of a workspace concatenated, streamed and capped (LLMS_FULL_MAX_DOCS / _BYTES). Audited (issue #68)",
+      "role": "viewer",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/llms.txt",
+      "tag": "ai-readable",
+      "summary": "llms.txt index of a workspace: a section per project, pages in tree order (issue #68)",
+      "role": "viewer",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/",
       "tag": "App",
       "summary": "",

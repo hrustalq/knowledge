@@ -98,6 +98,12 @@ export const envSchema = z.object({
    * and `/content` stays JSON-only.
    */
   AI_READABLE_ENABLED: boolish(true),
+  /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
+  LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
+  /** Cap on bytes streamed in one llms-full.txt (20 MB). */
+  LLMS_FULL_MAX_BYTES: z.coerce.number().int().positive().default(20_000_000),
+  /** Parallel S3 reads while streaming llms-full.txt. */
+  AI_READABLE_FETCH_CONCURRENCY: z.coerce.number().int().positive().default(8),
   // Background agent schedules (docs/features/20). Off by default: the failure
   // mode of unattended AI is an avalanche, not a slow queue.
   AGENT_SCHEDULE_ENABLED: boolish(false),

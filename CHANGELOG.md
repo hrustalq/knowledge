@@ -24,10 +24,19 @@ in the pull request that introduces them — see
   `Accept: text/markdown`. Same access as reading the page, read-only API keys
   included; `ETag` / `If-None-Match` answers `304` without re-reading storage.
   First part of AI-readable output (#68).
+- **`llms.txt` for your knowledge base.** `GET /v1/llms.txt` lists the
+  workspaces your key can read; `/v1/workspaces/:id/llms.txt` and
+  `/v1/projects/:id/llms.txt` index their pages (tree order, links to each
+  page's markdown); the matching `llms-full.txt` streams every page's text in
+  one response, capped and recorded in the audit log. Drafts and unmerged
+  branches never appear. (#68)
 
 ### Operations
 
-- `AI_READABLE_ENABLED` (default `true`) — kill switch for the markdown routes.
+- `AI_READABLE_ENABLED` (default `true`) — kill switch for the markdown and
+  `llms.txt` routes.
+- `LLMS_FULL_MAX_DOCS` (2000), `LLMS_FULL_MAX_BYTES` (20 MB) and
+  `AI_READABLE_FETCH_CONCURRENCY` (8) bound one `llms-full.txt` response.
 
 ### Fixed
 

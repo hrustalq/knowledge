@@ -7,6 +7,8 @@
     "invalidSession": "Invalid or expired session — log in again",
     "accountDisabled": "Account is disabled",
     "unknownApiKey": "Unknown API key",
+    "invalidUrlTicket": "This link's access ticket is invalid, expired or already used",
+    "apiKeyInUrl": "API keys are not accepted in a URL. Send the key as an Authorization: Bearer header, or exchange it for a single-use ticket at POST /v1/auth/url-ticket",
     "invalidCredentials": "Invalid email or password",
     "invalidResetToken": "Invalid or expired reset token",
     "noPasswordInDevMode": "No password to change in AUTH_MODE=none",

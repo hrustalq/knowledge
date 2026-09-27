@@ -38,6 +38,14 @@ is execution order**: `AuthGuard` → `AclGuard`.
    so a new route cannot opt in without a reviewed spec change. Query values
    named `token` are masked in the API's request and error logs
    (`redactUrl`) and in the bundled Caddy access log.
+
+   What a query token may **be** is narrower than a header (#102, phase 2,
+   `TokenAuthService.resolveQueryToken`): a single-use `kt_` URL ticket or a
+   `ks_` session token. A `kn_` API key in a URL is a 401 even on an opted-in
+   route, because it lives until revoked. A caller that needs the SSE stream
+   mints a ticket first with `POST /v1/auth/url-ticket` (header credential
+   only; `@ReadKeyOk`) and puts that in `?token=`. `test/url-tickets.spec.ts`
+   pins the rules.
 2. **`AclGuard`** reads `@Access(role, source)` metadata, resolves the target
    **workspace in PostgreSQL**, and 403s on failure.
 
@@ -89,6 +97,7 @@ Everything is hashed; nothing reversible is stored.
 | Session token   | `ks_`  | SHA-256 in `sessions`                          |
 | API key         | `kn_`  | SHA-256 in `api_keys` (many per user)          |
 | Reset token     | `kr_`  | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN`  |
+| URL ticket      | `kt_`  | SHA-256 key in Redis, `GETDEL` on use, TTL `AUTH_URL_TICKET_TTL_SEC` (60 s) |
 
 API keys are **shown once** — at bootstrap, or on Settings → Connect AI — and
 never retrievable. A key may be **read-only**, **pinned to one workspace**, or

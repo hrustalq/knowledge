@@ -7,6 +7,8 @@
     "invalidSession": "Сессия недействительна или истекла — войдите снова",
     "accountDisabled": "Учётная запись отключена",
     "unknownApiKey": "Неизвестный API-ключ",
+    "invalidUrlTicket": "Билет доступа в ссылке недействителен, истёк или уже использован",
+    "apiKeyInUrl": "API-ключи в URL не принимаются. Передайте ключ в заголовке Authorization: Bearer или обменяйте его на одноразовый билет через POST /v1/auth/url-ticket",
     "invalidCredentials": "Неверный адрес электронной почты или пароль",
     "invalidResetToken": "Ссылка для сброса пароля недействительна или истекла",
     "noPasswordInDevMode": "В режиме AUTH_MODE=none пароля нет, менять нечего",

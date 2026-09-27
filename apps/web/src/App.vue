@@ -25,7 +25,7 @@ const route = useRoute()
 const queryClient = useQueryClient()
 
 // Feature 04: one SSE connection per session — only once authenticated
-// (the events endpoint needs the ?token= in AUTH_MODE=api-key). The live
+// (the events endpoint needs a ?token= ticket in AUTH_MODE=api-key). The live
 // WebSocket (tracked-entity updates → query-cache patching) starts alongside.
 watchEffect(() => {
   if (!import.meta.env.SSR && auth.authenticated) {

@@ -1,10 +1,17 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { AuthSessionResponse, ForgotPasswordResponse, LogoutResponse, ResetPasswordResponse } from '@knowledge/contracts';
-import { CurrentPrincipal, Public } from './access.decorator.js';
+import type {
+  AuthSessionResponse,
+  ForgotPasswordResponse,
+  LogoutResponse,
+  ResetPasswordResponse,
+  UrlTicketResponse,
+} from '@knowledge/contracts';
+import { CurrentPrincipal, Public, ReadKeyOk } from './access.decorator.js';
 import { AuthFlowService } from './auth-flow.service.js';
 import { ChangePasswordDto, ForgotPasswordDto, LoginDto, ResetPasswordDto, SignupDto } from './auth-flow.dto.js';
 import type { Principal } from './principal.js';
+import { UrlTicketsService } from './url-tickets.service.js';
 
 /**
  * Auth flow endpoints. signup/login/forgot/reset are @Public (they mint the
@@ -14,7 +21,10 @@ import type { Principal } from './principal.js';
 @ApiTags('auth')
 @Controller('v1/auth')
 export class AuthFlowController {
-  constructor(private readonly flow: AuthFlowService) {}
+  constructor(
+    private readonly flow: AuthFlowService,
+    private readonly tickets: UrlTicketsService,
+  ) {}
 
   @Public()
   @Post('signup')
@@ -54,6 +64,28 @@ export class AuthFlowController {
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<ResetPasswordResponse> {
     await this.flow.resetPassword(dto.token, dto.password);
     return { ok: true };
+  }
+
+  /**
+   * #102: swap the caller's header credential for a single-use, ~60 s `kt_`
+   * ticket to put in `?token=` on a `@QueryTokenOk` route (the SSE stream), so
+   * the long-lived session token or API key never appears in a URL. The ticket
+   * carries the principal as resolved now, API-key narrowing included, so it
+   * can never reach more than the credential that minted it.
+   *
+   * Only a header mints one: this route is not `@QueryTokenOk`, so a ticket
+   * cannot be traded for a fresh ticket. `@ReadKeyOk` because POST here is
+   * transport — a read-only key needs the stream as much as a write key does.
+   */
+  @HttpCode(200)
+  @Post('url-ticket')
+  @ReadKeyOk()
+  @ApiOperation({
+    summary:
+      'Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers); API keys are refused in URLs',
+  })
+  urlTicket(@CurrentPrincipal() principal: Principal): Promise<UrlTicketResponse> {
+    return this.tickets.mint(principal);
   }
 
   @HttpCode(200)

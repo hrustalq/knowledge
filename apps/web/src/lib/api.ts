@@ -442,7 +442,9 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
  * `<img>` and `<object>` cannot send an Authorization header, so the token
  * rides in the query string. Only the asset routes marked `@QueryTokenOk()` in
  * the API accept it (as the SSE stream does), and the request is same-origin
- * through the proxy. Point this at any other route and it 401s (#102).
+ * through the proxy. Point this at any other route and it 401s (#102). The web
+ * only ever holds a `ks_` session token, which those routes accept; an API
+ * key in a URL is refused. Per-asset tickets are #102 phase 2b.
  */
 export function resolveAssetUrl(path: string): string {
   if (!path.startsWith('/v1/')) return path

@@ -15,6 +15,26 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Security
+
+- **Single-use tickets replace credentials in the event-stream URL.**
+  `POST /v1/auth/url-ticket` trades a header credential for a `kt_` ticket that
+  works once and expires in `AUTH_URL_TICKET_TTL_SEC` (60 s). The web app opens
+  `GET /v1/events` with one, so the session token no longer appears in any
+  access log for the stream. (#102, phase 2)
+
+### Breaking
+
+- **An API key in `?token=` is refused everywhere.** On `GET /v1/events` and the
+  attachment, import-image and avatar redirects, `?token=kn_…` is now a 401.
+  Scripts should send the key as `Authorization: Bearer`, or mint a ticket with
+  it (`POST /v1/auth/url-ticket`) for the SSE stream. (#102)
+
+### Operations
+
+- New optional env var `AUTH_URL_TICKET_TTL_SEC` (default 60, 5–3600). Tickets
+  live in the existing Redis. (#102)
+
 ## [0.13.0] — 2026-09-27
 
 ### Added

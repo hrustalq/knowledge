@@ -26,12 +26,19 @@ import { LiveGateway } from '../src/events/live.gateway.js';
  */
 
 const GOOD = 'kn_good_key';
+/** What a query token may be (#102 phase 2): a kt_ ticket or a ks_ session. */
+const GOOD_QUERY = 'ks_good_session';
 const principal: Principal = { ...DEV_PRINCIPAL, mode: 'api-key', isAdmin: false, userId: 'u1' };
 
 /** api-key mode: GOOD resolves, anything else (or nothing) is a 401. */
 const tokenAuth = {
   resolve: vi.fn(async (token: string | undefined) => {
     if (token === GOOD) return principal;
+    throw new UnauthorizedException('no');
+  }),
+  // The real rules (kn_ refused in URLs) are pinned in url-tickets.spec.ts.
+  resolveQueryToken: vi.fn(async (token: string) => {
+    if (token === GOOD_QUERY) return principal;
     throw new UnauthorizedException('no');
   }),
 };
@@ -93,10 +100,10 @@ describe('AuthGuard ?token= scope', () => {
     ['get', '/v1/documents/d1/markdown'],
     ['get', '/v1/workspaces/w1/llms-full.txt'],
     ['post', '/v1/documents'],
-  ] as const)('%s %s with a valid key in ?token= and no header → 401', async (method, path) => {
+  ] as const)('%s %s with a valid key or session in ?token= and no header → 401', async (method, path) => {
     const http = await boot();
-    const res = await http[method](`${path}?token=${GOOD}`);
-    expect(res.status).toBe(401);
+    expect((await http[method](`${path}?token=${GOOD}`)).status).toBe(401);
+    expect((await http[method](`${path}?token=${GOOD_QUERY}`)).status).toBe(401);
   });
 
   it('the same routes still accept the key as a Bearer header', async () => {
@@ -108,14 +115,14 @@ describe('AuthGuard ?token= scope', () => {
 
   it('an opted-in route authenticates from ?token=', async () => {
     const http = await boot();
-    const res = await http.get(`/v1/asset?token=${GOOD}`);
+    const res = await http.get(`/v1/asset?token=${GOOD_QUERY}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ userId: 'u1' });
   });
 
   it('class-level @QueryTokenOk covers its handlers', async () => {
     const http = await boot();
-    expect((await http.get(`/v1/opted-class?token=${GOOD}`)).status).toBe(200);
+    expect((await http.get(`/v1/opted-class?token=${GOOD_QUERY}`)).status).toBe(200);
   });
 
   it('a Bearer header wins over ?token= on an opted-in route', async () => {

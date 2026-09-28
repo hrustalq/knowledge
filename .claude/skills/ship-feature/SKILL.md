@@ -1,3 +1,8 @@
+---
+name: ship-feature
+description: "Take a feature, fix or docs change in this repo from request to production: check the request is unambiguous, open a labelled GitHub issue, cut a feature branch linked to that issue, then PR into dev, and (when asked) release, promote to main, tag and verify the deploy. Use when the user asks to build/implement/add/fix something and ship it, 'ship this', 'open a PR', 'release', 'deploy', 'cut a version', 'promote dev to main', 'сделай фичу', 'выкати', 'зарелизь'."
+---
+
 # Shipping a feature
 
 This repo separates integration from release, and almost every mistake comes
@@ -18,28 +23,128 @@ Two long-lived branches, and which one you are on decides everything:
   so it is also the answer to "what is live?". It is still not live until a tag
   is pushed.
 
-This skill starts from work that already exists in the tree and ends at a
-verified deploy. Writing the feature is ordinary coding and is not covered here.
+This skill starts from a request and ends at a verified deploy. Nothing is coded
+until the request is understood and has an issue; writing the feature itself is
+ordinary coding and is not covered here.
 
 ## The shape of it
 
 ```
-work in tree
-  -> feature branch (from main) -> changelog entry -> PR --base dev -> CI -> squash   (integrates)
+request -> is it clear? (ask until it is) -> GitHub issue, typed by label
+  -> branch linked to the issue (from main) -> code
+  -> changelog entry -> PR --base dev -> CI -> squash -> close issue   (integrates)
   -> chore/release-vX.Y.Z (from dev) -> version bump -> PR --base dev -> CI -> squash
   -> PR --base main --head dev -> CI -> MERGE COMMIT                    (promotes)
   -> tag vX.Y.Z on origin/main -> push                                  (deploys)
   -> watch the run -> verify the deployed version
 ```
 
-A feature is one PR. A release is two more. Nothing is merged back afterwards —
-see the sync trap below.
+A feature is one issue and one PR. A release is two more PRs. Nothing is merged
+back afterwards — see the sync trap below.
 
-## Stage 0 — know what you are shipping
+If the user points at an existing issue (`#N`, a URL, "the search one"), skip
+Stages 0–1 for creation, but still read it and fix its labels if they are wrong.
+If the work already exists in the tree with no issue, still open one: the issue
+is where the _why_ outlives the conversation.
 
-Read `git status` before doing anything. If the tree holds work that is not part
-of what you are shipping, do **not** `git add -A`. Stage explicitly by path, and
-where a single file mixes your change with someone else's, stage one hunk:
+## Stage 0 — is the request clear?
+
+Before any code, issue or branch, decide whether you could write the issue's
+end state and acceptance criteria from what the user said. Check four things:
+
+- **Kind.** Feature, bug fix, docs, or chore? "Search should show drafts" is a
+  feature if drafts were never shown, a bug if they used to be. The answer
+  decides the label, the branch prefix, the commit type and the version bump,
+  so it is never a guess.
+- **Outcome.** What will a user (or operator, or agent) observe when it is done?
+  A request that names only a mechanism ("add a cache") needs its goal
+  recovered ("search p95 under 300 ms").
+- **Scope.** Which surface — API, web, MCP, worker — and what is explicitly out?
+- **Done.** How would you verify it: a test, a UI state, an endpoint response?
+
+Read the relevant code first (and `docs/features/`, `docs/architecture/`) so you
+ask only what the repo cannot answer. Then:
+
+- **All four clear** → restate your understanding in two or three lines and
+  carry on to Stage 1 in the same turn.
+- **Anything open** → ask with `AskUserQuestion`: at most four questions, each
+  with concrete options drawn from the code, your recommended one first. Never
+  fill a gap with a plausible guess — an issue written around a guess is a
+  confident spec for the wrong thing, and the reader has no way to tell.
+
+Loop until the four are settled. A request that turns out to be several
+features becomes several issues; say so and ship them one at a time.
+
+## Stage 1 — the issue
+
+Write the body with the `create-issue` skill's shape (problem, desired end
+state, plan citing real paths, acceptance criteria, out of scope) and run its
+preflight for duplicates first:
+
+```bash
+bash ~/.claude/skills/create-issue/scripts/repo-context.sh "<keyword> <keyword>"
+```
+
+An open near-duplicate means you comment on that issue and use it, not file a
+second one.
+
+**Label by kind, exactly one type label** — an unlabelled or double-labelled
+issue gets triaged as the wrong thing (`issue-triage` treats `bug` as "verify it
+still reproduces", a feature as "plan the build"):
+
+| kind    | label           | title / branch / commit prefix |
+| ------- | --------------- | ------------------------------ |
+| feature | `enhancement`   | `feat(scope): …` / `feat/`     |
+| bug     | `bug`           | `fix(scope): …` / `fix/`       |
+| docs    | `documentation` | `docs(scope): …` / `docs/`     |
+| chore   | `enhancement`   | `chore(scope): …` / `chore/`   |
+
+Never put `bug` on a feature because it "fixes" a gap. Run `gh label list`
+before inventing one; add `in progress` when you start work.
+
+The repo is public, so filing is outward-facing: show the title, labels and body
+and create on approval. Fold this into the Stage 0 restatement so it costs one
+round trip, not two. If the user asked you to go ahead without checking, file
+it directly.
+
+```bash
+gh issue create --title "feat(search): …" --label enhancement --label "in progress" \
+  --assignee @me --body-file /path/to/body.md
+```
+
+Use `--body-file` from the scratchpad, not `--body "…"` — backticks and `$` in a
+markdown body get eaten by the shell.
+
+## Stage 2 — the branch, linked to the issue
+
+Branch **from `main`** with `gh issue develop`, which creates the branch on the
+remote and links it in the issue's _Development_ panel:
+
+```bash
+git fetch origin
+gh issue develop <N> --base main --name feat/<N>-<short-name> --checkout
+```
+
+`<N>-` in the name matches the house pattern (`fix/110-provider-account-errors`).
+`main` is the last state that ran in production, the honest base for new work.
+Use `--base dev` only when the change builds on something unreleased already
+merged there.
+
+`--base main` also records `main` as the branch's PR base in git config, so a
+bare `gh pr create` will target `main`. Always pass `--base dev` in Stage 3.
+
+If `--checkout` is refused because the tree is dirty, the branch still exists on
+the remote: `git fetch origin && git switch -c feat/<N>-<short-name> --track
+origin/feat/<N>-<short-name>`.
+
+Now write the code.
+
+## Stage 3 — the feature PR
+
+**Know what you are shipping.** Read `git status` before staging. If the tree
+holds work that is not part of what you are shipping, do **not** `git add -A`.
+Stage explicitly by path, and where a single file mixes your change with someone
+else's, stage one hunk:
 
 ```bash
 git diff -U3 -- path/to/file > /tmp/f.patch   # then keep only your hunks
@@ -50,14 +155,7 @@ git diff --cached --stat                      # always read this back
 Committing someone's half-finished refactor inside your feature is both hard to
 review and hard to undo. If you cannot tell which changes are yours, ask.
 
-## Stage 1 — the feature PR
-
-1. Branch **from `main`**: `git fetch origin && git switch -c feat/<short-name> origin/main`
-   (or `fix/`, `docs/`…). `main` is the last state that ran in production, which
-   is the honest base for new work. Branch from `origin/dev` instead only when
-   your change builds on something unreleased that is already merged there.
-
-2. **Write the changelog entry now, in this PR.** `CHANGELOG.md` under
+1. **Write the changelog entry now, in this PR.** `CHANGELOG.md` under
    `## [Unreleased]`, following `docs/templates/changelog-entry.md`. Recreate
    that heading if a release just consumed it. Entries are written here rather
    than at release time because writing them later means writing them from
@@ -73,27 +171,40 @@ review and hard to undo. If you cannot tell which changes are yours, ask.
    Skip the entry entirely for pure refactors, tests, formatting, CI tweaks and
    dependency bumps that change no behaviour.
 
-3. Commit with a conventional-commit subject. **The PR title becomes the commit
-   on `dev`** — PRs into `dev` are squash-merged by ruleset — so the title is the
-   thing that has to read well in history, and a PR containing both a fix and a
-   feature will land under one of them.
+2. Commit with a conventional-commit subject whose type matches the issue's
+   label (Stage 1 table), and end the body with `Refs #<N>`. **The PR title
+   becomes the commit on `dev`** — PRs into `dev` are squash-merged by ruleset —
+   so the title is the thing that has to read well in history, and a PR
+   containing both a fix and a feature will land under one of them.
 
-4. Push. `.husky/pre-push` runs `make verify` (db-generate, lint, typecheck,
+3. Push. `.husky/pre-push` runs `make verify` (db-generate, lint, typecheck,
    dependency rules, tests). It deliberately omits `build`, which CI covers —
    so a green push is not proof the build works.
 
-5. `gh pr create --base dev`. **Pass the flag.** GitHub bases a new PR on the
-   default branch, which is deliberately still `main`; without `--base dev` you
-   open a promotion PR carrying one feature, and `main` will only offer to merge
-   it as a merge commit. Explain the reasoning, not just the diff; if you did not
-   write the code, say so in the PR, because a reviewer reading a confident
-   description assumes the author understood the intent.
+4. `gh pr create --base dev`, body opening with `Refs #<N>.` **Pass the flag.**
+   GitHub bases a new PR on the default branch, which is deliberately still
+   `main`; without `--base dev` you open a promotion PR carrying one feature,
+   and `main` will only offer to merge it as a merge commit. Explain the
+   reasoning, not just the diff; if you did not write the code, say so in the
+   PR, because a reviewer reading a confident description assumes the author
+   understood the intent.
 
-6. Wait for `check`, then `gh pr merge <n> --squash` (see **Waiting for CI**).
+5. Wait for `check`, then `gh pr merge <n> --squash` (see **Waiting for CI**).
+
+6. **Close the issue yourself.** GitHub honours `Closes #N` only on the default
+   branch, so a PR into `dev` never closes anything — which is why the body says
+   `Refs`, not a keyword that silently does nothing. The branch link from Stage 2
+   already ties PR and issue together. Close it with a pointer so it is not
+   re-triaged:
+
+   ```bash
+   gh issue edit <N> --remove-label "in progress"
+   gh issue close <N> --comment "Landed on dev in #<pr>; ships with the next release."
+   ```
 
 That is the whole job for a feature. Stop here unless you were asked to release.
 
-## Stage 2 — the version bump, on `dev`
+## Stage 4 — the version bump, on `dev`
 
 Pick the number from the commits since the last tag, per `docs/versioning.md`:
 
@@ -129,7 +240,7 @@ bookkeeping nobody reads. The authoritative version is the git tag.
 Commit as `chore(release): vX.Y.Z`, push, `gh pr create --base dev`, wait for
 `check`, squash merge.
 
-## Stage 3 — the promotion PR
+## Stage 5 — the promotion PR
 
 ```bash
 git fetch origin
@@ -150,7 +261,7 @@ rather than doing damage — but know why: squashing `dev` into `main` rewrites
 every SHA, leaving the branches permanently diverged and every later promotion
 replaying already-released work.
 
-## Stage 4 — the tag, which is the deploy
+## Stage 6 — the tag, which is the deploy
 
 Tag **the commit that landed on `main`**.
 
@@ -166,14 +277,14 @@ but only after you have pushed it and have to delete it again. That is what
 catches a tag cut from `dev`, or from your local release commit whose SHA the
 squash rewrote.
 
-Do not merge anything into `dev` between Stage 3 and here: the tag should be the
+Do not merge anything into `dev` between Stage 5 and here: the tag should be the
 commit the promotion PR was reviewed as.
 
 This is the irreversible, outward-facing step. Unless the user has already asked
 for a deploy in this conversation, say what you are about to push and confirm
 first. Approval to merge is not approval to deploy.
 
-## Stage 5 — watch, then verify
+## Stage 7 — watch, then verify
 
 The run builds both images sequentially (a 3.8 GB box cannot afford parallel
 `tsc`), applies migrations, rolls out, then gates on loopback health and the
@@ -226,6 +337,12 @@ on a GitHub-hosted runner, on every PR regardless of base. Merge only on
 Each of these has actually happened here, or is the failure the branch layout
 was designed around.
 
+- **An issue labelled by guess gets triaged by guess.** A feature filed as
+  `bug` is "verified" against code that never had it and closed as not
+  reproducible. One type label, from Stage 0's answer, never inferred.
+- **`Closes #N` does nothing on a PR into `dev`.** Keywords only fire on the
+  default branch. Write `Refs #N` and close the issue by hand after the squash
+  (Stage 3, step 6).
 - **`gh pr create` defaults to `main`.** The default branch is still `main` on
   purpose (features are cut from it), so a feature PR without `--base dev`
   silently becomes a promotion PR. Check the base before merging anything.

@@ -216,6 +216,8 @@
     "budgetWorkspace": "This workspace's monthly AI token budget is spent. Ask a workspace admin to raise it.",
     "upstreamStatus": "The AI provider responded with an error ({status})",
     "upstreamError": "The AI provider responded with an error",
+    "upstreamNoCredit": "The AI provider refused the request: its account is out of credit (402). Top up the balance with the provider.",
+    "upstreamAuth": "The AI provider rejected the credentials ({status}). Check the API key in AI settings.",
     "unreachable": "The AI provider is unreachable"
   },
   "workflow": {

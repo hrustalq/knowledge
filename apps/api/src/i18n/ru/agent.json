@@ -120,6 +120,7 @@
     "modelPassFailed": "Проход модели не удался: {error}",
     "modelPassFailedStructuralOnly": "Проход модели не удался, поэтому включены только структурные находки.",
     "pageNotReviewed": "«{title}» не удалось проверить: {error}",
-    "pageNotScanned": "«{title}» не удалось просмотреть: {error}"
+    "pageNotScanned": "«{title}» не удалось просмотреть: {error}",
+    "stopped": "Остановлено досрочно, остальное не проверено: {error}"
   }
 }

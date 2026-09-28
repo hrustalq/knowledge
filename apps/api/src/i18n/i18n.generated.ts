@@ -128,6 +128,7 @@ export type I18nTranslations = {
             "modelPassFailedStructuralOnly": string;
             "pageNotReviewed": string;
             "pageNotScanned": string;
+            "stopped": string;
         };
     };
     "assistant": {
@@ -398,6 +399,8 @@ export type I18nTranslations = {
             "budgetWorkspace": string;
             "upstreamStatus": string;
             "upstreamError": string;
+            "upstreamNoCredit": string;
+            "upstreamAuth": string;
             "unreachable": string;
         };
         "workflow": {

@@ -505,6 +505,55 @@
         ]
       }
     },
+    "/v1/auth/url-ticket": {
+      "post": {
+        "operationId": "AuthFlowController_urlTicket",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers); API keys are refused in URLs",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v1/auth/change-password": {
       "post": {
         "operationId": "AuthFlowController_changePassword",
@@ -8094,7 +8143,7 @@
             }
           }
         },
-        "summary": "Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<key>.",
+        "summary": "Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<kt_ ticket> from POST /v1/auth/url-ticket (API keys are refused in URLs).",
         "tags": [
           "events"
         ]

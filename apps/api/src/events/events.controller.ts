@@ -14,7 +14,7 @@ export class EventsController {
   @Sse()
   @Access('viewer', 'query')
   @QueryTokenOk() // EventSource cannot set headers
-  @ApiOperation({ summary: 'Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<key>.' })
+  @ApiOperation({ summary: 'Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<kt_ ticket> from POST /v1/auth/url-ticket (API keys are refused in URLs).' })
   @ApiQuery({ name: 'workspaceId', required: true })
   events(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,

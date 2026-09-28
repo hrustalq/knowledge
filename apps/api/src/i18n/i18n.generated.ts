@@ -189,6 +189,8 @@ export type I18nTranslations = {
             "invalidSession": string;
             "accountDisabled": string;
             "unknownApiKey": string;
+            "invalidUrlTicket": string;
+            "apiKeyInUrl": string;
             "invalidCredentials": string;
             "invalidResetToken": string;
             "noPasswordInDevMode": string;

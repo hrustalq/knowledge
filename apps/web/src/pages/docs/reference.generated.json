@@ -741,6 +741,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/auth/url-ticket",
+      "tag": "auth",
+      "summary": "Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers); API keys are refused in URLs",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/me",
       "tag": "auth",
@@ -1574,7 +1584,7 @@
       "method": "GET",
       "path": "/v1/events",
       "tag": "events",
-      "summary": "Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<key>.",
+      "summary": "Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<kt_ ticket> from POST /v1/auth/url-ticket (API keys are refused in URLs).",
       "role": null,
       "source": null,
       "public": false,

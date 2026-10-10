@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
-import type { DocumentTreeNode } from '@knowledge/contracts';
+import type { AssistantAskSource, DocumentTreeNode } from '@knowledge/contracts';
 import { AccessService } from '../auth/access.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -92,7 +92,8 @@ export class AssistantReadToolsService {
           name: 'search_knowledge',
           description:
             'Hybrid (semantic + keyword) search over this workspace, with one hop of knowledge-graph ' +
-            'expansion. Returns matching documents with snippets plus graph-related documents. ' +
+            'expansion. Returns matching documents with snippets plus graph-related documents. Each result ' +
+            'carries a `cite` label (S1, S2, …) to end your sentences with. ' +
             'Use it whenever the current page does not already answer the question.',
           parameters: {
             type: 'object',
@@ -224,11 +225,35 @@ export class AssistantReadToolsService {
       ctx.workspaceId,
       res.results.map((r) => r.documentId),
     );
+    // One source per page, carrying the best chunk: the label is per page
+    // (that is what a chip is), and the first hit for a page is its top-ranked
+    // chunk, whose heading trail is where a citation link should land.
+    const sources: AssistantAskSource[] = [];
+    const seen = new Map<string, AssistantAskSource>();
+    for (const r of res.results) {
+      let source = seen.get(r.documentId);
+      if (!source) {
+        source = {
+          documentId: r.documentId,
+          title: r.title,
+          snippet: r.snippet,
+          revisionId: r.revisionId,
+          chunkId: r.chunkId,
+          headingPath: r.headingPath ?? [],
+          score: r.score,
+          factClass: 'explicit',
+        };
+        seen.set(r.documentId, source);
+        sources.push(source);
+      }
+    }
     const results = res.results.map((r) => ({
       documentId: r.documentId,
       title: r.title,
       breadcrumb: trails.get(r.documentId) || '(top level)',
+      section: r.headingPath?.length ? r.headingPath.join(' › ') : undefined,
       snippet: r.snippet,
+      ...this.citeOf(ctx, seen.get(r.documentId)!),
     }));
     const related = (res.related ?? []).map((d) => ({
       documentId: d.documentId,
@@ -238,7 +263,7 @@ export class AssistantReadToolsService {
     return {
       content: JSON.stringify({ results, related }),
       ok: true,
-      sources: res.results.map((r) => ({ documentId: r.documentId, title: r.title, snippet: r.snippet })),
+      sources,
     };
   }
 
@@ -252,15 +277,17 @@ export class AssistantReadToolsService {
     try {
       const content = await this.documents.getContent(documentId);
       const trails = await this.documents.breadcrumbsFor(ctx.workspaceId, [documentId]);
+      const source: AssistantAskSource = { documentId, title: doc.title, revisionId: content.revisionId, factClass: 'explicit' };
       return {
         content: JSON.stringify({
           documentId,
           title: doc.title,
           breadcrumb: trails.get(documentId) || '(top level)',
+          ...this.citeOf(ctx, source),
           markdown: content.markdown.slice(0, MAX_DOC_CHARS),
         }),
         ok: true,
-        sources: [{ documentId, title: doc.title }],
+        sources: [source],
       };
     } catch {
       return this.fail(`Document "${doc.title}" has no readable content yet (draft or unindexed)`);
@@ -350,17 +377,37 @@ export class AssistantReadToolsService {
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
 
     const graph = await this.documents.getDocumentGraph(documentId, depth);
+    // A page reached through the graph is evidence of the kind the edge is:
+    // an `inferred` edge is a model's guess, `frontmatter` the author's word.
+    // The weakest edge that led to a node is what the citation inherits.
+    const factOf = new Map<string, AssistantAskSource['factClass']>();
+    const rank: Record<string, number> = { explicit: 0, curated: 1, frontmatter: 2, inferred: 3 };
+    for (const e of graph.edges) {
+      const cls = e.extractor as NonNullable<AssistantAskSource['factClass']>;
+      if (!(cls in rank)) continue;
+      for (const end of [e.from, e.to]) {
+        const prev = factOf.get(end);
+        if (!prev || (rank[cls] ?? 0) > (rank[prev] ?? 0)) factOf.set(end, cls);
+      }
+    }
+    const sources: AssistantAskSource[] = graph.nodes
+      .filter((n) => n.kind === 'document' && n.id !== documentId)
+      .slice(0, 8)
+      .map((n) => ({ documentId: n.id, title: n.label, factClass: factOf.get(n.id) ?? 'inferred' }));
     return {
       content: JSON.stringify({
         documentId,
-        nodes: graph.nodes.map((n) => ({ id: n.id, kind: n.kind, label: n.label, distance: n.distance })),
+        nodes: graph.nodes.map((n) => ({
+          id: n.id,
+          kind: n.kind,
+          label: n.label,
+          distance: n.distance,
+          ...(n.kind === 'document' ? this.citeOf(ctx, sources.find((s) => s.documentId === n.id) ?? { documentId: n.id, title: n.label }) : {}),
+        })),
         edges: graph.edges.map((e) => ({ from: e.from, to: e.to, type: e.type, confidence: e.confidence })),
       }),
       ok: true,
-      sources: graph.nodes
-        .filter((n) => n.kind === 'document' && n.id !== documentId)
-        .slice(0, 8)
-        .map((n) => ({ documentId: n.id, title: n.label })),
+      sources,
     };
   }
 
@@ -385,10 +432,12 @@ export class AssistantReadToolsService {
     // still worth reporting, so this degrades rather than failing.
     const content = await this.documents.getContent(documentId).catch(() => null);
 
+    const source: AssistantAskSource = { documentId, title: doc.title, factClass: 'explicit' };
     return {
       content: JSON.stringify({
         documentId,
         title: doc.title,
+        ...this.citeOf(ctx, source),
         declared: readFrontmatterRelations(content?.frontmatter).map((r) => ({
           type: r.type,
           targetKey: r.target.key,
@@ -404,8 +453,20 @@ export class AssistantReadToolsService {
         })),
       }),
       ok: true,
-      sources: [{ documentId, title: doc.title }],
+      sources: [source],
     };
+  }
+
+  /**
+   * The `cite` field a tool result shows the model (docs/features/38). Stamped
+   * onto the source too, so the harness collects it already labelled. Absent
+   * when the caller runs no answer to cite into (a background agent).
+   */
+  private citeOf(ctx: AssistantToolContext, source: AssistantAskSource): { cite?: string } {
+    if (!ctx.cite) return {};
+    const cite = ctx.cite(source);
+    source.cite = cite;
+    return { cite };
   }
 
   /** Model-supplied ids are only honoured when the document lives in the pinned workspace. */

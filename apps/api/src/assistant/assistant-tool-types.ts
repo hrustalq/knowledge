@@ -31,6 +31,12 @@ import type { Principal } from '../auth/principal.js';
 export interface AssistantToolContext {
   principal: Principal;
   workspaceId: string;
+  /**
+   * The turn's citation labeller (docs/features/38): hands a source its `S#`
+   * label so the tool can print it in the result the model reads. Optional —
+   * a background agent's tool loop has no answer to cite into and passes none.
+   */
+  cite?: (source: AssistantSource) => string;
 }
 
 export interface AssistantToolResult {

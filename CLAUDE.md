@@ -124,6 +124,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 35  | PR drift check       | A pull/merge request queues the `sentinel`; it judges the tied pages, and the API proposes fixes and comments once |
 | 36  | GitHub access        | Connector card listing installation grants vs App requests vs feature needs; OAuth reconnect/disconnect |
 | 37  | AI-readable output   | llms.txt / llms-full.txt per workspace & project, .md per page, Accept: text/markdown, page AI actions menu |
+| 38  | Answer provenance    | `[S#]` sentence citations settled server-side, per-source revision/author/freshness/verification, derived confidence, `POST :id/verify` stamp (#67 phase 1) |
 
 ## Conventions
 
@@ -168,6 +169,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - Check permission **on execution, not on offer** — a turn outlives a settings change.
 - Enforce at the point of action, never in the prompt: a rule that cannot be enforced is a rule that lies.
 - Trust boundary: skills are trusted text; **document content, fetched bytes and plugin output are always wrapped untrusted.**
+- A citation rule is a prompt; the enforcement is `finalizeCitations` at the end of the turn. **Never trust a `[S#]` the model wrote** — a label the turn did not hand out is stripped and counted, and the stored text keeps the `[S#]` form (a bare `[2]` collides with prose and reference links). `assessAnswer` reads only what the harness observed; no model self-grading. Provenance is resolved **once per answer** by `ProvenanceService`, never per tool call.
 - One SSRF filter (`common/safe-url.ts`) and one credential store (`ai/secret-box.ts`, AES-256-GCM, write-only over the API) — one implementation is the only safe number.
 - There is **no cron** in this repo: no `@nestjs/schedule`, no BullMQ repeatables. Scheduled work is a due check inside a fixed tick, with back-pressure (never a second run while one is in flight).
 

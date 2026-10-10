@@ -1,4 +1,5 @@
 import type { DocumentCategory, RelatedDocumentResult, SearchResult } from '@knowledge/contracts/documents';
+import type { FactExtractor } from '@knowledge/contracts/graph';
 
 // Shared API contract types for the Dynamic Knowledge Platform.
 // Plain types + dependency-free error-contract helpers — no runtime deps, no server imports.
@@ -61,6 +62,17 @@ export interface DocumentSummary {
   headRevisionId: string | null;
   headRevisionStatus: RevisionStatus | null;
   createdAt: string;
+  /**
+   * The manual verification stamp (docs/features/38): who last said "this page
+   * is right" and at which revision. Optional because only the detail route
+   * fills it in — a tree node or a list row never needs it. `verification` is
+   * the derived reading of the stamp against the head (`verificationStateFor`),
+   * so the page can say "outdated" without anything having been written.
+   */
+  verifiedAt?: string | null;
+  verifiedBy?: string | null;
+  verifiedRevisionId?: string | null;
+  verification?: SourceVerificationState;
 }
 
 export interface RevisionInfo {
@@ -238,6 +250,11 @@ export type RepoEventType = (typeof REPO_EVENT_TYPES)[number];
 export const KNOWN_EVENT_TYPES = [
   'document.created',
   'document.updated',
+  // A person stamped the page as checked at its current head, or took the
+  // stamp off (docs/features/38). The stamp itself lives on the document row;
+  // whether it still holds is derived against the head at read time.
+  'document.verified',
+  'document.unverified',
   'project.created',
   'project.updated',
   'project.deleted',
@@ -401,11 +418,254 @@ export interface AssistantRelatedResponse {
  * because rows persisted before feature 25 do not carry it; absent reads as
  * `'document'`, which `assistantSourceKey` and every consumer rely on.
  */
-export interface AssistantAskSource {
+export interface AssistantAskSource extends SourceProvenance {
   kind?: 'document';
   documentId: string;
   title: string;
   snippet?: string;
+  /**
+   * The per-turn label the model cites this page by — `S1`, `S2`, … — assigned
+   * in the order sources were gathered and shown to the model inside every
+   * tool result (docs/features/38). A sentence in the answer ending in `[S2]`
+   * rests on this source. Optional: rows persisted before the feature carry
+   * none, and then the message simply has no sentence-level citations.
+   */
+  cite?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Answer provenance and confidence (docs/features/38, issue #67 phase 1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a page's manual verification stamp still holds.
+ *
+ * Derived, never stored (house classifier rule): the row carries
+ * `verified_revision_id`, and this is that id read against the head. A new
+ * revision therefore flips a page to `outdated` with no write to the document
+ * row, and `flagged` will come from an open report once reports exist
+ * (issue #67 phase 3) — until then `verificationStateFor` is always passed 0.
+ */
+export const SOURCE_VERIFICATION_STATES = ['verified', 'outdated', 'unverified', 'flagged'] as const;
+export type SourceVerificationState = (typeof SOURCE_VERIFICATION_STATES)[number];
+
+export function verificationStateFor(
+  doc: { verifiedRevisionId: string | null | undefined },
+  headRevisionId: string | null | undefined,
+  openIssueCount: number,
+): SourceVerificationState {
+  if (openIssueCount > 0) return 'flagged';
+  if (!doc.verifiedRevisionId) return 'unverified';
+  return headRevisionId && doc.verifiedRevisionId === headRevisionId ? 'verified' : 'outdated';
+}
+
+/**
+ * What a reader needs to decide how much to trust one cited page: which
+ * revision was read, who wrote it, when it last changed, whether anyone has
+ * checked it, and what kind of fact it is. Every field is optional because
+ * each is resolved from a different store at the end of the turn, and an answer
+ * must still render when one of those lookups has nothing to say.
+ *
+ * Shared between an assistant citation and an MCP search hit, so an agent over
+ * MCP reads the same freshness a person sees in the chat.
+ */
+export interface SourceProvenance {
+  revisionId?: string;
+  revisionNumber?: number;
+  /** The chunk the hit came from, when it came from search. */
+  chunkId?: string;
+  /** Heading trail of that chunk, root first — enough to anchor a link to a section. */
+  headingPath?: string[];
+  authorId?: string;
+  authorName?: string;
+  /** ISO timestamp the head revision was finalized — the page's freshness. */
+  changedAt?: string;
+  verification?: SourceVerificationState;
+  verifiedAt?: string;
+  verifiedByName?: string;
+  /**
+   * How this fact reached the answer. Page text read directly is `explicit`;
+   * a page reached through a graph edge carries that edge's extractor.
+   */
+  factClass?: FactExtractor;
+  /** Retrieval score of the best chunk, 0..1, when the source came from search. */
+  score?: number;
+}
+
+/**
+ * One sentence of the answer and the sources it rests on. `start`/`end` are
+ * character offsets into the persisted answer text; `cites` are source labels
+ * (`S1`…) that always resolve to a source on the same message — unknown labels
+ * are stripped before the message is stored.
+ */
+export interface AnswerCitation {
+  start: number;
+  end: number;
+  cites: string[];
+}
+
+export const ANSWER_CONFIDENCE_LEVELS = ['high', 'medium', 'low', 'none'] as const;
+export type AnswerConfidenceLevel = (typeof ANSWER_CONFIDENCE_LEVELS)[number];
+
+/**
+ * Why the confidence is what it is. Closed so the web can translate each one
+ * into a sentence; `value` is the signal's magnitude (a count or a ratio), not
+ * the penalty, so the UI can say "3 of 7 sentences cite nothing".
+ */
+export const ANSWER_CONFIDENCE_REASONS = [
+  'no-sources',
+  'uncited-sentences',
+  'stale-sources',
+  'inferred-only',
+  'unknown-citation',
+  'budget-exhausted',
+  'tool-errors',
+  'low-retrieval-score',
+  'flagged-sources',
+  'verified-sources',
+] as const;
+export type AnswerConfidenceReasonKey = (typeof ANSWER_CONFIDENCE_REASONS)[number];
+
+export interface AnswerConfidenceReason {
+  key: AnswerConfidenceReasonKey;
+  value: number;
+}
+
+export interface AnswerConfidence {
+  level: AnswerConfidenceLevel;
+  /** 0..1, the number the level was cut from. */
+  score: number;
+  reasons: AnswerConfidenceReason[];
+}
+
+/** The observable facts about one finished answer that `assessAnswer` reads. */
+export interface AnswerSignals {
+  /** Sentences in the answer outside code blocks. */
+  sentences: number;
+  /** Of those, how many end in at least one resolvable citation. */
+  citedSentences: number;
+  /** Distinct sources the turn gathered. */
+  sources: number;
+  /** Distinct sources at least one sentence cites. */
+  citedSources: number;
+  /** Markers the model wrote that named no gathered source (stripped). */
+  unknownCitations: number;
+  /** Best retrieval score among the sources, when any came from search. */
+  maxScore: number | null;
+  /** Cited sources whose head changed longer ago than the stale threshold, or whose stamp is outdated. */
+  staleSources: number;
+  /** Cited sources with an open report. */
+  flaggedSources: number;
+  /** Cited sources whose stamp holds at the head. */
+  verifiedSources: number;
+  /** Every cited source reached the answer through an inferred graph edge only. */
+  inferredOnly: boolean;
+  /** Tool calls that returned an error this turn. */
+  toolErrors: number;
+  /** The turn ran out of tool budget or rounds before it finished reading. */
+  budgetExhausted: boolean;
+}
+
+/**
+ * The weights, named so a reader of a confidence badge can be pointed at the
+ * number that produced it, and so the backtest can re-tune them against the
+ * feedback dataset (issue #67 phase 5) without finding them inline.
+ *
+ * Deliberately no model self-assessment: the score is a function of things the
+ * harness observed, so it cannot be talked up by the answer it describes.
+ */
+export const ANSWER_CONFIDENCE_WEIGHTS = {
+  /** Penalty at zero citation coverage, scaled linearly by the uncited share. */
+  coverage: 0.45,
+  /** Per unknown label, capped. */
+  unknownCitation: 0.1,
+  unknownCitationCap: 0.3,
+  /** Scaled by the stale share of cited sources. */
+  stale: 0.2,
+  /** Any cited page with an open report: a reader was already told something is wrong. */
+  flagged: 0.3,
+  inferredOnly: 0.3,
+  /** Per failed tool call, capped. */
+  toolError: 0.1,
+  toolErrorCap: 0.2,
+  budgetExhausted: 0.15,
+  /** Applied when the best retrieval score is under `lowScoreBelow`. */
+  lowScore: 0.2,
+  lowScoreBelow: 0.35,
+  /** Bonus when every cited source is verified at its head. */
+  verified: 0.1,
+  /** Level cuts on the final score. */
+  high: 0.75,
+  medium: 0.5,
+} as const;
+
+/**
+ * Confidence from observable signals — one pure function the API stores with,
+ * the web explains with and the backtest recomputes with, so three consumers
+ * cannot disagree about what `medium` means.
+ *
+ * `none` is reserved for an answer with no sources at all: whatever the model
+ * wrote, nothing in the workspace backs it. Everything else starts at 1 and
+ * loses points for what is missing, so an answer that cites every sentence
+ * from fresh, verified pages is `high` and one that cites nothing is `low`.
+ */
+export function assessAnswer(s: AnswerSignals): AnswerConfidence {
+  const W = ANSWER_CONFIDENCE_WEIGHTS;
+  const reasons: AnswerConfidenceReason[] = [];
+  if (s.sources <= 0) {
+    return { level: 'none', score: 0, reasons: [{ key: 'no-sources', value: 0 }] };
+  }
+  let score = 1;
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+
+  if (s.sentences > 0) {
+    const uncited = Math.max(0, s.sentences - s.citedSentences);
+    if (uncited > 0) {
+      score -= W.coverage * (uncited / s.sentences);
+      reasons.push({ key: 'uncited-sentences', value: uncited });
+    }
+  } else if (s.citedSentences === 0) {
+    // An answer with no prose sentences (a bare code block, a table) cites
+    // nothing and is treated as fully uncited.
+    score -= W.coverage;
+    reasons.push({ key: 'uncited-sentences', value: 0 });
+  }
+  if (s.unknownCitations > 0) {
+    score -= Math.min(W.unknownCitationCap, W.unknownCitation * s.unknownCitations);
+    reasons.push({ key: 'unknown-citation', value: s.unknownCitations });
+  }
+  const citedBase = Math.max(1, s.citedSources);
+  if (s.staleSources > 0) {
+    score -= W.stale * Math.min(1, s.staleSources / citedBase);
+    reasons.push({ key: 'stale-sources', value: s.staleSources });
+  }
+  if (s.flaggedSources > 0) {
+    score -= W.flagged;
+    reasons.push({ key: 'flagged-sources', value: s.flaggedSources });
+  }
+  if (s.inferredOnly) {
+    score -= W.inferredOnly;
+    reasons.push({ key: 'inferred-only', value: 1 });
+  }
+  if (s.toolErrors > 0) {
+    score -= Math.min(W.toolErrorCap, W.toolError * s.toolErrors);
+    reasons.push({ key: 'tool-errors', value: s.toolErrors });
+  }
+  if (s.budgetExhausted) {
+    score -= W.budgetExhausted;
+    reasons.push({ key: 'budget-exhausted', value: 1 });
+  }
+  if (s.maxScore !== null && s.maxScore < W.lowScoreBelow) {
+    score -= W.lowScore;
+    reasons.push({ key: 'low-retrieval-score', value: round(s.maxScore) });
+  }
+  if (s.citedSources > 0 && s.verifiedSources >= s.citedSources && s.flaggedSources === 0) {
+    score += W.verified;
+    reasons.push({ key: 'verified-sources', value: s.verifiedSources });
+  }
+  score = round(Math.min(1, Math.max(0, score)));
+  const level: AnswerConfidenceLevel = score >= W.high ? 'high' : score >= W.medium ? 'medium' : 'low';
+  return { level, score, reasons };
 }
 
 /**
@@ -430,6 +690,8 @@ export interface AssistantWebSource {
   snippet?: string;
   /** ISO timestamp of the fetch or search that produced this citation. */
   fetchedAt?: string;
+  /** Same per-turn label scheme as a page source, so one answer numbers all its sources in one series. */
+  cite?: string;
 }
 
 /** Anything an answer can cite. Discriminated by `kind`; absent means a document. */
@@ -473,6 +735,10 @@ export interface AssistantAskResponse {
   toolCalls?: AssistantToolCall[];
   /** Provider model that produced the answer. */
   model?: string;
+  /** Sentence spans of `answer` and the `cite` labels each rests on (docs/features/38). */
+  citations?: AnswerCitation[];
+  /** Derived from the turn's observable signals; null when the assistant is disabled. */
+  confidence?: AnswerConfidence | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -52,7 +52,7 @@ Full-text mirrors the embeddings pattern exactly:
 | `FULLTEXT_PROVIDER` | Behaviour                                                |
 | ------------------- | -------------------------------------------------------- |
 | `none` _(default)_  | Vector only. `mode: 'keyword'` silently falls back to it |
-| `opensearch`        | Plain-HTTP client, no SDK; `make infra-up-opensearch`     |
+| `opensearch`        | Plain-HTTP client, no SDK; `make infra-up-opensearch`    |
 
 The worker mirrors chunks into the index as a **non-fatal step 6b** — a failure
 to index for keyword search must never fail a revision that is otherwise
@@ -83,12 +83,12 @@ what exists. Without this note the plan reads as simply wrong against the code.
 Four provenance classes share one edge table, ordered by how much a human
 vouched for them ([plan.md §5](../../plan.md)):
 
-| `extractor`   | Source                                   | Confidence   |
-| ------------- | ---------------------------------------- | ------------ |
-| `explicit`    | `relations[]` on create, or the relations endpoint | 1   |
-| `frontmatter` | Parsed from the document — see [03](03-ingestion.md) | 1 |
-| `inferred`    | The LLM extractor                        | clamped      |
-| `curated`     | A human confirming or correcting a fact  | 1            |
+| `extractor`   | Source                                               | Confidence |
+| ------------- | ---------------------------------------------------- | ---------- |
+| `explicit`    | `relations[]` on create, or the relations endpoint   | 1          |
+| `frontmatter` | Parsed from the document — see [03](03-ingestion.md) | 1          |
+| `inferred`    | The LLM extractor                                    | clamped    |
+| `curated`     | A human confirming or correcting a fact              | 1          |
 
 Extraction is pluggable behind the `RELATION_EXTRACTOR` token (`src/extraction/`),
 mirroring embeddings: `none` (default) or `openai-compatible`
@@ -142,6 +142,18 @@ to every hit and returns a `related[]` of documents reachable **only** through
 the graph, each carrying the connecting edges as evidence. A result that a
 reader cannot audit back to a stated relationship is not a result they should
 act on.
+
+## Provenance on results
+
+A hit is a `(documentId, revisionId, chunkId, score)` and, since
+[feature 38](../features/38-answer-provenance.md), the chunk's `headingPath` —
+the vertex has always carried it; surfacing it is what lets a citation link to a
+section. What a hit is _worth_ — the head revision's number and author, when it
+last changed, whether a person has stamped it — is not a search concern and is
+not computed here. `ProvenanceService` (`feedback/`) resolves it from PostgreSQL
+in one batch at the end of an answer, and the MCP `knowledge_search` handler
+runs the same decoration over its hit list. Search stays a ranking; trust is a
+read on top of it.
 
 ## Security
 

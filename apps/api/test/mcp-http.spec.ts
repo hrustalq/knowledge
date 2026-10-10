@@ -115,9 +115,10 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     access,
     config,
     aiReadable,
+    provenance: { decorateResults: vi.fn(async (_ws: string, results: unknown[]) => results) },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
-  return { mcp, search, documents };
+  return { mcp, search, documents, provenance: deps.provenance };
 }
 
 async function connect(mcp: McpService, principal: Principal) {
@@ -159,6 +160,25 @@ describe('McpService over a principal', () => {
     const allowed = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
     expect(allowed.isError).toBeFalsy();
     expect(search.search).toHaveBeenCalledOnce();
+  });
+
+  it('decorates search hits with provenance in one batch and names the trace (docs/features/38)', async () => {
+    const { mcp, search, provenance } = service(accessWith('viewer'));
+    search.search.mockResolvedValueOnce({
+      results: [{ documentId: 'd1', revisionId: 'r1', chunkId: 'c1', title: 'T', snippet: '', score: 0.7 }],
+    } as never);
+    provenance.decorateResults.mockImplementationOnce(async (_ws: string, results: unknown[]) =>
+      (results as Array<Record<string, unknown>>).map((r) => ({ ...r, revisionNumber: 3, verification: 'verified' })),
+    );
+    const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A }));
+    const res = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
+    const body = JSON.parse((res.content as Array<{ text: string }>)[0]!.text) as {
+      results: Array<Record<string, unknown>>;
+      traceId: string;
+    };
+    expect(provenance.decorateResults).toHaveBeenCalledWith(WS_A, expect.any(Array));
+    expect(body.results[0]).toMatchObject({ documentId: 'd1', revisionNumber: 3, verification: 'verified' });
+    expect(body.traceId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('attributes a write to the caller, not the stub', async () => {

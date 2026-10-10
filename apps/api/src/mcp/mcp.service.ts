@@ -25,6 +25,8 @@ import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AiReadableService } from '../ai-readable/ai-readable.service.js';
+import { ProvenanceService } from '../feedback/provenance.service.js';
+import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
@@ -102,6 +104,7 @@ export class McpService {
     private readonly access: AccessService,
     private readonly config: ConfigService,
     private readonly aiReadable: AiReadableService,
+    private readonly provenance: ProvenanceService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -130,7 +133,10 @@ export class McpService {
       'knowledge_search',
       {
         description:
-          'Semantic search over the knowledge base. Every result carries document/revision/chunk citations.',
+          'Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus ' +
+          'provenance: revisionNumber, changedAt (freshness), authorName, verification (verified | outdated | ' +
+          'unverified | flagged) and factClass. Prefer verified and recent pages, and say when a page you relied ' +
+          'on is outdated. The response traceId identifies this search.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           query: z.string().min(1),
@@ -156,14 +162,20 @@ export class McpService {
           ...(projectIds?.length ? { projectIds } : {}),
           ...(tags?.length ? { tags } : {}),
         };
-        return this.json(
-          await this.search.search({
-            workspaceId,
-            query,
-            limit: limit ?? 20,
-            ...(Object.keys(filters).length ? { filters } : {}),
-          }),
-        );
+        const res = await this.search.search({
+          workspaceId,
+          query,
+          limit: limit ?? 20,
+          ...(Object.keys(filters).length ? { filters } : {}),
+        });
+        // One batched read for the whole hit list (docs/features/38), and the
+        // trace id of this call so an agent can quote it back once feedback
+        // tools exist (issue #67 phase 2).
+        return this.json({
+          ...res,
+          results: await this.provenance.decorateResults(workspaceId, res.results),
+          traceId: currentTrace()?.traceId ?? newTraceId(),
+        });
       },
     );
 

@@ -118,6 +118,7 @@ export class SearchService {
         title: docById.get(h.documentId)?.title ?? '(unknown)',
         snippet: h.text.slice(0, 300),
         score: Number(h.score.toFixed(4)),
+        headingPath: h.headingPath ?? [],
       }));
 
     record(results);

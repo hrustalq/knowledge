@@ -402,6 +402,8 @@ export const useAssistantStore = defineStore('assistant', {
         sources: [],
         uiBlocks: [],
         prompt: null,
+        citations: [],
+        confidence: null,
         createdAt: new Date().toISOString(),
       }
       this.messages.push(placeholder)

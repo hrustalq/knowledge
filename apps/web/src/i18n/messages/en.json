@@ -221,7 +221,17 @@
     "commentDeleted": "Comment deleted",
     "revisionNumber": "Revision #{n}",
     "viewingRevision": "Viewing revision {id} — commenting is off while reading history.",
-    "provenance": "{extractor} · confidence {confidence}"
+    "provenance": "{extractor} · confidence {confidence}",
+    "verify": {
+      "action": "Verify",
+      "actionHint": "Mark this page as checked and correct at its current revision",
+      "verified": "Verified · #{n}",
+      "verifiedBy": "Verified by {who} {when}",
+      "removeHint": "Verified by {who} {when}. Click to remove the stamp.",
+      "outdated": "Verified · outdated",
+      "outdatedBy": "Verified by {who} {when}, but the page has changed since",
+      "reverifyHint": "Verified by {who} {when}, but the page has changed since. Click to verify the current revision."
+    }
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -885,7 +895,9 @@
           "created": "commented on",
           "resolved": "resolved a comment on",
           "deleted": "deleted a comment on"
-        }
+        },
+        "verified": "verified",
+        "unverified": "removed the verification of"
       },
       "revision": {
         "finalized": "published a revision of"
@@ -1196,6 +1208,47 @@
     "findRelated": "Find related docs",
     "block": {
       "activity": "Activity"
+    },
+    "confidence": {
+      "title": "Answer confidence",
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence",
+      "none": "Unsupported",
+      "noReasons": "Every sentence cites a fresh, verified page.",
+      "reason": {
+        "no-sources": "The answer rests on no page in this workspace.",
+        "uncited-sentences": "{n} sentences cite no source.",
+        "stale-sources": "{n} cited pages have not changed in a long time, or were verified at an older revision.",
+        "inferred-only": "Every cited page was reached through an inferred relation, not read directly.",
+        "unknown-citation": "{n} citations named a source the assistant was never given and were removed.",
+        "budget-exhausted": "The assistant ran out of tool calls before it finished reading.",
+        "tool-errors": "{n} tool calls failed during this answer.",
+        "low-retrieval-score": "The best search match was weak ({n}).",
+        "flagged-sources": "{n} cited pages have an open report.",
+        "verified-sources": "Every cited page is verified at its current revision."
+      }
+    },
+    "provenance": {
+      "revision": "Revision",
+      "author": "Author",
+      "changed": "Changed",
+      "openPage": "Open the page →",
+      "openSite": "Open the site",
+      "fetched": "Read {when}",
+      "factTitle": "How this fact reached the answer",
+      "verification": {
+        "verified": "Verified",
+        "outdated": "Verified at an older revision",
+        "unverified": "Not verified",
+        "flagged": "Reported"
+      },
+      "fact": {
+        "explicit": "From the page text",
+        "frontmatter": "From frontmatter",
+        "inferred": "Inferred relation",
+        "curated": "Curated relation"
+      }
     }
   },
   "review": {

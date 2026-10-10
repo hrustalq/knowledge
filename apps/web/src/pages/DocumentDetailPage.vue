@@ -22,6 +22,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import {
   Activity as ActivityIcon,
+  BadgeCheck,
   BookA,
   Braces,
   GitMerge,
@@ -67,6 +68,7 @@ import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
+import { useMembers } from '@/components/merge-requests/use-members'
 
 const { t } = useI18n()
 
@@ -141,6 +143,62 @@ const visibleRelations = computed(() =>
   showAllRelations.value ? (relations.value ?? []) : (relations.value ?? []).slice(0, RELATION_PREVIEW),
 )
 let timer: ReturnType<typeof setInterval> | undefined
+
+/* ---------------------------------------------------------- verification */
+
+// The manual stamp (docs/features/38): one button that reads the derived state
+// and does the one thing that state calls for. Unverified → stamp it; verified
+// → take the stamp off; outdated (the head moved since) → stamp the new head.
+// A viewer sees the state and cannot change it.
+const { memberOf } = useMembers()
+const verification = computed(() => detail.value?.document.verification ?? 'unverified')
+const verifierName = computed(() => {
+  const id = detail.value?.document.verifiedBy
+  return id ? (memberOf(id)?.displayName ?? id.slice(0, 8)) : ''
+})
+const verifyLabel = computed(() => {
+  const d = detail.value
+  if (!d) return ''
+  switch (verification.value) {
+    case 'verified':
+      return t('documents.verify.verified', { n: d.revision.revisionNumber })
+    case 'outdated':
+      return t('documents.verify.outdated')
+    default:
+      return t('documents.verify.action')
+  }
+})
+const verifyTitle = computed(() => {
+  const d = detail.value
+  if (!d) return ''
+  const when = d.document.verifiedAt ? relativeTime(d.document.verifiedAt) : ''
+  switch (verification.value) {
+    case 'verified':
+      return auth.canEdit
+        ? t('documents.verify.removeHint', { who: verifierName.value, when })
+        : t('documents.verify.verifiedBy', { who: verifierName.value, when })
+    case 'outdated':
+      return auth.canEdit
+        ? t('documents.verify.reverifyHint', { who: verifierName.value, when })
+        : t('documents.verify.outdatedBy', { who: verifierName.value, when })
+    default:
+      return t('documents.verify.actionHint')
+  }
+})
+const verifying = ref(false)
+
+async function toggleVerify() {
+  if (!detail.value || verifying.value || !auth.canEdit) return
+  verifying.value = true
+  try {
+    const method = verification.value === 'verified' ? 'DELETE' : 'POST'
+    detail.value = await apiFetch<DocumentDetailResponse>(`/v1/documents/${documentId.value}/verify`, { method })
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    verifying.value = false
+  }
+}
 
 /* ------------------------------------------------------------ page data */
 
@@ -469,6 +527,23 @@ watch(
           :title="detail.document.title"
           :revision-id="viewingRevision"
         />
+        <!-- The verification stamp (docs/features/38) sits with the other
+             facts-about-the-page actions. A viewer sees it only when there is
+             something to see; an editor can always stamp. -->
+        <Button
+          v-if="auth.canEdit || verification !== 'unverified'"
+          variant="ghost"
+          size="sm"
+          class="kn-verify"
+          :data-tone="verification"
+          :disabled="!auth.canEdit || verifying"
+          :aria-pressed="verification === 'verified'"
+          :title="verifyTitle"
+          @click="toggleVerify"
+        >
+          <BadgeCheck class="size-3.5" />
+          {{ verifyLabel }}
+        </Button>
         <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
         <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
           <RouterLink
@@ -658,3 +733,16 @@ watch(
     <AskAssistant :document-id="documentId" :title="detail.document.title" />
   </template>
 </template>
+
+<style scoped>
+/* The stamp's glyph takes the state's hue; the button itself stays quiet. */
+.kn-verify[data-tone='verified'] > svg {
+  color: var(--color-emerald-500, #10b981);
+}
+.kn-verify[data-tone='outdated'] > svg {
+  color: var(--color-amber-500, #f59e0b);
+}
+.kn-verify[data-tone='unverified'] > svg {
+  opacity: 0.6;
+}
+</style>

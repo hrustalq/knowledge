@@ -3,11 +3,31 @@
 import { defineStore } from 'pinia'
 import { toast } from 'vue-sonner'
 import type { ComposerTranslation } from 'vue-i18n'
-import type { KnowledgeEvent } from '@knowledge/contracts'
-import { getToken, getWorkspaceId } from '@/lib/api'
+import type { KnowledgeEvent, UrlTicketResponse } from '@knowledge/contracts'
+import { ApiError, apiFetch, getToken, getWorkspaceId } from '@/lib/api'
 import { useAssistantStore } from '@/stores/assistant'
 import { useDocumentsStore } from '@/stores/documents'
 import { useNotificationsStore } from '@/stores/notifications'
+
+/** Reconnect backoff after the stream drops: 1 s, doubling, capped at 30 s. */
+const RETRY_MIN_MS = 1_000
+const RETRY_MAX_MS = 30_000
+
+/**
+ * The stream URL. EventSource cannot set headers, so in AUTH_MODE=api-key the
+ * credential rides in ?token= — as a single-use, ~60 s `kt_` ticket minted with
+ * the header credential, never the session token itself (#102). Without a
+ * token (AUTH_MODE=none) the URL carries none.
+ */
+export async function eventsStreamUrl(workspaceId: string): Promise<string> {
+  const url = `/api/v1/events?workspaceId=${encodeURIComponent(workspaceId)}`
+  if (!getToken()) return url
+  const { ticket } = await apiFetch<UrlTicketResponse>('/v1/auth/url-ticket', { method: 'POST' })
+  return `${url}&token=${encodeURIComponent(ticket)}`
+}
+
+let source: EventSource | null = null
+let retryMs = RETRY_MIN_MS
 
 export const useEventsStore = defineStore('events', {
   state: () => ({
@@ -19,11 +39,32 @@ export const useEventsStore = defineStore('events', {
   actions: {
     connect(t: ComposerTranslation) {
       if (this.connected || import.meta.env.SSR) return
-      // AUTH_MODE=api-key: EventSource cannot set headers — the API accepts ?token=.
-      const token = getToken()
-      const source = new EventSource(
-        `/api/v1/events?workspaceId=${getWorkspaceId()}${token ? `&token=${token}` : ''}`,
-      )
+      this.connected = true
+      void this.open(t)
+    },
+    /**
+     * Open (or reopen) the stream with a fresh ticket. EventSource's own
+     * auto-reconnect would replay the URL, and a ticket works once, so every
+     * drop closes the source and comes back here instead.
+     */
+    async open(t: ComposerTranslation) {
+      let url: string
+      try {
+        url = await eventsStreamUrl(getWorkspaceId())
+      } catch (e) {
+        // Signed out (or the session died): stop; the next sign-in connects again.
+        if (e instanceof ApiError && e.status === 401) {
+          this.connected = false
+          return
+        }
+        this.retry(t)
+        return
+      }
+      source?.close()
+      source = new EventSource(url)
+      source.onopen = () => {
+        retryMs = RETRY_MIN_MS
+      }
       source.onmessage = (msg) => {
         let event: KnowledgeEvent
         try {
@@ -60,9 +101,15 @@ export const useEventsStore = defineStore('events', {
         }
       }
       source.onerror = () => {
-        /* EventSource auto-reconnects; nothing to do */
+        source?.close()
+        source = null
+        this.retry(t)
       }
-      this.connected = true
+    },
+    retry(t: ComposerTranslation) {
+      const wait = retryMs
+      retryMs = Math.min(retryMs * 2, RETRY_MAX_MS)
+      setTimeout(() => void this.open(t), wait)
     },
   },
 })

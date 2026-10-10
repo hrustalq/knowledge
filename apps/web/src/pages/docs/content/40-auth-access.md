@@ -42,7 +42,9 @@ Four layers, in order:
 
 1. **AuthGuard** resolves the principal from the bearer token. Only routes marked
    `@QueryTokenOk()` (the SSE stream and the `<img>` redirects, which cannot set
-   headers) also read `?token=`; elsewhere it is ignored. Failure is **401**.
+   headers) also read `?token=`; elsewhere it is ignored. There it must be a single-use
+   `kt_` ticket (`POST /v1/auth/url-ticket`) or a session token, never an API key.
+   Failure is **401**.
 2. **AclGuard** reads the route's `@Access(role, source)` and resolves the target workspace
    _in Postgres, before the handler runs_ — so no graph query ever executes for a request
    that was going to be refused. Failure is **403**.

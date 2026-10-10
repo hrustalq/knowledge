@@ -114,6 +114,7 @@
     "modelPassFailed": "The model pass failed: {error}",
     "modelPassFailedStructuralOnly": "The model pass failed, so only structural findings are included.",
     "pageNotReviewed": "\"{title}\" could not be reviewed: {error}",
-    "pageNotScanned": "\"{title}\" could not be scanned: {error}"
+    "pageNotScanned": "\"{title}\" could not be scanned: {error}",
+    "stopped": "Stopped early, the remaining items were not checked: {error}"
   }
 }

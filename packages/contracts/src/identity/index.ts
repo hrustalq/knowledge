@@ -170,6 +170,16 @@ export interface LogoutResponse {
   ok: boolean;
 }
 
+/**
+ * POST /v1/auth/url-ticket (#102): a single-use `kt_` credential for a URL
+ * that cannot carry a header (EventSource). Put it in `?token=`; it is
+ * redeemed on first use and expires at `expiresAt` either way.
+ */
+export interface UrlTicketResponse {
+  ticket: string;
+  expiresAt: string;
+}
+
 export interface ForgotPasswordResponse {
   /** Always true — the endpoint never reveals whether the email exists. */
   ok: boolean;

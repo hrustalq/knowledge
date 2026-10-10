@@ -15,7 +15,7 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { AssistantClient } from '../assistant/assistant.client.js';
+import { AssistantClient, ProviderAccountError } from '../assistant/assistant.client.js';
 import { AssistantReadToolsService } from '../assistant/assistant-read-tools.service.js';
 import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
@@ -321,7 +321,7 @@ export class AgentExecutor {
         // A flaky model must not lose the deterministic findings already made.
         this.logger.warn(`Curator model pass failed: ${String(error)}`);
         summary += ` ${t('agent.warning.modelPassFailedStructuralOnly')}`;
-        await report({ warning: t('agent.warning.modelPassFailed', { error: String(error) }) });
+        await report({ warning: t('agent.warning.modelPassFailed', { error: reasonOf(error) }) });
       }
     }
 
@@ -405,10 +405,16 @@ export class AgentExecutor {
           if (findings.length >= MAX_FINDINGS) break;
         }
       } catch (error) {
+        // The provider refused the account (no credit, bad key): every later
+        // page would fail identically, so one warning, not one per page.
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          break;
+        }
         // One unreadable page must not lose the pages already reviewed — but a
         // pass that silently skipped half its pages reads as a clean review.
         this.logger.warn(`Reviewer could not review "${doc.title}": ${String(error)}`);
-        await report({ warning: t('agent.warning.pageNotReviewed', { title: doc.title, error: String(error) }) });
+        await report({ warning: t('agent.warning.pageNotReviewed', { title: doc.title, error: reasonOf(error) }) });
       }
     }
 
@@ -531,8 +537,12 @@ export class AgentExecutor {
             findings,
           };
         }
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          break;
+        }
         this.logger.warn(`Glossarist could not scan "${doc.title}": ${String(error)}`);
-        await report({ warning: t('agent.warning.pageNotScanned', { title: doc.title, error: String(error) }) });
+        await report({ warning: t('agent.warning.pageNotScanned', { title: doc.title, error: reasonOf(error) }) });
       }
     }
 
@@ -717,8 +727,12 @@ export class AgentExecutor {
           await report({ warning: t('agent.archaeology.budgetSpent', { files: filesRead, candidates: candidates.length }) });
           break;
         }
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          break;
+        }
         this.logger.warn(`Archaeologist could not read ${candidate.path}: ${String(error)}`);
-        await report({ warning: t('agent.warning.fileNotRead', { path: candidate.path, error: String(error) }) });
+        await report({ warning: t('agent.warning.fileNotRead', { path: candidate.path, error: reasonOf(error) }) });
       }
       if (findings.length >= MAX_FINDINGS) break;
     }
@@ -881,8 +895,12 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
           await report({ warning: t('agent.drift.budgetSpent', { checked, pages: candidates.length }) });
           break;
         }
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          break;
+        }
         this.logger.warn(`Sentinel could not judge "${candidate.title}": ${String(error)}`);
-        await report({ warning: t('agent.warning.pageNotReviewed', { title: candidate.title, error: String(error) }) });
+        await report({ warning: t('agent.warning.pageNotReviewed', { title: candidate.title, error: reasonOf(error) }) });
       }
     }
 
@@ -1221,7 +1239,7 @@ ${page.markdown}`, files);
         }
       } catch (error) {
         this.logger.warn(`Cartographer model pass failed: ${String(error)}`);
-        await report({ warning: t('agent.warning.modelPassFailed', { error: String(error) }) });
+        await report({ warning: t('agent.warning.modelPassFailed', { error: reasonOf(error) }) });
       }
     }
 
@@ -1358,6 +1376,11 @@ const OUTPUT_CONTRACT =
   'A finding you cannot tie to a listed page must be left out. ' +
   'You are looking at titles and dates only — say what they suggest, and never assert what a page ' +
   'contains as though you had read it. At most 12 findings; returning none is a valid answer.';
+
+/** What a warning shows: the message, never `ServiceUnavailableException: …`. */
+function reasonOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /** Fence-tolerant parse, matching the leniency of every other JSON call site here. */
 function safeJson(raw: string): Record<string, unknown> | null {

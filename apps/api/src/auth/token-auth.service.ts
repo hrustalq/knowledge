@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import { DEV_PRINCIPAL, type Principal } from './principal.js';
 import { SessionsService } from './sessions.service.js';
+import { UrlTicketsService } from './url-tickets.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
 
@@ -23,12 +24,34 @@ export class TokenAuthService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly sessions: SessionsService,
+    private readonly tickets: UrlTicketsService,
   ) {}
 
   async resolve(token: string | undefined): Promise<Principal> {
     if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
     if (!token) throw new UnauthorizedException(t('error.auth.missingBearer'));
     return token.startsWith('ks_') ? this.resolveSession(token) : this.resolveApiKey(token);
+  }
+
+  /**
+   * A credential that arrived in `?token=` on a `@QueryTokenOk` route (#102).
+   * A URL outlives the request that carried it (access logs, history,
+   * `Referer`), so it may hold only what is cheap to leak:
+   * - a `kt_` ticket: single-use, ~60 s, redeemed here and gone;
+   * - a `ks_` session token, which the web still puts on `<img>` URLs until
+   *   asset tickets land (phase 2b).
+   * A `kn_` API key is refused: it lives until revoked, and every client that
+   * holds one can send a header, or mint a ticket with it first.
+   */
+  async resolveQueryToken(token: string): Promise<Principal> {
+    if (this.config.get('AUTH_MODE') !== 'api-key') return DEV_PRINCIPAL;
+    if (UrlTicketsService.isTicket(token)) {
+      const principal = await this.tickets.redeem(token);
+      if (!principal) throw new UnauthorizedException(t('error.auth.invalidUrlTicket'));
+      return principal;
+    }
+    if (token.startsWith('ks_')) return this.resolveSession(token);
+    throw new UnauthorizedException(t('error.auth.apiKeyInUrl'));
   }
 
   private async resolveSession(token: string): Promise<Principal> {

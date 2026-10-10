@@ -12,6 +12,7 @@ import { AuthGuard } from './auth.guard.js';
 import { MeController } from './me.controller.js';
 import { SessionsService } from './sessions.service.js';
 import { TokenAuthService } from './token-auth.service.js';
+import { UrlTicketsService } from './url-tickets.service.js';
 
 /**
  * Phase 5 governance (plan.md §11). Global: AuthGuard resolves the caller on
@@ -28,6 +29,7 @@ import { TokenAuthService } from './token-auth.service.js';
     ApiKeysService,
     SessionsService,
     TokenAuthService,
+    UrlTicketsService,
     AuthFlowService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: AclGuard },

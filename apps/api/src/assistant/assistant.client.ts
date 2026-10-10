@@ -148,6 +148,13 @@ export type ToolExecutor = (
 ) => Promise<ToolExecutionResult>;
 
 /**
+ * The provider refused the account, not the request — out of credit (402) or
+ * a rejected key (401/403). Every later call fails the same way, so a pass
+ * over many pages stops at the first one (`stopsPass` in the agent executor).
+ */
+export class ProviderAccountError extends ServiceUnavailableException {}
+
+/**
  * Thin wrapper around the official OpenAI SDK: one place that knows how a
  * resolved config becomes a client, the error mapping, the bounded
  * tool-calling loop (harness), and where token usage is recorded. Services
@@ -649,6 +656,10 @@ export class AssistantClient {
   private upstreamError(err: unknown): ServiceUnavailableException {
     if (err instanceof OpenAI.APIError) {
       this.logger.warn(`Assistant upstream ${err.status}: ${String(err.message).slice(0, 300)}`);
+      if (err.status === 402) return new ProviderAccountError(t('error.assistant.upstreamNoCredit'));
+      if (err.status === 401 || err.status === 403) {
+        return new ProviderAccountError(t('error.assistant.upstreamAuth', { status: err.status }));
+      }
       return new ServiceUnavailableException(
         err.status ? t('error.assistant.upstreamStatus', { status: err.status }) : t('error.assistant.upstreamError'),
       );

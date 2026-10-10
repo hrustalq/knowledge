@@ -128,6 +128,7 @@ export type I18nTranslations = {
             "modelPassFailedStructuralOnly": string;
             "pageNotReviewed": string;
             "pageNotScanned": string;
+            "stopped": string;
         };
     };
     "assistant": {
@@ -189,6 +190,8 @@ export type I18nTranslations = {
             "invalidSession": string;
             "accountDisabled": string;
             "unknownApiKey": string;
+            "invalidUrlTicket": string;
+            "apiKeyInUrl": string;
             "invalidCredentials": string;
             "invalidResetToken": string;
             "noPasswordInDevMode": string;
@@ -396,6 +399,8 @@ export type I18nTranslations = {
             "budgetWorkspace": string;
             "upstreamStatus": string;
             "upstreamError": string;
+            "upstreamNoCredit": string;
+            "upstreamAuth": string;
             "unreachable": string;
         };
         "workflow": {

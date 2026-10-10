@@ -77,6 +77,11 @@ export const envSchema = z.object({
   AUTH_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(720),
   /** Auth flow: password-reset token lifetime. */
   AUTH_RESET_TTL_MIN: z.coerce.number().int().positive().default(30),
+  /**
+   * #102 phase 2: lifetime of a single-use `kt_` URL ticket (POST /v1/auth/url-ticket),
+   * the credential the web puts in `?token=` for SSE and <img>/<object> routes.
+   */
+  AUTH_URL_TICKET_TTL_SEC: z.coerce.number().int().min(5).max(3600).default(60),
   /** Auth flow: allow self-service POST /v1/auth/signup. */
   AUTH_SIGNUP_ENABLED: boolish(true),
   /** Workspace new signups auto-join (empty disables). Defaults to the demo workspace. */

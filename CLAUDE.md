@@ -124,7 +124,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 35  | PR drift check       | A pull/merge request queues the `sentinel`; it judges the tied pages, and the API proposes fixes and comments once |
 | 36  | GitHub access        | Connector card listing installation grants vs App requests vs feature needs; OAuth reconnect/disconnect |
 | 37  | AI-readable output   | llms.txt / llms-full.txt per workspace & project, .md per page, Accept: text/markdown, page AI actions menu |
-| 38  | Answer provenance    | `[S#]` sentence citations settled server-side, per-source revision/author/freshness/verification, derived confidence, `POST :id/verify` stamp (#67 phase 1) |
+| 38  | Answer provenance    | `[S#]` sentence citations settled server-side, per-source revision/author/freshness/verification, derived confidence, `POST :id/verify` stamp (#67 phase 1); votes + implicit signals in `answer_feedback`, `knowledge_feedback` MCP tool (phase 2) |
 
 ## Conventions
 

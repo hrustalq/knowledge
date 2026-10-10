@@ -8692,7 +8692,7 @@
             }
           }
         },
-        "summary": "A thread with its full message history",
+        "summary": "A thread with its full message history, each reply carrying your own vote on it",
         "tags": [
           "assistant"
         ]
@@ -15420,6 +15420,187 @@
         ]
       }
     },
+    "/v1/assistant/messages/{id}/feedback": {
+      "put": {
+        "operationId": "AnswerFeedbackController_vote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMessageFeedbackDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rate an assistant reply (thumbs up/down with a reason); re-voting replaces the vote",
+        "tags": [
+          "assistant"
+        ]
+      },
+      "delete": {
+        "operationId": "AnswerFeedbackController_retract",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Retract your own vote on an assistant reply",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/v1/assistant/ask/feedback": {
+      "post": {
+        "operationId": "AnswerFeedbackController_voteOnAsk",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskFeedbackDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rate a one-shot POST /v1/assistant/ask answer — the client sends what it saw",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/v1/mcp": {
       "post": {
         "operationId": "McpController_handle",
@@ -18753,6 +18934,101 @@
             ]
           }
         }
+      },
+      "SetMessageFeedbackDto": {
+        "type": "object",
+        "properties": {
+          "rating": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "wrong",
+              "outdated",
+              "incomplete",
+              "irrelevant-sources",
+              "no-answer",
+              "unclear",
+              "other"
+            ],
+            "description": "Required when rating is \"down\" (400 VALIDATION_FAILED without it); optional on \"up\"."
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "assistant",
+              "editor-assistant"
+            ],
+            "description": "Which pane the vote came from. The editor assistant mounts the same chat, so the client says which; omitted reads as \"assistant\"."
+          }
+        },
+        "required": [
+          "rating"
+        ]
+      },
+      "AskFeedbackDto": {
+        "type": "object",
+        "properties": {
+          "rating": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "wrong",
+              "outdated",
+              "incomplete",
+              "irrelevant-sources",
+              "no-answer",
+              "unclear",
+              "other"
+            ],
+            "description": "Required when rating is \"down\" (400 VALIDATION_FAILED without it); optional on \"up\"."
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "The question the answer was for"
+          },
+          "answerExcerpt": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "The start of the answer, as the voter saw it"
+          },
+          "citedDocumentIds": {
+            "description": "Document ids the answer cited (at most 20)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "rating",
+          "workspaceId",
+          "query"
+        ]
       },
       "ApiErrorResponse": {
         "type": "object",

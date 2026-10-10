@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { DOCUMENT_CATEGORIES } from '@knowledge/contracts';
+import { ANSWER_FEEDBACK_REASONS, ANSWER_RATINGS, DOCUMENT_CATEGORIES } from '@knowledge/contracts';
 import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -26,6 +26,7 @@ import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
+import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
@@ -69,6 +70,7 @@ export const MCP_SERVER_VERSION = '0.13.0';
  *   knowledge_list_documents    → the page tree of a workspace/project
  *   knowledge_get_document_content → a page's full markdown (read before revising)
  *   knowledge_create_document   → a new page with inline markdown
+ *   knowledge_feedback          → rate an answer built from knowledge_search (docs/features/38)
  *
  * Two transports, one tool set (docs/features/33). `buildServer(principal)`
  * binds every tool to a caller: each one runs the same `requireRole` its REST
@@ -105,6 +107,7 @@ export class McpService {
     private readonly config: ConfigService,
     private readonly aiReadable: AiReadableService,
     private readonly provenance: ProvenanceService,
+    private readonly feedback: AnswerFeedbackService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -169,13 +172,49 @@ export class McpService {
           ...(Object.keys(filters).length ? { filters } : {}),
         });
         // One batched read for the whole hit list (docs/features/38), and the
-        // trace id of this call so an agent can quote it back once feedback
-        // tools exist (issue #67 phase 2).
+        // trace id of this call so an agent can quote it back to
+        // knowledge_feedback.
         return this.json({
           ...res,
           results: await this.provenance.decorateResults(workspaceId, res.results),
           traceId: currentTrace()?.traceId ?? newTraceId(),
         });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_feedback',
+      {
+        description:
+          'Rate an answer you built from knowledge_search: up or down, with a reason on down. Quote the search\'s ' +
+          'traceId so a re-vote updates the same row. Votes and reasons are what turns a bad answer into ' +
+          'documentation work; nothing else changes.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          rating: z.enum(ANSWER_RATINGS),
+          reason: z.enum(ANSWER_FEEDBACK_REASONS).optional().describe('Required when rating is "down"'),
+          comment: z.string().max(2000).optional(),
+          query: z.string().min(1).max(4000).describe('The question the answer was for'),
+          traceId: z.string().max(64).optional().describe('traceId from the knowledge_search response'),
+          documentIds: z.array(z.string().uuid()).max(20).optional().describe('Pages the answer cited'),
+        },
+      },
+      async ({ workspaceId, rating, reason, comment, query, traceId, documentIds }) => {
+        await guard.ws(workspaceId, 'viewer');
+        if (rating === 'down' && !reason) throw new Error('A "down" rating needs a reason.');
+        const res = await this.feedback.voteOverMcp(
+          {
+            workspaceId,
+            rating,
+            ...(reason ? { reason } : {}),
+            ...(comment ? { comment } : {}),
+            query,
+            ...(traceId ? { traceId } : {}),
+            ...(documentIds?.length ? { documentIds } : {}),
+          },
+          principal,
+        );
+        return this.json({ feedbackId: res.feedback.id, surface: res.feedback.surface, deduplicated: res.deduplicated });
       },
     );
 

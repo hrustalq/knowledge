@@ -15,6 +15,13 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Breaking
+
+- **An API key in `?token=` is refused everywhere.** On `GET /v1/events` and the
+  attachment, import-image and avatar redirects, `?token=kn_…` is now a 401.
+  Scripts should send the key as `Authorization: Bearer`, or mint a ticket with
+  it (`POST /v1/auth/url-ticket`) for the SSE stream. (#102)
+
 ### Added
 
 - **Answers cite their sentences.** An assistant reply now ends each factual
@@ -38,6 +45,31 @@ in the pull request that introduces them — see
   revision (`POST /v1/documents/:id/verify`, `DELETE` to remove). The stamp
   reads as outdated the moment a new revision is published, with no write;
   answers that cite the page show the same state. (#67)
+- **Rate an answer.** Thumbs up/down under every assistant reply on
+  `/assistant` and in the editor assistant, and under one-shot answers in the
+  page's Ask AI widget. A thumbs-down asks for a reason (wrong, out of date,
+  incomplete, wrong pages cited, no answer, unclear, other) and takes an
+  optional comment; pressing the active thumb takes the vote back, and a vote
+  survives a reload. Over the API: `PUT`/`DELETE
+  /v1/assistant/messages/:id/feedback` and `POST /v1/assistant/ask/feedback`,
+  open to read-only API keys. Second part of the answer trust milestone (#67).
+- **Agents can rate what they read.** A new `knowledge_feedback` MCP tool
+  takes a rating, a reason and the `traceId` of the `knowledge_search` it
+  answered from, so a re-vote on the same search updates one row. Hidden from
+  read-only keys like every other write; the server instructions and the
+  generated skill tell an agent when to call it. (#67)
+- **Weak answers leave a trace on their own.** An answer the harness scored
+  `low` or `none` confidence is recorded as an implicit `low-confidence` /
+  `no-answer` signal, so the coverage-gap agent of a later phase has something
+  to cluster even when nobody voted. (#67)
+
+### Security
+
+- **Single-use tickets replace credentials in the event-stream URL.**
+  `POST /v1/auth/url-ticket` trades a header credential for a `kt_` ticket that
+  works once and expires in `AUTH_URL_TICKET_TTL_SEC` (60 s). The web app opens
+  `GET /v1/events` with one, so the session token no longer appears in any
+  access log for the stream. (#102, phase 2)
 
 ### Operations
 
@@ -49,25 +81,15 @@ in the pull request that introduces them — see
 - New env var `ANSWER_STALE_SOURCE_DAYS` (default `180`): a cited page whose
   head changed longer ago than this counts as stale evidence in the confidence
   score. Lowers the badge; hides nothing.
-### Security
-
-- **Single-use tickets replace credentials in the event-stream URL.**
-  `POST /v1/auth/url-ticket` trades a header credential for a `kt_` ticket that
-  works once and expires in `AUTH_URL_TICKET_TTL_SEC` (60 s). The web app opens
-  `GET /v1/events` with one, so the session token no longer appears in any
-  access log for the stream. (#102, phase 2)
-
-### Breaking
-
-- **An API key in `?token=` is refused everywhere.** On `GET /v1/events` and the
-  attachment, import-image and avatar redirects, `?token=kn_…` is now a 401.
-  Scripts should send the key as `Authorization: Bearer`, or mint a ticket with
-  it (`POST /v1/auth/url-ticket`) for the SSE stream. (#102)
-
-### Operations
-
 - New optional env var `AUTH_URL_TICKET_TTL_SEC` (default 60, 5–3600). Tickets
   live in the existing Redis. (#102)
+- New env `ANSWER_FEEDBACK_ENABLED` (default `true`). `false` refuses the vote
+  routes and `knowledge_feedback` and records no implicit signals — for an
+  operator who does not want question text stored in PostgreSQL. Migration
+  `20261010135843_answer_feedback` creates the `answer_feedback` table only
+  (expand-only; the previous image runs against it). Votes store the question
+  as typed, the first 1 000 characters of the answer and the cited page ids;
+  retention is phase 3 of #67. (#67)
 
 ## [0.13.0] — 2026-09-27
 

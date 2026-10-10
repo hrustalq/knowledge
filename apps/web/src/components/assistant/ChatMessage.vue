@@ -19,6 +19,7 @@ import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
 import AssistantPrompt from './AssistantPrompt.vue'
 import AnswerConfidence from './AnswerConfidence.vue'
+import AnswerFeedback from './AnswerFeedback.vue'
 import SourceChip from './SourceChip.vue'
 import { toolVocabulary } from './tool-vocabulary'
 import { citeOfEvent, decorateCitations, highlightCite, sourceByCite, sourceHref } from '@/lib/citations'
@@ -253,22 +254,28 @@ function saveEdit() {
         </div>
       </footer>
 
-      <!-- No edit here: rewriting a reply would leave the transcript claiming
-           the model said something it did not. Reset asks the question again. -->
-      <div v-if="canAct" class="kn-msg-actions flex items-center gap-0.5">
-        <button type="button" class="kn-msg-action" :aria-label="copied ? t('common.copied') : t('chat.copyReply')" @click="copy">
-          <Check v-if="copied" class="size-3.5 text-emerald-500" />
-          <Copy v-else class="size-3.5" />
-        </button>
-        <button
-          type="button"
-          class="kn-msg-action"
-          :aria-label="t('chat.discardReply')"
-          :title="t('chat.askAgain')"
-          @click="emit('reset', message)"
-        >
-          <RotateCcw class="size-3.5" />
-        </button>
+      <!-- The thumbs stay visible (docs/features/38): a vote is the one thing
+           the reader is asked for, so it does not hide behind a hover the way
+           copy and reset do. No edit here: rewriting a reply would leave the
+           transcript claiming the model said something it did not. Reset asks
+           the question again. -->
+      <div v-if="canAct" class="flex items-center gap-2">
+        <AnswerFeedback :target="{ kind: 'message', messageId: message.id }" :initial="message.feedback" />
+        <div class="kn-msg-actions flex items-center gap-0.5">
+          <button type="button" class="kn-msg-action" :aria-label="copied ? t('common.copied') : t('chat.copyReply')" @click="copy">
+            <Check v-if="copied" class="size-3.5 text-emerald-500" />
+            <Copy v-else class="size-3.5" />
+          </button>
+          <button
+            type="button"
+            class="kn-msg-action"
+            :aria-label="t('chat.discardReply')"
+            :title="t('chat.askAgain')"
+            @click="emit('reset', message)"
+          >
+            <RotateCcw class="size-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   </article>

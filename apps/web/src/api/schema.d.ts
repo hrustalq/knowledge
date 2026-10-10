@@ -1713,7 +1713,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A thread with its full message history */
+        /** A thread with its full message history, each reply carrying your own vote on it */
         get: operations["AssistantController_getThread"];
         put?: never;
         post?: never;
@@ -3063,6 +3063,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/assistant/messages/{id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rate an assistant reply (thumbs up/down with a reason); re-voting replaces the vote */
+        put: operations["AnswerFeedbackController_vote"];
+        post?: never;
+        /** Retract your own vote on an assistant reply */
+        delete: operations["AnswerFeedbackController_retract"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assistant/ask/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rate a one-shot POST /v1/assistant/ask answer — the client sends what it saw */
+        post: operations["AnswerFeedbackController_voteOnAsk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp": {
         parameters: {
             query?: never;
@@ -4229,6 +4264,39 @@ export interface components {
         ValidateWorkflowDto: {
             /** @description Defaults to the stored graph */
             graph?: components["schemas"]["WorkflowGraphDto"];
+        };
+        SetMessageFeedbackDto: {
+            /** @enum {string} */
+            rating: "up" | "down";
+            /**
+             * @description Required when rating is "down" (400 VALIDATION_FAILED without it); optional on "up".
+             * @enum {string}
+             */
+            reason?: "wrong" | "outdated" | "incomplete" | "irrelevant-sources" | "no-answer" | "unclear" | "other";
+            comment?: string;
+            /**
+             * @description Which pane the vote came from. The editor assistant mounts the same chat, so the client says which; omitted reads as "assistant".
+             * @enum {string}
+             */
+            surface?: "assistant" | "editor-assistant";
+        };
+        AskFeedbackDto: {
+            /** @enum {string} */
+            rating: "up" | "down";
+            /**
+             * @description Required when rating is "down" (400 VALIDATION_FAILED without it); optional on "up".
+             * @enum {string}
+             */
+            reason?: "wrong" | "outdated" | "incomplete" | "irrelevant-sources" | "no-answer" | "unclear" | "other";
+            comment?: string;
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description The question the answer was for */
+            query: string;
+            /** @description The start of the answer, as the voter saw it */
+            answerExcerpt?: string;
+            /** @description Document ids the answer cited (at most 20) */
+            citedDocumentIds?: string[];
         };
         ApiErrorResponse: {
             /**
@@ -14336,6 +14404,132 @@ export interface operations {
         responses: {
             /** @description Unchanged since the ETag sent in If-None-Match */
             304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnswerFeedbackController_vote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMessageFeedbackDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnswerFeedbackController_retract: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnswerFeedbackController_voteOnAsk: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskFeedbackDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

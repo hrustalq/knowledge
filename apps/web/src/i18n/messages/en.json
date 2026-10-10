@@ -1209,6 +1209,26 @@
     "block": {
       "activity": "Activity"
     },
+    "feedback": {
+      "up": "Helpful",
+      "down": "Not helpful",
+      "thanks": "Thanks — noted.",
+      "reasonTitle": "What went wrong?",
+      "reason": {
+        "wrong": "Wrong",
+        "outdated": "Out of date",
+        "incomplete": "Incomplete",
+        "irrelevant-sources": "Wrong pages cited",
+        "no-answer": "No answer",
+        "unclear": "Unclear",
+        "other": "Something else"
+      },
+      "comment": "Comment",
+      "commentPlaceholder": "Optional — what should it have said?",
+      "send": "Send",
+      "retract": "Take back my vote",
+      "failed": "The vote was not saved. Try again."
+    },
     "confidence": {
       "title": "Answer confidence",
       "high": "High confidence",

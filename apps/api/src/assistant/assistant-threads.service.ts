@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { Prisma } from '@prisma/client';
 import type { AssistantMessage, AssistantThread } from '@prisma/client';
 import { t } from '../i18n/t.js';
+import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 
 const DEFAULT_THREAD_PAGE = 50;
 const MAX_THREAD_PAGE = 100;
@@ -34,7 +35,10 @@ const AUTO_TITLE_CHARS = 60;
  */
 @Injectable()
 export class AssistantThreadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly feedback: AnswerFeedbackService,
+  ) {}
 
   async createThread(
     workspaceId: string,
@@ -197,13 +201,29 @@ export class AssistantThreadsService {
     });
   }
 
-  async getThread(threadId: string): Promise<GetAssistantThreadResponse> {
+  /**
+   * The thread and its history. With a `viewerId`, each assistant reply also
+   * carries that person's own vote (docs/features/38, phase 2) — one batched
+   * read, so the thumbs survive a reload without a request per message.
+   */
+  async getThread(threadId: string, viewerId?: string): Promise<GetAssistantThreadResponse> {
     const thread = await this.getThreadOrThrow(threadId);
     const messages = await this.prisma.assistantMessage.findMany({
       where: { threadId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    return { thread: this.toSummary(thread), messages: messages.map((m) => this.toMessageInfo(m)) };
+    const votes = viewerId
+      ? await this.feedback.ownVotes(
+          messages.filter((m) => m.role === 'assistant').map((m) => m.id),
+          viewerId,
+        )
+      : new Map();
+    return {
+      thread: this.toSummary(thread),
+      messages: messages.map((m) =>
+        m.role === 'assistant' ? { ...this.toMessageInfo(m), feedback: votes.get(m.id) ?? null } : this.toMessageInfo(m),
+      ),
+    };
   }
 
   async getThreadOrThrow(threadId: string): Promise<AssistantThread> {

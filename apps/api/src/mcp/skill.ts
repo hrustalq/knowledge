@@ -48,6 +48,14 @@ export function renderSkill(input: SkillInput): string {
   const canWrite = tools.some((tool) => !tool.readOnly);
   const host = hostOf(input.url);
   const toolRef = (name: string) => `\`${name}\``;
+  // A vote is a write (docs/features/38): the step is described only to a key
+  // that is offered the tool, so a read-only skill never names a dead end.
+  const feedbackStep = tools.some((tool) => tool.name === 'knowledge_feedback')
+    ? `5. Say how it went: ${toolRef('knowledge_feedback')} with the search's \`traceId\`, \`rating: "up"\` or \`"down"\` and a
+   reason (\`wrong\`, \`outdated\`, \`incomplete\`, \`irrelevant-sources\`, \`no-answer\`, \`unclear\`, \`other\`). A rated
+   miss is what turns into documentation work; an unrated one is forgotten.
+`
+    : '';
 
   const access = whoami.workspaces.length
     ? [
@@ -178,7 +186,7 @@ Every content tool takes a \`workspaceId\`. Never guess one; use the table or ${
 3. Answer with citations: the page title and a link \`${webUrl}/documents/<documentId>\`.
 4. If search finds nothing relevant, say so plainly. Do not fill the gap from general knowledge as if the knowledge base
    had said it.
-
+${feedbackStep}
 ### Find your way around
 
 - ${toolRef('knowledge_list_documents')} — the page tree of a workspace or project.

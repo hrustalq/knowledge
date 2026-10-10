@@ -107,6 +107,14 @@
       "footer": "Updated on every push. Pages are only changed through the merge requests linked above."
     }
   },
+  "report": {
+    "noContent": "\"{title}\" has no readable content to judge the report against.",
+    "noModel": "No model is configured for the sentinel, so the report is passed on without a verdict.",
+    "reportedTitle": "\"{title}\" — reported as {kind}",
+    "summaryNoModel": "Report on \"{title}\" was not judged; it stays open for a person.",
+    "summaryConfirmed": "Report on \"{title}\" confirmed; corrected pages drafted: {drafted}.",
+    "summaryRejected": "Report on \"{title}\" checked: the page holds up."
+  },
   "warning": {
     "fileNotRead": "{path} could not be read: {error}",
     "graphUnreadableOrphans": "The relation graph could not be read, so the orphan check was skipped.",

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { AssistantSource, SearchResult, SourceProvenance, SourceVerificationState } from '@knowledge/contracts';
-import { isWebSource, verificationStateFor } from '@knowledge/contracts';
+import { isWebSource, OPEN_KNOWLEDGE_ISSUE_STATUSES, verificationStateFor } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 /**
@@ -33,7 +33,7 @@ export interface DocumentProvenance {
  * freshness a person does.
  *
  * Lives in `FeedbackCoreModule` (controller-free, both processes) rather than
- * beside the assistant because phase 3 of #67 adds the open-report count here,
+ * beside the assistant because the open-report count (phase 3) is read here,
  * and that table belongs to the feedback area.
  */
 @Injectable()
@@ -82,6 +82,7 @@ export class ProvenanceService {
         })
       : [];
     const nameById = new Map(users.map((u) => [u.id, u.displayName]));
+    const openIssues = await this.openIssueCounts(docs.map((d) => d.id));
 
     for (const d of docs) {
       const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
@@ -95,13 +96,27 @@ export class ProvenanceService {
         // still reported so the UI can draw initials, the name is simply null.
         authorName: head ? (nameById.get(head.authorId) ?? null) : null,
         changedAt: (head?.finalizedAt ?? head?.createdAt)?.toISOString() ?? null,
-        // Open reports arrive with issue #67 phase 3; until then nothing is flagged.
-        verification: verificationStateFor(d, headId, 0),
+        verification: verificationStateFor(d, headId, openIssues.get(d.id) ?? 0),
         verifiedAt: d.verifiedAt?.toISOString() ?? null,
         verifiedByName: d.verifiedBy ? (nameById.get(d.verifiedBy) ?? null) : null,
       });
     }
     return out;
+  }
+
+  /**
+   * Open reports per page (docs/features/38, phase 3) — what turns a stamp
+   * into `flagged`. One grouped count for the batch; a page with none is
+   * simply absent.
+   */
+  async openIssueCounts(documentIds: readonly string[]): Promise<Map<string, number>> {
+    if (documentIds.length === 0) return new Map();
+    const rows = await this.prisma.knowledgeIssue.groupBy({
+      by: ['documentId'],
+      where: { documentId: { in: [...documentIds] }, status: { in: [...OPEN_KNOWLEDGE_ISSUE_STATUSES] } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.documentId, r._count._all]));
   }
 
   /** The optional fields a `SourceProvenance` consumer reads, from one record. */

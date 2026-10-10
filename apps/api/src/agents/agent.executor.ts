@@ -54,11 +54,15 @@ import {
   linkedCandidates,
   mentionedFiles,
   readDriftVerdict,
+  readReportVerdict,
+  reportJudgementPrompt,
+  REPORT_OUTPUT_CONTRACT,
   scopeFiles,
   searchQueryFor,
   subdirOf,
   type DriftCandidate,
 } from './drift.js';
+import { readEvidence } from '../feedback/knowledge-issues.service.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
@@ -168,9 +172,12 @@ export class AgentExecutor {
         return this.excavate(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
-      // no pull request has nothing to check. Only DriftTriggerService starts one.
+      // neither a pull request nor a report has nothing to check. Only
+      // DriftTriggerService and KnowledgeIssuesService start one.
       case 'sentinel':
-        return this.checkDrift(run, agent, principal, report);
+        return ((run.input ?? {}) as AgentRunInput).issueId
+          ? this.checkReport(run, agent, principal, report)
+          : this.checkDrift(run, agent, principal, report);
       default:
         // RUNNABLE_AGENTS is the API's copy of this switch; anything reaching
         // here got past that check, so failing loudly beats running an agent as
@@ -913,6 +920,110 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       }),
       findings: findings.slice(0, MAX_FINDINGS),
     };
+  }
+
+  /**
+   * The sentinel pointed at a report instead of a diff (docs/features/38,
+   * phase 3): one page, one model call, the report's text wrapped as the
+   * untrusted evidence it is. The verdict is a `stale` finding naming the
+   * report, with the corrected page as a draft when the model is sure; no
+   * finding means the report was judged wrong, and `ReportPublishSweeper`
+   * resolves the issue. The worker writes nothing else.
+   */
+  private async checkReport(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const issueId = ((run.input ?? {}) as AgentRunInput).issueId;
+    if (!issueId) throw new Error(t('error.ai.agentNeedsPullRequest', { key: agent.key }));
+
+    await report({ stage: 'report', progress: 0.05 });
+    const issue = await this.prisma.knowledgeIssue.findFirst({ where: { id: issueId, workspaceId: run.workspaceId } });
+    if (!issue) throw new Error(t('error.knowledgeIssue.notFound', { id: issueId }));
+    const page = await this.prisma.document.findFirst({
+      where: { id: issue.documentId, workspaceId: run.workspaceId },
+      select: { id: true, title: true },
+    });
+    if (!page) throw new Error(t('error.document.notFound', { id: issue.documentId }));
+    const head = await this.documents.getContent(page.id).catch(() => null);
+    if (!head || !head.markdown.trim()) {
+      return { summary: t('agent.report.noContent', { title: page.title }), findings: [] };
+    }
+    const reported =
+      issue.revisionId && issue.revisionId !== head.revisionId
+        ? await this.documents
+            .getContent(page.id, issue.revisionId)
+            .then((c) => ({ revisionId: c.revisionId, markdown: c.markdown }))
+            .catch(() => null)
+        : null;
+
+    const echo: AgentFinding = {
+      kind: 'stale',
+      severity: 'info',
+      title: t('agent.report.reportedTitle', { title: page.title, kind: issue.kind }),
+      detail: issue.detail.slice(0, 2_000),
+      documentIds: [page.id],
+      documentTitles: [page.title],
+      issueId: issue.id,
+    };
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    if (!agent.config.enabled || blocking.length > 0) {
+      // No model: the report is still worth a reader's attention, so it is
+      // echoed as a heads-up finding with no verdict — `agent.drift.noModel`.
+      await report({ warning: t('agent.report.noModel') });
+      return { summary: t('agent.report.summaryNoModel', { title: page.title }), findings: [echo] };
+    }
+
+    await report({ stage: 'judging', progress: 0.4 });
+    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const call = { config: agent.config, userId: run.createdBy, operation: 'agent' as const, locale: run.locale as Locale };
+    const tools = this.readTools.definitions();
+    const toolCtx = { principal, workspaceId: run.workspaceId };
+    const execute = (name: string, args: Record<string, unknown>) => this.readTools.execute(name, args, toolCtx);
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: `${agent.instructions}\n\n${REPORT_OUTPUT_CONTRACT}${skills}` },
+      {
+        role: 'user',
+        content: reportJudgementPrompt(
+          {
+            id: issue.id,
+            kind: issue.kind,
+            detail: issue.detail,
+            evidence: readEvidence(issue.evidence),
+            suggestedMarkdown: issue.suggestedMarkdown,
+            reportCount: issue.reportCount,
+          },
+          { id: page.id, title: page.title, markdown: head.markdown },
+          reported,
+          MAX_PAGE_CHARS,
+        ),
+      },
+    ];
+
+    try {
+      const raw = agent.missing.includes('tools')
+        ? await this.client.chat(call, messages, { json: true })
+        : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
+      const finding = readReportVerdict(safeJson(raw), { id: page.id, title: page.title, markdown: head.markdown }, issue.id);
+      return {
+        summary: finding
+          ? t('agent.report.summaryConfirmed', { title: page.title, drafted: finding.draft ? 1 : 0 })
+          : t('agent.report.summaryRejected', { title: page.title }),
+        findings: finding ? [finding] : [],
+      };
+    } catch (error) {
+      if (error instanceof ProviderAccountError) {
+        await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+      } else {
+        this.logger.warn(`Sentinel could not judge report ${issue.id}: ${String(error)}`);
+        await report({ warning: t('agent.warning.pageNotReviewed', { title: page.title, error: reasonOf(error) }) });
+      }
+      // Not judged is not "judged fine": the echo keeps the report in front of
+      // a person, and the publisher reads an info finding as exactly that.
+      return { summary: t('agent.report.summaryNoModel', { title: page.title }), findings: [echo] };
+    }
   }
 
   /**

@@ -226,6 +226,11 @@
     "messageNotAssistant": "Only an assistant reply can be rated — {id} is a user message.",
     "reasonRequired": "A thumbs-down needs a reason."
   },
+  "knowledgeIssue": {
+    "notFound": "Knowledge issue {id} not found.",
+    "rateLimited": "You have filed {limit} reports in the last 24 hours. Try again later.",
+    "raced": "Another report of the same page and kind arrived at the same time. Try again."
+  },
   "workflow": {
     "notFound": "Workflow {id} not found",
     "runNotFound": "Workflow run {id} not found",

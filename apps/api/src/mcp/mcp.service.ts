@@ -2,7 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { ANSWER_FEEDBACK_REASONS, ANSWER_RATINGS, DOCUMENT_CATEGORIES } from '@knowledge/contracts';
+import {
+  ANSWER_FEEDBACK_REASONS,
+  ANSWER_RATINGS,
+  DOCUMENT_CATEGORIES,
+  KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS,
+  KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS,
+  KNOWLEDGE_ISSUE_EVIDENCE_MAX,
+  KNOWLEDGE_ISSUE_KINDS,
+  KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS,
+} from '@knowledge/contracts';
 import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -27,6 +36,7 @@ import { AccessService } from '../auth/access.service.js';
 import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
+import { KnowledgeIssuesService } from '../feedback/knowledge-issues.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
@@ -71,6 +81,7 @@ export const MCP_SERVER_VERSION = '0.13.0';
  *   knowledge_get_document_content → a page's full markdown (read before revising)
  *   knowledge_create_document   → a new page with inline markdown
  *   knowledge_feedback          → rate an answer built from knowledge_search (docs/features/38)
+ *   knowledge_report_issue      → report a page as wrong / stale; checked by the sentinel (docs/features/38)
  *
  * Two transports, one tool set (docs/features/33). `buildServer(principal)`
  * binds every tool to a caller: each one runs the same `requireRole` its REST
@@ -108,6 +119,7 @@ export class McpService {
     private readonly aiReadable: AiReadableService,
     private readonly provenance: ProvenanceService,
     private readonly feedback: AnswerFeedbackService,
+    private readonly issues: KnowledgeIssuesService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -215,6 +227,63 @@ export class McpService {
           principal,
         );
         return this.json({ feedbackId: res.feedback.id, surface: res.feedback.surface, deduplicated: res.deduplicated });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_report_issue',
+      {
+        description:
+          'Report that a page is wrong, out of date, missing something, or a duplicate. Quote the passage and say ' +
+          'where the correct information is. The report is checked by the sentinel and may become a merge request ' +
+          'for a person to review; a second report of the same page and kind folds into the open one. Returns the ' +
+          'issue, its status (open | checking | proposed) and whether it was deduplicated.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          documentId: z.string().uuid(),
+          revisionId: z.string().uuid().optional().describe('The revision you read, from knowledge_search or get_document'),
+          kind: z.enum(KNOWLEDGE_ISSUE_KINDS),
+          detail: z.string().min(1).max(KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS).describe('What is wrong, in plain words'),
+          evidence: z
+            .array(
+              z.object({
+                quote: z.string().max(KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS).optional().describe('The passage disputed'),
+                url: z.string().max(KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS).optional().describe('Where the correct information is'),
+                note: z.string().max(KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS).optional(),
+              }),
+            )
+            .max(KNOWLEDGE_ISSUE_EVIDENCE_MAX)
+            .optional(),
+          suggestedMarkdown: z
+            .string()
+            .max(KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS)
+            .optional()
+            .describe('A corrected page body without frontmatter. From an editor key it opens a draft merge request at once.'),
+        },
+      },
+      async ({ workspaceId, documentId, revisionId, kind, detail, evidence, suggestedMarkdown }) => {
+        await guard.doc(documentId, 'viewer');
+        const res = await this.issues.report(
+          {
+            workspaceId,
+            documentId,
+            ...(revisionId ? { revisionId } : {}),
+            kind,
+            detail,
+            ...(evidence?.length ? { evidence } : {}),
+            ...(suggestedMarkdown ? { suggestedMarkdown } : {}),
+            surface: 'mcp',
+          },
+          principal,
+        );
+        return this.json({
+          issueId: res.issue.id,
+          status: res.issue.status,
+          deduplicated: res.deduplicated,
+          reportCount: res.issue.reportCount,
+          ...(res.issue.mergeRequestId ? { mergeRequestId: res.issue.mergeRequestId } : {}),
+          ...(res.issue.agentRunId ? { agentRunId: res.issue.agentRunId } : {}),
+        });
       },
     );
 

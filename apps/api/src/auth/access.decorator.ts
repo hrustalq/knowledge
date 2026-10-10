@@ -17,6 +17,7 @@ export type WorkspaceSource =
   | 'project' // :id path param is a project id (resolved to its workspace)
   | 'assistant-thread' // :id path param is an assistant chat thread id
   | 'assistant-message' // :id path param is an assistant chat message id (resolved through its thread; docs/features/38)
+  | 'knowledge-issue' // :id path param is a knowledge issue id (docs/features/38, phase 3)
   | 'ai-skill' // :id path param is an AI skill id
   | 'ai-plugin' // :id path param is an AI plugin (MCP server) id
   | 'ai-provider' // :id path param is an AI provider profile id

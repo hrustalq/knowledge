@@ -657,6 +657,49 @@ model AnswerFeedback {
   @@map("answer_feedback")
 }
 
+/// A reported problem with a page (docs/features/38, issue #67 phase 3) — from
+/// an agent over MCP, from a person on the page, or from a down-vote that named
+/// the pages it cited. One OPEN issue per (document, kind): a second report
+/// folds in as report_count + 1 and more evidence. Prisma cannot express that
+/// partial unique index, so the service writes it as a guarded UPDATE-then-INSERT.
+/// No FK on workspace_id / created_by / resolved_by (house policy); none on
+/// agent_run_id / merge_request_id either — a run or an MR that is deleted
+/// leaves the report standing.
+model KnowledgeIssue {
+  id                String    @id @default(uuid()) @db.Uuid
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  documentId        String    @map("document_id") @db.Uuid
+  /// The revision the reporter read, when the reporter said.
+  revisionId        String?   @map("revision_id") @db.Uuid
+  /// KNOWLEDGE_ISSUE_KINDS: stale | wrong | missing | duplicate | other
+  kind              String
+  /// KNOWLEDGE_ISSUE_STATUSES: open | checking | proposed | resolved | dismissed
+  status            String    @default("open")
+  /// Untrusted, ≤ 4 000 chars. Wrapped before any model sees it.
+  detail            String
+  /// KnowledgeIssueEvidence[] (≤ 10). Untrusted.
+  evidence          Json      @default("[]")
+  /// A corrected body the reporter supplied, ≤ 200 000 chars. Untrusted; an
+  /// editor's becomes a draft MR as-is, a viewer's only ever reaches the sentinel.
+  suggestedMarkdown String?   @map("suggested_markdown")
+  /// KNOWLEDGE_ISSUE_SURFACES: an answer surface, or 'web' for the page itself.
+  surface           String
+  reportCount       Int       @default(1) @map("report_count")
+  agentRunId        String?   @map("agent_run_id") @db.Uuid
+  mergeRequestId    String?   @map("merge_request_id") @db.Uuid
+  createdBy         String    @map("created_by") @db.Uuid
+  apiKeyId          String?   @map("api_key_id") @db.Uuid
+  resolvedBy        String?   @map("resolved_by") @db.Uuid
+  resolvedAt        DateTime? @map("resolved_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, status, createdAt])
+  @@index([documentId, status])
+  @@index([createdBy, createdAt])
+  @@map("knowledge_issues")
+}
+
 // ---------------------------------------------------------------------------
 // AI settings (docs/features/12): the assistant layer made administrable per
 // workspace instead of per boot. Every column here is an OVERRIDE — null means

@@ -3098,6 +3098,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/knowledge-issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List reports in a workspace, newest first; narrow by page or status */
+        get: operations["KnowledgeIssuesController_list"];
+        put?: never;
+        /** Report a problem with a page. Folds into the open issue for the same page and kind; otherwise opens a draft merge request (editor with a corrected body), queues a sentinel check, or stays open for a person. */
+        post: operations["KnowledgeIssuesController_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/knowledge-issues/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Close a report by hand: resolved (the page is right now) or dismissed (the report was not) */
+        patch: operations["KnowledgeIssuesController_close"];
+        trace?: never;
+    };
     "/v1/mcp": {
         parameters: {
             query?: never;
@@ -4297,6 +4332,47 @@ export interface components {
             answerExcerpt?: string;
             /** @description Document ids the answer cited (at most 20) */
             citedDocumentIds?: string[];
+        };
+        KnowledgeIssueEvidenceDto: {
+            /** @description A passage of the page the report disputes */
+            quote?: string;
+            /** @description Where the correct information is */
+            url?: string;
+            note?: string;
+        };
+        ReportKnowledgeIssueDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description The page the report is about; must belong to workspaceId
+             */
+            documentId: string;
+            /**
+             * Format: uuid
+             * @description The revision the reporter read
+             */
+            revisionId?: string;
+            /** @enum {string} */
+            kind: "stale" | "wrong" | "missing" | "duplicate" | "other";
+            /** @description What is wrong, in the reporter's words */
+            detail: string;
+            /** @description At most 10 items */
+            evidence?: components["schemas"]["KnowledgeIssueEvidenceDto"][];
+            /** @description A corrected page body (markdown, no frontmatter). From an editor it opens a draft merge request at once; from a viewer it only reaches the sentinel as evidence. */
+            suggestedMarkdown?: string;
+            /**
+             * @description Where the report was made. Omitted reads as "web" (the page itself).
+             * @enum {string}
+             */
+            surface?: "assistant" | "editor-assistant" | "ask" | "mcp" | "web";
+        };
+        CloseKnowledgeIssueDto: {
+            /**
+             * @description The only two states a person sets by hand
+             * @enum {string}
+             */
+            status: "resolved" | "dismissed";
         };
         ApiErrorResponse: {
             /**
@@ -14530,6 +14606,134 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeIssuesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                documentId?: string;
+                status?: "open" | "checking" | "proposed" | "resolved" | "dismissed";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeIssuesController_report: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportKnowledgeIssueDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeIssuesController_close: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseKnowledgeIssueDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

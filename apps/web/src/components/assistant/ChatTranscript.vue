@@ -154,6 +154,15 @@ function answerFor(index: number): string | undefined {
   return next.message.content
 }
 
+/** The question a reply answered: the nearest user turn before it (docs/features/38 — carried into a report filed from its thumbs). */
+function questionFor(index: number): string | undefined {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const row = rows.value[i]
+    if (row?.kind === 'message' && row.message.role === 'user') return row.message.content
+  }
+  return undefined
+}
+
 /** A prompt is answerable only on the last message, and only between turns. */
 function isNewest(index: number): boolean {
   return !props.live && index === props.messages.length - 1
@@ -341,6 +350,7 @@ defineExpose({ scrollToEnd })
                 :message="messageAt(item.index)!"
                 :prompt-active="isNewest(item.index)"
                 :prompt-answer="answerFor(item.index)"
+                :question="questionFor(item.index)"
                 :actionable="!live"
                 @answer="emit('answer', $event)"
                 @switch-mode="emit('switchMode', $event)"

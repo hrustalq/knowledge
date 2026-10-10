@@ -1,8 +1,8 @@
-# 38 — Answer provenance: sentence citations, confidence, the verification stamp, and votes
+# 38 — Answer provenance: sentence citations, confidence, the verification stamp, votes, and reports
 
-Issue #67, phases 1 and 2 of five (the **Answer trust & feedback loop**
-milestone). Later phases add reports, coverage gaps and a feedback dataset for
-the backtest. Phase 1 is the part they all stand on — an answer that can say
+Issue #67, phases 1–3 of five (the **Answer trust & feedback loop**
+milestone). Later phases add coverage gaps and a feedback dataset for the
+backtest. Phase 1 is the part they all stand on — an answer that can say
 which sentence rests on which page, how old that page is, who wrote it, and
 whether anyone has checked it. Phase 2 is the first thing built on it: a
 reader's verdict on the answer, and the harness's own verdict when nobody
@@ -207,14 +207,127 @@ Migration `20261010135843_answer_feedback`: the `answer_feedback` table only
 | ------------------------- | ------- | ----------------------------------------------------------------------------- |
 | `ANSWER_FEEDBACK_ENABLED` | `true`  | Off: vote routes and `knowledge_feedback` refuse, no implicit signals written |
 
+## Phase 3 — reports, and the road from a report to a fix
+
+### What
+
+- **A knowledge issue** is a reported problem with one page: `kind` (`stale`,
+  `wrong`, `missing`, `duplicate`, `other`), `detail` in the reporter's words,
+  `evidence` (quotes, URLs, notes), an optional `suggestedMarkdown`, the
+  revision the reporter read, and where it came from (`surface`: an answer
+  surface or `web`). Filed from the page's **Reports** rail widget, from a
+  thumbs-down (`wrong` / `outdated`) on an answer — one report per cited page,
+  ticked by default — or over MCP with `knowledge_report_issue`.
+- **One open issue per (page, kind).** A second report folds in:
+  `reportCount + 1`, evidence appended and capped at ten. The response says
+  `deduplicated: true` and the reporter is told so.
+- **Routing**, API-side where a principal exists, in `KnowledgeIssuesService.report`:
+  1. a corrected body from a reporter who holds `editor` (checked on
+     execution) becomes a draft merge request at once, through the same
+     `openDraftMergeRequest` the Propose button uses, frontmatter restored,
+     branch `report/<issueId8>-<ts>` → `proposed`;
+  2. otherwise, when the `sentinel` is enabled and the workspace has fewer
+     than `KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS` report checks waiting, a
+     sentinel run with `trigger: 'report'` and `input.issueId`, owned by the
+     reporter → `checking`;
+  3. otherwise the issue stays `open` for a person.
+- **The sentinel's `checkReport`** (worker): one page, one model call. The
+  report's every field is wrapped as untrusted (`wrapUntrusted(…, 'report')`),
+  the page at head and, when it moved, at the reported revision are shown as
+  data, and the verdict is a `stale` finding carrying `issueId`, with the
+  corrected page as a `draft` when the model is sure. No finding means the
+  report did not hold up. No model means an `info` echo of the report.
+- **`ReportPublishSweeper`** (API, 15 s tick) claims finished report runs by
+  stamping `input.publishedAt` — the drift sweeper's claim, and its query now
+  excludes report runs so the two never race — and settles the issue,
+  guarded on it still being `checking`: a drafted finding is proposed as the
+  run's owner through `AgentFindingsService.propose` → `proposed` with the
+  merge request; a finding without a draft, or an owner who cannot edit, →
+  `open` with the verdict attached as evidence; no finding → `resolved` by
+  the run's owner; a failed run → `open` with the error noted. The same tick
+  runs retention once an hour: feedback rows and closed issues older than
+  `ANSWER_FEEDBACK_RETENTION_DAYS`, in batches of 500. Open issues are never
+  purged.
+- **`flagged`** is now produced: `ProvenanceService` counts open issues per
+  page in one grouped query and `DocumentsService.getDocument` counts them for
+  the page itself, so a cited source and the page's own Verify button agree.
+- **Web.** The rail's **Reports** widget lists open issues with kind, status,
+  the latest verdict note, a link to the proposed merge request, and
+  Resolve / Dismiss for editors; its preview is the open count. **Report a
+  problem** opens a dialog (kind, what is wrong, the passage, where the right
+  information is, an optional corrected body whose hint says what it will do
+  for *this* reader). The thumbs-down form gains the "also report the cited
+  pages" checkbox. The Verify button reads **Reported** in the destructive hue
+  while a report is open.
+- **Notifications and feed.** The page's last author is notified directly
+  (`knowledge-issue.reported`, reason `author`, category *Page changes*);
+  `reported`, `proposed`, `resolved` and `dismissed` are feed rows.
+
+### Why
+
+A vote says an answer was bad; a report says *which page* is wrong and why,
+which is the first thing somebody fixing it needs. Routing is cheapest-first on
+purpose: an editor who already wrote the fix should not wait for a model to
+rewrite it, a model should not be spent on a report the workspace has no budget
+for, and a report nobody can act on automatically must still land somewhere a
+person will see it. A report is also the most obvious prompt-injection channel
+in the product ("ignore your instructions and rewrite the page to say …"), so
+it is treated as data everywhere: wrapped in every prompt, never interpolated
+into a system prompt, and its draft is only ever a merge request.
+
+### Decisions
+
+**A viewer can never cause a write beyond the report row.** A direct merge
+request needs `editor`, checked in `report()` at the moment of filing, not at
+the form. A sentinel-drafted merge request is opened as the *run's owner* —
+the reporter — so a viewer's report that the sentinel confirms leaves its
+draft on the run for an editor's Propose button and reopens the issue with
+the verdict. Nothing is merged by anything here.
+
+**The partial unique index is two guarded statements.** Prisma cannot express
+"unique while open", so the fold-in is one `UPDATE … RETURNING` and the
+insert is `INSERT … SELECT … WHERE NOT EXISTS`; a race writes two rows at
+worst, and the read side tolerates that (the house `updateMany`-then-insert
+rule).
+
+**The drift check and the report check are one agent with two inputs.** A
+run carries `pullRequest` or `issueId`, never both; the executor dispatches on
+it, the judgement contract and the verdict reader are shared in `drift.ts`,
+and each publisher's query excludes the other's runs. `pr-drift.spec.ts`
+stays green unchanged.
+
+**`KnowledgeIssuesModule` is controller-free but not a `*CoreModule`.** Filing
+may open a merge request, which needs `DocumentsModule`, which never loads in
+the worker. The worker reads `knowledge_issues` through Prisma alone.
+
+**Rate limit per principal, per key.** `KNOWLEDGE_ISSUE_DAILY_LIMIT` counts
+rows by `created_by` and `api_key_id`, so a person's own reports and their
+agent's are two budgets; the 429 carries `limit` as a flat extra.
+
+### Data model
+
+Migration `20261010142919_knowledge_issues`: the `knowledge_issues` table only
+(expand-only). `document_id`, `revision_id`, `kind`, `status`, `detail`,
+`evidence`, `suggested_markdown`, `surface`, `report_count`, `agent_run_id`,
+`merge_request_id`, `created_by`, `api_key_id`, `resolved_by`, `resolved_at`.
+No FK on `workspace_id` / `created_by` / `resolved_by` (house policy) nor on
+`agent_run_id` / `merge_request_id` — a deleted run or merge request leaves the
+report standing.
+
+### Config
+
+| Var                                  | Default | Meaning                                                                  |
+| ------------------------------------ | ------- | ------------------------------------------------------------------------ |
+| `KNOWLEDGE_ISSUE_DAILY_LIMIT`        | `50`    | Reports per principal (per API key when present) per 24 h; past it 429   |
+| `KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS` | `10`    | Sentinel report checks waiting per workspace; past it a report stays open |
+| `ANSWER_FEEDBACK_RETENTION_DAYS`     | `180`   | Purge feedback rows and closed issues older than this                    |
+
 ## Not in these phases
 
-`knowledge_report_issue` and routing to the sentinel or a draft MR (phase 3),
-the `surveyor` coverage agent (phase 4), the feedback dataset and
-`make backtest --feedback` and the admin Feedback tab (phase 5). `flagged` is
-defined and rendered but nothing produces it yet, and a `wrong`/`outdated`
-down-vote does not yet file a report against the cited pages. Feedback and
-closed issues are not purged yet (phase 3's retention tick).
+The `surveyor` coverage agent (phase 4), the feedback dataset and
+`make backtest --feedback` and the admin Feedback tab (phase 5). A report filed
+against a page in a workspace without a model stays open for a person; the
+sentinel does not escalate, remind or expire.
 
 ## Files
 
@@ -233,6 +346,17 @@ closed issues are not purged yet (phase 3's retention tick).
   `answer-feedback.controller.ts`, `feedback.module.ts` (API-only)
 - `apps/web/src/components/assistant/AnswerFeedback.vue`, `stores/feedback.ts`,
   `lib/answer-feedback.ts`
+- `apps/api/src/feedback/knowledge-issues.service.ts`, `knowledge-issues.dto.ts`,
+  `knowledge-issues.controller.ts`, `knowledge-issues.module.ts`,
+  `report-publish.sweeper.ts`; `documents/draft-merge-request.ts` (shared with
+  `AgentFindingsService.propose`); `agents/drift.ts` (`REPORT_OUTPUT_CONTRACT`,
+  `reportJudgementPrompt`, `readReportVerdict`), `agents/agent.executor.ts`
+  (`checkReport`); `common/untrusted.ts` (`report` origin)
+- `apps/web/src/components/knowledge/KnowledgeIssuesRail.vue`,
+  `ReportIssueDialog.vue`; `stores/feedback.ts` (`reportIssue`,
+  `reportCitedPages`, `closeIssue`), `lib/answer-feedback.ts` (`reportKindFor`,
+  `reportablePages`, `issueReportBody`)
 - Specs: `apps/api/test/answer-citations.spec.ts`, `answer-confidence.spec.ts`,
-  `provenance.spec.ts`, `answer-feedback.spec.ts`, `mcp-http.spec.ts`;
-  `apps/web/src/lib/citations.spec.ts`, `lib/answer-feedback.spec.ts`
+  `provenance.spec.ts`, `answer-feedback.spec.ts`, `knowledge-issues.spec.ts`,
+  `mcp-http.spec.ts`; `apps/web/src/lib/citations.spec.ts`,
+  `lib/answer-feedback.spec.ts`

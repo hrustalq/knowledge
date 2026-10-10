@@ -151,6 +151,20 @@ export const envSchema = z.object({
    * want question text in PostgreSQL at all.
    */
   ANSWER_FEEDBACK_ENABLED: boolish(true),
+  /**
+   * Feedback rows and closed knowledge issues older than this are purged by
+   * the report sweeper's retention tick (docs/features/38, phase 3). Stored
+   * question text is user content and must not live forever.
+   */
+  ANSWER_FEEDBACK_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  /** Knowledge issues one principal (per API key when present) may file per 24 h; past it a report is 429. */
+  KNOWLEDGE_ISSUE_DAILY_LIMIT: z.coerce.number().int().positive().default(50),
+  /**
+   * Sentinel report checks one workspace may have waiting. Past this a report
+   * stays `open` for a person instead of queueing a model run — the
+   * DriftTriggerService MAX_PENDING rule, made an env var.
+   */
+  KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS: z.coerce.number().int().positive().default(10),
 
   /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider

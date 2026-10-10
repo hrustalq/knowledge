@@ -56,6 +56,15 @@ export function renderSkill(input: SkillInput): string {
    miss is what turns into documentation work; an unrated one is forgotten.
 `
     : '';
+  // A report is a write too (docs/features/38, phase 3), described only to a
+  // key that is offered it.
+  const reportStep = tools.some((tool) => tool.name === 'knowledge_report_issue')
+    ? `6. If a page you read is wrong or out of date, ${toolRef('knowledge_report_issue')} with its \`documentId\`, a \`kind\`
+   (\`stale\`, \`wrong\`, \`missing\`, \`duplicate\`, \`other\`), what is wrong in plain words and \`evidence\` (the passage,
+   where the right information is). The report is checked and may become a merge request for a person to review;
+   it never edits the page by itself.
+`
+    : '';
 
   const access = whoami.workspaces.length
     ? [
@@ -186,7 +195,7 @@ Every content tool takes a \`workspaceId\`. Never guess one; use the table or ${
 3. Answer with citations: the page title and a link \`${webUrl}/documents/<documentId>\`.
 4. If search finds nothing relevant, say so plainly. Do not fill the gap from general knowledge as if the knowledge base
    had said it.
-${feedbackStep}
+${feedbackStep}${reportStep}
 ### Find your way around
 
 - ${toolRef('knowledge_list_documents')} — the page tree of a workspace or project.

@@ -36,6 +36,8 @@ const props = defineProps<{
   promptActive?: boolean
   /** The user turn that answered this message's prompt, when it has one. */
   promptAnswer?: string
+  /** For a reply: the question it answered, carried into a report filed from its thumbs (docs/features/38). */
+  question?: string
   /** False while a turn is in flight: rewinding under a running stream is not offered. */
   actionable?: boolean
 }>()
@@ -260,7 +262,12 @@ function saveEdit() {
            transcript claiming the model said something it did not. Reset asks
            the question again. -->
       <div v-if="canAct" class="flex items-center gap-2">
-        <AnswerFeedback :target="{ kind: 'message', messageId: message.id }" :initial="message.feedback" />
+        <AnswerFeedback
+          :target="{ kind: 'message', messageId: message.id }"
+          :initial="message.feedback"
+          :sources="message.sources"
+          :query="question"
+        />
         <div class="kn-msg-actions flex items-center gap-0.5">
           <button type="button" class="kn-msg-action" :aria-label="copied ? t('common.copied') : t('chat.copyReply')" @click="copy">
             <Check v-if="copied" class="size-3.5 text-emerald-500" />

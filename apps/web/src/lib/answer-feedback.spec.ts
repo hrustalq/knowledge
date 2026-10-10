@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { AnswerVote } from '@knowledge/contracts'
-import { canSend, optimisticVote, thumbAction, voteBody, voteSurface } from './answer-feedback'
+import {
+  canSend,
+  issueReportBody,
+  optimisticVote,
+  reportKindFor,
+  reportablePages,
+  thumbAction,
+  voteBody,
+  voteSurface,
+} from './answer-feedback'
 
 const up: AnswerVote = { rating: 'up', reason: null, comment: null, createdAt: '2026-10-10T00:00:00Z' }
 const down: AnswerVote = { rating: 'down', reason: 'outdated', comment: 'rev 3 says otherwise', createdAt: '2026-10-10T00:00:00Z' }
@@ -73,5 +82,54 @@ describe('optimisticVote', () => {
       comment: 'x',
     })
     expect(optimisticVote({ rating: 'up', reason: null, comment: '' }).comment).toBeNull()
+  })
+})
+
+// ---- a down-vote that names its pages (docs/features/38, phase 3) ---------
+
+describe('reportKindFor', () => {
+  it('only wrong and outdated name a page', () => {
+    expect(reportKindFor('wrong')).toBe('wrong')
+    expect(reportKindFor('outdated')).toBe('stale')
+    for (const r of ['incomplete', 'irrelevant-sources', 'no-answer', 'unclear', 'other', null] as const) {
+      expect(reportKindFor(r)).toBeNull()
+    }
+  })
+})
+
+describe('reportablePages', () => {
+  it('is the cited workspace pages once each, never a web source', () => {
+    const pages = reportablePages([
+      { documentId: 'd1', title: 'A', revisionId: 'r1' },
+      { documentId: 'd1', title: 'A again' },
+      { kind: 'web', url: 'https://x.test', site: 'x.test', title: 'W', fetchedAt: '2026-10-10T00:00:00Z' },
+      { documentId: 'd2', title: 'B' },
+    ])
+    expect(pages).toEqual([{ documentId: 'd1', title: 'A', revisionId: 'r1' }, { documentId: 'd2', title: 'B' }])
+  })
+})
+
+describe('issueReportBody', () => {
+  it("carries the vote's reason as the kind, its comment as the detail and the question as a note", () => {
+    const body = issueReportBody(
+      { documentId: 'd1', revisionId: 'r1' },
+      { workspaceId: 'ws', kind: 'stale', query: 'How long do sessions last?', comment: ' Says 30 days, it is 7. ', surface: 'assistant' },
+    )
+    expect(body).toEqual({
+      workspaceId: 'ws',
+      documentId: 'd1',
+      revisionId: 'r1',
+      kind: 'stale',
+      detail: 'Says 30 days, it is 7.',
+      evidence: [{ note: 'The question was: How long do sessions last?' }],
+      surface: 'assistant',
+    })
+  })
+
+  it('says where it came from when the voter left no comment', () => {
+    const body = issueReportBody({ documentId: 'd1' }, { workspaceId: 'ws', kind: 'wrong', query: '', comment: '', surface: 'ask' })
+    expect(body.detail).toMatch(/thumbs-down/)
+    expect(body.evidence).toEqual([])
+    expect(body).not.toHaveProperty('revisionId')
   })
 })

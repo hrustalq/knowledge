@@ -46,7 +46,7 @@ import type {
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
 import type { Document, DocumentBranch, DocumentRevision } from '@prisma/client';
-import { verificationStateFor } from '@knowledge/contracts';
+import { OPEN_KNOWLEDGE_ISSUE_STATUSES, verificationStateFor } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
@@ -473,6 +473,11 @@ export class DocumentsService {
         : [];
 
     const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId ?? null;
+    // An open report flags the page (docs/features/38, phase 3) — the same
+    // predicate ProvenanceService applies to a cited source.
+    const openIssues = await this.prisma.knowledgeIssue.count({
+      where: { documentId, status: { in: [...OPEN_KNOWLEDGE_ISSUE_STATUSES] } },
+    });
     return {
       document: {
         documentId: document.id,
@@ -489,7 +494,7 @@ export class DocumentsService {
         verifiedAt: document.verifiedAt?.toISOString() ?? null,
         verifiedBy: document.verifiedBy,
         verifiedRevisionId: document.verifiedRevisionId,
-        verification: verificationStateFor(document, headId, 0),
+        verification: verificationStateFor(document, headId, openIssues),
       },
       revision: this.toRevisionInfo(revision),
       chunks,

@@ -428,6 +428,9 @@ export type I18nTranslations = {
             "disabled": string;
             "messageNotAssistant": string;
             "reasonRequired": string;
+            "invalidFilter": string;
+            "invalidDate": string;
+            "invalidRange": string;
         };
         "knowledgeIssue": {
             "notFound": string;

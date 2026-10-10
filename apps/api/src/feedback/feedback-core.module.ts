@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ProvenanceService } from './provenance.service.js';
 import { AnswerFeedbackService } from './answer-feedback.service.js';
+import { FeedbackDatasetService } from './feedback-dataset.service.js';
 
 /**
  * The answer trust layer (docs/features/38, issue #67), controller-free so
@@ -11,10 +12,12 @@ import { AnswerFeedbackService } from './answer-feedback.service.js';
  *
  * Exported for injection into `AssistantService`, `AssistantThreadsService`
  * and `McpService`, which live in modules that import this one.
+ * `FeedbackDatasetService` (phase 5) is the admin read side and the backtest
+ * dataset; the script reaches it through the application context.
  */
 @Module({
   imports: [PrismaModule],
-  providers: [ProvenanceService, AnswerFeedbackService],
-  exports: [ProvenanceService, AnswerFeedbackService],
+  providers: [ProvenanceService, AnswerFeedbackService, FeedbackDatasetService],
+  exports: [ProvenanceService, AnswerFeedbackService, FeedbackDatasetService],
 })
 export class FeedbackCoreModule {}

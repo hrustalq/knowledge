@@ -185,6 +185,35 @@ export interface AnswerFeedbackInfo {
 }
 
 // PUT /v1/assistant/messages/:id/feedback, POST /v1/assistant/ask/feedback
+/**
+ * One row of the admin Feedback tab (phase 5): a vote or an implicit signal,
+ * with the first part of the answer and the cited pages resolved to titles.
+ */
+export interface AnswerFeedbackListEntry extends AnswerFeedbackInfo {
+  answerExcerpt: string | null;
+  citedDocuments: Array<{ id: string; title: string | null }>;
+}
+
+export interface ListAnswerFeedbackResponse {
+  workspaceId: string;
+  entries: AnswerFeedbackListEntry[];
+  nextCursor: string | null;
+}
+
+/** Counts over `answer_feedback` and `knowledge_issues` in a window — no aggregate table behind it. */
+export interface AnswerFeedbackSummary {
+  workspaceId: string;
+  from: string;
+  to: string;
+  votes: { up: number; down: number };
+  signals: { 'low-confidence': number; 'no-answer': number };
+  byReason: Array<{ reason: AnswerFeedbackReason; count: number }>;
+  bySurface: Array<{ surface: AnswerSurface; count: number }>;
+  issues: Array<{ status: KnowledgeIssueStatus; count: number }>;
+  /** Votes the export turns into a `FeedbackBacktestCase`: cited at least one page, and either an up-vote or a down-vote that blames the pages. */
+  datasetVotes: number;
+}
+
 export interface SetAnswerFeedbackResponse {
   feedback: AnswerFeedbackInfo;
 }

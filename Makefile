@@ -122,7 +122,7 @@ verify: db-generate lint typecheck deps test ## Pre-push gate: everything in `ch
 check: lint typecheck deps test build ## Lint + typecheck + dependency rules + tests + build (CI gate)
 
 .PHONY: backtest
-backtest: ## Retrieval/pipeline backtest. ARGS="--generate --limit 120" or ARGS="--report"
+backtest: ## Retrieval/pipeline backtest. ARGS="--generate --limit 120" | "--report" | "--export-feedback --workspace <id> --out fb.ndjson" | "--feedback fb.ndjson --k 10"
 	@# Runs the built output rather than the source: Node's type stripping emits
 	@# no decorator metadata, and Nest's DI needs it to construct SearchService.
 	$(API) run build

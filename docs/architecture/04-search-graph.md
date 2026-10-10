@@ -155,6 +155,15 @@ in one batch at the end of an answer, and the MCP `knowledge_search` handler
 runs the same decoration over its hit list. Search stays a ranking; trust is a
 read on top of it.
 
+The read goes the other way too, once. Votes on answers (`answer_feedback`) are
+the only ground truth about retrieval that a person produced: an up-vote names
+the pages that answered a question, a "wrong" down-vote names the pages that did
+not. `FeedbackDatasetService` turns them into `FeedbackBacktestCase` lines and
+`make backtest --feedback` replays them through `SearchService.search` — so a
+change to fusion, chunking or embedding is measured against what people asked,
+not only against each page's own title. Nothing in search reads that table;
+feedback is a benchmark, never a ranking signal.
+
 ## Security
 
 Edge type names are **SQL-interpolated**, so every type is validated against

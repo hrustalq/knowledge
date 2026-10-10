@@ -397,6 +397,18 @@ export async function apiFetchText(path: string, init?: RequestInit): Promise<st
   return (await apiRequest(path, init)).text()
 }
 
+/**
+ * apiFetch for a route that answers a file (`GET /v1/ai/feedback/export`).
+ * `<a href>` cannot send the Authorization header, so the bytes come through
+ * fetch and are handed to the browser as an object URL by the caller.
+ */
+export async function apiFetchBlob(path: string, init?: RequestInit): Promise<{ blob: Blob; filename: string | null }> {
+  const res = await apiRequest(path, init)
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const match = /filename="?([^";]+)"?/.exec(disposition)
+  return { blob: await res.blob(), filename: match?.[1] ?? null }
+}
+
 /** The one request path — headers, credential, and the error envelope — both readers share. */
 async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken()

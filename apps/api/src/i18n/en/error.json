@@ -224,7 +224,10 @@
   "feedback": {
     "disabled": "Answer feedback is disabled on this server (ANSWER_FEEDBACK_ENABLED=false).",
     "messageNotAssistant": "Only an assistant reply can be rated — {id} is a user message.",
-    "reasonRequired": "A thumbs-down needs a reason."
+    "reasonRequired": "A thumbs-down needs a reason.",
+    "invalidFilter": "\"{value}\" is not a {name}. Use one of: {allowed}.",
+    "invalidDate": "\"{value}\" is not a date for {name}.",
+    "invalidRange": "\"from\" must not be after \"to\"."
   },
   "knowledgeIssue": {
     "notFound": "Knowledge issue {id} not found.",

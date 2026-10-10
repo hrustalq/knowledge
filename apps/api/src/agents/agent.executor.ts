@@ -1,14 +1,19 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { AgentRun } from '@prisma/client';
 import type {
   AgentFinding,
   AgentFindingKind,
   AgentRunInput,
+  AnswerSignalKind,
+  AnswerSurface,
   AssistantWebSource,
   AuthorableRelationType,
   Locale,
   RelationInput,
 } from '@knowledge/contracts';
+import type { Env } from '../config/env.js';
+import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { AGENT_FINDING_KINDS, isAuthorableRelationType } from '@knowledge/contracts';
 import { normalizeRelation } from '../common/relations.js';
 import { t } from '../i18n/t.js';
@@ -63,13 +68,29 @@ import {
   type DriftCandidate,
 } from './drift.js';
 import { readEvidence } from '../feedback/knowledge-issues.service.js';
+import {
+  COVERAGE_OUTPUT_CONTRACT,
+  EMBED_BATCH,
+  MAX_CLUSTERS,
+  citedIdsOf,
+  clusterSignals,
+  coverageOf,
+  coveragePrompt,
+  normalizeQuestion,
+  questionKey,
+  readCoverageVerdict,
+  type CoverageSignal,
+} from './coverage.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
  * the point somebody asks for it, rather than accepting it and failing in the
  * worker a second later with nothing to show for the round trip.
  */
-export const RUNNABLE_AGENTS = new Set(['curator', 'reviewer', 'glossarist', 'cartographer', 'archaeologist']);
+export const RUNNABLE_AGENTS = new Set(['curator', 'reviewer', 'glossarist', 'cartographer', 'archaeologist', 'surveyor']);
+
+/** A page id the model named is checked against the database only if it could be one. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Workspace pages the archaeologist reads as "already declared" — linked to the connector or under its destination. */
 const MAX_DECLARED_PAGES = 40;
@@ -145,6 +166,8 @@ export class AgentExecutor {
     private readonly snapshots: RepoSnapshotService,
     private readonly pullRequests: PullRequestService,
     private readonly search: SearchService,
+    @Inject(EMBEDDING_PROVIDER) private readonly embedding: EmbeddingProvider,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   /**
@@ -170,6 +193,8 @@ export class AgentExecutor {
         return this.mapRelations(run, agent, principal, report);
       case 'archaeologist':
         return this.excavate(run, agent, principal, report);
+      case 'surveyor':
+        return this.surveyCoverage(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
@@ -1176,6 +1201,169 @@ ${page.markdown}`, files);
       }
     }
     return out;
+  }
+
+  // ------------------------------------------------------------------ surveyor
+
+  /**
+   * Clusters the questions answers failed on into coverage gaps
+   * (docs/features/38, phase 4).
+   *
+   * Three stages, two of them no model. `signals` reads `answer_feedback` for
+   * the window: down-votes, low-confidence turns, turns with no answer — the
+   * misses only, since a good answer nobody rated wrote nothing. `clustering`
+   * embeds each distinct question with the workspace's embedding provider and
+   * joins them greedily by cosine to a centroid; clusters under the minimum
+   * size are dropped. Only `topics` is judgement: one tool loop per cluster,
+   * with the questions wrapped as the untrusted text they are, returning the
+   * topic's name, what the workspace already says, and one of three fixes.
+   *
+   * Every finding carries `coverage` — the questions, the count, the signal
+   * mix — so it is grounded whether or not the model cited a page: the cluster
+   * is a fact about feedback, and the proposal is what the model adds. A
+   * person then creates the drafted page, proposes the edit, or starts the
+   * archaeologist; the run never writes.
+   */
+  private async surveyCoverage(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const input = (run.input ?? {}) as AgentRunInput;
+    const windowDays =
+      input.coverage?.windowDays && input.coverage.windowDays > 0
+        ? Math.trunc(input.coverage.windowDays)
+        : this.config.get('COVERAGE_WINDOW_DAYS', { infer: true });
+    const minSize = this.config.get('COVERAGE_MIN_CLUSTER_SIZE', { infer: true });
+    const threshold = this.config.get('COVERAGE_SIMILARITY', { infer: true });
+    const maxQuestions = this.config.get('COVERAGE_MAX_QUESTIONS', { infer: true });
+
+    // The stub provider hashes words: two phrasings of one question land far
+    // apart and two unrelated questions sharing a word land close. Clusters
+    // over it would be junk with a confident count on them, so the run says so
+    // and stops — the one honest answer a fixture can give.
+    if (this.config.get('EMBEDDINGS_PROVIDER', { infer: true }) === 'stub') {
+      return { summary: t('agent.coverage.noEmbedding'), findings: [] };
+    }
+
+    // --- what failed, in the window
+    await report({ stage: 'signals', progress: 0.05 });
+    const since = new Date(Date.now() - windowDays * 86_400_000);
+    const rows = await this.prisma.answerFeedback.findMany({
+      where: {
+        workspaceId: run.workspaceId,
+        createdAt: { gte: since },
+        OR: [{ kind: { in: ['low-confidence', 'no-answer'] } }, { kind: 'vote', rating: 'down' }],
+      },
+      select: { id: true, query: true, kind: true, surface: true },
+      orderBy: { createdAt: 'desc' },
+      take: maxQuestions,
+    });
+    const signals: CoverageSignal[] = rows
+      .filter((r) => questionKey(r.query).length >= 3)
+      .map((r) => ({ id: r.id, query: r.query, kind: r.kind as AnswerSignalKind, surface: r.surface as AnswerSurface }));
+    if (signals.length === 0) return { summary: t('agent.coverage.noSignals', { days: windowDays }), findings: [] };
+
+    // --- which of them are one topic: one embedding per distinct text
+    await report({ stage: 'clustering', progress: 0.15 });
+    const texts = new Map<string, string>();
+    for (const s of signals) texts.set(questionKey(s.query), normalizeQuestion(s.query));
+    const keys = [...texts.keys()];
+    const vectors = new Map<string, number[]>();
+    for (let at = 0; at < keys.length; at += EMBED_BATCH) {
+      const slice = keys.slice(at, at + EMBED_BATCH);
+      const embedded = await this.embedding.embedBatch(slice.map((k) => texts.get(k)!));
+      slice.forEach((k, i) => vectors.set(k, embedded[i]));
+      await report({ stage: 'clustering', progress: 0.15 + (0.25 * Math.min(at + EMBED_BATCH, keys.length)) / keys.length });
+    }
+    const clusters = clusterSignals(signals, vectors, { threshold, minSize, maxClusters: MAX_CLUSTERS });
+    const counts = { signals: signals.length, questions: keys.length, clusters: clusters.length };
+    if (clusters.length === 0) return { summary: t('agent.coverage.tooFew', { ...counts, min: minSize }), findings: [] };
+
+    // --- the judgement: one tool loop per cluster
+    const hasCodebase =
+      (await this.prisma.connector.count({ where: { workspaceId: run.workspaceId, enabled: true, kind: 'codebase' } })) > 0;
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    if (!agent.config.enabled || blocking.length > 0) {
+      // No model: the clusters are still the facts a reader came for, so each
+      // becomes a finding with no proposal — named by its most-asked question.
+      await report({ warning: t('agent.coverage.noModel') });
+      return {
+        summary: t('agent.coverage.summaryNoModel', counts),
+        findings: clusters.map((cluster) => ({
+          kind: 'gap' as const,
+          severity: 'info' as const,
+          title: cluster.questions[0],
+          detail: t('agent.coverage.noModelDetail', { count: cluster.count }),
+          documentIds: [],
+          documentTitles: [],
+          coverage: coverageOf(cluster, 'create-page'),
+        })),
+      };
+    }
+
+    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const call = { config: agent.config, userId: run.createdBy, operation: 'agent' as const, locale: run.locale as Locale };
+    const tools = this.readTools.definitions();
+    const toolCtx = { principal, workspaceId: run.workspaceId };
+    const execute = (name: string, args: Record<string, unknown>) => this.readTools.execute(name, args, toolCtx);
+    const findings: AgentFinding[] = [];
+    let judged = 0;
+
+    for (const [at, cluster] of clusters.entries()) {
+      await report({ stage: 'topics', progress: 0.4 + (0.55 * at) / clusters.length });
+      const messages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: `${agent.instructions}\n\n${COVERAGE_OUTPUT_CONTRACT}${skills}` },
+        {
+          role: 'user',
+          content:
+            (typeof input.note === 'string' && input.note ? `Extra instructions: ${input.note}\n\n` : '') +
+            coveragePrompt(cluster, { hasCodebase, windowDays }),
+        },
+      ];
+      const fallbackDetail = t('agent.coverage.noModelDetail', { count: cluster.count });
+      try {
+        const raw = agent.missing.includes('tools')
+          ? await this.client.chat(call, messages, { json: true })
+          : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
+        judged += 1;
+        const parsed = safeJson(raw);
+        // A cited page must exist here: one query over whatever the model
+        // named, and `readCoverageVerdict` keeps only what came back.
+        const cited = citedIdsOf(parsed).filter((id) => UUID.test(id));
+        const known = new Map(
+          cited.length
+            ? (
+                await this.prisma.document.findMany({
+                  where: { id: { in: cited }, workspaceId: run.workspaceId },
+                  select: { id: true, title: true },
+                })
+              ).map((d) => [d.id, d.title])
+            : [],
+        );
+        findings.push(readCoverageVerdict(parsed, cluster, known, { hasCodebase, fallbackDetail }));
+      } catch (error) {
+        if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+          await report({ warning: t('agent.coverage.budgetSpent', { judged, clusters: clusters.length }) });
+          break;
+        }
+        if (error instanceof ProviderAccountError) {
+          await report({ warning: t('agent.warning.stopped', { error: error.message }) });
+          break;
+        }
+        // Not judged is not "no gap": the cluster still lands, unnamed.
+        this.logger.warn(`Surveyor could not judge a cluster: ${String(error)}`);
+        await report({ warning: t('agent.warning.modelPassFailed', { error: reasonOf(error) }) });
+        findings.push(readCoverageVerdict(null, cluster, new Map(), { hasCodebase, fallbackDetail }));
+      }
+      if (findings.length >= MAX_FINDINGS) break;
+    }
+
+    return {
+      summary: t('agent.coverage.summary', { ...counts, judged, findings: findings.length }),
+      findings: findings.slice(0, MAX_FINDINGS),
+    };
   }
 
   // ------------------------------------------------------------- cartographer

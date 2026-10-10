@@ -27,6 +27,8 @@
   "archaeologistDesc": "Reads a connected repository and drafts pages for the business logic no document declares.",
   "sentinel": "Sentinel",
   "sentinelDesc": "Checks the pages a pull or merge request may make wrong, and drafts the corrections.",
+  "surveyor": "Surveyor",
+  "surveyorDesc": "Clusters the questions answers failed on into coverage gaps, and proposes the page that would close each.",
   "route": {
     "explicit": "Explicitly requested.",
     "disabled": "disabled",
@@ -114,6 +116,16 @@
     "summaryNoModel": "Report on \"{title}\" was not judged; it stays open for a person.",
     "summaryConfirmed": "Report on \"{title}\" confirmed; corrected pages drafted: {drafted}.",
     "summaryRejected": "Report on \"{title}\" checked: the page holds up."
+  },
+  "coverage": {
+    "noEmbedding": "The surveyor needs a real embedding provider to cluster questions; EMBEDDINGS_PROVIDER=stub would produce junk clusters, so nothing was read.",
+    "noSignals": "No down-voted, low-confidence or unanswered questions in the last {days} days.",
+    "tooFew": "Read {signals} signals ({questions} distinct questions) and found no topic asked {min} or more times.",
+    "noModel": "No model is configured for the surveyor, so the clusters are listed without a recommendation.",
+    "noModelDetail": "{count} answers about this failed. The knowledge base was not searched for what covers it; a person decides what to write.",
+    "summaryNoModel": "Read {signals} signals and found {clusters} topics; none was judged.",
+    "budgetSpent": "Stopped after {judged} of {clusters} topics: the workspace AI budget is spent.",
+    "summary": "Read {signals} signals ({questions} distinct questions), found {clusters} topics and judged {judged}; proposes {findings} gaps."
   },
   "warning": {
     "fileNotRead": "{path} could not be read: {error}",

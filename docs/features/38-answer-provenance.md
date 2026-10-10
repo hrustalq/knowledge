@@ -1,8 +1,7 @@
-# 38 — Answer provenance: sentence citations, confidence, the verification stamp, votes, and reports
+# 38 — Answer provenance: sentence citations, confidence, the verification stamp, votes, reports, and coverage gaps
 
-Issue #67, phases 1–3 of five (the **Answer trust & feedback loop**
-milestone). Later phases add coverage gaps and a feedback dataset for the
-backtest. Phase 1 is the part they all stand on — an answer that can say
+Issue #67, phases 1–4 of five (the **Answer trust & feedback loop**
+milestone). The last phase adds a feedback dataset for the backtest. Phase 1 is the part they all stand on — an answer that can say
 which sentence rests on which page, how old that page is, who wrote it, and
 whether anyone has checked it. Phase 2 is the first thing built on it: a
 reader's verdict on the answer, and the harness's own verdict when nobody
@@ -322,12 +321,107 @@ report standing.
 | `KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS` | `10`    | Sentinel report checks waiting per workspace; past it a report stays open |
 | `ANSWER_FEEDBACK_RETENTION_DAYS`     | `180`   | Purge feedback rows and closed issues older than this                    |
 
+## Phase 4 — coverage gaps: the `surveyor`
+
+### What
+
+- **A built-in background agent** that turns the misses phase 2 stores into a
+  to-do list. Runnable from the Agents tab, schedulable through
+  `AgentScheduleSweeper` like every runnable agent (off by default), and the
+  home of the new **Coverage** tab on the AI settings page.
+- **Three stages, two without a model.** `signals` reads `answer_feedback`
+  for the last `COVERAGE_WINDOW_DAYS` (or `input.coverage.windowDays`):
+  down-votes, `low-confidence` and `no-answer` rows, newest first, at most
+  `COVERAGE_MAX_QUESTIONS`. `clustering` embeds each distinct question once
+  with the workspace's embedding provider — the one the ingestion worker
+  indexes with — and joins them greedily by cosine to a running centroid
+  (`agents/coverage.ts`, Nest-free): a question is visited most-repeated
+  first, joins the closest cluster within `COVERAGE_SIMILARITY`, or starts
+  one; clusters under `COVERAGE_MIN_CLUSTER_SIZE` are dropped, the largest
+  twelve are kept. `topics` is one tool loop per cluster: the questions are
+  wrapped as untrusted (`wrapUntrusted(…, 'feedback')`), the model searches
+  for what already covers them, and answers with a topic name, what the
+  workspace does and does not say, and one of three recommendations.
+- **A finding per cluster**, `kind: 'gap'`, carrying `coverage`: the
+  representative questions, the count, the signal mix, the surfaces and the
+  recommendation. `update-page` cites the page it would edit first;
+  `create-page` cites nothing and carries the drafted page; `run-archaeologist`
+  cites nothing and is only allowed when the workspace has a `codebase`
+  connector. A no-answer signal in the cluster makes the finding a warning.
+- **Web.** The Coverage tab shows the latest surveyor run as cards — topic,
+  what the model found, the count, the signal and surface mix, the sample
+  questions, the recommendation — with **Draft page** (the create-page
+  route), **Propose update** (the propose route) or **Run archaeologist**
+  (starts an archaeologist run whose `note` is the topic and the questions,
+  with the repository picker the Agents tab uses, and a hint when there is
+  none to pick). **Survey now** starts a run; the stage shows while it runs.
+  The same findings appear on the Runs tab with the same buttons.
+
+### Why
+
+A vote says one answer was bad. Ten votes about one thing say the workspace
+is missing a page, and nobody reads ten votes. Kapa's coverage gaps and
+Slite's Ask Insights are this feature; the difference here is that the
+clustering is done with the same embedding the pages were indexed with, and
+that each gap arrives with the fix already proposed through the routes the
+other agents' findings use — so the loop from "people keep asking" to "there
+is now a page" is two clicks, both a person's.
+
+### Decisions
+
+**The stub provider refuses.** `DeterministicStubProvider` hashes words: two
+phrasings of one question land far apart and two unrelated questions sharing
+a word land close. Clusters over it would be junk with a confident count on
+them, so on `EMBEDDINGS_PROVIDER=stub` the run returns
+`agent.coverage.noEmbedding` and reads nothing — which also means the
+surveyor cannot be exercised in a default dev environment.
+
+**A cluster is never dropped for what the model said.** The grounding rule
+(`readFinding`: a finding cites a page or is discarded) is about claims a
+model makes about pages. A cluster is a fact computed from feedback, and the
+questions are quoted on the finding; what is validated is the proposal.
+`update-page` needs a cited page that exists in the workspace, else it is a
+`create-page`; `run-archaeologist` needs a repository, else likewise; a
+`create-page` keeps its draft only when it is long enough to be a page. With
+no model, or when a model call fails, the cluster lands named by its most
+asked question with no proposal.
+
+**`create-page` cites nothing, by design.** The issue suggested citing the
+nearest pages on a create-page finding so it would pass grounding. The web
+offers Create page only to a finding with a draft and no page ids (the
+archaeologist's shape) and Propose to one that cites a page — so a draft that
+also cited pages would be offered as a rewrite of them. The nearest pages are
+named in `detail` instead.
+
+**One embedding per distinct text, one model call per cluster.** Identical
+questions (after whitespace and case folding) are one point with a weight,
+and the weight decides the visiting order, so the question ten people asked
+seeds its cluster rather than being absorbed by a one-off. Embedding is
+batched sixty-four at a time; the model is called at most twelve times.
+
+**Stage `topics`, not `judging`.** The sentinel's `judging` stage reads
+"Checking pages against the change" on the web, which is not what this run
+does; a stage is free text resolved through `labelFor`, so the surveyor has
+its own three.
+
+### Config
+
+| Var                         | Default | Meaning                                                              |
+| --------------------------- | ------- | -------------------------------------------------------------------- |
+| `COVERAGE_WINDOW_DAYS`      | `30`    | How far back a run reads answer feedback                             |
+| `COVERAGE_MIN_CLUSTER_SIZE` | `3`     | Smallest cluster reported                                            |
+| `COVERAGE_SIMILARITY`       | `0.82`  | Cosine a question must reach to a cluster's centroid to join it      |
+| `COVERAGE_MAX_QUESTIONS`    | `2000`  | Most feedback rows read per run                                      |
+
+No migration: the surveyor reads `answer_feedback` and writes only its run.
+
 ## Not in these phases
 
-The `surveyor` coverage agent (phase 4), the feedback dataset and
-`make backtest --feedback` and the admin Feedback tab (phase 5). A report filed
-against a page in a workspace without a model stays open for a person; the
-sentinel does not escalate, remind or expire.
+The feedback dataset, `make backtest --feedback` and the admin Feedback tab
+(phase 5). A report filed against a page in a workspace without a model stays
+open for a person; the sentinel does not escalate, remind or expire. The
+surveyor does not re-rank search or hide anything; a gap is a card until a
+person acts on it.
 
 ## Files
 
@@ -356,7 +450,13 @@ sentinel does not escalate, remind or expire.
   `ReportIssueDialog.vue`; `stores/feedback.ts` (`reportIssue`,
   `reportCitedPages`, `closeIssue`), `lib/answer-feedback.ts` (`reportKindFor`,
   `reportablePages`, `issueReportBody`)
+- `apps/api/src/agents/coverage.ts` (`clusterSignals`, `coveragePrompt`,
+  `readCoverageVerdict`), `agents/agent.executor.ts` (`surveyCoverage`),
+  `agents/built-in-agents.ts` (`surveyor`), `agents/agent-worker.module.ts`
+  (imports `EmbeddingModule`); `common/untrusted.ts` (`feedback` origin)
+- `apps/web/src/components/ai/AiCoveragePanel.vue`, `pages/AiSettingsPage.vue`
+  (tab `coverage`)
 - Specs: `apps/api/test/answer-citations.spec.ts`, `answer-confidence.spec.ts`,
   `provenance.spec.ts`, `answer-feedback.spec.ts`, `knowledge-issues.spec.ts`,
-  `mcp-http.spec.ts`; `apps/web/src/lib/citations.spec.ts`,
+  `coverage.spec.ts`, `mcp-http.spec.ts`; `apps/web/src/lib/citations.spec.ts`,
   `lib/answer-feedback.spec.ts`

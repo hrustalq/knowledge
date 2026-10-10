@@ -34,6 +34,8 @@ export type I18nTranslations = {
         "archaeologistDesc": string;
         "sentinel": string;
         "sentinelDesc": string;
+        "surveyor": string;
+        "surveyorDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -127,6 +129,16 @@ export type I18nTranslations = {
             "summaryNoModel": string;
             "summaryConfirmed": string;
             "summaryRejected": string;
+        };
+        "coverage": {
+            "noEmbedding": string;
+            "noSignals": string;
+            "tooFew": string;
+            "noModel": string;
+            "noModelDetail": string;
+            "summaryNoModel": string;
+            "budgetSpent": string;
+            "summary": string;
         };
         "warning": {
             "fileNotRead": string;

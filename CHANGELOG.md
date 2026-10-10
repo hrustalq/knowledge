@@ -53,6 +53,17 @@ in the pull request that introduces them — see
   survives a reload. Over the API: `PUT`/`DELETE
   /v1/assistant/messages/:id/feedback` and `POST /v1/assistant/ask/feedback`,
   open to read-only API keys. Second part of the answer trust milestone (#67).
+- **Coverage gaps.** A new built-in `surveyor` agent reads the questions the
+  assistant was down-voted on, answered with low confidence or could not
+  answer, clusters them by meaning with the workspace's embedding provider, and
+  reports each topic asked often enough as a gap: how many times, from where,
+  the sample questions, what the workspace already says, and one proposed fix
+  — a drafted page, an edit to the page that should hold the answer, or an
+  archaeologist run over the connected repository. A new **Coverage** tab on
+  the AI settings page shows the latest survey as cards with a one-click
+  **Draft page**, **Propose update** or **Run archaeologist**, and **Survey
+  now**; the agent can also be scheduled like any other. Fourth part of the
+  answer trust milestone (#67).
 - **Agents can rate what they read.** A new `knowledge_feedback` MCP tool
   takes a rating, a reason and the `traceId` of the `knowledge_search` it
   answered from, so a re-vote on the same search updates one row. Hidden from
@@ -125,6 +136,16 @@ in the pull request that introduces them — see
   sweeper once an hour; open reports are never purged). A report check runs
   the `sentinel` agent and spends the reporter's AI budget; with the sentinel
   disabled every report stays open. (#67)
+- New env vars for the `surveyor` agent, all with defaults and no migration:
+  `COVERAGE_WINDOW_DAYS` (`30`: how many days of answer feedback a run reads),
+  `COVERAGE_MIN_CLUSTER_SIZE` (`3`: the smallest topic reported),
+  `COVERAGE_SIMILARITY` (`0.82`: the cosine a question must reach to join a
+  topic), `COVERAGE_MAX_QUESTIONS` (`2000`: the most feedback rows read per
+  run). A survey embeds every distinct question through the configured
+  embedding provider and makes at most twelve model calls, as the run's owner.
+  On `EMBEDDINGS_PROVIDER=stub` the surveyor refuses rather than cluster on
+  hashed words, so it is not usable in a stub-embedding deployment. Off unless
+  someone presses Survey now or schedules the agent. (#67)
 
 ## [0.13.0] — 2026-09-27
 

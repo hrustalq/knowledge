@@ -1615,6 +1615,7 @@
       "neverRun": "Has not run yet"
     },
     "tabRuns": "Runs",
+    "tabCoverage": "Coverage",
     "runs": {
       "subtitle": "Background runs. An agent proposes; nothing it finds changes a page.",
       "emptyTitle": "No runs yet",
@@ -1631,7 +1632,8 @@
       "trigger": {
         "manual": "manual",
         "schedule": "scheduled",
-        "webhook": "pull request"
+        "webhook": "pull request",
+        "report": "report"
       },
       "stage": {
         "scanning": "Scanning pages",
@@ -1645,7 +1647,10 @@
         "reading": "Reading source files",
         "diff": "Reading the change",
         "related": "Finding related pages",
-        "judging": "Checking pages against the change"
+        "judging": "Checking pages against the change",
+        "signals": "Reading answer feedback",
+        "clustering": "Clustering questions",
+        "topics": "Naming topics"
       },
       "propose": "Propose fix",
       "proposed": "Opened a merge request: {title}",
@@ -1824,7 +1829,40 @@
     "openaiCompatible": "OpenAI-compatible",
     "noActivityDays": "No assistant activity in the last {n} day. | No assistant activity in the last {n} days.",
     "peak": "peak {value}",
-    "tokensChartLabel": "Tokens per day over the last {n} days, peak {peak}"
+    "tokensChartLabel": "Tokens per day over the last {n} days, peak {peak}",
+    "coverage": {
+      "subtitle": "What people asked that the workspace could not answer, grouped by topic. The surveyor proposes; nothing here changes a page until you act on it.",
+      "run": "Survey now",
+      "runStarted": "Started a surveyor run",
+      "lastRun": "Surveyed {when}",
+      "emptyTitle": "No survey yet",
+      "emptyBody": "Run the surveyor to cluster down-voted, low-confidence and unanswered questions into topics. It needs a real embedding provider and some feedback to read.",
+      "noGapsTitle": "No gaps found",
+      "noGapsBody": "No topic was asked often enough to count, or every question had an answer.",
+      "questions": "{count} question | {count} questions",
+      "signal": {
+        "vote": "{count} down-voted",
+        "low-confidence": "{count} low confidence",
+        "no-answer": "{count} unanswered"
+      },
+      "surface": {
+        "assistant": "assistant",
+        "editor-assistant": "editor",
+        "ask": "Ask AI",
+        "mcp": "MCP"
+      },
+      "recommendation": {
+        "create-page": "Nothing covers this — a new page would.",
+        "update-page": "An existing page is the right home and is incomplete.",
+        "run-archaeologist": "The answer is in the code, not in any page."
+      },
+      "draftPage": "Draft page",
+      "proposeUpdate": "Propose update",
+      "runArchaeologist": "Run archaeologist",
+      "archaeologistStarted": "Started an archaeologist run for this topic",
+      "pickConnector": "Which repository should the archaeologist read?",
+      "noteIntro": "Coverage gap: {topic}. Questions people asked that the workspace could not answer:"
+    }
   },
   "search": {
     "activeFilters": "{n} filter | {n} filters",

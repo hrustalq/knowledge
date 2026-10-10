@@ -961,6 +961,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'archaeologist',
   /** Checks the pages a pull or merge request may have made wrong (docs/features/35). */
   'sentinel',
+  /** Clusters the questions answers failed on into coverage gaps (docs/features/38, phase 4). */
+  'surveyor',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -993,6 +995,11 @@ export interface AgentRunInput {
    * check against the page, the other a change to check the page against.
    */
   issueId?: string;
+  /**
+   * How far back a surveyor run reads answer feedback (docs/features/38,
+   * phase 4). Absent, the worker uses `COVERAGE_WINDOW_DAYS`.
+   */
+  coverage?: { windowDays: number };
   /**
    * Set once the API has acted on a finished sentinel run — proposals opened,
    * the pull request commented on. The claim that stops two sweeps doing it
@@ -1305,6 +1312,36 @@ export interface AgentFinding {
    * a draft and no document is one nobody has acted on yet.
    */
   draft?: AgentFindingDraft;
+  /**
+   * The questions this finding stands on (docs/features/38, phase 4). Set
+   * only by the surveyor, whose findings are grounded in answer feedback
+   * rather than in pages: a cluster of questions the workspace could not
+   * answer is a fact computed from `answer_feedback`, and the page ids and
+   * draft are the model's proposal for closing it.
+   */
+  coverage?: AgentFindingCoverage;
+}
+
+/**
+ * What a surveyor finding proposes (docs/features/38, phase 4). Closed: the
+ * executor validates the model's answer against it, the web picks the button
+ * from it, and a value the code never emits would be a button that does
+ * nothing.
+ */
+export const COVERAGE_RECOMMENDATIONS = ['create-page', 'update-page', 'run-archaeologist'] as const;
+export type CoverageRecommendation = (typeof COVERAGE_RECOMMENDATIONS)[number];
+
+/** One cluster of questions answers failed on, and what to do about it. */
+export interface AgentFindingCoverage {
+  /** Representative questions, most asked first. Capped; `count` is the whole cluster. */
+  questions: string[];
+  /** Signals in the cluster — one per feedback row, so a question asked three times counts three. */
+  count: number;
+  /** How the signals arrived: down-votes, low-confidence turns, turns with no answer. */
+  signals: Record<AnswerSignalKind, number>;
+  /** Where they were asked. */
+  surfaces: AnswerSurface[];
+  recommendation: CoverageRecommendation;
 }
 
 /** The page a finding would become: written by the run, published by a person. */

@@ -11,6 +11,7 @@ import { CodeResearchModule } from '../connectors/code-research/code-research.mo
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { SearchCoreModule } from '../search/search-core.module.js';
+import { EmbeddingModule } from '../embedding/embedding.module.js';
 import { AgentCoreModule } from './agent-core.module.js';
 import { AgentQueueModule } from './agent-queue.module.js';
 import { AgentExecutor } from './agent.executor.js';
@@ -67,6 +68,11 @@ import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
     // The sentinel (docs/features/35) searches once per run for the pages a
     // change reads like — the hand-written ones no connector link reaches.
     SearchCoreModule,
+    // The surveyor (docs/features/38, phase 4) embeds the questions answers
+    // failed on, to cluster them — the same provider the ingestion worker
+    // indexes with, so a question and the chunk that would answer it share a
+    // space.
+    EmbeddingModule,
     DocumentsCoreModule,
     GlossaryCoreModule,
   ],

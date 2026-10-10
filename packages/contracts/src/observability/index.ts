@@ -175,3 +175,150 @@ export interface IngestStepEvent extends BacktestEventBase {
 }
 
 export type BacktestEvent = HttpRequestEvent | SearchExecutedEvent | AiCallEvent | IngestStepEvent;
+
+// --- feedback as a backtest dataset -----------------------------------------
+//
+// Phase 5 of the answer trust milestone (docs/features/38, issue #67). The
+// `search.executed` stream above knows what came back; it never knows what
+// *should* have. Votes do: an up-vote says the cited pages answered the
+// question, a "wrong" or "irrelevant sources" down-vote says they did not, and a
+// report that ended in a merged fix says the page answers it *now*. Each of
+// those is one labelled case the retrieval backtest can replay.
+//
+// `BACKTEST_EVENT_KINDS` is deliberately not widened: a case is ground truth
+// built from PostgreSQL rows, not an event the app emitted.
+
+import type { AnswerFeedbackReason, AnswerRating, AnswerSurface } from '@knowledge/contracts/ai';
+
+/** One line of the exported NDJSON. */
+export interface FeedbackBacktestCase {
+  /** The export is per workspace; the replay searches in it. */
+  workspaceId: string;
+  query: string;
+  surface: AnswerSurface;
+  rating: AnswerRating;
+  reason: AnswerFeedbackReason | null;
+  /** Pages a correct retrieval must return: cited by an up-voted answer, or fixed by a merged report. */
+  expectedDocumentIds: string[];
+  /** Pages a correct retrieval should keep out of its head: cited by a `wrong` / `irrelevant-sources` down-vote. */
+  rejectedDocumentIds: string[];
+  createdAt: string;
+}
+
+/** The down-vote reasons that blame the pages rather than the answer's wording. */
+export const REJECTING_FEEDBACK_REASONS: readonly AnswerFeedbackReason[] = ['wrong', 'irrelevant-sources'];
+
+/** What the builder reads off an `answer_feedback` vote row. */
+export interface FeedbackVoteLike {
+  workspaceId: string;
+  query: string;
+  surface: AnswerSurface;
+  rating: AnswerRating;
+  reason: AnswerFeedbackReason | null;
+  citedDocumentIds: readonly string[];
+  createdAt: string;
+}
+
+/**
+ * One vote → one case, or nothing. `fixedDocumentIds` are the cited pages a
+ * later report on this vote got merged for: the page was wrong when the vote
+ * was cast and answers the question now, so it moves from rejected to expected.
+ * A vote with no ground truth either way — an up-vote on a web-only answer, a
+ * down-vote that blames the wording — yields `null` rather than an empty case.
+ */
+export function feedbackCaseFromVote(
+  vote: FeedbackVoteLike,
+  fixedDocumentIds: readonly string[] = [],
+): FeedbackBacktestCase | null {
+  const query = vote.query.trim();
+  if (!query) return null;
+  const cited = [...new Set(vote.citedDocumentIds)];
+  const fixed = [...new Set(fixedDocumentIds)].filter((id) => cited.includes(id));
+  let expected: string[];
+  let rejected: string[];
+  if (vote.rating === 'up') {
+    expected = cited;
+    rejected = [];
+  } else {
+    expected = fixed;
+    rejected =
+      vote.reason && REJECTING_FEEDBACK_REASONS.includes(vote.reason) ? cited.filter((id) => !fixed.includes(id)) : [];
+  }
+  if (expected.length === 0 && rejected.length === 0) return null;
+  return {
+    workspaceId: vote.workspaceId,
+    query,
+    surface: vote.surface,
+    rating: vote.rating,
+    reason: vote.reason,
+    expectedDocumentIds: expected,
+    rejectedDocumentIds: rejected,
+    createdAt: vote.createdAt,
+  };
+}
+
+/** One replayed case. `null` where the case carries no label of that kind. */
+export interface FeedbackCaseScore {
+  hitAt1: boolean | null;
+  hitAtK: boolean | null;
+  reciprocalRank: number | null;
+  rejectedInTopK: boolean | null;
+}
+
+/** Score one case against the ranked head a search returned for its query. */
+export function scoreFeedbackCase(c: FeedbackBacktestCase, rankedDocumentIds: readonly string[], k: number): FeedbackCaseScore {
+  const head = rankedDocumentIds.slice(0, Math.max(1, k));
+  let hitAt1: boolean | null = null;
+  let hitAtK: boolean | null = null;
+  let reciprocalRank: number | null = null;
+  if (c.expectedDocumentIds.length > 0) {
+    const rank = head.findIndex((id) => c.expectedDocumentIds.includes(id));
+    hitAt1 = rank === 0;
+    hitAtK = rank >= 0;
+    reciprocalRank = rank >= 0 ? 1 / (rank + 1) : 0;
+  }
+  const rejectedInTopK =
+    c.rejectedDocumentIds.length > 0 ? head.some((id) => c.rejectedDocumentIds.includes(id)) : null;
+  return { hitAt1, hitAtK, reciprocalRank, rejectedInTopK };
+}
+
+/** Rates over the cases that carry the label, so a split with no expectations reads as 0/0, not 0%. */
+export interface FeedbackMetrics {
+  cases: number;
+  withExpected: number;
+  hitAt1: number;
+  hitAtK: number;
+  mrr: number;
+  withRejected: number;
+  rejectedInTopK: number;
+}
+
+export function summarizeFeedbackScores(scores: readonly FeedbackCaseScore[]): FeedbackMetrics {
+  let withExpected = 0;
+  let hitAt1 = 0;
+  let hitAtK = 0;
+  let rrSum = 0;
+  let withRejected = 0;
+  let rejectedInTopK = 0;
+  for (const s of scores) {
+    if (s.reciprocalRank !== null) {
+      withExpected += 1;
+      rrSum += s.reciprocalRank;
+      if (s.hitAt1) hitAt1 += 1;
+      if (s.hitAtK) hitAtK += 1;
+    }
+    if (s.rejectedInTopK !== null) {
+      withRejected += 1;
+      if (s.rejectedInTopK) rejectedInTopK += 1;
+    }
+  }
+  return {
+    cases: scores.length,
+    withExpected,
+    hitAt1,
+    hitAtK,
+    mrr: withExpected ? rrSum / withExpected : 0,
+    withRejected,
+    rejectedInTopK,
+  };
+}

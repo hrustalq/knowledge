@@ -224,7 +224,10 @@
   "feedback": {
     "disabled": "Оценка ответов отключена на этом сервере (ANSWER_FEEDBACK_ENABLED=false).",
     "messageNotAssistant": "Оценить можно только ответ ассистента — {id} является сообщением пользователя.",
-    "reasonRequired": "Для оценки «не помогло» нужно указать причину."
+    "reasonRequired": "Для оценки «не помогло» нужно указать причину.",
+    "invalidFilter": "«{value}» — недопустимое значение {name}. Допустимые: {allowed}.",
+    "invalidDate": "«{value}» — не дата для {name}.",
+    "invalidRange": "«from» не может быть позже «to»."
   },
   "knowledgeIssue": {
     "notFound": "Замечание {id} не найдено.",

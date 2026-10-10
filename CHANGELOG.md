@@ -97,6 +97,20 @@ in the pull request that introduces them — see
   a notification under *Page changes*; the feed records `reported`,
   `proposed`, `resolved` and `dismissed`. (#67)
 
+- **Feedback becomes a test set.** A new **Feedback** tab on the AI settings
+  page lists every vote and weak-answer signal — the question, the cited pages,
+  the surface, the confidence the answer had — with counts for the last 30
+  days, and an **Export dataset** button that downloads the votes as NDJSON
+  (`GET /v1/ai/feedback/export`, admin-only, audited). Each line is one
+  labelled retrieval case: an up-vote names the pages that answered, a
+  "wrong" or "irrelevant sources" down-vote names the pages that did not, and
+  a report that ended in a merged fix names the page that answers now.
+  `make backtest ARGS="--export-feedback --workspace <id> --out fb.ndjson"`
+  writes the same file from the database, and `make backtest ARGS="--feedback
+  fb.ndjson"` replays it through search and prints recall@1, recall@k, MRR
+  and how often a rejected page still ranks, split by surface and by reason.
+  Last part of the answer trust milestone (#67).
+
 ### Security
 
 - **Single-use tickets replace credentials in the event-stream URL.**
@@ -146,6 +160,12 @@ in the pull request that introduces them — see
   On `EMBEDDINGS_PROVIDER=stub` the surveyor refuses rather than cluster on
   hashed words, so it is not usable in a stub-embedding deployment. Off unless
   someone presses Survey now or schedules the agent. (#67)
+- The feedback export (`GET /v1/ai/feedback/export`, `make backtest
+  --export-feedback`) carries question text and user ids: it is admin-only,
+  every call writes an `audit_logs` row (`feedback.export`, with the line
+  count), and one export reads at most 50 000 votes. No new env var and no
+  migration; retention (`ANSWER_FEEDBACK_RETENTION_DAYS`) bounds the dataset
+  as it bounds the table. (#67)
 
 ## [0.13.0] — 2026-09-27
 

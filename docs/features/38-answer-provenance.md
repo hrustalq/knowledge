@@ -1,4 +1,4 @@
-# 38 — Answer provenance: sentence citations, confidence, the verification stamp, votes, reports, and coverage gaps
+# 38 — Answer provenance: sentence citations, confidence, the verification stamp, votes, reports, coverage gaps, and feedback as a dataset
 
 Issue #67, phases 1–4 of five (the **Answer trust & feedback loop**
 milestone). The last phase adds a feedback dataset for the backtest. Phase 1 is the part they all stand on — an answer that can say
@@ -415,13 +415,99 @@ its own three.
 
 No migration: the surveyor reads `answer_feedback` and writes only its run.
 
+## Phase 5 — feedback as a backtest dataset, and the Feedback tab
+
+### What
+
+- **A labelled retrieval dataset built from votes.** `FeedbackBacktestCase`
+  (`packages/contracts/src/observability`) is one line of NDJSON:
+  `{ workspaceId, query, surface, rating, reason, expectedDocumentIds,
+  rejectedDocumentIds, createdAt }`. `feedbackCaseFromVote` is the pure
+  builder: an up-vote expects every page the answer cited; a `wrong` or
+  `irrelevant-sources` down-vote rejects them; any other down-vote blames the
+  wording and labels nothing. A report the voter filed from that thumbs-down
+  whose merge request **merged** moves its page from rejected to expected —
+  the page was wrong then and answers now. A vote with no label either way
+  (an up-vote on a web-only answer, an "unclear") is not a case.
+- **Two ways to the same lines.** `GET /v1/ai/feedback/export?workspaceId=`
+  streams them as `application/x-ndjson` (admin, audited as `feedback.export`
+  with the row count); `make backtest ARGS="--export-feedback --workspace <id>
+  --out fb.ndjson"` reads PostgreSQL directly through the same
+  `FeedbackDatasetService` and writes the same file. Both read at most 50 000
+  votes, newest first, and say so when they stop.
+- **The replay.** `make backtest ARGS="--feedback fb.ndjson --k 10"` runs each
+  case's question through `SearchService.search` in its workspace and scores
+  the head with `scoreFeedbackCase`: recall@1, recall@k and MRR over the cases
+  with expected pages, and "rejected in top-k" over the cases with rejected
+  pages — split overall, by surface and by rating/reason. A split with no
+  label reads `n/a`, never `0%`.
+- **The Feedback tab** on the AI settings page: five counts over the last 30
+  days (helpful, not helpful, low confidence, no answer, open reports), a
+  filterable list of votes and implicit signals — when, what, the question,
+  the cited pages as links, the surface, the confidence the answer had — with
+  the comment under its row, and **Export dataset**, which says how many
+  votes it will use. `GET /v1/ai/feedback` (cursor-paginated) and
+  `GET /v1/ai/feedback/summary` back it; all three routes are
+  `@Access('admin', 'query')` because the rows hold question text and user ids.
+
+### Why
+
+The September backtest found recall@1 at 4.2% with a scratchpad script whose
+ground truth was each page's own title — the only truth the repo could make
+for itself. A vote is ground truth a person made: it names the question as
+asked and the pages that did or did not answer it. Every retrieval change
+from here on can be measured against what real people asked, and the
+confidence weights the issue warned about tuning blind (`ANSWER_CONFIDENCE_WEIGHTS`)
+now have an eval. The same dataset is what the search milestone's regression
+benchmark should consume.
+
+### Decisions
+
+**A report is joined to its vote by who, which page and when — not by text.**
+The web files a report from a thumbs-down with the question quoted in the
+evidence note, but a note is a string a person can edit. `linkMergedFixes`
+instead takes a merged report by the same principal, on a page the vote cited,
+filed within an hour after the vote. That is the shape the thumbs-down flow
+produces, and it holds for an agent reporting over MCP right after
+`knowledge_feedback` too.
+
+**The MR's state is the truth, not the issue's status.** An issue becomes
+`proposed` when its merge request opens and stays there until a person closes
+it; the merge is what makes the page the answer. So a fix counts when
+`merge_requests.status = 'merged'` and the issue is not `dismissed`, whatever
+else its status says.
+
+**`workspaceId` is on the case.** The issue's shape omitted it, but the replay
+has to search somewhere, and a file that says where it came from can be
+replayed without a flag.
+
+**`BACKTEST_EVENT_KINDS` is not widened.** An event is something the app
+emitted into the JSONL stream; a case is ground truth read from PostgreSQL. The
+two have different producers, different consumers and different retention,
+and sharing a vocabulary would only let one be mistaken for the other.
+
+**The export validates before it commits a header.** The first pull of the
+case stream runs the window check, so a bad `from` is still a 400 envelope;
+once the first line is out, a failure mid-stream destroys the socket and is
+audited as `ok: false` with the lines written so far. A validation refusal
+writes no audit row — nothing was exported.
+
+**Rates are over the cases that carry the label.** A case can carry expected
+pages, rejected pages, or both. `summarizeFeedbackScores` keeps the two
+denominators apart; a replay of only down-votes reports recall as `n/a`
+rather than a false zero.
+
+**No new env var and no migration.** Everything phase 5 reads, phases 2 and 3
+already store; retention (`ANSWER_FEEDBACK_RETENTION_DAYS`) bounds the
+dataset the same way it bounds the table.
+
 ## Not in these phases
 
-The feedback dataset, `make backtest --feedback` and the admin Feedback tab
-(phase 5). A report filed against a page in a workspace without a model stays
-open for a person; the sentinel does not escalate, remind or expire. The
-surveyor does not re-rank search or hide anything; a gap is a card until a
-person acts on it.
+A report filed against a page in a workspace without a model stays open for a
+person; the sentinel does not escalate, remind or expire. The surveyor does not
+re-rank search or hide anything; a gap is a card until a person acts on it.
+Feedback never becomes a live ranking signal: the dataset is replayed by hand
+with `make backtest`, and nothing in search reads `answer_feedback`.
 
 ## Files
 
@@ -456,7 +542,15 @@ person acts on it.
   (imports `EmbeddingModule`); `common/untrusted.ts` (`feedback` origin)
 - `apps/web/src/components/ai/AiCoveragePanel.vue`, `pages/AiSettingsPage.vue`
   (tab `coverage`)
+- `packages/contracts/src/observability/index.ts` — `FeedbackBacktestCase`,
+  `feedbackCaseFromVote`, `scoreFeedbackCase`, `summarizeFeedbackScores`;
+  `apps/api/src/feedback/feedback-dataset.service.ts` (`list`, `summary`,
+  `cases`, `linkMergedFixes`), `answer-feedback-admin.controller.ts`
+  (`GET /v1/ai/feedback`, `/summary`, `/export`); `scripts/backtest.main.ts`
+  (`--export-feedback`, `--feedback`)
+- `apps/web/src/components/ai/AiFeedbackPanel.vue`, `pages/AiSettingsPage.vue`
+  (tab `feedback`), `lib/api.ts` (`apiFetchBlob`)
 - Specs: `apps/api/test/answer-citations.spec.ts`, `answer-confidence.spec.ts`,
   `provenance.spec.ts`, `answer-feedback.spec.ts`, `knowledge-issues.spec.ts`,
-  `coverage.spec.ts`, `mcp-http.spec.ts`; `apps/web/src/lib/citations.spec.ts`,
-  `lib/answer-feedback.spec.ts`
+  `coverage.spec.ts`, `feedback-dataset.spec.ts`, `mcp-http.spec.ts`;
+  `apps/web/src/lib/citations.spec.ts`, `lib/answer-feedback.spec.ts`

@@ -1616,6 +1616,7 @@
     },
     "tabRuns": "Runs",
     "tabCoverage": "Coverage",
+    "tabFeedback": "Feedback",
     "runs": {
       "subtitle": "Background runs. An agent proposes; nothing it finds changes a page.",
       "emptyTitle": "No runs yet",
@@ -1862,6 +1863,36 @@
       "archaeologistStarted": "Started an archaeologist run for this topic",
       "pickConnector": "Which repository should the archaeologist read?",
       "noteIntro": "Coverage gap: {topic}. Questions people asked that the workspace could not answer:"
+    },
+    "feedback": {
+      "subtitle": "What people said about answers — votes, the answers the assistant itself scored weak, and reports. Export turns the votes into a labelled dataset for `make backtest --feedback`.",
+      "export": "Export dataset",
+      "exported": "Dataset downloaded",
+      "datasetVotes": "{count} vote usable as a test case | {count} votes usable as test cases",
+      "anyReason": "Any reason",
+      "anySurface": "Any surface",
+      "emptyTitle": "No feedback yet",
+      "emptyBody": "Votes under assistant replies, answers the harness scored weak and reports on pages land here. Nothing matches the current filters.",
+      "deletedPage": "(deleted page)",
+      "kind": {
+        "vote": "Vote",
+        "low-confidence": "Low confidence",
+        "no-answer": "No answer"
+      },
+      "stat": {
+        "up": "Helpful",
+        "down": "Not helpful",
+        "lowConfidence": "Low confidence",
+        "noAnswer": "No answer",
+        "openReports": "Open reports"
+      },
+      "col": {
+        "what": "What",
+        "question": "Question",
+        "pages": "Cited pages",
+        "surface": "Surface",
+        "confidence": "Confidence"
+      }
     }
   },
   "search": {

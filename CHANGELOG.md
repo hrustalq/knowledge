@@ -15,6 +15,41 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **Answers cite their sentences.** An assistant reply now ends each factual
+  sentence with a marker for the page it rests on, shown as a superscript
+  number; hovering it highlights the source chip, clicking it opens the page at
+  the cited section. A marker naming a page the assistant was never given is
+  removed before the answer is stored. Available on `/assistant`, in the editor
+  assistant and on `POST /v1/assistant/ask` (`citations`). First part of the
+  answer trust milestone (#67).
+- **Every cited page says how trustworthy it is.** Source chips carry a
+  provenance card: revision number, author, how long ago the page changed, its
+  verification state and how the fact reached the answer (page text, frontmatter,
+  an inferred or a curated relation). The same fields, plus a `traceId`, are on
+  every `knowledge_search` hit over MCP. (#67)
+- **A confidence badge on every answer** — high, medium, low or unsupported —
+  derived from what the harness observed (citation coverage, retrieval score,
+  stale or unverified pages, failed tool calls, a spent tool budget), with each
+  reason spelled out on hover. Never the model's own opinion of itself. Also on
+  `POST /v1/assistant/ask` (`confidence`). (#67)
+- **Verify a page.** An editor can stamp a page as checked at its current
+  revision (`POST /v1/documents/:id/verify`, `DELETE` to remove). The stamp
+  reads as outdated the moment a new revision is published, with no write;
+  answers that cite the page show the same state. (#67)
+
+### Operations
+
+- Migration `20261010120000_answer_provenance` adds `citations` and
+  `confidence` to `assistant_messages` and `verified_at` / `verified_by` /
+  `verified_revision_id` to `documents`. Expand-only, nullable or defaulted, no
+  backfill: the previous release's image runs against it, so a code rollback
+  needs no database step.
+- New env var `ANSWER_STALE_SOURCE_DAYS` (default `180`): a cited page whose
+  head changed longer ago than this counts as stale evidence in the confidence
+  score. Lowers the badge; hides nothing.
+
 ## [0.13.0] — 2026-09-27
 
 ### Added

@@ -112,6 +112,12 @@ export interface SearchResult {
   title: string;
   snippet: string;
   score: number;
+  /**
+   * Heading trail of the matched chunk, root first. The chunk vertex has carried
+   * it since Phase 1; surfacing it is what lets a citation link to a section
+   * rather than a page (docs/features/38).
+   */
+  headingPath?: string[];
   /** Entities related to the result's document (present when expandGraph is used). */
   entities?: EntityRef[];
 }

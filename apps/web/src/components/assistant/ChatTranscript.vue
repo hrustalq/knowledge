@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
 import ChatMessage from './ChatMessage.vue'
+import { decorateCitations } from '@/lib/citations'
 import AssistantPrompt from './AssistantPrompt.vue'
 import ThinkingTrail from './ThinkingTrail.vue'
 
@@ -357,11 +358,15 @@ defineExpose({ scrollToEnd })
                 </span>
                 <div class="min-w-0 flex-1 space-y-3">
                   <ThinkingTrail :live="live!" />
+                  <!-- Markers the model has written so far become neutral
+                       chips; the done frame's message replaces them with ones
+                       that resolve (docs/features/38). -->
                   <MarkdownView
                     v-if="live!.text"
                     :markdown="live!.text"
                     :streaming="!live!.stopped"
                     class="max-w-[72ch]"
+                    @rendered="decorateCitations($event, new Set())"
                   />
                   <GenerativeUiBlock v-for="(block, i) in live!.uiBlocks" :key="i" :block="block" />
                   <!-- Shown as soon as it is built, but inert until the turn

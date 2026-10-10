@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
+  AnswerCitation,
+  AnswerConfidence,
   AssistantSource,
   AssistantMessageInfo,
   AssistantMessageRole,
@@ -229,6 +231,8 @@ export class AssistantThreadsService {
       sources?: AssistantSource[];
       uiBlocks?: AssistantUiBlock[];
       prompt?: AssistantPrompt | null;
+      citations?: AnswerCitation[];
+      confidence?: AnswerConfidence | null;
     } = {},
   ): Promise<AssistantMessageInfo> {
     const [message] = await this.prisma.$transaction([
@@ -243,6 +247,10 @@ export class AssistantThreadsService {
           // Prisma distinguishes a SQL NULL from a JSON `null` literal; a turn
           // that asked nothing wants the column empty, not the string "null".
           prompt: opts.prompt ? (opts.prompt as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+          citations: (opts.citations ?? []) as object,
+          // Same NULL-vs-null rule as `prompt`: a turn that was not assessed
+          // (a user turn, a disabled provider) leaves the column empty.
+          confidence: opts.confidence ? (opts.confidence as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         },
       }),
       this.prisma.assistantThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } }),
@@ -276,6 +284,8 @@ export class AssistantThreadsService {
       sources: (m.sources ?? []) as unknown as AssistantSource[],
       uiBlocks: (m.uiBlocks ?? []) as unknown as AssistantUiBlock[],
       prompt: (m.prompt ?? null) as unknown as AssistantPrompt | null,
+      citations: (m.citations ?? []) as unknown as AnswerCitation[],
+      confidence: (m.confidence ?? null) as unknown as AnswerConfidence | null,
       createdAt: m.createdAt.toISOString(),
     };
   }

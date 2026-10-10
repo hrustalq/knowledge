@@ -1481,6 +1481,26 @@
       "platformAdmin": false
     },
     {
+      "method": "DELETE",
+      "path": "/v1/documents/{id}/verify",
+      "tag": "documents",
+      "summary": "Remove the verification stamp",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/verify",
+      "tag": "documents",
+      "summary": "Stamp the page as verified at its current head (docs/features/38). The stamp reads as outdated once the head moves; nothing is written then",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/documents/graph",
       "tag": "documents",
@@ -2898,7 +2918,7 @@
     },
     {
       "name": "knowledge_search",
-      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations.",
+      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus provenance: revisionNumber, changedAt (freshness), authorName, verification (verified | outdated | unverified | flagged) and factClass. Prefer verified and recent pages, and say when a page you relied on is outdated. The response traceId identifies this search.",
       "inputs": [
         {
           "name": "workspaceId",

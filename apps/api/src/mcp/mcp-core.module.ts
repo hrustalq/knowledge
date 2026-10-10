@@ -14,6 +14,7 @@ import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.mod
 import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
+import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -48,6 +49,8 @@ import { McpService } from './mcp.service.js';
     // Resource templates over the same service as the /markdown and llms.txt
     // routes (issue #68). Controller-free.
     AiReadableCoreModule,
+    // Provenance on knowledge_search hits (docs/features/38). Controller-free.
+    FeedbackCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

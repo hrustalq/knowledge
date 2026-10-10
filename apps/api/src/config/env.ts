@@ -133,6 +133,12 @@ export const envSchema = z.object({
   ASSISTANT_MAX_TOOL_CALLS: z.coerce.number().int().min(0).max(64).default(24),
   /** Upstream request timeout for the assistant provider. */
   ASSISTANT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  /**
+   * A cited page whose head changed longer ago than this counts as stale
+   * evidence in the answer's confidence (docs/features/38). Confidence only —
+   * nothing is hidden or re-ranked by it.
+   */
+  ANSWER_STALE_SOURCE_DAYS: z.coerce.number().int().positive().default(180),
 
   /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider

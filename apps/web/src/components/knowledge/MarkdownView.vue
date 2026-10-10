@@ -78,7 +78,12 @@ async function render() {
   await nextTick()
   if (props.streaming) {
     const root = host.value
-    if (root) wrapRuns(root, reveal.advance(root.textContent?.length ?? 0))
+    if (root) {
+      wrapRuns(root, reveal.advance(root.textContent?.length ?? 0))
+      // Decorations that make sense on unfinished text (citation markers,
+      // docs/features/38) hang off this; the heavy passes above still wait.
+      emit('rendered', root)
+    }
     return
   }
   reveal.reset()

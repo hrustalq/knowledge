@@ -15,6 +15,7 @@ import { AssistantService } from './assistant.service.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
 import { AssistantController } from './assistant.controller.js';
 import { AiModule } from '../ai/ai.module.js';
+import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 
 // AiModule is a forwardRef because the dependency genuinely runs both ways:
 // a turn needs the workspace's AI config, and the settings page's "Test
@@ -49,6 +50,8 @@ import { AiModule } from '../ai/ai.module.js';
     // "the worker generates, the API publishes" is exactly the rule that keeps
     // an unattended run from opening an issue on a stranger's repository.
     ConnectorWorkItemsModule,
+    // Provenance for cited pages (docs/features/38): resolved once per answer.
+    FeedbackCoreModule,
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],

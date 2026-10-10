@@ -37,6 +37,13 @@ model Document {
   /// drawn in before this column existed, so the migration changes nothing on
   /// screen; manual reordering is the upgrade it makes possible.
   position      Int      @default(0)
+  /// Manual verification stamp (docs/features/38): a person said "this page is
+  /// right" at `verified_revision_id`. Whether it still holds is derived against
+  /// the head at read time (`verificationStateFor`), never stored. No FK on
+  /// verified_by, per house policy on user columns. Nullable: no backfill.
+  verifiedAt         DateTime? @map("verified_at") @db.Timestamptz
+  verifiedBy         String?   @map("verified_by") @db.Uuid
+  verifiedRevisionId String?   @map("verified_revision_id") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   project       Project            @relation(fields: [projectId], references: [id])
@@ -592,6 +599,13 @@ model AssistantMessage {
   // Nullable rather than a default so "asked nothing" and "asked something"
   // stay distinguishable, and the column can be added without a backfill.
   prompt    Json?
+  // AnswerCitation[] — sentence spans of `content` and the source labels each
+  // rests on (docs/features/38). Empty for user turns and pre-feature rows.
+  citations Json     @default("[]")
+  // AnswerConfidence | null — derived at the end of the turn from observable
+  // signals. Nullable so pre-feature rows and user turns read as "not assessed"
+  // rather than as a level.
+  confidence Json?
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   thread AssistantThread @relation(fields: [threadId], references: [id])

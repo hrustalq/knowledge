@@ -1,4 +1,6 @@
 import type {
+  AnswerCitation,
+  AnswerConfidence,
   ApiErrorPayload,
   AssistantSource,
   AssistantToolCall,
@@ -113,6 +115,13 @@ export interface AssistantMessageInfo {
   uiBlocks: AssistantUiBlock[];
   /** Set when the turn ended by asking the user something. At most one per turn. */
   prompt: AssistantPrompt | null;
+  /**
+   * Sentence-level citations into `content` (docs/features/38). Empty for user
+   * turns and for assistant rows persisted before the feature.
+   */
+  citations: AnswerCitation[];
+  /** Null for user turns and pre-feature rows; the badge is simply not drawn. */
+  confidence: AnswerConfidence | null;
   createdAt: string;
 }
 

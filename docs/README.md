@@ -62,7 +62,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 35  | Drift check on pull / merge requests        | [features/35-pr-drift-check.md](features/35-pr-drift-check.md)         | ✅ implemented    |
 | 36  | GitHub access and re-authorisation          | [features/36-github-access.md](features/36-github-access.md)           | ✅ implemented    |
 | 37  | AI-readable output (llms.txt, `.md` pages)  | [features/37-ai-readable-output.md](features/37-ai-readable-output.md) | ✅ implemented    |
-| 38  | Answer provenance, confidence, verify stamp, votes | [features/38-answer-provenance.md](features/38-answer-provenance.md)   | ✅ phases 1–2 of #67 |
+| 38  | Answer provenance, confidence, verify stamp, votes | [features/38-answer-provenance.md](features/38-answer-provenance.md)   | ✅ phases 1–4 of #67 |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

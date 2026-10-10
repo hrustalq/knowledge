@@ -165,6 +165,15 @@ export const envSchema = z.object({
    * DriftTriggerService MAX_PENDING rule, made an env var.
    */
   KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS: z.coerce.number().int().positive().default(10),
+  /**
+   * The surveyor (docs/features/38, phase 4): how far back a run reads answer
+   * feedback, the smallest cluster it reports, the cosine threshold two
+   * questions must clear to be one topic, and the most signals one run reads.
+   */
+  COVERAGE_WINDOW_DAYS: z.coerce.number().int().positive().default(30),
+  COVERAGE_MIN_CLUSTER_SIZE: z.coerce.number().int().min(1).default(3),
+  COVERAGE_SIMILARITY: z.coerce.number().min(0).max(1).default(0.82),
+  COVERAGE_MAX_QUESTIONS: z.coerce.number().int().positive().default(2_000),
 
   /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider

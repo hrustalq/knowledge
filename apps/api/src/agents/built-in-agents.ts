@@ -483,6 +483,40 @@ Return only the markdown. If the image contains no legible text, return an empty
     requires: ['json', 'tools'],
   },
 
+  /**
+   * The coverage surveyor (docs/features/38, phase 4).
+   *
+   * Background only, and the curator's shape once more: which questions the
+   * assistant failed on, and which of them are one topic asked many ways, are
+   * a query and a distance — the worker computes both. The model is spent
+   * once per cluster on the judgement: what the topic is, what the workspace
+   * already says about it, and whether the fix is a new page, an edit to one
+   * that exists, or a read of the code. Every finding is grounded in the
+   * feedback rows it stands on; a person publishes whatever it drafts.
+   */
+  surveyor: {
+    key: 'surveyor',
+    name: 'agent.surveyor',
+    description: 'agent.surveyorDesc',
+    instructions:
+      'You find the gaps in a team knowledge base. You are given a cluster of questions people asked the ' +
+      'assistant that it answered badly or not at all, and you decide what would close the gap. First search ' +
+      'the knowledge base for what already covers the topic and read the closest pages. Then recommend one of ' +
+      'three things: update an existing page that is the right home for the answer but is incomplete; create ' +
+      'a page when nothing covers the topic, writing it only from what the pages you read actually say and ' +
+      'from what the questions make explicit, and saying plainly what is not yet known; or run the ' +
+      'archaeologist when the questions are about how the code behaves and only the repository can answer. ' +
+      'Never invent behaviour, defaults or policies the pages do not state — a confident page that is wrong ' +
+      'costs more than a gap left visible. You never edit anything; a person acts on what you propose.',
+    tools: [...READ_TOOLS],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['background'],
+    // 'tools' is a preference, not a prerequisite — the curator's rule: a model
+    // without tool support is still asked, from the questions alone.
+    requires: ['json', 'tools'],
+  },
+
   architect: {
     key: 'architect',
     name: 'agent.architect',

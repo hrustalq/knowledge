@@ -2,7 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { DOCUMENT_CATEGORIES } from '@knowledge/contracts';
+import {
+  ANSWER_FEEDBACK_REASONS,
+  ANSWER_RATINGS,
+  DOCUMENT_CATEGORIES,
+  KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS,
+  KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS,
+  KNOWLEDGE_ISSUE_EVIDENCE_MAX,
+  KNOWLEDGE_ISSUE_KINDS,
+  KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS,
+} from '@knowledge/contracts';
 import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -25,6 +34,10 @@ import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AiReadableService } from '../ai-readable/ai-readable.service.js';
+import { ProvenanceService } from '../feedback/provenance.service.js';
+import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
+import { KnowledgeIssuesService } from '../feedback/knowledge-issues.service.js';
+import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
 import { MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
@@ -34,7 +47,7 @@ import { renderSkill, type McpWhoami } from './skill.js';
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.13.0';
+export const MCP_SERVER_VERSION = '0.14.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -67,6 +80,8 @@ export const MCP_SERVER_VERSION = '0.13.0';
  *   knowledge_list_documents    → the page tree of a workspace/project
  *   knowledge_get_document_content → a page's full markdown (read before revising)
  *   knowledge_create_document   → a new page with inline markdown
+ *   knowledge_feedback          → rate an answer built from knowledge_search (docs/features/38)
+ *   knowledge_report_issue      → report a page as wrong / stale; checked by the sentinel (docs/features/38)
  *
  * Two transports, one tool set (docs/features/33). `buildServer(principal)`
  * binds every tool to a caller: each one runs the same `requireRole` its REST
@@ -102,6 +117,9 @@ export class McpService {
     private readonly access: AccessService,
     private readonly config: ConfigService,
     private readonly aiReadable: AiReadableService,
+    private readonly provenance: ProvenanceService,
+    private readonly feedback: AnswerFeedbackService,
+    private readonly issues: KnowledgeIssuesService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -130,7 +148,10 @@ export class McpService {
       'knowledge_search',
       {
         description:
-          'Semantic search over the knowledge base. Every result carries document/revision/chunk citations.',
+          'Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus ' +
+          'provenance: revisionNumber, changedAt (freshness), authorName, verification (verified | outdated | ' +
+          'unverified | flagged) and factClass. Prefer verified and recent pages, and say when a page you relied ' +
+          'on is outdated. The response traceId identifies this search.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           query: z.string().min(1),
@@ -156,14 +177,113 @@ export class McpService {
           ...(projectIds?.length ? { projectIds } : {}),
           ...(tags?.length ? { tags } : {}),
         };
-        return this.json(
-          await this.search.search({
+        const res = await this.search.search({
+          workspaceId,
+          query,
+          limit: limit ?? 20,
+          ...(Object.keys(filters).length ? { filters } : {}),
+        });
+        // One batched read for the whole hit list (docs/features/38), and the
+        // trace id of this call so an agent can quote it back to
+        // knowledge_feedback.
+        return this.json({
+          ...res,
+          results: await this.provenance.decorateResults(workspaceId, res.results),
+          traceId: currentTrace()?.traceId ?? newTraceId(),
+        });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_feedback',
+      {
+        description:
+          'Rate an answer you built from knowledge_search: up or down, with a reason on down. Quote the search\'s ' +
+          'traceId so a re-vote updates the same row. Votes and reasons are what turns a bad answer into ' +
+          'documentation work; nothing else changes.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          rating: z.enum(ANSWER_RATINGS),
+          reason: z.enum(ANSWER_FEEDBACK_REASONS).optional().describe('Required when rating is "down"'),
+          comment: z.string().max(2000).optional(),
+          query: z.string().min(1).max(4000).describe('The question the answer was for'),
+          traceId: z.string().max(64).optional().describe('traceId from the knowledge_search response'),
+          documentIds: z.array(z.string().uuid()).max(20).optional().describe('Pages the answer cited'),
+        },
+      },
+      async ({ workspaceId, rating, reason, comment, query, traceId, documentIds }) => {
+        await guard.ws(workspaceId, 'viewer');
+        if (rating === 'down' && !reason) throw new Error('A "down" rating needs a reason.');
+        const res = await this.feedback.voteOverMcp(
+          {
             workspaceId,
+            rating,
+            ...(reason ? { reason } : {}),
+            ...(comment ? { comment } : {}),
             query,
-            limit: limit ?? 20,
-            ...(Object.keys(filters).length ? { filters } : {}),
-          }),
+            ...(traceId ? { traceId } : {}),
+            ...(documentIds?.length ? { documentIds } : {}),
+          },
+          principal,
         );
+        return this.json({ feedbackId: res.feedback.id, surface: res.feedback.surface, deduplicated: res.deduplicated });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_report_issue',
+      {
+        description:
+          'Report that a page is wrong, out of date, missing something, or a duplicate. Quote the passage and say ' +
+          'where the correct information is. The report is checked by the sentinel and may become a merge request ' +
+          'for a person to review; a second report of the same page and kind folds into the open one. Returns the ' +
+          'issue, its status (open | checking | proposed) and whether it was deduplicated.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          documentId: z.string().uuid(),
+          revisionId: z.string().uuid().optional().describe('The revision you read, from knowledge_search or get_document'),
+          kind: z.enum(KNOWLEDGE_ISSUE_KINDS),
+          detail: z.string().min(1).max(KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS).describe('What is wrong, in plain words'),
+          evidence: z
+            .array(
+              z.object({
+                quote: z.string().max(KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS).optional().describe('The passage disputed'),
+                url: z.string().max(KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS).optional().describe('Where the correct information is'),
+                note: z.string().max(KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS).optional(),
+              }),
+            )
+            .max(KNOWLEDGE_ISSUE_EVIDENCE_MAX)
+            .optional(),
+          suggestedMarkdown: z
+            .string()
+            .max(KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS)
+            .optional()
+            .describe('A corrected page body without frontmatter. From an editor key it opens a draft merge request at once.'),
+        },
+      },
+      async ({ workspaceId, documentId, revisionId, kind, detail, evidence, suggestedMarkdown }) => {
+        await guard.doc(documentId, 'viewer');
+        const res = await this.issues.report(
+          {
+            workspaceId,
+            documentId,
+            ...(revisionId ? { revisionId } : {}),
+            kind,
+            detail,
+            ...(evidence?.length ? { evidence } : {}),
+            ...(suggestedMarkdown ? { suggestedMarkdown } : {}),
+            surface: 'mcp',
+          },
+          principal,
+        );
+        return this.json({
+          issueId: res.issue.id,
+          status: res.issue.status,
+          deduplicated: res.deduplicated,
+          reportCount: res.issue.reportCount,
+          ...(res.issue.mergeRequestId ? { mergeRequestId: res.issue.mergeRequestId } : {}),
+          ...(res.issue.agentRunId ? { agentRunId: res.issue.agentRunId } : {}),
+        });
       },
     );
 

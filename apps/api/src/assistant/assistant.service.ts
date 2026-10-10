@@ -19,10 +19,12 @@ import type {
 import {
   ASSISTANT_WRITE_TOOL_NAMES,
   DRAFT_EDIT_OPS,
+  assessAnswer,
   assistantSourceKey,
   draftEditNeedsAnchor,
   isWebSource,
 } from '@knowledge/contracts';
+import { ConfigService } from '@nestjs/config';
 import type { AssistantThread } from '@prisma/client';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -55,6 +57,9 @@ import { t } from '../i18n/t.js';
 import { currentLocale } from '../i18n/locale.js';
 import { applyDraftEdit, refuseDraftEdit } from './draft-edits.js';
 import { scanPartialObject } from './partial-args.js';
+import { CITATION_CLAUSE, CiteLabels, answerSignals, finalizeCitations } from './citations.js';
+import { ProvenanceService } from '../feedback/provenance.service.js';
+import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 
 const SEVERITIES = ['error', 'warning', 'suggestion'] as const;
 
@@ -218,6 +223,12 @@ interface PreparedTurn {
    * when the turn was not sent from the editor.
    */
   draft: string | null;
+  /** Hands every gathered source its `S#` label (docs/features/38). */
+  labels: CiteLabels;
+  /** Tool calls that came back `ok: false` — a confidence signal. */
+  toolErrors: number;
+  /** The user's message this turn answers, kept for the implicit feedback signal (docs/features/38). */
+  question: string;
 }
 
 /**
@@ -251,6 +262,9 @@ export class AssistantService {
     private readonly tiebreak: AgentTiebreakService,
     private readonly code: CodeResearchService,
     private readonly tasks: WorkItemToolsService,
+    private readonly provenance: ProvenanceService,
+    private readonly feedback: AnswerFeedbackService,
+    private readonly env: ConfigService,
   ) {}
 
   /**
@@ -399,6 +413,7 @@ export class AssistantService {
       // Draft-only / unreadable revision — the model can still search.
     }
 
+    const labels = new CiteLabels();
     const system =
       'You are the assistant of a team knowledge base, answering questions about one documentation page. ' +
       'You have read-only tools scoped to this workspace: search_knowledge, read_document, explore_document_graph.\n\n' +
@@ -419,7 +434,9 @@ export class AssistantService {
       // model has to go looking for its own location, and a page deep in the
       // tree is not even reachable in a default-depth tree listing — it
       // answered with a section two levels up rather than its real parent.
-      `Current page: "${document.title}"${groundingTrail} (documentId: ${document.id})\n\n` +
+      CITATION_CLAUSE +
+      '\n\n' +
+      `Current page: "${document.title}"${groundingTrail} (documentId: ${document.id}, cite ${labels.label(document.id)})\n\n` +
       `<document title=${JSON.stringify(document.title)}>\n${markdown.slice(0, 30_000) || '(no readable content yet)'}\n</document>`;
 
     const history: ChatCompletionMessageParam[] = (dto.history ?? []).slice(-8).map((t) => ({
@@ -433,14 +450,20 @@ export class AssistantService {
     // web tools (docs/features/25), so a web source cannot reach the map, and
     // the narrower type is what lets the response promise the same.
     const collected = new Map<string, AssistantAskSource>([
-      [document.id, { documentId: document.id, title: document.title }],
+      [document.id, labels.tag({ documentId: document.id, title: document.title, factClass: 'explicit' })],
     ]);
+    let toolErrors = 0;
     const { content, trace } = await this.client.runWithTools(
       call,
       [{ role: 'system', content: system }, ...history, { role: 'user', content: dto.question }],
       this.tools.definitions('ask', { ui: false }),
       async (name, args) => {
-        const result = await this.tools.execute(name, args, { principal, workspaceId: dto.workspaceId });
+        const result = await this.tools.execute(name, args, {
+          principal,
+          workspaceId: dto.workspaceId,
+          cite: (source) => labels.label(source),
+        });
+        if (!result.ok) toolErrors++;
         for (const source of result.sources) {
           // isWebSource can only be false here — see the map's type above —
           // but the narrowing is what proves it rather than a cast.
@@ -451,13 +474,57 @@ export class AssistantService {
       },
     );
 
+    const settled = await this.settleAnswer(dto.workspaceId, content, [...collected.values()], labels, trace, toolErrors, call.config.maxToolCalls);
+    this.feedback.recordSignal({
+      workspaceId: dto.workspaceId,
+      surface: 'ask',
+      query: dto.question,
+      answer: settled.text,
+      sources: settled.sources,
+      confidence: settled.confidence,
+      principal,
+    });
     return {
       enabled: true,
-      answer: content.trim(),
-      sources: [...collected.values()],
+      answer: settled.text,
+      // The `/ask` map only ever held page sources, and provenance keeps web
+      // sources as they are, so the narrowing holds through decoration.
+      sources: settled.sources as AssistantAskSource[],
       toolCalls: trace,
       model: call.config.model,
+      citations: settled.citations,
+      confidence: settled.confidence,
     };
+  }
+
+  /**
+   * The end of every answer (docs/features/38): settle the model's `[S#]`
+   * markers against the labels this turn handed out, resolve each cited page's
+   * provenance in one batch, and derive the confidence from what was observed.
+   * Shared by `/ask` and both chat paths so the three cannot drift.
+   */
+  private async settleAnswer(
+    workspaceId: string,
+    content: string,
+    collected: AssistantSource[],
+    labels: CiteLabels,
+    trace: AssistantToolCall[],
+    toolErrors: number,
+    maxToolCalls: number,
+  ) {
+    const final = finalizeCitations(content.trim(), labels.known());
+    const sources = await this.provenance.decorateSources(workspaceId, collected);
+    const confidence = assessAnswer(
+      answerSignals({
+        final,
+        sources,
+        trace,
+        toolErrors,
+        maxToolCalls,
+        staleAfterDays: this.env.get<number>('ANSWER_STALE_SOURCE_DAYS') ?? 180,
+      }),
+    );
+    return { text: final.text, sources, citations: final.citations, confidence };
   }
 
   /**
@@ -502,7 +569,7 @@ export class AssistantService {
       (name, args) => this.runTool(name, args, { principal, thread, turn }),
     );
 
-    const assistantMessage = await this.finishTurn(thread, turn, content, trace);
+    const assistantMessage = await this.finishTurn(thread, turn, content, trace, principal);
     return { enabled: true, userMessage, assistantMessage };
   }
 
@@ -606,7 +673,7 @@ export class AssistantService {
       return;
     }
 
-    const assistantMessage = await this.finishTurn(thread, turn, content, trace);
+    const assistantMessage = await this.finishTurn(thread, turn, content, trace, principal);
     emit({ type: 'done', message: assistantMessage });
   }
 
@@ -688,18 +755,47 @@ export class AssistantService {
     return { enabled: true, userMessage, thread, turn, call };
   }
 
-  /** Persist the reply and close the turn on the live bus. */
+  /**
+   * Persist the reply and close the turn on the live bus. A weak answer also
+   * leaves an implicit signal behind (docs/features/38, phase 2) — written
+   * after the message so the row can point at it, and fire-and-forget so it
+   * can never fail the turn.
+   */
   private async finishTurn(
     thread: AssistantThread,
     turn: PreparedTurn,
     content: string,
     trace: AssistantToolCall[],
+    principal: Principal,
   ): Promise<AssistantMessageInfo> {
-    const assistantMessage = await this.threads.appendMessage(thread.id, 'assistant', content.trim(), {
+    const settled = await this.settleAnswer(
+      thread.workspaceId,
+      content,
+      [...turn.collected.values()],
+      turn.labels,
+      trace,
+      turn.toolErrors,
+      turn.agent.config.maxToolCalls,
+    );
+    const assistantMessage = await this.threads.appendMessage(thread.id, 'assistant', settled.text, {
       toolCalls: trace,
-      sources: [...turn.collected.values()],
+      sources: settled.sources,
       uiBlocks: turn.uiBlocks,
       prompt: turn.prompt,
+      citations: settled.citations,
+      confidence: settled.confidence,
+    });
+    this.feedback.recordSignal({
+      workspaceId: thread.workspaceId,
+      // The same pane in two places: beside a draft it is the editor assistant.
+      surface: turn.draft !== null ? 'editor-assistant' : 'assistant',
+      query: turn.question,
+      answer: settled.text,
+      sources: settled.sources,
+      confidence: settled.confidence,
+      threadId: thread.id,
+      messageId: assistantMessage.id,
+      principal,
     });
     await this.events.publish({
       type: 'assistant.turn.finished',
@@ -764,6 +860,7 @@ export class AssistantService {
     // server returns text, nothing more.
     if (this.plugins.isPluginTool(name)) {
       const pluginResult = await this.plugins.execute(thread.workspaceId, name, args);
+      if (!pluginResult.ok) turn.toolErrors++;
       await this.events.publish({
         type: 'assistant.tool-call.finished',
         workspaceId: thread.workspaceId,
@@ -773,11 +870,19 @@ export class AssistantService {
       });
       return pluginResult;
     }
-    const result = await this.tools.execute(name, args, { principal: ctx.principal, workspaceId: thread.workspaceId });
+    const result = await this.tools.execute(name, args, {
+      principal: ctx.principal,
+      workspaceId: thread.workspaceId,
+      cite: (source) => turn.labels.label(source),
+    });
+    if (!result.ok) turn.toolErrors++;
     for (const source of result.sources) {
       // Keyed by identity, not by document id: a web citation has no document
       // id, and two of them would otherwise collapse into one `undefined` slot.
       const key = assistantSourceKey(source);
+      // Every source gets its label here even when its tool did not print one
+      // (a web page), so the chips number as one series.
+      turn.labels.tag(source);
       if (!turn.collected.has(key)) turn.collected.set(key, source);
     }
     if (result.uiBlock) turn.uiBlocks.push(result.uiBlock);
@@ -945,6 +1050,7 @@ export class AssistantService {
 
     const groundingDocumentId = dto.documentId ?? thread.documentId ?? undefined;
     const draft = dto.draft ?? null;
+    const labels = new CiteLabels();
     let groundingDoc: { id: string; title: string } | null = null;
     let groundingMarkdown = '';
     // Same reasoning as in `ask`: the chat pane's grounding page carried its
@@ -986,7 +1092,7 @@ export class AssistantService {
     const manualDocsBlock = manualDocs
       .map(
         (d) =>
-          `<document title=${JSON.stringify(d.title)} documentId="${d.id}">\n${d.markdown.slice(0, 30_000) || '(no readable content yet)'}\n</document>`,
+          `<document title=${JSON.stringify(d.title)} documentId="${d.id}" cite="${labels.label(d.id)}">\n${d.markdown.slice(0, 30_000) || '(no readable content yet)'}\n</document>`,
       )
       .join('\n\n');
 
@@ -1012,16 +1118,20 @@ export class AssistantService {
       // Same rule for the repositories: absent when there are none.
       codeResearchClause(repos) +
       workItemClause(taskRepos) +
+      // Sentence-level citations (docs/features/38). Appended for every turn,
+      // draft or not: the rule is about how evidence is cited, which does not
+      // change with what is on the author's screen.
+      CITATION_CLAUSE +
       (draft
         ? // The draft replaces the published copy rather than joining it: it is
           // newer, and sending both would spend the context on two near-copies.
           (groundingDoc
-            ? `\n\nCurrent page: "${groundingDoc.title}"${turnTrail} (documentId: ${groundingDoc.id})`
+            ? `\n\nCurrent page: "${groundingDoc.title}"${turnTrail} (documentId: ${groundingDoc.id}, cite ${labels.label(groundingDoc.id)})`
             : '\n\nCurrent page: a new page, not yet published') +
           DRAFT_CLAUSE +
           `\n\n<draft title=${JSON.stringify(draft.title || '(untitled)')}>\n${draft.markdown.slice(0, 30_000) || '(empty — the page has no body yet)'}\n</draft>`
         : groundingDoc
-          ? `\n\nCurrent page: "${groundingDoc.title}"${turnTrail} (documentId: ${groundingDoc.id})\n\n` +
+          ? `\n\nCurrent page: "${groundingDoc.title}"${turnTrail} (documentId: ${groundingDoc.id}, cite ${labels.label(groundingDoc.id)})\n\n` +
             `<document title=${JSON.stringify(groundingDoc.title)}>\n${groundingMarkdown.slice(0, 30_000) || '(no readable content yet)'}\n</document>`
           : '') +
       (manualDocsBlock
@@ -1056,13 +1166,18 @@ export class AssistantService {
       taskRepos,
       messages: [{ role: 'system', content: system }, ...history, { role: 'user', content: dto.content }],
       collected: new Map<string, AssistantSource>([
-        ...(groundingDoc ? ([[groundingDoc.id, { documentId: groundingDoc.id, title: groundingDoc.title }]] as const) : []),
-        ...manualDocs.map((d) => [d.id, { documentId: d.id, title: d.title }] as const),
+        ...(groundingDoc
+          ? ([[groundingDoc.id, labels.tag({ documentId: groundingDoc.id, title: groundingDoc.title, factClass: 'explicit' })]] as const)
+          : []),
+        ...manualDocs.map((d) => [d.id, labels.tag({ documentId: d.id, title: d.title, factClass: 'explicit' })] as const),
       ]),
       uiBlocks: [],
       emittedUiBlocks: 0,
       prompt: null,
       draft: draft ? draft.markdown : null,
+      labels,
+      toolErrors: 0,
+      question: dto.content,
     };
   }
 

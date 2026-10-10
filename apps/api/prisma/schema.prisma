@@ -37,6 +37,13 @@ model Document {
   /// drawn in before this column existed, so the migration changes nothing on
   /// screen; manual reordering is the upgrade it makes possible.
   position      Int      @default(0)
+  /// Manual verification stamp (docs/features/38): a person said "this page is
+  /// right" at `verified_revision_id`. Whether it still holds is derived against
+  /// the head at read time (`verificationStateFor`), never stored. No FK on
+  /// verified_by, per house policy on user columns. Nullable: no backfill.
+  verifiedAt         DateTime? @map("verified_at") @db.Timestamptz
+  verifiedBy         String?   @map("verified_by") @db.Uuid
+  verifiedRevisionId String?   @map("verified_revision_id") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   project       Project            @relation(fields: [projectId], references: [id])
@@ -592,12 +599,105 @@ model AssistantMessage {
   // Nullable rather than a default so "asked nothing" and "asked something"
   // stay distinguishable, and the column can be added without a backfill.
   prompt    Json?
+  // AnswerCitation[] — sentence spans of `content` and the source labels each
+  // rests on (docs/features/38). Empty for user turns and pre-feature rows.
+  citations Json     @default("[]")
+  // AnswerConfidence | null — derived at the end of the turn from observable
+  // signals. Nullable so pre-feature rows and user turns read as "not assessed"
+  // rather than as a level.
+  confidence Json?
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   thread AssistantThread @relation(fields: [threadId], references: [id])
 
   @@index([threadId, createdAt])
   @@map("assistant_messages")
+}
+
+/// One signal about one answer (docs/features/38, issue #67 phase 2): an
+/// explicit vote, or an implicit miss the harness recorded itself
+/// (low confidence / no answer). Misses only — a good answer that nobody rated
+/// writes nothing, which keeps the volume bounded and keeps the measurement
+/// stream in JSONL where it belongs. No FK on workspace_id / created_by (house
+/// policy: the dev principal has no users row) and none on message_id either —
+/// a rewind deletes messages, and a vote that outlives its message is still a
+/// data point for the surveyor and the backtest.
+model AnswerFeedback {
+  id               String    @id @default(uuid()) @db.Uuid
+  workspaceId      String    @map("workspace_id") @db.Uuid
+  /// ANSWER_SIGNAL_KINDS: vote | low-confidence | no-answer
+  kind             String
+  /// ANSWER_SURFACES: assistant | editor-assistant | ask | mcp
+  surface          String
+  /// 'up' | 'down' — votes only; null on an implicit signal.
+  rating           String?
+  /// ANSWER_FEEDBACK_REASONS; required by the DTO on 'down'.
+  reason           String?
+  comment          String?
+  /// The question, as asked. User content: purged by retention (phase 3).
+  query            String
+  answerExcerpt    String?   @map("answer_excerpt")
+  threadId         String?   @map("thread_id") @db.Uuid
+  messageId        String?   @map("message_id") @db.Uuid
+  /// MCP: the knowledge_search call the agent built its answer from.
+  traceId          String?   @map("trace_id")
+  citedDocumentIds Json      @default("[]") @map("cited_document_ids")
+  /// AnswerConfidence snapshot at answer time.
+  confidence       Json?
+  createdBy        String    @map("created_by") @db.Uuid
+  apiKeyId         String?   @map("api_key_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // One vote per person per message. NULL message_id rows (ask, mcp) are
+  // exempt — SQL unique treats NULLs as distinct — and dedupe differently.
+  @@unique([messageId, createdBy])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, kind, createdAt])
+  @@map("answer_feedback")
+}
+
+/// A reported problem with a page (docs/features/38, issue #67 phase 3) — from
+/// an agent over MCP, from a person on the page, or from a down-vote that named
+/// the pages it cited. One OPEN issue per (document, kind): a second report
+/// folds in as report_count + 1 and more evidence. Prisma cannot express that
+/// partial unique index, so the service writes it as a guarded UPDATE-then-INSERT.
+/// No FK on workspace_id / created_by / resolved_by (house policy); none on
+/// agent_run_id / merge_request_id either — a run or an MR that is deleted
+/// leaves the report standing.
+model KnowledgeIssue {
+  id                String    @id @default(uuid()) @db.Uuid
+  workspaceId       String    @map("workspace_id") @db.Uuid
+  documentId        String    @map("document_id") @db.Uuid
+  /// The revision the reporter read, when the reporter said.
+  revisionId        String?   @map("revision_id") @db.Uuid
+  /// KNOWLEDGE_ISSUE_KINDS: stale | wrong | missing | duplicate | other
+  kind              String
+  /// KNOWLEDGE_ISSUE_STATUSES: open | checking | proposed | resolved | dismissed
+  status            String    @default("open")
+  /// Untrusted, ≤ 4 000 chars. Wrapped before any model sees it.
+  detail            String
+  /// KnowledgeIssueEvidence[] (≤ 10). Untrusted.
+  evidence          Json      @default("[]")
+  /// A corrected body the reporter supplied, ≤ 200 000 chars. Untrusted; an
+  /// editor's becomes a draft MR as-is, a viewer's only ever reaches the sentinel.
+  suggestedMarkdown String?   @map("suggested_markdown")
+  /// KNOWLEDGE_ISSUE_SURFACES: an answer surface, or 'web' for the page itself.
+  surface           String
+  reportCount       Int       @default(1) @map("report_count")
+  agentRunId        String?   @map("agent_run_id") @db.Uuid
+  mergeRequestId    String?   @map("merge_request_id") @db.Uuid
+  createdBy         String    @map("created_by") @db.Uuid
+  apiKeyId          String?   @map("api_key_id") @db.Uuid
+  resolvedBy        String?   @map("resolved_by") @db.Uuid
+  resolvedAt        DateTime? @map("resolved_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, status, createdAt])
+  @@index([documentId, status])
+  @@index([createdBy, createdAt])
+  @@map("knowledge_issues")
 }
 
 // ---------------------------------------------------------------------------

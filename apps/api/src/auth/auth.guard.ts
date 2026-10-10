@@ -39,7 +39,12 @@ export class AuthGuard implements CanActivate {
     const queryToken =
       queryTokenOk && typeof req.query?.token === 'string' && req.query.token ? req.query.token : undefined;
 
-    req.principal = await this.tokenAuth.resolve(bearer ?? queryToken);
+    // A header always wins; a query token goes through the narrower URL rules
+    // (single-use kt_ tickets, ks_ sessions; never a long-lived kn_ key).
+    req.principal =
+      !bearer && queryToken
+        ? await this.tokenAuth.resolveQueryToken(queryToken)
+        : await this.tokenAuth.resolve(bearer);
     // Every record emitted downstream carries the caller, without a single
     // service having to accept a userId argument purely to log it.
     bindTrace({ userId: req.principal.userId });

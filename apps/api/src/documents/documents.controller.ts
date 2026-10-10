@@ -172,6 +172,25 @@ export class DocumentsController {
     return this.documents.moveDocument(id, dto, principal?.userId);
   }
 
+  @Post(':id/verify')
+  @Access('editor', 'document')
+  @ApiOperation({
+    summary:
+      'Stamp the page as verified at its current head (docs/features/38). ' +
+      'The stamp reads as outdated once the head moves; nothing is written then',
+  })
+  @ApiResponse({ status: 409, description: 'The page has no finalized head revision to vouch for' })
+  verify(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+    return this.documents.verifyDocument(id, principal.userId);
+  }
+
+  @Delete(':id/verify')
+  @Access('editor', 'document')
+  @ApiOperation({ summary: 'Remove the verification stamp' })
+  unverify(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+    return this.documents.unverifyDocument(id, principal.userId);
+  }
+
   @Get(':id/content')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Full raw content of a revision (feature 01; head of the default branch by default)' })

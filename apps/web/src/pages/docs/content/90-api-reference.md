@@ -21,6 +21,14 @@ principal. `?token=` works only where a header cannot be sent: `GET /v1/events`
 (`EventSource`) and the attachment, import-image and avatar redirects (`<img>`). On
 every other route a token in the URL is ignored and the request is **401**.
 
+An API key is never accepted in a URL. To open the event stream from a script, trade the
+key for a single-use ticket first — it expires in 60 seconds and works once:
+
+```bash
+T=$(curl -s -X POST -H "Authorization: Bearer $KEY" $API/v1/auth/url-ticket | jq -r .ticket)
+curl -N "$API/v1/events?workspaceId=$WS&token=$T"
+```
+
 ## Errors
 
 Every non-2xx response is the same envelope:

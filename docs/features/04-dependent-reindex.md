@@ -47,9 +47,12 @@ posture as fulltext/inference steps).
 
 ## Notes
 
-- SSE + `AUTH_MODE=api-key`: `EventSource` cannot set headers; the endpoint
-  accepts the key via `?token=` as well: the route is marked `@QueryTokenOk()`,
-  one of the few that may be (#102, [06-auth-acl.md](../architecture/06-auth-acl.md)).
+- SSE + `AUTH_MODE=api-key`: `EventSource` cannot set headers, so the route is
+  marked `@QueryTokenOk()` (#102, [06-auth-acl.md](../architecture/06-auth-acl.md)).
+  The web mints a single-use `kt_` ticket (`POST /v1/auth/url-ticket`) and puts
+  that in `?token=`, never the session token. A ticket works once, so the store
+  closes the source on error and reopens it with a fresh ticket (backoff 1 s →
+  30 s) instead of letting `EventSource` replay a spent URL.
 - Events are best-effort delivery (no replay); the UI still refetches on
   navigation, so a missed event never corrupts state.
 

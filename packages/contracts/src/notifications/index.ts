@@ -80,7 +80,14 @@ export function notificationCategoryFor(type: string): NotificationCategory | nu
  * indexing events carry none — so notifying on those would tell authors about
  * their own edits, which is the one thing an inbox must not do.
  */
-const NOTIFIED_DOCUMENT_TYPES: readonly string[] = ['revision.finalized', 'document.updated'];
+const NOTIFIED_DOCUMENT_TYPES: readonly string[] = [
+  'revision.finalized',
+  'document.updated',
+  // Somebody says the page is wrong (docs/features/38, phase 3): the author
+  // hears directly, a watcher through the fan-out. What became of the report
+  // is a feed row, not an inbox one.
+  'knowledge-issue.reported',
+];
 
 const NOTIFIED_REVIEW_TYPES: readonly string[] = [
   'merge-request.created',

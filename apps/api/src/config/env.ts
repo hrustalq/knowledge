@@ -77,6 +77,11 @@ export const envSchema = z.object({
   AUTH_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(720),
   /** Auth flow: password-reset token lifetime. */
   AUTH_RESET_TTL_MIN: z.coerce.number().int().positive().default(30),
+  /**
+   * #102 phase 2: lifetime of a single-use `kt_` URL ticket (POST /v1/auth/url-ticket),
+   * the credential the web puts in `?token=` for SSE and <img>/<object> routes.
+   */
+  AUTH_URL_TICKET_TTL_SEC: z.coerce.number().int().min(5).max(3600).default(60),
   /** Auth flow: allow self-service POST /v1/auth/signup. */
   AUTH_SIGNUP_ENABLED: boolish(true),
   /** Workspace new signups auto-join (empty disables). Defaults to the demo workspace. */
@@ -133,6 +138,42 @@ export const envSchema = z.object({
   ASSISTANT_MAX_TOOL_CALLS: z.coerce.number().int().min(0).max(64).default(24),
   /** Upstream request timeout for the assistant provider. */
   ASSISTANT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  /**
+   * A cited page whose head changed longer ago than this counts as stale
+   * evidence in the answer's confidence (docs/features/38). Confidence only —
+   * nothing is hidden or re-ranked by it.
+   */
+  ANSWER_STALE_SOURCE_DAYS: z.coerce.number().int().positive().default(180),
+  /**
+   * Votes and implicit low-confidence signals on answers (docs/features/38,
+   * phase 2). Off: the vote routes and knowledge_feedback refuse, and the
+   * harness records no signals. A master switch for an operator who does not
+   * want question text in PostgreSQL at all.
+   */
+  ANSWER_FEEDBACK_ENABLED: boolish(true),
+  /**
+   * Feedback rows and closed knowledge issues older than this are purged by
+   * the report sweeper's retention tick (docs/features/38, phase 3). Stored
+   * question text is user content and must not live forever.
+   */
+  ANSWER_FEEDBACK_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  /** Knowledge issues one principal (per API key when present) may file per 24 h; past it a report is 429. */
+  KNOWLEDGE_ISSUE_DAILY_LIMIT: z.coerce.number().int().positive().default(50),
+  /**
+   * Sentinel report checks one workspace may have waiting. Past this a report
+   * stays `open` for a person instead of queueing a model run — the
+   * DriftTriggerService MAX_PENDING rule, made an env var.
+   */
+  KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS: z.coerce.number().int().positive().default(10),
+  /**
+   * The surveyor (docs/features/38, phase 4): how far back a run reads answer
+   * feedback, the smallest cluster it reports, the cosine threshold two
+   * questions must clear to be one topic, and the most signals one run reads.
+   */
+  COVERAGE_WINDOW_DAYS: z.coerce.number().int().positive().default(30),
+  COVERAGE_MIN_CLUSTER_SIZE: z.coerce.number().int().min(1).default(3),
+  COVERAGE_SIMILARITY: z.coerce.number().min(0).max(1).default(0.82),
+  COVERAGE_MAX_QUESTIONS: z.coerce.number().int().positive().default(2_000),
 
   /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider

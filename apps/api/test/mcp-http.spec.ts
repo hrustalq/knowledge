@@ -115,9 +115,16 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     access,
     config,
     aiReadable,
+    provenance: { decorateResults: vi.fn(async (_ws: string, results: unknown[]) => results) },
+    feedback: {
+      voteOverMcp: vi.fn(async () => ({
+        feedback: { id: 'f-1', surface: 'mcp' },
+        deduplicated: false,
+      })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
-  return { mcp, search, documents };
+  return { mcp, search, documents, provenance: deps.provenance, feedback: deps.feedback };
 }
 
 async function connect(mcp: McpService, principal: Principal) {
@@ -159,6 +166,58 @@ describe('McpService over a principal', () => {
     const allowed = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
     expect(allowed.isError).toBeFalsy();
     expect(search.search).toHaveBeenCalledOnce();
+  });
+
+  it('decorates search hits with provenance in one batch and names the trace (docs/features/38)', async () => {
+    const { mcp, search, provenance } = service(accessWith('viewer'));
+    search.search.mockResolvedValueOnce({
+      results: [{ documentId: 'd1', revisionId: 'r1', chunkId: 'c1', title: 'T', snippet: '', score: 0.7 }],
+    } as never);
+    provenance.decorateResults.mockImplementationOnce(async (_ws: string, results: unknown[]) =>
+      (results as Array<Record<string, unknown>>).map((r) => ({ ...r, revisionNumber: 3, verification: 'verified' })),
+    );
+    const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A }));
+    const res = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
+    const body = JSON.parse((res.content as Array<{ text: string }>)[0]!.text) as {
+      results: Array<Record<string, unknown>>;
+      traceId: string;
+    };
+    expect(provenance.decorateResults).toHaveBeenCalledWith(WS_A, expect.any(Array));
+    expect(body.results[0]).toMatchObject({ documentId: 'd1', revisionNumber: 3, verification: 'verified' });
+    expect(body.traceId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('knowledge_feedback stores a vote as the caller with surface mcp, and insists on a reason for a down-vote', async () => {
+    const { mcp, feedback } = service(accessWith('viewer'));
+    const p = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A });
+    const client = await connect(mcp, p);
+
+    const bare = await client.callTool({
+      name: 'knowledge_feedback',
+      arguments: { workspaceId: WS_A, rating: 'down', query: 'billing' },
+    });
+    expect(bare.isError).toBe(true);
+    expect(feedback.voteOverMcp).not.toHaveBeenCalled();
+
+    const res = await client.callTool({
+      name: 'knowledge_feedback',
+      arguments: { workspaceId: WS_A, rating: 'down', reason: 'outdated', query: 'billing', traceId: 't-1' },
+    });
+    expect(res.isError).toBeFalsy();
+    expect(feedback.voteOverMcp).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: WS_A, rating: 'down', reason: 'outdated', query: 'billing', traceId: 't-1' }),
+      p,
+    );
+    const body = JSON.parse((res.content as Array<{ text: string }>)[0]!.text) as Record<string, unknown>;
+    expect(body).toEqual({ feedbackId: 'f-1', surface: 'mcp', deduplicated: false });
+
+    // A workspace the key is not pinned to is refused before the service runs.
+    const denied = await client.callTool({
+      name: 'knowledge_feedback',
+      arguments: { workspaceId: WS_B, rating: 'up', query: 'x' },
+    });
+    expect(denied.isError).toBe(true);
+    expect(feedback.voteOverMcp).toHaveBeenCalledTimes(1);
   });
 
   it('attributes a write to the caller, not the stub', async () => {

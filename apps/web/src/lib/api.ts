@@ -397,6 +397,18 @@ export async function apiFetchText(path: string, init?: RequestInit): Promise<st
   return (await apiRequest(path, init)).text()
 }
 
+/**
+ * apiFetch for a route that answers a file (`GET /v1/ai/feedback/export`).
+ * `<a href>` cannot send the Authorization header, so the bytes come through
+ * fetch and are handed to the browser as an object URL by the caller.
+ */
+export async function apiFetchBlob(path: string, init?: RequestInit): Promise<{ blob: Blob; filename: string | null }> {
+  const res = await apiRequest(path, init)
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const match = /filename="?([^";]+)"?/.exec(disposition)
+  return { blob: await res.blob(), filename: match?.[1] ?? null }
+}
+
 /** The one request path — headers, credential, and the error envelope — both readers share. */
 async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getToken()
@@ -442,7 +454,9 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
  * `<img>` and `<object>` cannot send an Authorization header, so the token
  * rides in the query string. Only the asset routes marked `@QueryTokenOk()` in
  * the API accept it (as the SSE stream does), and the request is same-origin
- * through the proxy. Point this at any other route and it 401s (#102).
+ * through the proxy. Point this at any other route and it 401s (#102). The web
+ * only ever holds a `ks_` session token, which those routes accept; an API
+ * key in a URL is refused. Per-asset tickets are #102 phase 2b.
  */
 export function resolveAssetUrl(path: string): string {
   if (!path.startsWith('/v1/')) return path

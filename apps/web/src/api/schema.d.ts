@@ -140,6 +140,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/url-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint a single-use, short-lived kt_ ticket for ?token= on SSE (EventSource cannot set headers); API keys are refused in URLs */
+        post: operations["AuthFlowController_urlTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/change-password": {
         parameters: {
             query?: never;
@@ -488,6 +505,24 @@ export interface paths {
         /** Feature 32: place a page under a parent and among its siblings in one call. parentId: null re-roots; beforeId names the sibling it lands above, omitted appends last */
         post: operations["DocumentsController_move"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stamp the page as verified at its current head (docs/features/38). The stamp reads as outdated once the head moves; nothing is written then */
+        post: operations["DocumentsController_verify"];
+        /** Remove the verification stamp */
+        delete: operations["DocumentsController_unverify"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1575,7 +1610,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<key>. */
+        /** Live workspace events over SSE (docs/features/04). EventSource cannot set headers — in api-key mode pass ?token=<kt_ ticket> from POST /v1/auth/url-ticket (API keys are refused in URLs). */
         get: operations["EventsController_events"];
         put?: never;
         post?: never;
@@ -1678,7 +1713,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A thread with its full message history */
+        /** A thread with its full message history, each reply carrying your own vote on it */
         get: operations["AssistantController_getThread"];
         put?: never;
         post?: never;
@@ -3028,6 +3063,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/assistant/messages/{id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rate an assistant reply (thumbs up/down with a reason); re-voting replaces the vote */
+        put: operations["AnswerFeedbackController_vote"];
+        post?: never;
+        /** Retract your own vote on an assistant reply */
+        delete: operations["AnswerFeedbackController_retract"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assistant/ask/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rate a one-shot POST /v1/assistant/ask answer — the client sends what it saw */
+        post: operations["AnswerFeedbackController_voteOnAsk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/feedback/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Votes, implicit signals and reports in a window, counted by rating, reason, surface and status */
+        get: operations["AnswerFeedbackAdminController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/feedback/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The labelled retrieval dataset as NDJSON, one FeedbackBacktestCase per usable vote (at most 50000 votes read); audited */
+        get: operations["AnswerFeedbackAdminController_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Votes and implicit signals, newest first (cursor-paginated) */
+        get: operations["AnswerFeedbackAdminController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/knowledge-issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List reports in a workspace, newest first; narrow by page or status */
+        get: operations["KnowledgeIssuesController_list"];
+        put?: never;
+        /** Report a problem with a page. Folds into the open issue for the same page and kind; otherwise opens a draft merge request (editor with a corrected body), queues a sentinel check, or stays open for a person. */
+        post: operations["KnowledgeIssuesController_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/knowledge-issues/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Close a report by hand: resolved (the page is right now) or dismissed (the report was not) */
+        patch: operations["KnowledgeIssuesController_close"];
+        trace?: never;
+    };
     "/v1/mcp": {
         parameters: {
             query?: never;
@@ -4195,6 +4351,80 @@ export interface components {
             /** @description Defaults to the stored graph */
             graph?: components["schemas"]["WorkflowGraphDto"];
         };
+        SetMessageFeedbackDto: {
+            /** @enum {string} */
+            rating: "up" | "down";
+            /**
+             * @description Required when rating is "down" (400 VALIDATION_FAILED without it); optional on "up".
+             * @enum {string}
+             */
+            reason?: "wrong" | "outdated" | "incomplete" | "irrelevant-sources" | "no-answer" | "unclear" | "other";
+            comment?: string;
+            /**
+             * @description Which pane the vote came from. The editor assistant mounts the same chat, so the client says which; omitted reads as "assistant".
+             * @enum {string}
+             */
+            surface?: "assistant" | "editor-assistant";
+        };
+        AskFeedbackDto: {
+            /** @enum {string} */
+            rating: "up" | "down";
+            /**
+             * @description Required when rating is "down" (400 VALIDATION_FAILED without it); optional on "up".
+             * @enum {string}
+             */
+            reason?: "wrong" | "outdated" | "incomplete" | "irrelevant-sources" | "no-answer" | "unclear" | "other";
+            comment?: string;
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description The question the answer was for */
+            query: string;
+            /** @description The start of the answer, as the voter saw it */
+            answerExcerpt?: string;
+            /** @description Document ids the answer cited (at most 20) */
+            citedDocumentIds?: string[];
+        };
+        KnowledgeIssueEvidenceDto: {
+            /** @description A passage of the page the report disputes */
+            quote?: string;
+            /** @description Where the correct information is */
+            url?: string;
+            note?: string;
+        };
+        ReportKnowledgeIssueDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description The page the report is about; must belong to workspaceId
+             */
+            documentId: string;
+            /**
+             * Format: uuid
+             * @description The revision the reporter read
+             */
+            revisionId?: string;
+            /** @enum {string} */
+            kind: "stale" | "wrong" | "missing" | "duplicate" | "other";
+            /** @description What is wrong, in the reporter's words */
+            detail: string;
+            /** @description At most 10 items */
+            evidence?: components["schemas"]["KnowledgeIssueEvidenceDto"][];
+            /** @description A corrected page body (markdown, no frontmatter). From an editor it opens a draft merge request at once; from a viewer it only reaches the sentinel as evidence. */
+            suggestedMarkdown?: string;
+            /**
+             * @description Where the report was made. Omitted reads as "web" (the page itself).
+             * @enum {string}
+             */
+            surface?: "assistant" | "editor-assistant" | "ask" | "mcp" | "web";
+        };
+        CloseKnowledgeIssueDto: {
+            /**
+             * @description The only two states a person sets by hand
+             * @enum {string}
+             */
+            status: "resolved" | "dismissed";
+        };
         ApiErrorResponse: {
             /**
              * @description HTTP status (0 is reserved for client-synthesized errors)
@@ -4567,6 +4797,44 @@ export interface operations {
                 "application/json": components["schemas"]["ResetPasswordDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AuthFlowController_urlTicket: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -5844,6 +6112,87 @@ export interface operations {
         responses: {
             /** @description beforeId no longer names a child of parentId — the tree moved */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_verify: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The page has no finalized head revision to vouch for */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_unverify: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14182,6 +14531,396 @@ export interface operations {
         responses: {
             /** @description Unchanged since the ETag sent in If-None-Match */
             304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnswerFeedbackController_vote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMessageFeedbackDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnswerFeedbackController_retract: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnswerFeedbackController_voteOnAsk: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskFeedbackDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnswerFeedbackAdminController_summary: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description ISO timestamp; defaults to 30 days ago */
+                from?: string;
+                /** @description ISO timestamp; defaults to now */
+                to?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnswerFeedbackAdminController_export: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description ISO timestamp; defaults to the beginning */
+                from?: string;
+                /** @description ISO timestamp; defaults to now */
+                to?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AnswerFeedbackAdminController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                kind?: "vote" | "low-confidence" | "no-answer";
+                rating?: "up" | "down";
+                reason?: string;
+                surface?: "assistant" | "editor-assistant" | "ask" | "mcp";
+                from?: string;
+                to?: string;
+                cursor?: string;
+                limit?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeIssuesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                documentId?: string;
+                status?: "open" | "checking" | "proposed" | "resolved" | "dismissed";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeIssuesController_report: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportKnowledgeIssueDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeIssuesController_close: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseKnowledgeIssueDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

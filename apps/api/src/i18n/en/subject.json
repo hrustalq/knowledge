@@ -6,6 +6,8 @@
   "job": "job id",
   "project": "project id",
   "assistantThread": "assistant thread id",
+  "assistantMessage": "assistant message id",
+  "knowledgeIssue": "knowledge issue id",
   "skill": "skill id",
   "plugin": "plugin id",
   "provider": "provider id",

@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
 import ChatMessage from './ChatMessage.vue'
+import { decorateCitations } from '@/lib/citations'
 import AssistantPrompt from './AssistantPrompt.vue'
 import ThinkingTrail from './ThinkingTrail.vue'
 
@@ -151,6 +152,15 @@ function answerFor(index: number): string | undefined {
   const next = rows.value[index + 1]
   if (next?.kind !== 'message' || next.message.role !== 'user') return undefined
   return next.message.content
+}
+
+/** The question a reply answered: the nearest user turn before it (docs/features/38 — carried into a report filed from its thumbs). */
+function questionFor(index: number): string | undefined {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const row = rows.value[i]
+    if (row?.kind === 'message' && row.message.role === 'user') return row.message.content
+  }
+  return undefined
 }
 
 /** A prompt is answerable only on the last message, and only between turns. */
@@ -340,6 +350,7 @@ defineExpose({ scrollToEnd })
                 :message="messageAt(item.index)!"
                 :prompt-active="isNewest(item.index)"
                 :prompt-answer="answerFor(item.index)"
+                :question="questionFor(item.index)"
                 :actionable="!live"
                 @answer="emit('answer', $event)"
                 @switch-mode="emit('switchMode', $event)"
@@ -357,11 +368,15 @@ defineExpose({ scrollToEnd })
                 </span>
                 <div class="min-w-0 flex-1 space-y-3">
                   <ThinkingTrail :live="live!" />
+                  <!-- Markers the model has written so far become neutral
+                       chips; the done frame's message replaces them with ones
+                       that resolve (docs/features/38). -->
                   <MarkdownView
                     v-if="live!.text"
                     :markdown="live!.text"
                     :streaming="!live!.stopped"
                     class="max-w-[72ch]"
+                    @rendered="decorateCitations($event, new Set())"
                   />
                   <GenerativeUiBlock v-for="(block, i) in live!.uiBlocks" :key="i" :block="block" />
                   <!-- Shown as soon as it is built, but inert until the turn

@@ -13,6 +13,8 @@ import { useAuthStore } from '@/stores/auth'
 import AiConfigPanel from '@/components/ai/AiConfigPanel.vue'
 import AiAgentsPanel from '@/components/ai/AiAgentsPanel.vue'
 import AgentRunsPanel from '@/components/ai/AgentRunsPanel.vue'
+import AiCoveragePanel from '@/components/ai/AiCoveragePanel.vue'
+import AiFeedbackPanel from '@/components/ai/AiFeedbackPanel.vue'
 import AiSkillsPanel from '@/components/ai/AiSkillsPanel.vue'
 import AiPluginsPanel from '@/components/ai/AiPluginsPanel.vue'
 import AiUsagePanel from '@/components/ai/AiUsagePanel.vue'
@@ -25,6 +27,8 @@ const TABS = [
   { key: 'config', label: 'ai.tabConfig' },
   { key: 'agents', label: 'ai.tabAgents' },
   { key: 'runs', label: 'ai.tabRuns' },
+  { key: 'coverage', label: 'ai.tabCoverage' },
+  { key: 'feedback', label: 'ai.tabFeedback' },
   { key: 'skills', label: 'ai.tabSkills' },
   { key: 'plugins', label: 'ai.tabPlugins' },
   { key: 'usage', label: 'ai.tabUsage' },
@@ -94,6 +98,8 @@ function setTab(key: TabKey) {
       <AiConfigPanel v-if="tab === 'config'" :can-manage="canManage" />
       <AiAgentsPanel v-else-if="tab === 'agents'" :can-manage="canManage" />
       <AgentRunsPanel v-else-if="tab === 'runs'" />
+      <AiCoveragePanel v-else-if="tab === 'coverage'" :can-manage="canManage" />
+      <AiFeedbackPanel v-else-if="tab === 'feedback'" :can-manage="canManage" />
       <AiSkillsPanel v-else-if="tab === 'skills'" :can-manage="canManage" />
       <AiPluginsPanel v-else-if="tab === 'plugins'" :can-manage="canManage" />
       <AiUsagePanel v-else-if="tab === 'usage'" :can-manage="canManage" />

@@ -13,7 +13,159 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.14.0] — 2026-10-10
+
+### Breaking
+
+- **An API key in `?token=` is refused everywhere.** On `GET /v1/events` and the
+  attachment, import-image and avatar redirects, `?token=kn_…` is now a 401.
+  Scripts should send the key as `Authorization: Bearer`, or mint a ticket with
+  it (`POST /v1/auth/url-ticket`) for the SSE stream. (#102)
+
+### Added
+
+- **Answers cite their sentences.** An assistant reply now ends each factual
+  sentence with a marker for the page it rests on, shown as a superscript
+  number; hovering it highlights the source chip, clicking it opens the page at
+  the cited section. A marker naming a page the assistant was never given is
+  removed before the answer is stored. Available on `/assistant`, in the editor
+  assistant and on `POST /v1/assistant/ask` (`citations`). First part of the
+  answer trust milestone (#67).
+- **Every cited page says how trustworthy it is.** Source chips carry a
+  provenance card: revision number, author, how long ago the page changed, its
+  verification state and how the fact reached the answer (page text, frontmatter,
+  an inferred or a curated relation). The same fields, plus a `traceId`, are on
+  every `knowledge_search` hit over MCP. (#67)
+- **A confidence badge on every answer** — high, medium, low or unsupported —
+  derived from what the harness observed (citation coverage, retrieval score,
+  stale or unverified pages, failed tool calls, a spent tool budget), with each
+  reason spelled out on hover. Never the model's own opinion of itself. Also on
+  `POST /v1/assistant/ask` (`confidence`). (#67)
+- **Verify a page.** An editor can stamp a page as checked at its current
+  revision (`POST /v1/documents/:id/verify`, `DELETE` to remove). The stamp
+  reads as outdated the moment a new revision is published, with no write;
+  answers that cite the page show the same state. (#67)
+- **Rate an answer.** Thumbs up/down under every assistant reply on
+  `/assistant` and in the editor assistant, and under one-shot answers in the
+  page's Ask AI widget. A thumbs-down asks for a reason (wrong, out of date,
+  incomplete, wrong pages cited, no answer, unclear, other) and takes an
+  optional comment; pressing the active thumb takes the vote back, and a vote
+  survives a reload. Over the API: `PUT`/`DELETE
+  /v1/assistant/messages/:id/feedback` and `POST /v1/assistant/ask/feedback`,
+  open to read-only API keys. Second part of the answer trust milestone (#67).
+- **Coverage gaps.** A new built-in `surveyor` agent reads the questions the
+  assistant was down-voted on, answered with low confidence or could not
+  answer, clusters them by meaning with the workspace's embedding provider, and
+  reports each topic asked often enough as a gap: how many times, from where,
+  the sample questions, what the workspace already says, and one proposed fix
+  — a drafted page, an edit to the page that should hold the answer, or an
+  archaeologist run over the connected repository. A new **Coverage** tab on
+  the AI settings page shows the latest survey as cards with a one-click
+  **Draft page**, **Propose update** or **Run archaeologist**, and **Survey
+  now**; the agent can also be scheduled like any other. Fourth part of the
+  answer trust milestone (#67).
+- **Agents can rate what they read.** A new `knowledge_feedback` MCP tool
+  takes a rating, a reason and the `traceId` of the `knowledge_search` it
+  answered from, so a re-vote on the same search updates one row. Hidden from
+  read-only keys like every other write; the server instructions and the
+  generated skill tell an agent when to call it. (#67)
+- **Weak answers leave a trace on their own.** An answer the harness scored
+  `low` or `none` confidence is recorded as an implicit `low-confidence` /
+  `no-answer` signal, so the coverage-gap agent of a later phase has something
+  to cluster even when nobody voted. (#67)
+- **Report a problem with a page.** A new **Reports** widget in the page rail
+  lists open reports and lets a reader file one: what kind of problem, what is
+  wrong, the passage disputed and where the right information is. A report is
+  checked by the sentinel against the page and, when it holds up, becomes a
+  draft merge request for a person to review; an editor who pastes the
+  corrected body gets that merge request at once, in their name. A page with
+  an open report shows as **Reported** on its Verify button and as `flagged`
+  on every answer that cites it; editors resolve or dismiss reports from the
+  rail. A second report of the same page and kind folds into the open one.
+  Over the API: `POST /v1/knowledge-issues`, `GET /v1/knowledge-issues`,
+  `PATCH /v1/knowledge-issues/:id`. Third part of the answer trust milestone
+  (#67).
+- **A thumbs-down names its pages.** Voting an answer down as *wrong* or *out
+  of date* offers, ticked by default, to report the pages it cited — one
+  report per page, after the vote itself is stored. (#67)
+- **Agents can report what they read.** A new `knowledge_report_issue` MCP
+  tool takes the page, the kind of problem, what is wrong and the evidence;
+  the server instructions and the generated skill tell an agent when to call
+  it. A report never edits a page by itself. Hidden from read-only keys like
+  every other write. (#67)
+- **Page authors hear about reports.** The last author of a reported page gets
+  a notification under *Page changes*; the feed records `reported`,
+  `proposed`, `resolved` and `dismissed`. (#67)
+
+- **Feedback becomes a test set.** A new **Feedback** tab on the AI settings
+  page lists every vote and weak-answer signal — the question, the cited pages,
+  the surface, the confidence the answer had — with counts for the last 30
+  days, and an **Export dataset** button that downloads the votes as NDJSON
+  (`GET /v1/ai/feedback/export`, admin-only, audited). Each line is one
+  labelled retrieval case: an up-vote names the pages that answered, a
+  "wrong" or "irrelevant sources" down-vote names the pages that did not, and
+  a report that ended in a merged fix names the page that answers now.
+  `make backtest ARGS="--export-feedback --workspace <id> --out fb.ndjson"`
+  writes the same file from the database, and `make backtest ARGS="--feedback
+  fb.ndjson"` replays it through search and prints recall@1, recall@k, MRR
+  and how often a rejected page still ranks, split by surface and by reason.
+  Last part of the answer trust milestone (#67).
+
+### Security
+
+- **Single-use tickets replace credentials in the event-stream URL.**
+  `POST /v1/auth/url-ticket` trades a header credential for a `kt_` ticket that
+  works once and expires in `AUTH_URL_TICKET_TTL_SEC` (60 s). The web app opens
+  `GET /v1/events` with one, so the session token no longer appears in any
+  access log for the stream. (#102, phase 2)
+
+### Operations
+
+- Migration `20261010120000_answer_provenance` adds `citations` and
+  `confidence` to `assistant_messages` and `verified_at` / `verified_by` /
+  `verified_revision_id` to `documents`. Expand-only, nullable or defaulted, no
+  backfill: the previous release's image runs against it, so a code rollback
+  needs no database step.
+- New env var `ANSWER_STALE_SOURCE_DAYS` (default `180`): a cited page whose
+  head changed longer ago than this counts as stale evidence in the confidence
+  score. Lowers the badge; hides nothing.
+- New optional env var `AUTH_URL_TICKET_TTL_SEC` (default 60, 5–3600). Tickets
+  live in the existing Redis. (#102)
+- New env `ANSWER_FEEDBACK_ENABLED` (default `true`). `false` refuses the vote
+  routes and `knowledge_feedback` and records no implicit signals — for an
+  operator who does not want question text stored in PostgreSQL. Migration
+  `20261010135843_answer_feedback` creates the `answer_feedback` table only
+  (expand-only; the previous image runs against it). Votes store the question
+  as typed, the first 1 000 characters of the answer and the cited page ids;
+  retention is phase 3 of #67. (#67)
+- Migration `20261010142919_knowledge_issues` creates the `knowledge_issues`
+  table only (expand-only; the previous image runs against it, so a code
+  rollback needs no database step). New env vars, all with defaults:
+  `KNOWLEDGE_ISSUE_DAILY_LIMIT` (`50` reports per principal, per API key when
+  one is used, per 24 h — past it a report is a 429 naming the limit),
+  `KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS` (`10` sentinel report checks waiting per
+  workspace — past it a report stays open for a person instead of queueing a
+  model run), `ANSWER_FEEDBACK_RETENTION_DAYS` (`180`: feedback rows and
+  closed reports older than this are purged, in batches, by the report
+  sweeper once an hour; open reports are never purged). A report check runs
+  the `sentinel` agent and spends the reporter's AI budget; with the sentinel
+  disabled every report stays open. (#67)
+- New env vars for the `surveyor` agent, all with defaults and no migration:
+  `COVERAGE_WINDOW_DAYS` (`30`: how many days of answer feedback a run reads),
+  `COVERAGE_MIN_CLUSTER_SIZE` (`3`: the smallest topic reported),
+  `COVERAGE_SIMILARITY` (`0.82`: the cosine a question must reach to join a
+  topic), `COVERAGE_MAX_QUESTIONS` (`2000`: the most feedback rows read per
+  run). A survey embeds every distinct question through the configured
+  embedding provider and makes at most twelve model calls, as the run's owner.
+  On `EMBEDDINGS_PROVIDER=stub` the surveyor refuses rather than cluster on
+  hashed words, so it is not usable in a stub-embedding deployment. Off unless
+  someone presses Survey now or schedules the agent. (#67)
+- The feedback export (`GET /v1/ai/feedback/export`, `make backtest
+  --export-feedback`) carries question text and user ids: it is admin-only,
+  every call writes an `audit_logs` row (`feedback.export`, with the line
+  count), and one export reads at most 50 000 votes. No new env var and no
+  migration; retention (`ANSWER_FEEDBACK_RETENTION_DAYS`) bounds the dataset
+  as it bounds the table. (#67)
 
 ## [0.13.0] — 2026-09-27
 
@@ -998,7 +1150,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.13.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/hrustalq/knowledge/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/hrustalq/knowledge/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/hrustalq/knowledge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/hrustalq/knowledge/compare/v0.10.1...v0.11.0

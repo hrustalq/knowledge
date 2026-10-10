@@ -46,6 +46,7 @@ import type {
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
 import type { Document, DocumentBranch, DocumentRevision } from '@prisma/client';
+import { OPEN_KNOWLEDGE_ISSUE_STATUSES, verificationStateFor } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
@@ -472,6 +473,11 @@ export class DocumentsService {
         : [];
 
     const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId ?? null;
+    // An open report flags the page (docs/features/38, phase 3) — the same
+    // predicate ProvenanceService applies to a cited source.
+    const openIssues = await this.prisma.knowledgeIssue.count({
+      where: { documentId, status: { in: [...OPEN_KNOWLEDGE_ISSUE_STATUSES] } },
+    });
     return {
       document: {
         documentId: document.id,
@@ -484,10 +490,65 @@ export class DocumentsService {
         headRevisionId: headId,
         headRevisionStatus: (revision.status as RevisionStatus) ?? null,
         createdAt: document.createdAt.toISOString(),
+        // The stamp and its reading against the head (docs/features/38).
+        verifiedAt: document.verifiedAt?.toISOString() ?? null,
+        verifiedBy: document.verifiedBy,
+        verifiedRevisionId: document.verifiedRevisionId,
+        verification: verificationStateFor(document, headId, openIssues),
       },
       revision: this.toRevisionInfo(revision),
       chunks,
     };
+  }
+
+  /**
+   * Stamp the page as checked at its current head (docs/features/38).
+   *
+   * The stamp is three columns and nothing else: who, when, and which revision.
+   * Whether it still holds is derived against the head on every read, so a new
+   * revision makes the page `outdated` with no write here. Verifying a page
+   * with no finalized head is refused — there is nothing to vouch for.
+   */
+  async verifyDocument(documentId: string, verifiedBy: string): Promise<DocumentDetailResponse> {
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      include: { branches: true },
+    });
+    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
+    const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId ?? null;
+    if (!headId) throw new ConflictException(t('error.document.noRevisions', { id: documentId }));
+    await this.prisma.document.update({
+      where: { id: documentId },
+      data: { verifiedAt: new Date(), verifiedBy, verifiedRevisionId: headId },
+    });
+    void this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: verifiedBy,
+      action: 'document.verified',
+      documentId,
+      subjectId: headId,
+      metadata: { title: document.title, revisionId: headId },
+    });
+    return this.getDocument(documentId);
+  }
+
+  /** Take the stamp off. Idempotent: an unverified page stays unverified. */
+  async unverifyDocument(documentId: string, actor: string): Promise<DocumentDetailResponse> {
+    const document = await this.getDocumentOrThrow(documentId);
+    if (document.verifiedRevisionId) {
+      await this.prisma.document.update({
+        where: { id: documentId },
+        data: { verifiedAt: null, verifiedBy: null, verifiedRevisionId: null },
+      });
+      void this.activity.record({
+        workspaceId: document.workspaceId,
+        actor,
+        action: 'document.unverified',
+        documentId,
+        metadata: { title: document.title },
+      });
+    }
+    return this.getDocument(documentId);
   }
 
   async createBranch(documentId: string, dto: CreateBranchDto): Promise<CreateBranchResponse> {

@@ -30,6 +30,7 @@ import type {
 import { assistantSourceKey } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId } from '@/lib/api'
 import { streamAssistantTurn } from '@/lib/assistant-stream'
+import { useFeedbackStore } from '@/stores/feedback'
 
 /**
  * The editor's side of a turn (docs/features/34): what the page says right now,
@@ -49,6 +50,11 @@ export interface DraftBridge {
   settle: () => void
 }
 let draftBridge: DraftBridge | null = null
+
+/** Whether an editor is mounted beside the pane — what makes a vote an `editor-assistant` one (docs/features/38). */
+export function hasDraftBridge(): boolean {
+  return draftBridge !== null
+}
 
 /** Registered by the editor while it is mounted; returns the unregister. */
 export function connectDraft(bridge: DraftBridge): () => void {
@@ -249,6 +255,7 @@ export const useAssistantStore = defineStore('assistant', {
         const res = await apiFetch<GetAssistantThreadResponse>(`/v1/assistant/threads/${threadId}`)
         this.activeThread = res.thread
         this.messages = res.messages
+        useFeedbackStore().hydrate(res.messages)
         this.live = null
         this.syncSummary(res.thread)
       } catch (e) {
@@ -316,6 +323,7 @@ export const useAssistantStore = defineStore('assistant', {
         { method: 'DELETE' },
       )
       this.messages = res.messages
+        useFeedbackStore().hydrate(res.messages)
       this.live = null
       this.syncSummary(res.thread)
     },
@@ -402,6 +410,8 @@ export const useAssistantStore = defineStore('assistant', {
         sources: [],
         uiBlocks: [],
         prompt: null,
+        citations: [],
+        confidence: null,
         createdAt: new Date().toISOString(),
       }
       this.messages.push(placeholder)
@@ -536,6 +546,7 @@ export const useAssistantStore = defineStore('assistant', {
       try {
         const res = await apiFetch<GetAssistantThreadResponse>(`/v1/assistant/threads/${id}`)
         this.messages = res.messages
+        useFeedbackStore().hydrate(res.messages)
         this.live = null
         this.syncSummary(res.thread)
       } catch {

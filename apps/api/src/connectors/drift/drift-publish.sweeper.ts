@@ -35,7 +35,10 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000;
  * Propose while this runs cannot open a second merge request either.
  *
  * Each run is published **at most once**: claimed by stamping
- * `input.publishedAt` in one guarded statement, before anything is written. A
+ * `input.publishedAt` in one guarded statement, before anything is written.
+ * Report checks (`input.issueId`, docs/features/38) share the agent and are
+ * excluded here — `ReportPublishSweeper` claims those, so neither steals the
+ * other's run. A
  * comment that fails is logged, not retried — the next push to the branch
  * starts a new check and a new comment, and retrying a failing host every tick
  * would be the only thing this sweeper did.
@@ -78,6 +81,7 @@ export class DriftPublishSweeper implements OnModuleInit, OnModuleDestroy {
            AND status = 'succeeded'
            AND finished_at >= ${since}
            AND COALESCE(input ->> 'publishedAt', '') = ''
+           AND COALESCE(input ->> 'issueId', '') = ''
          ORDER BY finished_at ASC
          LIMIT ${BATCH}
       `;

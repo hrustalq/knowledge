@@ -1,4 +1,6 @@
 import type {
+  AnswerCitation,
+  AnswerConfidence,
   ApiErrorPayload,
   AssistantSource,
   AssistantToolCall,
@@ -103,6 +105,219 @@ export interface AssistantModeSwitchPrompt {
 
 export type AssistantPrompt = AssistantFormPrompt | AssistantModeSwitchPrompt;
 
+// ---------------------------------------------------------------------------
+// Answer feedback (docs/features/38, issue #67 phase 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where an answer was given, and therefore where a vote on it came from. A
+ * closed list because the admin tab (phase 5) filters by it in SQL and the
+ * surveyor (phase 4) reports the mix per cluster.
+ *
+ * `editor-assistant` is the same `ChatPane` as `assistant`, mounted beside a
+ * draft (docs/features/34): the API cannot tell the two apart from a message
+ * row, so the client says which pane it is voting from and the API only
+ * checks the value is one of these.
+ */
+export const ANSWER_SURFACES = ['assistant', 'editor-assistant', 'ask', 'mcp'] as const;
+export type AnswerSurface = (typeof ANSWER_SURFACES)[number];
+
+export const ANSWER_RATINGS = ['up', 'down'] as const;
+export type AnswerRating = (typeof ANSWER_RATINGS)[number];
+
+/**
+ * Why an answer was voted down. Required on `down`, optional on `up`: a thumbs
+ * up needs no explanation, and a thumbs down with none is a number nobody can
+ * act on. `wrong` and `outdated` are the two that name a page (phase 3 lets
+ * such a vote file a report against the cited pages).
+ */
+export const ANSWER_FEEDBACK_REASONS = [
+  'wrong',
+  'outdated',
+  'incomplete',
+  'irrelevant-sources',
+  'no-answer',
+  'unclear',
+  'other',
+] as const;
+export type AnswerFeedbackReason = (typeof ANSWER_FEEDBACK_REASONS)[number];
+
+/**
+ * What one `answer_feedback` row records: an explicit vote, or a miss the
+ * harness noticed on its own. Misses only — a good answer nobody rated writes
+ * nothing, which keeps the table bounded and keeps measurement in the JSONL
+ * stream where it belongs.
+ */
+export const ANSWER_SIGNAL_KINDS = ['vote', 'low-confidence', 'no-answer'] as const;
+export type AnswerSignalKind = (typeof ANSWER_SIGNAL_KINDS)[number];
+
+export const ANSWER_FEEDBACK_COMMENT_MAX_CHARS = 2_000;
+
+/** The caller's own vote on one answer — what the thumbs under a message show. */
+export interface AnswerVote {
+  rating: AnswerRating;
+  reason: AnswerFeedbackReason | null;
+  comment: string | null;
+  createdAt: string;
+}
+
+/** One stored feedback row, as the vote routes and the admin tab (phase 5) return it. */
+export interface AnswerFeedbackInfo {
+  id: string;
+  workspaceId: string;
+  kind: AnswerSignalKind;
+  surface: AnswerSurface;
+  rating: AnswerRating | null;
+  reason: AnswerFeedbackReason | null;
+  comment: string | null;
+  /** The question the answer was for. */
+  query: string;
+  /** Null for a one-shot `/ask` answer or an MCP vote: nothing persisted to point at. */
+  messageId: string | null;
+  threadId: string | null;
+  /** MCP only: the `knowledge_search` call the agent built its answer from. */
+  traceId: string | null;
+  citedDocumentIds: string[];
+  /** The answer's confidence when it was given, so a vote can be read against it later. */
+  confidence: AnswerConfidence | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+// PUT /v1/assistant/messages/:id/feedback, POST /v1/assistant/ask/feedback
+/**
+ * One row of the admin Feedback tab (phase 5): a vote or an implicit signal,
+ * with the first part of the answer and the cited pages resolved to titles.
+ */
+export interface AnswerFeedbackListEntry extends AnswerFeedbackInfo {
+  answerExcerpt: string | null;
+  citedDocuments: Array<{ id: string; title: string | null }>;
+}
+
+export interface ListAnswerFeedbackResponse {
+  workspaceId: string;
+  entries: AnswerFeedbackListEntry[];
+  nextCursor: string | null;
+}
+
+/** Counts over `answer_feedback` and `knowledge_issues` in a window — no aggregate table behind it. */
+export interface AnswerFeedbackSummary {
+  workspaceId: string;
+  from: string;
+  to: string;
+  votes: { up: number; down: number };
+  signals: { 'low-confidence': number; 'no-answer': number };
+  byReason: Array<{ reason: AnswerFeedbackReason; count: number }>;
+  bySurface: Array<{ surface: AnswerSurface; count: number }>;
+  issues: Array<{ status: KnowledgeIssueStatus; count: number }>;
+  /** Votes the export turns into a `FeedbackBacktestCase`: cited at least one page, and either an up-vote or a down-vote that blames the pages. */
+  datasetVotes: number;
+}
+
+export interface SetAnswerFeedbackResponse {
+  feedback: AnswerFeedbackInfo;
+}
+
+// DELETE /v1/assistant/messages/:id/feedback
+export interface DeleteAnswerFeedbackResponse {
+  ok: true;
+  /** False when there was no vote to retract — still a 200, the end state is the same. */
+  removed: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge issues (docs/features/38, issue #67 phase 3): a reported problem
+// with a page — from an agent over MCP, from a person on the page, or from a
+// down-vote that named the pages it cited.
+// ---------------------------------------------------------------------------
+
+/** What is wrong with the page, in the reporter's words. Closed: the sentinel judges `stale`/`wrong`, the rest wait for a person. */
+export const KNOWLEDGE_ISSUE_KINDS = ['stale', 'wrong', 'missing', 'duplicate', 'other'] as const;
+export type KnowledgeIssueKind = (typeof KNOWLEDGE_ISSUE_KINDS)[number];
+
+/**
+ * Where a report is on its way to a fix.
+ *
+ * `open` waits for a person; `checking` has a sentinel run queued or running;
+ * `proposed` has a merge request to review; `resolved` and `dismissed` are
+ * closed. The first three count as *open* for the page's `flagged` state and
+ * for dedupe — `isOpenIssueStatus` is that predicate, and the guard, the
+ * provenance count and the rail all read it rather than a copy.
+ */
+export const KNOWLEDGE_ISSUE_STATUSES = ['open', 'checking', 'proposed', 'resolved', 'dismissed'] as const;
+export type KnowledgeIssueStatus = (typeof KNOWLEDGE_ISSUE_STATUSES)[number];
+export const OPEN_KNOWLEDGE_ISSUE_STATUSES: readonly KnowledgeIssueStatus[] = ['open', 'checking', 'proposed'];
+export function isOpenIssueStatus(status: string): boolean {
+  return (OPEN_KNOWLEDGE_ISSUE_STATUSES as readonly string[]).includes(status);
+}
+
+/** The two terminal states a person may set by hand. */
+export const KNOWLEDGE_ISSUE_CLOSE_STATUSES = ['resolved', 'dismissed'] as const;
+
+/** Where a report came from: an answer surface, or the page itself. */
+export const KNOWLEDGE_ISSUE_SURFACES = [...ANSWER_SURFACES, 'web'] as const;
+export type KnowledgeIssueSurface = (typeof KNOWLEDGE_ISSUE_SURFACES)[number];
+
+export const KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS = 4_000;
+export const KNOWLEDGE_ISSUE_EVIDENCE_MAX = 10;
+export const KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS = 2_000;
+export const KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS = 200_000;
+
+/** One piece of evidence behind a report. Untrusted text, every field. */
+export interface KnowledgeIssueEvidence {
+  /** A passage of the page the reporter disputes. */
+  quote?: string;
+  /** Where the correct information is. */
+  url?: string;
+  /** Anything else — a verdict the sentinel attached is a note too. */
+  note?: string;
+}
+
+export interface KnowledgeIssueInfo {
+  id: string;
+  workspaceId: string;
+  documentId: string;
+  documentTitle: string | null;
+  /** The revision the reporter read, when they said. */
+  revisionId: string | null;
+  kind: KnowledgeIssueKind;
+  status: KnowledgeIssueStatus;
+  detail: string;
+  evidence: KnowledgeIssueEvidence[];
+  /** Whether a corrected body came with the report; the body itself is not returned on a list. */
+  hasSuggestion: boolean;
+  surface: KnowledgeIssueSurface;
+  /** Reports folded into this one: a second report of the same (page, kind) while it is open. */
+  reportCount: number;
+  /** The sentinel run checking it, once one was queued. */
+  agentRunId: string | null;
+  /** The merge request that proposes the fix, once one exists. */
+  mergeRequestId: string | null;
+  createdBy: string;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// POST /v1/knowledge-issues, knowledge_report_issue
+export interface ReportKnowledgeIssueResponse {
+  issue: KnowledgeIssueInfo;
+  /** True when the report folded into an issue that was already open for the page and kind. */
+  deduplicated: boolean;
+}
+
+// GET /v1/knowledge-issues?workspaceId=&documentId=&status=
+export interface ListKnowledgeIssuesResponse {
+  workspaceId: string;
+  issues: KnowledgeIssueInfo[];
+}
+
+// PATCH /v1/knowledge-issues/:id
+export interface UpdateKnowledgeIssueResponse {
+  issue: KnowledgeIssueInfo;
+}
+
 export interface AssistantMessageInfo {
   id: string;
   threadId: string;
@@ -113,6 +328,19 @@ export interface AssistantMessageInfo {
   uiBlocks: AssistantUiBlock[];
   /** Set when the turn ended by asking the user something. At most one per turn. */
   prompt: AssistantPrompt | null;
+  /**
+   * Sentence-level citations into `content` (docs/features/38). Empty for user
+   * turns and for assistant rows persisted before the feature.
+   */
+  citations: AnswerCitation[];
+  /** Null for user turns and pre-feature rows; the badge is simply not drawn. */
+  confidence: AnswerConfidence | null;
+  /**
+   * The caller's own vote on this answer (docs/features/38, phase 2). Present
+   * only when a thread is read back — a `done` frame carries none, because a
+   * reply nobody has seen yet cannot have been rated.
+   */
+  feedback?: AnswerVote | null;
   createdAt: string;
 }
 
@@ -762,6 +990,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'archaeologist',
   /** Checks the pages a pull or merge request may have made wrong (docs/features/35). */
   'sentinel',
+  /** Clusters the questions answers failed on into coverage gaps (docs/features/38, phase 4). */
+  'surveyor',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -781,12 +1011,24 @@ export function isConnectorScopedAgent(key: string): boolean {
 /**
  * What a run was asked to do — `agent_runs.input`. `note` seeds an extra
  * instruction; `connectorId` scopes a connector-scoped agent to one repository;
- * `pullRequest` names the change a sentinel run checks (docs/features/35).
+ * `pullRequest` names the change a sentinel run checks (docs/features/35);
+ * `issueId` the report it judges (docs/features/38).
  */
 export interface AgentRunInput {
   note?: string;
   connectorId?: string;
   pullRequest?: AgentRunPullRequest;
+  /**
+   * The knowledge issue a sentinel run judges (docs/features/38, phase 3). A
+   * run carries either this or `pullRequest`, never both: one is a report to
+   * check against the page, the other a change to check the page against.
+   */
+  issueId?: string;
+  /**
+   * How far back a surveyor run reads answer feedback (docs/features/38,
+   * phase 4). Absent, the worker uses `COVERAGE_WINDOW_DAYS`.
+   */
+  coverage?: { windowDays: number };
   /**
    * Set once the API has acted on a finished sentinel run — proposals opened,
    * the pull request commented on. The claim that stops two sweeps doing it
@@ -1017,6 +1259,12 @@ export const AGENT_RUN_TRIGGERS = [
   'schedule',
   /** A pull or merge request webhook started a sentinel run (docs/features/35). */
   'webhook',
+  /**
+   * A knowledge issue started a sentinel run (docs/features/38, phase 3).
+   * Emitted by exactly one service, `KnowledgeIssuesService`, the way
+   * `'webhook'` is by `DriftTriggerService`.
+   */
+  'report',
 ] as const;
 export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
 
@@ -1060,6 +1308,12 @@ export interface AgentFinding {
    */
   proposedAt?: string | null;
   /**
+   * The knowledge issue this finding answers (docs/features/38, phase 3): a
+   * sentinel judging a report points its verdict back at the report, which is
+   * what lets the publisher move the issue on without guessing.
+   */
+  issueId?: string;
+  /**
    * The relations this finding proposes the first cited page should declare
    * (docs/features/28). Set only by the cartographer, and what lets the finding
    * be applied as a frontmatter edit instead of being handed to a model that
@@ -1087,6 +1341,36 @@ export interface AgentFinding {
    * a draft and no document is one nobody has acted on yet.
    */
   draft?: AgentFindingDraft;
+  /**
+   * The questions this finding stands on (docs/features/38, phase 4). Set
+   * only by the surveyor, whose findings are grounded in answer feedback
+   * rather than in pages: a cluster of questions the workspace could not
+   * answer is a fact computed from `answer_feedback`, and the page ids and
+   * draft are the model's proposal for closing it.
+   */
+  coverage?: AgentFindingCoverage;
+}
+
+/**
+ * What a surveyor finding proposes (docs/features/38, phase 4). Closed: the
+ * executor validates the model's answer against it, the web picks the button
+ * from it, and a value the code never emits would be a button that does
+ * nothing.
+ */
+export const COVERAGE_RECOMMENDATIONS = ['create-page', 'update-page', 'run-archaeologist'] as const;
+export type CoverageRecommendation = (typeof COVERAGE_RECOMMENDATIONS)[number];
+
+/** One cluster of questions answers failed on, and what to do about it. */
+export interface AgentFindingCoverage {
+  /** Representative questions, most asked first. Capped; `count` is the whole cluster. */
+  questions: string[];
+  /** Signals in the cluster — one per feedback row, so a question asked three times counts three. */
+  count: number;
+  /** How the signals arrived: down-votes, low-confidence turns, turns with no answer. */
+  signals: Record<AnswerSignalKind, number>;
+  /** Where they were asked. */
+  surfaces: AnswerSurface[];
+  recommendation: CoverageRecommendation;
 }
 
 /** The page a finding would become: written by the run, published by a person. */

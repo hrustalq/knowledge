@@ -34,6 +34,8 @@ export type I18nTranslations = {
         "archaeologistDesc": string;
         "sentinel": string;
         "sentinelDesc": string;
+        "surveyor": string;
+        "surveyorDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -120,6 +122,24 @@ export type I18nTranslations = {
                 "footer": string;
             };
         };
+        "report": {
+            "noContent": string;
+            "noModel": string;
+            "reportedTitle": string;
+            "summaryNoModel": string;
+            "summaryConfirmed": string;
+            "summaryRejected": string;
+        };
+        "coverage": {
+            "noEmbedding": string;
+            "noSignals": string;
+            "tooFew": string;
+            "noModel": string;
+            "noModelDetail": string;
+            "summaryNoModel": string;
+            "budgetSpent": string;
+            "summary": string;
+        };
         "warning": {
             "fileNotRead": string;
             "graphUnreadableOrphans": string;
@@ -128,6 +148,7 @@ export type I18nTranslations = {
             "modelPassFailedStructuralOnly": string;
             "pageNotReviewed": string;
             "pageNotScanned": string;
+            "stopped": string;
         };
     };
     "assistant": {
@@ -189,6 +210,8 @@ export type I18nTranslations = {
             "invalidSession": string;
             "accountDisabled": string;
             "unknownApiKey": string;
+            "invalidUrlTicket": string;
+            "apiKeyInUrl": string;
             "invalidCredentials": string;
             "invalidResetToken": string;
             "noPasswordInDevMode": string;
@@ -396,7 +419,23 @@ export type I18nTranslations = {
             "budgetWorkspace": string;
             "upstreamStatus": string;
             "upstreamError": string;
+            "upstreamNoCredit": string;
+            "upstreamAuth": string;
             "unreachable": string;
+            "messageNotFoundById": string;
+        };
+        "feedback": {
+            "disabled": string;
+            "messageNotAssistant": string;
+            "reasonRequired": string;
+            "invalidFilter": string;
+            "invalidDate": string;
+            "invalidRange": string;
+        };
+        "knowledgeIssue": {
+            "notFound": string;
+            "rateLimited": string;
+            "raced": string;
         };
         "workflow": {
             "notFound": string;
@@ -584,6 +623,23 @@ export type I18nTranslations = {
             "wideTable": string;
         };
     };
+    "knowledgeIssue": {
+        "kind": {
+            "stale": string;
+            "wrong": string;
+            "missing": string;
+            "duplicate": string;
+            "other": string;
+        };
+        "mergeRequestTitle": string;
+        "mergeRequestIntro": string;
+        "verdict": {
+            "failed": string;
+            "notStale": string;
+            "noDraft": string;
+            "drafted": string;
+        };
+    };
     "mention": {
         "failed": string;
         "timedOut": string;
@@ -664,6 +720,8 @@ export type I18nTranslations = {
         "job": string;
         "project": string;
         "assistantThread": string;
+        "assistantMessage": string;
+        "knowledgeIssue": string;
         "skill": string;
         "plugin": string;
         "provider": string;

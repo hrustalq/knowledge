@@ -7,6 +7,8 @@
     "invalidSession": "Invalid or expired session — log in again",
     "accountDisabled": "Account is disabled",
     "unknownApiKey": "Unknown API key",
+    "invalidUrlTicket": "This link's access ticket is invalid, expired or already used",
+    "apiKeyInUrl": "API keys are not accepted in a URL. Send the key as an Authorization: Bearer header, or exchange it for a single-use ticket at POST /v1/auth/url-ticket",
     "invalidCredentials": "Invalid email or password",
     "invalidResetToken": "Invalid or expired reset token",
     "noPasswordInDevMode": "No password to change in AUTH_MODE=none",
@@ -214,7 +216,23 @@
     "budgetWorkspace": "This workspace's monthly AI token budget is spent. Ask a workspace admin to raise it.",
     "upstreamStatus": "The AI provider responded with an error ({status})",
     "upstreamError": "The AI provider responded with an error",
-    "unreachable": "The AI provider is unreachable"
+    "upstreamNoCredit": "The AI provider refused the request: its account is out of credit (402). Top up the balance with the provider.",
+    "upstreamAuth": "The AI provider rejected the credentials ({status}). Check the API key in AI settings.",
+    "unreachable": "The AI provider is unreachable",
+    "messageNotFoundById": "Assistant message {id} not found"
+  },
+  "feedback": {
+    "disabled": "Answer feedback is disabled on this server (ANSWER_FEEDBACK_ENABLED=false).",
+    "messageNotAssistant": "Only an assistant reply can be rated — {id} is a user message.",
+    "reasonRequired": "A thumbs-down needs a reason.",
+    "invalidFilter": "\"{value}\" is not a {name}. Use one of: {allowed}.",
+    "invalidDate": "\"{value}\" is not a date for {name}.",
+    "invalidRange": "\"from\" must not be after \"to\"."
+  },
+  "knowledgeIssue": {
+    "notFound": "Knowledge issue {id} not found.",
+    "rateLimited": "You have filed {limit} reports in the last 24 hours. Try again later.",
+    "raced": "Another report of the same page and kind arrived at the same time. Try again."
   },
   "workflow": {
     "notFound": "Workflow {id} not found",

@@ -9,16 +9,20 @@
 // bubble would fight every block inside it, and a knowledge base's answers
 // deserve to look like the knowledge base.
 import { useI18n } from 'vue-i18n'
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { Check, Copy, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
 import type { AssistantMessageInfo, AssistantUiBlock } from '@knowledge/contracts'
-import { assistantSourceKey } from '@knowledge/contracts'
+import { assistantSourceKey, isWebSource } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import GenerativeUiBlock from '@/components/knowledge/GenerativeUiBlock.vue'
 import AssistantPrompt from './AssistantPrompt.vue'
+import AnswerConfidence from './AnswerConfidence.vue'
+import AnswerFeedback from './AnswerFeedback.vue'
 import SourceChip from './SourceChip.vue'
 import { toolVocabulary } from './tool-vocabulary'
+import { citeOfEvent, decorateCitations, highlightCite, sourceByCite, sourceHref } from '@/lib/citations'
 
 const { t } = useI18n()
 
@@ -32,6 +36,8 @@ const props = defineProps<{
   promptActive?: boolean
   /** The user turn that answered this message's prompt, when it has one. */
   promptAnswer?: string
+  /** For a reply: the question it answered, carried into a report filed from its thumbs (docs/features/38). */
+  question?: string
   /** False while a turn is in flight: rewinding under a running stream is not offered. */
   actionable?: boolean
 }>()
@@ -48,6 +54,44 @@ const emit = defineEmits<{
 const body = computed(() => props.streamingText ?? props.message.content)
 const blocks = computed(() => props.streamingBlocks ?? props.message.uiBlocks)
 const isUser = computed(() => props.message.role === 'user')
+
+// Sentence-level citations (docs/features/38). The rendered answer carries
+// `[S2]` markers; after each render they become superscript buttons, and the
+// chip and the markers that name one source light up together — from either
+// end. Clicking a marker opens the page at the cited section.
+const router = useRouter()
+const knownCites = computed(() => new Set(props.message.sources.map((s) => s.cite).filter((c): c is string => !!c)))
+const activeCite = ref<string | null>(null)
+let answerRoot: HTMLElement | null = null
+
+function onRendered(root: HTMLElement) {
+  answerRoot = root
+  decorateCitations(root, knownCites.value)
+  if (root.dataset.knCitesBound) return
+  root.dataset.knCitesBound = '1'
+  const enter = (e: Event) => {
+    const label = citeOfEvent(e)
+    if (label) activeCite.value = label
+  }
+  const leave = (e: Event) => {
+    if (citeOfEvent(e)) activeCite.value = null
+  }
+  root.addEventListener('mouseover', enter)
+  root.addEventListener('mouseout', leave)
+  root.addEventListener('focusin', enter)
+  root.addEventListener('focusout', leave)
+  root.addEventListener('click', (e) => {
+    const label = citeOfEvent(e)
+    if (!label) return
+    const source = sourceByCite(props.message.sources, label)
+    if (!source) return
+    e.preventDefault()
+    if (isWebSource(source)) window.open(source.url, '_blank', 'noopener,noreferrer')
+    else void router.push(sourceHref(source))
+  })
+}
+
+watch(activeCite, (label) => highlightCite(answerRoot, label))
 
 /**
  * Actions need a message the server knows about. The optimistic bubble carries
@@ -158,7 +202,13 @@ function saveEdit() {
     </span>
 
     <div class="min-w-0 flex-1 space-y-3">
-      <MarkdownView v-if="body" :markdown="body" class="max-w-[72ch]" :streaming="streamingText !== undefined" />
+      <MarkdownView
+        v-if="body"
+        :markdown="body"
+        class="max-w-[72ch]"
+        :streaming="streamingText !== undefined"
+        @rendered="onRendered"
+      />
 
       <GenerativeUiBlock v-for="(block, i) in blocks" :key="i" :block="block" />
 
@@ -174,9 +224,12 @@ function saveEdit() {
 
       <!-- What it used, and what it read: the receipts for the answer above. -->
       <footer
-        v-if="message.toolCalls.length > 0 || message.sources.length > 0"
+        v-if="message.toolCalls.length > 0 || message.sources.length > 0 || message.confidence"
         class="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-1"
       >
+        <!-- First, because it is the one receipt that is about the answer as a
+             whole; everything after it is about one step or one page. -->
+        <AnswerConfidence v-if="message.confidence" :confidence="message.confidence" />
         <span
           v-for="(tc, i) in message.toolCalls"
           :key="`t-${i}`"
@@ -193,30 +246,97 @@ function saveEdit() {
         <div v-if="message.sources.length > 0" class="flex flex-wrap gap-1.5">
           <!-- Keyed by identity, not by document id: a web citation has none,
                and two of them would share one `undefined` key. -->
-          <SourceChip v-for="s in message.sources" :key="assistantSourceKey(s)" :source="s" />
+          <SourceChip
+            v-for="s in message.sources"
+            :key="assistantSourceKey(s)"
+            :source="s"
+            :active="!!s.cite && activeCite === s.cite"
+            @hover="activeCite = $event ? s.cite ?? null : null"
+          />
         </div>
       </footer>
 
-      <!-- No edit here: rewriting a reply would leave the transcript claiming
-           the model said something it did not. Reset asks the question again. -->
-      <div v-if="canAct" class="kn-msg-actions flex items-center gap-0.5">
-        <button type="button" class="kn-msg-action" :aria-label="copied ? t('common.copied') : t('chat.copyReply')" @click="copy">
-          <Check v-if="copied" class="size-3.5 text-emerald-500" />
-          <Copy v-else class="size-3.5" />
-        </button>
-        <button
-          type="button"
-          class="kn-msg-action"
-          :aria-label="t('chat.discardReply')"
-          :title="t('chat.askAgain')"
-          @click="emit('reset', message)"
-        >
-          <RotateCcw class="size-3.5" />
-        </button>
+      <!-- The thumbs stay visible (docs/features/38): a vote is the one thing
+           the reader is asked for, so it does not hide behind a hover the way
+           copy and reset do. No edit here: rewriting a reply would leave the
+           transcript claiming the model said something it did not. Reset asks
+           the question again. -->
+      <div v-if="canAct" class="flex items-center gap-2">
+        <AnswerFeedback
+          :target="{ kind: 'message', messageId: message.id }"
+          :initial="message.feedback"
+          :sources="message.sources"
+          :query="question"
+        />
+        <div class="kn-msg-actions flex items-center gap-0.5">
+          <button type="button" class="kn-msg-action" :aria-label="copied ? t('common.copied') : t('chat.copyReply')" @click="copy">
+            <Check v-if="copied" class="size-3.5 text-emerald-500" />
+            <Copy v-else class="size-3.5" />
+          </button>
+          <button
+            type="button"
+            class="kn-msg-action"
+            :aria-label="t('chat.discardReply')"
+            :title="t('chat.askAgain')"
+            @click="emit('reset', message)"
+          >
+            <RotateCcw class="size-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   </article>
 </template>
+
+<style>
+/*
+ * Citation markers (docs/features/38). Unscoped: the buttons are created by a
+ * DOM pass inside MarkdownView's host, where a scoped attribute cannot reach.
+ */
+.kn-cites {
+  display: inline-flex;
+  gap: 1px;
+  margin-left: 1px;
+  vertical-align: super;
+  line-height: 0;
+}
+.kn-cite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease-out, border-color 120ms ease-out, background-color 120ms ease-out;
+}
+.kn-cite:hover,
+.kn-cite:focus-visible,
+.kn-cite-active {
+  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--primary);
+  outline: none;
+}
+/* A label the message has no source for yet: the stream is still running, or
+   the API stripped it. Drawn, so the text does not jump, but not a link. */
+.kn-cite-pending {
+  cursor: default;
+  border-style: dashed;
+}
+.kn-cite-pending:hover {
+  border-color: var(--border);
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+</style>
 
 <style scoped>
 /*

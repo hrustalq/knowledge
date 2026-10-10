@@ -22,8 +22,10 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import {
   Activity as ActivityIcon,
+  BadgeCheck,
   BookA,
   Braces,
+  Flag,
   GitMerge,
   History,
   Plug,
@@ -38,6 +40,7 @@ import type {
   DocumentContentResponse,
   DocumentDetailResponse,
   ListActivityResponse,
+  ListKnowledgeIssuesResponse,
   ListDocumentRelationsResponse,
   ListDocumentThreadsResponse,
   ListMergeRequestsResponse,
@@ -46,6 +49,7 @@ import type {
   DocumentWorkflowRunsResponse,
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
+import { isOpenIssueStatus } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
@@ -64,9 +68,11 @@ import GraphLightbox from '@/components/graph/GraphLightbox.vue'
 import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
+import KnowledgeIssuesRail from '@/components/knowledge/KnowledgeIssuesRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
+import { useMembers } from '@/components/merge-requests/use-members'
 
 const { t } = useI18n()
 
@@ -80,6 +86,9 @@ const RAIL_WIDGETS = [
   { id: 'frontmatter', label: t('rail.frontmatter'), icon: Braces, expandable: false },
   { id: 'revisions', label: t('rail.history'), icon: History, expandable: true },
   { id: 'merge-requests', label: t('rail.changes'), icon: GitMerge, expandable: true },
+  // Reports against the page (docs/features/38, phase 3): what readers and
+  // agents said is wrong, and where each report is on its way to a fix.
+  { id: 'issues', label: t('rail.issues'), icon: Flag, expandable: false },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
   { id: 'workflows', label: t('rail.workflows'), icon: WorkflowIcon, expandable: false },
   { id: 'connectors', label: t('rail.connectors'), icon: Plug, expandable: false },
@@ -141,6 +150,68 @@ const visibleRelations = computed(() =>
   showAllRelations.value ? (relations.value ?? []) : (relations.value ?? []).slice(0, RELATION_PREVIEW),
 )
 let timer: ReturnType<typeof setInterval> | undefined
+
+/* ---------------------------------------------------------- verification */
+
+// The manual stamp (docs/features/38): one button that reads the derived state
+// and does the one thing that state calls for. Unverified → stamp it; verified
+// → take the stamp off; outdated (the head moved since) → stamp the new head.
+// A viewer sees the state and cannot change it.
+const { memberOf } = useMembers()
+const verification = computed(() => detail.value?.document.verification ?? 'unverified')
+const verifierName = computed(() => {
+  const id = detail.value?.document.verifiedBy
+  return id ? (memberOf(id)?.displayName ?? id.slice(0, 8)) : ''
+})
+const verifyLabel = computed(() => {
+  const d = detail.value
+  if (!d) return ''
+  switch (verification.value) {
+    case 'verified':
+      return t('documents.verify.verified', { n: d.revision.revisionNumber })
+    case 'outdated':
+      return t('documents.verify.outdated')
+    // An open report outranks the stamp (docs/features/38, phase 3): the
+    // button names it, and the Issues widget is where it is dealt with.
+    case 'flagged':
+      return t('documents.verify.flagged')
+    default:
+      return t('documents.verify.action')
+  }
+})
+const verifyTitle = computed(() => {
+  const d = detail.value
+  if (!d) return ''
+  const when = d.document.verifiedAt ? relativeTime(d.document.verifiedAt) : ''
+  switch (verification.value) {
+    case 'flagged':
+      return t('documents.verify.flaggedHint')
+    case 'verified':
+      return auth.canEdit
+        ? t('documents.verify.removeHint', { who: verifierName.value, when })
+        : t('documents.verify.verifiedBy', { who: verifierName.value, when })
+    case 'outdated':
+      return auth.canEdit
+        ? t('documents.verify.reverifyHint', { who: verifierName.value, when })
+        : t('documents.verify.outdatedBy', { who: verifierName.value, when })
+    default:
+      return t('documents.verify.actionHint')
+  }
+})
+const verifying = ref(false)
+
+async function toggleVerify() {
+  if (!detail.value || verifying.value || !auth.canEdit) return
+  verifying.value = true
+  try {
+    const method = verification.value === 'verified' ? 'DELETE' : 'POST'
+    detail.value = await apiFetch<DocumentDetailResponse>(`/v1/documents/${documentId.value}/verify`, { method })
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    verifying.value = false
+  }
+}
 
 /* ------------------------------------------------------------ page data */
 
@@ -323,6 +394,13 @@ const activityPreview = useQuery(
 const connectorsPreview = useQuery(
   computed(() => apiQueryOptions('/v1/documents/{id}/connectors', { path: { id: documentId.value } })),
 )
+const issuesPreview = useQuery(
+  computed(() =>
+    apiQueryOptions('/v1/knowledge-issues', {
+      query: { workspaceId: getWorkspaceId(), documentId: documentId.value },
+    }),
+  ),
+)
 
 const previewFor = computed<Record<RailWidget, string | null>>(() => {
   const revisions = (revisionsPreview.data.value as ListRevisionsResponse | undefined)?.revisions
@@ -338,6 +416,8 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
     : 0
 
   const connectorLinks = (connectorsPreview.data.value as DocumentConnectorResponse | undefined)?.links
+  const issues = (issuesPreview.data.value as ListKnowledgeIssuesResponse | undefined)?.issues
+  const openIssues = issues?.filter((i) => isOpenIssueStatus(i.status)).length ?? 0
 
   return {
     overview: detail.value ? `#${detail.value.revision.revisionNumber}` : null,
@@ -355,6 +435,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           ? `${mrs.length} closed`
           : 'none'
       : null,
+    issues: issues ? (openIssues ? t('count.openIssues', { n: openIssues }, openIssues) : t('knowledgeIssue.none')) : null,
     graph: relations.value
       ? relations.value.length
         ? t('count.relations', { n: relations.value.length }, relations.value.length)
@@ -469,6 +550,23 @@ watch(
           :title="detail.document.title"
           :revision-id="viewingRevision"
         />
+        <!-- The verification stamp (docs/features/38) sits with the other
+             facts-about-the-page actions. A viewer sees it only when there is
+             something to see; an editor can always stamp. -->
+        <Button
+          v-if="auth.canEdit || verification !== 'unverified'"
+          variant="ghost"
+          size="sm"
+          class="kn-verify"
+          :data-tone="verification"
+          :disabled="!auth.canEdit || verifying"
+          :aria-pressed="verification === 'verified'"
+          :title="verifyTitle"
+          @click="toggleVerify"
+        >
+          <BadgeCheck class="size-3.5" />
+          {{ verifyLabel }}
+        </Button>
         <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
         <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
           <RouterLink
@@ -564,6 +662,13 @@ watch(
 
           <template #widget-revisions><RevisionsView :document-id="documentId" /></template>
           <template #widget-merge-requests><MergeRequestList :document-id="documentId" /></template>
+          <template #widget-issues>
+            <KnowledgeIssuesRail
+              :document-id="documentId"
+              :title="detail.document.title"
+              :revision-id="content?.revisionId ?? detail.revision.revisionId"
+            />
+          </template>
           <template #widget-graph><GraphView :document-id="documentId" /></template>
           <template #widget-workflows><WorkflowRail :document-id="documentId" /></template>
           <template #widget-connectors><ConnectorRail :document-id="documentId" /></template>
@@ -658,3 +763,20 @@ watch(
     <AskAssistant :document-id="documentId" :title="detail.document.title" />
   </template>
 </template>
+
+<style scoped>
+/* The stamp's glyph takes the state's hue; the button itself stays quiet. */
+.kn-verify[data-tone='verified'] > svg {
+  color: var(--color-emerald-500, #10b981);
+}
+.kn-verify[data-tone='outdated'] > svg {
+  color: var(--color-amber-500, #f59e0b);
+}
+.kn-verify[data-tone='unverified'] > svg {
+  opacity: 0.6;
+}
+/* A report stands against the page: the one state drawn in the destructive hue. */
+.kn-verify[data-tone='flagged'] > svg {
+  color: var(--destructive);
+}
+</style>

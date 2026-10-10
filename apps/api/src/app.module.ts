@@ -28,6 +28,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { McpHttpModule } from './mcp/mcp-http.module.js';
 import { AiReadableModule } from './ai-readable/ai-readable.module.js';
+import { FeedbackModule } from './feedback/feedback.module.js';
 
 @Module({
   imports: [
@@ -61,6 +62,9 @@ import { AiReadableModule } from './ai-readable/ai-readable.module.js';
     WorkflowMaterializeModule,
     // Plain-markdown reads for agents (issue #68). API-only: carries a controller.
     AiReadableModule,
+    // Votes on answers (docs/features/38, issue #67 phase 2). API-only: the
+    // controller; the worker loads FeedbackCoreModule on its own.
+    FeedbackModule,
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,

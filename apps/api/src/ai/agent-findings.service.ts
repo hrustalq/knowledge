@@ -15,6 +15,7 @@ import { StorageService } from '../storage/storage.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { DocumentRelationsService } from '../documents/document-relations.service.js';
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
+import { openDraftMergeRequest } from '../documents/draft-merge-request.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AiUsageService } from './ai-usage.service.js';
@@ -41,12 +42,14 @@ const MAX_CITED = 3;
 export class AgentFindingsService {
   private readonly logger = new Logger(AgentFindingsService.name);
 
+  // The first four are `readonly` rather than `private readonly` so the
+  // service itself satisfies `DraftMergeRequestDeps` — one helper, no adapter.
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly storage: StorageService,
-    private readonly documents: DocumentsService,
+    readonly prisma: PrismaService,
+    readonly storage: StorageService,
+    readonly documents: DocumentsService,
     private readonly relations: DocumentRelationsService,
-    private readonly mergeRequests: MergeRequestsService,
+    readonly mergeRequests: MergeRequestsService,
     private readonly registry: AgentRegistryService,
     private readonly client: AssistantClient,
     private readonly usage: AiUsageService,
@@ -105,51 +108,28 @@ export class AgentFindingsService {
       const title = `${finding.title.slice(0, 200)}`;
       const branch = `agent/${run.agentKey}-${Date.now()}`;
 
-      // Everything the proposal writes commits together. The finding's
-      // `mergeRequestId` used to be written after `mergeRequests.create` had
-      // committed, so a failure in between left the finding claimed forever
-      // (409 `in-flight`) beside an orphaned merge request nothing pointed at.
-      //
-      // The model call above is deliberately OUTSIDE: it routinely takes tens of
-      // seconds, and no Postgres transaction should be held open across it. So
-      // is the claim — it guards the LLM window, which is the part that
-      // actually takes time, and a claim invisible until commit would guard
-      // almost nothing.
-      const mergeRequestId = await this.prisma.withTransaction(
-        async () => {
-          await this.documents.createBranch(documentId, { name: branch });
-          const revision = await this.documents.createRevision(
-            documentId,
-            { branch, message: title, contentType: 'text/markdown' },
-            undefined,
-            principal.userId,
-          );
-          const row = await this.prisma.documentRevision.findUnique({ where: { id: revision.revisionId } });
-          if (!row) throw new BadRequestException(t('error.ai.draftRevisionGone'));
-          await this.storage.putObjectText(row.s3Key, markdown, 'text/markdown');
-          await this.documents.finalizeRevision(documentId, revision.revisionId);
-
-          const mr = await this.mergeRequests.create(
-            documentId,
-            {
-              sourceBranch: branch,
-              title,
-              // The evidence travels with the proposal: a reviewer deciding
-              // whether a page drifted wants the pull request that moved it.
-              description: (
-                `Proposed from a ${run.agentKey} run.\n\n**${finding.kind}** — ${finding.detail}` +
-                (finding.sources?.length
-                  ? `\n\n${finding.sources.map((src) => `- [${src.title}](${src.url})`).join('\n')}`
-                  : '')
-              ).slice(0, 4_000),
-            },
-            principal.userId,
-          );
-          await this.writeBack(runId, index, mr.mergeRequest.mergeRequestId);
-          return mr.mergeRequest.mergeRequestId;
-        },
-        { timeout: 30_000, maxWait: 10_000 },
-      );
+      // The draft becomes a merge request in one transaction, with the
+      // finding's `mergeRequestId` written back inside it (`openDraftMergeRequest`
+      // says why). The model call above is deliberately OUTSIDE: it routinely
+      // takes tens of seconds, and no Postgres transaction should be held open
+      // across it. So is the claim — it guards the LLM window, which is the
+      // part that actually takes time, and a claim invisible until commit
+      // would guard almost nothing.
+      const mergeRequestId = await openDraftMergeRequest(this, {
+        documentId,
+        branch,
+        title,
+        // The evidence travels with the proposal: a reviewer deciding whether
+        // a page drifted wants the pull request that moved it.
+        description:
+          `Proposed from a ${run.agentKey} run.\n\n**${finding.kind}** — ${finding.detail}` +
+          (finding.sources?.length
+            ? `\n\n${finding.sources.map((src) => `- [${src.title}](${src.url})`).join('\n')}`
+            : ''),
+        markdown,
+        userId: principal.userId,
+        onCreated: (id) => this.writeBack(runId, index, id),
+      });
 
       return { mergeRequestId, documentId, documentTitle: document.title, branch, title };
     } catch (error) {

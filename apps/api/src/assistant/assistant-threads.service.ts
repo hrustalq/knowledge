@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
+  AnswerCitation,
+  AnswerConfidence,
   AssistantSource,
   AssistantMessageInfo,
   AssistantMessageRole,
@@ -18,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { Prisma } from '@prisma/client';
 import type { AssistantMessage, AssistantThread } from '@prisma/client';
 import { t } from '../i18n/t.js';
+import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 
 const DEFAULT_THREAD_PAGE = 50;
 const MAX_THREAD_PAGE = 100;
@@ -32,7 +35,10 @@ const AUTO_TITLE_CHARS = 60;
  */
 @Injectable()
 export class AssistantThreadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly feedback: AnswerFeedbackService,
+  ) {}
 
   async createThread(
     workspaceId: string,
@@ -195,13 +201,29 @@ export class AssistantThreadsService {
     });
   }
 
-  async getThread(threadId: string): Promise<GetAssistantThreadResponse> {
+  /**
+   * The thread and its history. With a `viewerId`, each assistant reply also
+   * carries that person's own vote (docs/features/38, phase 2) — one batched
+   * read, so the thumbs survive a reload without a request per message.
+   */
+  async getThread(threadId: string, viewerId?: string): Promise<GetAssistantThreadResponse> {
     const thread = await this.getThreadOrThrow(threadId);
     const messages = await this.prisma.assistantMessage.findMany({
       where: { threadId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
-    return { thread: this.toSummary(thread), messages: messages.map((m) => this.toMessageInfo(m)) };
+    const votes = viewerId
+      ? await this.feedback.ownVotes(
+          messages.filter((m) => m.role === 'assistant').map((m) => m.id),
+          viewerId,
+        )
+      : new Map();
+    return {
+      thread: this.toSummary(thread),
+      messages: messages.map((m) =>
+        m.role === 'assistant' ? { ...this.toMessageInfo(m), feedback: votes.get(m.id) ?? null } : this.toMessageInfo(m),
+      ),
+    };
   }
 
   async getThreadOrThrow(threadId: string): Promise<AssistantThread> {
@@ -229,6 +251,8 @@ export class AssistantThreadsService {
       sources?: AssistantSource[];
       uiBlocks?: AssistantUiBlock[];
       prompt?: AssistantPrompt | null;
+      citations?: AnswerCitation[];
+      confidence?: AnswerConfidence | null;
     } = {},
   ): Promise<AssistantMessageInfo> {
     const [message] = await this.prisma.$transaction([
@@ -243,6 +267,10 @@ export class AssistantThreadsService {
           // Prisma distinguishes a SQL NULL from a JSON `null` literal; a turn
           // that asked nothing wants the column empty, not the string "null".
           prompt: opts.prompt ? (opts.prompt as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+          citations: (opts.citations ?? []) as object,
+          // Same NULL-vs-null rule as `prompt`: a turn that was not assessed
+          // (a user turn, a disabled provider) leaves the column empty.
+          confidence: opts.confidence ? (opts.confidence as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         },
       }),
       this.prisma.assistantThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } }),
@@ -276,6 +304,8 @@ export class AssistantThreadsService {
       sources: (m.sources ?? []) as unknown as AssistantSource[],
       uiBlocks: (m.uiBlocks ?? []) as unknown as AssistantUiBlock[],
       prompt: (m.prompt ?? null) as unknown as AssistantPrompt | null,
+      citations: (m.citations ?? []) as unknown as AnswerCitation[],
+      confidence: (m.confidence ?? null) as unknown as AnswerConfidence | null,
       createdAt: m.createdAt.toISOString(),
     };
   }

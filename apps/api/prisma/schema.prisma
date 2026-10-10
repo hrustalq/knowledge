@@ -614,6 +614,49 @@ model AssistantMessage {
   @@map("assistant_messages")
 }
 
+/// One signal about one answer (docs/features/38, issue #67 phase 2): an
+/// explicit vote, or an implicit miss the harness recorded itself
+/// (low confidence / no answer). Misses only — a good answer that nobody rated
+/// writes nothing, which keeps the volume bounded and keeps the measurement
+/// stream in JSONL where it belongs. No FK on workspace_id / created_by (house
+/// policy: the dev principal has no users row) and none on message_id either —
+/// a rewind deletes messages, and a vote that outlives its message is still a
+/// data point for the surveyor and the backtest.
+model AnswerFeedback {
+  id               String    @id @default(uuid()) @db.Uuid
+  workspaceId      String    @map("workspace_id") @db.Uuid
+  /// ANSWER_SIGNAL_KINDS: vote | low-confidence | no-answer
+  kind             String
+  /// ANSWER_SURFACES: assistant | editor-assistant | ask | mcp
+  surface          String
+  /// 'up' | 'down' — votes only; null on an implicit signal.
+  rating           String?
+  /// ANSWER_FEEDBACK_REASONS; required by the DTO on 'down'.
+  reason           String?
+  comment          String?
+  /// The question, as asked. User content: purged by retention (phase 3).
+  query            String
+  answerExcerpt    String?   @map("answer_excerpt")
+  threadId         String?   @map("thread_id") @db.Uuid
+  messageId        String?   @map("message_id") @db.Uuid
+  /// MCP: the knowledge_search call the agent built its answer from.
+  traceId          String?   @map("trace_id")
+  citedDocumentIds Json      @default("[]") @map("cited_document_ids")
+  /// AnswerConfidence snapshot at answer time.
+  confidence       Json?
+  createdBy        String    @map("created_by") @db.Uuid
+  apiKeyId         String?   @map("api_key_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // One vote per person per message. NULL message_id rows (ask, mcp) are
+  // exempt — SQL unique treats NULLs as distinct — and dedupe differently.
+  @@unique([messageId, createdBy])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, kind, createdAt])
+  @@map("answer_feedback")
+}
+
 // ---------------------------------------------------------------------------
 // AI settings (docs/features/12): the assistant layer made administrable per
 // workspace instead of per boot. Every column here is an OVERRIDE — null means

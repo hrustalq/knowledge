@@ -98,9 +98,9 @@ export class AssistantController {
 
   @Get('threads/:id')
   @Access('viewer', 'assistant-thread')
-  @ApiOperation({ summary: 'A thread with its full message history' })
-  getThread(@Param('id', ParseUUIDPipe) id: string) {
-    return this.threads.getThread(id);
+  @ApiOperation({ summary: 'A thread with its full message history, each reply carrying your own vote on it' })
+  getThread(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+    return this.threads.getThread(id, principal.userId);
   }
 
   @Patch('threads/:id')

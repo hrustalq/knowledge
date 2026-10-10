@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { nativeEl } from '@/lib/utils'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
+import AnswerFeedback from '@/components/assistant/AnswerFeedback.vue'
 
 const { t } = useI18n()
 
@@ -36,6 +37,8 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   sources?: AssistantAskSource[]
+  /** The question this answer was for — what a vote on it is filed under (docs/features/38). */
+  question?: string
   /** Glossary proposals rendered as an interactive card rather than as prose. */
   glossary?: GlossaryTermSuggestion[]
   /** Terms already accepted from this card, so the button can settle. */
@@ -121,6 +124,7 @@ async function send() {
     messages.value.push({
       role: 'assistant',
       content: res.answer,
+      ...(res.enabled ? { question: q } : {}),
       ...(res.enabled && res.sources.length > 0 ? { sources: res.sources } : {}),
     })
   } catch (e) {
@@ -266,6 +270,19 @@ async function acceptTerm(message: ChatMessage, suggestion: GlossaryTermSuggesti
               {{ s.title }}
             </RouterLink>
           </div>
+
+          <!-- A one-shot answer is never stored, so the vote carries what was
+               seen: the question, the start of the answer, the cited pages. -->
+          <AnswerFeedback
+            v-if="m.question !== undefined"
+            :target="{
+              kind: 'ask',
+              workspaceId: getWorkspaceId(),
+              query: m.question,
+              answer: m.content,
+              sources: m.sources ?? [],
+            }"
+          />
         </div>
       </div>
       <p v-if="busy" class="text-sm text-muted-foreground">{{ t('assistant.thinking') }}</p>

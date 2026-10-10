@@ -144,6 +144,13 @@ export const envSchema = z.object({
    * nothing is hidden or re-ranked by it.
    */
   ANSWER_STALE_SOURCE_DAYS: z.coerce.number().int().positive().default(180),
+  /**
+   * Votes and implicit low-confidence signals on answers (docs/features/38,
+   * phase 2). Off: the vote routes and knowledge_feedback refuse, and the
+   * harness records no signals. A master switch for an operator who does not
+   * want question text in PostgreSQL at all.
+   */
+  ANSWER_FEEDBACK_ENABLED: boolish(true),
 
   /**
    * Feature 12 AI settings: AES-256-GCM key (base64, 32 bytes) for provider

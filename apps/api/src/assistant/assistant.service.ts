@@ -59,6 +59,7 @@ import { applyDraftEdit, refuseDraftEdit } from './draft-edits.js';
 import { scanPartialObject } from './partial-args.js';
 import { CITATION_CLAUSE, CiteLabels, answerSignals, finalizeCitations } from './citations.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
+import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 
 const SEVERITIES = ['error', 'warning', 'suggestion'] as const;
 
@@ -226,6 +227,8 @@ interface PreparedTurn {
   labels: CiteLabels;
   /** Tool calls that came back `ok: false` — a confidence signal. */
   toolErrors: number;
+  /** The user's message this turn answers, kept for the implicit feedback signal (docs/features/38). */
+  question: string;
 }
 
 /**
@@ -260,6 +263,7 @@ export class AssistantService {
     private readonly code: CodeResearchService,
     private readonly tasks: WorkItemToolsService,
     private readonly provenance: ProvenanceService,
+    private readonly feedback: AnswerFeedbackService,
     private readonly env: ConfigService,
   ) {}
 
@@ -471,6 +475,15 @@ export class AssistantService {
     );
 
     const settled = await this.settleAnswer(dto.workspaceId, content, [...collected.values()], labels, trace, toolErrors, call.config.maxToolCalls);
+    this.feedback.recordSignal({
+      workspaceId: dto.workspaceId,
+      surface: 'ask',
+      query: dto.question,
+      answer: settled.text,
+      sources: settled.sources,
+      confidence: settled.confidence,
+      principal,
+    });
     return {
       enabled: true,
       answer: settled.text,
@@ -556,7 +569,7 @@ export class AssistantService {
       (name, args) => this.runTool(name, args, { principal, thread, turn }),
     );
 
-    const assistantMessage = await this.finishTurn(thread, turn, content, trace);
+    const assistantMessage = await this.finishTurn(thread, turn, content, trace, principal);
     return { enabled: true, userMessage, assistantMessage };
   }
 
@@ -660,7 +673,7 @@ export class AssistantService {
       return;
     }
 
-    const assistantMessage = await this.finishTurn(thread, turn, content, trace);
+    const assistantMessage = await this.finishTurn(thread, turn, content, trace, principal);
     emit({ type: 'done', message: assistantMessage });
   }
 
@@ -742,12 +755,18 @@ export class AssistantService {
     return { enabled: true, userMessage, thread, turn, call };
   }
 
-  /** Persist the reply and close the turn on the live bus. */
+  /**
+   * Persist the reply and close the turn on the live bus. A weak answer also
+   * leaves an implicit signal behind (docs/features/38, phase 2) — written
+   * after the message so the row can point at it, and fire-and-forget so it
+   * can never fail the turn.
+   */
   private async finishTurn(
     thread: AssistantThread,
     turn: PreparedTurn,
     content: string,
     trace: AssistantToolCall[],
+    principal: Principal,
   ): Promise<AssistantMessageInfo> {
     const settled = await this.settleAnswer(
       thread.workspaceId,
@@ -765,6 +784,18 @@ export class AssistantService {
       prompt: turn.prompt,
       citations: settled.citations,
       confidence: settled.confidence,
+    });
+    this.feedback.recordSignal({
+      workspaceId: thread.workspaceId,
+      // The same pane in two places: beside a draft it is the editor assistant.
+      surface: turn.draft !== null ? 'editor-assistant' : 'assistant',
+      query: turn.question,
+      answer: settled.text,
+      sources: settled.sources,
+      confidence: settled.confidence,
+      threadId: thread.id,
+      messageId: assistantMessage.id,
+      principal,
     });
     await this.events.publish({
       type: 'assistant.turn.finished',
@@ -1146,6 +1177,7 @@ export class AssistantService {
       draft: draft ? draft.markdown : null,
       labels,
       toolErrors: 0,
+      question: dto.content,
     };
   }
 

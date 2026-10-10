@@ -105,6 +105,97 @@ export interface AssistantModeSwitchPrompt {
 
 export type AssistantPrompt = AssistantFormPrompt | AssistantModeSwitchPrompt;
 
+// ---------------------------------------------------------------------------
+// Answer feedback (docs/features/38, issue #67 phase 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where an answer was given, and therefore where a vote on it came from. A
+ * closed list because the admin tab (phase 5) filters by it in SQL and the
+ * surveyor (phase 4) reports the mix per cluster.
+ *
+ * `editor-assistant` is the same `ChatPane` as `assistant`, mounted beside a
+ * draft (docs/features/34): the API cannot tell the two apart from a message
+ * row, so the client says which pane it is voting from and the API only
+ * checks the value is one of these.
+ */
+export const ANSWER_SURFACES = ['assistant', 'editor-assistant', 'ask', 'mcp'] as const;
+export type AnswerSurface = (typeof ANSWER_SURFACES)[number];
+
+export const ANSWER_RATINGS = ['up', 'down'] as const;
+export type AnswerRating = (typeof ANSWER_RATINGS)[number];
+
+/**
+ * Why an answer was voted down. Required on `down`, optional on `up`: a thumbs
+ * up needs no explanation, and a thumbs down with none is a number nobody can
+ * act on. `wrong` and `outdated` are the two that name a page (phase 3 lets
+ * such a vote file a report against the cited pages).
+ */
+export const ANSWER_FEEDBACK_REASONS = [
+  'wrong',
+  'outdated',
+  'incomplete',
+  'irrelevant-sources',
+  'no-answer',
+  'unclear',
+  'other',
+] as const;
+export type AnswerFeedbackReason = (typeof ANSWER_FEEDBACK_REASONS)[number];
+
+/**
+ * What one `answer_feedback` row records: an explicit vote, or a miss the
+ * harness noticed on its own. Misses only — a good answer nobody rated writes
+ * nothing, which keeps the table bounded and keeps measurement in the JSONL
+ * stream where it belongs.
+ */
+export const ANSWER_SIGNAL_KINDS = ['vote', 'low-confidence', 'no-answer'] as const;
+export type AnswerSignalKind = (typeof ANSWER_SIGNAL_KINDS)[number];
+
+export const ANSWER_FEEDBACK_COMMENT_MAX_CHARS = 2_000;
+
+/** The caller's own vote on one answer — what the thumbs under a message show. */
+export interface AnswerVote {
+  rating: AnswerRating;
+  reason: AnswerFeedbackReason | null;
+  comment: string | null;
+  createdAt: string;
+}
+
+/** One stored feedback row, as the vote routes and the admin tab (phase 5) return it. */
+export interface AnswerFeedbackInfo {
+  id: string;
+  workspaceId: string;
+  kind: AnswerSignalKind;
+  surface: AnswerSurface;
+  rating: AnswerRating | null;
+  reason: AnswerFeedbackReason | null;
+  comment: string | null;
+  /** The question the answer was for. */
+  query: string;
+  /** Null for a one-shot `/ask` answer or an MCP vote: nothing persisted to point at. */
+  messageId: string | null;
+  threadId: string | null;
+  /** MCP only: the `knowledge_search` call the agent built its answer from. */
+  traceId: string | null;
+  citedDocumentIds: string[];
+  /** The answer's confidence when it was given, so a vote can be read against it later. */
+  confidence: AnswerConfidence | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+// PUT /v1/assistant/messages/:id/feedback, POST /v1/assistant/ask/feedback
+export interface SetAnswerFeedbackResponse {
+  feedback: AnswerFeedbackInfo;
+}
+
+// DELETE /v1/assistant/messages/:id/feedback
+export interface DeleteAnswerFeedbackResponse {
+  ok: true;
+  /** False when there was no vote to retract — still a 200, the end state is the same. */
+  removed: boolean;
+}
+
 export interface AssistantMessageInfo {
   id: string;
   threadId: string;
@@ -122,6 +213,12 @@ export interface AssistantMessageInfo {
   citations: AnswerCitation[];
   /** Null for user turns and pre-feature rows; the badge is simply not drawn. */
   confidence: AnswerConfidence | null;
+  /**
+   * The caller's own vote on this answer (docs/features/38, phase 2). Present
+   * only when a thread is read back — a `done` frame carries none, because a
+   * reply nobody has seen yet cannot have been rated.
+   */
+  feedback?: AnswerVote | null;
   createdAt: string;
 }
 

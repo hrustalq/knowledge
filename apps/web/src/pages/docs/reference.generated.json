@@ -522,6 +522,36 @@
     },
     {
       "method": "POST",
+      "path": "/v1/assistant/ask/feedback",
+      "tag": "assistant",
+      "summary": "Rate a one-shot POST /v1/assistant/ask answer — the client sends what it saw",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/assistant/messages/{id}/feedback",
+      "tag": "assistant",
+      "summary": "Retract your own vote on an assistant reply",
+      "role": "viewer",
+      "source": "assistant-message",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/assistant/messages/{id}/feedback",
+      "tag": "assistant",
+      "summary": "Rate an assistant reply (thumbs up/down with a reason); re-voting replaces the vote",
+      "role": "viewer",
+      "source": "assistant-message",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/assistant/related",
       "tag": "assistant",
       "summary": "Relevant documents for a draft — hybrid search, no LLM required",
@@ -584,7 +614,7 @@
       "method": "GET",
       "path": "/v1/assistant/threads/{id}",
       "tag": "assistant",
-      "summary": "A thread with its full message history",
+      "summary": "A thread with its full message history, each reply carrying your own vote on it",
       "role": "viewer",
       "source": "assistant-thread",
       "public": false,
@@ -2602,6 +2632,40 @@
         },
         {
           "name": "message",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_feedback",
+      "description": "Rate an answer you built from knowledge_search: up or down, with a reason on down. Quote the search's traceId so a re-vote updates the same row. Votes and reasons are what turns a bad answer into documentation work; nothing else changes.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "rating",
+          "optional": false
+        },
+        {
+          "name": "reason",
+          "optional": true
+        },
+        {
+          "name": "comment",
+          "optional": true
+        },
+        {
+          "name": "query",
+          "optional": false
+        },
+        {
+          "name": "traceId",
+          "optional": true
+        },
+        {
+          "name": "documentIds",
           "optional": true
         }
       ]

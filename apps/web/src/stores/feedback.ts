@@ -4,10 +4,15 @@ import type {
   AnswerVote,
   AssistantMessageInfo,
   DeleteAnswerFeedbackResponse,
+  KnowledgeIssueInfo,
+  KnowledgeIssueKind,
+  KnowledgeIssueSurface,
+  ReportKnowledgeIssueResponse,
   SetAnswerFeedbackResponse,
+  UpdateKnowledgeIssueResponse,
 } from '@knowledge/contracts'
 import { apiFetch } from '@/lib/api'
-import { optimisticVote, voteBody, type FeedbackTarget, type VoteDraft } from '@/lib/answer-feedback'
+import { issueReportBody, optimisticVote, voteBody, type FeedbackTarget, type VoteDraft } from '@/lib/answer-feedback'
 
 /**
  * The caller's votes on answers (docs/features/38, phase 2).
@@ -20,6 +25,9 @@ import { optimisticVote, voteBody, type FeedbackTarget, type VoteDraft } from '@
  *
  * One-shot `/ask` answers have no message id and no server-side vote to read
  * back; `voteOnAsk` returns what was stored and the widget keeps it itself.
+ *
+ * Reports (phase 3) are plain requests with no cache: the page's Issues rail
+ * reads them through vue-query and invalidates itself.
  */
 export const useFeedbackStore = defineStore('feedback', {
   state: () => ({
@@ -84,6 +92,47 @@ export const useFeedbackStore = defineStore('feedback', {
       } finally {
         delete this.busy[messageId]
       }
+    },
+
+    /**
+     * File a report against a page (docs/features/38, phase 3). The API folds
+     * it into an open issue for the same page and kind, opens a draft merge
+     * request, queues a sentinel check, or leaves it open — the response says
+     * which, and the caller tells the reporter.
+     */
+    async reportIssue(body: Record<string, unknown>): Promise<ReportKnowledgeIssueResponse> {
+      return apiFetch<ReportKnowledgeIssueResponse>('/v1/knowledge-issues', { method: 'POST', body: JSON.stringify(body) })
+    },
+
+    /**
+     * A thumbs-down that named its pages: one report per cited page, after the
+     * vote itself is stored. Reports are best-effort — a failed one is counted,
+     * not thrown, because the vote has already landed and the thumbs should say so.
+     */
+    async reportCitedPages(
+      pages: ReadonlyArray<{ documentId: string; revisionId?: string }>,
+      input: { workspaceId: string; kind: KnowledgeIssueKind; query: string; comment: string; surface: KnowledgeIssueSurface },
+    ): Promise<{ reported: number; failed: number }> {
+      let reported = 0
+      let failed = 0
+      for (const page of pages) {
+        try {
+          await this.reportIssue(issueReportBody(page, input))
+          reported += 1
+        } catch {
+          failed += 1
+        }
+      }
+      return { reported, failed }
+    },
+
+    /** Close a report by hand — resolved or dismissed. */
+    async closeIssue(issueId: string, status: 'resolved' | 'dismissed'): Promise<KnowledgeIssueInfo> {
+      const res = await apiFetch<UpdateKnowledgeIssueResponse>(`/v1/knowledge-issues/${issueId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      })
+      return res.issue
     },
 
     /** A vote on a one-shot `/ask` answer: stored as its own row, nothing cached here. */

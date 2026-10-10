@@ -230,7 +230,9 @@
       "removeHint": "Verified by {who} {when}. Click to remove the stamp.",
       "outdated": "Verified · outdated",
       "outdatedBy": "Verified by {who} {when}, but the page has changed since",
-      "reverifyHint": "Verified by {who} {when}, but the page has changed since. Click to verify the current revision."
+      "reverifyHint": "Verified by {who} {when}, but the page has changed since. Click to verify the current revision.",
+      "flagged": "Reported",
+      "flaggedHint": "A reader or an agent reported a problem with this page. See the Reports widget in the rail."
     }
   },
   "settings": {
@@ -992,6 +994,12 @@
         "paused": "paused a workflow run",
         "resumed": "resumed a workflow run",
         "cancelled": "cancelled a workflow run"
+      },
+      "knowledge-issue": {
+        "reported": "reported a problem with",
+        "proposed": "proposed a fix for a report on",
+        "resolved": "resolved a report on",
+        "dismissed": "dismissed a report on"
       }
     },
     "loading": "Loading activity…",
@@ -1227,7 +1235,11 @@
       "commentPlaceholder": "Optional — what should it have said?",
       "send": "Send",
       "retract": "Take back my vote",
-      "failed": "The vote was not saved. Try again."
+      "failed": "The vote was not saved. Try again.",
+      "reportPages": "Also report the cited page | Also report the {n} cited pages",
+      "reportPagesHint": "Files a report against each page; the sentinel checks it and may draft a fix.",
+      "reported": "Thanks — noted, and {n} page reported. | Thanks — noted, and {n} pages reported.",
+      "reportFailed": "{n} report was not filed. | {n} reports were not filed."
     },
     "confidence": {
       "title": "Answer confidence",
@@ -1391,7 +1403,8 @@
     "open": "{n} open | {n} open",
     "connected": "{n} connected | {n} connected",
     "workflows": "no workflows | {n} workflow | {n} workflows",
-    "tools": "no tools | {n} tool | {n} tools"
+    "tools": "no tools | {n} tool | {n} tools",
+    "openIssues": "{n} open report | {n} open reports"
   },
   "chat": {
     "needsAgentMode": "This needs Agent mode",
@@ -1980,6 +1993,7 @@
     "frontmatter": "Frontmatter",
     "history": "History",
     "changes": "Changes",
+    "issues": "Reports",
     "graph": "Graph",
     "workflows": "Workflows",
     "activity": "Activity",
@@ -1987,6 +2001,52 @@
     "people": "People",
     "pages": "Pages",
     "glossary": "Glossary"
+  },
+  "knowledgeIssue": {
+    "report": "Report a problem",
+    "reportTitle": "Report a problem with \"{title}\"",
+    "reportDescription": "Say what is wrong. The report is checked against the page and may become a merge request for a person to review; the page itself is never edited by a report.",
+    "kindLabel": "What kind of problem",
+    "kind": {
+      "stale": "Out of date",
+      "wrong": "Wrong",
+      "missing": "Something is missing",
+      "duplicate": "Duplicates another page",
+      "other": "Something else"
+    },
+    "status": {
+      "open": "Open",
+      "checking": "Being checked",
+      "proposed": "Fix proposed",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed"
+    },
+    "detail": "What is wrong",
+    "detailPlaceholder": "Which statement, and what should it say?",
+    "quote": "The passage (optional)",
+    "quotePlaceholder": "Paste the sentence or paragraph you dispute",
+    "url": "Where the right information is (optional)",
+    "urlPlaceholder": "https://…",
+    "suggestion": "Corrected page body (optional, markdown)",
+    "suggestionPlaceholder": "The whole page as it should read, without frontmatter",
+    "suggestionEditorHint": "As an editor, a corrected body opens a draft merge request in your name at once.",
+    "suggestionViewerHint": "Your suggestion is attached as evidence for the check; it does not open a merge request.",
+    "send": "Send report",
+    "empty": "No open reports. If something on this page is wrong, say so.",
+    "none": "none",
+    "reportCount": "{n} report | {n} reports",
+    "openMergeRequest": "Open the proposed fix",
+    "resolve": "Resolve",
+    "dismiss": "Dismiss",
+    "recentlyClosed": "{n} recently closed | {n} recently closed",
+    "toast": {
+      "open": "Reported. It stays open for a person to look at.",
+      "checking": "Reported. The sentinel is checking it against the page.",
+      "proposed": "Reported, and a draft merge request with your correction is open.",
+      "deduplicated": "Already reported — yours was added to the open report ({n} so far).",
+      "resolved": "Report resolved.",
+      "dismissed": "Report dismissed."
+    }
   },
   "access": {
     "title": "Access control",
@@ -2794,7 +2854,8 @@
       "agent.run.failed": "an agent run failed",
       "import.parsed": "an import is ready to review",
       "import.failed": "an import failed",
-      "connector.run.failed": "a sync failed"
+      "connector.run.failed": "a sync failed",
+      "knowledge-issue.reported": "reported a problem with this page"
     }
   },
   "connect": {

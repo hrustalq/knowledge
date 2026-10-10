@@ -196,6 +196,99 @@ export interface DeleteAnswerFeedbackResponse {
   removed: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Knowledge issues (docs/features/38, issue #67 phase 3): a reported problem
+// with a page — from an agent over MCP, from a person on the page, or from a
+// down-vote that named the pages it cited.
+// ---------------------------------------------------------------------------
+
+/** What is wrong with the page, in the reporter's words. Closed: the sentinel judges `stale`/`wrong`, the rest wait for a person. */
+export const KNOWLEDGE_ISSUE_KINDS = ['stale', 'wrong', 'missing', 'duplicate', 'other'] as const;
+export type KnowledgeIssueKind = (typeof KNOWLEDGE_ISSUE_KINDS)[number];
+
+/**
+ * Where a report is on its way to a fix.
+ *
+ * `open` waits for a person; `checking` has a sentinel run queued or running;
+ * `proposed` has a merge request to review; `resolved` and `dismissed` are
+ * closed. The first three count as *open* for the page's `flagged` state and
+ * for dedupe — `isOpenIssueStatus` is that predicate, and the guard, the
+ * provenance count and the rail all read it rather than a copy.
+ */
+export const KNOWLEDGE_ISSUE_STATUSES = ['open', 'checking', 'proposed', 'resolved', 'dismissed'] as const;
+export type KnowledgeIssueStatus = (typeof KNOWLEDGE_ISSUE_STATUSES)[number];
+export const OPEN_KNOWLEDGE_ISSUE_STATUSES: readonly KnowledgeIssueStatus[] = ['open', 'checking', 'proposed'];
+export function isOpenIssueStatus(status: string): boolean {
+  return (OPEN_KNOWLEDGE_ISSUE_STATUSES as readonly string[]).includes(status);
+}
+
+/** The two terminal states a person may set by hand. */
+export const KNOWLEDGE_ISSUE_CLOSE_STATUSES = ['resolved', 'dismissed'] as const;
+
+/** Where a report came from: an answer surface, or the page itself. */
+export const KNOWLEDGE_ISSUE_SURFACES = [...ANSWER_SURFACES, 'web'] as const;
+export type KnowledgeIssueSurface = (typeof KNOWLEDGE_ISSUE_SURFACES)[number];
+
+export const KNOWLEDGE_ISSUE_DETAIL_MAX_CHARS = 4_000;
+export const KNOWLEDGE_ISSUE_EVIDENCE_MAX = 10;
+export const KNOWLEDGE_ISSUE_EVIDENCE_ITEM_MAX_CHARS = 2_000;
+export const KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS = 200_000;
+
+/** One piece of evidence behind a report. Untrusted text, every field. */
+export interface KnowledgeIssueEvidence {
+  /** A passage of the page the reporter disputes. */
+  quote?: string;
+  /** Where the correct information is. */
+  url?: string;
+  /** Anything else — a verdict the sentinel attached is a note too. */
+  note?: string;
+}
+
+export interface KnowledgeIssueInfo {
+  id: string;
+  workspaceId: string;
+  documentId: string;
+  documentTitle: string | null;
+  /** The revision the reporter read, when they said. */
+  revisionId: string | null;
+  kind: KnowledgeIssueKind;
+  status: KnowledgeIssueStatus;
+  detail: string;
+  evidence: KnowledgeIssueEvidence[];
+  /** Whether a corrected body came with the report; the body itself is not returned on a list. */
+  hasSuggestion: boolean;
+  surface: KnowledgeIssueSurface;
+  /** Reports folded into this one: a second report of the same (page, kind) while it is open. */
+  reportCount: number;
+  /** The sentinel run checking it, once one was queued. */
+  agentRunId: string | null;
+  /** The merge request that proposes the fix, once one exists. */
+  mergeRequestId: string | null;
+  createdBy: string;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// POST /v1/knowledge-issues, knowledge_report_issue
+export interface ReportKnowledgeIssueResponse {
+  issue: KnowledgeIssueInfo;
+  /** True when the report folded into an issue that was already open for the page and kind. */
+  deduplicated: boolean;
+}
+
+// GET /v1/knowledge-issues?workspaceId=&documentId=&status=
+export interface ListKnowledgeIssuesResponse {
+  workspaceId: string;
+  issues: KnowledgeIssueInfo[];
+}
+
+// PATCH /v1/knowledge-issues/:id
+export interface UpdateKnowledgeIssueResponse {
+  issue: KnowledgeIssueInfo;
+}
+
 export interface AssistantMessageInfo {
   id: string;
   threadId: string;
@@ -887,12 +980,19 @@ export function isConnectorScopedAgent(key: string): boolean {
 /**
  * What a run was asked to do — `agent_runs.input`. `note` seeds an extra
  * instruction; `connectorId` scopes a connector-scoped agent to one repository;
- * `pullRequest` names the change a sentinel run checks (docs/features/35).
+ * `pullRequest` names the change a sentinel run checks (docs/features/35);
+ * `issueId` the report it judges (docs/features/38).
  */
 export interface AgentRunInput {
   note?: string;
   connectorId?: string;
   pullRequest?: AgentRunPullRequest;
+  /**
+   * The knowledge issue a sentinel run judges (docs/features/38, phase 3). A
+   * run carries either this or `pullRequest`, never both: one is a report to
+   * check against the page, the other a change to check the page against.
+   */
+  issueId?: string;
   /**
    * Set once the API has acted on a finished sentinel run — proposals opened,
    * the pull request commented on. The claim that stops two sweeps doing it
@@ -1123,6 +1223,12 @@ export const AGENT_RUN_TRIGGERS = [
   'schedule',
   /** A pull or merge request webhook started a sentinel run (docs/features/35). */
   'webhook',
+  /**
+   * A knowledge issue started a sentinel run (docs/features/38, phase 3).
+   * Emitted by exactly one service, `KnowledgeIssuesService`, the way
+   * `'webhook'` is by `DriftTriggerService`.
+   */
+  'report',
 ] as const;
 export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
 
@@ -1165,6 +1271,12 @@ export interface AgentFinding {
    * fails.
    */
   proposedAt?: string | null;
+  /**
+   * The knowledge issue this finding answers (docs/features/38, phase 3): a
+   * sentinel judging a report points its verdict back at the report, which is
+   * what lets the publisher move the issue on without guessing.
+   */
+  issueId?: string;
   /**
    * The relations this finding proposes the first cited page should declare
    * (docs/features/28). Set only by the cartographer, and what lets the finding

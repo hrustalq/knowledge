@@ -167,6 +167,16 @@ export class AccessService {
     return message.thread.workspaceId;
   }
 
+  /** A report's workspace is its own column; resolved from `:id` for the same reason as a message's (docs/features/38, phase 3). */
+  async workspaceOfKnowledgeIssue(issueId: string): Promise<string> {
+    const issue = await this.prisma.knowledgeIssue.findUnique({
+      where: { id: issueId },
+      select: { workspaceId: true },
+    });
+    if (!issue) throw new NotFoundException(t('error.knowledgeIssue.notFound', { id: issueId }));
+    return issue.workspaceId;
+  }
+
   /**
    * Skills and plugins shape what the assistant does for a whole workspace, so
    * resolving the ACL from the `:id` param — not a caller-supplied

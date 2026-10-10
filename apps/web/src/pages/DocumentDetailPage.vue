@@ -25,6 +25,7 @@ import {
   BadgeCheck,
   BookA,
   Braces,
+  Flag,
   GitMerge,
   History,
   Plug,
@@ -39,6 +40,7 @@ import type {
   DocumentContentResponse,
   DocumentDetailResponse,
   ListActivityResponse,
+  ListKnowledgeIssuesResponse,
   ListDocumentRelationsResponse,
   ListDocumentThreadsResponse,
   ListMergeRequestsResponse,
@@ -47,6 +49,7 @@ import type {
   DocumentWorkflowRunsResponse,
 } from '@knowledge/contracts'
 import { apiFetch, getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
+import { isOpenIssueStatus } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
@@ -65,6 +68,7 @@ import GraphLightbox from '@/components/graph/GraphLightbox.vue'
 import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import WorkflowRail from '@/components/workflows/WorkflowRail.vue'
 import ConnectorRail from '@/components/connectors/ConnectorRail.vue'
+import KnowledgeIssuesRail from '@/components/knowledge/KnowledgeIssuesRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
@@ -82,6 +86,9 @@ const RAIL_WIDGETS = [
   { id: 'frontmatter', label: t('rail.frontmatter'), icon: Braces, expandable: false },
   { id: 'revisions', label: t('rail.history'), icon: History, expandable: true },
   { id: 'merge-requests', label: t('rail.changes'), icon: GitMerge, expandable: true },
+  // Reports against the page (docs/features/38, phase 3): what readers and
+  // agents said is wrong, and where each report is on its way to a fix.
+  { id: 'issues', label: t('rail.issues'), icon: Flag, expandable: false },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
   { id: 'workflows', label: t('rail.workflows'), icon: WorkflowIcon, expandable: false },
   { id: 'connectors', label: t('rail.connectors'), icon: Plug, expandable: false },
@@ -164,6 +171,10 @@ const verifyLabel = computed(() => {
       return t('documents.verify.verified', { n: d.revision.revisionNumber })
     case 'outdated':
       return t('documents.verify.outdated')
+    // An open report outranks the stamp (docs/features/38, phase 3): the
+    // button names it, and the Issues widget is where it is dealt with.
+    case 'flagged':
+      return t('documents.verify.flagged')
     default:
       return t('documents.verify.action')
   }
@@ -173,6 +184,8 @@ const verifyTitle = computed(() => {
   if (!d) return ''
   const when = d.document.verifiedAt ? relativeTime(d.document.verifiedAt) : ''
   switch (verification.value) {
+    case 'flagged':
+      return t('documents.verify.flaggedHint')
     case 'verified':
       return auth.canEdit
         ? t('documents.verify.removeHint', { who: verifierName.value, when })
@@ -381,6 +394,13 @@ const activityPreview = useQuery(
 const connectorsPreview = useQuery(
   computed(() => apiQueryOptions('/v1/documents/{id}/connectors', { path: { id: documentId.value } })),
 )
+const issuesPreview = useQuery(
+  computed(() =>
+    apiQueryOptions('/v1/knowledge-issues', {
+      query: { workspaceId: getWorkspaceId(), documentId: documentId.value },
+    }),
+  ),
+)
 
 const previewFor = computed<Record<RailWidget, string | null>>(() => {
   const revisions = (revisionsPreview.data.value as ListRevisionsResponse | undefined)?.revisions
@@ -396,6 +416,8 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
     : 0
 
   const connectorLinks = (connectorsPreview.data.value as DocumentConnectorResponse | undefined)?.links
+  const issues = (issuesPreview.data.value as ListKnowledgeIssuesResponse | undefined)?.issues
+  const openIssues = issues?.filter((i) => isOpenIssueStatus(i.status)).length ?? 0
 
   return {
     overview: detail.value ? `#${detail.value.revision.revisionNumber}` : null,
@@ -413,6 +435,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           ? `${mrs.length} closed`
           : 'none'
       : null,
+    issues: issues ? (openIssues ? t('count.openIssues', { n: openIssues }, openIssues) : t('knowledgeIssue.none')) : null,
     graph: relations.value
       ? relations.value.length
         ? t('count.relations', { n: relations.value.length }, relations.value.length)
@@ -639,6 +662,13 @@ watch(
 
           <template #widget-revisions><RevisionsView :document-id="documentId" /></template>
           <template #widget-merge-requests><MergeRequestList :document-id="documentId" /></template>
+          <template #widget-issues>
+            <KnowledgeIssuesRail
+              :document-id="documentId"
+              :title="detail.document.title"
+              :revision-id="content?.revisionId ?? detail.revision.revisionId"
+            />
+          </template>
           <template #widget-graph><GraphView :document-id="documentId" /></template>
           <template #widget-workflows><WorkflowRail :document-id="documentId" /></template>
           <template #widget-connectors><ConnectorRail :document-id="documentId" /></template>
@@ -744,5 +774,9 @@ watch(
 }
 .kn-verify[data-tone='unverified'] > svg {
   opacity: 0.6;
+}
+/* A report stands against the page: the one state drawn in the destructive hue. */
+.kn-verify[data-tone='flagged'] > svg {
+  color: var(--destructive);
 }
 </style>

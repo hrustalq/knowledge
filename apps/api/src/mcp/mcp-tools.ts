@@ -15,7 +15,7 @@ export const MCP_INSTRUCTIONS = [
   'Knowledge platform: a versioned documentation store with semantic search and a relation graph.',
   'Workspace > Project > Document. Every content tool takes a workspaceId — call knowledge_whoami first to get yours.',
   'Answer from the knowledge base with knowledge_search, and cite the document ids and titles it returns.',
-  'Rate an answer you built from knowledge_search with knowledge_feedback (quote its traceId); if a page you read is wrong or out of date, say so there — knowledge_report_issue follows.',
+  'Rate an answer you built from knowledge_search with knowledge_feedback (quote its traceId). If a page you read is wrong or out of date, call knowledge_report_issue with the evidence — a report is checked and may become a merge request, never a silent edit.',
   'To change an existing page: knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request. Do not merge your own merge request unless asked to.',
   'Read the knowledge://skill resource (or the "guide" prompt) for the full playbook.',
 ].join('\n');
@@ -43,6 +43,10 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   // Hidden from read-only keys like every other write; the REST vote routes
   // admit them, so a read key can still rate what it was shown.
   'knowledge_feedback',
+  // A report writes an issue row, may queue a model run and may open a merge
+  // request (docs/features/38, phase 3). The REST route admits a read key for
+  // the row alone, the same split as the vote.
+  'knowledge_report_issue',
 ]);
 
 /**

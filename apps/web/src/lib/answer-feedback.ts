@@ -8,7 +8,11 @@ import type {
   AnswerSurface,
   AnswerVote,
   AssistantAskSource,
+  AssistantSource,
+  KnowledgeIssueKind,
+  KnowledgeIssueSurface,
 } from '@knowledge/contracts'
+import { isWebSource } from '@knowledge/contracts'
 
 /** What the component is rating: a persisted reply, or a one-shot `/ask` answer the API never stored. */
 export type FeedbackTarget =
@@ -80,5 +84,49 @@ export function optimisticVote(draft: VoteDraft): AnswerVote {
     reason: draft.reason,
     comment: draft.comment.trim() || null,
     createdAt: new Date().toISOString(),
+  }
+}
+
+// ---- a down-vote that names its pages (docs/features/38, phase 3) ---------
+
+
+/**
+ * The two reasons that name a page: the answer was wrong because a cited page
+ * is, or out of date because a cited page is. Everything else is about the
+ * answer, not the pages, and files no report.
+ */
+export function reportKindFor(reason: AnswerFeedbackReason | null): KnowledgeIssueKind | null {
+  if (reason === 'wrong') return 'wrong'
+  if (reason === 'outdated') return 'stale'
+  return null
+}
+
+/** The pages a down-vote may report: cited workspace pages, once each. A web source has no page to report against. */
+export function reportablePages(sources: readonly AssistantSource[]): Array<{ documentId: string; title: string; revisionId?: string }> {
+  const seen = new Set<string>()
+  const out: Array<{ documentId: string; title: string; revisionId?: string }> = []
+  for (const s of sources) {
+    if (isWebSource(s) || seen.has(s.documentId)) continue
+    seen.add(s.documentId)
+    out.push({ documentId: s.documentId, title: s.title, ...(s.revisionId ? { revisionId: s.revisionId } : {}) })
+  }
+  return out
+}
+
+/** One `POST /v1/knowledge-issues` body per reported page: the vote's reason as the kind, its comment as the detail. */
+export function issueReportBody(
+  page: { documentId: string; revisionId?: string },
+  input: { workspaceId: string; kind: KnowledgeIssueKind; query: string; comment: string; surface: KnowledgeIssueSurface },
+): Record<string, unknown> {
+  const comment = input.comment.trim()
+  const question = input.query.trim().slice(0, 500)
+  return {
+    workspaceId: input.workspaceId,
+    documentId: page.documentId,
+    ...(page.revisionId ? { revisionId: page.revisionId } : {}),
+    kind: input.kind,
+    detail: (comment || `Reported from a thumbs-down on an answer.`).slice(0, 4_000),
+    evidence: question ? [{ note: `The question was: ${question}` }] : [],
+    surface: input.surface,
   }
 }

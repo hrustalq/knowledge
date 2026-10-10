@@ -15601,6 +15601,212 @@
         ]
       }
     },
+    "/v1/knowledge-issues": {
+      "post": {
+        "operationId": "KnowledgeIssuesController_report",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportKnowledgeIssueDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Report a problem with a page. Folds into the open issue for the same page and kind; otherwise opens a draft merge request (editor with a corrected body), queues a sentinel check, or stays open for a person.",
+        "tags": [
+          "knowledge-issues"
+        ]
+      },
+      "get": {
+        "operationId": "KnowledgeIssuesController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "checking",
+                "proposed",
+                "resolved",
+                "dismissed"
+              ]
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List reports in a workspace, newest first; narrow by page or status",
+        "tags": [
+          "knowledge-issues"
+        ]
+      }
+    },
+    "/v1/knowledge-issues/{id}": {
+      "patch": {
+        "operationId": "KnowledgeIssuesController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseKnowledgeIssueDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Close a report by hand: resolved (the page is right now) or dismissed (the report was not)",
+        "tags": [
+          "knowledge-issues"
+        ]
+      }
+    },
     "/v1/mcp": {
       "post": {
         "operationId": "McpController_handle",
@@ -19028,6 +19234,104 @@
           "rating",
           "workspaceId",
           "query"
+        ]
+      },
+      "KnowledgeIssueEvidenceDto": {
+        "type": "object",
+        "properties": {
+          "quote": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "A passage of the page the report disputes"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Where the correct information is"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      },
+      "ReportKnowledgeIssueDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The page the report is about; must belong to workspaceId"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The revision the reporter read"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "stale",
+              "wrong",
+              "missing",
+              "duplicate",
+              "other"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "What is wrong, in the reporter's words"
+          },
+          "evidence": {
+            "description": "At most 10 items",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeIssueEvidenceDto"
+            }
+          },
+          "suggestedMarkdown": {
+            "type": "string",
+            "maxLength": 200000,
+            "description": "A corrected page body (markdown, no frontmatter). From an editor it opens a draft merge request at once; from a viewer it only reaches the sentinel as evidence."
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "assistant",
+              "editor-assistant",
+              "ask",
+              "mcp",
+              "web"
+            ],
+            "description": "Where the report was made. Omitted reads as \"web\" (the page itself)."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "documentId",
+          "kind",
+          "detail"
+        ]
+      },
+      "CloseKnowledgeIssueDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "dismissed"
+            ],
+            "description": "The only two states a person sets by hand"
+          }
+        },
+        "required": [
+          "status"
         ]
       },
       "ApiErrorResponse": {

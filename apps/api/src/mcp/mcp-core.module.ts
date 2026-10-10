@@ -15,6 +15,7 @@ import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
+import { KnowledgeIssuesModule } from '../feedback/knowledge-issues.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -51,6 +52,9 @@ import { McpService } from './mcp.service.js';
     AiReadableCoreModule,
     // Provenance on knowledge_search hits (docs/features/38). Controller-free.
     FeedbackCoreModule,
+    // knowledge_report_issue (docs/features/38, phase 3). Controller-free, but
+    // API-side: filing a report may open a merge request.
+    KnowledgeIssuesModule,
   ],
   providers: [McpService],
   exports: [McpService],

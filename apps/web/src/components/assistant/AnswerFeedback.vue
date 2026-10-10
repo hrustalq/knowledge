@@ -13,18 +13,32 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ThumbsDown, ThumbsUp } from 'lucide-vue-next'
-import type { AnswerFeedbackReason, AnswerVote } from '@knowledge/contracts'
+import type { AnswerFeedbackReason, AnswerVote, AssistantSource } from '@knowledge/contracts'
 import { ANSWER_FEEDBACK_REASONS } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { getWorkspaceId } from '@/lib/api'
 import { useFeedbackStore } from '@/stores/feedback'
 import { hasDraftBridge } from '@/stores/assistant'
-import { canSend, thumbAction, voteSurface, type FeedbackTarget, type VoteDraft } from '@/lib/answer-feedback'
+import {
+  canSend,
+  reportKindFor,
+  reportablePages,
+  thumbAction,
+  voteSurface,
+  type FeedbackTarget,
+  type VoteDraft,
+} from '@/lib/answer-feedback'
 
 const props = defineProps<{
   target: FeedbackTarget
   /** For a message target: the vote the thread read came with. */
   initial?: AnswerVote | null
+  /** For a message target: the reply's sources, so a wrong/outdated vote can report the pages it cited. */
+  sources?: readonly AssistantSource[]
+  /** For a message target: the question the reply answered, carried into the report. */
+  query?: string
 }>()
 
 const { t } = useI18n()
@@ -47,11 +61,25 @@ const comment = ref('')
 const thanked = ref(false)
 let thankTimer: ReturnType<typeof setTimeout> | null = null
 
+// A `wrong` / `outdated` vote names its pages (docs/features/38, phase 3):
+// the cited workspace pages can be reported in the same gesture, ticked by
+// default because that is what the vote means. Hidden when the reason is
+// about the answer rather than the pages, or when nothing was cited.
+const reportPages = ref(true)
+const pages = computed(() =>
+  reportablePages(props.target.kind === 'ask' ? props.target.sources : (props.sources ?? [])),
+)
+const reportKind = computed(() => reportKindFor(reason.value))
+const canReport = computed(() => reportKind.value !== null && pages.value.length > 0)
+const reported = ref<{ reported: number; failed: number } | null>(null)
+
 watch(open, (isOpen) => {
   if (!isOpen) return
   // Reopening on an existing down-vote starts from what was said last time.
   reason.value = current.value?.rating === 'down' ? current.value.reason : null
   comment.value = current.value?.rating === 'down' ? (current.value.comment ?? '') : ''
+  reportPages.value = true
+  reported.value = null
   error.value = null
 })
 
@@ -73,6 +101,18 @@ async function submit(draft: VoteDraft) {
     }
     open.value = false
     thank()
+    // After the vote has landed: a report per cited page, best-effort. The
+    // vote is the thing that must not be lost; a report that fails is said.
+    const kind = reportKindFor(draft.reason)
+    if (draft.rating === 'down' && kind && reportPages.value && pages.value.length > 0) {
+      reported.value = await store.reportCitedPages(pages.value, {
+        workspaceId: props.target.kind === 'ask' ? props.target.workspaceId : getWorkspaceId(),
+        kind,
+        query: props.target.kind === 'ask' ? props.target.query : (props.query ?? ''),
+        comment: draft.comment,
+        surface: props.target.kind === 'ask' ? 'ask' : voteSurface(hasDraftBridge()),
+      })
+    }
   } catch {
     error.value = t('assistant.feedback.failed')
   } finally {
@@ -165,6 +205,13 @@ function pressDown() {
             @keydown.enter.ctrl.prevent="submit({ rating: 'down', reason, comment })"
           />
         </label>
+        <label v-if="canReport" class="flex items-start gap-2">
+          <Checkbox :model-value="reportPages" class="mt-0.5" @update:model-value="reportPages = !!$event" />
+          <span class="text-xs">
+            {{ t('assistant.feedback.reportPages', { n: pages.length }, pages.length) }}
+            <span class="block text-muted-foreground">{{ t('assistant.feedback.reportPagesHint') }}</span>
+          </span>
+        </label>
         <p v-if="error" class="text-xs text-destructive">{{ error }}</p>
         <div class="flex items-center justify-end gap-2">
           <Button variant="ghost" size="sm" @click="open = false">{{ t('common.cancel') }}</Button>
@@ -175,7 +222,10 @@ function pressDown() {
       </PopoverContent>
     </Popover>
 
-    <span v-if="thanked" class="ml-1 text-[11px] text-muted-foreground" role="status">{{ t('assistant.feedback.thanks') }}</span>
+    <span v-if="thanked" class="ml-1 text-[11px] text-muted-foreground" role="status">
+      {{ reported && reported.reported > 0 ? t('assistant.feedback.reported', { n: reported.reported }, reported.reported) : t('assistant.feedback.thanks') }}
+      <template v-if="reported && reported.failed > 0"> {{ t('assistant.feedback.reportFailed', { n: reported.failed }, reported.failed) }}</template>
+    </span>
     <span v-else-if="error && !open" class="ml-1 text-[11px] text-destructive" role="alert">{{ error }}</span>
   </div>
 </template>

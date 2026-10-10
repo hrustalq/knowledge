@@ -255,6 +255,13 @@ export const KNOWN_EVENT_TYPES = [
   // whether it still holds is derived against the head at read time.
   'document.verified',
   'document.unverified',
+  // A report against a page and what became of it (docs/features/38, phase
+  // 3). `reported` reaches the page's last author directly and its watchers
+  // by fan-out; the other three are feed rows.
+  'knowledge-issue.reported',
+  'knowledge-issue.proposed',
+  'knowledge-issue.resolved',
+  'knowledge-issue.dismissed',
   'project.created',
   'project.updated',
   'project.deleted',

@@ -1,0 +1,17 @@
+{
+  "kind": {
+    "stale": "out of date",
+    "wrong": "wrong",
+    "missing": "missing",
+    "duplicate": "duplicate",
+    "other": "other"
+  },
+  "mergeRequestTitle": "Fix reported on \"{title}\" ({kind})",
+  "mergeRequestIntro": "Proposed from a report ({kind}) filed against this page. The body is the reporter's, published as-is.",
+  "verdict": {
+    "failed": "The sentinel check failed: {error}",
+    "notStale": "The sentinel judged the page against the report and found nothing wrong. {summary}",
+    "noDraft": "The sentinel agrees something is wrong but could not draft the fix: {detail}",
+    "drafted": "The sentinel confirmed the report: {detail}"
+  }
+}

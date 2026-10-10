@@ -16,6 +16,8 @@ function prismaWith(docs: unknown[], revisions: unknown[], users: unknown[]) {
       (docs as Array<{ id: string; workspaceId: string }>).filter((d) => where.id.in.includes(d.id) && d.workspaceId === where.workspaceId)) },
     documentRevision: { findMany: vi.fn(async () => revisions) },
     user: { findMany: vi.fn(async () => users) },
+    // No open reports: nothing is flagged (phase 3 counts them here).
+    knowledgeIssue: { groupBy: vi.fn(async () => []) },
   };
 }
 

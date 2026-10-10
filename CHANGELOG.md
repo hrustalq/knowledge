@@ -62,6 +62,29 @@ in the pull request that introduces them — see
   `low` or `none` confidence is recorded as an implicit `low-confidence` /
   `no-answer` signal, so the coverage-gap agent of a later phase has something
   to cluster even when nobody voted. (#67)
+- **Report a problem with a page.** A new **Reports** widget in the page rail
+  lists open reports and lets a reader file one: what kind of problem, what is
+  wrong, the passage disputed and where the right information is. A report is
+  checked by the sentinel against the page and, when it holds up, becomes a
+  draft merge request for a person to review; an editor who pastes the
+  corrected body gets that merge request at once, in their name. A page with
+  an open report shows as **Reported** on its Verify button and as `flagged`
+  on every answer that cites it; editors resolve or dismiss reports from the
+  rail. A second report of the same page and kind folds into the open one.
+  Over the API: `POST /v1/knowledge-issues`, `GET /v1/knowledge-issues`,
+  `PATCH /v1/knowledge-issues/:id`. Third part of the answer trust milestone
+  (#67).
+- **A thumbs-down names its pages.** Voting an answer down as *wrong* or *out
+  of date* offers, ticked by default, to report the pages it cited — one
+  report per page, after the vote itself is stored. (#67)
+- **Agents can report what they read.** A new `knowledge_report_issue` MCP
+  tool takes the page, the kind of problem, what is wrong and the evidence;
+  the server instructions and the generated skill tell an agent when to call
+  it. A report never edits a page by itself. Hidden from read-only keys like
+  every other write. (#67)
+- **Page authors hear about reports.** The last author of a reported page gets
+  a notification under *Page changes*; the feed records `reported`,
+  `proposed`, `resolved` and `dismissed`. (#67)
 
 ### Security
 
@@ -90,6 +113,18 @@ in the pull request that introduces them — see
   (expand-only; the previous image runs against it). Votes store the question
   as typed, the first 1 000 characters of the answer and the cited page ids;
   retention is phase 3 of #67. (#67)
+- Migration `20261010142919_knowledge_issues` creates the `knowledge_issues`
+  table only (expand-only; the previous image runs against it, so a code
+  rollback needs no database step). New env vars, all with defaults:
+  `KNOWLEDGE_ISSUE_DAILY_LIMIT` (`50` reports per principal, per API key when
+  one is used, per 24 h — past it a report is a 429 naming the limit),
+  `KNOWLEDGE_ISSUE_MAX_PENDING_CHECKS` (`10` sentinel report checks waiting per
+  workspace — past it a report stays open for a person instead of queueing a
+  model run), `ANSWER_FEEDBACK_RETENTION_DAYS` (`180`: feedback rows and
+  closed reports older than this are purged, in batches, by the report
+  sweeper once an hour; open reports are never purged). A report check runs
+  the `sentinel` agent and spends the reporter's AI budget; with the sentinel
+  disabled every report stays open. (#67)
 
 ## [0.13.0] — 2026-09-27
 

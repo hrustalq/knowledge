@@ -1801,6 +1801,36 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/knowledge-issues",
+      "tag": "knowledge-issues",
+      "summary": "List reports in a workspace, newest first; narrow by page or status",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge-issues",
+      "tag": "knowledge-issues",
+      "summary": "Report a problem with a page. Folds into the open issue for the same page and kind; otherwise opens a draft merge request (editor with a corrected body), queues a sentinel check, or stays open for a person.",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/knowledge-issues/{id}",
+      "tag": "knowledge-issues",
+      "summary": "Close a report by hand: resolved (the page is right now) or dismissed (the report was not)",
+      "role": "editor",
+      "source": "knowledge-issue",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "DELETE",
       "path": "/v1/mcp",
       "tag": "mcp",
@@ -2986,6 +3016,40 @@
         },
         {
           "name": "limit",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_report_issue",
+      "description": "Report that a page is wrong, out of date, missing something, or a duplicate. Quote the passage and say where the correct information is. The report is checked by the sentinel and may become a merge request for a person to review; a second report of the same page and kind folds into the open one. Returns the issue, its status (open | checking | proposed) and whether it was deduplicated.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "revisionId",
+          "optional": true
+        },
+        {
+          "name": "kind",
+          "optional": false
+        },
+        {
+          "name": "detail",
+          "optional": false
+        },
+        {
+          "name": "evidence",
+          "optional": true
+        },
+        {
+          "name": "suggestedMarkdown",
           "optional": true
         }
       ]

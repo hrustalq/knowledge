@@ -433,6 +433,13 @@ onMounted(async () => {
       apiFetch<DocumentDetailResponse>(`/v1/documents/${editId.value}`),
       apiFetch<DocumentContentResponse>(`/v1/documents/${editId.value}/content`),
     ])
+    // An archived page is read-only until unarchived (docs/features/39);
+    // the API would refuse the publish, so refuse the editing first.
+    if (detail.document.archivedAt) {
+      toast.info(t('verification.archived.editorBlocked'))
+      await router.replace(`/documents/${editId.value}`)
+      return
+    }
     title.value = detail.document.title
     category.value = detail.document.category
     parentId.value = detail.document.parentId ?? ''

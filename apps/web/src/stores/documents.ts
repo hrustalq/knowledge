@@ -16,6 +16,11 @@ function projectParam(): string {
   return projectId ? `&projectId=${projectId}` : ''
 }
 
+/** `&includeArchived=1` when the reader asked to see put-away pages too. */
+function archivedParam(show: boolean): string {
+  return show ? '&includeArchived=1' : ''
+}
+
 export interface DocumentFilters {
   categories: DocumentCategory[]
   projectIds: string[]
@@ -223,6 +228,13 @@ export const useDocumentsStore = defineStore('documents', {
      */
     tree: [] as DocumentTreeNode[],
     treeLoaded: false,
+    /**
+     * Archived pages are hidden by the API unless asked for (docs/features/39).
+     * One switch for the tree and the list together — the rail shares the
+     * tree, so it follows — and `rescope` is how the switch takes effect: the
+     * rows on screen were fetched under the other answer.
+     */
+    showArchived: false,
     /** Node ids whose children are in flight, so a row can show it is working. */
     expanding: [] as string[],
     /** Node ids whose children have been fetched — empty branches included. */
@@ -289,6 +301,7 @@ export const useDocumentsStore = defineStore('documents', {
         else if (projectId) params.set('projectId', projectId)
         if (this.filters.categories.length) params.set('categories', this.filters.categories.join(','))
         if (this.filters.tags.length) params.set('tags', this.filters.tags.join(','))
+        if (this.showArchived) params.set('includeArchived', '1')
         if (!opts.reset && this.nextCursor) params.set('cursor', this.nextCursor)
 
         const res = await apiFetch<ListDocumentsResponse>(`/v1/documents?${params}`)
@@ -333,7 +346,7 @@ export const useDocumentsStore = defineStore('documents', {
 
       const job = (async () => {
         const res = await apiFetch<DocumentTreeResponse>(
-          `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1${projectParam()}`,
+          `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1${projectParam()}${archivedParam(this.showArchived)}`,
         )
         // Folded onto what we hold rather than replacing it, so a refresh does
         // not empty every open branch and re-render every row — see mergeNodes.
@@ -376,7 +389,7 @@ export const useDocumentsStore = defineStore('documents', {
         if (!opts.background) this.expanding = [...new Set([...this.expanding, parentId])]
         try {
           const res = await apiFetch<DocumentTreeResponse>(
-            `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1&parentId=${parentId}${projectParam()}`,
+            `/v1/documents/tree?workspaceId=${getWorkspaceId()}&depth=1&parentId=${parentId}${projectParam()}${archivedParam(this.showArchived)}`,
           )
           const node = walk(this.tree, parentId)
           if (node) {
@@ -533,6 +546,13 @@ export const useDocumentsStore = defineStore('documents', {
      * shows its skeletons while the new tree loads instead of holding the old
      * project's pages under the new project's name for a beat.
      */
+    /** Show or hide archived pages everywhere the store feeds; refetches what is in use. */
+    async setShowArchived(show: boolean): Promise<void> {
+      if (show === this.showArchived) return
+      this.showArchived = show
+      await this.rescope()
+    },
+
     async rescope() {
       const wantList = this.loaded
       const wantTree = this.treeLoaded

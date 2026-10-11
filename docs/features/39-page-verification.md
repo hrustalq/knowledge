@@ -10,41 +10,41 @@ can set, an **inactive** reading derived from its activity clock, and an
 multiply every hit's score by the page's state, so a verified page ranks above
 an unverified one and a page known to be wrong ranks last.
 
-Phase status: **API, ranking, MCP, the expiry sweeper and the sentinel
-integration are implemented** (this document). The page-level status bar and
-the knowledge-health dashboard ([feature 40](40-knowledge-health.md)) follow in
-later pull requests of the same issue.
+Phase status: **API, ranking, MCP, the expiry sweeper, the sentinel
+integration and the page-level UI are implemented** (this document). The
+knowledge-health dashboard ([feature 40](40-knowledge-health.md)) follows in a
+later pull request of the same issue.
 
 ## What is stored, what is derived
 
 The row stores little, and nothing that says "verified":
 
-| column                                       | meaning                                                                               |
-| -------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `verified_at / verified_by / verified_revision_id` | the stamp (feature 38) — _is_ the verified state                                |
-| `verification_expires_at`                    | `verified_at + interval`; `NULL` = never                                              |
-| `review_interval_days`                       | the page's own interval; `NULL` inherits the workspace default, `0` = never           |
-| `verification_flag`                          | the one state a person or agent **declares**: `requested` or `outdated`, else `NULL` |
-| `verification_note`, `verification_source`   | why, and who/what set it (`person`, `drift`, `curator`, `mcp` + run or PR)           |
-| `owner_id`                                   | the responsible member; `NULL` = unowned                                              |
-| `last_activity_at`                           | bumped by `ActivityService.record` for every `FRESHNESS_ACTIONS` action               |
-| `archived_at / archived_by`                  | put away                                                                              |
-| `expiry_reminded_at / expired_notified_at`   | the sweeper's claim-once stamps; both reset on every verify                           |
-| `document_revisions.body_chars`              | body length without frontmatter, written by the ingestion normalizer                  |
+| column                                             | meaning                                                                              |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `verified_at / verified_by / verified_revision_id` | the stamp (feature 38) — _is_ the verified state                                     |
+| `verification_expires_at`                          | `verified_at + interval`; `NULL` = never                                             |
+| `review_interval_days`                             | the page's own interval; `NULL` inherits the workspace default, `0` = never          |
+| `verification_flag`                                | the one state a person or agent **declares**: `requested` or `outdated`, else `NULL` |
+| `verification_note`, `verification_source`         | why, and who/what set it (`person`, `drift`, `curator`, `mcp` + run or PR)           |
+| `owner_id`                                         | the responsible member; `NULL` = unowned                                             |
+| `last_activity_at`                                 | bumped by `ActivityService.record` for every `FRESHNESS_ACTIONS` action              |
+| `archived_at / archived_by`                        | put away                                                                             |
+| `expiry_reminded_at / expired_notified_at`         | the sweeper's claim-once stamps; both reset on every verify                          |
+| `document_revisions.body_chars`                    | body length without frontmatter, written by the ingestion normalizer                 |
 
 Everything a reader sees is **one predicate**, `verificationStateFor` in
 `@knowledge/contracts`, over the row, the head revision, the open-report count
 and the clock. In precedence order:
 
-| state        | when                                                                                   |
-| ------------ | -------------------------------------------------------------------------------------- |
-| `outdated`   | `verification_flag = 'outdated'` — declared wrong                                      |
-| `flagged`    | an open knowledge issue (feature 38, phase 3)                                          |
-| `requested`  | `verification_flag = 'requested'`                                                      |
-| `unverified` | no stamp                                                                               |
-| `edited`     | stamped at an older revision than the head                                             |
-| `expired`    | stamped at the head, `verification_expires_at` passed                                  |
-| `verified`   | stamped at the head, inside its interval                                               |
+| state        | when                                                  |
+| ------------ | ----------------------------------------------------- |
+| `outdated`   | `verification_flag = 'outdated'` — declared wrong     |
+| `flagged`    | an open knowledge issue (feature 38, phase 3)         |
+| `requested`  | `verification_flag = 'requested'`                     |
+| `unverified` | no stamp                                              |
+| `edited`     | stamped at an older revision than the head            |
+| `expired`    | stamped at the head, `verification_expires_at` passed |
+| `verified`   | stamped at the head, inside its interval              |
 
 A new revision, a passing deadline or a closed report each change the answer
 **with no write** to the document row. That is what lets search, the dashboard,
@@ -63,8 +63,8 @@ of them as stale.
 **Inactive** is `isInactive(last_activity_at, inactiveAfterDays)` — no write,
 comment or verification inside the window. Read analytics is another milestone,
 so a page read daily but never touched looks inactive. **Empty** is
-`body_chars <= emptyMaxChars`; `NULL` body_chars (revisions indexed before the
-column) reads as _unknown_, never as empty.
+`body_chars <= emptyMaxChars`; `NULL` body*chars (revisions indexed before the
+column) reads as \_unknown*, never as empty.
 
 ## Transitions
 
@@ -73,15 +73,15 @@ guarded statement** — `updateMany` over `{ id, archivedAt: null }` — followe
 one activity record. Two replicas racing on the same page: one wins the
 `updateMany`, the other records nothing.
 
-| route                                           | role             | effect                                                                                                         |
-| ----------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------- |
-| `POST /v1/documents/:id/verify {intervalDays?}` | editor           | stamp at head; set interval when given; compute expiry; clear flag, note, source and both sweeper stamps        |
-| `DELETE /v1/documents/:id/verify`               | editor           | back to `unverified`: stamp and flag both go                                                                   |
-| `POST /v1/documents/:id/verification-request {note?}` | viewer     | `requested`; notifies the owner (or the last verifier)                                                          |
-| `POST /v1/documents/:id/outdated {note?}`       | editor           | `outdated`; notifies the owner                                                                                  |
-| `PATCH /v1/documents/:id {ownerId?, reviewIntervalDays?}` | editor | owner must be a workspace member (`null` = unowned); a stamped page's expiry moves with its interval            |
-| `POST /v1/documents/:id/archive {includeDescendants?}` | editor    | one statement over `path LIKE '<own path>%'`; default `true`, so a parent is never archived over live children |
-| `POST /v1/documents/:id/unarchive`              | editor           | the inverse                                                                                                    |
+| route                                                     | role   | effect                                                                                                         |
+| --------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `POST /v1/documents/:id/verify {intervalDays?}`           | editor | stamp at head; set interval when given; compute expiry; clear flag, note, source and both sweeper stamps       |
+| `DELETE /v1/documents/:id/verify`                         | editor | back to `unverified`: stamp and flag both go                                                                   |
+| `POST /v1/documents/:id/verification-request {note?}`     | viewer | `requested`; notifies the owner (or the last verifier)                                                         |
+| `POST /v1/documents/:id/outdated {note?}`                 | editor | `outdated`; notifies the owner                                                                                 |
+| `PATCH /v1/documents/:id {ownerId?, reviewIntervalDays?}` | editor | owner must be a workspace member (`null` = unowned); a stamped page's expiry moves with its interval           |
+| `POST /v1/documents/:id/archive {includeDescendants?}`    | editor | one statement over `path LIKE '<own path>%'`; default `true`, so a parent is never archived over live children |
+| `POST /v1/documents/:id/unarchive`                        | editor | the inverse                                                                                                    |
 
 Verifying refuses a page with no finalized head (`409`, `details.reason =
 no_head_revision`) and an archived page (`409`, `document_archived`). Verifying
@@ -122,7 +122,7 @@ editor), offered once per finding (`flaggedAt`). Nothing here verifies.
 ## The expiry sweeper
 
 `VerificationSweeper` (`apps/api/src/verification/verification.sweeper.ts`) is
-the clock's voice. It changes nothing about what a page *reads as* — `expired`
+the clock's voice. It changes nothing about what a page _reads as_ — `expired`
 is derived from the deadline alone — it only decides when a person hears about
 it. API-side like `DriftPublishSweeper`, because a notification is a user-facing
 act and the worker has no principal; no cron, a fixed 60 s tick with a `running`
@@ -184,13 +184,13 @@ status, and then:
 The weights are exported constants (`TRUST_WEIGHTS`), guesses to be tuned with
 `make backtest`:
 
-| state                             | factor |
-| --------------------------------- | ------ |
-| verified                          | 1.15   |
-| unverified, requested, edited     | 1.0    |
-| expired, flagged                  | 0.85   |
-| outdated                          | 0.5    |
-| inactive (on top of the above)    | × 0.9  |
+| state                          | factor |
+| ------------------------------ | ------ |
+| verified                       | 1.15   |
+| unverified, requested, edited  | 1.0    |
+| expired, flagged               | 0.85   |
+| outdated                       | 0.5    |
+| inactive (on top of the above) | × 0.9  |
 
 Multiplicative, so it works for RRF, cosine-only and max-normalized BM25 scores
 alike. A verified page must not beat a clearly more relevant unverified one,
@@ -224,6 +224,55 @@ The kill switch is `SEARCH_TRUST_RANKING` (env) combined with the workspace's
   `requested` needs `viewer`, `outdated` needs `editor` (the REST twins' roles),
   the source is recorded as `mcp`, and it is hidden from read-only keys via
   `WRITE_TOOLS`. `MCP_INSTRUCTIONS` and the generated skill explain the states.
+
+## On the page
+
+`components/verification/` is the whole of it:
+
+- **`VerificationBar`** is the body of a **Verification** widget that heads
+  the page rail of `DocumentDetailPage` — a `RailSection` like Overview and
+  History, so it folds away and its open state is remembered per reader the
+  same way; the collapsed row's preview is the state itself. While reading an
+  old revision the widget says the stamp is about the head and shows nothing
+  else. Open, it draws one sentence saying who verified or flagged the page
+  and when (a drift flag links to its pull request; the note is rendered as
+  text, never as markup), an `Inactive` chip, the owner, and the actions — each
+  one a REST route from the table above, hidden when the caller's role cannot
+  take it, so a hidden button is never a surprise 403. **Verify** is a menu of
+  review intervals (workspace default / 30 / 90 / 180 / 365 / never) with the
+  page's own interval checked, so re-verifying keeps it unless a different row
+  is picked. **Request verification** is offered to any member; **Mark
+  outdated**, **Clear verification** and **Archive** to editors. Archive asks
+  first and defaults to the subtree, the way the route does.
+- On an **archived** page the widget previews *Archived* and its body says
+  when and by whom, read-only until unarchived, with **Unarchive** for editors. The Edit action goes, and
+  the editor route sends you back to the page with a toast. Comments stay open:
+  a comment is about the page, not a write to it, and the API takes them.
+- **`OwnerPicker`**: a chip for readers, a member roster for editors with
+  _Unowned_ pinned first (unowned is a state the dashboard reports, not an
+  error). `PATCH :id { ownerId }` and the page re-reads itself.
+- **`VerificationBadge`** is the pill, reused by the search sheet on every hit
+  whose state is not `unverified`, so a reader can see why a weaker match sits
+  above a stronger one.
+- The **tree** (rail and index), the **list** and the search sheet draw a dot
+  only for a state that asks for a look — `edited`, `expired`, `requested`,
+  `flagged`, `outdated` — never for `verified` or `unverified`: marking the
+  ordinary states on every row would make the mark mean nothing. One helper,
+  `verification-ui.ts`, decides the hue and the "asks for a look" set, on top
+  of the `verificationTone` the provenance chips already read, so a page cannot
+  be amber in the rail and red in the sheet.
+- **Show archived** on the pages index (tree and list views, never the graph)
+  flips one store switch, `documents.showArchived`, that the tree, the rail's
+  tree and the list all read; the rows on screen were fetched under the other
+  answer, so the switch refetches through `rescope`. Archived rows are dimmed
+  and struck through with an archive icon.
+- Live: a `document.*` event for the open page re-reads the detail (the bar's
+  state) without touching the content; comments keep their own query.
+
+The state names (`verification.state.*`) are one catalogue in `en.json` /
+`ru.json`; the assistant's provenance chip links to them rather than carrying
+its own, which is also what gave the chip words for `edited`, `expired` and
+`requested` — it had rendered the raw key for those since the rename.
 
 ## Configuration
 

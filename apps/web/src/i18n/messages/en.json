@@ -221,25 +221,7 @@
     "commentDeleted": "Comment deleted",
     "revisionNumber": "Revision #{n}",
     "viewingRevision": "Viewing revision {id} — commenting is off while reading history.",
-    "provenance": "{extractor} · confidence {confidence}",
-    "verify": {
-      "action": "Verify",
-      "actionHint": "Mark this page as checked and correct at its current revision",
-      "verified": "Verified · #{n}",
-      "verifiedBy": "Verified by {who} {when}",
-      "removeHint": "Verified by {who} {when}. Click to remove the stamp.",
-      "edited": "Verified · edited since",
-      "editedBy": "Verified by {who} {when}, but the page has changed since",
-      "reverifyHint": "Verified by {who} {when}, but the page has changed since. Click to verify the current revision.",
-      "expired": "Verification expired",
-      "expiredBy": "Verified by {who} {when}; the review interval has passed. Click to verify again.",
-      "requested": "Verification requested",
-      "requestedHint": "Somebody asked for this page to be checked. {note}",
-      "outdated": "Outdated",
-      "outdatedHint": "This page was marked outdated. {note} Verify it once it is right again.",
-      "flagged": "Reported",
-      "flaggedHint": "A reader or an agent reported a problem with this page. See the Reports widget in the rail."
-    }
+    "provenance": "{extractor} · confidence {confidence}"
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -1278,10 +1260,13 @@
       "fetched": "Read {when}",
       "factTitle": "How this fact reached the answer",
       "verification": {
-        "verified": "Verified",
-        "outdated": "Verified at an older revision",
-        "unverified": "Not verified",
-        "flagged": "Reported"
+        "verified": "@:verification.state.verified",
+        "outdated": "@:verification.state.outdated",
+        "unverified": "@:verification.state.unverified",
+        "flagged": "@:verification.state.flagged",
+        "edited": "@:verification.state.edited",
+        "expired": "@:verification.state.expired",
+        "requested": "@:verification.state.requested"
       },
       "fact": {
         "explicit": "From the page text",
@@ -3104,5 +3089,95 @@
     "copyFailed": "Could not copy to the clipboard",
     "tooLongCopied": "The page is too long for a link, so it was copied. Paste it into the chat.",
     "failed": "Could not load the page"
+  },
+  "verification": {
+    "title": "Verification",
+    "headOnly": "Verification is about the current head; go back to it to see or change the stamp.",
+    "state": {
+      "verified": "Verified",
+      "expired": "Verification expired",
+      "edited": "Edited since verified",
+      "requested": "Verification requested",
+      "outdated": "Outdated",
+      "flagged": "Reported",
+      "unverified": "Not verified"
+    },
+    "inactive": "Inactive",
+    "inactiveHint": "No edits, comments or checks for a while",
+    "note": "Note",
+    "describe": {
+      "verified": "Verified by {who} {when}",
+      "expires": "expires {when}",
+      "neverExpires": "never expires",
+      "edited": "Verified by {who} {when}; the page has changed since",
+      "expired": "Verified by {who} {when}; the review interval has passed",
+      "requested": "{who} asked for a check {when}",
+      "outdated": "Marked outdated by {who} {when}",
+      "flagged": "A reader or an agent reported a problem with this page — see Reports in the rail",
+      "unverified": "Nobody has verified this page yet"
+    },
+    "source": {
+      "sentinel": "the sentinel",
+      "curator": "the curator",
+      "mcp": "an agent over MCP",
+      "someone": "somebody"
+    },
+    "sourceLink": "Open the pull request",
+    "owner": "Owner",
+    "unowned": "Unowned",
+    "changeOwner": "Change owner",
+    "searchMembers": "Search members…",
+    "noMembers": "No member matches that.",
+    "action": {
+      "verify": "Verify",
+      "verified": "Verified",
+      "verifyAt": "Verify at #{n}",
+      "request": "Request a check",
+      "outdated": "Mark outdated",
+      "clear": "Clear verification",
+      "archive": "Archive page",
+      "unarchive": "Unarchive",
+      "more": "More page actions"
+    },
+    "interval": {
+      "title": "review interval",
+      "default": "Workspace default",
+      "days": "{n} day | {n} days",
+      "never": "Never expires"
+    },
+    "requestDialog": {
+      "title": "Request verification",
+      "description": "The owner is told this page needs a check. Say what looks wrong or out of date.",
+      "notePlaceholder": "What should be checked?",
+      "submit": "Request"
+    },
+    "outdatedDialog": {
+      "title": "Mark outdated",
+      "description": "Readers, search and the assistant are told this page is wrong until somebody verifies it again.",
+      "notePlaceholder": "What is wrong?",
+      "submit": "Mark outdated"
+    },
+    "archiveDialog": {
+      "title": "Archive “{title}”?",
+      "description": "The page leaves the tree, lists, search and the assistant. It stays readable by its link and is read-only until unarchived.",
+      "withDescendants": "Also archive the pages under it",
+      "confirm": "Archive"
+    },
+    "archived": {
+      "badge": "Archived",
+      "banner": "Archived {when} by {who}. The page is read-only until it is unarchived.",
+      "editorBlocked": "This page is archived. Unarchive it to edit.",
+      "showArchived": "Show archived",
+      "hideArchived": "Hide archived pages"
+    },
+    "toast": {
+      "verified": "Page verified",
+      "cleared": "Verification cleared",
+      "requested": "Verification requested",
+      "outdated": "Page marked outdated",
+      "ownerChanged": "Owner updated",
+      "archived": "Page archived",
+      "unarchived": "Page restored"
+    }
   }
 }

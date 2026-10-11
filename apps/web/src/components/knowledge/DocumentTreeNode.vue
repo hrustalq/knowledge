@@ -10,7 +10,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
-import { ChevronRight, FileText, Loader2 } from 'lucide-vue-next'
+import { Archive, ChevronRight, FileText, Loader2 } from 'lucide-vue-next'
 import { Collapse } from '@/components/ui/collapse'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useSidebarStore } from '@/stores/sidebar'
 import TreeRowMenu from './TreeRowMenu.vue'
+import { needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
 
 const { t } = useI18n()
 defineOptions({ name: 'DocumentTreeNode' })
@@ -62,6 +63,15 @@ watchEffect(() => {
 function toggle() {
   open.value = !open.value
 }
+
+/**
+ * A verification mark only when the state asks for a look (docs/features/39):
+ * expired, edited since, requested, reported or outdated. Verified and
+ * unverified are the ordinary states and draw nothing. Archived rows appear
+ * only when the index was asked to show them, dimmed, with the icon saying why.
+ */
+const attention = computed(() => needsAttention(props.node.verification))
+const archived = computed(() => !!props.node.archivedAt)
 
 /** One level of the index tree indents by 24px; the drop line follows it. */
 const INDEX_INDENT = 24
@@ -114,10 +124,28 @@ const dnd = useTreeDndRow({
       <RouterLink
         :to="`/documents/${node.documentId}`"
         class="truncate text-sm font-medium transition-colors hover:text-primary"
+        :class="archived ? 'text-muted-foreground line-through decoration-muted-foreground/40' : ''"
         draggable="false"
       >
         {{ node.title }}
       </RouterLink>
+      <span
+        v-if="archived"
+        class="grid shrink-0 place-items-center text-muted-foreground/70"
+        role="img"
+        :aria-label="t('verification.archived.badge')"
+        :title="t('verification.archived.badge')"
+      >
+        <Archive class="size-3.5" aria-hidden="true" />
+      </span>
+      <span
+        v-else-if="attention"
+        class="size-1.5 shrink-0 rounded-full"
+        :class="verificationDotClass(node.verification)"
+        :title="t(`verification.state.${node.verification}`)"
+        role="img"
+        :aria-label="t(`verification.state.${node.verification}`)"
+      />
       <Badge variant="outline" class="hidden shrink-0 text-xs sm:inline-flex">
         {{ labelFor(t, 'category', node.category) }}
       </Badge>

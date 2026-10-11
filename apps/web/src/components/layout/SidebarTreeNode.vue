@@ -14,6 +14,7 @@ import { useDocumentsStore } from '@/stores/documents'
 import { TREE_INDENT, useSidebarStore } from '@/stores/sidebar'
 import TreeRowMenu from '@/components/knowledge/TreeRowMenu.vue'
 import { TreeWindowKey } from './tree-window'
+import { needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
 
 defineOptions({ name: 'SidebarTreeNode' })
 const { t } = useI18n()
@@ -62,6 +63,10 @@ watch(
   },
 )
 const isActive = computed(() => props.node.documentId === props.activeId)
+
+/** See DocumentTreeNode: a mark only for a state that asks for a look. */
+const attention = computed(() => needsAttention(props.node.verification))
+const archived = computed(() => !!props.node.archivedAt)
 
 const treeWindow = inject(TreeWindowKey, null)
 
@@ -153,11 +158,22 @@ const dnd = useTreeDndRow({
       <RouterLink
         :to="`/documents/${node.documentId}`"
         class="min-w-0 flex-1 truncate py-1.5"
-        :title="node.title"
+        :class="archived ? 'line-through decoration-current/40 opacity-70' : ''"
+        :title="archived ? `${node.title} · ${t('verification.archived.badge')}` : node.title"
         draggable="false"
       >
         {{ node.title }}
       </RouterLink>
+      <!-- At 256px there is no room for a word; the dot carries the state and
+           the title on the link carries the reason. -->
+      <span
+        v-if="attention && !archived"
+        class="size-1.5 shrink-0 rounded-full"
+        :class="verificationDotClass(node.verification)"
+        role="img"
+        :aria-label="t(`verification.state.${node.verification}`)"
+        :title="t(`verification.state.${node.verification}`)"
+      />
       <!-- The status dot yields its slot to the menu on hover rather than
            sitting beside it: at 256px a second permanent affordance is the
            difference between a readable title and an ellipsis. -->

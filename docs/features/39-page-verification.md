@@ -10,9 +10,9 @@ can set, an **inactive** reading derived from its activity clock, and an
 multiply every hit's score by the page's state, so a verified page ranks above
 an unverified one and a page known to be wrong ranks last.
 
-Phase status: **API, ranking, MCP and the expiry sweeper are implemented**
-(this document). The sentinel integration, the page-level status bar and the
-knowledge-health dashboard ([feature 40](40-knowledge-health.md)) follow in
+Phase status: **API, ranking, MCP, the expiry sweeper and the sentinel
+integration are implemented** (this document). The page-level status bar and
+the knowledge-health dashboard ([feature 40](40-knowledge-health.md)) follow in
 later pull requests of the same issue.
 
 ## What is stored, what is derived
@@ -96,6 +96,28 @@ Events: `document.verified`, `document.unverified`,
 (`requested`, `outdated`, `expiring`, `expired`, `owner-changed`) reach the owner
 under a new **`verification`** notification category, which a person can mute,
 with reason `owner` ranked between `author` and `assigned`.
+
+## The sentinel
+
+The one flag that is a **fact rather than an opinion** ([feature 35](35-pr-drift-check.md)).
+A drift check that finds a page wrong sets it `requested` as the connector
+owner, source `{ kind: 'drift', runId, url }`, note "`<PR title> (#n)`: the
+finding's detail" — once per page, findings above `info` only, and before the
+pull request comment so a refused comment does not also silence the page. When
+the pull request **merges** (GitHub `closed` + `merged`, GitLab `merge`; neither
+starts a check), the pages the newest check flagged turn `outdated`, as long as
+they are still `requested`: a page verified after the check started, cleared by
+hand, or whose proposed fix has itself merged is left alone, and an owner who is
+no longer an editor cannot declare a page outdated. Both steps are the
+`DriftPublishSweeper`'s, claimed once per run (`input.publishedAt`,
+`input.outdatedAt`), and the connector option `driftFlagPages` (default on,
+effective only with the check on) turns them off.
+
+`flag` grew two guards for it: `unlessVerifiedAfter` and `onlyIfFlag`. A stale
+finding in the agent runs panel — the curator's or the sentinel's — also offers
+**Mark outdated** beside Propose, a person's explicit declaration with the run as
+its source (`POST /v1/ai/agents/runs/:id/findings/:index/mark-outdated`,
+editor), offered once per finding (`flaggedAt`). Nothing here verifies.
 
 ## The expiry sweeper
 

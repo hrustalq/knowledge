@@ -304,6 +304,8 @@
       "propose": "Report and propose page updates"
     },
     "driftCheckHint": "When a pull or merge request opens or gets new commits, the Sentinel agent checks the pages it may make wrong and comments on it once, updating that comment on every push. Propose also opens a merge request here for every page it drafted a fix for.",
+    "driftFlagPages": "Flag the pages it finds wrong",
+    "driftFlagPagesHint": "A drift finding asks the page's owner for a check; merging the pull request marks the page outdated until somebody verifies it.",
     "webhookSecretKeep": "Leave empty to keep the current secret",
     "driftWebhookHint": "GitLab, or a GitHub repository hook added by hand: send Merge request / Pull request events to this connector's webhook, signed with this secret.",
     "driftWebhookApp": "This repository is connected through the GitHub App, whose webhook already delivers pull requests — a secret is only needed for a hook added by hand.",
@@ -1665,6 +1667,9 @@
       "createPage": "Create page",
       "pageCreated": "Created the page \"{title}\"",
       "viewProposal": "View merge request",
+      "markOutdated": "Mark outdated",
+      "markedOutdated": "Marked \"{title}\" outdated",
+      "outdatedMarked": "Marked outdated",
       "applyRelations": "Apply relations",
       "relationsApplied": "Opened a merge request: {title}",
       "nothingToApply": "The page already declares these relations — nothing to propose."

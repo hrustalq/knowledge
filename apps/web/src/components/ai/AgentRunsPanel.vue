@@ -6,7 +6,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { CircleAlert, CircleCheck, Clock, FilePlus2, GitPullRequest, Link2, Loader2, TriangleAlert } from 'lucide-vue-next'
+import { CircleAlert, CircleCheck, Clock, FilePlus2, GitPullRequest, Link2, Loader2, OctagonAlert, TriangleAlert } from 'lucide-vue-next'
 import type { AgentFinding, AgentRunSummary, ListAgentRunsResponse, ListConnectorsResponse } from '@knowledge/contracts'
 import { toast } from 'vue-sonner'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
@@ -49,6 +49,9 @@ const applyRelations = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/
 })
 const createPage = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/create-page', {
   invalidates: () => [['/v1/ai/agents/runs'], ['/v1/documents']],
+})
+const markOutdated = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/mark-outdated', {
+  invalidates: () => [['/v1/ai/agents/runs'], ['/v1/documents'], ['/v1/knowledge-health']],
 })
 /** Which finding is mid-flight, so only its own button spins. */
 const proposing = ref<string | null>(null)
@@ -93,6 +96,30 @@ function canApplyRelations(f: AgentFinding): boolean {
 
 function canCreatePage(f: AgentFinding): boolean {
   return !!f.draft && f.documentIds.length === 0 && !f.proposedAt
+}
+
+/**
+ * A fourth verb, for a stale finding only (docs/features/39): declare the page
+ * wrong without a fix. It sits beside Propose rather than replacing it — a
+ * page can be marked outdated now and corrected later — and is offered once.
+ */
+function canMarkOutdated(f: AgentFinding): boolean {
+  return f.kind === 'stale' && f.documentIds.length > 0 && !f.flaggedAt
+}
+
+async function outdate(run: AgentRunSummary, index: number) {
+  proposing.value = `${run.id}:${index}:outdated`
+  try {
+    const res = (await markOutdated.mutateAsync({
+      path: { id: run.id, index },
+      query: { workspaceId },
+    })) as { documentTitle: string }
+    toast.success(t('ai.runs.markedOutdated', { title: res.documentTitle }))
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    proposing.value = null
+  }
 }
 
 async function create(run: AgentRunSummary, index: number) {
@@ -275,7 +302,7 @@ const severityClass = (f: AgentFinding) =>
                 <SourceChip v-for="s in f.sources" :key="s.url" :source="s" />
               </p>
             </div>
-            <div class="ml-auto shrink-0">
+            <div class="ml-auto flex shrink-0 flex-col items-end gap-1">
               <!-- Already acted on: the link replaces the button, so the same
                    finding cannot open a second merge request. -->
               <RouterLink
@@ -318,6 +345,20 @@ const severityClass = (f: AgentFinding) =>
                 <FilePlus2 v-else class="size-3.5" />
                 {{ t('ai.runs.createPage') }}
               </Button>
+              <Button
+                v-if="canMarkOutdated(f)"
+                variant="ghost"
+                size="sm"
+                :disabled="proposing !== null"
+                @click="outdate(run, i)"
+              >
+                <Loader2 v-if="proposing === `${run.id}:${i}:outdated`" class="size-3.5 animate-spin" />
+                <OctagonAlert v-else class="size-3.5" />
+                {{ t('ai.runs.markOutdated') }}
+              </Button>
+              <span v-else-if="f.flaggedAt" class="text-muted-foreground text-[11px]">
+                {{ t('ai.runs.outdatedMarked') }}
+              </span>
             </div>
           </li>
         </ul>

@@ -142,6 +142,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/ai/agents/runs/{id}/findings/{index}/mark-outdated",
+      "tag": "ai",
+      "summary": "Declare the page a stale finding cites outdated, as the caller",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/ai/agents/runs/{id}/findings/{index}/propose",
       "tag": "ai",
       "summary": "Open a merge request that addresses one finding",

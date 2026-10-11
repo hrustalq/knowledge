@@ -95,6 +95,13 @@ twenty waiting checks.
 the old revision. Drafts are skipped (`ready_for_review` picks them up). A title
 edit, a label or an assignee is not a change to the code.
 
+A **merge** — GitHub `closed` with `merged: true`, GitLab `merge` — is read
+separately (`readMergedDelivery`) and starts no check: the head was checked
+when it was pushed. It stamps `input.mergedAt` on that pull request's runs in
+one statement (`DriftTriggerService.merged`), pending and running ones
+included, so a change merged before its check finished is still acted on once
+the check succeeds. Forks are accepted here; nothing is spent on a merge.
+
 **Forks are never checked.** A run spends the connector owner's AI budget. On a
 public repository a fork's pull request is a stranger pressing that button, so
 a delivery whose head repository differs from its base — or whose fork was
@@ -137,6 +144,36 @@ check of the same pull request publishes for itself and the older stays quiet,
 and a page an earlier push already proposed (and whose merge request is still
 open) is linked rather than proposed twice.
 
+**A finding flags the page; a merge makes it outdated** (issue #66,
+[feature 39](39-page-verification.md)). The pull request comment tells the
+author; the flag tells whoever opens the page. On publish, every page a finding
+above `info` cites — once per page — is set `requested` as the run's owner,
+with `{ kind: 'drift', runId, url }` as the source and "`<PR title> (#n)`: the
+finding's detail" as the note. The flags go out **before** the comment, so a
+host that refuses the comment does not also silence the page. Any member may
+ask for a check, so the owner needs no role for this step. Two guards, both in
+`VerificationService.flag`: a page verified **after the check started** has been
+looked at against something newer than the check saw, and an `outdated` page
+is already worse than asked-about.
+
+The sweeper's second pass acts on `mergedAt`: once the run is published and the
+pull request merged, the pages the **newest** check of that pull request flagged
+turn `outdated` — only while still `requested` (`onlyIfFlag`), so a person who
+cleared the request or verified the page has already answered; not when the
+page's proposed fix (this run's or an earlier push's) has itself been merged;
+and only as an owner who is still an editor, since `outdated` is an editor's
+claim. The claim is `input.outdatedAt`, the same one-statement shape as
+`publishedAt`, and the pass is keyed on when the pull request merged rather
+than when the check ran, because a pull request can be open for weeks. The
+connector option `driftFlagPages` (default on, effective only with the check
+on) turns both steps off. Nothing here verifies a page — no agent does.
+
+**Mark outdated, by hand.** A `stale` finding in the agent runs panel — the
+curator's or the sentinel's — offers *Mark outdated* beside *Propose*:
+`POST /v1/ai/agents/runs/:id/findings/:index/mark-outdated`, `editor`, the
+person's own declaration with the run (and pull request) as the source, recorded
+on the finding as `flaggedAt` so it is offered once. Explicit, never automatic.
+
 **Both hooks, one verification.** The GitHub App-level hook (feature 32) already
 receives `pull_request`; it now also hands the event to the drift trigger. The
 per-connector hook at `/v1/connectors/:id/webhook` — the only kind GitLab has —
@@ -157,9 +194,10 @@ that thing, for this one agent, and never the event bus — so none of feature
 
 Connector config, on `codebase` and `markdown-git`:
 
-| key          | values                          | default |
-| ------------ | ------------------------------- | ------- |
-| `driftCheck` | `off` \| `report` \| `propose` | `off`   |
+| key              | values                          | default |
+| ---------------- | ------------------------------- | ------- |
+| `driftCheck`     | `off` \| `report` \| `propose` | `off`   |
+| `driftFlagPages` | `true` \| `false` (`'false'` from the form counts) | `true`, effective only with the check on |
 
 The setup dialog's options step shows it for the two git kinds, with the
 webhook secret beside it once it is on (optional when the repository was
@@ -167,11 +205,14 @@ connected through the GitHub App, whose hook already delivers pull requests).
 
 Agent: `sentinel` (background, event-only). Run stages `diff`, `related`,
 `judging`. `AgentRunInput.pullRequest` (`number`, `title`, `url`, `headSha`,
-`headRef`, `baseRef`, `author`) and `publishedAt`. A drift finding is
-`kind: 'stale'`, cites the page, carries the pull request as a web source and,
-when there is one, the corrected page as `draft`.
+`headRef`, `baseRef`, `author`), `publishedAt`, and since #66 `mergedAt`
+(stamped by the trigger on a merge) and `outdatedAt` (the sweeper's claim). A
+drift finding is `kind: 'stale'`, cites the page, carries the pull request as a
+web source and, when there is one, the corrected page as `draft`; `flaggedAt`
+records a person marking its page outdated from it.
 
-No new endpoint, no new env var, no migration.
+One endpoint, `POST /v1/ai/agents/runs/:id/findings/:index/mark-outdated`
+(`editor`). No new env var, no migration.
 
 ## Setup
 
@@ -211,12 +252,20 @@ The token needs to read the pull request's files and write a comment: on GitHub
 
 ## Verification
 
-`make verify`, and `apps/api/test/pr-drift.spec.ts` (29 cases): which GitHub and
+`make verify`, and `apps/api/test/pr-drift.spec.ts` (44 cases): which GitHub and
 GitLab deliveries start a check (actions, drafts, forks, `update` without
 `oldrev`), the signature and token checks, the deepest-module tie and the hub
 rule, a markdown page the change edits being excluded, subdir scoping, file
 mentions (with generic filenames refused), diff excerpts, what a verdict must
-carry, and the comment's escaping.
+carry, and the comment's escaping. Since #66: a merge is read as a merged
+delivery and never as a check (both hosts, GitLab's timestamp normalised),
+`driftFlagPages` defaults, one flag per cited page above `info`, the trigger's
+stamp touching nothing for a disabled connector, and the sweeper — `requested`
+as the owner before the comment, nothing with the option off, `outdated` only
+where still `requested` and only from the newest check, left alone when the fix
+merged or the owner is no longer an editor, and claimed once across replicas.
+
+Not exercised end to end: a real merged delivery against a real connector.
 
 End to end, against the public `hrustalq/knowledge` repository and its PR #58:
 

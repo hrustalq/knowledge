@@ -5,7 +5,7 @@ import { AgentRegistryService } from '../../agents/agent-registry.service.js';
 import { AgentProducer } from '../../agents/agent.producer.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { REPO_CONNECTOR_KINDS } from '../code-research/repo-snapshot.service.js';
-import type { PullRequestDelivery } from './pull-request-delivery.js';
+import type { MergedPullRequestDelivery, PullRequestDelivery } from './pull-request-delivery.js';
 
 /** The agent a drift check runs as. */
 export const DRIFT_AGENT_KEY = 'sentinel';
@@ -120,5 +120,32 @@ export class DriftTriggerService {
     });
     await this.producer.enqueue(run.id);
     return run.id;
+  }
+
+  /**
+   * The pull request merged (docs/features/39, issue #66 phase 4). Starts
+   * nothing: the head was checked when it was pushed, and a merge is the same
+   * diff. What it changes is the pages — a check only *asked* whether they
+   * were still right, and a merge is what makes the answer no.
+   *
+   * One statement stamps `input.mergedAt` on every run of that pull request
+   * that did not fail, and `DriftPublishSweeper` acts on the newest once it
+   * has been published. A run still pending or running is stamped too, so a
+   * change merged before its check finished is not forgotten: the sweeper
+   * reaches it when it succeeds. Returns how many runs were stamped.
+   */
+  async merged(row: Connector, delivery: MergedPullRequestDelivery): Promise<number> {
+    if (!row.enabled || !REPO_CONNECTOR_KINDS.has(row.kind)) return 0;
+    const number = String(delivery.pullRequest.number);
+    return this.prisma.$executeRaw`
+      UPDATE agent_runs
+         SET input = jsonb_set(COALESCE(input, '{}'::jsonb), '{mergedAt}', to_jsonb(${delivery.mergedAt}::text), true)
+       WHERE workspace_id = ${row.workspaceId}::uuid
+         AND agent_key = ${DRIFT_AGENT_KEY}
+         AND status NOT IN ('failed', 'cancelled')
+         AND input ->> 'connectorId' = ${row.id}
+         AND input -> 'pullRequest' ->> 'number' = ${number}
+         AND COALESCE(input ->> 'mergedAt', '') = ''
+    `;
   }
 }

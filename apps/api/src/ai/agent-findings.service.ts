@@ -4,6 +4,7 @@ import type {
   AgentRunInput,
   CreatePageFromFindingResponse,
   DocumentCategory,
+  FlagFindingOutdatedResponse,
   Locale,
   ProposeAgentFindingResponse,
   ProposeRelationsResponse,
@@ -19,6 +20,7 @@ import { openDraftMergeRequest } from '../documents/draft-merge-request.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AiUsageService } from './ai-usage.service.js';
+import { VerificationService } from '../verification/verification.service.js';
 import type { Principal } from '../auth/principal.js';
 
 /** How much of a cited page the drafter is shown. The workflow executor's cap. */
@@ -53,6 +55,7 @@ export class AgentFindingsService {
     private readonly registry: AgentRegistryService,
     private readonly client: AssistantClient,
     private readonly usage: AiUsageService,
+    private readonly verification: VerificationService,
   ) {}
 
   async propose(
@@ -147,6 +150,50 @@ export class AgentFindingsService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Mark the page a `stale` finding cites outdated (docs/features/39, #66).
+   *
+   * The other verb for a stale finding, beside Propose: a person who agrees the
+   * page is wrong but has no fix yet declares it so, and search ranks it last
+   * until somebody verifies it. Explicit, never automatic — the curator's and
+   * the sentinel's findings are proposals, and this is the person acting on
+   * one, attributed to them. The source names the run (and, for a drift
+   * finding, the pull request) so the page says where the claim came from.
+   * Recorded on the finding as `flaggedAt`, so the button is offered once.
+   */
+  async markOutdated(
+    workspaceId: string,
+    runId: string,
+    index: number,
+    principal: Principal,
+  ): Promise<FlagFindingOutdatedResponse> {
+    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
+    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
+    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
+    const finding = findings[index];
+    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    if (finding.kind !== 'stale') throw new BadRequestException(t('error.ai.findingNotStale'));
+    const documentId = finding.documentIds[0];
+    if (!documentId) throw new BadRequestException(t('error.ai.findingNoDocument'));
+    const document = await this.prisma.document.findUnique({ where: { id: documentId } });
+    if (!document || document.workspaceId !== workspaceId) {
+      throw new BadRequestException(t('error.ai.findingDocumentGone', { documentId }));
+    }
+
+    const pr = ((run.input ?? {}) as AgentRunInput).pullRequest;
+    const res = await this.verification.markOutdated(documentId, {
+      actorId: principal.userId,
+      note: finding.detail,
+      source: { kind: pr ? 'drift' : 'curator', by: principal.userId, runId, ...(pr?.url ? { url: pr.url } : {}) },
+    });
+    await this.prisma.$executeRaw`
+      UPDATE agent_runs
+         SET findings = jsonb_set(findings, ARRAY[${String(index)}::text, 'flaggedAt'], to_jsonb(${new Date().toISOString()}::text), true)
+       WHERE id = ${runId}::uuid
+    `;
+    return { documentId, documentTitle: document.title, verification: res?.document.verification ?? 'outdated' };
   }
 
   /**

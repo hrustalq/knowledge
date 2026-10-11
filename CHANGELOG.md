@@ -67,6 +67,19 @@ in the pull request that introduces them — see
   before that column existed, so the dashboard's "empty" filter stops reading
   as unknown for old pages. `VERIFICATION_SWEEP_ENABLED=false` turns it off.
   Part of #66. (#66)
+- **A drift check now marks the page, not just the pull request.** With a
+  connector's drift check on, every page the sentinel finds wrong is flagged
+  `requested` for its owner, with the pull request and the finding as the note.
+  When that pull request merges — GitHub `closed` with `merged`, GitLab `merge`,
+  neither of which starts a check — the pages still `requested` become
+  `outdated` and rank last until somebody verifies them. A page verified after
+  the check started, cleared by hand, or whose proposed fix already merged is
+  left alone, and an owner who can no longer edit cannot declare a page
+  outdated. The new connector option **Flag the pages it finds wrong**
+  (`driftFlagPages`, on by default, effective only with the check on) turns it
+  off. A stale finding in the agent runs panel gains **Mark outdated** beside
+  Propose (`POST /v1/ai/agents/runs/:id/findings/:index/mark-outdated`,
+  editor), explicit and offered once. (#66)
 
 ### Changed
 

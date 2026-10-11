@@ -399,6 +399,7 @@ export type I18nTranslations = {
             "findingInFlight": string;
             "findingNoDocument": string;
             "findingOrphan": string;
+            "findingNotStale": string;
             "findingNoRelations": string;
             "findingDocumentGone": string;
             "assistantDisabled": string;

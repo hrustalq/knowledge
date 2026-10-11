@@ -10,10 +10,10 @@ can set, an **inactive** reading derived from its activity clock, and an
 multiply every hit's score by the page's state, so a verified page ranks above
 an unverified one and a page known to be wrong ranks last.
 
-Phase status: **API, ranking, MCP, the expiry sweeper, the sentinel
-integration, the page-level UI and the knowledge-health dashboard
-([feature 40](40-knowledge-health.md)) are implemented** (this document). What
-remains of #66 is the backtest comparison with trust ranking on and off.
+Phase status: **all of #66 is implemented** — API, ranking, MCP, the expiry
+sweeper, the sentinel integration, the page-level UI and the knowledge-health
+dashboard ([feature 40](40-knowledge-health.md)) — and covered end to end by
+`apps/api/test/verification.e2e-spec.ts` (verify → search, archive → search).
 
 ## What is stored, what is derived
 
@@ -207,6 +207,25 @@ records `trustApplied` so two runs can be compared.
 The kill switch is `SEARCH_TRUST_RANKING` (env) combined with the workspace's
 `trustRanking` override (feature 40 settings); both are read through
 `VerificationPolicyService`, the one place the effective policy is resolved.
+
+### Measured
+
+Known-item backtest (`make backtest ARGS="--generate --limit 500 --k 10"`,
+each page's own title as the query) on the local demo workspace, 2026-10-11,
+`FULLTEXT_PROVIDER=none`, `bge-m3` embeddings:
+
+| `SEARCH_TRUST_RANKING` | queries | recall@1 | recall@10 | MRR@10 |
+| ---------------------- | ------- | -------- | --------- | ------ |
+| `true`                 | 473     | 72.9%    | 82.2%     | 0.7653 |
+| `false`                | 473     | 72.9%    | 82.2%     | 0.7653 |
+
+Identical, as it should be on that corpus: 472 of its 473 pages are
+`unverified` and active, which weighs exactly 1, and the one verified page did
+not move any known item. What this run establishes is **no regression** — the wider candidate
+fetch under trust ranking does not displace a known item. It says nothing about
+uplift; that needs a corpus with real verified and outdated pages, and the
+feedback replay (`--feedback`, feature 38 phase 5) is the instrument for it once
+production votes exist.
 
 ## Assistant and MCP
 

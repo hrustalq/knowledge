@@ -29,6 +29,7 @@ import { AppService } from './app.service.js';
 import { McpHttpModule } from './mcp/mcp-http.module.js';
 import { AiReadableModule } from './ai-readable/ai-readable.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
+import { VerificationModule } from './verification/verification.module.js';
 
 @Module({
   imports: [
@@ -65,6 +66,9 @@ import { FeedbackModule } from './feedback/feedback.module.js';
     // Votes on answers (docs/features/38, issue #67 phase 2). API-only: the
     // controller; the worker loads FeedbackCoreModule on its own.
     FeedbackModule,
+    // Page verification, archive and the knowledge-health dashboard
+    // (docs/features/39 + 40, issue #66). API-only: the controllers.
+    VerificationModule,
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,

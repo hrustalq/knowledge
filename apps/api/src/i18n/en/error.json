@@ -61,7 +61,10 @@
     "nothingToUpdate": "Nothing to update",
     "contentIsDraft": "Revision {id} is a draft — finalize it before reading content",
     "uploadMissing": "No object uploaded at {key} — upload before finalizing",
-    "revisionNotDraft": "Revision {id} is {status}, expected draft"
+    "revisionNotDraft": "Revision {id} is {status}, expected draft",
+    "archived": "Document {id} is archived — unarchive it before changing it",
+    "ownerNotMember": "The owner must be a member of this workspace",
+    "foreignIds": "{count} of the given pages belong to another workspace"
   },
   "branch": {
     "notFound": "Branch {name} not found on document {documentId}",

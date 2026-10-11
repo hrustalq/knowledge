@@ -510,24 +510,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/documents/{id}/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Stamp the page as verified at its current head (docs/features/38). The stamp reads as outdated once the head moves; nothing is written then */
-        post: operations["DocumentsController_verify"];
-        /** Remove the verification stamp */
-        delete: operations["DocumentsController_unverify"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/documents/{id}/content": {
         parameters: {
             query?: never;
@@ -3184,6 +3166,161 @@ export interface paths {
         patch: operations["KnowledgeIssuesController_close"];
         trace?: never;
     };
+    "/v1/documents/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stamp the page as verified at its current head (docs/features/39). Clears any requested/outdated flag; optionally sets the review interval. The stamp reads as edited once the head moves and expired past its interval, with nothing written */
+        post: operations["VerificationController_verify"];
+        /** Back to unverified: remove the stamp and any requested/outdated flag */
+        delete: operations["VerificationController_clear"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/verification-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask for the page to be checked. Notifies the owner (or the last verifier) */
+        post: operations["VerificationController_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/outdated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Declare the page outdated. Ranks it last in search until verified or cleared; notifies the owner */
+        post: operations["VerificationController_outdated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive the page and (by default) its subtree in one statement. Hidden from lists, tree, search, ask and MCP unless asked for; still readable by id; writes return 409 document_archived until unarchived */
+        post: operations["VerificationController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore an archived page and (by default) its subtree */
+        post: operations["VerificationController_unarchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/knowledge-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pages with their derived verification status, filtered and paged; most neglected first */
+        get: operations["KnowledgeHealthController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/knowledge-health/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live counts per filter — no stored aggregate; equals the list totals */
+        get: operations["KnowledgeHealthController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/knowledge-health/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** One action over up to 200 pages, results per id. A single id from another workspace is a 403 with nothing written (details.foreign). archive / unarchive need admin */
+        post: operations["KnowledgeHealthController_bulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/knowledge-health/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The freshness policy: what applies (effective), what the workspace overrides, and the env defaults */
+        get: operations["KnowledgeHealthController_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Override part of the policy for this workspace; null on a key goes back to the env default */
+        patch: operations["KnowledgeHealthController_updateSettings"];
+        trace?: never;
+    };
     "/v1/mcp": {
         parameters: {
             query?: never;
@@ -3395,6 +3532,13 @@ export interface components {
             parentId?: Record<string, never> | null;
             /** Format: uuid */
             projectId?: string;
+            /**
+             * Format: uuid
+             * @description Owner; null for unowned
+             */
+            ownerId?: string | null;
+            /** @description Review interval in days; null inherits, 0 never expires */
+            reviewIntervalDays?: number | null;
         };
         MoveDocumentDto: {
             /** Format: uuid */
@@ -3596,6 +3740,10 @@ export interface components {
             projectIds?: string[];
             /** @description Only return documents carrying any of these tags */
             tags?: string[];
+            /** @description Only pages in these verification states */
+            verificationStates?: ("verified" | "expired" | "edited" | "requested" | "outdated" | "flagged" | "unverified")[];
+            /** @description Also return archived pages. Omitted reads as false */
+            includeArchived?: boolean;
         };
         SearchDto: {
             /** Format: uuid */
@@ -3661,7 +3809,7 @@ export interface components {
         UpdateNotificationPreferencesDto: {
             workspaceId: string;
             /** @description Categories to switch off; omit to leave unchanged. An empty array clears every mute. */
-            mutedCategories?: ("mention" | "review" | "comment" | "document" | "job")[];
+            mutedCategories?: ("mention" | "review" | "comment" | "document" | "verification" | "job")[];
             /** @description Commenting on something starts watching it. Defaults to true; omit to leave unchanged. */
             autoWatchOnComment?: boolean;
         };
@@ -3675,7 +3823,7 @@ export interface components {
              * @description Narrows `all` to one category, so clearing comments leaves reviews unread.
              * @enum {string}
              */
-            category?: "mention" | "review" | "comment" | "document" | "job";
+            category?: "mention" | "review" | "comment" | "document" | "verification" | "job";
         };
         AssistantReviewDto: {
             /** Format: uuid */
@@ -4424,6 +4572,48 @@ export interface components {
              * @enum {string}
              */
             status: "resolved" | "dismissed";
+        };
+        VerifyDocumentDto: {
+            /** @description Review interval in days. Omit to keep, null to inherit the workspace default, 0 for never */
+            intervalDays?: number | null;
+        };
+        FlagDocumentDto: {
+            /** @description Why — shown on the page and in the owner's notification */
+            note?: string;
+        };
+        ArchiveDocumentDto: {
+            /** @description Also the pages under this one. Omitted reads as true, so a parent is never archived over live children */
+            includeDescendants?: boolean;
+        };
+        KnowledgeHealthBulkDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description At most 200; every id must belong to workspaceId or nothing is written */
+            documentIds: string[];
+            /**
+             * @description archive / unarchive need admin
+             * @enum {string}
+             */
+            action: "verify" | "request" | "outdated" | "clear" | "reassign" | "archive" | "unarchive";
+            /**
+             * Format: uuid
+             * @description reassign: the new owner, null for unowned. Must be a workspace member
+             */
+            ownerId?: string | null;
+            /** @description request / outdated: the note */
+            note?: string;
+            /** @description verify: review interval in days (see VerifyDocumentDto) */
+            intervalDays?: number | null;
+        };
+        UpdateKnowledgeHealthSettingsDto: {
+            /** @description Days a stamp holds; 0 = never */
+            reviewIntervalDays?: number | null;
+            remindBeforeDays?: number | null;
+            /** @description 0 disables inactivity */
+            inactiveAfterDays?: number | null;
+            emptyMaxChars?: number | null;
+            /** @description Multiply search scores by the page's verification state */
+            trustRanking?: boolean | null;
         };
         ApiErrorResponse: {
             /**
@@ -5840,6 +6030,8 @@ export interface operations {
                 projectIds?: string;
                 /** @description Comma-separated frontmatter tags; bare name or `tag:` entity key */
                 tags?: string;
+                /** @description 1 to include archived pages (docs/features/39) */
+                includeArchived?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -5928,6 +6120,8 @@ export interface operations {
                 parentId?: string;
                 /** @description Levels to load below parentId; omit to load all of them */
                 depth?: string;
+                /** @description 1 to include archived pages (docs/features/39) */
+                includeArchived?: string;
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
@@ -6112,87 +6306,6 @@ export interface operations {
         responses: {
             /** @description beforeId no longer names a child of parentId — the tree moved */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    DocumentsController_verify: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The page has no finalized head revision to vouch for */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    DocumentsController_unverify: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
-                "Accept-Language"?: "en" | "ru";
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9725,7 +9838,7 @@ export interface operations {
                 workspaceId: string;
                 /** @description Only unread rows. Defaults to false. */
                 unread?: boolean;
-                category?: "mention" | "review" | "comment" | "document" | "job";
+                category?: "mention" | "review" | "comment" | "document" | "verification" | "job";
                 /** @description Page size, 1-100. Defaults to 30. */
                 limit?: number;
                 cursor?: string;
@@ -14917,6 +15030,490 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CloseKnowledgeIssueDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    VerificationController_verify: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyDocumentDto"];
+            };
+        };
+        responses: {
+            /** @description No finalized head to vouch for (no_head_revision), or the page is archived (document_archived) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    VerificationController_clear: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    VerificationController_request: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlagDocumentDto"];
+            };
+        };
+        responses: {
+            /** @description The page is archived */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    VerificationController_outdated: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlagDocumentDto"];
+            };
+        };
+        responses: {
+            /** @description The page is archived */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    VerificationController_archive: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveDocumentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    VerificationController_unarchive: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveDocumentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeHealthController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                projectId?: string;
+                /** @description Omitted lists every live page */
+                filter?: "stale" | "unowned" | "empty" | "expired" | "edited" | "outdated" | "requested" | "flagged" | "inactive" | "archived";
+                /** @description Only pages owned by this member */
+                ownerId?: string;
+                /** @description Title substring, case-insensitive */
+                q?: string;
+                /** @description Omitted sorts by last activity, most neglected first */
+                sort?: "activity" | "title";
+                /** @description nextCursor of the previous page */
+                cursor?: string;
+                /** @description Rows per page; omitted reads as 50 */
+                limit?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeHealthController_summary: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                projectId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeHealthController_bulk: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeHealthBulkDto"];
+            };
+        };
+        responses: {
+            /** @description Some ids belong to another workspace, or archive/unarchive without admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeHealthController_settings: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    KnowledgeHealthController_updateSettings: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateKnowledgeHealthSettingsDto"];
             };
         };
         responses: {

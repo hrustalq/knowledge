@@ -153,10 +153,12 @@ let timer: ReturnType<typeof setInterval> | undefined
 
 /* ---------------------------------------------------------- verification */
 
-// The manual stamp (docs/features/38): one button that reads the derived state
-// and does the one thing that state calls for. Unverified → stamp it; verified
-// → take the stamp off; outdated (the head moved since) → stamp the new head.
-// A viewer sees the state and cannot change it.
+// The manual stamp (docs/features/38 + 39): one button that reads the derived
+// state and does the one thing that state calls for. Unverified → stamp it;
+// verified → take the stamp off; edited (the head moved since), expired,
+// requested or outdated → stamp the current head, which also clears the flag.
+// A viewer sees the state and cannot change it. The full status bar with
+// owner, interval and archive is the next phase of #66.
 const { memberOf } = useMembers()
 const verification = computed(() => detail.value?.document.verification ?? 'unverified')
 const verifierName = computed(() => {
@@ -169,6 +171,12 @@ const verifyLabel = computed(() => {
   switch (verification.value) {
     case 'verified':
       return t('documents.verify.verified', { n: d.revision.revisionNumber })
+    case 'edited':
+      return t('documents.verify.edited')
+    case 'expired':
+      return t('documents.verify.expired')
+    case 'requested':
+      return t('documents.verify.requested')
     case 'outdated':
       return t('documents.verify.outdated')
     // An open report outranks the stamp (docs/features/38, phase 3): the
@@ -183,6 +191,7 @@ const verifyTitle = computed(() => {
   const d = detail.value
   if (!d) return ''
   const when = d.document.verifiedAt ? relativeTime(d.document.verifiedAt) : ''
+  const note = d.document.verificationNote ?? ''
   switch (verification.value) {
     case 'flagged':
       return t('documents.verify.flaggedHint')
@@ -190,10 +199,16 @@ const verifyTitle = computed(() => {
       return auth.canEdit
         ? t('documents.verify.removeHint', { who: verifierName.value, when })
         : t('documents.verify.verifiedBy', { who: verifierName.value, when })
-    case 'outdated':
+    case 'edited':
       return auth.canEdit
         ? t('documents.verify.reverifyHint', { who: verifierName.value, when })
-        : t('documents.verify.outdatedBy', { who: verifierName.value, when })
+        : t('documents.verify.editedBy', { who: verifierName.value, when })
+    case 'expired':
+      return t('documents.verify.expiredBy', { who: verifierName.value, when })
+    case 'requested':
+      return t('documents.verify.requestedHint', { note })
+    case 'outdated':
+      return t('documents.verify.outdatedHint', { note })
     default:
       return t('documents.verify.actionHint')
   }
@@ -769,14 +784,17 @@ watch(
 .kn-verify[data-tone='verified'] > svg {
   color: var(--color-emerald-500, #10b981);
 }
-.kn-verify[data-tone='outdated'] > svg {
+.kn-verify[data-tone='edited'] > svg,
+.kn-verify[data-tone='expired'] > svg,
+.kn-verify[data-tone='requested'] > svg {
   color: var(--color-amber-500, #f59e0b);
 }
 .kn-verify[data-tone='unverified'] > svg {
   opacity: 0.6;
 }
-/* A report stands against the page: the one state drawn in the destructive hue. */
-.kn-verify[data-tone='flagged'] > svg {
+/* Somebody says the page is wrong — a report or a declared outdated: drawn in the destructive hue. */
+.kn-verify[data-tone='flagged'] > svg,
+.kn-verify[data-tone='outdated'] > svg {
   color: var(--destructive);
 }
 </style>

@@ -13,6 +13,78 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **Pages have an owner, a review interval and an expiry.** `PATCH
+  /v1/documents/:id` takes `ownerId` (a workspace member, or `null`) and
+  `reviewIntervalDays` (`null` inherits the workspace default, `0` never
+  expires); `POST /v1/documents/:id/verify` takes `{ intervalDays }` and the
+  stamp now reads `expired` once its interval has passed, with nothing written.
+  The owner is told when somebody asks for a check, marks the page outdated or
+  hands it to them, under a new `verification` notification category that can
+  be muted. First part of the page verification milestone (#66).
+- **Ask for a check, or declare a page wrong.** Any member can `POST
+  /v1/documents/:id/verification-request`; an editor can `POST
+  /v1/documents/:id/outdated`. Both take a note and show on the page as
+  `requested` / `outdated` until a person verifies or clears it (`DELETE
+  /v1/documents/:id/verify` now clears both the stamp and the flag). Over MCP,
+  `knowledge_flag_document` does the same with the same roles; there is
+  deliberately no tool that verifies. (#66)
+- **Archive a page or a subtree.** `POST /v1/documents/:id/archive` (and
+  `/unarchive`) puts a page and, by default, everything under it away: hidden
+  from the page list, the tree, search, the assistant and MCP unless
+  `includeArchived` is asked for, still readable by id, and refusing writes with
+  `409 document_archived`. Archive is a visibility default, not a permission.
+  (#66)
+- **Search ranks by trust.** Hybrid, semantic and keyword search — and so the
+  assistant's `ask` and MCP `knowledge_search` — multiply each hit's score by
+  its page's verification state: verified pages rank above unverified ones,
+  expired and reported pages below, pages declared outdated last, and pages with
+  no activity for `PAGE_INACTIVE_AFTER_DAYS` a little lower still. Every hit
+  carries `trust: { status, verifiedAt, expiresAt, ownerId, inactive }`, and
+  `filters.verificationStates` / `filters.includeArchived` narrow a search.
+  `SEARCH_TRUST_RANKING=false`, or a workspace's `trustRanking` override,
+  restores the previous order exactly. (#66)
+- **Knowledge-health API.** `GET /v1/knowledge-health` lists a workspace's pages
+  with their derived status, filtered by `stale | unowned | empty | expired |
+  edited | outdated | requested | flagged | inactive | archived`, owner, project
+  and title; `/summary` counts each filter live; `POST /bulk` runs verify /
+  request / outdated / clear / reassign / archive / unarchive over up to 200
+  pages with per-id results, refusing the whole batch when one id belongs to
+  another workspace; `GET`/`PATCH /settings` reads and overrides the
+  workspace's freshness policy, showing what applies beside what is overridden.
+  The dashboard page that uses it ships in a later part of #66. (#66)
+
+### Changed
+
+- **A verified page that has since been edited now reads `edited`, not
+  `outdated`.** `outdated` is reserved for a page somebody declared wrong (a
+  person, the sentinel, or an agent over MCP), so that ranking and the health
+  filters can tell "touched since the check" from "known to be wrong". The
+  provenance card, the `verification` field on `GET /v1/documents/:id` and
+  `knowledge_search` hits, and the confidence badge all use the new name. (#66)
+- Verifying, flagging, owning and archiving a page count as curation in the
+  activity calendar rather than as writes. (#66)
+
+### Operations
+
+- New env vars, all with defaults, all overridable per workspace through
+  `PATCH /v1/knowledge-health/settings`: `VERIFICATION_DEFAULT_REVIEW_DAYS`
+  (90), `VERIFICATION_REMIND_BEFORE_DAYS` (7), `PAGE_INACTIVE_AFTER_DAYS`
+  (180), `EMPTY_PAGE_MAX_CHARS` (40), `VERIFICATION_SWEEP_ENABLED` (true),
+  `SEARCH_TRUST_RANKING` (true). (#66)
+- Migration `20261011120000_page_verification` adds nullable or defaulted
+  columns to `documents` and `document_revisions` and a `knowledge_health_settings`
+  table; the previous image runs against it unchanged, so a code rollback needs
+  no database step. It backfills `documents.last_activity_at` from revisions and
+  the activity log and `documents.owner_id` from each page's first author where
+  that author is still a member; pages whose first author was the dev stub or
+  has left stay unowned. `document_revisions.body_chars` is not backfilled
+  (content lives in object storage): "empty page" reads as unknown for existing
+  revisions until the sweeper of a later #66 part fills it. (#66)
+
 ## [0.14.0] — 2026-10-10
 
 ### Breaking

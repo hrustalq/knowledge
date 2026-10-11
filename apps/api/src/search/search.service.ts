@@ -1,10 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { RelatedDocumentResult, SearchResponse, SearchResult } from '@knowledge/contracts';
+import type { DocumentTrust, RelatedDocumentResult, SearchResponse, SearchResult } from '@knowledge/contracts';
+import { isInactive, trustWeight, verificationStateFor } from '@knowledge/contracts';
 import { currentTrace, emitBacktest } from '@knowledge/observability';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GraphService, type ChunkHit } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
+import { ProvenanceService } from '../feedback/provenance.service.js';
+import { VerificationPolicyService } from '../verification/verification-policy.service.js';
 import { tagFilterKey } from '../common/relations.js';
 import type { SearchDto } from './search.dto.js';
 
@@ -18,6 +21,8 @@ export class SearchService {
     private readonly graph: GraphService,
     @Inject(EMBEDDING_PROVIDER) private readonly embeddings: EmbeddingProvider,
     @Inject(FULLTEXT_PROVIDER) private readonly fulltext: FulltextProvider,
+    private readonly provenance: ProvenanceService,
+    private readonly policy: VerificationPolicyService,
   ) {}
 
   async search(dto: SearchDto): Promise<SearchResponse> {
@@ -33,7 +38,17 @@ export class SearchService {
     const tagKeys = dto.filters?.tags?.length
       ? [...new Set(dto.filters.tags.map(tagFilterKey))]
       : null;
-    const fetchK = categories || projectIds || tagKeys ? k * 5 : k;
+    const states = dto.filters?.verificationStates?.length ? new Set(dto.filters.verificationStates) : null;
+    const includeArchived = dto.filters?.includeArchived === true;
+    // Trust re-rank (docs/features/39): env kill switch × workspace override.
+    // When it is on, candidates are at least doubled so a demoted hit has
+    // something to be displaced by; when it is off, fetchK is exactly what it
+    // was before #66, because RRF over a longer candidate list is a different
+    // ranking and "off" promises the old one.
+    const settings = await this.policy.effective(dto.workspaceId);
+    const trustOn = settings.trustRanking;
+    const filtered = categories || projectIds || tagKeys || states;
+    const fetchK = Math.max(filtered ? k * 5 : k, trustOn ? k * 2 : k);
 
     // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
     // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
@@ -90,6 +105,7 @@ export class SearchService {
         vectorHits: vectorHits.length,
         fulltextHits: textHits.length,
         fusedHits: hits.length,
+        trustApplied: trustOn,
         results: out.map((r) => ({ documentId: r.documentId, chunkId: r.chunkId, score: r.score })),
       });
     };
@@ -99,27 +115,71 @@ export class SearchService {
       return { results: [] };
     }
 
-    // Join PG for authoritative titles (three-store separation: PG owns metadata).
-    const docs = await this.prisma.document.findMany({
-      where: { id: { in: [...new Set(hits.map((h) => h.documentId))] } },
-      select: { id: true, title: true, category: true, projectId: true },
-    });
+    // Join PG for authoritative titles (three-store separation: PG owns
+    // metadata) and for everything the trust re-rank reads: the stamp, the
+    // flag, the owner, the freshness clock and the archive mark.
+    const docIds = [...new Set(hits.map((h) => h.documentId))];
+    const [docs, issues] = await Promise.all([
+      this.prisma.document.findMany({
+        where: { id: { in: docIds } },
+        select: {
+          id: true,
+          title: true,
+          category: true,
+          projectId: true,
+          defaultBranch: true,
+          verifiedAt: true,
+          verifiedRevisionId: true,
+          verificationExpiresAt: true,
+          verificationFlag: true,
+          ownerId: true,
+          lastActivityAt: true,
+          archivedAt: true,
+          branches: { select: { name: true, headRevisionId: true } },
+        },
+      }),
+      this.provenance.openIssueCounts(docIds),
+    ]);
     const docById = new Map(docs.map((d) => [d.id, d]));
+    const now = new Date();
+    const trustOf = new Map<string, DocumentTrust>();
+    for (const d of docs) {
+      const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
+      trustOf.set(d.id, {
+        status: verificationStateFor(d, headId, issues.get(d.id) ?? 0, now),
+        verifiedAt: d.verifiedAt?.toISOString() ?? null,
+        expiresAt: d.verificationExpiresAt?.toISOString() ?? null,
+        ownerId: d.ownerId,
+        inactive: isInactive(d.lastActivityAt, settings.inactiveAfterDays, now),
+      });
+    }
 
-    const results: SearchResult[] = hits
+    // Archived pages drop first, whatever the switch says: they are put away,
+    // not demoted. Then the multiplicative weight, a re-sort, and only then
+    // the cut to k — the weight is the point of the over-fetch above.
+    const weighted = hits
+      .filter((h) => includeArchived || !docById.get(h.documentId)?.archivedAt)
       .filter((h) => !taggedDocs || taggedDocs.has(h.documentId))
       .filter((h) => !categories || categories.has((docById.get(h.documentId)?.category ?? 'other') as never))
       .filter((h) => !projectIds || projectIds.has(docById.get(h.documentId)?.projectId ?? ''))
-      .slice(0, k)
-      .map((h) => ({
-        documentId: h.documentId,
-        revisionId: h.revisionId,
-        chunkId: h.chunkId,
-        title: docById.get(h.documentId)?.title ?? '(unknown)',
-        snippet: h.text.slice(0, 300),
-        score: Number(h.score.toFixed(4)),
-        headingPath: h.headingPath ?? [],
-      }));
+      .filter((h) => !states || states.has(trustOf.get(h.documentId)?.status ?? 'unverified'))
+      .map((h) => {
+        const trust = trustOf.get(h.documentId);
+        const weight = trustOn && trust ? trustWeight(trust.status, trust.inactive) : 1;
+        return { hit: h, score: h.score * weight, trust };
+      });
+    if (trustOn) weighted.sort((a, b) => b.score - a.score);
+
+    const results: SearchResult[] = weighted.slice(0, k).map(({ hit: h, score, trust }) => ({
+      documentId: h.documentId,
+      revisionId: h.revisionId,
+      chunkId: h.chunkId,
+      title: docById.get(h.documentId)?.title ?? '(unknown)',
+      snippet: h.text.slice(0, 300),
+      score: Number(score.toFixed(4)),
+      headingPath: h.headingPath ?? [],
+      ...(trust ? { trust } : {}),
+    }));
 
     record(results);
 
@@ -131,6 +191,7 @@ export class SearchService {
         results,
         Math.min(dto.expandGraph.depth ?? 1, 3),
         dto.expandGraph.relationTypes,
+        includeArchived,
       );
       return { results, related };
     }
@@ -170,6 +231,7 @@ export class SearchService {
     results: SearchResult[],
     depth: number,
     relationTypes?: string[],
+    includeArchived = false,
   ): Promise<RelatedDocumentResult[]> {
     const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
     const allowed = relationTypes?.length ? new Set(relationTypes) : null;
@@ -224,6 +286,15 @@ export class SearchService {
         }
       }
       frontierDocs = nextDocs;
+    }
+    // The graph does not know about archive (docs/features/39): a put-away page
+    // keeps its edges, so the walk reaches it and PG says whether to show it.
+    if (!includeArchived && related.size > 0) {
+      const archived = await this.prisma.document.findMany({
+        where: { id: { in: [...related.keys()] }, archivedAt: { not: null } },
+        select: { id: true },
+      });
+      for (const { id } of archived) related.delete(id);
     }
     return [...related.values()].sort((a, b) => a.distance - b.distance || b.via.length - a.via.length);
   }

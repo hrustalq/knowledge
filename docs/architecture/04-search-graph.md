@@ -67,6 +67,26 @@ not UI structure, so project and category membership are not modelled as edges �
 which means filtering cannot happen during the graph query and must happen after
 it, with enough candidates over-fetched that a filtered page is still full.
 
+## Trust re-rank
+
+Since [feature 39](../features/39-page-verification.md) the PostgreSQL join also
+reads the page's stamp, declared flag, owner, activity clock and archive mark.
+Archived pages are dropped first — they are put away, not demoted — and the rest
+have their fused score multiplied by `trustWeight(status, inactive)`
+(`TRUST_WEIGHTS` in contracts: verified 1.15, expired/flagged 0.85, outdated 0.5,
+inactive ×0.9), re-sorted, and only then cut to `k`. Multiplicative so the same
+factor serves RRF, cosine-only and max-normalized BM25 scores.
+
+With the re-rank on, `fetchK` is at least `2k` so a demoted hit has something to
+be displaced by. With it off (`SEARCH_TRUST_RANKING=false`, or the workspace's
+`trustRanking` override), `fetchK` and the order are exactly the pre-feature
+ones: RRF over a longer candidate list is a different ranking, and "off"
+promises the old one. The switch is resolved by `VerificationPolicyService`, the
+one place the effective freshness policy is read. Every hit carries
+`trust: { status, verifiedAt, expiresAt, ownerId, inactive }`, and the backtest
+event records `trustApplied` so two runs can be compared. New post-ranking
+filters: `verificationStates[]`, `includeArchived`.
+
 ## The graph is bipartite
 
 **Edges always run Document → Entity**, with a `doc:<id>` node convention, and

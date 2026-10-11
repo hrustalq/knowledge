@@ -144,6 +144,8 @@ export interface SearchExecutedEvent extends BacktestEventBase {
   fulltextHits: number;
   fusedHits: number;
   embeddingModel?: string;
+  /** Whether the trust re-rank multiplied the fused scores (docs/features/39), so two runs can be compared. */
+  trustApplied?: boolean;
   results: Array<{ documentId: string; chunkId?: string; score: number }>;
 }
 

@@ -65,6 +65,13 @@ export function renderSkill(input: SkillInput): string {
    it never edits the page by itself.
 `
     : '';
+  // The declared flags (docs/features/39): offered to write keys only, like the report.
+  const flagStep = tools.some((tool) => tool.name === 'knowledge_flag_document')
+    ? `7. To ask the owner to check a page, ${toolRef('knowledge_flag_document')} with \`state: "requested"\`; to declare it
+   wrong, \`state: "outdated"\` (editor). Always give a \`note\`. Verifying a page is a person's act — there is no tool
+   for it, and you should not ask for one.
+`
+    : '';
 
   const access = whoami.workspaces.length
     ? [
@@ -190,12 +197,14 @@ Every content tool takes a \`workspaceId\`. Never guess one; use the table or ${
 ### Answer a question from the knowledge base
 
 1. ${toolRef('knowledge_search')} with the user's question in plain words (and \`projectIds\` or \`tags\` to narrow).
-   Results are chunks with \`documentId\`, \`revisionId\` and \`title\`.
+   Results are chunks with \`documentId\`, \`revisionId\` and \`title\`, plus \`trust.status\` (\`verified\`, \`expired\`,
+   \`edited\`, \`requested\`, \`outdated\`, \`flagged\`, \`unverified\`). Ranking already favours verified pages and demotes
+   outdated ones; when you rely on an outdated, expired or edited page, say so next to the citation.
 2. When a chunk is not enough, ${toolRef('knowledge_get_document_content')} for the whole page.
 3. Answer with citations: the page title and a link \`${webUrl}/documents/<documentId>\`.
 4. If search finds nothing relevant, say so plainly. Do not fill the gap from general knowledge as if the knowledge base
    had said it.
-${feedbackStep}${reportStep}
+${feedbackStep}${reportStep}${flagStep}
 ### Find your way around
 
 - ${toolRef('knowledge_list_documents')} — the page tree of a workspace or project.

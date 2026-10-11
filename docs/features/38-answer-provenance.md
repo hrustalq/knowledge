@@ -36,9 +36,12 @@ gives one.
   `verified_at`, `verified_by`, `verified_revision_id` at the current head;
   `DELETE` removes it. Whether the stamp still holds is **derived** on read by
   `verificationStateFor`: `verified` when the stamped revision is the head,
-  `outdated` once the head has moved, `unverified` without a stamp, `flagged`
-  once an open report exists (phase 3). Activity records `document.verified` /
-  `document.unverified`.
+  `edited` once the head has moved (called `outdated` until
+  [feature 39](39-page-verification.md), which gave that word to a declared
+  state), `unverified` without a stamp, `flagged` once an open report exists
+  (phase 3), and since feature 39 also `expired`, `requested` and `outdated`.
+  Activity records `document.verified` / `document.unverified`. The write side
+  now lives in `VerificationService` (feature 39).
 - **Web.** Markers render as superscript buttons: hovering one lights the
   matching source chip and vice versa; clicking opens the page at the cited
   section. Each chip carries a verification dot and a provenance card

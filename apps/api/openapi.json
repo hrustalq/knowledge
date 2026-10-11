@@ -2115,6 +2115,15 @@
             }
           },
           {
+            "name": "includeArchived",
+            "required": false,
+            "in": "query",
+            "description": "1 to include archived pages (docs/features/39)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -2194,6 +2203,15 @@
             "required": false,
             "in": "query",
             "description": "Levels to load below parentId; omit to load all of them",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeArchived",
+            "required": false,
+            "in": "query",
+            "description": "1 to include archived pages (docs/features/39)",
             "schema": {
               "type": "string"
             }
@@ -2501,118 +2519,6 @@
           }
         },
         "summary": "Feature 32: place a page under a parent and among its siblings in one call. parentId: null re-roots; beforeId names the sibling it lands above, omitted appends last",
-        "tags": [
-          "documents"
-        ]
-      }
-    },
-    "/v1/documents/{id}/verify": {
-      "post": {
-        "operationId": "DocumentsController_verify",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "409": {
-            "description": "The page has no finalized head revision to vouch for"
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Stamp the page as verified at its current head (docs/features/38). The stamp reads as outdated once the head moves; nothing is written then",
-        "tags": [
-          "documents"
-        ]
-      },
-      "delete": {
-        "operationId": "DocumentsController_unverify",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Accept-Language",
-            "in": "header",
-            "required": false,
-            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ru"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "4XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Remove the verification stamp",
         "tags": [
           "documents"
         ]
@@ -8138,6 +8044,7 @@
                 "review",
                 "comment",
                 "document",
+                "verification",
                 "job"
               ]
             }
@@ -16093,6 +16000,787 @@
         ]
       }
     },
+    "/v1/documents/{id}/verify": {
+      "post": {
+        "operationId": "VerificationController_verify",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "409": {
+            "description": "No finalized head to vouch for (no_head_revision), or the page is archived (document_archived)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stamp the page as verified at its current head (docs/features/39). Clears any requested/outdated flag; optionally sets the review interval. The stamp reads as edited once the head moves and expired past its interval, with nothing written",
+        "tags": [
+          "documents"
+        ]
+      },
+      "delete": {
+        "operationId": "VerificationController_clear",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Back to unverified: remove the stamp and any requested/outdated flag",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/verification-request": {
+      "post": {
+        "operationId": "VerificationController_request",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlagDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "409": {
+            "description": "The page is archived"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ask for the page to be checked. Notifies the owner (or the last verifier)",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/outdated": {
+      "post": {
+        "operationId": "VerificationController_outdated",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlagDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "409": {
+            "description": "The page is archived"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Declare the page outdated. Ranks it last in search until verified or cleared; notifies the owner",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/archive": {
+      "post": {
+        "operationId": "VerificationController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Archive the page and (by default) its subtree in one statement. Hidden from lists, tree, search, ask and MCP unless asked for; still readable by id; writes return 409 document_archived until unarchived",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/unarchive": {
+      "post": {
+        "operationId": "VerificationController_unarchive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Restore an archived page and (by default) its subtree",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/v1/knowledge-health": {
+      "get": {
+        "operationId": "KnowledgeHealthController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "required": false,
+            "in": "query",
+            "description": "Omitted lists every live page",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stale",
+                "unowned",
+                "empty",
+                "expired",
+                "edited",
+                "outdated",
+                "requested",
+                "flagged",
+                "inactive",
+                "archived"
+              ]
+            }
+          },
+          {
+            "name": "ownerId",
+            "required": false,
+            "in": "query",
+            "description": "Only pages owned by this member",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Title substring, case-insensitive",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "Omitted sorts by last activity, most neglected first",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "activity",
+                "title"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "nextCursor of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Rows per page; omitted reads as 50",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pages with their derived verification status, filtered and paged; most neglected first",
+        "tags": [
+          "knowledge-health"
+        ]
+      }
+    },
+    "/v1/knowledge-health/summary": {
+      "get": {
+        "operationId": "KnowledgeHealthController_summary",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Live counts per filter — no stored aggregate; equals the list totals",
+        "tags": [
+          "knowledge-health"
+        ]
+      }
+    },
+    "/v1/knowledge-health/bulk": {
+      "post": {
+        "operationId": "KnowledgeHealthController_bulk",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeHealthBulkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "403": {
+            "description": "Some ids belong to another workspace, or archive/unarchive without admin"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One action over up to 200 pages, results per id. A single id from another workspace is a 403 with nothing written (details.foreign). archive / unarchive need admin",
+        "tags": [
+          "knowledge-health"
+        ]
+      }
+    },
+    "/v1/knowledge-health/settings": {
+      "get": {
+        "operationId": "KnowledgeHealthController_settings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The freshness policy: what applies (effective), what the workspace overrides, and the env defaults",
+        "tags": [
+          "knowledge-health"
+        ]
+      },
+      "patch": {
+        "operationId": "KnowledgeHealthController_updateSettings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateKnowledgeHealthSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Override part of the policy for this workspace; null on a key goes back to the env default",
+        "tags": [
+          "knowledge-health"
+        ]
+      }
+    },
     "/v1/mcp": {
       "post": {
         "operationId": "McpController_handle",
@@ -16338,7 +17026,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.13.0",
+    "version": "0.14.0",
     "contact": {}
   },
   "tags": [],
@@ -16770,6 +17458,17 @@
           "projectId": {
             "type": "string",
             "format": "uuid"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Owner; null for unowned"
+          },
+          "reviewIntervalDays": {
+            "type": "number",
+            "nullable": true,
+            "description": "Review interval in days; null inherits, 0 never expires"
           }
         }
       },
@@ -17360,6 +18059,26 @@
             "items": {
               "type": "string"
             }
+          },
+          "verificationStates": {
+            "type": "array",
+            "description": "Only pages in these verification states",
+            "items": {
+              "type": "string",
+              "enum": [
+                "verified",
+                "expired",
+                "edited",
+                "requested",
+                "outdated",
+                "flagged",
+                "unverified"
+              ]
+            }
+          },
+          "includeArchived": {
+            "type": "boolean",
+            "description": "Also return archived pages. Omitted reads as false"
           }
         }
       },
@@ -17536,6 +18255,7 @@
                 "review",
                 "comment",
                 "document",
+                "verification",
                 "job"
               ]
             }
@@ -17573,6 +18293,7 @@
               "review",
               "comment",
               "document",
+              "verification",
               "job"
             ],
             "description": "Narrows `all` to one category, so clearing comments leaves reviews unread."
@@ -19619,6 +20340,114 @@
         "required": [
           "status"
         ]
+      },
+      "VerifyDocumentDto": {
+        "type": "object",
+        "properties": {
+          "intervalDays": {
+            "type": "number",
+            "nullable": true,
+            "description": "Review interval in days. Omit to keep, null to inherit the workspace default, 0 for never"
+          }
+        }
+      },
+      "FlagDocumentDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Why — shown on the page and in the owner's notification"
+          }
+        }
+      },
+      "ArchiveDocumentDto": {
+        "type": "object",
+        "properties": {
+          "includeDescendants": {
+            "type": "boolean",
+            "description": "Also the pages under this one. Omitted reads as true, so a parent is never archived over live children"
+          }
+        }
+      },
+      "KnowledgeHealthBulkDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentIds": {
+            "description": "At most 200; every id must belong to workspaceId or nothing is written",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "verify",
+              "request",
+              "outdated",
+              "clear",
+              "reassign",
+              "archive",
+              "unarchive"
+            ],
+            "description": "archive / unarchive need admin"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "reassign: the new owner, null for unowned. Must be a workspace member"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "request / outdated: the note"
+          },
+          "intervalDays": {
+            "type": "number",
+            "nullable": true,
+            "description": "verify: review interval in days (see VerifyDocumentDto)"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "documentIds",
+          "action"
+        ]
+      },
+      "UpdateKnowledgeHealthSettingsDto": {
+        "type": "object",
+        "properties": {
+          "reviewIntervalDays": {
+            "type": "number",
+            "nullable": true,
+            "description": "Days a stamp holds; 0 = never"
+          },
+          "remindBeforeDays": {
+            "type": "number",
+            "nullable": true
+          },
+          "inactiveAfterDays": {
+            "type": "number",
+            "nullable": true,
+            "description": "0 disables inactivity"
+          },
+          "emptyMaxChars": {
+            "type": "number",
+            "nullable": true
+          },
+          "trustRanking": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Multiply search scores by the page's verification state"
+          }
+        }
       },
       "ApiErrorResponse": {
         "type": "object",

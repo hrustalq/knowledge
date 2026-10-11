@@ -60,8 +60,8 @@ describe('ProvenanceService', () => {
       verification: 'verified',
       verifiedByName: 'Grace',
     });
-    // The head moved since the stamp: outdated, with nothing written anywhere.
-    expect(map.get('doc-b')).toMatchObject({ verification: 'outdated', authorName: null, changedAt: '2026-05-01T00:00:00.000Z' });
+    // The head moved since the stamp: edited, with nothing written anywhere.
+    expect(map.get('doc-b')).toMatchObject({ verification: 'edited', authorName: null, changedAt: '2026-05-01T00:00:00.000Z' });
     // No head at all: unverified, and no revision facts to report.
     expect(map.get('doc-c')).toMatchObject({ verification: 'unverified', revisionNumber: null, changedAt: null });
   });
@@ -87,7 +87,7 @@ describe('ProvenanceService', () => {
     const hits = await svc.decorateResults(WS, [
       { documentId: 'doc-b', revisionId: 'rev-b2', chunkId: 'c', title: 'B', snippet: '', score: 0.5 },
     ]);
-    expect(hits[0]).toMatchObject({ revisionId: 'rev-b2', revisionNumber: 2, verification: 'outdated', factClass: 'explicit' });
+    expect(hits[0]).toMatchObject({ revisionId: 'rev-b2', revisionNumber: 2, verification: 'edited', factClass: 'explicit' });
   });
 
   it('asks nothing when there is nothing to resolve', async () => {

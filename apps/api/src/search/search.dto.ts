@@ -1,9 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DOCUMENT_CATEGORIES, type DocumentCategory } from '@knowledge/contracts';
+import {
+  DOCUMENT_CATEGORIES,
+  SOURCE_VERIFICATION_STATES,
+  type DocumentCategory,
+  type SourceVerificationState,
+} from '@knowledge/contracts';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -59,6 +65,19 @@ export class SearchFiltersDto {
   @IsString({ each: true })
   @MaxLength(200, { each: true, message: vmsg('maxLength') })
   tags?: string[];
+
+  /** Derived verification states to keep (docs/features/39); applied post-ranking like the rest. */
+  @ApiPropertyOptional({ enum: SOURCE_VERIFICATION_STATES, isArray: true, description: 'Only pages in these verification states' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(SOURCE_VERIFICATION_STATES.length, { message: vmsg('arrayMaxSize') })
+  @IsIn(SOURCE_VERIFICATION_STATES as unknown as string[], { each: true })
+  verificationStates?: SourceVerificationState[];
+
+  @ApiPropertyOptional({ description: 'Also return archived pages. Omitted reads as false' })
+  @IsOptional()
+  @IsBoolean()
+  includeArchived?: boolean;
 }
 
 export class SearchDto {

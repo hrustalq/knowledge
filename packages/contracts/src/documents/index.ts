@@ -1,4 +1,11 @@
-import type { ChunkSummary, DocumentSummary, RevisionInfo, RevisionStatus } from '@knowledge/contracts/core';
+import type {
+  ChunkSummary,
+  DocumentSummary,
+  DocumentTrust,
+  RevisionInfo,
+  RevisionStatus,
+  SourceVerificationState,
+} from '@knowledge/contracts/core';
 import type { AuthorableRelationType, FactExtractor } from '@knowledge/contracts/graph';
 import type { DeleteReviewCommentResponse, ReviewComment, ReviewThread, SemanticDiff, StructuralDiff } from '@knowledge/contracts/reviews';
 
@@ -103,7 +110,15 @@ export interface SearchRequest {
    * become TAGGED_WITH edges to `tag:<name>` entities). Tags match with OR
    * semantics: a document passes if it carries any of the listed tags.
    */
-  filters?: { categories?: DocumentCategory[]; projectIds?: string[]; tags?: string[] };
+  filters?: {
+    categories?: DocumentCategory[];
+    projectIds?: string[];
+    tags?: string[];
+    /** Only pages whose derived verification state is one of these (docs/features/39). */
+    verificationStates?: SourceVerificationState[];
+    /** Archived pages are dropped unless asked for. */
+    includeArchived?: boolean;
+  };
 }
 export interface SearchResult {
   documentId: string;
@@ -111,7 +126,14 @@ export interface SearchResult {
   chunkId: string;
   title: string;
   snippet: string;
+  /** The fused retrieval score after the trust re-rank (docs/features/39). */
   score: number;
+  /**
+   * The page's verification state, owner and inactivity, and what the re-rank
+   * read (docs/features/39). On every hit, so `ask` and `knowledge_search` can
+   * say which page they trusted and why.
+   */
+  trust?: DocumentTrust;
   /**
    * Heading trail of the matched chunk, root first. The chunk vertex has carried
    * it since Phase 1; surfacing it is what lets a citation link to a section

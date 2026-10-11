@@ -46,7 +46,14 @@ import type {
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
 import type { Document, DocumentBranch, DocumentRevision } from '@prisma/client';
-import { OPEN_KNOWLEDGE_ISSUE_STATUSES, verificationStateFor } from '@knowledge/contracts';
+import {
+  isInactive,
+  verificationStateFor,
+  type VerificationFlag,
+  type VerificationSource,
+} from '@knowledge/contracts';
+import { ProvenanceService } from '../feedback/provenance.service.js';
+import { expiryFor, VerificationPolicyService } from '../verification/verification-policy.service.js';
 import { t } from '../i18n/t.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
@@ -72,9 +79,12 @@ const WORKSPACE_GRAPH_MAX_EDGES = 4000;
 const PENDING_PATH = '/pending/';
 
 /** A path that actually locates a document, rather than the rollback sentinel. */
-function hasRealPath(path: string): boolean {
+export function hasRealPath(path: string): boolean {
   return path !== PENDING_PATH && path.length > 1;
 }
+
+/** `details.reason` of the 409 every write to an archived page raises (docs/features/39). */
+export const DOCUMENT_ARCHIVED = 'document_archived';
 
 @Injectable()
 export class DocumentsService {
@@ -86,6 +96,8 @@ export class DocumentsService {
     private readonly activity: ActivityService,
     private readonly projects: ProjectsService,
     private readonly notifications: NotificationsService,
+    private readonly provenance: ProvenanceService,
+    private readonly policy: VerificationPolicyService,
   ) {}
 
   async createDocument(dto: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -248,6 +260,7 @@ export class DocumentsService {
     authorId: string = AUTHOR_ID_STUB,
   ): Promise<RevisionInfo> {
     const document = await this.getDocumentOrThrow(documentId);
+    this.assertNotArchived(document);
 
     if (expectedHeadRevisionId) {
       const branchName = dto.branch ?? document.defaultBranch;
@@ -282,6 +295,7 @@ export class DocumentsService {
 
   async finalizeRevision(documentId: string, revisionId: string): Promise<FinalizeRevisionResponse> {
     const document = await this.getDocumentOrThrow(documentId);
+    this.assertNotArchived(document);
     const revision = await this.getRevisionOrThrow(documentId, revisionId);
 
     if (revision.status !== 'draft') {
@@ -387,7 +401,7 @@ export class DocumentsService {
     workspaceId: string,
     limit = 20,
     cursor?: string,
-    filters: { categories?: string[]; projectIds?: string[]; tags?: string[] } = {},
+    filters: { categories?: string[]; projectIds?: string[]; tags?: string[]; includeArchived?: boolean } = {},
   ): Promise<ListDocumentsResponse> {
     const categories = filters.categories?.filter(Boolean) ?? [];
     const projectIds = filters.projectIds?.filter(Boolean) ?? [];
@@ -407,6 +421,8 @@ export class DocumentsService {
     const docs = await this.prisma.document.findMany({
       where: {
         workspaceId,
+        // Archived pages are put away, not deleted: absent unless asked for (docs/features/39).
+        ...(filters.includeArchived ? {} : { archivedAt: null }),
         ...(categories.length ? { category: { in: categories } } : {}),
         ...(projectIds.length ? { projectId: { in: projectIds } } : {}),
         ...(taggedIds ? { id: { in: taggedIds } } : {}),
@@ -423,7 +439,11 @@ export class DocumentsService {
     const headIds = page
       .map((d) => d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId)
       .filter((id): id is string => !!id);
-    const heads = await this.prisma.documentRevision.findMany({ where: { id: { in: headIds } } });
+    const [heads, issues, settings] = await Promise.all([
+      this.prisma.documentRevision.findMany({ where: { id: { in: headIds } } }),
+      this.provenance.openIssueCounts(page.map((d) => d.id)),
+      this.policy.effective(workspaceId),
+    ]);
     const headById = new Map(heads.map((r) => [r.id, r]));
 
     const items: DocumentSummary[] = page.map((d) => {
@@ -440,10 +460,112 @@ export class DocumentsService {
         headRevisionId: headId,
         headRevisionStatus: (head?.status as RevisionStatus) ?? null,
         createdAt: d.createdAt.toISOString(),
+        ...this.trustFields(d, headId, issues.get(d.id) ?? 0, settings.inactiveAfterDays),
       };
     });
 
     return { items, nextCursor: hasMore ? page[page.length - 1].id : null };
+  }
+
+  /**
+   * The verification, ownership, freshness and archive fields every summary
+   * carries (docs/features/39). The state is derived here, at read time, from
+   * the row, the head and the open-report count — never stored.
+   */
+  private trustFields(
+    d: Document,
+    headId: string | null,
+    openIssues: number,
+    inactiveAfterDays: number,
+  ): Pick<
+    DocumentSummary,
+    | 'verifiedAt'
+    | 'verifiedBy'
+    | 'verifiedRevisionId'
+    | 'verification'
+    | 'ownerId'
+    | 'reviewIntervalDays'
+    | 'verificationExpiresAt'
+    | 'verificationFlag'
+    | 'verificationNote'
+    | 'verificationSource'
+    | 'lastActivityAt'
+    | 'inactive'
+    | 'archivedAt'
+    | 'archivedBy'
+  > {
+    return {
+      verifiedAt: d.verifiedAt?.toISOString() ?? null,
+      verifiedBy: d.verifiedBy,
+      verifiedRevisionId: d.verifiedRevisionId,
+      verification: verificationStateFor(d, headId, openIssues),
+      ownerId: d.ownerId,
+      reviewIntervalDays: d.reviewIntervalDays,
+      verificationExpiresAt: d.verificationExpiresAt?.toISOString() ?? null,
+      verificationFlag: (d.verificationFlag as VerificationFlag | null) ?? null,
+      verificationNote: d.verificationNote,
+      verificationSource: (d.verificationSource as unknown as VerificationSource | null) ?? null,
+      lastActivityAt: d.lastActivityAt.toISOString(),
+      inactive: isInactive(d.lastActivityAt, inactiveAfterDays),
+      archivedAt: d.archivedAt?.toISOString() ?? null,
+      archivedBy: d.archivedBy,
+    };
+  }
+
+  /**
+   * Hand the page to a member, or to nobody. One place, so `PATCH :id` and the
+   * knowledge-health bulk path validate membership the same way: the owner must
+   * hold a `workspace_members` row in the page's workspace — the dev principal
+   * is the one exception, and only because `AUTH_MODE=none` has no rows at all.
+   * The new owner is told (reason `owner`), the actor never is.
+   */
+  async setOwner(documentId: string, ownerId: string | null, actorId?: string): Promise<DocumentSummary> {
+    const document = await this.getDocumentOrThrow(documentId);
+    this.assertNotArchived(document);
+    if (ownerId !== null) await this.assertMember(document.workspaceId, ownerId);
+    if (ownerId === document.ownerId) return this.toSummary(document);
+    const updated = await this.prisma.document.update({ where: { id: documentId }, data: { ownerId } });
+    void this.activity.record({
+      workspaceId: document.workspaceId,
+      actor: actorId,
+      action: 'document.owner-changed',
+      documentId,
+      projectId: document.projectId,
+      metadata: { title: document.title, from: document.ownerId, to: ownerId },
+      patch: { ownerId },
+    });
+    if (ownerId && ownerId !== actorId) {
+      void this.notifications.notify({
+        workspaceId: document.workspaceId,
+        userIds: [ownerId],
+        type: 'document.owner-changed',
+        reason: 'owner',
+        actor: actorId ?? null,
+        documentId,
+        subjectType: 'document',
+        subjectId: documentId,
+        title: document.title,
+        subscribe: true,
+      });
+    }
+    return this.toSummary(updated);
+  }
+
+  private async assertMember(workspaceId: string, userId: string): Promise<void> {
+    if (userId === AUTHOR_ID_STUB) return;
+    const member = await this.prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } });
+    if (!member) throw new BadRequestException(t('error.document.ownerNotMember'));
+  }
+
+  /** Every write to an archived page is a 409 with `details.reason = document_archived` (docs/features/39). */
+  private assertNotArchived(document: { id: string; archivedAt: Date | null }): void {
+    if (document.archivedAt) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.document.archived', { id: document.id }),
+        reason: DOCUMENT_ARCHIVED,
+      });
+    }
   }
 
   async getDocument(documentId: string, revisionId?: string): Promise<DocumentDetailResponse> {
@@ -475,9 +597,10 @@ export class DocumentsService {
     const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId ?? null;
     // An open report flags the page (docs/features/38, phase 3) — the same
     // predicate ProvenanceService applies to a cited source.
-    const openIssues = await this.prisma.knowledgeIssue.count({
-      where: { documentId, status: { in: [...OPEN_KNOWLEDGE_ISSUE_STATUSES] } },
-    });
+    const [issues, settings] = await Promise.all([
+      this.provenance.openIssueCounts([documentId]),
+      this.policy.effective(document.workspaceId),
+    ]);
     return {
       document: {
         documentId: document.id,
@@ -490,65 +613,13 @@ export class DocumentsService {
         headRevisionId: headId,
         headRevisionStatus: (revision.status as RevisionStatus) ?? null,
         createdAt: document.createdAt.toISOString(),
-        // The stamp and its reading against the head (docs/features/38).
-        verifiedAt: document.verifiedAt?.toISOString() ?? null,
-        verifiedBy: document.verifiedBy,
-        verifiedRevisionId: document.verifiedRevisionId,
-        verification: verificationStateFor(document, headId, openIssues),
+        // The stamp, the flag and their reading against the head and the
+        // clock (docs/features/38 + 39). Writes live in VerificationService.
+        ...this.trustFields(document, headId, issues.get(documentId) ?? 0, settings.inactiveAfterDays),
       },
       revision: this.toRevisionInfo(revision),
       chunks,
     };
-  }
-
-  /**
-   * Stamp the page as checked at its current head (docs/features/38).
-   *
-   * The stamp is three columns and nothing else: who, when, and which revision.
-   * Whether it still holds is derived against the head on every read, so a new
-   * revision makes the page `outdated` with no write here. Verifying a page
-   * with no finalized head is refused — there is nothing to vouch for.
-   */
-  async verifyDocument(documentId: string, verifiedBy: string): Promise<DocumentDetailResponse> {
-    const document = await this.prisma.document.findUnique({
-      where: { id: documentId },
-      include: { branches: true },
-    });
-    if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
-    const headId = document.branches.find((b) => b.name === document.defaultBranch)?.headRevisionId ?? null;
-    if (!headId) throw new ConflictException(t('error.document.noRevisions', { id: documentId }));
-    await this.prisma.document.update({
-      where: { id: documentId },
-      data: { verifiedAt: new Date(), verifiedBy, verifiedRevisionId: headId },
-    });
-    void this.activity.record({
-      workspaceId: document.workspaceId,
-      actor: verifiedBy,
-      action: 'document.verified',
-      documentId,
-      subjectId: headId,
-      metadata: { title: document.title, revisionId: headId },
-    });
-    return this.getDocument(documentId);
-  }
-
-  /** Take the stamp off. Idempotent: an unverified page stays unverified. */
-  async unverifyDocument(documentId: string, actor: string): Promise<DocumentDetailResponse> {
-    const document = await this.getDocumentOrThrow(documentId);
-    if (document.verifiedRevisionId) {
-      await this.prisma.document.update({
-        where: { id: documentId },
-        data: { verifiedAt: null, verifiedBy: null, verifiedRevisionId: null },
-      });
-      void this.activity.record({
-        workspaceId: document.workspaceId,
-        actor,
-        action: 'document.unverified',
-        documentId,
-        metadata: { title: document.title },
-      });
-    }
-    return this.getDocument(documentId);
   }
 
   async createBranch(documentId: string, dto: CreateBranchDto): Promise<CreateBranchResponse> {
@@ -744,10 +815,36 @@ export class DocumentsService {
   /** Features 07 + 08 (docs/features): rename, recategorize, move in the tree. */
   async updateDocument(documentId: string, dto: UpdateDocumentDto, actorId?: string): Promise<DocumentSummary> {
     const document = await this.getDocumentOrThrow(documentId);
+    this.assertNotArchived(document);
 
-    const data: { title?: string; category?: string; parentId?: string | null; projectId?: string } = {};
+    // Ownership is its own act with its own event and notification
+    // (docs/features/39); the rest of the patch follows. A call that only
+    // changes the owner ends here.
+    if (dto.ownerId !== undefined && dto.ownerId !== document.ownerId) {
+      await this.setOwner(documentId, dto.ownerId, actorId);
+      document.ownerId = dto.ownerId;
+    }
+
+    const data: {
+      title?: string;
+      category?: string;
+      parentId?: string | null;
+      projectId?: string;
+      reviewIntervalDays?: number | null;
+      verificationExpiresAt?: Date | null;
+    } = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.category !== undefined) data.category = dto.category;
+    if (dto.reviewIntervalDays !== undefined && dto.reviewIntervalDays !== document.reviewIntervalDays) {
+      data.reviewIntervalDays = dto.reviewIntervalDays;
+      // A stamped page's deadline moves with its interval, from the same
+      // arithmetic VerificationService.verify uses.
+      if (document.verifiedAt) {
+        const settings = await this.policy.effective(document.workspaceId);
+        data.verificationExpiresAt = expiryFor(document.verifiedAt, dto.reviewIntervalDays, settings.reviewIntervalDays);
+      }
+    }
+    if (Object.keys(data).length === 0 && dto.ownerId !== undefined) return this.toSummary(await this.getDocumentOrThrow(documentId));
 
     // Project move (Workspace > Project > Document). Cross-workspace moves are
     // out of scope: the S3 key layout, graph vertices and the fulltext index
@@ -991,9 +1088,16 @@ export class DocumentsService {
   async getTree(
     workspaceId: string,
     projectId?: string,
-    opts: { parentId?: string | null; depth?: number } = {},
+    opts: { parentId?: string | null; depth?: number; includeArchived?: boolean } = {},
   ): Promise<DocumentTreeResponse> {
-    const scope = { workspaceId, ...(projectId ? { projectId } : {}) };
+    // Archived pages leave the tree unless asked for (docs/features/39). A live
+    // child of an archived parent then surfaces as a root, by the same orphan
+    // rule legacy rows already use — nothing is hidden by accident.
+    const scope = {
+      workspaceId,
+      ...(projectId ? { projectId } : {}),
+      ...(opts.includeArchived ? {} : { archivedAt: null }),
+    };
     const lazy = typeof opts.depth === 'number';
     const parentId = opts.parentId ?? null;
 
@@ -1003,8 +1107,9 @@ export class DocumentsService {
         include: { branches: true },
         orderBy: [{ position: 'asc' }, { title: 'asc' }],
       });
+      const issues = await this.provenance.openIssueCounts(docs.map((d) => d.id));
       const nodes = new Map<string, DocumentTreeNode>();
-      for (const d of docs) nodes.set(d.id, await Promise.resolve(this.toTreeNode(d, null)));
+      for (const d of docs) nodes.set(d.id, this.toTreeNode(d, null, issues.get(d.id) ?? 0));
       const heads = await this.headStatuses(docs);
       for (const node of nodes.values()) node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
 
@@ -1032,7 +1137,7 @@ export class DocumentsService {
    * `parentId: null` alone would make them unreachable instead.
    */
   private async treeLevel(
-    scope: { workspaceId: string; projectId?: string },
+    scope: { workspaceId: string; projectId?: string; archivedAt?: null },
     parentId: string | null,
     depth: number,
   ): Promise<DocumentTreeNode[]> {
@@ -1064,18 +1169,19 @@ export class DocumentsService {
     });
     if (docs.length === 0) return [];
 
-    const [heads, counts] = await Promise.all([
+    const [heads, counts, issues] = await Promise.all([
       this.headStatuses(docs),
       this.prisma.document.groupBy({
         by: ['parentId'],
         where: { ...scope, parentId: { in: docs.map((d) => d.id) } },
         _count: { _all: true },
       }),
+      this.provenance.openIssueCounts(docs.map((d) => d.id)),
     ]);
     const countByParent = new Map(counts.map((c) => [c.parentId!, c._count._all]));
 
     const nodes = docs.map((d) => {
-      const node = this.toTreeNode(d, countByParent.get(d.id) ?? 0);
+      const node = this.toTreeNode(d, countByParent.get(d.id) ?? 0, issues.get(d.id) ?? 0);
       node.headRevisionStatus = heads.get(node.headRevisionId ?? '') ?? null;
       return node;
     });
@@ -1093,8 +1199,9 @@ export class DocumentsService {
   }
 
   private toTreeNode(
-    d: { id: string; workspaceId: string; projectId: string; title: string; defaultBranch: string; category: string; parentId: string | null; createdAt: Date; branches: { name: string; headRevisionId: string | null }[] },
+    d: Document & { branches: { name: string; headRevisionId: string | null }[] },
     childCount: number | null,
+    openIssues: number,
   ): DocumentTreeNode {
     const headId = d.branches.find((b) => b.name === d.defaultBranch)?.headRevisionId ?? null;
     return {
@@ -1108,6 +1215,12 @@ export class DocumentsService {
       headRevisionId: headId,
       headRevisionStatus: null,
       createdAt: d.createdAt.toISOString(),
+      // What a tree row draws (docs/features/39): the status dot and whether
+      // the page is put away. The rest of the trust fields are the detail's.
+      verification: verificationStateFor(d, headId, openIssues),
+      verificationFlag: (d.verificationFlag as VerificationFlag | null) ?? null,
+      ownerId: d.ownerId,
+      archivedAt: d.archivedAt?.toISOString() ?? null,
       children: [],
       childCount: childCount ?? 0,
     };
@@ -1411,6 +1524,10 @@ export class DocumentsService {
     const head = branch?.headRevisionId
       ? await this.prisma.documentRevision.findUnique({ where: { id: branch.headRevisionId } })
       : null;
+    const [issues, settings] = await Promise.all([
+      this.provenance.openIssueCounts([d.id]),
+      this.policy.effective(d.workspaceId),
+    ]);
     return {
       documentId: d.id,
       workspaceId: d.workspaceId,
@@ -1422,6 +1539,7 @@ export class DocumentsService {
       headRevisionId: branch?.headRevisionId ?? null,
       headRevisionStatus: (head?.status as RevisionStatus) ?? null,
       createdAt: d.createdAt.toISOString(),
+      ...this.trustFields(d, branch?.headRevisionId ?? null, issues.get(d.id) ?? 0, settings.inactiveAfterDays),
     };
   }
 

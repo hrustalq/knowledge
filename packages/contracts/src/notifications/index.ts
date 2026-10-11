@@ -22,6 +22,9 @@ export const NOTIFICATION_REASONS = [
   'watching',
   'participant',
   'author',
+  // The page's owner (docs/features/39): told about requests, expiry and being
+  // made the owner. Above `author` because owning outlives having written.
+  'owner',
   'assigned',
   'review-requested',
   'mention',
@@ -44,7 +47,7 @@ export function notificationReasonRank(reason: string): number {
  * connector sync because they are one thing to the reader — background work
  * they started, now finished.
  */
-export const NOTIFICATION_CATEGORIES = ['mention', 'review', 'comment', 'document', 'job'] as const;
+export const NOTIFICATION_CATEGORIES = ['mention', 'review', 'comment', 'document', 'verification', 'job'] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 /**
@@ -70,9 +73,25 @@ export function notificationCategoryFor(type: string): NotificationCategory | nu
   if (type.endsWith('.comment.created') || type.endsWith('.comment.updated')) return 'comment';
   if (NOTIFIED_REVIEW_TYPES.includes(type)) return 'review';
   if (NOTIFIED_DOCUMENT_TYPES.includes(type)) return 'document';
+  if (NOTIFIED_VERIFICATION_TYPES.includes(type)) return 'verification';
   if (NOTIFIED_JOB_TYPES.includes(type)) return 'job';
   return null;
 }
+
+/**
+ * A page's trust changing hands or state (docs/features/39): a request to
+ * verify, a declared outdated, a stamp about to expire or expired, a new owner.
+ * Its own category because an owner of two hundred pages mutes this and
+ * nothing else; `document.verified` / `cleared` are deliberately absent — a
+ * check happening is a feed row, not news anyone needs in an inbox.
+ */
+const NOTIFIED_VERIFICATION_TYPES: readonly string[] = [
+  'document.verification-requested',
+  'document.outdated',
+  'document.verification-expiring',
+  'document.verification-expired',
+  'document.owner-changed',
+];
 
 /**
  * `revision.finalized`, not `revision.indexed`, is what "the page changed"

@@ -1261,6 +1261,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/documents/{id}/archive",
+      "tag": "documents",
+      "summary": "Archive the page and (by default) its subtree in one statement. Hidden from lists, tree, search, ask and MCP unless asked for; still readable by id; writes return 409 document_archived until unarchived",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/documents/{id}/branches",
       "tag": "documents",
@@ -1385,6 +1395,16 @@
       "path": "/v1/documents/{id}/move",
       "tag": "documents",
       "summary": "Feature 32: place a page under a parent and among its siblings in one call. parentId: null re-roots; beforeId names the sibling it lands above, omitted appends last",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/outdated",
+      "tag": "documents",
+      "summary": "Declare the page outdated. Ranks it last in search until verified or cleared; notifies the owner",
       "role": "editor",
       "source": "document",
       "public": false,
@@ -1542,6 +1562,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/documents/{id}/unarchive",
+      "tag": "documents",
+      "summary": "Restore an archived page and (by default) its subtree",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/documents/{id}/uploads",
       "tag": "documents",
       "summary": "Create (or reuse) draft revision + get presigned PUT URL",
@@ -1551,10 +1581,20 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/documents/{id}/verification-request",
+      "tag": "documents",
+      "summary": "Ask for the page to be checked. Notifies the owner (or the last verifier)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "DELETE",
       "path": "/v1/documents/{id}/verify",
       "tag": "documents",
-      "summary": "Remove the verification stamp",
+      "summary": "Back to unverified: remove the stamp and any requested/outdated flag",
       "role": "editor",
       "source": "document",
       "public": false,
@@ -1564,7 +1604,7 @@
       "method": "POST",
       "path": "/v1/documents/{id}/verify",
       "tag": "documents",
-      "summary": "Stamp the page as verified at its current head (docs/features/38). The stamp reads as outdated once the head moves; nothing is written then",
+      "summary": "Stamp the page as verified at its current head (docs/features/39). Clears any requested/outdated flag; optionally sets the review interval. The stamp reads as edited once the head moves and expired past its interval, with nothing written",
       "role": "editor",
       "source": "document",
       "public": false,
@@ -1826,6 +1866,56 @@
       "tag": "ingestion",
       "summary": "Staleness report: embedding drift, stuck and failed jobs (Phase 5)",
       "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge-health",
+      "tag": "knowledge-health",
+      "summary": "Pages with their derived verification status, filtered and paged; most neglected first",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/knowledge-health/bulk",
+      "tag": "knowledge-health",
+      "summary": "One action over up to 200 pages, results per id. A single id from another workspace is a 403 with nothing written (details.foreign). archive / unarchive need admin",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge-health/settings",
+      "tag": "knowledge-health",
+      "summary": "The freshness policy: what applies (effective), what the workspace overrides, and the env defaults",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/knowledge-health/settings",
+      "tag": "knowledge-health",
+      "summary": "Override part of the policy for this workspace; null on a key goes back to the env default",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/knowledge-health/summary",
+      "tag": "knowledge-health",
+      "summary": "Live counts per filter — no stored aggregate; equals the list totals",
+      "role": "viewer",
       "source": "query",
       "public": false,
       "platformAdmin": false
@@ -2753,6 +2843,28 @@
       ]
     },
     {
+      "name": "knowledge_flag_document",
+      "description": "Set a page's declared verification state (docs/features/39): \"requested\" asks its owner to check it (any member), \"outdated\" declares it wrong (editor) and ranks it last in search until a person verifies or clears it. Give a note saying why. Verifying is a person's act and has no tool. For a problem with evidence that should be checked and fixed, prefer knowledge_report_issue.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "state",
+          "optional": false
+        },
+        {
+          "name": "note",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_get_connector_run",
       "description": "One sync run: status, current stage, and how many pages were created, updated, skipped, failed or left as conflicts. Warnings list what a run could not carry.",
       "inputs": [
@@ -2908,7 +3020,7 @@
     },
     {
       "name": "knowledge_list_documents",
-      "description": "The page tree of a workspace, optionally one project: titles, ids, categories and nesting. Use it to browse; use knowledge_search to find.",
+      "description": "The page tree of a workspace, optionally one project: titles, ids, categories, nesting and each page's verification state. Archived pages are absent unless includeArchived is true. Use it to browse; use knowledge_search to find.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -2924,6 +3036,10 @@
         },
         {
           "name": "depth",
+          "optional": true
+        },
+        {
+          "name": "includeArchived",
           "optional": true
         }
       ]
@@ -3086,7 +3202,7 @@
     },
     {
       "name": "knowledge_search",
-      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus provenance: revisionNumber, changedAt (freshness), authorName, verification (verified | outdated | unverified | flagged) and factClass. Prefer verified and recent pages, and say when a page you relied on is outdated. The response traceId identifies this search.",
+      "description": "Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus provenance: revisionNumber, changedAt (freshness), authorName, verification / trust.status (verified | expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you relied on is outdated, expired or edited since verification. Archived pages are absent unless includeArchived is true. The response traceId identifies this search.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -3106,6 +3222,10 @@
         },
         {
           "name": "tags",
+          "optional": true
+        },
+        {
+          "name": "includeArchived",
           "optional": true
         }
       ]

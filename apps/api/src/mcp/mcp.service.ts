@@ -11,6 +11,8 @@ import {
   KNOWLEDGE_ISSUE_EVIDENCE_MAX,
   KNOWLEDGE_ISSUE_KINDS,
   KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS,
+  VERIFICATION_FLAGS,
+  VERIFICATION_NOTE_MAX_CHARS,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
@@ -37,6 +39,7 @@ import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 import { KnowledgeIssuesService } from '../feedback/knowledge-issues.service.js';
+import { VerificationService } from '../verification/verification.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
@@ -120,6 +123,7 @@ export class McpService {
     private readonly provenance: ProvenanceService,
     private readonly feedback: AnswerFeedbackService,
     private readonly issues: KnowledgeIssuesService,
+    private readonly verification: VerificationService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -149,9 +153,11 @@ export class McpService {
       {
         description:
           'Semantic search over the knowledge base. Every result carries document/revision/chunk citations plus ' +
-          'provenance: revisionNumber, changedAt (freshness), authorName, verification (verified | outdated | ' +
-          'unverified | flagged) and factClass. Prefer verified and recent pages, and say when a page you relied ' +
-          'on is outdated. The response traceId identifies this search.',
+          'provenance: revisionNumber, changedAt (freshness), authorName, verification / trust.status (verified | ' +
+          'expired | edited | requested | outdated | flagged | unverified), trust.inactive, trust.ownerId and ' +
+          'factClass. Ranking already favours verified pages and demotes outdated ones; still say when a page you ' +
+          'relied on is outdated, expired or edited since verification. Archived pages are absent unless ' +
+          'includeArchived is true. The response traceId identifies this search.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           query: z.string().min(1),
@@ -168,14 +174,16 @@ export class McpService {
             .describe(
               'Restrict results to documents carrying ANY of these frontmatter tags ("security" or "tag:security")',
             ),
+          includeArchived: z.boolean().optional().describe('Also return archived pages (default false)'),
         },
       },
-      async ({ workspaceId, query, limit, projectIds, tags }) => {
+      async ({ workspaceId, query, limit, projectIds, tags, includeArchived }) => {
         await guard.ws(workspaceId, 'viewer');
         // One merged object: separate spreads would clobber each other.
         const filters = {
           ...(projectIds?.length ? { projectIds } : {}),
           ...(tags?.length ? { tags } : {}),
+          ...(includeArchived ? { includeArchived: true } : {}),
         };
         const res = await this.search.search({
           workspaceId,
@@ -283,6 +291,40 @@ export class McpService {
           reportCount: res.issue.reportCount,
           ...(res.issue.mergeRequestId ? { mergeRequestId: res.issue.mergeRequestId } : {}),
           ...(res.issue.agentRunId ? { agentRunId: res.issue.agentRunId } : {}),
+        });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_flag_document',
+      {
+        description:
+          'Set a page\'s declared verification state (docs/features/39): "requested" asks its owner to check it ' +
+          '(any member), "outdated" declares it wrong (editor) and ranks it last in search until a person verifies ' +
+          'or clears it. Give a note saying why. Verifying is a person\'s act and has no tool. For a problem with ' +
+          'evidence that should be checked and fixed, prefer knowledge_report_issue.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          documentId: z.string().uuid(),
+          state: z.enum(VERIFICATION_FLAGS),
+          note: z.string().max(VERIFICATION_NOTE_MAX_CHARS).optional().describe('Why, in plain words — shown on the page'),
+        },
+      },
+      async ({ workspaceId, documentId, state, note }) => {
+        // The REST twins: `verification-request` is viewer, `outdated` is editor.
+        await guard.doc(documentId, state === 'outdated' ? 'editor' : 'viewer');
+        const res = await this.verification.flag(documentId, state, {
+          actorId: principal.userId,
+          ...(note ? { note } : {}),
+          source: { kind: 'mcp', by: principal.userId },
+        });
+        const doc = res?.document;
+        return this.json({
+          documentId,
+          workspaceId,
+          state,
+          verification: doc?.verification ?? state,
+          ownerId: doc?.ownerId ?? null,
         });
       },
     );
@@ -888,20 +930,24 @@ export class McpService {
       'knowledge_list_documents',
       {
         description:
-          'The page tree of a workspace, optionally one project: titles, ids, categories and nesting. Use it to browse; use knowledge_search to find.',
+          'The page tree of a workspace, optionally one project: titles, ids, categories, nesting and each page\'s ' +
+          'verification state. Archived pages are absent unless includeArchived is true. Use it to browse; use ' +
+          'knowledge_search to find.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           projectId: z.string().uuid().optional().describe('Restrict to one project'),
           parentId: z.string().uuid().optional().describe('Children of this page; omit for the top level'),
           depth: z.number().int().min(1).max(10).optional().describe('Levels to load; omit for the whole tree'),
+          includeArchived: z.boolean().optional().describe('Also list archived pages (default false)'),
         },
       },
-      async ({ workspaceId, projectId, parentId, depth }) => {
+      async ({ workspaceId, projectId, parentId, depth, includeArchived }) => {
         await guard.ws(workspaceId, 'viewer');
         return this.json(
           await this.documents.getTree(workspaceId, projectId, {
             parentId: parentId ?? null,
             ...(depth ? { depth } : {}),
+            ...(includeArchived ? { includeArchived: true } : {}),
           }),
         );
       },

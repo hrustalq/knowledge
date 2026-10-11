@@ -96,8 +96,9 @@ describe('verificationStateFor', () => {
   it('reads the stamp against the head', () => {
     expect(verificationStateFor({ verifiedRevisionId: null }, 'r2', 0)).toBe('unverified');
     expect(verificationStateFor({ verifiedRevisionId: 'r2' }, 'r2', 0)).toBe('verified');
-    expect(verificationStateFor({ verifiedRevisionId: 'r1' }, 'r2', 0)).toBe('outdated');
-    expect(verificationStateFor({ verifiedRevisionId: 'r2' }, null, 0)).toBe('outdated');
+    // The head moved since the stamp: edited, not outdated (docs/features/39).
+    expect(verificationStateFor({ verifiedRevisionId: 'r1' }, 'r2', 0)).toBe('edited');
+    expect(verificationStateFor({ verifiedRevisionId: 'r2' }, null, 0)).toBe('edited');
   });
 
   it('is flagged whenever a report is open, stamp or not', () => {

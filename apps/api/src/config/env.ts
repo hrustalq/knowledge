@@ -98,6 +98,23 @@ export const envSchema = z.object({
   /** Phase 5 stale-doc detection & reindex scheduling (worker sweeper). */
   STALE_SWEEP_ENABLED: boolish(true),
   /**
+   * Page verification and knowledge health (docs/features/39 + 40, issue #66).
+   * Defaults, not ceilings: a `knowledge_health_settings` row overrides each
+   * per workspace, and an absent row reproduces exactly these values.
+   */
+  /** Days a stamp holds before it reads `expired`; 0 = never. */
+  VERIFICATION_DEFAULT_REVIEW_DAYS: z.coerce.number().int().min(0).default(90),
+  /** How long before expiry the owner is reminded. */
+  VERIFICATION_REMIND_BEFORE_DAYS: z.coerce.number().int().min(0).default(7),
+  /** No write, comment or verification for this long and a page reads `inactive`; 0 disables. */
+  PAGE_INACTIVE_AFTER_DAYS: z.coerce.number().int().min(0).default(180),
+  /** A head revision whose body (without frontmatter) is at most this long is an empty page. */
+  EMPTY_PAGE_MAX_CHARS: z.coerce.number().int().min(0).default(40),
+  /** The API-side sweeper that reminds, expires and fills `body_chars` for legacy revisions. */
+  VERIFICATION_SWEEP_ENABLED: boolish(true),
+  /** Kill switch for the trust re-rank in search; false restores the pre-#66 order exactly. */
+  SEARCH_TRUST_RANKING: boolish(true),
+  /**
    * AI-readable output (issue #68): `GET /v1/documents/:id/markdown` and
    * `Accept: text/markdown` on `/content`. Kill switch — false 404s the routes
    * and `/content` stays JSON-only.

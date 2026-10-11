@@ -129,6 +129,12 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       };
       const normalizedKey = revision.s3Key.replace(/[^/]+$/, 'normalized.json');
       await this.storage.putObjectJson(normalizedKey, normalized);
+      // Body length without frontmatter, so "empty page" is a PG question
+      // (docs/features/39). Idempotent with the rest of the step.
+      await this.prisma.documentRevision.update({
+        where: { id: revision.id },
+        data: { bodyChars: parsed.content.trim().length },
+      });
       mark('normalize', sections.length);
 
       // 4. Chunk

@@ -16,6 +16,7 @@ export const MCP_INSTRUCTIONS = [
   'Workspace > Project > Document. Every content tool takes a workspaceId — call knowledge_whoami first to get yours.',
   'Answer from the knowledge base with knowledge_search, and cite the document ids and titles it returns.',
   'Rate an answer you built from knowledge_search with knowledge_feedback (quote its traceId). If a page you read is wrong or out of date, call knowledge_report_issue with the evidence — a report is checked and may become a merge request, never a silent edit.',
+  'Every search hit carries trust.status (verified | expired | edited | requested | outdated | flagged | unverified). Prefer verified pages; say so when you rely on an outdated, expired or edited one. knowledge_flag_document marks a page requested (please check) or outdated (known wrong) — verifying is a person\'s act and has no tool.',
   'To change an existing page: knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request. Do not merge your own merge request unless asked to.',
   'Read the knowledge://skill resource (or the "guide" prompt) for the full playbook.',
 ].join('\n');
@@ -47,6 +48,9 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   // request (docs/features/38, phase 3). The REST route admits a read key for
   // the row alone, the same split as the vote.
   'knowledge_report_issue',
+  // Sets a page's declared verification flag (docs/features/39). There is
+  // deliberately no verify tool: a stamp is a person's act.
+  'knowledge_flag_document',
 ]);
 
 /**

@@ -6,7 +6,7 @@ import type {
   ActivityKind,
   ListActivityResponse,
 } from '@knowledge/contracts';
-import { ACTIVITY_KINDS, activityKindFor } from '@knowledge/contracts';
+import { ACTIVITY_KINDS, activityKindFor, FRESHNESS_ACTIONS } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { actorIdentities, DEV_ACTOR } from './actor.js';
 import { EventsPublisher } from '../events/events.publisher.js';
@@ -58,6 +58,15 @@ export class ActivityService {
           metadata: (input.metadata ?? {}) as object,
         },
       });
+      // A page's freshness clock (docs/features/39), bumped here rather than at
+      // each call site so a new writer cannot forget it. The set is the same
+      // one the migration backfilled from, so "inactive" means one thing.
+      if (input.documentId && FRESHNESS_ACTIONS.has(input.action)) {
+        await this.prisma.document.updateMany({
+          where: { id: input.documentId },
+          data: { lastActivityAt: new Date() },
+        });
+      }
       await this.events.publish({
         type: input.action,
         workspaceId: input.workspaceId,

@@ -21,7 +21,7 @@ import { AccessService } from '../auth/access.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import type { Principal } from '../auth/principal.js';
-import { DocumentsService } from './documents.service.js';
+import { DOCUMENT_ARCHIVED, DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
 import type { CreateMergeRequestDto, UpdateMergeRequestDto } from './dto/merge-requests.dto.js';
 import { t } from '../i18n/t.js';
@@ -76,6 +76,16 @@ export class MergeRequestsService {
   ): Promise<CreateMergeRequestResponse> {
     const document = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
+    // An archived page is read-only until unarchived (docs/features/39): the
+    // same 409 DocumentsService raises for a revision, so a client has one
+    // reason to branch on.
+    if (document.archivedAt) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.document.archived', { id: documentId }),
+        reason: DOCUMENT_ARCHIVED,
+      });
+    }
 
     const targetName = dto.targetBranch ?? document.defaultBranch;
     if (dto.sourceBranch === targetName) {

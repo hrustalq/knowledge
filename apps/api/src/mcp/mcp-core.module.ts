@@ -16,6 +16,7 @@ import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { KnowledgeIssuesModule } from '../feedback/knowledge-issues.module.js';
+import { VerificationCoreModule } from '../verification/verification-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -55,6 +56,8 @@ import { McpService } from './mcp.service.js';
     // knowledge_report_issue (docs/features/38, phase 3). Controller-free, but
     // API-side: filing a report may open a merge request.
     KnowledgeIssuesModule,
+    // knowledge_flag_document (docs/features/39). Controller-free and auth-free.
+    VerificationCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

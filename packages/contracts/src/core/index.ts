@@ -73,6 +73,25 @@ export interface DocumentSummary {
   verifiedBy?: string | null;
   verifiedRevisionId?: string | null;
   verification?: SourceVerificationState;
+  /**
+   * Ownership, freshness and archive state (docs/features/39, issue #66).
+   * Optional for the same reason the stamp is: the detail route and the
+   * knowledge-health list fill them in, a tree node carries only what it draws
+   * (`verification`, `archivedAt`).
+   */
+  ownerId?: string | null;
+  /** Per-page review interval; `null` inherits the workspace default, `0` never expires. */
+  reviewIntervalDays?: number | null;
+  verificationExpiresAt?: string | null;
+  /** A declared state (`requested` / `outdated`) with its note and where it came from. */
+  verificationFlag?: VerificationFlag | null;
+  verificationNote?: string | null;
+  verificationSource?: VerificationSource | null;
+  lastActivityAt?: string;
+  /** Derived from `lastActivityAt` against the workspace's inactivity window. */
+  inactive?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
 }
 
 export interface RevisionInfo {
@@ -121,6 +140,10 @@ export function activityKindFor(action: string): ActivityKind {
   // Comments first: 'merge-request.comment.created' is discussion, not review.
   if (action.includes('.comment.')) return 'discuss';
   if (action.startsWith('merge-request.')) return 'review';
+  // Verifying, flagging, owning or archiving a page shapes the base without
+  // writing in it (docs/features/39) — checked before the `document.` prefix
+  // claims it as a write.
+  if (CURATION_DOCUMENT_ACTIONS.has(action)) return 'curate';
   if (
     action.startsWith('document.') ||
     action.startsWith('revision.') ||
@@ -255,6 +278,17 @@ export const KNOWN_EVENT_TYPES = [
   // whether it still holds is derived against the head at read time.
   'document.verified',
   'document.unverified',
+  // Declared verification state, ownership and archive (docs/features/39,
+  // issue #66). `verification-requested` and `outdated` reach the owner
+  // directly; `expiring` / `expired` are the sweeper's, attributed to nobody.
+  'document.verification-requested',
+  'document.outdated',
+  'document.verification-cleared',
+  'document.verification-expiring',
+  'document.verification-expired',
+  'document.owner-changed',
+  'document.archived',
+  'document.unarchived',
   // A report against a page and what became of it (docs/features/38, phase
   // 3). `reported` reaches the page's last author directly and its watchers
   // by fan-out; the other three are feed rows.
@@ -445,25 +479,266 @@ export interface AssistantAskSource extends SourceProvenance {
 // ---------------------------------------------------------------------------
 
 /**
- * Whether a page's manual verification stamp still holds.
+ * What a page's verification reads as right now (docs/features/38 + 39).
  *
- * Derived, never stored (house classifier rule): the row carries
- * `verified_revision_id`, and this is that id read against the head. A new
- * revision therefore flips a page to `outdated` with no write to the document
- * row, and `flagged` will come from an open report once reports exist
- * (issue #67 phase 3) — until then `verificationStateFor` is always passed 0.
+ * Derived, never stored (house classifier rule). The row carries a stamp
+ * (`verified_revision_id`, `verification_expires_at`) and at most one declared
+ * flag (`verification_flag`); this is both read against the head and the clock:
+ *
+ * - `outdated`   — declared wrong: a merged pull request the sentinel tied to the
+ *                  page, a person, or an agent over MCP. Strongest, because it
+ *                  is a statement about the content, not about the stamp.
+ * - `flagged`    — an open knowledge issue (docs/features/38, phase 3).
+ * - `requested`  — somebody asked for a check (a person, a drift report, MCP).
+ * - `unverified` — never stamped.
+ * - `edited`     — stamped at an older revision: the head moved, nobody has
+ *                  vouched for it since. Not `outdated`: an edit after a check
+ *                  is usually a fix, and ranking must not punish it like a
+ *                  page known to be wrong.
+ * - `expired`    — stamped at the head, but `verification_expires_at` passed.
+ * - `verified`   — stamped at the head, inside its interval.
+ *
+ * A new revision, a passing deadline or a closed report each change the answer
+ * with no write to the document row, which is what lets search, the dashboard,
+ * the sweeper and the page agree without a job keeping them in step.
  */
-export const SOURCE_VERIFICATION_STATES = ['verified', 'outdated', 'unverified', 'flagged'] as const;
+export const SOURCE_VERIFICATION_STATES = [
+  'verified',
+  'expired',
+  'edited',
+  'requested',
+  'outdated',
+  'flagged',
+  'unverified',
+] as const;
 export type SourceVerificationState = (typeof SOURCE_VERIFICATION_STATES)[number];
 
+/** The two states a person or an agent *declares*; everything else is derived. */
+export const VERIFICATION_FLAGS = ['requested', 'outdated'] as const;
+export type VerificationFlag = (typeof VERIFICATION_FLAGS)[number];
+
+/** Who set the flag. `drift` and `curator` are the agents of docs/features/35 and 20. */
+export const VERIFICATION_SOURCE_KINDS = ['person', 'drift', 'curator', 'mcp'] as const;
+export type VerificationSourceKind = (typeof VERIFICATION_SOURCE_KINDS)[number];
+
+export interface VerificationSource {
+  kind: VerificationSourceKind;
+  /** users.id of the person, or the run owner the agent acted for. */
+  by?: string;
+  /** The agent run that produced the finding, when an agent set it. */
+  runId?: string;
+  /** The pull request a drift finding came from. */
+  url?: string;
+  /** ISO timestamp. */
+  at: string;
+}
+
+/** Everything the predicate reads off a document row. All optional: a pre-#66 caller passes the stamp alone. */
+export interface VerificationInput {
+  verifiedRevisionId: string | null | undefined;
+  verificationExpiresAt?: Date | string | null;
+  verificationFlag?: VerificationFlag | string | null;
+}
+
 export function verificationStateFor(
-  doc: { verifiedRevisionId: string | null | undefined },
+  doc: VerificationInput,
   headRevisionId: string | null | undefined,
   openIssueCount: number,
+  now: Date = new Date(),
 ): SourceVerificationState {
+  if (doc.verificationFlag === 'outdated') return 'outdated';
   if (openIssueCount > 0) return 'flagged';
+  if (doc.verificationFlag === 'requested') return 'requested';
   if (!doc.verifiedRevisionId) return 'unverified';
-  return headRevisionId && doc.verifiedRevisionId === headRevisionId ? 'verified' : 'outdated';
+  if (!headRevisionId || doc.verifiedRevisionId !== headRevisionId) return 'edited';
+  const expires = doc.verificationExpiresAt ? new Date(doc.verificationExpiresAt) : null;
+  if (expires && expires.getTime() <= now.getTime()) return 'expired';
+  return 'verified';
+}
+
+/** States under which the stamp no longer vouches for the page a reader opens. */
+export function verificationIsStale(state: SourceVerificationState): boolean {
+  return state === 'edited' || state === 'expired' || state === 'outdated';
+}
+
+// ---------------------------------------------------------------------------
+// Page trust: freshness, ownership and ranking weight (docs/features/39, #66)
+// ---------------------------------------------------------------------------
+
+/**
+ * No qualifying activity inside the window. Only writes, comments and
+ * verification count (`FRESHNESS_ACTIONS`): read analytics is another
+ * milestone, so a page read daily but never touched looks inactive here.
+ */
+export function isInactive(lastActivityAt: Date | string | null | undefined, inactiveAfterDays: number, now: Date = new Date()): boolean {
+  if (!lastActivityAt || inactiveAfterDays <= 0) return false;
+  const at = new Date(lastActivityAt).getTime();
+  return now.getTime() - at > inactiveAfterDays * 86_400_000;
+}
+
+/**
+ * The activity actions that mean "somebody touched this page", bumping
+ * `documents.last_activity_at`. Read by `ActivityService.record` so a new call
+ * site cannot forget to bump it, and by the migration's backfill.
+ */
+export const FRESHNESS_ACTIONS: ReadonlySet<string> = new Set([
+  'revision.finalized',
+  'merge-request.merged',
+  'document.comment.created',
+  'document.verified',
+]);
+
+/** Actions `activityKindFor` files under `curate` although they carry the `document.` prefix. */
+export const CURATION_DOCUMENT_ACTIONS: ReadonlySet<string> = new Set([
+  'document.verified',
+  'document.unverified',
+  'document.verification-requested',
+  'document.outdated',
+  'document.verification-cleared',
+  'document.verification-expiring',
+  'document.verification-expired',
+  'document.owner-changed',
+  'document.archived',
+  'document.unarchived',
+]);
+
+/**
+ * The multiplicative weight a search hit's fused score takes from its page's
+ * state. Multiplicative so it works for RRF, cosine-only and max-normalized
+ * BM25 scores alike. The numbers are guesses to be tuned with `make backtest`;
+ * they are exported constants so tuning them needs no migration. A verified
+ * page must not beat a clearly more relevant unverified one, which bounds the
+ * top factor near 1.
+ */
+export const TRUST_WEIGHTS: Readonly<Record<SourceVerificationState, number>> & { readonly inactive: number } = {
+  verified: 1.15,
+  unverified: 1,
+  requested: 1,
+  edited: 1,
+  expired: 0.85,
+  flagged: 0.85,
+  outdated: 0.5,
+  /** Applied on top of the state factor. */
+  inactive: 0.9,
+};
+
+export function trustWeight(state: SourceVerificationState, inactive: boolean): number {
+  return TRUST_WEIGHTS[state] * (inactive ? TRUST_WEIGHTS.inactive : 1);
+}
+
+/** What a search hit says about how much to trust its page. */
+export interface DocumentTrust {
+  status: SourceVerificationState;
+  verifiedAt?: string | null;
+  expiresAt?: string | null;
+  ownerId?: string | null;
+  inactive: boolean;
+}
+
+/**
+ * The knowledge-health dashboard's filters (docs/features/40). `stale` is the
+ * union of expired, outdated and inactive — the "needs attention" view.
+ * `whereForHealthFilter` in the API is this list's SQL inverse, so a filter
+ * here with no clause there fails the spec rather than returning everything.
+ */
+export const HEALTH_FILTERS = [
+  'stale',
+  'unowned',
+  'empty',
+  'expired',
+  'edited',
+  'outdated',
+  'requested',
+  'flagged',
+  'inactive',
+  'archived',
+] as const;
+export type HealthFilter = (typeof HEALTH_FILTERS)[number];
+
+export const HEALTH_BULK_ACTIONS = ['verify', 'request', 'outdated', 'clear', 'reassign', 'archive', 'unarchive'] as const;
+export type HealthBulkAction = (typeof HEALTH_BULK_ACTIONS)[number];
+/** Bulk actions that need `admin`: an archive sweep across somebody else's pages is an admin's act. */
+export const HEALTH_ADMIN_BULK_ACTIONS: readonly HealthBulkAction[] = ['archive', 'unarchive'];
+export const HEALTH_BULK_MAX_IDS = 200;
+export const VERIFICATION_NOTE_MAX_CHARS = 1000;
+
+/** One row of the dashboard: a page and everything a curator decides on. */
+export interface KnowledgeHealthRow {
+  documentId: string;
+  projectId: string;
+  title: string;
+  /** Ancestor titles root-first, " / "-joined; empty for a root. */
+  breadcrumb: string;
+  status: SourceVerificationState;
+  ownerId: string | null;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  expiresAt: string | null;
+  lastActivityAt: string;
+  inactive: boolean;
+  /** Null while the head's body length is unknown (legacy revisions catch up in the sweeper). */
+  empty: boolean | null;
+  archivedAt: string | null;
+  childCount: number;
+  verificationFlag: VerificationFlag | null;
+  verificationNote: string | null;
+}
+
+// GET /v1/knowledge-health?workspaceId=&projectId=&filter=&ownerId=&q=&cursor=&limit=
+export interface KnowledgeHealthListResponse {
+  workspaceId: string;
+  rows: KnowledgeHealthRow[];
+  nextCursor: string | null;
+}
+
+// GET /v1/knowledge-health/summary?workspaceId=&projectId=
+export interface KnowledgeHealthSummaryResponse {
+  workspaceId: string;
+  total: number;
+  counts: Record<HealthFilter, number>;
+}
+
+// POST /v1/knowledge-health/bulk
+export interface KnowledgeHealthBulkResult {
+  documentId: string;
+  ok: boolean;
+  /** A short code when `ok` is false: `archived`, `no-head`, `not-found`. */
+  error?: string;
+}
+export interface KnowledgeHealthBulkResponse {
+  action: HealthBulkAction;
+  results: KnowledgeHealthBulkResult[];
+}
+
+/**
+ * Per-workspace freshness settings (docs/features/40) — a sparse override of the
+ * `VERIFICATION_*` / `PAGE_INACTIVE_AFTER_DAYS` / `SEARCH_TRUST_RANKING` env
+ * block. `effective` is what applies; `override` is what the row says, `null`
+ * meaning "inherit", so the UI can show both and a silent clamp cannot lie.
+ */
+export interface KnowledgeHealthSettingsValues {
+  reviewIntervalDays: number;
+  remindBeforeDays: number;
+  inactiveAfterDays: number;
+  emptyMaxChars: number;
+  trustRanking: boolean;
+}
+export type KnowledgeHealthSettingsOverride = { [K in keyof KnowledgeHealthSettingsValues]: KnowledgeHealthSettingsValues[K] | null };
+
+// POST /v1/documents/:id/archive | /unarchive
+export interface ArchiveDocumentResponse {
+  documentId: string;
+  archivedAt: string | null;
+  /** Rows the one statement touched: the page and, by default, its subtree. */
+  affected: number;
+}
+
+// GET/PATCH /v1/knowledge-health/settings?workspaceId=
+export interface KnowledgeHealthSettingsResponse {
+  workspaceId: string;
+  effective: KnowledgeHealthSettingsValues;
+  override: KnowledgeHealthSettingsOverride;
+  defaults: KnowledgeHealthSettingsValues;
 }
 
 /**

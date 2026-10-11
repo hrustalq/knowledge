@@ -247,12 +247,29 @@ export class AssistantReadToolsService {
         sources.push(source);
       }
     }
+    // Owner display names for the hits, one lookup. The dev principal and
+    // deleted accounts have no row, and are simply not named.
+    const ownerIds = [...new Set(res.results.map((r) => r.trust?.ownerId).filter((id): id is string => !!id))];
+    const owners = ownerIds.length
+      ? await this.prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, displayName: true } })
+      : [];
+    const ownerName = new Map(owners.map((u) => [u.id, u.displayName]));
     const results = res.results.map((r) => ({
       documentId: r.documentId,
       title: r.title,
       breadcrumb: trails.get(r.documentId) || '(top level)',
       section: r.headingPath?.length ? r.headingPath.join(' › ') : undefined,
       snippet: r.snippet,
+      // Trusted PG metadata, outside the untrusted content wrapper
+      // (docs/features/39): the status is a fact about the row, not page text.
+      ...(r.trust
+        ? {
+            status: r.trust.status,
+            ...(r.trust.verifiedAt ? { verifiedAt: r.trust.verifiedAt } : {}),
+            ...(r.trust.inactive ? { inactive: true } : {}),
+            ...(r.trust.ownerId && ownerName.get(r.trust.ownerId) ? { owner: ownerName.get(r.trust.ownerId) } : {}),
+          }
+        : {}),
       ...this.citeOf(ctx, seen.get(r.documentId)!),
     }));
     const related = (res.related ?? []).map((d) => ({

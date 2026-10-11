@@ -5,6 +5,7 @@ import {
   GitPullRequestArrow,
   MessageSquare,
   Play,
+  ShieldCheck,
   UserPlus,
 } from 'lucide-vue-next'
 import type { NotificationCategory, NotificationEntry } from '@knowledge/contracts'
@@ -29,6 +30,7 @@ const LOOKS: Record<NotificationCategory, NotificationLook> = {
   review: { icon: GitPullRequestArrow, class: 'text-emerald-500', label: 'notifications.category.review' },
   comment: { icon: MessageSquare, class: 'text-sky-500', label: 'notifications.category.comment' },
   document: { icon: FileText, class: 'text-violet-500', label: 'notifications.category.document' },
+  verification: { icon: ShieldCheck, class: 'text-teal-500', label: 'notifications.category.verification' },
   job: { icon: Play, class: 'text-muted-foreground', label: 'notifications.category.job' },
 }
 

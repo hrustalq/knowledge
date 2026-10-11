@@ -228,9 +228,15 @@
       "verified": "Verified · #{n}",
       "verifiedBy": "Verified by {who} {when}",
       "removeHint": "Verified by {who} {when}. Click to remove the stamp.",
-      "outdated": "Verified · outdated",
-      "outdatedBy": "Verified by {who} {when}, but the page has changed since",
+      "edited": "Verified · edited since",
+      "editedBy": "Verified by {who} {when}, but the page has changed since",
       "reverifyHint": "Verified by {who} {when}, but the page has changed since. Click to verify the current revision.",
+      "expired": "Verification expired",
+      "expiredBy": "Verified by {who} {when}; the review interval has passed. Click to verify again.",
+      "requested": "Verification requested",
+      "requestedHint": "Somebody asked for this page to be checked. {note}",
+      "outdated": "Outdated",
+      "outdatedHint": "This page was marked outdated. {note} Verify it once it is right again.",
       "flagged": "Reported",
       "flaggedHint": "A reader or an agent reported a problem with this page. See the Reports widget in the rail."
     }
@@ -2874,6 +2880,7 @@
       "review": "Reviews",
       "comment": "Comments",
       "document": "Page changes",
+      "verification": "Verification",
       "job": "Runs"
     },
     "categoryHint": {
@@ -2881,6 +2888,7 @@
       "review": "Merge requests you author, are assigned, or are asked to review.",
       "comment": "New discussion on something you follow.",
       "document": "A page you follow was edited, renamed or moved.",
+      "verification": "A page you own needs a check, was marked outdated, is about to expire, or was handed to you.",
       "job": "A workflow, agent, import or sync you started finished."
     },
     "reason": {

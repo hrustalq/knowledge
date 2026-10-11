@@ -377,6 +377,23 @@ export function driftCheckMode(config: Record<string, unknown> | null | undefine
   return (DRIFT_CHECK_MODES as readonly unknown[]).includes(value) ? (value as DriftCheckMode) : 'off';
 }
 
+/**
+ * Whether a drift check also marks the pages it finds wrong (docs/features/39,
+ * issue #66): `requested` when a check reports drift, `outdated` once the pull
+ * request merges. On by default — the check already names the page on the
+ * pull request, and the flag is the same fact where readers of the page see
+ * it. Effective only when `driftCheck` is not `off`. An absent key reads as
+ * on, so a connector that opted into the check before this key existed gets
+ * the flags; the setup form writes config values as strings, so `'false'`
+ * counts as off too.
+ */
+export const DRIFT_FLAG_PAGES_CONFIG_KEY = 'driftFlagPages';
+
+export function driftFlagPages(config: Record<string, unknown> | null | undefined): boolean {
+  const value = config?.[DRIFT_FLAG_PAGES_CONFIG_KEY];
+  return value !== false && value !== 'false';
+}
+
 // ---------------------------------------------------------------------------
 // GitHub App repository picker (docs/features/30)
 // ---------------------------------------------------------------------------

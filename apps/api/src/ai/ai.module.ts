@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { ActivityModule } from '../activity/activity.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { StorageModule } from '../storage/storage.module.js';
+import { VerificationCoreModule } from '../verification/verification-core.module.js';
 import { AssistantModule } from '../assistant/assistant.module.js';
 import { AiCoreModule } from './ai-core.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
@@ -39,6 +40,8 @@ import { AiUsageController } from './ai-usage.controller.js';
     // publishes". DocumentsModule does not import this one, so no new cycle.
     DocumentsModule,
     StorageModule,
+    // Mark outdated from a finding (docs/features/39). Controller-free.
+    VerificationCoreModule,
     forwardRef(() => AssistantModule),
   ],
   controllers: [AiController, AiUsageController],

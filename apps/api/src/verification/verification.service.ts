@@ -32,6 +32,12 @@ export interface FlagOptions {
   unlessVerifiedAfter?: Date;
   /** Leave an `outdated` page alone rather than downgrading it to `requested`. */
   keepOutdated?: boolean;
+  /**
+   * Act only when the page currently carries this flag. The sentinel turns a
+   * `requested` it set into `outdated` when the pull request merges — never a
+   * page somebody has since cleared.
+   */
+  onlyIfFlag?: VerificationFlag;
 }
 
 /**
@@ -146,6 +152,7 @@ export class VerificationService {
     this.assertNotArchived(document);
     if (opts.unlessVerifiedAfter && document.verifiedAt && document.verifiedAt >= opts.unlessVerifiedAfter) return null;
     if (opts.keepOutdated && document.verificationFlag === 'outdated') return null;
+    if (opts.onlyIfFlag && document.verificationFlag !== opts.onlyIfFlag) return null;
 
     const at = new Date();
     const note = opts.note?.slice(0, VERIFICATION_NOTE_MAX_CHARS) ?? null;

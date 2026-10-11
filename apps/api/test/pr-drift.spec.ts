@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import type { AgentRunPullRequest } from '@knowledge/contracts';
 
@@ -17,18 +17,29 @@ import type { AgentRunPullRequest } from '@knowledge/contracts';
  * 3. **What a judgement must carry to count** — and what a comment on
  *    somebody's pull request may contain.
  */
+// The sweeper's one outward write. Mocked so the publish pass can run end to
+// end without a host; what it was asked to post is asserted, not sent.
+vi.mock('../src/connectors/adapters/pull-request.js', () => ({ upsertPullRequestComment: vi.fn(async () => undefined) }));
+
 const {
   isPullRequestEvent,
+  readGithubMergedPullRequest,
   readGithubPullRequest,
+  readGitlabMergedRequest,
   readGitlabMergeRequest,
+  readMergedDelivery,
   readPullRequestDelivery,
   verifyRepoDelivery,
 } = await import('../src/connectors/drift/pull-request-delivery.js');
+const { flagNote, pagesToFlag } = await import('../src/connectors/drift/drift-flags.js');
+const { DriftTriggerService } = await import('../src/connectors/drift/drift-trigger.service.js');
+const { DriftPublishSweeper } = await import('../src/connectors/drift/drift-publish.sweeper.js');
+const { upsertPullRequestComment } = await import('../src/connectors/adapters/pull-request.js');
 const { diffExcerpt, linkedCandidates, mentionedFiles, readDriftVerdict, scopeFiles, subdirOf } = await import(
   '../src/agents/drift.js'
 );
 const { driftCommentMarker, renderDriftComment } = await import('../src/connectors/drift/drift-report.js');
-const { driftCheckMode } = await import('@knowledge/contracts');
+const { driftCheckMode, driftFlagPages } = await import('@knowledge/contracts');
 
 const githubPayload = (overrides: Record<string, unknown> = {}, pr: Record<string, unknown> = {}) => ({
   action: 'opened',
@@ -310,5 +321,242 @@ describe('renderDriftComment', () => {
   it('keys the marker by connector, so two connectors on one repository keep a comment each', () => {
     expect(driftCommentMarker('a')).not.toBe(driftCommentMarker('b'));
     expect(driftCommentMarker('a')).toMatch(/^<!--.*-->$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Page flags (docs/features/39, issue #66 phase 4)
+// ---------------------------------------------------------------------------
+
+describe('merged deliveries', () => {
+  it('reads a GitHub merge as a merged delivery, never as a check', () => {
+    const payload = githubPayload({ action: 'closed' }, { state: 'closed', merged: true, merged_at: '2026-10-11T10:00:00Z' });
+    expect(readGithubPullRequest('pull_request', payload)).toBeNull();
+    expect(readGithubMergedPullRequest('pull_request', payload)).toEqual({ pullRequest: pr, mergedAt: '2026-10-11T10:00:00.000Z' });
+    expect(readMergedDelivery({ 'x-github-event': 'pull_request' }, payload)?.pullRequest.number).toBe(42);
+  });
+
+  it('ignores a pull request closed without merging, and an open one', () => {
+    expect(readGithubMergedPullRequest('pull_request', githubPayload({ action: 'closed' }, { state: 'closed', merged: false }))).toBeNull();
+    expect(readGithubMergedPullRequest('pull_request', githubPayload())).toBeNull();
+  });
+
+  it('accepts a merged fork: nothing is spent, and only pages a check flagged can move', () => {
+    const payload = githubPayload({ action: 'closed' }, { merged: true, head: { sha: 'x', ref: 'f', repo: { id: 8 } } });
+    expect(readGithubMergedPullRequest('pull_request', payload)?.pullRequest.number).toBe(42);
+  });
+
+  it('reads a GitLab merge by iid and normalises its timestamp, never as a check', () => {
+    const payload = gitlabPayload({ action: 'merge', state: 'merged', merged_at: '2026-10-11 10:00:00 UTC' });
+    expect(readGitlabMergeRequest(payload)).toBeNull();
+    const read = readGitlabMergedRequest(payload);
+    expect(read?.pullRequest.number).toBe(9);
+    expect(read?.mergedAt).toBe('2026-10-11T10:00:00.000Z');
+    expect(readMergedDelivery({ 'x-gitlab-event': 'Merge Request Hook' }, payload)?.pullRequest.number).toBe(9);
+  });
+
+  it('stamps now when the host gives no usable time, so the sweeper can always cast it', () => {
+    const before = Date.now();
+    const read = readGitlabMergedRequest(gitlabPayload({ action: 'merge', merged_at: 'yesterday-ish' }));
+    expect(new Date(read!.mergedAt).getTime()).toBeGreaterThanOrEqual(before);
+    expect(readGitlabMergedRequest(gitlabPayload({ action: 'close' }))).toBeNull();
+  });
+});
+
+describe('driftFlagPages', () => {
+  it('is on unless turned off, including the string the setup form writes', () => {
+    expect(driftFlagPages({})).toBe(true);
+    expect(driftFlagPages(null)).toBe(true);
+    expect(driftFlagPages({ driftFlagPages: 'true' })).toBe(true);
+    expect(driftFlagPages({ driftFlagPages: false })).toBe(false);
+    expect(driftFlagPages({ driftFlagPages: 'false' })).toBe(false);
+  });
+});
+
+const stale = (documentId: string, over: Partial<ReturnType<typeof baseFinding>> = {}) => ({ ...baseFinding(documentId), ...over });
+function baseFinding(documentId: string) {
+  return {
+    kind: 'stale' as const,
+    severity: 'warning' as const,
+    title: 'Retry policy — option renamed',
+    detail: 'The page   says `retries`;\nthe code says `maxAttempts`.',
+    documentIds: [documentId],
+    documentTitles: ['Retry policy'],
+  };
+}
+
+describe('pagesToFlag / flagNote', () => {
+  it('flags each cited page once, skipping remarks and findings that cite nothing', () => {
+    const pages = pagesToFlag([
+      stale('doc-1'),
+      stale('doc-1', { title: 'second finding, same page' }),
+      stale('doc-2', { severity: 'info' }),
+      stale('doc-3', { documentIds: [] }),
+      stale('doc-4', { severity: 'error' }),
+    ]);
+    expect([...pages.keys()]).toEqual(['doc-1', 'doc-4']);
+    expect(pages.get('doc-1')?.title).toBe('Retry policy — option renamed');
+  });
+
+  it('writes a one-line note naming the pull request, without escaping for HTML', () => {
+    expect(flagNote(stale('doc-1'), pr)).toBe('Rename retry option (#42): The page says `retries`; the code says `maxAttempts`.');
+    expect(flagNote(stale('doc-1', { detail: '' }), pr)).toBe('Rename retry option (#42): Retry policy — option renamed');
+  });
+});
+
+const WS = '11111111-1111-4111-8111-111111111111';
+
+describe('DriftTriggerService.merged', () => {
+  const connector = (over: Record<string, unknown> = {}) =>
+    ({ id: 'conn-1', workspaceId: WS, kind: 'codebase', enabled: true, createdBy: 'owner-1', config: {}, ...over }) as never;
+
+  it('stamps the pull request\'s runs in one statement and starts nothing', async () => {
+    const prisma = { $executeRaw: vi.fn(async () => 2), agentRun: { create: vi.fn(), findFirst: vi.fn() } };
+    const service = new DriftTriggerService(prisma as never, {} as never, { enqueue: vi.fn() } as never);
+    expect(await service.merged(connector(), { pullRequest: pr, mergedAt: '2026-10-11T10:00:00.000Z' })).toBe(2);
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.agentRun.create).not.toHaveBeenCalled();
+  });
+
+  it('touches nothing for a disabled connector or a kind with no repository', async () => {
+    const prisma = { $executeRaw: vi.fn(async () => 1) };
+    const service = new DriftTriggerService(prisma as never, {} as never, {} as never);
+    expect(await service.merged(connector({ enabled: false }), { pullRequest: pr, mergedAt: 'x' })).toBe(0);
+    expect(await service.merged(connector({ kind: 'confluence' }), { pullRequest: pr, mergedAt: 'x' })).toBe(0);
+    expect(prisma.$executeRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('DriftPublishSweeper page flags', () => {
+  const createdAt = new Date('2026-10-11T09:00:00Z');
+  const run = (over: Record<string, unknown> = {}) => ({
+    id: 'run-1',
+    workspaceId: WS,
+    agentKey: 'sentinel',
+    status: 'succeeded',
+    createdBy: 'owner-1',
+    locale: 'en',
+    createdAt,
+    input: { connectorId: 'conn-1', pullRequest: pr },
+    findings: [stale('doc-1'), stale('doc-2', { severity: 'info' })],
+    ...over,
+  });
+
+  function harness(opts: {
+    publish?: string[];
+    merged?: string[];
+    run?: Record<string, unknown>;
+    config?: Record<string, unknown>;
+    siblings?: Array<{ createdAt: Date; findings: unknown }>;
+    mergedMrs?: string[];
+    editor?: boolean;
+  } = {}) {
+    const prisma = {
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValueOnce((opts.publish ?? []).map((id) => ({ id })))
+        .mockResolvedValueOnce((opts.merged ?? []).map((id) => ({ id }))),
+      $executeRaw: vi.fn(async () => 1),
+      agentRun: {
+        findUnique: vi.fn(async () => run(opts.run)),
+        findMany: vi.fn(async () => opts.siblings ?? []),
+      },
+      connector: {
+        findUnique: vi.fn(async () => ({
+          id: 'conn-1',
+          name: 'app',
+          workspaceId: WS,
+          enabled: true,
+          config: opts.config ?? { driftCheck: 'report' },
+        })),
+      },
+      mergeRequest: { findMany: vi.fn(async () => (opts.mergedMrs ?? []).map((id) => ({ id }))) },
+    };
+    const connectors = { contextFor: vi.fn(async () => ({})) };
+    const findings = { propose: vi.fn() };
+    const access = {
+      principalFor: vi.fn(async () => ({ userId: 'owner-1' })),
+      requireRole: vi.fn(async () => {
+        if (opts.editor === false) throw new Error('viewer only');
+      }),
+    };
+    const verification = {
+      requestVerification: vi.fn(async () => ({ document: { verification: 'requested' } })),
+      markOutdated: vi.fn(async () => ({ document: { verification: 'outdated' } })),
+    };
+    const config = { get: vi.fn(() => 'https://kb.example.com') };
+    const sweeper = new DriftPublishSweeper(
+      prisma as never,
+      connectors as never,
+      findings as never,
+      access as never,
+      verification as never,
+      config as never,
+    );
+    return { sweeper, prisma, verification, findings };
+  }
+
+  it('asks for a check on each page the report names, as the owner, before commenting', async () => {
+    const { sweeper, verification } = harness({ publish: ['run-1'] });
+    vi.mocked(upsertPullRequestComment).mockClear();
+    await sweeper.sweep();
+    expect(verification.requestVerification).toHaveBeenCalledTimes(1);
+    expect(verification.requestVerification).toHaveBeenCalledWith('doc-1', {
+      actorId: 'owner-1',
+      note: 'Rename retry option (#42): The page says `retries`; the code says `maxAttempts`.',
+      source: { kind: 'drift', by: 'owner-1', runId: 'run-1', url: pr.url },
+      unlessVerifiedAfter: createdAt,
+      keepOutdated: true,
+    });
+    expect(verification.markOutdated).not.toHaveBeenCalled();
+    expect(upsertPullRequestComment).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves pages alone with driftFlagPages off, and still comments', async () => {
+    const { sweeper, verification } = harness({ publish: ['run-1'], config: { driftCheck: 'report', driftFlagPages: 'false' } });
+    vi.mocked(upsertPullRequestComment).mockClear();
+    await sweeper.sweep();
+    expect(verification.requestVerification).not.toHaveBeenCalled();
+    expect(upsertPullRequestComment).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns requested into outdated once the pull request merged, only where still requested', async () => {
+    const { sweeper, verification } = harness({
+      merged: ['run-1'],
+      run: { input: { connectorId: 'conn-1', pullRequest: pr, publishedAt: '2026-10-11T09:05:00Z', mergedAt: '2026-10-11T10:00:00Z' } },
+    });
+    await sweeper.sweep();
+    expect(verification.requestVerification).not.toHaveBeenCalled();
+    expect(verification.markOutdated).toHaveBeenCalledTimes(1);
+    expect(verification.markOutdated).toHaveBeenCalledWith('doc-1', {
+      actorId: 'owner-1',
+      note: 'Rename retry option (#42): The page says `retries`; the code says `maxAttempts`.',
+      source: { kind: 'drift', by: 'owner-1', runId: 'run-1', url: pr.url, at: '2026-10-11T10:00:00Z' },
+      unlessVerifiedAfter: createdAt,
+      onlyIfFlag: 'requested',
+    });
+  });
+
+  it('does not outdate a page whose proposed fix merged, or when a newer check exists, or for a non-editor', async () => {
+    const merged = { connectorId: 'conn-1', pullRequest: pr, publishedAt: 'x', mergedAt: '2026-10-11T10:00:00Z' };
+    const fixed = harness({ merged: ['run-1'], run: { input: merged, findings: [stale('doc-1', { mergeRequestId: 'mr-1' })] }, mergedMrs: ['mr-1'] });
+    await fixed.sweeper.sweep();
+    expect(fixed.verification.markOutdated).not.toHaveBeenCalled();
+
+    const superseded = harness({ merged: ['run-1'], run: { input: merged }, siblings: [{ createdAt: new Date('2026-10-11T09:30:00Z'), findings: [] }] });
+    await superseded.sweeper.sweep();
+    expect(superseded.verification.markOutdated).not.toHaveBeenCalled();
+
+    const viewer = harness({ merged: ['run-1'], run: { input: merged }, editor: false });
+    await viewer.sweeper.sweep();
+    expect(viewer.verification.markOutdated).not.toHaveBeenCalled();
+  });
+
+  it('claims a run before acting, and skips one another replica claimed', async () => {
+    const { sweeper, prisma, verification } = harness({ merged: ['run-1'] });
+    prisma.$executeRaw.mockResolvedValueOnce(0);
+    await sweeper.sweep();
+    expect(prisma.agentRun.findUnique).not.toHaveBeenCalled();
+    expect(verification.markOutdated).not.toHaveBeenCalled();
   });
 });

@@ -37,3 +37,11 @@ export function actorIdentities(actor: string): string[] {
 export function isDevActor(actor: string | null | undefined): boolean {
   return actor === DEV_ACTOR || actor === DEV_ACTOR_ID;
 }
+
+/**
+ * The actor of an act nobody performed: a deadline passing, a sweeper
+ * announcing it. Written to `activity_log.actor` by `VerificationSweeper` for
+ * `document.verification-expired`, so the feed row is neither attributed to
+ * the dev principal nor to the owner it is about.
+ */
+export const SYSTEM_ACTOR = 'system';

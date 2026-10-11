@@ -2932,7 +2932,12 @@
       "import.parsed": "an import is ready to review",
       "import.failed": "an import failed",
       "connector.run.failed": "a sync failed",
-      "knowledge-issue.reported": "reported a problem with this page"
+      "knowledge-issue.reported": "reported a problem with this page",
+      "document.verification-requested": "asked for this page to be verified",
+      "document.outdated": "marked this page outdated",
+      "document.verification-expiring": "the verification of this page is about to expire",
+      "document.verification-expired": "the verification of this page has expired",
+      "document.owner-changed": "made you the owner of this page"
     }
   },
   "connect": {

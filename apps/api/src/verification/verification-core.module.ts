@@ -14,8 +14,7 @@ import { VerificationService } from './verification.service.js';
  * publisher later for "a finding flags the page". The `admin` check on bulk
  * archive lives in the controller for exactly that reason.
  *
- * `VerificationModule` (API) adds the controllers and, from phase 3, the
- * sweeper.
+ * `VerificationModule` (API) adds the controllers and the expiry sweeper.
  */
 @Module({
   imports: [PrismaModule, ActivityCoreModule, NotificationsCoreModule, VerificationPolicyModule, DocumentsCoreModule],

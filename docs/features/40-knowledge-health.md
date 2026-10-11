@@ -97,7 +97,7 @@ clamp lies about the configuration. Env values are defaults here, not ceilings.
 | key                  | env                                | used by                                   |
 | -------------------- | ---------------------------------- | ----------------------------------------- |
 | `reviewIntervalDays` | `VERIFICATION_DEFAULT_REVIEW_DAYS` | expiry on verify, when the page has no own interval |
-| `remindBeforeDays`   | `VERIFICATION_REMIND_BEFORE_DAYS`  | the sweeper's reminder (later phase)       |
+| `remindBeforeDays`   | `VERIFICATION_REMIND_BEFORE_DAYS`  | the sweeper's reminder window; `0` = none  |
 | `inactiveAfterDays`  | `PAGE_INACTIVE_AFTER_DAYS`         | `inactive` everywhere; `0` disables        |
 | `emptyMaxChars`      | `EMPTY_PAGE_MAX_CHARS`             | `empty`                                    |
 | `trustRanking`       | `SEARCH_TRUST_RANKING`             | the search re-rank                         |

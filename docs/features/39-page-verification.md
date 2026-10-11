@@ -10,10 +10,10 @@ can set, an **inactive** reading derived from its activity clock, and an
 multiply every hit's score by the page's state, so a verified page ranks above
 an unverified one and a page known to be wrong ranks last.
 
-Phase status: **API, ranking and MCP are implemented** (this document). The
-expiry sweeper and its notifications, the sentinel integration, the page-level
-status bar and the knowledge-health dashboard ([feature 40](40-knowledge-health.md))
-follow in later pull requests of the same issue.
+Phase status: **API, ranking, MCP and the expiry sweeper are implemented**
+(this document). The sentinel integration, the page-level status bar and the
+knowledge-health dashboard ([feature 40](40-knowledge-health.md)) follow in
+later pull requests of the same issue.
 
 ## What is stored, what is derived
 
@@ -90,11 +90,48 @@ is a **person's act**: there is no MCP tool for it, by design.
 Events: `document.verified`, `document.unverified`,
 `document.verification-requested`, `document.outdated`,
 `document.verification-cleared`, `document.owner-changed`, `document.archived`,
-`document.unarchived` (plus `-expiring` / `-expired` from the sweeper later).
+`document.unarchived`, and from the sweeper `document.verification-expiring` /
+`document.verification-expired`.
 `activityKindFor` files them all under `curate`. The directed ones
 (`requested`, `outdated`, `expiring`, `expired`, `owner-changed`) reach the owner
 under a new **`verification`** notification category, which a person can mute,
 with reason `owner` ranked between `author` and `assigned`.
+
+## The expiry sweeper
+
+`VerificationSweeper` (`apps/api/src/verification/verification.sweeper.ts`) is
+the clock's voice. It changes nothing about what a page *reads as* — `expired`
+is derived from the deadline alone — it only decides when a person hears about
+it. API-side like `DriftPublishSweeper`, because a notification is a user-facing
+act and the worker has no principal; no cron, a fixed 60 s tick with a `running`
+back-pressure flag and batches of 200. Each tick:
+
+1. **Remind.** Pages whose stamp runs out inside the workspace's
+   `remindBeforeDays` (the settings row, else `VERIFICATION_REMIND_BEFORE_DAYS`,
+   resolved by `COALESCE` in the query so one statement serves every workspace;
+   `0` means no reminders) and whose `expiry_reminded_at` is still null. Each is
+   **claimed** with `updateMany({ where: { id, expiryRemindedAt: null } })`
+   before anything is sent, then the owner — or the last verifier of an unowned
+   page — gets `document.verification-expiring` under reason `owner`. No feed
+   row: nothing has happened to the page yet.
+2. **Expire.** Pages past their deadline with `expired_notified_at` null. Same
+   claim on the other stamp, then one `document.verification-expired` activity
+   row under the **system actor** (`SYSTEM_ACTOR`, not the dev principal and
+   not the owner it is about) and the same directed notification.
+3. **`body_chars` catch-up.** Up to 50 head revisions indexed before the column
+   existed: read `source.md`, measure the body without frontmatter — the same
+   arithmetic the ingestion normalizer uses — and write it where still null. A
+   revision whose source cannot be read is skipped for the rest of the process,
+   not retried every minute.
+
+Only a page that currently reads `verified` is reminded or expired: no declared
+flag and the stamp at the head. A page already reading `requested` or `edited`
+has a louder state than "about to expire", and a reminder on top of it would be
+noise. The claim-then-act shape is what makes two API replicas safe: one wins
+the `updateMany`, the other sends nothing. `verify` resets both stamps, so the
+next interval starts clean; `clear` resets them too.
+
+`VERIFICATION_SWEEP_ENABLED=false` turns the tick off entirely.
 
 ## Archive
 
@@ -204,7 +241,8 @@ unknown.
   imports it for `knowledge_flag_document`.
 - `VerificationModule` — API-only: `VerificationController` (mounted on
   `v1/documents` beside `DocumentsController`; every route is `:id/<literal>`,
-  so there is no ordering hazard) and `KnowledgeHealthController`.
+  so there is no ordering hazard), `KnowledgeHealthController` and
+  `VerificationSweeper`.
 
 `DocumentsCoreModule` also imports `FeedbackCoreModule` now, for the one
 open-report count `verificationStateFor` reads; list, tree, detail and search

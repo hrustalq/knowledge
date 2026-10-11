@@ -56,6 +56,17 @@ in the pull request that introduces them — see
   another workspace; `GET`/`PATCH /settings` reads and overrides the
   workspace's freshness policy, showing what applies beside what is overridden.
   The dashboard page that uses it ships in a later part of #66. (#66)
+- **The owner hears before a verification runs out, and once it has.** A
+  sweeper in the API process reminds a page's owner (or its last verifier)
+  `VERIFICATION_REMIND_BEFORE_DAYS` before the stamp expires — per workspace,
+  `remindBeforeDays` in the knowledge-health settings overrides it, `0` turns
+  reminders off — and announces the expiry when it passes, once each per stamp
+  even with several API replicas running. The expiry lands in the activity feed
+  under a `system` actor; both notifications ride the `verification` category
+  and can be muted. The same tick fills `body_chars` for revisions indexed
+  before that column existed, so the dashboard's "empty" filter stops reading
+  as unknown for old pages. `VERIFICATION_SWEEP_ENABLED=false` turns it off.
+  Part of #66. (#66)
 
 ### Changed
 

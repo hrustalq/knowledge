@@ -2932,7 +2932,12 @@
       "import.parsed": "импорт готов к проверке",
       "import.failed": "импорт не удался",
       "connector.run.failed": "синхронизация не удалась",
-      "knowledge-issue.reported": "сообщил(а) о проблеме на этой странице"
+      "knowledge-issue.reported": "сообщил(а) о проблеме на этой странице",
+      "document.verification-requested": "попросил(а) проверить эту страницу",
+      "document.outdated": "отметил(а) страницу как устаревшую",
+      "document.verification-expiring": "срок проверки этой страницы скоро истекает",
+      "document.verification-expired": "срок проверки этой страницы истёк",
+      "document.owner-changed": "назначил(а) вас владельцем этой страницы"
     }
   },
   "connect": {

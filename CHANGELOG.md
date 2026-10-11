@@ -94,6 +94,20 @@ edited | outdated | requested | flagged | inactive | archived`, owner, project
   rail, the page list and the search sheet mark pages whose state asks for a
   look, and the pages index gains a **Show archived** switch. Every action
   reflects live in other tabs. (#66)
+- **A knowledge-health dashboard.** `/knowledge-health`, in the rail beside
+  merge requests and workflows, lists the workspace's (or the active
+  project's) pages most neglected first, with a preset strip — _Needs
+  attention_, _Unowned_, _Empty_, _Expired_, _Edited since verified_,
+  _Outdated_, _Requested_, _Reported_, _Inactive_, _Archived_ — each carrying
+  its live count, and narrowing by title, owner and sort. Editors select rows
+  (shift for a range, cmd/ctrl to add one, Escape to clear) and run one action
+  over all of them: verify with a review interval, reassign, request a check,
+  mark outdated, clear verification, and for admins archive and unarchive;
+  each page that refuses says why. A preview sheet shows a page's verification
+  widget and body beside the table. The **Settings** tab shows the workspace's
+  freshness policy — what is overridden beside what applies and the server
+  default — and lets an admin change it. The dashboard follows live events, so
+  a page verified elsewhere moves off the strip as you watch. (#66)
 
 ### Changed
 

@@ -100,6 +100,11 @@ export function createRouter() {
       // Workflows (docs/features/17): the run list, and one run's node tree.
       { path: '/workflows', component: () => import('@/pages/WorkflowsPage.vue') },
       { path: '/workflows/:id', component: () => import('@/pages/WorkflowRunPage.vue') },
+
+      // Knowledge health (docs/features/40): the workspace's pages by
+      // verification state, bulk actions and the freshness policy.
+
+      { path: '/knowledge-health', component: () => import('@/pages/KnowledgeHealthPage.vue') },
       // meta.fill: the chat owns the viewport — see App.vue's two content modes.
       { path: '/assistant', component: () => import('@/pages/AssistantPage.vue'), meta: { fill: true } },
       // Settings: shell with its own right-hand nav; the sections are nested pages.

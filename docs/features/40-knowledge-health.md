@@ -6,8 +6,8 @@ unowned, empty, expired, outdated, requested, flagged, inactive or archived;
 the counts; one action over many pages; and the per-workspace freshness policy.
 
 Phase status: **the API and the dashboard page are implemented** (this
-document). What remains of #66 is the backtest comparison with trust ranking
-on and off.
+document); with them #66 is complete. The trust-ranking backtest is recorded in
+[feature 39](39-page-verification.md#measured).
 
 ## Routes
 

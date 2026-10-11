@@ -22,6 +22,18 @@ const props = defineProps<{
   ownerId: string | null
   canEdit: boolean
   disabled?: boolean
+  /**
+   * The trigger's leading word. Defaults to "Owner"; the knowledge-health
+   * bulk bar passes "Reassign", where the picker names an action over many
+   * pages rather than the state of one.
+   */
+  label?: string
+  /**
+   * Emit even when the pick equals `ownerId`. On the page the current owner
+   * is a fact and re-picking it changes nothing; in a bulk reassign
+   * `ownerId` is only a placeholder and every pick is an instruction.
+   */
+  always?: boolean
 }>()
 const emit = defineEmits<{ change: [ownerId: string | null] }>()
 
@@ -46,7 +58,7 @@ const roster = computed(() => {
 
 function pick(id: string | null) {
   open.value = false
-  if (id !== props.ownerId) emit('change', id)
+  if (props.always || id !== props.ownerId) emit('change', id)
 }
 </script>
 
@@ -64,11 +76,13 @@ function pick(id: string | null) {
         type="button"
         class="inline-flex h-6 max-w-full items-center gap-1 rounded-md border bg-background px-1.5 text-xs transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
         :disabled="disabled"
-        :title="t('verification.changeOwner')"
-        :aria-label="t('verification.changeOwner')"
+        :title="label ?? t('verification.changeOwner')"
+        :aria-label="label ?? t('verification.changeOwner')"
       >
-        <span class="text-muted-foreground">{{ t('verification.owner') }}</span>
-        <template v-if="ownerId">
+        <span class="text-muted-foreground">{{ label ?? t('verification.owner') }}</span>
+        <!-- A bulk reassign has no current owner to show: the trigger is the verb alone. -->
+        <template v-if="always" />
+        <template v-else-if="ownerId">
           <UserAvatar :user-id="ownerId" :name="owner?.displayName" :src="owner?.avatarUrl ?? null" size="sm" />
           <span class="max-w-32 truncate">{{ owner?.displayName ?? ownerId.slice(0, 8) }}</span>
         </template>

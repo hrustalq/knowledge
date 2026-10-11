@@ -11,9 +11,9 @@ multiply every hit's score by the page's state, so a verified page ranks above
 an unverified one and a page known to be wrong ranks last.
 
 Phase status: **API, ranking, MCP, the expiry sweeper, the sentinel
-integration and the page-level UI are implemented** (this document). The
-knowledge-health dashboard ([feature 40](40-knowledge-health.md)) follows in a
-later pull request of the same issue.
+integration, the page-level UI and the knowledge-health dashboard
+([feature 40](40-knowledge-health.md)) are implemented** (this document). What
+remains of #66 is the backtest comparison with trust ranking on and off.
 
 ## What is stored, what is derived
 
@@ -244,7 +244,7 @@ The kill switch is `SEARCH_TRUST_RANKING` (env) combined with the workspace's
   is picked. **Request verification** is offered to any member; **Mark
   outdated**, **Clear verification** and **Archive** to editors. Archive asks
   first and defaults to the subtree, the way the route does.
-- On an **archived** page the widget previews *Archived* and its body says
+- On an **archived** page the widget previews _Archived_ and its body says
   when and by whom, read-only until unarchived, with **Unarchive** for editors. The Edit action goes, and
   the editor route sends you back to the page with a toast. Comments stay open:
   a comment is about the page, not a write to it, and the API takes them.

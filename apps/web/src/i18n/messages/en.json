@@ -85,6 +85,7 @@
     "search": "Search",
     "mergeRequests": "Merge requests",
     "workflows": "Workflows",
+    "knowledgeHealth": "Knowledge health",
     "assistant": "Assistant",
     "settings": "Settings",
     "activity": "Activity",
@@ -3178,6 +3179,144 @@
       "ownerChanged": "Owner updated",
       "archived": "Page archived",
       "unarchived": "Page restored"
+    }
+  },
+  "health": {
+    "title": "Knowledge health",
+    "subtitleIntro": "Which pages are stale, unowned, empty or put away — and one action over many of them.",
+    "subtitle": "{count} live page {scope} | {count} live pages {scope}",
+    "tab": {
+      "pages": "Pages",
+      "settings": "Settings"
+    },
+    "presets": "Presets",
+    "preset": {
+      "all": "All",
+      "stale": "Needs attention",
+      "unowned": "Unowned",
+      "empty": "Empty",
+      "expired": "Expired",
+      "edited": "Edited since verified",
+      "outdated": "Outdated",
+      "requested": "Requested",
+      "flagged": "Reported",
+      "inactive": "Inactive",
+      "archived": "Archived"
+    },
+    "presetHint": {
+      "all": "Every live page",
+      "stale": "Expired, outdated or inactive",
+      "unowned": "No member answers for the page",
+      "empty": "A body under the workspace's empty-page threshold",
+      "expired": "The review interval has passed since the last verification",
+      "edited": "Changed since it was verified",
+      "outdated": "Declared wrong by a person or by a merged pull request",
+      "requested": "Somebody asked for a check",
+      "flagged": "A reader or an agent reported a problem",
+      "inactive": "No edit, comment or check for the inactivity window",
+      "archived": "Put away; hidden from lists, search and the assistant"
+    },
+    "search": "Search by title…",
+    "owner": {
+      "label": "Owner",
+      "any": "Any owner"
+    },
+    "sort": {
+      "label": "Sort",
+      "activity": "Least recent activity first",
+      "title": "Title, A to Z"
+    },
+    "column": {
+      "title": "Page",
+      "status": "State",
+      "owner": "Owner",
+      "verified": "Verified",
+      "activity": "Last activity"
+    },
+    "selectAll": "Select every loaded page",
+    "selectRow": "Select “{title}”",
+    "preview": "Preview",
+    "previewRoot": "Top level",
+    "openPage": "Open page",
+    "emptyChip": "Empty",
+    "emptyHint": "The body is under the workspace's empty-page threshold",
+    "children": "{n} page under it | {n} pages under it",
+    "verifiedBy": "{who}, {when}",
+    "expires": "expires {when}",
+    "neverExpires": "never expires",
+    "noRows": "No pages here.",
+    "noRowsHint": "Every live page is verified, owned and active — or nothing has been published yet.",
+    "noRowsNarrowed": "No pages match this narrowing.",
+    "clearNarrowing": "Clear",
+    "bulk": {
+      "toolbar": "Bulk actions",
+      "selected": "{n} selected | {n} selected",
+      "verify": "Verify",
+      "reassign": "Reassign",
+      "more": "More",
+      "request": "Request a check",
+      "outdated": "Mark outdated",
+      "clear": "Clear verification",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "deselect": "Deselect (Esc)",
+      "archiveDialog": {
+        "title": "Archive {n} page? | Archive {n} pages?",
+        "description": "Each page and everything under it leaves the tree, lists, search and the assistant. They stay readable by link and can be unarchived.",
+        "confirm": "Archive"
+      },
+      "failed": "{title}: {reason}",
+      "failedMore": "{n} more page could not be changed | {n} more pages could not be changed",
+      "reason": {
+        "archived": "the page is archived",
+        "no-head": "no published revision to verify",
+        "not-found": "page not found",
+        "unknown": "refused"
+      }
+    },
+    "toast": {
+      "verify": "Verified {n} page | Verified {n} pages",
+      "request": "Asked for a check on {n} page | Asked for a check on {n} pages",
+      "outdated": "Marked {n} page outdated | Marked {n} pages outdated",
+      "clear": "Cleared verification on {n} page | Cleared verification on {n} pages",
+      "reassign": "Reassigned {n} page | Reassigned {n} pages",
+      "archive": "Archived {n} page | Archived {n} pages",
+      "unarchive": "Restored {n} page | Restored {n} pages"
+    },
+    "settings": {
+      "title": "Freshness policy",
+      "intro": "What applies to this workspace. An empty field means the server default applies; a value here overrides it for every page in the workspace.",
+      "readOnly": "Read-only — a workspace admin can change these",
+      "applies": "Applies:",
+      "default": "Default: {value}",
+      "saved": "Policy saved",
+      "days": "{n} day | {n} days",
+      "chars": "{n} character | {n} characters",
+      "on": "On",
+      "off": "Off",
+      "inherit": "Default ({value})",
+      "key": {
+        "reviewIntervalDays": {
+          "label": "Review interval",
+          "hint": "Days a verification holds when the page sets no interval of its own; 0 means it never expires"
+        },
+        "remindBeforeDays": {
+          "label": "Remind before expiry",
+          "hint": "Days before a verification expires that the owner is reminded; 0 turns reminders off"
+        },
+        "inactiveAfterDays": {
+          "label": "Inactive after",
+          "hint": "Days without an edit, comment or check before a page reads inactive; 0 disables the reading"
+        },
+        "emptyMaxChars": {
+          "label": "Empty-page threshold",
+          "hint": "A page whose body is this many characters or fewer reads empty"
+        },
+        "trustRanking": {
+          "label": "Trust-aware ranking",
+          "hint": "Multiply search scores by each page's verification state, so verified pages rank above outdated ones"
+        }
+      }
     }
   }
 }

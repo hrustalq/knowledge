@@ -4,7 +4,7 @@
 import { computed, ref, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { GitPullRequestArrow, House, Library, Settings, Sparkles,
+import { GitPullRequestArrow, HeartPulse, House, Library, Settings, Sparkles,
   Workflow,
 } from 'lucide-vue-next'
 import type { ScopeCreated } from '@/lib/scopes'
@@ -43,6 +43,9 @@ const links = computed<NavLink[]>(() => [
   // Search is not a destination — it is the topbar trigger's sheet ("/" or ⌘K).
   { to: '/merge-requests', label: t('nav.mergeRequests'), icon: GitPullRequestArrow },
   { to: '/workflows', label: t('nav.workflows'), icon: Workflow },
+  // The trust loop's review surface (docs/features/40): beside merge requests
+  // and workflows, which are the other two places a page is acted on in bulk.
+  { to: '/knowledge-health', label: t('nav.knowledgeHealth'), icon: HeartPulse },
   { to: '/assistant', label: t('nav.assistant'), icon: Sparkles },
   // Projects, users, access and activity live under the settings shell.
   { to: '/settings', label: t('nav.settings'), icon: Settings },

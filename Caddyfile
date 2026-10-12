@@ -1,4 +1,9 @@
-# Reverse proxy for knowledge.hrustalq.dev, with automatic Let's Encrypt TLS.
+# Reverse proxy for knowledge.hrustalq.dev, behind a Cloudflare tunnel.
+#
+# TLS ends at Cloudflare's edge. cloudflared (the `cloudflared-tunnel` container
+# in ~/Homelab/infra) reaches this container over the shared infra_tunnel-network
+# as http://knowledge-caddy:80, so Caddy serves plain HTTP and issues no
+# certificates. Nothing on the Mac mini listens publicly.
 #
 # The whole browser surface of this app is /api/* — verified in three places:
 #   apps/web/src/api/http.ts:86-88   baseURL defaults to '/api'
@@ -9,12 +14,18 @@
 # and `handle_path` must mirror Vite's rewrite exactly.
 
 {
-	# Uncomment and set an address to receive Let's Encrypt expiry notices.
-	# Certificates are issued fine without it.
-	# email you@example.com
+	auto_https off
+	servers {
+		# cloudflared connects from the compose network; the visitor's address
+		# arrives in Cf-Connecting-Ip, which only the tunnel can set here.
+		trusted_proxies static private_ranges
+		client_ip_headers Cf-Connecting-Ip X-Forwarded-For
+	}
 }
 
-knowledge.hrustalq.dev {
+# Any Host: cloudflared forwards the public hostname unchanged, and a bare :80
+# also answers the loopback smoke check on 127.0.0.1:8088.
+:80 {
 	encode zstd gzip
 
 	# handle_path strips the matched prefix before proxying: /api/v1/documents

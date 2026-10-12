@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 
 const REPO = 'hrustalq/knowledge';
 const ENVIRONMENT = 'production';
-const SECRET = /PASSWORD|SECRET|TOKEN|_KEY$|DATABASE_URL|SMTP_URL/;
+const SECRET = /PASSWORD|_PASS$|SECRET|TOKEN|_KEY$|DATABASE_URL|SMTP_URL/;
 const TEMPLATE = new URL('../.env.production.example', import.meta.url);
 
 const args = process.argv.slice(2);

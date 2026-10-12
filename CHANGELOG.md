@@ -13,6 +13,24 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.17.0] — 2026-10-12
+
+### Added
+
+- **SMTP login as two settings.** `MAIL_SMTP_USER` and `MAIL_SMTP_PASS` carry
+  the relay credentials verbatim — no URL-encoding — beside a credential-free
+  `MAIL_SMTP_URL` such as `smtps://smtp.timeweb.ru:465`, so the URL can be an
+  ordinary variable and only the password a secret. The old `user:pass@` URL
+  form still works; setting both refuses to boot. (#140)
+
+### Operations
+
+- New optional env vars `MAIL_SMTP_USER`, `MAIL_SMTP_PASS` (both empty by
+  default). To send through Timeweb: variable `MAIL_SMTP_URL=smtps://smtp.timeweb.ru:465`,
+  variable `MAIL_SMTP_USER`, secret `MAIL_SMTP_PASS`, variable
+  `MAIL_TRANSPORT=smtp`, then deploy. `scripts/env-to-github.mjs` now treats a
+  name ending `_PASS` as a secret. (#140)
+
 ## [0.16.0] — 2026-10-12
 
 ### Added
@@ -1359,7 +1377,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.16.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/hrustalq/knowledge/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/hrustalq/knowledge/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/hrustalq/knowledge/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/hrustalq/knowledge/compare/v0.13.0...v0.14.0

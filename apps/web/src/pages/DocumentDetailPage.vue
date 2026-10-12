@@ -28,6 +28,7 @@ import {
   Flag,
   GitMerge,
   History,
+  LayoutTemplate,
   Plug,
   Info,
   Pencil,
@@ -54,6 +55,7 @@ import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useEventsStore } from '@/stores/events'
+import { useTemplatesStore } from '@/stores/templates'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -140,6 +142,24 @@ const content = ref<DocumentContentResponse | null>(null)
 const contentError = ref<string | null>(null)
 const relations = ref<ListDocumentRelationsResponse['relations'] | null>(null)
 const error = ref<string | null>(null)
+
+/**
+ * The template this page was created from (issue #69), named once the roster
+ * knows it. The roster includes archived templates, so a page still names a
+ * template nobody can start from any more.
+ */
+const templates = useTemplatesStore()
+const templateRef = computed(() => detail.value?.document.templateRef ?? null)
+watch(templateRef, (ref) => {
+  if (ref) void templates.ensureLoaded()
+})
+const templateChip = computed(() => {
+  const ref = templateRef.value
+  if (!ref) return null
+  const version = detail.value?.document.templateVersion ?? 1
+  const name = templates.byRef(ref)?.name
+  return name ? t('documents.fromTemplate', { name, version }) : t('documents.fromTemplateUnnamed', { version })
+})
 const headings = ref<{ id: string; text: string; level: number }[]>([])
 const outdatedThreads = ref<string[]>([])
 /**
@@ -489,6 +509,10 @@ watch(
       <template #status>
         <Badge variant="outline">{{ labelFor(t, 'category', detail.document.category) }}</Badge>
         <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
+        <Badge v-if="templateChip" variant="outline" class="text-muted-foreground gap-1 font-normal">
+          <LayoutTemplate class="size-3" aria-hidden="true" />
+          {{ templateChip }}
+        </Badge>
       </template>
 
       <template #actions>

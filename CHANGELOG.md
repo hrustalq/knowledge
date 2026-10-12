@@ -32,6 +32,17 @@ in the pull request that introduces them — see
   `knowledge_list_templates` and `knowledge_get_template`, and
   `knowledge_create_document` takes `templateRef` + `values` instead of
   `content`. The gallery and editor UI follow in later releases. (#146)
+- **New page from a template.** The page tree's `+` has a chevron beside it
+  with "From template…", a page's ⋯ menu gains "New child page" and "New child
+  page from template…", and an empty tree offers the gallery too. The gallery
+  groups the project's, the workspace's and the built-in templates, asks for
+  the placeholders a template declares (people and pages are picked, not
+  typed), previews the filled-in skeleton, and opens the editor on it with the
+  parent already set. Nothing is saved until the author publishes; the page
+  then records which template and version it came from and shows a "From
+  template" chip. Unpublished edits keep that provenance across a reload.
+  `POST /v1/documents` gains `template.provenanceOnly` for clients that upload
+  the body themselves, as the editor does. (#147)
 
 ### Fixed
 

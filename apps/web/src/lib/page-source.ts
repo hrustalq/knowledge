@@ -7,6 +7,7 @@
  * copy of `buildSource` in any of them would be a second opinion about what
  * publishing writes.
  */
+import { normalizeEntityKey } from '@knowledge/contracts'
 
 export interface RelationRow {
   type: string
@@ -26,6 +27,24 @@ export interface PageFields {
   tags: string
   /** The revision message. Travels with the draft; is not itself a change. */
   message: string
+  /**
+   * The template the page was started from (issue #69), sent as provenance
+   * when it is created. Travels with the draft so a reload does not lose it,
+   * and is not itself a change: it says where the page came from, not what
+   * it says.
+   */
+  template?: TemplateProvenance | null
+}
+
+export interface TemplateProvenance {
+  ref: string
+  version: number
+}
+
+export function isTemplateProvenance(value: unknown): value is TemplateProvenance {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  return typeof v.ref === 'string' && typeof v.version === 'number'
 }
 
 export const EMPTY_PAGE: PageFields = {
@@ -37,6 +56,7 @@ export const EMPTY_PAGE: PageFields = {
   relations: [],
   tags: '',
   message: '',
+  template: null,
 }
 
 /** The frontmatter keys the settings sheet models. Everything else is carried verbatim. */
@@ -123,4 +143,45 @@ export function samePage(a: PageFields, b: PageFields): boolean {
     return false
   }
   return buildSource({ ...a, body: '' }) === buildSource({ ...b, body: '' })
+}
+
+/** What a template contributes to a page beyond its body. */
+export interface TemplateDefaults {
+  category: string
+  relations: RelationRow[]
+  /** Comma-separated, as `readFrontmatter` returns them. */
+  tags: string
+}
+
+/**
+ * A template's tags, relations and category laid over a page: tags and
+ * relations are a union (a relation is the same one when its type and folded
+ * key match), and the category is taken only while the page has none of its
+ * own. Nothing the author already set is replaced.
+ */
+export function mergeTemplateDefaults<T extends Pick<PageFields, 'category' | 'relations' | 'tags'>>(
+  page: T,
+  defaults: TemplateDefaults,
+): T {
+  const tags = page.tags.split(',').map((t) => t.trim()).filter(Boolean)
+  const seenTags = new Set(tags.map((t) => t.toLocaleLowerCase()))
+  for (const tag of defaults.tags.split(',').map((t) => t.trim()).filter(Boolean)) {
+    if (seenTags.has(tag.toLocaleLowerCase())) continue
+    seenTags.add(tag.toLocaleLowerCase())
+    tags.push(tag)
+  }
+  const relationId = (r: RelationRow) => `${r.type.trim().toUpperCase()}\u0000${normalizeEntityKey(r.key)}`
+  const relations = page.relations.map((r) => ({ ...r }))
+  const seenRelations = new Set(relations.filter((r) => r.key.trim()).map(relationId))
+  for (const r of defaults.relations) {
+    if (!r.key.trim() || seenRelations.has(relationId(r))) continue
+    seenRelations.add(relationId(r))
+    relations.push({ ...r })
+  }
+  return {
+    ...page,
+    category: page.category === 'other' ? defaults.category : page.category,
+    relations,
+    tags: tags.join(', '),
+  }
 }

@@ -235,14 +235,17 @@ export class DocumentsService {
    * indexing like any hand-written page's. With `content` — the editor, which
    * rendered the skeleton and let the author change it — what the author
    * publishes wins, and the template is recorded as provenance once it is
-   * known to resolve. Either way the template's category is only a default.
+   * known to resolve. `provenanceOnly` is the editor's case: no `content`,
+   * because the body is uploaded afterwards, and rendering here would finalize
+   * a skeleton the author never published. Either way the template's category
+   * is only a default.
    */
   private async applyTemplate(
     dto: CreateDocumentDto,
     authorId: string,
   ): Promise<{ dto: CreateDocumentDto; template: { ref: string; version: number } | null }> {
     if (!dto.template) return { dto, template: null };
-    if (dto.content) {
+    if (dto.content || dto.template.provenanceOnly) {
       const resolved = await this.templates.resolve(dto.workspaceId, dto.template.ref, dto.template.version);
       return {
         dto: { ...dto, category: dto.category ?? resolved.parsed.meta.category },

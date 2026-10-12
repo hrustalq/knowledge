@@ -148,7 +148,12 @@
     "projectGoesInto": "Goes into {scope}. You can add more later.",
     "noWorkspacePermission": "You do not have permission to create a workspace here.",
     "scopeCreated": "{name} created",
-    "invitePeopleTo": "Invite people to {scope} so they can work in it."
+    "invitePeopleTo": "Invite people to {scope} so they can work in it.",
+    "newPageOptions": "More ways to start a page",
+    "blankPage": "Blank page",
+    "newPageFromTemplate": "From template…",
+    "or": "or",
+    "startFromTemplate": "start from a template"
   },
   "role": {
     "viewer": "Viewer",
@@ -239,7 +244,9 @@
     "commentDeleted": "Comment deleted",
     "revisionNumber": "Revision #{n}",
     "viewingRevision": "Viewing revision {id} — commenting is off while reading history.",
-    "provenance": "{extractor} · confidence {confidence}"
+    "provenance": "{extractor} · confidence {confidence}",
+    "fromTemplate": "From template: {name} v{version}",
+    "fromTemplateUnnamed": "From a template, v{version}"
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -1331,7 +1338,9 @@
       "positionLast": "{title}: last in {parent}.",
       "rowMenu": "Actions for {title}",
       "topLevel": "Top level"
-    }
+    },
+    "newChild": "New child page",
+    "newChildFromTemplate": "New child page from template…"
   },
   "graph": {
     "depth": "Depth",
@@ -2367,7 +2376,8 @@
       "leaveTitle": "Leave with unstaged changes?",
       "leaveBody": "Kept, they stay in this browser and are restored when you reopen the page. Discarded, the page stays as published.",
       "keepAndLeave": "Keep and leave",
-      "dontAskAgain": "Don’t ask again"
+      "dontAskAgain": "Don’t ask again",
+      "otherNewPage": "You were writing another new page in this browser. Restoring it replaces this one — review the diff before you publish."
     },
     "moreActions": "More actions",
     "publish": "Publish",
@@ -2376,7 +2386,9 @@
     "expandSection": "Expand section",
     "mentioned": "Mentioned: {name}",
     "statusColor": "Status: {color}",
-    "untitledPage": "Untitled page"
+    "untitledPage": "Untitled page",
+    "fromTemplate": "from {name}",
+    "fromATemplate": "from a template"
   },
   "toolbar": {
     "formatting": "Formatting",
@@ -3337,6 +3349,27 @@
           "hint": "Multiply search scores by each page's verification state, so verified pages rank above outdated ones"
         }
       }
+    }
+  },
+  "templates": {
+    "gallery": {
+      "title": "New page from template",
+      "search": "Search templates",
+      "blank": "Blank page",
+      "blankDescription": "An empty page. Pick a template on the left to start from a structure instead.",
+      "groups": {
+        "project": "This project",
+        "workspace": "Workspace",
+        "builtIn": "Built-in"
+      },
+      "preview": "Preview",
+      "pageTitle": "Page title",
+      "create": "Open in editor",
+      "required": "Required",
+      "pickPerson": "Pick a person",
+      "pickPage": "Pick a page",
+      "whereTop": "Goes into {project}, at the top level. Nothing is saved until you publish.",
+      "whereUnder": "Goes into {project}, under “{parent}”. Nothing is saved until you publish."
     }
   }
 }

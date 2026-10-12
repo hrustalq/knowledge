@@ -3719,6 +3719,8 @@ export interface components {
             values?: {
                 [key: string]: string;
             };
+            /** @description Record the template as provenance and render nothing, even without `content`: the caller uploads the body itself (the editor, which rendered the skeleton and let the author change it). Off when omitted. */
+            provenanceOnly?: boolean;
         };
         CreateDocumentDto: {
             /** Format: uuid */

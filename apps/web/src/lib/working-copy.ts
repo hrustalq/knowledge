@@ -12,7 +12,7 @@
  * markdown, the write has to be synchronous to survive `pagehide`, and every
  * access is guarded because private modes and full quotas throw.
  */
-import type { PageFields } from './page-source'
+import { isTemplateProvenance, type PageFields } from './page-source'
 
 export interface WorkingCopy extends PageFields {
   v: 1
@@ -62,7 +62,13 @@ export function readWorkingCopy(key: string): WorkingCopy | null {
     const parsed: unknown = JSON.parse(raw)
     // A shape this version does not recognise is not restored — offering a
     // half-understood draft back is worse than offering nothing.
-    return isWorkingCopy(parsed) ? { ...parsed, message: typeof parsed.message === 'string' ? parsed.message : '' } : null
+    if (!isWorkingCopy(parsed)) return null
+    return {
+      ...parsed,
+      message: typeof parsed.message === 'string' ? parsed.message : '',
+      // Older copies have none; a malformed one is dropped rather than sent as provenance.
+      template: isTemplateProvenance(parsed.template) ? parsed.template : null,
+    }
   } catch {
     return null
   }

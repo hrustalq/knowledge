@@ -9,6 +9,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -81,8 +82,9 @@ export class RelationInputDto {
 
 /**
  * The template a page starts from (issue #69). With no `content`, the server
- * renders it; with `content` (the editor, which rendered and edited it
- * already), the content wins and this is recorded as provenance only.
+ * renders it; with `content`, the content wins and this is recorded as
+ * provenance only. The editor sends neither — its body goes to storage by
+ * presigned upload — so it says `provenanceOnly` instead.
  */
 export class DocumentTemplateDto {
   @ApiProperty({ description: 'A template uuid or `builtin:<key>`', example: 'builtin:adr' })
@@ -105,6 +107,15 @@ export class DocumentTemplateDto {
   @IsOptional()
   @IsObject()
   values?: Record<string, string>;
+
+  @ApiPropertyOptional({
+    description:
+      'Record the template as provenance and render nothing, even without `content`: the caller uploads the ' +
+      'body itself (the editor, which rendered the skeleton and let the author change it). Off when omitted.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  provenanceOnly?: boolean;
 }
 
 export class CreateDocumentDto {

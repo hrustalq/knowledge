@@ -12,12 +12,13 @@
  * simply wrong on any route without a trail. `--kn-chrome-h` is published from
  * the chrome actually rendered, and the sub-rails read it.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { Toaster } from '@/components/ui/sonner'
 import SearchSheet from '@/components/knowledge/SearchSheet.vue'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useAuthStore } from '@/stores/auth'
+import { useTemplatesStore } from '@/stores/templates'
 import AppSidebar from './AppSidebar.vue'
 import VerifyEmailBanner from './VerifyEmailBanner.vue'
 import AppTopbar from './AppTopbar.vue'
@@ -25,6 +26,22 @@ import AppBreadcrumbs from './AppBreadcrumbs.vue'
 import { useCrumbs } from './breadcrumbs'
 
 const route = useRoute()
+
+/**
+ * The template gallery (issue #69) is opened from the tree and the editor,
+ * which know nothing of each other, so it lives here once. Loaded on first
+ * open and kept after, so its preview pipeline is not in every page's bundle
+ * and closing it still animates.
+ */
+const TemplateGalleryDialog = defineAsyncComponent(() => import('@/components/templates/TemplateGalleryDialog.vue'))
+const templates = useTemplatesStore()
+const galleryMounted = ref(false)
+watch(
+  () => templates.gallery.open,
+  (open) => {
+    if (open) galleryMounted.value = true
+  },
+)
 const sidebar = useSidebarStore()
 const crumbs = useCrumbs()
 
@@ -163,6 +180,7 @@ watch(
       </main>
     </div>
     <SearchSheet />
+    <TemplateGalleryDialog v-if="galleryMounted" />
     <Toaster />
   </div>
 </template>

@@ -18286,6 +18286,10 @@
               "type": "string"
             },
             "description": "Placeholder values by name, used when the server renders (no `content`)"
+          },
+          "provenanceOnly": {
+            "type": "boolean",
+            "description": "Record the template as provenance and render nothing, even without `content`: the caller uploads the body itself (the editor, which rendered the skeleton and let the author change it). Off when omitted."
           }
         },
         "required": [

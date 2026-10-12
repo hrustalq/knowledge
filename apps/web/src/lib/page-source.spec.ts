@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_PAGE, buildSource, readFrontmatter, samePage, type PageFields } from './page-source'
+import { EMPTY_PAGE, buildSource, mergeTemplateDefaults, readFrontmatter, samePage, type PageFields } from './page-source'
 
 const page = (overrides: Partial<PageFields> = {}): PageFields => ({ ...EMPTY_PAGE, ...overrides })
 
@@ -68,9 +68,58 @@ describe('samePage', () => {
     expect(samePage(page({ message: 'why' }), page())).toBe(true)
   })
 
+  it('does not count template provenance as a change: it says where the page came from, not what it says', () => {
+    expect(samePage(page({ template: { ref: 'builtin:adr', version: 1 } }), page())).toBe(true)
+  })
+
   it('sees changes to the body, placement and relations', () => {
     expect(samePage(page({ body: 'a' }), page({ body: 'b' }))).toBe(false)
     expect(samePage(page({ parentId: 'p' }), page())).toBe(false)
     expect(samePage(page({ relations: [{ type: 'OWNS', key: 'team:x', name: '' }] }), page())).toBe(false)
+  })
+})
+
+describe('mergeTemplateDefaults', () => {
+  const defaults = {
+    category: 'architecture',
+    tags: 'adr, decision',
+    relations: [{ type: 'DESCRIBES', key: 'service:billing', name: '' }],
+  }
+
+  it('lays a template over a blank page', () => {
+    const merged = mergeTemplateDefaults(page(), defaults)
+    expect(merged.category).toBe('architecture')
+    expect(merged.tags).toBe('adr, decision')
+    expect(merged.relations).toEqual([{ type: 'DESCRIBES', key: 'service:billing', name: '' }])
+  })
+
+  it('keeps a category the author chose', () => {
+    expect(mergeTemplateDefaults(page({ category: 'guide' }), defaults).category).toBe('guide')
+  })
+
+  it('unions tags case-insensitively, the page’s own first', () => {
+    expect(mergeTemplateDefaults(page({ tags: 'ADR, billing' }), defaults).tags).toBe('ADR, billing, decision')
+  })
+
+  it('treats a relation as present when its type and folded key match', () => {
+    const merged = mergeTemplateDefaults(
+      page({ relations: [{ type: 'describes', key: 'Service:Billing', name: 'Billing' }] }),
+      defaults,
+    )
+    expect(merged.relations).toEqual([{ type: 'describes', key: 'Service:Billing', name: 'Billing' }])
+  })
+
+  it('adds a relation the page does not have, and skips blank template rows', () => {
+    const merged = mergeTemplateDefaults(page({ relations: [{ type: 'OWNS', key: 'team:core', name: '' }] }), {
+      ...defaults,
+      relations: [...defaults.relations, { type: 'USES', key: '  ', name: '' }],
+    })
+    expect(merged.relations.map((r) => r.key)).toEqual(['team:core', 'service:billing'])
+  })
+
+  it('does not change the input', () => {
+    const before = page({ tags: 'x' })
+    mergeTemplateDefaults(before, defaults)
+    expect(before.tags).toBe('x')
   })
 })

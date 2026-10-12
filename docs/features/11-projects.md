@@ -75,8 +75,9 @@ tree and one sidebar. Projects split off the organizational half. They are
 
 - Archiving a project instead of deleting it (`archived` flag + a filter on
   the switcher), so old work can leave the sidebar without moving its pages.
-- Per-project defaults — a default category, a page template, a default
-  relation type — now that there is somewhere to hang them.
+- Per-project defaults — a default category, a default relation type — now
+  that there is somewhere to hang them. Project-scoped page templates shipped in
+  [42](42-page-templates.md); a project still has no *default* template.
 - Bulk move: select several pages in the list and re-project them at once.
 - Project-level ACLs, if isolation inside a workspace is ever needed. The
   `'project'` guard source is already the hook for it.

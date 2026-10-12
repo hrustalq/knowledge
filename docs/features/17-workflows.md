@@ -209,6 +209,14 @@ giving up on it, and the review panel renders both so nobody approves a graph
 fact sight-unseen. `produces.relationToParent` is validated against the shared
 edge-type vocabulary on the canvas, where it can still be fixed.
 
+An `ai.draft` step can also write into a page template
+(`produces.templateRef`, [42](42-page-templates.md)). The model gets the
+template's skeleton, wrapped untrusted, behind a code-owned rule to keep its
+headings; its unconditional tags and relations are merged into the draft; and
+the page records the template and version as provenance. Whether the ref exists
+is checked at save (`unknownTemplate`) in the API, not in `validateGraph`, which
+has no database.
+
 ## Limits
 
 Three-way content merges are not attempted anywhere here — a run writes new

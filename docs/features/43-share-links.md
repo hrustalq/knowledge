@@ -4,8 +4,9 @@ Issue [#77](https://github.com/hrustalq/knowledge/issues/77), phase 1 of
 public publishing. An editor hands one page (and optionally the pages under
 it) to someone who will never sign in: a customer, a contractor, a reviewer
 from another team. The link opens a read-only, server-rendered copy of the
-page. Published docs sites, versions, custom domains and export are later
-phases of the same issue and are not built yet.
+page. Published docs sites and versions are phase 2a
+([44](44-docs-portal.md)); custom domains and export are later phases of the
+same issue.
 
 ## Public is opt-in twice
 

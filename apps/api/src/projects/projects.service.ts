@@ -254,7 +254,12 @@ export class ProjectsService {
       // protects content, and there is none. Both modes do the same thing to an
       // empty project, so the answer just reports which one was asked for
       // rather than rewriting the caller's intent.
-      await this.prisma.project.delete({ where: { id: projectId } });
+      await this.prisma.$transaction([
+        // A site is the project's face, not content of its own: it goes with
+        // the project in every mode (docs/features/44). Its versions cascade.
+        this.prisma.publishedSite.deleteMany({ where: { projectId } }),
+        this.prisma.project.delete({ where: { id: projectId } }),
+      ]);
       await this.recordDeletion(project, actorId, null, counts, []);
       return {
         deleted: true,
@@ -292,6 +297,7 @@ export class ProjectsService {
         await tx.notificationSubscription.deleteMany({
           where: { subjectType: 'project', subjectId: projectId },
         });
+        await tx.publishedSite.deleteMany({ where: { projectId } });
         await tx.project.delete({ where: { id: projectId } });
       });
       await this.recordDeletion(project, actorId, null, counts, [], destroyed);
@@ -345,6 +351,9 @@ export class ProjectsService {
       await tx.notificationSubscription.deleteMany({
         where: { subjectType: 'project', subjectId: projectId },
       });
+      // The site does not travel: its address and theme describe this
+      // project, and the destination may have a site of its own.
+      await tx.publishedSite.deleteMany({ where: { projectId } });
 
       await tx.project.delete({ where: { id: projectId } });
     });

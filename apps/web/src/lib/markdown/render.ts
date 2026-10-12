@@ -5,6 +5,7 @@
  * never look one way when read and another way when opened for editing.
  */
 import { Marked, type Tokens } from 'marked';
+import { slugifyPath } from '@knowledge/contracts/publishing';
 import { KN, escapeHtml, isPanelType } from './nodes.js';
 import { pageTitleHref, type PageRefResolver } from '../page-refs.js';
 
@@ -252,12 +253,10 @@ export const SANITIZE_CONFIG: { ADD_TAGS: string[]; ADD_ATTR: string[] } = {
  * ASCII-only, so every Cyrillic heading slugified to `''` or `'-'` and a
  * Russian page's anchors were `section`, `-`, `-1`, `-2` — positional, and
  * retargeted the moment a heading was inserted above.
+ *
+ * The body lives in contracts as `slugifyPath` (docs/features/44): a published
+ * site's page URLs are cut by the same function in the API's site builder.
  */
 export function slugifyHeading(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\p{L}\p{N}_\s-]/gu, '')
-    .replace(/\s+/g, '-')
-    .slice(0, 80);
+  return slugifyPath(text);
 }

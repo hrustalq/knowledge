@@ -13,9 +13,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
  *
  * The row is a sparse override of a code default that is `false` for anything
  * public, so an empty table reproduces "nothing is public" exactly. Above it
- * sits PUBLIC_SHARING_ENABLED, a ceiling rather than a default: with it off,
- * no workspace setting turns sharing on, and the settings page shows both the
- * switch and why it does nothing.
+ * sit PUBLIC_SHARING_ENABLED and PUBLIC_SITES_ENABLED, ceilings rather than
+ * defaults: with one off, no workspace setting turns that kind of publishing
+ * on, and the settings page shows both the switch and why it does nothing.
  */
 @Injectable()
 export class PublishingSettingsService {
@@ -27,6 +27,7 @@ export class PublishingSettingsService {
   ceiling(): PublishingSettingsResponse['ceiling'] {
     return {
       sharingEnabled: this.config.get('PUBLIC_SHARING_ENABLED', { infer: true }),
+      sitesEnabled: this.config.get('PUBLIC_SITES_ENABLED', { infer: true }),
       maxTtlDays: this.config.get('SHARE_LINK_MAX_TTL_DAYS', { infer: true }),
     };
   }
@@ -36,6 +37,7 @@ export class PublishingSettingsService {
     return {
       allowShareLinks: row?.allowShareLinks ?? null,
       allowPasswordlessShares: row?.allowPasswordlessShares ?? null,
+      allowPublicSites: row?.allowPublicSites ?? null,
     };
   }
 
@@ -44,6 +46,7 @@ export class PublishingSettingsService {
     return {
       allowShareLinks: this.ceiling().sharingEnabled && (override.allowShareLinks ?? false),
       allowPasswordlessShares: override.allowPasswordlessShares ?? false,
+      allowPublicSites: this.ceiling().sitesEnabled && (override.allowPublicSites ?? false),
     };
   }
 

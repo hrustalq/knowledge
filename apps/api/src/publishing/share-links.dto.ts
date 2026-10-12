@@ -64,6 +64,15 @@ export class UpdatePublishingSettingsDto {
   @ValidateIf((o: UpdatePublishingSettingsDto) => o.allowPasswordlessShares !== undefined && o.allowPasswordlessShares !== null)
   @IsBoolean()
   allowPasswordlessShares?: boolean | null;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    description: 'Allow publishing a project as a public docs site; null goes back to the default (off)',
+  })
+  @ValidateIf((o: UpdatePublishingSettingsDto) => o.allowPublicSites !== undefined && o.allowPublicSites !== null)
+  @IsBoolean()
+  allowPublicSites?: boolean | null;
 }
 
 export class UnlockShareDto {

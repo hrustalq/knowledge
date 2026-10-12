@@ -103,6 +103,23 @@ in the pull request that introduces them — see
   in the workspace. A link that never expires needs a password unless the
   admin allows otherwise. Over MCP, `knowledge_share_page` creates one (editor;
   hidden from read-only keys). (#77)
+- **Published docs sites.** A project, or one page and everything under it,
+  can now be published as a read-only docs site that anyone with the address
+  can read: a page tree, an "On this page" outline, previous/next links and the
+  project's avatar as its logo, rendered on the server so the text is there
+  without JavaScript. Set it up from **Project settings → Published site**
+  (admins): pick the address, then the accent colour, font, header links and
+  footer, and publish. Sites are served at `/pub/<address>`, or at
+  `<address>.<PUBLISH_BASE_DOMAIN>` when a base domain is configured. Readers
+  see a snapshot, never a branch head: only indexed revisions are published,
+  the "Latest" version rebuilds itself shortly after a page changes, and a
+  version you add can be frozen as it is now (`v1.0`) or follow a named branch,
+  with a version switcher that keeps the reader on the same page. A page whose
+  latest change failed to index keeps showing its previous revision, and the
+  version lists it as a warning. Unpublishing, or turning sites off, takes a
+  site down on the next request. Like share links, sites are **off** until a
+  workspace admin allows them in **Settings → Publishing**. Search, sitemap,
+  `llms.txt` and custom domains come with the next phase. (#77)
 
 ### Fixed
 
@@ -141,6 +158,20 @@ in the pull request that introduces them — see
   copied again later. The web image gains `jsdom` (server-side sanitising of
   public pages) and a second built app, `reader.html`; no Caddyfile change,
   since `/s/*` already reaches the web container and `/api/*` the API.
+- Published sites (#77): migration `20261013090000_published_sites` is
+  expand-only (three new tables, `published_sites`, `site_versions` and
+  `site_version_pages`, and one nullable column,
+  `publishing_settings.allow_public_sites`), so a code rollback needs no
+  database step; a rolled-back image simply serves no sites. New env vars, all
+  with defaults, none required: `PUBLIC_SITES_ENABLED` (`true`; the ceiling
+  over the workspace switch, which defaults to off), `PUBLISH_BASE_DOMAIN`
+  (empty = path mode, `/pub/<slug>`), `SITE_BUILD_DEBOUNCE_MS` (`30000`) and
+  `SITE_MAX_PAGES` (`2000`). Builds run in the worker on a new BullMQ queue,
+  `site-build`, in the existing Redis. `docker-compose.prod.yml` now passes
+  `PUBLISH_BASE_DOMAIN` to the web container as well. Leave it empty in
+  production for now: a subdomain needs the Caddy on-demand TLS block that
+  ships with the next phase, and `/pub/*` already reaches the web container
+  with no Caddyfile change.
 
 ## [0.17.0] — 2026-10-12
 

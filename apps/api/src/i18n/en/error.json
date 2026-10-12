@@ -402,5 +402,22 @@
     "rateLimited": "Too many requests — try again in a minute",
     "unlockRateLimited": "Too many password attempts — try again later",
     "locked": "This link is password-protected"
+  },
+  "site": {
+    "notFound": "This site does not exist",
+    "versionNotFound": "This site version does not exist",
+    "disabledByWorkspace": "Public sites are turned off for this workspace",
+    "exists": "This project already has a site",
+    "slugInvalid": "A site address is 2–40 lowercase letters, digits and single hyphens, starting and ending with a letter or digit",
+    "slugReserved": "“{slug}” is reserved — pick another address",
+    "slugTaken": "Another site already uses “{slug}”",
+    "rootNotInProject": "The site’s root must be a page of this project",
+    "themeInvalid": "The theme has invalid values: {fields}",
+    "versionSlugInvalid": "A version address is lowercase letters, digits, dots and hyphens, up to 32 characters",
+    "versionSlugTaken": "This site already has a version at “{slug}”",
+    "versionSlugShadowsPage": "A top-level page of the site is already at “{slug}” — pick another version address",
+    "versionLimit": "A site has at most {max} versions",
+    "versionNotBuilt": "Only a version that has built at least once can be the default",
+    "defaultVersionDelete": "The default version cannot be deleted — make another version the default first"
   }
 }

@@ -608,6 +608,23 @@ export type I18nTranslations = {
             "unlockRateLimited": string;
             "locked": string;
         };
+        "site": {
+            "notFound": string;
+            "versionNotFound": string;
+            "disabledByWorkspace": string;
+            "exists": string;
+            "slugInvalid": string;
+            "slugReserved": string;
+            "slugTaken": string;
+            "rootNotInProject": string;
+            "themeInvalid": string;
+            "versionSlugInvalid": string;
+            "versionSlugTaken": string;
+            "versionSlugShadowsPage": string;
+            "versionLimit": string;
+            "versionNotBuilt": string;
+            "defaultVersionDelete": string;
+        };
     };
     "import": {
         "stage": {
@@ -819,6 +836,8 @@ export type I18nTranslations = {
         "sourcePolicy": string;
         "template": string;
         "shareLink": string;
+        "site": string;
+        "siteVersion": string;
     };
     "validation": {
         "isDefined": string;

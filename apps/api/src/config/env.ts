@@ -171,6 +171,24 @@ export const envSchema = z.object({
   PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
   /** Password attempts per IP and link in 15 minutes before the unlock answers 429. */
   PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN: z.coerce.number().int().positive().default(10),
+  /**
+   * Published sites (docs/features/44, issue #77). PUBLIC_SITES_ENABLED is the
+   * ceiling over the workspace's `allow_public_sites` switch: false refuses to
+   * publish and 404s every live site.
+   */
+  PUBLIC_SITES_ENABLED: boolish(true),
+  /**
+   * Sites are served at `<slug>.<PUBLISH_BASE_DOMAIN>`. Empty = path mode,
+   * `${WEB_BASE_URL}/pub/<slug>`. The web SSR reads the same variable.
+   */
+  PUBLISH_BASE_DOMAIN: z
+    .string()
+    .default('')
+    .transform((v) => v.trim().toLowerCase().replace(/^\.+|\.+$/g, '')),
+  /** How long a live version waits after a change before it rebuilds; later changes in the window ride along. */
+  SITE_BUILD_DEBOUNCE_MS: z.coerce.number().int().min(0).default(30_000),
+  /** Most pages one site version publishes; the rest is cut and the build says so. */
+  SITE_MAX_PAGES: z.coerce.number().int().positive().default(2000),
   /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
   LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
   /** Cap on bytes streamed in one llms-full.txt (20 MB). */

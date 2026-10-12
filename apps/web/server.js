@@ -38,9 +38,24 @@ const readerTemplateHtml = isProduction
   ? await fs.readFile('./dist/client/reader.html', 'utf-8')
   : ''
 
-// `/s/<token>` and `/s/<token>/<documentId>` — a share link. Kept in step with
-// SHARE_PATH in src/entry-public.ts, which re-checks it.
-const PUBLIC_PATH = /^\/s\/[^/?#]+(?:\/[^/?#]+)?\/?(?:[?#].*)?$/
+// `/s/<token>` and `/s/<token>/<documentId>` — a share link — and
+// `/pub/<slug>/…` — a published site in path mode (docs/features/44). Kept in
+// step with SHARE_PATH and SITE_PATH in src/entry-public.ts, which re-check them.
+const PUBLIC_PATH = /^\/(?:s\/[^/?#]+(?:\/[^/?#]+)?\/?|pub\/[a-z0-9-]+(?:\/[^?#]*)?)(?:[?#].*)?$/
+
+// Sites on their own host: `<slug>.<PUBLISH_BASE_DOMAIN>` (docs/features/44).
+// The same variable the API reads; empty means path mode only.
+const PUBLISH_BASE_DOMAIN = (process.env.PUBLISH_BASE_DOMAIN ?? '').trim().toLowerCase().replace(/^\.+|\.+$/g, '')
+
+/** The site host this request came in on, or null for the app's own host. */
+function siteHostOf(req) {
+  if (!PUBLISH_BASE_DOMAIN) return null
+  const host = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '')
+  const suffix = `.${PUBLISH_BASE_DOMAIN}`
+  if (!host.endsWith(suffix)) return null
+  const label = host.slice(0, -suffix.length)
+  return label && !label.includes('.') ? host : null
+}
 
 // Create http server
 const app = express()
@@ -53,13 +68,14 @@ app.use(traceMiddleware)
 // /documents/:id, /llms.txt and the per-workspace/project llms files, proxied
 // to the API. Mounted before Vite and the static handler so neither claims a
 // `.md`/`.txt` path first, and in both branches (dev and production) alike.
-app.use(
-  aiReadableMiddleware({
-    apiBase: process.env.API_URL_INTERNAL ?? 'http://localhost:3000',
-    readCookie,
-    logger,
-  }),
-)
+const aiReadable = aiReadableMiddleware({
+  apiBase: process.env.API_URL_INTERNAL ?? 'http://localhost:3000',
+  readCookie,
+  logger,
+})
+// Not on a site's host: there, `/llms.txt` belongs to the site (phase 2b), not
+// to the workspace a member's cookie would name.
+app.use((req, res, next) => (siteHostOf(req) ? next() : aiReadable(req, res, next)))
 
 // Add Vite or respective production middlewares
 /** @type {import('vite').ViteDevServer | undefined} */
@@ -130,12 +146,12 @@ function forwardedFor(req) {
 }
 
 /**
- * A share link (docs/features/43): the public entry, its own shell, and the
- * headers every share response carries — the token is in the URL, so no
- * Referer may take it elsewhere, nothing may index or cache it, and a revoke
- * must end it on the next request.
+ * A share link (docs/features/43) or a published site (docs/features/44): the
+ * public entry and its own shell. The render decides the headers — a share
+ * carries no-referrer/noindex/no-store, a site its own robots rule — and may
+ * answer with a redirect to a page's one canonical URL.
  */
-async function renderPublic(req, res, url) {
+async function renderPublic(req, res, url, siteHost) {
   let template
   let render
   if (!isProduction) {
@@ -155,6 +171,7 @@ async function renderPublic(req, res, url) {
       shareCookies: shareCookies(req.headers.cookie),
       forwardedFor: forwardedFor(req),
       traceId: typeof headerTraceId === 'string' ? headerTraceId : null,
+      siteHost,
     })
   } catch (e) {
     // The API's per-address cap, passed on as itself rather than as a 500.
@@ -164,6 +181,10 @@ async function renderPublic(req, res, url) {
     }
     throw e
   }
+  if (rendered.redirect) {
+    res.set(rendered.headers ?? {}).redirect(302, rendered.redirect)
+    return
+  }
   const html = template
     .replace(`<!--app-lang-->`, locale)
     .replace(`<!--app-css-->`, devStyles)
@@ -171,12 +192,7 @@ async function renderPublic(req, res, url) {
     .replace(`<!--app-html-->`, rendered.html ?? '')
   res
     .status(rendered.status ?? 200)
-    .set({
-      'Content-Type': 'text/html',
-      'Referrer-Policy': 'no-referrer',
-      'X-Robots-Tag': 'noindex, nofollow',
-      'Cache-Control': 'no-store',
-    })
+    .set({ 'Content-Type': 'text/html', ...rendered.headers })
     .send(html)
 }
 
@@ -186,8 +202,9 @@ app.use('*all', async (req, res) => {
     const url = req.originalUrl.replace(base, '')
     // Checked first, before any cookie is read: a public render takes nothing
     // from the member app's request context.
-    if (PUBLIC_PATH.test(req.originalUrl)) {
-      await renderPublic(req, res, req.originalUrl)
+    const siteHost = siteHostOf(req)
+    if (siteHost || PUBLIC_PATH.test(req.originalUrl)) {
+      await renderPublic(req, res, req.originalUrl, siteHost)
       return
     }
 

@@ -170,13 +170,16 @@ GET  /v1/audit-logs                                               admin
 
 ## The public surface
 
-`/v1/public/*` (docs/features/43) is the one place an anonymous request reads
-content. Its controllers are `@Public()`, so both guards step aside, and
-authorisation is the service's job: `PublicSharesService` resolves the `kp_`
-token on every request and confines every read to the scope the link names,
-answering 404 for anything outside it. `PublicRateLimitGuard` caps it per IP,
-counting `X-Forwarded-For` only when the peer is internal (Caddy, the web SSR).
-The `share-link` source resolves a link id to its workspace for the
+`/v1/public/*` (docs/features/43, 44) is the one place an anonymous request
+reads content. Its controllers are `@Public()`, so both guards step aside, and
+authorisation is the service's job, re-done on every request with nothing
+cached: `PublicSharesService` resolves the `kp_` token and confines every read
+to the scope the link names; `PublicSitesService` resolves a live site (status,
+workspace switch, env ceiling) and reads only its version's snapshot
+(`site_version_pages`), never a branch head. Both answer 404 for anything
+outside. `PublicRateLimitGuard` caps them per IP, counting `X-Forwarded-For`
+only when the peer is internal (Caddy, the web SSR). The `share-link`, `site`
+and `site-version` sources resolve their ids to a workspace for the
 authenticated management routes, like every other source.
 
 ## Limits

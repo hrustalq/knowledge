@@ -438,6 +438,7 @@ model Project {
   documents     Document[]
   glossaryTerms GlossaryTerm[]
   connectors    Connector[]
+  site          PublishedSite?
 
   @@index([workspaceId, createdAt])
   @@map("projects")
@@ -2139,7 +2140,96 @@ model PublishingSettings {
   allowShareLinks         Boolean? @map("allow_share_links")
   /// Allow a link with neither a password nor an expiry.
   allowPasswordlessShares Boolean? @map("allow_passwordless_shares")
+  /// Allow publishing a project as a public docs site (docs/features/44).
+  allowPublicSites        Boolean? @map("allow_public_sites")
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("publishing_settings")
+}
+
+/// A project published as a read-only docs site (docs/features/44, issue #77
+/// phase 2a). One per project. Public routes never read a branch head: they
+/// read a version's snapshot (`site_version_pages`) and nothing else.
+model PublishedSite {
+  id               String   @id @default(uuid()) @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  projectId        String   @unique @map("project_id") @db.Uuid
+  /// `<slug>.PUBLISH_BASE_DOMAIN`, or `/pub/<slug>` in path mode. A DNS label.
+  slug             String   @unique
+  /// PUBLISHED_SITE_STATUSES: draft | live | unpublished. Only `live` is served.
+  status           String   @default("draft")
+  /// Null publishes the whole project; otherwise that page and its subtree.
+  /// No FK: a deleted root leaves the site empty rather than blocking the delete.
+  rootDocumentId   String?  @map("root_document_id") @db.Uuid
+  /// SiteTheme (contracts), always written through normalizeSiteTheme.
+  theme            Json     @default("{}")
+  seoIndexable     Boolean  @default(true) @map("seo_indexable")
+  /// The version served without a version segment. No FK (it points into
+  /// this site's own versions, which cascade from it).
+  defaultVersionId String?  @map("default_version_id") @db.Uuid
+  createdBy        String   @map("created_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  project  Project       @relation(fields: [projectId], references: [id])
+  versions SiteVersion[]
+
+  @@index([workspaceId])
+  @@map("published_sites")
+}
+
+/// A named view of a site: `live` follows a branch and rebuilds itself,
+/// `frozen` is a snapshot that changes only when rebuilt by hand.
+model SiteVersion {
+  id           String    @id @default(uuid()) @db.Uuid
+  siteId       String    @map("site_id") @db.Uuid
+  name         String
+  /// URL segment for a non-default version. Unique per site.
+  slug         String
+  /// SITE_VERSION_KINDS: live | frozen
+  kind         String
+  /// Branch name each page is read from; a page without it falls back to its
+  /// own default branch. Null = every page's default branch.
+  sourceBranch String?   @map("source_branch")
+  /// SITE_VERSION_STATUSES: the last build attempt. What is served is whatever
+  /// the last successful build wrote (`built_at` not null).
+  status       String    @default("building")
+  builtAt      DateTime? @map("built_at") @db.Timestamptz
+  pageCount    Int       @default(0) @map("page_count")
+  /// SiteBuildWarning[] from the last successful build.
+  warnings     Json      @default("[]")
+  error        String?
+  createdBy    String    @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  site  PublishedSite     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  pages SiteVersionPage[]
+
+  @@unique([siteId, slug])
+  @@map("site_versions")
+}
+
+/// The materialised snapshot: one row per published page, pinning the
+/// revision it shows. Replaced as a whole, in one transaction, per build.
+/// No FK on document_id/revision_id: a frozen version is a record of what was
+/// published, and deleting a page removes its rows explicitly
+/// (ProjectCascadeService).
+model SiteVersionPage {
+  versionId  String  @map("version_id") @db.Uuid
+  documentId String  @map("document_id") @db.Uuid
+  revisionId String  @map("revision_id") @db.Uuid
+  /// The nearest published ancestor; null for a top-level page of the site.
+  parentId   String? @map("parent_id") @db.Uuid
+  position   Int
+  depth      Int
+  /// `guides/install`; '' for the root page of a site published from one page.
+  slugPath   String  @map("slug_path")
+  title      String
+
+  version SiteVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@id([versionId, documentId])
+  @@unique([versionId, slugPath])
+  @@index([documentId])
+  @@map("site_version_pages")
 }

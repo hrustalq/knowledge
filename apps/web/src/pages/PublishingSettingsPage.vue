@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
- * /settings/publishing (docs/features/43, issue #77): what this workspace may
- * show to people who are not signed in, and every public link it has made.
+ * /settings/publishing (docs/features/43, 44, issue #77): what this workspace
+ * may show to people who are not signed in — share links and published sites
+ * — and every public link it has made.
  *
  * Each switch shows what is asked for (the override; "default" inherits off)
- * beside what applies — and when the deployment's PUBLIC_SHARING_ENABLED
- * ceiling is off, says so, because a switch that reads "on" while nothing
+ * beside what applies — and when the deployment's PUBLIC_SHARING_ENABLED or
+ * PUBLIC_SITES_ENABLED ceiling is off, says so, because a switch that reads "on" while nothing
  * works is a silent clamp (CLAUDE.md). Admin-only, like the routes behind it.
  */
 import { computed, reactive, ref, watch } from 'vue'
@@ -49,9 +50,14 @@ type Key = keyof PublishingSettingsOverride
 const KEYS: readonly { key: Key; label: string; hint: string }[] = [
   { key: 'allowShareLinks', label: 'publishing.allowShareLinks', hint: 'publishing.allowShareLinksHint' },
   { key: 'allowPasswordlessShares', label: 'publishing.allowPasswordless', hint: 'publishing.allowPasswordlessHint' },
+  { key: 'allowPublicSites', label: 'publishing.allowPublicSites', hint: 'publishing.allowPublicSitesHint' },
 ]
 
-const form = reactive<Record<Key, Tri>>({ allowShareLinks: 'inherit', allowPasswordlessShares: 'inherit' })
+const form = reactive<Record<Key, Tri>>({
+  allowShareLinks: 'inherit',
+  allowPasswordlessShares: 'inherit',
+  allowPublicSites: 'inherit',
+})
 const toTri = (v: boolean | null): Tri => (v === null ? 'inherit' : v ? 'on' : 'off')
 const fromTri = (v: Tri): boolean | null => (v === 'inherit' ? null : v === 'on')
 watch(
@@ -71,7 +77,11 @@ async function save() {
   try {
     const next = (await api.patch('/v1/workspaces/{id}/publishing-settings', {
       path: { id: workspaceId },
-      body: { allowShareLinks: fromTri(form.allowShareLinks), allowPasswordlessShares: fromTri(form.allowPasswordlessShares) },
+      body: {
+        allowShareLinks: fromTri(form.allowShareLinks),
+        allowPasswordlessShares: fromTri(form.allowPasswordlessShares),
+        allowPublicSites: fromTri(form.allowPublicSites),
+      },
     })) as PublishingSettingsResponse
     queryClient.setQueryData(settingsOptions.queryKey, next)
     toast.success(t('publishing.saved'))
@@ -118,6 +128,12 @@ async function revoke(id: string) {
           class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
         >
           {{ t('publishing.ceilingOff') }}
+        </p>
+        <p
+          v-if="!settings.ceiling.sitesEnabled"
+          class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+        >
+          {{ t('publishing.sitesCeilingOff') }}
         </p>
         <div class="divide-y rounded-md border">
           <div v-for="k in KEYS" :key="k.key" class="grid gap-x-4 gap-y-1.5 px-4 py-3 sm:grid-cols-[1fr_12rem]">

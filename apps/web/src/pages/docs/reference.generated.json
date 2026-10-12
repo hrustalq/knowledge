@@ -2432,6 +2432,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/public/sites/resolve",
+      "tag": "public",
+      "summary": "A site, version and page for a slug or host plus a path: everything one render needs",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/documents/{id}/shares",
       "tag": "publishing",
       "summary": "A page’s live share links, and what the workspace allows",
@@ -2447,6 +2457,26 @@
       "summary": "Create a public, read-only link to the page (and optionally its subpages)",
       "role": "editor",
       "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/site",
+      "tag": "publishing",
+      "summary": "The project’s published site, if any, and what the workspace allows",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{id}/site",
+      "tag": "publishing",
+      "summary": "Create the project’s site (a draft) with a live “Latest” version, and build it",
+      "role": "admin",
+      "source": "project",
       "public": false,
       "platformAdmin": false
     },
@@ -2467,6 +2497,86 @@
       "summary": "Change a link’s expiry, password or subtree",
       "role": "editor",
       "source": "share-link",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/site-versions/{id}",
+      "tag": "publishing",
+      "summary": "Delete a version and its snapshot. The default version cannot be deleted",
+      "role": "admin",
+      "source": "site-version",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/site-versions/{id}",
+      "tag": "publishing",
+      "summary": "Rename a version, freeze or unfreeze it, or point it at another branch (rebuilds)",
+      "role": "admin",
+      "source": "site-version",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/site-versions/{id}/rebuild",
+      "tag": "publishing",
+      "summary": "Re-snapshot the version now. Readers keep the old snapshot until the new one is complete",
+      "role": "admin",
+      "source": "site-version",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/sites/{id}",
+      "tag": "publishing",
+      "summary": "Delete the site and its versions. Pages are untouched; the address is freed",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/sites/{id}",
+      "tag": "publishing",
+      "summary": "Change the address, root page, theme, indexing or default version",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/publish",
+      "tag": "publishing",
+      "summary": "Put the site live: anyone with the address can read it",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/unpublish",
+      "tag": "publishing",
+      "summary": "Take the site down. It stops resolving at once; its configuration is kept",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/versions",
+      "tag": "publishing",
+      "summary": "Add a version: `live` follows a branch, `frozen` is a snapshot taken now",
+      "role": "admin",
+      "source": "site",
       "public": false,
       "platformAdmin": false
     },

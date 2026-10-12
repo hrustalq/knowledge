@@ -128,7 +128,12 @@ export function createRouter() {
             path: 'projects',
             component: () => import('@/pages/ProjectsPage.vue'),
             // Third rail: the roster lives in the shell, the selection here.
-            children: [{ path: ':id?', component: () => import('@/pages/ProjectDetailPage.vue') }],
+            children: [
+              // A project's published site (docs/features/44). The page gates
+              // its controls on auth.canAdminWorkspace; the API enforces admin.
+              { path: ':id/site', component: () => import('@/pages/SiteSettingsPage.vue') },
+              { path: ':id?', component: () => import('@/pages/ProjectDetailPage.vue') },
+            ],
           },
           // Glossary: workspace vocabulary; the page gates writes on the
           // editor role, and reading it is open to any member.

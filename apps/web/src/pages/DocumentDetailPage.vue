@@ -17,6 +17,7 @@ import { formatDateTime } from '@/lib/format'
 import { errorMessage } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
 import { hasWorkingCopy } from '@/lib/working-copy'
+import { readFrontmatter } from '@/lib/page-source'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -29,6 +30,7 @@ import {
   GitMerge,
   History,
   LayoutTemplate,
+  MoreHorizontal,
   Plug,
   Info,
   Pencil,
@@ -60,6 +62,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
 import { PageLayout, PageRail, PageState } from '@/components/layout/page'
 import TocRail from '@/components/knowledge/TocRail.vue'
 import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
@@ -159,6 +168,21 @@ const templateChip = computed(() => {
   const version = detail.value?.document.templateVersion ?? 1
   const name = templates.byRef(ref)?.name
   return name ? t('documents.fromTemplate', { name, version }) : t('documents.fromTemplateUnnamed', { version })
+})
+/** "Save as template": the page as it is shown — an older revision, when one is being read. */
+const saveAsOpen = ref(false)
+const saveAsPage = computed<SaveAsTemplatePage | null>(() => {
+  if (!detail.value || !content.value) return null
+  const fm = readFrontmatter(content.value.frontmatter)
+  return {
+    title: detail.value.document.title,
+    body: content.value.markdown,
+    category: detail.value.document.category,
+    tags: fm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+    relations: fm.relations.map((r) => ({ type: r.type, target: r.key })),
+    other: fm.other,
+    projectId: detail.value.document.projectId,
+  }
 })
 const headings = ref<{ id: string; text: string; level: number }[]>([])
 const outdatedThreads = ref<string[]>([])
@@ -551,6 +575,18 @@ watch(
             <span v-if="hasUnstaged" class="sr-only">{{ t('editor.unstaged.label') }}</span>
           </RouterLink>
         </Button>
+        <DropdownMenu v-if="auth.canEdit && saveAsPage">
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="icon-sm" :aria-label="t('documents.moreActions')">
+              <MoreHorizontal class="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="w-48">
+            <DropdownMenuItem @select="saveAsOpen = true">
+              <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </template>
 
       <template #meta>
@@ -745,5 +781,7 @@ watch(
 
     <!-- Ask-AI chat about this page -->
     <AskAssistant :document-id="documentId" :title="detail.document.title" />
+
+    <SaveAsTemplateDialog v-model:open="saveAsOpen" :page="saveAsPage" />
   </template>
 </template>

@@ -1,6 +1,6 @@
 import type { Locale } from '@knowledge/contracts/core';
 import type { DocumentCategory } from '@knowledge/contracts/documents';
-import { normalizeEntityKey } from '@knowledge/contracts/graph';
+import { FRONTMATTER_KEY_ALIASES, normalizeEntityKey } from '@knowledge/contracts/graph';
 
 // ---------------------------------------------------------------------------
 // Page templates (issue #69).
@@ -159,6 +159,13 @@ export interface TemplateDetail extends TemplateSummary {
   /** Default `tags:` and `relations:`, placeholders still unfilled. */
   tags: string[];
   relations: TemplateRelationDefault[];
+  /**
+   * Every frontmatter key the page inherits, `template:` removed — `tags` and
+   * `relations` included, as written. An editor that models only some keys
+   * re-emits the rest from here (`composeTemplateSource`), rather than
+   * destroying them on save.
+   */
+  frontmatter: Record<string, unknown>;
   /** The version this detail describes (= `currentVersion` unless a version was asked for). */
   version: number;
 }
@@ -439,6 +446,100 @@ export function renderTemplateFrontmatter(
     } else {
       out[key] = rendered;
     }
+  }
+  return out;
+}
+
+// --- writing a source -----------------------------------------------------------
+
+/** What an editor holds of a template: the meta block, the inherited frontmatter and the body. */
+export interface TemplateSourceFields {
+  meta: TemplateMeta;
+  tags: string[];
+  relations: TemplateRelationDefault[];
+  /** Frontmatter keys the editor does not model, re-emitted verbatim. `tags`/`relations`/`template` here are ignored. */
+  other?: Record<string, unknown>;
+  body: string;
+}
+
+/** Keys `composeTemplateSource` writes itself, under any spelling ingestion accepts. */
+function isModelledKey(key: string): boolean {
+  const folded = key.normalize('NFC').trim().toLowerCase();
+  return folded === 'template' || folded === 'tags' || folded === 'relations' || FRONTMATTER_KEY_ALIASES[folded] !== undefined;
+}
+
+/**
+ * The markdown source a template is stored as — the inverse of the API's
+ * `parseTemplateSource`, so an editor with a form instead of a YAML box can
+ * still write one.
+ *
+ * Every scalar is emitted as JSON, which is valid YAML flow style: no YAML
+ * emitter is needed, and a `{{placeholder}}` or a colon in a title pattern is
+ * always quoted. The `template:` block is laid out one field — and one
+ * placeholder — per line, so a version diff shows what actually changed.
+ */
+export function composeTemplateSource(fields: TemplateSourceFields): string {
+  const { meta } = fields;
+  const lines: string[] = ['---'];
+  for (const [key, value] of Object.entries(fields.other ?? {})) {
+    if (value === undefined || isModelledKey(key)) continue;
+    lines.push(`${JSON.stringify(key)}: ${JSON.stringify(value)}`);
+  }
+  const tags = fields.tags.map((t) => t.trim()).filter(Boolean);
+  if (tags.length > 0) lines.push(`tags: [${tags.map((t) => JSON.stringify(t)).join(', ')}]`);
+  const relations = fields.relations.filter((r) => r.type.trim() && r.target.trim());
+  if (relations.length > 0) {
+    lines.push('relations:');
+    for (const r of relations) {
+      lines.push(`  - type: ${JSON.stringify(r.type.trim())}`);
+      lines.push(`    target: ${JSON.stringify(r.target.trim())}`);
+    }
+  }
+  lines.push('template:');
+  lines.push(`  category: ${JSON.stringify(meta.category)}`);
+  if (meta.titlePattern?.trim()) lines.push(`  titlePattern: ${JSON.stringify(meta.titlePattern.trim())}`);
+  if (meta.description?.trim()) lines.push(`  description: ${JSON.stringify(meta.description.trim())}`);
+  if (meta.placeholders.length > 0) {
+    lines.push('  placeholders:');
+    for (const p of meta.placeholders) {
+      const entry: TemplatePlaceholder = {
+        name: p.name.trim(),
+        ...(p.label?.trim() ? { label: p.label.trim() } : {}),
+        kind: p.kind,
+        ...(p.required ? { required: true } : {}),
+        ...(p.hint?.trim() ? { hint: p.hint.trim() } : {}),
+      };
+      lines.push(`    - ${JSON.stringify(entry)}`);
+    }
+  }
+  if (meta.aiInstructions?.trim()) lines.push(`  aiInstructions: ${JSON.stringify(meta.aiInstructions.trim())}`);
+  lines.push('---', '');
+  return `${lines.join('\n')}${fields.body.replace(/^\n+/, '')}`;
+}
+
+/**
+ * Placeholders a template text uses but does not declare yet, appended to the
+ * ones it does (which are kept as they are, used or not — removing one is the
+ * author's call). A name used as a relation target is offered as an `entity`,
+ * since that is where its value is folded into a key; the rest start as `text`.
+ * System names are never declared: the parser refuses a declared `title`.
+ */
+export function detectPlaceholders(
+  text: { body: string; tags?: readonly string[]; relations?: readonly TemplateRelationDefault[] },
+  declared: readonly TemplatePlaceholder[] = [],
+): TemplatePlaceholder[] {
+  const known = new Set<string>([...SYSTEM_PLACEHOLDERS, ...declared.map((p) => p.name)]);
+  const entities = new Set((text.relations ?? []).flatMap((r) => referencedPlaceholders(r.target)));
+  const found = [
+    ...referencedPlaceholders(text.body),
+    ...(text.tags ?? []).flatMap((t) => referencedPlaceholders(t)),
+    ...entities,
+  ];
+  const out = [...declared];
+  for (const name of found) {
+    if (known.has(name) || !TEMPLATE_PLACEHOLDER_NAME_RE.test(name)) continue;
+    known.add(name);
+    out.push({ name, kind: entities.has(name) ? 'entity' : 'text' });
   }
   return out;
 }

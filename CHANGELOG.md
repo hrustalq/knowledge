@@ -43,6 +43,21 @@ in the pull request that introduces them — see
   template" chip. Unpublished edits keep that provenance across a reload.
   `POST /v1/documents` gains `template.provenanceOnly` for clients that upload
   the body themselves, as the editor does. (#147)
+- **Templates in settings, `/template` in the editor, and Save as template.**
+  Settings → Templates lists every template the project can see, archived ones
+  and hidden built-ins included, with each one's shape and version history (a
+  diff between any two versions). Templates are written with a form and the
+  rich editor rather than YAML: placeholders, title pattern, the tags and
+  relations pages inherit, and instructions for the assistant. A built-in can
+  be customised (its versions continue from the shipped one), hidden, shown
+  again or reset; a custom template can be archived and restored. Typing
+  `/template` (or `/шаблон`) in a page inserts a template's skeleton at the
+  cursor and adds its tags and relations to the page. "Save as template" in a
+  page's ⋯ menu, in the document view and in the editor, turns the page into a
+  template, finding its `{{placeholders}}`. Controls follow the API's rule:
+  project templates are editors', workspace-wide and built-in ones admins'.
+  Template details from the API now include `frontmatter`, so an editor can
+  keep keys it does not model. (#69)
 
 ### Fixed
 

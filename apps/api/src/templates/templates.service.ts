@@ -660,6 +660,7 @@ export class TemplatesService {
       body: template.parsed.body,
       tags: template.parsed.tags,
       relations: template.parsed.relations,
+      frontmatter: template.parsed.data,
       version: template.version,
     };
   }

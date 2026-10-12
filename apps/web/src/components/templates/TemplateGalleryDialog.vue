@@ -3,6 +3,11 @@
  * "New page from template" (issue #69): pick a template, fill in what it asks
  * for, watch the skeleton fill in, open the editor on it.
  *
+ * In insert mode — the editor's `/template` — the same pick and form end in
+ * the render being handed back to the page being written, at its cursor,
+ * rather than in a new page. There is no blank option and no title field:
+ * the page already has both.
+ *
  * Mounted once in AppShell and driven by the templates store, because the
  * places that open it — the tree's `+`, a row's menu, the empty tree, the
  * editor when a link arrives without values — know nothing of each other.
@@ -53,9 +58,13 @@ const { nameOf } = useMembers()
 
 const open = computed({
   get: () => templates.gallery.open,
-  set: (v: boolean) => (v ? templates.openGallery(templates.gallery.target) : templates.closeGallery()),
+  // The dialog only ever closes itself; opening is the store's, with a mode.
+  set: (v: boolean) => {
+    if (!v) templates.closeGallery()
+  },
 })
 const target = computed(() => templates.gallery.target)
+const inserting = computed(() => target.value.mode === 'insert')
 
 /** `null` is the blank page, listed first: starting from nothing is still the commonest start. */
 const selectedRef = ref<string | null>(null)
@@ -78,7 +87,7 @@ watch(
     void templates.ensureLoaded()
     if (!documents.loaded) void documents.fetchList()
     query.value = ''
-    title.value = ''
+    title.value = target.value.title ?? ''
     values.value = {}
     triedCreate.value = false
     selectedRef.value = target.value.ref ?? null
@@ -91,8 +100,10 @@ const groups = computed(() =>
     templates.offered.filter((tpl) => matchesTemplate(tpl, query.value, labelFor(t, 'category', tpl.category))),
   ),
 )
-const blankMatches = computed(() =>
-  t('templates.gallery.blank').toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase()),
+const blankMatches = computed(
+  () =>
+    !inserting.value &&
+    t('templates.gallery.blank').toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase()),
 )
 const selected = computed(() => templates.byRef(selectedRef.value))
 
@@ -154,7 +165,9 @@ const preview = computed(() => {
 })
 
 const where = computed(() =>
-  parentTitle.value
+  inserting.value
+    ? t('templates.gallery.insertWhere')
+    : parentTitle.value
     ? t('templates.gallery.whereUnder', { project: projectName.value, parent: parentTitle.value })
     : t('templates.gallery.whereTop', { project: projectName.value }),
 )
@@ -169,6 +182,7 @@ function editorQuery(ref?: string): Record<string, string> {
 }
 
 async function create() {
+  if (!selectedRef.value && inserting.value) return
   if (!selectedRef.value) {
     templates.closeGallery()
     await router.push({ path: '/create', query: editorQuery() })
@@ -190,6 +204,11 @@ async function create() {
         ...(target.value.parentId ? { parentId: target.value.parentId } : {}),
       }),
     })
+    if (inserting.value) {
+      templates.closeGallery()
+      templates.deliverInsert(rendered)
+      return
+    }
     templates.rendered = rendered
     templates.closeGallery()
     await router.push({ path: '/create', query: editorQuery(rendered.templateRef) })
@@ -213,7 +232,7 @@ function scopeLabel(scope: string): string {
   <Dialog v-model:open="open">
     <DialogContent class="flex h-[min(44rem,90vh)] flex-col gap-0 p-0 sm:max-w-4xl">
       <DialogHeader class="border-b px-5 pt-5 pb-3">
-        <DialogTitle>{{ t('templates.gallery.title') }}</DialogTitle>
+        <DialogTitle>{{ inserting ? t('templates.gallery.insertTitle') : t('templates.gallery.title') }}</DialogTitle>
         <DialogDescription>{{ where }}</DialogDescription>
       </DialogHeader>
 
@@ -280,7 +299,7 @@ function scopeLabel(scope: string): string {
         <!-- The pick ---------------------------------------------------- -->
         <div class="min-h-0 overflow-y-auto px-5 py-4">
           <div v-if="selectedRef === null" class="text-muted-foreground text-sm">
-            {{ t('templates.gallery.blankDescription') }}
+            {{ inserting ? t('templates.gallery.insertPick') : t('templates.gallery.blankDescription') }}
           </div>
 
           <p v-else-if="detailError" class="text-sm">{{ detailError }}</p>
@@ -297,7 +316,7 @@ function scopeLabel(scope: string): string {
             </p>
 
             <form id="kn-tpl-form" class="space-y-3" @submit.prevent="create">
-              <div class="space-y-1.5">
+              <div v-if="!inserting" class="space-y-1.5">
                 <Label for="kn-tpl-title">{{ t('templates.gallery.pageTitle') }}</Label>
                 <Input id="kn-tpl-title" v-model="title" :placeholder="t('editor.pageTitle')" />
               </div>
@@ -314,7 +333,7 @@ function scopeLabel(scope: string): string {
                 {{ t('templates.gallery.preview') }}
               </p>
               <div class="kn-tpl-preview bg-muted/30 rounded-md border px-4 py-3">
-                <p class="mb-2 text-lg font-semibold">{{ preview?.title || t('editor.untitledPage') }}</p>
+                <p v-if="!inserting" class="mb-2 text-lg font-semibold">{{ preview?.title || t('editor.untitledPage') }}</p>
                 <MarkdownView :markdown="preview?.body ?? ''" />
               </div>
             </section>
@@ -329,10 +348,16 @@ function scopeLabel(scope: string): string {
         <Button
           type="submit"
           form="kn-tpl-form"
-          :disabled="creating || (selectedRef !== null && !detail)"
+          :disabled="creating || (selectedRef !== null && !detail) || (inserting && selectedRef === null)"
           @click="selectedRef === null && create()"
         >
-          {{ creating ? t('common.creating') : t('templates.gallery.create') }}
+          {{
+            creating
+              ? t('common.creating')
+              : inserting
+                ? t('templates.gallery.insert')
+                : t('templates.gallery.create')
+          }}
         </Button>
       </DialogFooter>
     </DialogContent>

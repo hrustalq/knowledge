@@ -153,7 +153,8 @@
     "blankPage": "Blank page",
     "newPageFromTemplate": "From template…",
     "or": "or",
-    "startFromTemplate": "start from a template"
+    "startFromTemplate": "start from a template",
+    "templates": "Templates"
   },
   "role": {
     "viewer": "Viewer",
@@ -246,7 +247,8 @@
     "viewingRevision": "Viewing revision {id} — commenting is off while reading history.",
     "provenance": "{extractor} · confidence {confidence}",
     "fromTemplate": "From template: {name} v{version}",
-    "fromTemplateUnnamed": "From a template, v{version}"
+    "fromTemplateUnnamed": "From a template, v{version}",
+    "moreActions": "More actions"
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -259,7 +261,8 @@
     "docsHint": "How all of this works",
     "profileHint": "Name, language, password",
     "notificationsHint": "Mentions, reviews, what you follow",
-    "connectHint": "MCP clients, API keys, skill"
+    "connectHint": "MCP clients, API keys, skill",
+    "templatesHint": "Page shapes to start from"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -2466,7 +2469,8 @@
     "heading4": "Heading 4",
     "left": "Left",
     "right": "Right",
-    "more": "More formatting"
+    "more": "More formatting",
+    "template": "Template"
   },
   "hints": {
     "noProjects": "No projects in this workspace yet.",
@@ -3369,7 +3373,104 @@
       "pickPerson": "Pick a person",
       "pickPage": "Pick a page",
       "whereTop": "Goes into {project}, at the top level. Nothing is saved until you publish.",
-      "whereUnder": "Goes into {project}, under “{parent}”. Nothing is saved until you publish."
-    }
+      "whereUnder": "Goes into {project}, under “{parent}”. Nothing is saved until you publish.",
+      "insertTitle": "Insert a template",
+      "insertWhere": "The skeleton goes in at the cursor, and its tags and relations join the page's. Nothing is saved until you publish.",
+      "insertPick": "Pick a template on the left to insert its skeleton here.",
+      "insert": "Insert"
+    },
+    "placeholderKind": {
+      "text": "Text",
+      "date": "Date",
+      "user": "Person",
+      "page": "Page",
+      "entity": "Entity key"
+    },
+    "placeholders": {
+      "none": "No placeholders: pages start from the text exactly as written.",
+      "name": "Name",
+      "label": "Label",
+      "kind": "Kind",
+      "hint": "Hint or example",
+      "remove": "Remove {name}",
+      "add": "Add placeholder",
+      "detect": "Detect from text"
+    },
+    "fields": {
+      "icon": "Icon",
+      "name": "Name",
+      "description": "Description",
+      "scope": "Offered in",
+      "category": "Category",
+      "titlePattern": "Title pattern",
+      "titlePatternHint": "How the page title is built, e.g. {example}. Empty: the title as typed.",
+      "placeholders": "Placeholders",
+      "placeholdersHint": "Asked for when a page is created. Only names declared here are filled in; any other {example} stays as written.",
+      "tags": "Tags pages inherit",
+      "relations": "Relations pages inherit",
+      "relationTarget": "Target entity key",
+      "aiInstructions": "Instructions for the assistant",
+      "aiInstructionsHint": "Used when a page is filled in with AI. Passed on as guidance from your workspace, not as rules the assistant must obey.",
+      "body": "Body",
+      "bodyHint": "Write placeholders as {example}; {system} are always available. To keep one literal, write {escaped}."
+    },
+    "scope": {
+      "projectNamed": "This project ({project})",
+      "noProject": "The page is in no project.",
+      "workspace": "Every project in the workspace",
+      "workspaceHint": "Changes what every project is offered.",
+      "adminOnly": "Needs the admin role."
+    },
+    "saveAs": {
+      "action": "Save as template",
+      "title": "Save page as template",
+      "description": "The page's text becomes the template's body, and its tags and relations become what pages created from it inherit. The page itself is not changed.",
+      "placeholdersHint": "Found from the {example} in the page. With none, the template is a fixed structure to fill in by hand.",
+      "save": "Save template",
+      "saved": "Template “{name}” saved",
+      "openSettings": "Open"
+    },
+    "settings": {
+      "new": "New template",
+      "newHint": "A template is a page shape: its body, the placeholders asked for when a page is created, and the tags and relations those pages inherit.",
+      "none": "No templates.",
+      "pick": "Pick a template to see its shape and history.",
+      "notFound": "This template is not offered in the active project.",
+      "use": "New page from it",
+      "customise": "Customise",
+      "hide": "Hide",
+      "show": "Show",
+      "reset": "Reset to default",
+      "archive": "Archive",
+      "unarchive": "Restore",
+      "archived": "Archived",
+      "hidden": "Hidden",
+      "customized": "Customised",
+      "shape": "Shape",
+      "readOnly": "Only editors can change project templates.",
+      "adminOnly": "Only admins can change workspace-wide and built-in templates.",
+      "customiseHint": "Customising changes this template for the whole workspace. Its name and description stay the product's, in each reader's language. Saving adds a version after the shipped one; Reset brings the shipped one back.",
+      "create": "Create template",
+      "created": "Template “{name}” created",
+      "saved": "“{name}” saved as v{version}",
+      "archivedToast": "“{name}” archived",
+      "unarchivedToast": "“{name}” restored",
+      "hiddenToast": "“{name}” is hidden from the gallery",
+      "shownToast": "“{name}” is offered again",
+      "resetToast": "“{name}” is back to the shipped version",
+      "resetTitle": "Reset “{name}”?",
+      "resetBody": "This workspace's versions of the template are deleted and the shipped one is offered again. Pages already created from it keep their text and still say which version they came from."
+    },
+    "history": {
+      "title": "History",
+      "shipped": "Shipped with the product",
+      "someone": "Someone",
+      "by": "{who}, {when}",
+      "current": "current",
+      "onlyOne": "Only one version so far.",
+      "compare": "v{version} compared with",
+      "pick": "Version"
+    },
+    "version": "v{version}"
   }
 }

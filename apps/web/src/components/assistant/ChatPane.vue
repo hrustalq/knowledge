@@ -176,7 +176,16 @@ function prefill(text: string) {
   composerEl.value?.setDraft(text)
 }
 
-defineExpose({ prefill, focus: () => composerEl.value?.focus() })
+/**
+ * For a host that starts the conversation itself — the editor filling a page
+ * from a template (issue #69): sent as typed, in the composer's current mode.
+ */
+async function send(text: string) {
+  transcriptEl.value?.scrollToEnd()
+  await assistant.sendMessage(text, props.documentId, { mode: assistantMode.value })
+}
+
+defineExpose({ prefill, send, focus: () => composerEl.value?.focus() })
 
 async function startNewThread() {
   try {

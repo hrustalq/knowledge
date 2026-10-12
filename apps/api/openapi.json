@@ -19400,6 +19400,24 @@
           "content"
         ]
       },
+      "AssistantDraftTemplateDto": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "description": "A template id or builtin:<key>",
+            "example": "builtin:adr"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "ref",
+          "version"
+        ]
+      },
       "AssistantDraftDto": {
         "type": "object",
         "properties": {
@@ -19411,6 +19429,14 @@
             "type": "string",
             "maxLength": 100000,
             "description": "The body markdown, unstaged edits included"
+          },
+          "template": {
+            "description": "The template this new page started from. The turn is told the draft is a skeleton to fill in; a ref the workspace cannot resolve is ignored.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssistantDraftTemplateDto"
+              }
+            ]
           }
         },
         "required": [

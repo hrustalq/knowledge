@@ -143,6 +143,20 @@ export class ChatAttachmentDto {
   content!: string;
 }
 
+/** The template a new page was started from (issue #69). */
+export class AssistantDraftTemplateDto {
+  @ApiProperty({ description: 'A template id or builtin:<key>', example: 'builtin:adr' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100, { message: vmsg('maxLength') })
+  ref!: string;
+
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
 /** The page as it stands in the author's editor (docs/features/34). */
 export class AssistantDraftDto {
   @ApiProperty({ description: 'The title field as typed, which may differ from the published title' })
@@ -154,6 +168,17 @@ export class AssistantDraftDto {
   @IsString()
   @MaxLength(ASSISTANT_DRAFT_MAX_CHARS, { message: vmsg('maxLength') })
   markdown!: string;
+
+  @ApiPropertyOptional({
+    type: AssistantDraftTemplateDto,
+    description:
+      'The template this new page started from. The turn is told the draft is a skeleton to fill in; a ref ' +
+      'the workspace cannot resolve is ignored.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AssistantDraftTemplateDto)
+  template?: AssistantDraftTemplateDto;
 }
 
 export class PostAssistantMessageDto {

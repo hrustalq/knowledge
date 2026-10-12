@@ -56,6 +56,8 @@ import type {
 import { t } from '../i18n/t.js';
 import { currentLocale } from '../i18n/locale.js';
 import { applyDraftEdit, refuseDraftEdit } from './draft-edits.js';
+import { templateClause } from './template-clause.js';
+import { TemplatesService } from '../templates/templates.service.js';
 import { scanPartialObject } from './partial-args.js';
 import { CITATION_CLAUSE, CiteLabels, answerSignals, finalizeCitations } from './citations.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
@@ -264,6 +266,7 @@ export class AssistantService {
     private readonly tasks: WorkItemToolsService,
     private readonly provenance: ProvenanceService,
     private readonly feedback: AnswerFeedbackService,
+    private readonly templates: TemplatesService,
     private readonly env: ConfigService,
   ) {}
 
@@ -1050,6 +1053,7 @@ export class AssistantService {
 
     const groundingDocumentId = dto.documentId ?? thread.documentId ?? undefined;
     const draft = dto.draft ?? null;
+    const draftTemplate = draft?.template ? await this.draftTemplateClause(thread.workspaceId, draft.template) : '';
     const labels = new CiteLabels();
     let groundingDoc: { id: string; title: string } | null = null;
     let groundingMarkdown = '';
@@ -1129,6 +1133,7 @@ export class AssistantService {
             ? `\n\nCurrent page: "${groundingDoc.title}"${turnTrail} (documentId: ${groundingDoc.id}, cite ${labels.label(groundingDoc.id)})`
             : '\n\nCurrent page: a new page, not yet published') +
           DRAFT_CLAUSE +
+          draftTemplate +
           `\n\n<draft title=${JSON.stringify(draft.title || '(untitled)')}>\n${draft.markdown.slice(0, 30_000) || '(empty — the page has no body yet)'}\n</draft>`
         : groundingDoc
           ? `\n\nCurrent page: "${groundingDoc.title}"${turnTrail} (documentId: ${groundingDoc.id}, cite ${labels.label(groundingDoc.id)})\n\n` +
@@ -1179,6 +1184,29 @@ export class AssistantService {
       toolErrors: 0,
       question: dto.content,
     };
+  }
+
+  /**
+   * The template clause for a draft started from one (issue #69), or nothing.
+   * Resolved inside the thread's workspace, so a ref from another tenant reads
+   * as unknown. An unknown or deleted template drops the clause rather than
+   * failing the turn: the draft is still a draft, and the author still wants
+   * an answer. Archived is fine — the page was started from it all the same.
+   */
+  private async draftTemplateClause(workspaceId: string, ref: { ref: string; version: number }): Promise<string> {
+    try {
+      const template = await this.templates.resolve(workspaceId, ref.ref, ref.version);
+      const { meta } = template.parsed;
+      return templateClause({
+        ref: template.ref,
+        version: template.version,
+        name: template.name,
+        description: template.row?.description ?? meta.description,
+        aiInstructions: meta.aiInstructions,
+      });
+    } catch {
+      return '';
+    }
   }
 
   /** Relevant-document lookup — plain hybrid search over a draft excerpt; always available. */

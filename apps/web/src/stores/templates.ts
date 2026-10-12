@@ -25,6 +25,12 @@ export interface GalleryTarget {
   title?: string
 }
 
+/** A fill the gallery asked for, waiting for the editor it navigates to. */
+export interface TemplateFill {
+  ref: TemplateRef
+  prompt: string
+}
+
 /**
  * Where an insert-mode render goes. Outside the store's state on purpose: a
  * callback is not state, and state is what SSR serializes.
@@ -66,6 +72,13 @@ export const useTemplatesStore = defineStore('templates', {
      * the template itself.
      */
     rendered: null as RenderTemplateResponse | null,
+    /**
+     * "Describe the page for AI": what the author asked for, handed to the
+     * editor with the render, which opens the assistant on it as the first
+     * turn. Transient and one-shot for the same reason as `rendered` — a
+     * reload must not ask the assistant again.
+     */
+    fill: null as TemplateFill | null,
   }),
   getters: {
     offered(state): TemplateSummary[] {
@@ -142,6 +155,12 @@ export const useTemplatesStore = defineStore('templates', {
       insertHandler = null
       handler?.(rendered)
       return handler !== null
+    },
+    /** The gallery's fill request for `ref`, once — taken with its render. */
+    takeFill(ref: TemplateRef): string | null {
+      const fill = this.fill
+      this.fill = null
+      return fill?.ref === ref ? fill.prompt : null
     },
     /** The gallery's render for `ref`, once: a second editor visit must not reuse it. */
     takeRendered(ref: TemplateRef): RenderTemplateResponse | null {

@@ -4110,11 +4110,21 @@ export interface components {
             filename: string;
             content: string;
         };
+        AssistantDraftTemplateDto: {
+            /**
+             * @description A template id or builtin:<key>
+             * @example builtin:adr
+             */
+            ref: string;
+            version: number;
+        };
         AssistantDraftDto: {
             /** @description The title field as typed, which may differ from the published title */
             title: string;
             /** @description The body markdown, unstaged edits included */
             markdown: string;
+            /** @description The template this new page started from. The turn is told the draft is a skeleton to fill in; a ref the workspace cannot resolve is ignored. */
+            template?: components["schemas"]["AssistantDraftTemplateDto"];
         };
         PostAssistantMessageDto: {
             /** @example Draft a short onboarding page for new hires */

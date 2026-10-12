@@ -13,7 +13,7 @@
 // rail on the left stays as the author left it: the conversation is a second
 // thing to look at, not a replacement for getting somewhere else.
 import { useI18n } from 'vue-i18n'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { History, PanelRightClose, Sparkles, SquarePen } from 'lucide-vue-next'
 import { useAssistantStore } from '@/stores/assistant'
 import { Button } from '@/components/ui/button'
@@ -51,7 +51,11 @@ const view = ref<'chat' | 'threads'>('chat')
 
 const subtitle = computed(() => (assistant.activeThread ? threadLabel(assistant.activeThread) : t('editorAi.newChat')))
 
-onMounted(() => void assistant.openForDocument(props.documentId))
+/** Settles once the panel knows which chat it is showing — what `fill` waits for. */
+let opened: Promise<void> = Promise.resolve()
+onMounted(() => {
+  opened = assistant.openForDocument(props.documentId)
+})
 // A page saved for the first time gets its id mid-session; the chat it was
 // having is the chat about it, so nothing reopens.
 watch(
@@ -73,7 +77,21 @@ const starters = computed(() =>
     : [t('editorAi.starter.tighten'), t('editorAi.starter.gaps'), t('editorAi.starter.summary')],
 )
 
-defineExpose({ focus: () => pane.value?.focus() })
+/**
+ * Start a fresh chat with `prompt` as its first turn (issue #69): the gallery's
+ * "Describe the page for AI". A new chat, so the fill is not appended to
+ * whatever was open; the turn carries the draft — and with it the template —
+ * like any other, through the draft bridge.
+ */
+async function fill(prompt: string) {
+  await opened.catch(() => undefined)
+  view.value = 'chat'
+  assistant.startBlank()
+  await nextTick()
+  await pane.value?.send(prompt)
+}
+
+defineExpose({ focus: () => pane.value?.focus(), fill })
 </script>
 
 <template>

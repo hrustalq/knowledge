@@ -296,12 +296,27 @@ export class AssistantToolsService {
           description:
             'Create a brand-new page in this workspace with the given markdown content. It is visible immediately ' +
             '(there is nothing existing to protect for a new page) — use this only when the user is clearly asking ' +
-            'for a NEW document, not a change to one that already exists (use propose_update for that instead).',
+            'for a NEW document, not a change to one that already exists (use propose_update for that instead). ' +
+            'For a page of a kind the workspace has a template for (list_templates), pass templateRef: with ' +
+            'markdown, yours is the page and the template is recorded as its shape and adds its tags and ' +
+            'relations; without markdown, the template is filled in from values.',
           parameters: {
             type: 'object',
             properties: {
               title: { type: 'string', description: 'Document title' },
-              markdown: { type: 'string', description: 'Full markdown content of the new page' },
+              markdown: {
+                type: 'string',
+                description: 'Full markdown content of the new page. Required unless templateRef is given.',
+              },
+              templateRef: {
+                type: 'string',
+                description: 'A template ref from list_templates, e.g. builtin:adr',
+              },
+              values: {
+                type: 'object',
+                additionalProperties: { type: 'string' },
+                description: 'Placeholder values by name, as get_template lists them: text, an ISO date, or a user/page id',
+              },
               category: { type: 'string', description: 'Optional category; defaults to "other"' },
               parentId: {
                 type: 'string',
@@ -314,7 +329,7 @@ export class AssistantToolsService {
                 description: "Optional UUID of the owning project; defaults to the workspace's first project",
               },
             },
-            required: ['title', 'markdown'],
+            required: ['title'],
           },
         },
       },
@@ -582,8 +597,9 @@ export class AssistantToolsService {
   private async createDocument(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
     const title = String(args.title ?? '').trim().slice(0, 300);
     const markdown = String(args.markdown ?? '');
+    const templateRef = typeof args.templateRef === 'string' ? args.templateRef.trim() : '';
     if (!title) return this.fail('title is required');
-    if (!markdown.trim()) return this.fail('markdown is required');
+    if (!markdown.trim() && !templateRef) return this.fail('markdown is required (or a templateRef to fill in)');
     const authorId = ctx.principal.userId; // matches DEV_PRINCIPAL's stub id in AUTH_MODE=none
 
     // Every document needs a project. A project id from args is validated
@@ -600,9 +616,12 @@ export class AssistantToolsService {
         workspaceId: ctx.workspaceId, // pinned — never from args
         projectId,
         title,
-        content: { mode: 'inline', format: 'markdown', text: markdown },
+        ...(markdown.trim() ? { content: { mode: 'inline', format: 'markdown', text: markdown } } : {}),
         ...(typeof args.category === 'string' && args.category ? { category: args.category as DocumentCategory } : {}),
         ...(typeof args.parentId === 'string' && args.parentId ? { parentId: args.parentId } : {}),
+        // Issue #69. Resolved and rendered inside the pinned workspace by
+        // createDocument, so a ref from another tenant is a not-found there.
+        ...(templateRef ? { template: { ref: templateRef, values: templateValues(args.values) } } : {}),
       },
       authorId,
     );
@@ -849,4 +868,12 @@ export class AssistantToolsService {
   private fail(message: string): AssistantToolResult {
     return { content: JSON.stringify({ error: message }), ok: false, sources: [] };
   }
+}
+
+/** A model's `values` argument as placeholder values: string fields only, anything else dropped. */
+function templateValues(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) if (typeof value === 'string') out[key] = value;
+  return out;
 }

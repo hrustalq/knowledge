@@ -5,6 +5,7 @@ import type {
   AssistantSource,
   AssistantToolCall,
   AssistantWebSource,
+  SourceVerificationState,
 } from '@knowledge/contracts/core';
 import type { RelationInput } from '@knowledge/contracts/documents';
 import type { AiActionId } from '@knowledge/contracts/content';
@@ -1035,6 +1036,15 @@ export interface AgentRunInput {
    * twice; never set by anything else.
    */
   publishedAt?: string;
+  /**
+   * When the pull request a sentinel run checked was merged (docs/features/35,
+   * issue #66 phase 4). Stamped by `DriftTriggerService` on a merged delivery,
+   * which starts no check: it is what turns the pages the run flagged
+   * `requested` into `outdated`.
+   */
+  mergedAt?: string;
+  /** The sweeper's claim that it acted on `mergedAt`, once. Never set by anything else. */
+  outdatedAt?: string;
 }
 
 /**
@@ -1308,6 +1318,12 @@ export interface AgentFinding {
    */
   proposedAt?: string | null;
   /**
+   * When a person marked the cited page outdated from this finding
+   * (docs/features/39, issue #66). Explicit, never automatic, and recorded so
+   * the button does not offer the same declaration twice.
+   */
+  flaggedAt?: string | null;
+  /**
    * The knowledge issue this finding answers (docs/features/38, phase 3): a
    * sentinel judging a report points its verdict back at the report, which is
    * what lets the publisher move the issue on without guessing.
@@ -1386,6 +1402,14 @@ export interface ProposeAgentFindingResponse {
   documentTitle: string;
   branch: string;
   title: string;
+}
+
+// POST /v1/ai/agents/runs/:id/findings/:index/mark-outdated
+export interface FlagFindingOutdatedResponse {
+  documentId: string;
+  documentTitle: string;
+  /** The page's derived state after the flag — `outdated`, unless a report outranks it. */
+  verification: SourceVerificationState;
 }
 
 // POST /v1/ai/agents/runs/:id/findings/:index/create-page

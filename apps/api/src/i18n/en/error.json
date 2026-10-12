@@ -61,7 +61,10 @@
     "nothingToUpdate": "Nothing to update",
     "contentIsDraft": "Revision {id} is a draft — finalize it before reading content",
     "uploadMissing": "No object uploaded at {key} — upload before finalizing",
-    "revisionNotDraft": "Revision {id} is {status}, expected draft"
+    "revisionNotDraft": "Revision {id} is {status}, expected draft",
+    "archived": "Document {id} is archived — unarchive it before changing it",
+    "ownerNotMember": "The owner must be a member of this workspace",
+    "foreignIds": "{count} of the given pages belong to another workspace"
   },
   "branch": {
     "notFound": "Branch {name} not found on document {documentId}",
@@ -193,6 +196,7 @@
     "findingInFlight": "This finding is already being proposed.",
     "findingNoDocument": "This finding cites no page to change.",
     "findingOrphan": "An orphan finding is about missing relations, not page content. Use Apply relations instead, or add one in the page's frontmatter.",
+    "findingNotStale": "Only a stale finding can mark its page outdated.",
     "findingNoRelations": "This finding proposes no relations, so there is nothing to declare. Propose it as a page change instead.",
     "findingDocumentGone": "The page this finding cites ({documentId}) is no longer in this workspace.",
     "assistantDisabled": "The AI assistant is disabled for this workspace.",

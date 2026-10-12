@@ -13,6 +13,141 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.15.0] — 2026-10-12
+
+### Added
+
+- **Pages have an owner, a review interval and an expiry.** `PATCH
+/v1/documents/:id` takes `ownerId` (a workspace member, or `null`) and
+  `reviewIntervalDays` (`null` inherits the workspace default, `0` never
+  expires); `POST /v1/documents/:id/verify` takes `{ intervalDays }` and the
+  stamp now reads `expired` once its interval has passed, with nothing written.
+  The owner is told when somebody asks for a check, marks the page outdated or
+  hands it to them, under a new `verification` notification category that can
+  be muted. First part of the page verification milestone (#66).
+- **Ask for a check, or declare a page wrong.** Any member can `POST
+/v1/documents/:id/verification-request`; an editor can `POST
+/v1/documents/:id/outdated`. Both take a note and show on the page as
+  `requested` / `outdated` until a person verifies or clears it (`DELETE
+/v1/documents/:id/verify` now clears both the stamp and the flag). Over MCP,
+  `knowledge_flag_document` does the same with the same roles; there is
+  deliberately no tool that verifies. (#66)
+- **Archive a page or a subtree.** `POST /v1/documents/:id/archive` (and
+  `/unarchive`) puts a page and, by default, everything under it away: hidden
+  from the page list, the tree, search, the assistant and MCP unless
+  `includeArchived` is asked for, still readable by id, and refusing writes with
+  `409 document_archived`. Archive is a visibility default, not a permission.
+  (#66)
+- **Search ranks by trust.** Hybrid, semantic and keyword search — and so the
+  assistant's `ask` and MCP `knowledge_search` — multiply each hit's score by
+  its page's verification state: verified pages rank above unverified ones,
+  expired and reported pages below, pages declared outdated last, and pages with
+  no activity for `PAGE_INACTIVE_AFTER_DAYS` a little lower still. Every hit
+  carries `trust: { status, verifiedAt, expiresAt, ownerId, inactive }`, and
+  `filters.verificationStates` / `filters.includeArchived` narrow a search.
+  `SEARCH_TRUST_RANKING=false`, or a workspace's `trustRanking` override,
+  restores the previous order exactly. (#66)
+- **Knowledge-health API.** `GET /v1/knowledge-health` lists a workspace's pages
+  with their derived status, filtered by `stale | unowned | empty | expired |
+edited | outdated | requested | flagged | inactive | archived`, owner, project
+  and title; `/summary` counts each filter live; `POST /bulk` runs verify /
+  request / outdated / clear / reassign / archive / unarchive over up to 200
+  pages with per-id results, refusing the whole batch when one id belongs to
+  another workspace; `GET`/`PATCH /settings` reads and overrides the
+  workspace's freshness policy, showing what applies beside what is overridden.
+  The dashboard page that uses it ships in a later part of #66. (#66)
+- **The owner hears before a verification runs out, and once it has.** A
+  sweeper in the API process reminds a page's owner (or its last verifier)
+  `VERIFICATION_REMIND_BEFORE_DAYS` before the stamp expires — per workspace,
+  `remindBeforeDays` in the knowledge-health settings overrides it, `0` turns
+  reminders off — and announces the expiry when it passes, once each per stamp
+  even with several API replicas running. The expiry lands in the activity feed
+  under a `system` actor; both notifications ride the `verification` category
+  and can be muted. The same tick fills `body_chars` for revisions indexed
+  before that column existed, so the dashboard's "empty" filter stops reading
+  as unknown for old pages. `VERIFICATION_SWEEP_ENABLED=false` turns it off.
+  Part of #66. (#66)
+- **A drift check now marks the page, not just the pull request.** With a
+  connector's drift check on, every page the sentinel finds wrong is flagged
+  `requested` for its owner, with the pull request and the finding as the note.
+  When that pull request merges — GitHub `closed` with `merged`, GitLab `merge`,
+  neither of which starts a check — the pages still `requested` become
+  `outdated` and rank last until somebody verifies them. A page verified after
+  the check started, cleared by hand, or whose proposed fix already merged is
+  left alone, and an owner who can no longer edit cannot declare a page
+  outdated. The new connector option **Flag the pages it finds wrong**
+  (`driftFlagPages`, on by default, effective only with the check on) turns it
+  off. A stale finding in the agent runs panel gains **Mark outdated** beside
+  Propose (`POST /v1/ai/agents/runs/:id/findings/:index/mark-outdated`,
+  editor), explicit and offered once. (#66)
+
+- **The page shows its verification, its owner and the way to change both.**
+  A **Verification** widget heads every page's rail, folding like the widgets
+  under it, and reads the derived state — verified,
+  expired, edited since, requested, reported, outdated — with who stamped or
+  flagged it and when (a drift flag links to its pull request), the owner, and
+  the actions the reader's role allows: **Verify** with a review interval
+  (workspace default, 30/90/180/365 days, never), **Request verification** for
+  any member, **Mark outdated**, **Clear verification** and **Archive** for
+  editors. An archived page shows when and by whom with **Unarchive** instead,
+  loses its Edit action, and the editor route sends you back to it. The page tree, the
+  rail, the page list and the search sheet mark pages whose state asks for a
+  look, and the pages index gains a **Show archived** switch. Every action
+  reflects live in other tabs. (#66)
+- **A knowledge-health dashboard.** `/knowledge-health`, in the rail beside
+  merge requests and workflows, lists the workspace's (or the active
+  project's) pages most neglected first, with a preset strip — _Needs
+  attention_, _Unowned_, _Empty_, _Expired_, _Edited since verified_,
+  _Outdated_, _Requested_, _Reported_, _Inactive_, _Archived_ — each carrying
+  its live count, and narrowing by title, owner and sort. Editors select rows
+  (shift for a range, cmd/ctrl to add one, Escape to clear) and run one action
+  over all of them: verify with a review interval, reassign, request a check,
+  mark outdated, clear verification, and for admins archive and unarchive;
+  each page that refuses says why. A preview sheet shows a page's verification
+  widget and body beside the table. The **Settings** tab shows the workspace's
+  freshness policy — what is overridden beside what applies and the server
+  default — and lets an admin change it. The dashboard follows live events, so
+  a page verified elsewhere moves off the strip as you watch. (#66)
+
+### Changed
+
+- **A verified page that has since been edited now reads `edited`, not
+  `outdated`.** `outdated` is reserved for a page somebody declared wrong (a
+  person, the sentinel, or an agent over MCP), so that ranking and the health
+  filters can tell "touched since the check" from "known to be wrong". The
+  provenance card, the `verification` field on `GET /v1/documents/:id` and
+  `knowledge_search` hits, and the confidence badge all use the new name. (#66)
+- The provenance chip under an assistant answer now names every verification
+  state; it had shown the raw message key for a page that read `edited`,
+  `expired` or `requested`. (#66)
+- Verifying, flagging, owning and archiving a page count as curation in the
+  activity calendar rather than as writes. (#66)
+
+### Operations
+
+- New env vars, all with defaults, all overridable per workspace through
+  `PATCH /v1/knowledge-health/settings`: `VERIFICATION_DEFAULT_REVIEW_DAYS`
+  (90), `VERIFICATION_REMIND_BEFORE_DAYS` (7), `PAGE_INACTIVE_AFTER_DAYS`
+  (180), `EMPTY_PAGE_MAX_CHARS` (40), `VERIFICATION_SWEEP_ENABLED` (true),
+  `SEARCH_TRUST_RANKING` (true). (#66)
+- Migration `20261011120000_page_verification` adds nullable or defaulted
+  columns to `documents` and `document_revisions` and a `knowledge_health_settings`
+  table; the previous image runs against it unchanged, so a code rollback needs
+  no database step. It backfills `documents.last_activity_at` from revisions and
+  the activity log and `documents.owner_id` from each page's first author where
+  that author is still a member; pages whose first author was the dev stub or
+  has left stay unowned. `document_revisions.body_chars` is not backfilled
+  (content lives in object storage): "empty page" reads as unknown for existing
+  revisions until the sweeper of a later #66 part fills it. (#66)
+- Production moved off the `knowledge-prod` VPS, which is unreachable, to the
+  Mac mini. `deploy.yml` now runs on the `knowledge-macmini` runner (macOS,
+  ARM64, Colima) and rolls out `~/Homelab/infra/knowledge`; `.env`,
+  `searxng/settings.yml` and `admin-bootstrap.txt` live there, hand-managed as
+  before. Nothing on the box listens publicly: a Cloudflare Worker on
+  `knowledge.hrustalq.dev` forwards to the Mac mini's Tailscale Funnel, which
+  serves caddy on `127.0.0.1:8088` (plain HTTP, no ACME). The VPS's data was
+  not recoverable, so production started from an empty database. (#126)
+
 ## [0.14.0] — 2026-10-10
 
 ### Breaking
@@ -51,7 +186,7 @@ in the pull request that introduces them — see
   incomplete, wrong pages cited, no answer, unclear, other) and takes an
   optional comment; pressing the active thumb takes the vote back, and a vote
   survives a reload. Over the API: `PUT`/`DELETE
-  /v1/assistant/messages/:id/feedback` and `POST /v1/assistant/ask/feedback`,
+/v1/assistant/messages/:id/feedback` and `POST /v1/assistant/ask/feedback`,
   open to read-only API keys. Second part of the answer trust milestone (#67).
 - **Coverage gaps.** A new built-in `surveyor` agent reads the questions the
   assistant was down-voted on, answered with low confidence or could not
@@ -85,8 +220,8 @@ in the pull request that introduces them — see
   Over the API: `POST /v1/knowledge-issues`, `GET /v1/knowledge-issues`,
   `PATCH /v1/knowledge-issues/:id`. Third part of the answer trust milestone
   (#67).
-- **A thumbs-down names its pages.** Voting an answer down as *wrong* or *out
-  of date* offers, ticked by default, to report the pages it cited — one
+- **A thumbs-down names its pages.** Voting an answer down as _wrong_ or _out
+  of date_ offers, ticked by default, to report the pages it cited — one
   report per page, after the vote itself is stored. (#67)
 - **Agents can report what they read.** A new `knowledge_report_issue` MCP
   tool takes the page, the kind of problem, what is wrong and the evidence;
@@ -94,7 +229,7 @@ in the pull request that introduces them — see
   it. A report never edits a page by itself. Hidden from read-only keys like
   every other write. (#67)
 - **Page authors hear about reports.** The last author of a reported page gets
-  a notification under *Page changes*; the feed records `reported`,
+  a notification under _Page changes_; the feed records `reported`,
   `proposed`, `resolved` and `dismissed`. (#67)
 
 - **Feedback becomes a test set.** A new **Feedback** tab on the AI settings
@@ -107,7 +242,7 @@ in the pull request that introduces them — see
   a report that ended in a merged fix names the page that answers now.
   `make backtest ARGS="--export-feedback --workspace <id> --out fb.ndjson"`
   writes the same file from the database, and `make backtest ARGS="--feedback
-  fb.ndjson"` replays it through search and prints recall@1, recall@k, MRR
+fb.ndjson"` replays it through search and prints recall@1, recall@k, MRR
   and how often a rejected page still ranks, split by surface and by reason.
   Last part of the answer trust milestone (#67).
 
@@ -161,7 +296,7 @@ in the pull request that introduces them — see
   hashed words, so it is not usable in a stub-embedding deployment. Off unless
   someone presses Survey now or schedules the agent. (#67)
 - The feedback export (`GET /v1/ai/feedback/export`, `make backtest
-  --export-feedback`) carries question text and user ids: it is admin-only,
+--export-feedback`) carries question text and user ids: it is admin-only,
   every call writes an `audit_logs` row (`feedback.export`, with the line
   count), and one export reads at most 50 000 votes. No new env var and no
   migration; retention (`ANSWER_FEEDBACK_RETENTION_DAYS`) bounds the dataset
@@ -304,8 +439,8 @@ in the pull request that introduces them — see
   on a github.com repository now has a **GitHub access** card (admins only)
   listing every permission and webhook event its App installation has, next to
   what each feature needs — sync, publishing, work items, the drift check. A gap
-  says whose job it is: *pending* permissions are accepted by the installation's
-  owner (**Review on GitHub**), *missing* ones must first be added to the App
+  says whose job it is: _pending_ permissions are accepted by the installation's
+  owner (**Review on GitHub**), _missing_ ones must first be added to the App
   registration (**Edit the App**). Gaps in features the connector does not use
   are shown but not flagged. (#64)
 - **Reconnect or disconnect your GitHub account.** The same card shows which
@@ -347,8 +482,8 @@ in the pull request that introduces them — see
   the pages about the code the change touches — pages the connector derived,
   pages that name a changed file, and a few search hits — decides page by page
   whether the change makes something on it untrue, and drafts the corrected
-  page. In *Report* mode it leaves one comment on the pull request listing the
-  pages that drifted, updated on every push; in *Propose* mode it also opens a
+  page. In _Report_ mode it leaves one comment on the pull request listing the
+  pages that drifted, updated on every push; in _Propose_ mode it also opens a
   merge request here for each drafted correction. Forks and drafts are never
   checked, and nothing changes a page until a person merges. (#61)
 
@@ -362,12 +497,12 @@ in the pull request that introduces them — see
 ### Operations
 
 - Off by default; nothing changes for existing connectors. The GitHub App needs
-  no new permission or event — it already receives *Pull request* events and has
-  *Pull requests* / *Issues: Read and write* since 0.9.0. A connector using a
+  no new permission or event — it already receives _Pull request_ events and has
+  _Pull requests_ / _Issues: Read and write_ since 0.9.0. A connector using a
   token, and every GitLab connector, needs a **Webhook secret** set on the
   connector and a repository webhook pointed at
-  `$API_PUBLIC_URL/v1/connectors/<id>/webhook` with *Pull requests* (GitHub) or
-  *Merge request events* (GitLab) selected. See
+  `$API_PUBLIC_URL/v1/connectors/<id>/webhook` with _Pull requests_ (GitHub) or
+  _Merge request events_ (GitLab) selected. See
   [docs/features/35](docs/features/35-pr-drift-check.md#setup).
 
 ## [0.10.1] — 2026-09-26
@@ -392,7 +527,6 @@ in the pull request that introduces them — see
   repaired automatically — their frontmatter is still in the revision history.
 
 ## [0.10.0] — 2026-09-26
-
 
 ### Added
 
@@ -462,11 +596,11 @@ in the pull request that introduces them — see
 
 - **The SearXNG instance answered every search with nothing.** Its config
   narrowed the engine roster with `keep_only`, which preserves each engine's
-  *default* state — and upstream ships google as `disabled: true`. Kept but
+  _default_ state — and upstream ships google as `disabled: true`. Kept but
   disabled, google never fired on a real query, only on an explicit
   `?engines=google`, so the instance returned `200 application/json` with an
   empty `results` array and looked like a working backend that had nothing to
-  say. A top-level `engines:` block now enables it; that form *modifies* the
+  say. A top-level `engines:` block now enables it; that form _modifies_ the
   engines it names rather than re-widening the roster `keep_only` narrowed. (#52)
 - **One of the four configured engines was never loaded.** `keep_only` matches
   engine names, not module names, and a name matching nothing is dropped in
@@ -494,7 +628,7 @@ in the pull request that introduces them — see
   SearXNG "does not fit beside a build" applied to OpenSearch's JVM and has
   been corrected.
 - **`/srv/knowledge/searxng/settings.yml` is hand-managed beside `.env`** and is
-  deliberately *not* synced by `deploy.yml`, because it carries a generated
+  deliberately _not_ synced by `deploy.yml`, because it carries a generated
   `secret_key` that must not be the dev placeholder this repo ships. The service
   definition, however, must live in `docker-compose.prod.yml`: deploy installs
   that file over the box's copy and then runs `up -d --remove-orphans`, so a
@@ -594,12 +728,13 @@ in the pull request that introduces them — see
   keeps trusted operator separate, because it is a flag over admin rather than a
   fourth role. `/settings/users` and `/admin/users` redirect.
 - **The followed-subjects list names what it follows.** `GET
-  /v1/notifications/subscriptions` now returns each subject's title and pages by
+/v1/notifications/subscriptions` now returns each subject's title and pages by
   cursor (`limit` / `cursor` / `nextCursor`, the shape `/v1/activity` uses).
   A subject that has since been deleted still reports `null`, and the settings
   page shows its id — the honest thing for something that is gone.
 
 ### Fixed
+
 - **The settings navigation stays put again when the page scrolls.** The sub-rail
   — settings sections, the project roster, the docs index, the saved
   merge-request filters — was declared sticky but sat inside a container with
@@ -848,6 +983,7 @@ in the pull request that introduces them — see
   digits.
 - **Review severity badges show a translated label** instead of the raw
   `error` / `warning` / `suggestion` value.
+
 ### Added
 
 - `docs/architecture/` — nine per-layer implementation documents for the machinery
@@ -1102,7 +1238,7 @@ in the pull request that introduces them — see
 - Documents no longer fail to index on a newly deployed instance. Every upload
   stayed unsearchable: the graph store rejected the schema the worker creates at
   startup, and each ingestion job then failed with `Type with name 'Chunk' was not
-  found`. A worker that cannot create its graph schema now refuses to start
+found`. A worker that cannot create its graph schema now refuses to start
   instead of accepting work it will fail indefinitely. (#4)
 
 ### Operations
@@ -1150,7 +1286,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.14.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/hrustalq/knowledge/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/hrustalq/knowledge/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/hrustalq/knowledge/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/hrustalq/knowledge/compare/v0.11.0...v0.12.0

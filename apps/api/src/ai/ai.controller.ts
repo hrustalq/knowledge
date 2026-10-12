@@ -33,6 +33,7 @@ import type {
   ListSourcePoliciesResponse,
   CreatePageFromFindingResponse,
   ProposeAgentFindingResponse,
+  FlagFindingOutdatedResponse,
   ProposeRelationsResponse,
   SourcePolicy,
 } from '@knowledge/contracts';
@@ -410,6 +411,27 @@ export class AiController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<ProposeAgentFindingResponse> {
     return this.findings.propose(workspaceId, id, index, principal);
+  }
+
+  /**
+   * Mark the page a stale finding cites outdated (docs/features/39, #66).
+   *
+   * `editor`, the role `POST /v1/documents/:id/outdated` asks for: it is the
+   * same declaration, made from the finding that prompted it and attributed
+   * to the person pressing the button, never to the run.
+   */
+  @Post('agents/runs/:id/findings/:index/mark-outdated')
+  @Access('editor', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
+  @ApiOperation({ summary: 'Declare the page a stale finding cites outdated, as the caller' })
+  markFindingOutdated(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<FlagFindingOutdatedResponse> {
+    return this.findings.markOutdated(workspaceId, id, index, principal);
   }
 
   /**

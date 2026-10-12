@@ -10,12 +10,15 @@ import {
   ArrayMaxSize,
   IsArray,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -143,6 +146,24 @@ export class UpdateDocumentDto {
   @IsOptional()
   @IsUUID()
   projectId?: string;
+
+  /**
+   * The responsible person (docs/features/39). Must be a member of the page's
+   * workspace; explicit `null` makes the page unowned. Nullable, so the Swagger
+   * type is spelled out (see CLAUDE.md gotchas).
+   */
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Owner; null for unowned' })
+  @ValidateIf((o: UpdateDocumentDto) => o.ownerId !== undefined && o.ownerId !== null)
+  @IsUUID()
+  ownerId?: string | null;
+
+  /** Per-page review interval: `null` inherits the workspace default, `0` never expires. */
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Review interval in days; null inherits, 0 never expires' })
+  @ValidateIf((o: UpdateDocumentDto) => o.reviewIntervalDays !== undefined && o.reviewIntervalDays !== null)
+  @IsInt()
+  @Min(0, { message: vmsg('min') })
+  @Max(3650, { message: vmsg('max') })
+  reviewIntervalDays?: number | null;
 }
 
 /**

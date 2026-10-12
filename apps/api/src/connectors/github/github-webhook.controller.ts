@@ -13,7 +13,7 @@ import { ConnectorsService } from '../connectors.service.js';
 import { ConnectorWorkItemsService } from '../connector-work-items.service.js';
 import { toWorkItem } from './github-issues.service.js';
 import { DriftTriggerService } from '../drift/drift-trigger.service.js';
-import { readGithubPullRequest } from '../drift/pull-request-delivery.js';
+import { readGithubMergedPullRequest, readGithubPullRequest } from '../drift/pull-request-delivery.js';
 
 /**
  * The App-level webhook (docs/features/32).
@@ -142,6 +142,10 @@ export class GithubWebhookController {
       // branch — and decides for itself whether the connector opted in.
       const drift = readGithubPullRequest(event, payload);
       const queued = drift ? await this.drift.request(row, drift) : null;
+      // A merge starts no check; it turns the pages the last check flagged
+      // from asked-about into outdated (docs/features/39).
+      const merged = readGithubMergedPullRequest(event, payload);
+      if (merged) await this.drift.merged(row, merged);
       if (!type) return queued !== null;
       // `toWorkItem` discriminates on a nested `pull_request` key, which a pull
       // request *payload* does not have — it is the pull request. Re-nesting the

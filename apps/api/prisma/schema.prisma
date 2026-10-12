@@ -44,6 +44,32 @@ model Document {
   verifiedAt         DateTime? @map("verified_at") @db.Timestamptz
   verifiedBy         String?   @map("verified_by") @db.Uuid
   verifiedRevisionId String?   @map("verified_revision_id") @db.Uuid
+  /// Ownership, freshness, declared state and archive (docs/features/39, #66).
+  /// The stamp above IS the verified state; nothing stored says "verified".
+  /// `verification_flag` holds the one state a person or agent *declares*
+  /// (`requested` | `outdated`), the rest is derived by `verificationStateFor`
+  /// against the head, the clock and the open-report count. No FK on owner_id,
+  /// archived_by (house policy on user columns).
+  ownerId               String?   @map("owner_id") @db.Uuid
+  /// `verified_at + review_interval_days`; null = never expires.
+  verificationExpiresAt DateTime? @map("verification_expires_at") @db.Timestamptz
+  /// Null inherits the workspace default (knowledge_health_settings → env); 0 = never.
+  reviewIntervalDays    Int?      @map("review_interval_days")
+  verificationFlag      String?   @map("verification_flag")
+  verificationNote      String?   @map("verification_note")
+  /// `VerificationSource`: who/what set the flag, and from which run or PR.
+  verificationSource    Json?     @map("verification_source")
+  /// Sweeper idempotency stamps (claim-once); both reset on every verify.
+  expiryRemindedAt      DateTime? @map("expiry_reminded_at") @db.Timestamptz
+  expiredNotifiedAt     DateTime? @map("expired_notified_at") @db.Timestamptz
+  /// Bumped by `ActivityService.record` for every FRESHNESS_ACTIONS action;
+  /// backfilled from revisions + activity_log in the migration. "Inactive" is
+  /// derived from it, never stored.
+  lastActivityAt        DateTime  @default(now()) @map("last_activity_at") @db.Timestamptz
+  /// Archive is a visibility default, not an access boundary: hidden from
+  /// lists, tree, search and MCP unless asked for; readable by id; read-only.
+  archivedAt            DateTime? @map("archived_at") @db.Timestamptz
+  archivedBy            String?   @map("archived_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   project       Project            @relation(fields: [projectId], references: [id])
@@ -60,6 +86,11 @@ model Document {
   @@index([parentId])
   @@index([workspaceId, path])
   @@index([parentId, position])
+  @@index([workspaceId, verificationFlag])
+  @@index([workspaceId, ownerId])
+  @@index([workspaceId, verificationExpiresAt])
+  @@index([workspaceId, lastActivityAt])
+  @@index([workspaceId, archivedAt])
   @@map("documents")
 }
 
@@ -99,6 +130,11 @@ model DocumentRevision {
   // revision was last indexed (provider:model:dim); drift triggers reindex.
   indexedAt      DateTime? @map("indexed_at") @db.Timestamptz
   embeddingModel String?   @map("embedding_model")
+  // Body length without frontmatter, written by the ingestion normalizer
+  // (docs/features/39) so "empty page" is answerable in PG. Null for revisions
+  // indexed before the column existed — read as "unknown", never as "empty" —
+  // until the verification sweeper's bounded catch-up fills it.
+  bodyChars      Int?      @map("body_chars")
 
   document Document         @relation(fields: [documentId], references: [id])
   branch   DocumentBranch?  @relation(fields: [branchId], references: [id])
@@ -1835,6 +1871,24 @@ model NotificationPreference {
 
   @@id([userId, workspaceId])
   @@map("notification_preferences")
+}
+
+/**
+ * Per-workspace freshness policy (docs/features/40, #66) — a sparse override of
+ * the VERIFICATION_* / PAGE_INACTIVE_AFTER_DAYS / EMPTY_PAGE_MAX_CHARS /
+ * SEARCH_TRUST_RANKING env defaults. Null = inherit, so an empty table gives
+ * exactly the env behaviour. workspace_id carries no FK, like ai_settings.
+ */
+model KnowledgeHealthSettings {
+  workspaceId        String   @id @map("workspace_id") @db.Uuid
+  reviewIntervalDays Int?     @map("review_interval_days")
+  remindBeforeDays   Int?     @map("remind_before_days")
+  inactiveAfterDays  Int?     @map("inactive_after_days")
+  emptyMaxChars      Int?     @map("empty_max_chars")
+  trustRanking       Boolean? @map("trust_ranking")
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("knowledge_health_settings")
 }
 
 /// A GitHub App installation on an account or organisation (docs/features/30).

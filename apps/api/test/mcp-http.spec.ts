@@ -122,9 +122,15 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         deduplicated: false,
       })),
     },
+    issues: {},
+    verification: {
+      flag: vi.fn(async (documentId: string, state: string) => ({
+        document: { documentId, verification: state, ownerId: 'owner-1' },
+      })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
-  return { mcp, search, documents, provenance: deps.provenance, feedback: deps.feedback };
+  return { mcp, search, documents, provenance: deps.provenance, feedback: deps.feedback, verification: deps.verification };
 }
 
 async function connect(mcp: McpService, principal: Principal) {
@@ -185,6 +191,33 @@ describe('McpService over a principal', () => {
     expect(provenance.decorateResults).toHaveBeenCalledWith(WS_A, expect.any(Array));
     expect(body.results[0]).toMatchObject({ documentId: 'd1', revisionNumber: 3, verification: 'verified' });
     expect(body.traceId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('knowledge_flag_document needs viewer for requested and editor for outdated, and records the mcp source (docs/features/39)', async () => {
+    const { mcp, verification } = service(accessWith('viewer'));
+    const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A }));
+    const doc = '44444444-4444-4444-8444-444444444444';
+    // The guard resolves the document's workspace before the role check.
+    (mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
+
+    const asked = await client.callTool({
+      name: 'knowledge_flag_document',
+      arguments: { workspaceId: WS_A, documentId: doc, state: 'requested', note: 'please re-check the SLA table' },
+    });
+    expect(asked.isError).toBeFalsy();
+    expect(verification.flag).toHaveBeenCalledWith(
+      doc,
+      'requested',
+      expect.objectContaining({ note: 'please re-check the SLA table', source: expect.objectContaining({ kind: 'mcp' }) }),
+    );
+
+    // A viewer may ask, but may not declare a page wrong.
+    const refused = await client.callTool({
+      name: 'knowledge_flag_document',
+      arguments: { workspaceId: WS_A, documentId: doc, state: 'outdated' },
+    });
+    expect(refused.isError).toBe(true);
+    expect(verification.flag).toHaveBeenCalledTimes(1);
   });
 
   it('knowledge_feedback stores a vote as the caller with surface mcp, and insists on a reason for a down-vote', async () => {

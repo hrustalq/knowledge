@@ -9,7 +9,12 @@ import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService } from './connectors.service.js';
 import { REPO_CONNECTOR_KINDS } from './code-research/repo-snapshot.service.js';
 import { DriftTriggerService } from './drift/drift-trigger.service.js';
-import { isPullRequestEvent, readPullRequestDelivery, verifyRepoDelivery } from './drift/pull-request-delivery.js';
+import {
+  isPullRequestEvent,
+  readMergedDelivery,
+  readPullRequestDelivery,
+  verifyRepoDelivery,
+} from './drift/pull-request-delivery.js';
 import { safeJson } from './webhook-payload.js';
 
 /**
@@ -65,8 +70,12 @@ export class ConnectorWebhookController {
           throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
         }
         const delivery = readPullRequestDelivery(lower, payload);
-        const runId = delivery ? await this.drift.request(row, delivery) : null;
-        return { accepted: true, runId };
+        if (delivery) return { accepted: true, runId: await this.drift.request(row, delivery) };
+        // A merge is not a change to check but a fact about pages already
+        // checked (docs/features/39): it starts no run, it moves their flags.
+        const merged = readMergedDelivery(lower, payload);
+        if (merged) await this.drift.merged(row, merged);
+        return { accepted: true, runId: null };
       }
     }
 

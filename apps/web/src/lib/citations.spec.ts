@@ -42,9 +42,12 @@ describe('where a citation opens', () => {
 })
 
 describe('verificationTone', () => {
-  it('maps the four states and the absent one', () => {
+  it('maps every state and the absent one', () => {
     expect(verificationTone('verified')).toBe('ok')
-    expect(verificationTone('outdated')).toBe('warn')
+    expect(verificationTone('edited')).toBe('warn')
+    expect(verificationTone('expired')).toBe('warn')
+    expect(verificationTone('requested')).toBe('warn')
+    expect(verificationTone('outdated')).toBe('bad')
     expect(verificationTone('flagged')).toBe('bad')
     expect(verificationTone('unverified')).toBe('none')
     expect(verificationTone(undefined)).toBe('none')

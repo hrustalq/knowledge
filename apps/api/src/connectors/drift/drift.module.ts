@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AiModule } from '../../ai/ai.module.js';
 import { PrismaModule } from '../../prisma/prisma.module.js';
 import { ConnectorsCoreModule } from '../connectors-core.module.js';
+import { VerificationCoreModule } from '../../verification/verification-core.module.js';
 import { DriftPublishSweeper } from './drift-publish.sweeper.js';
 
 /**
@@ -12,9 +13,12 @@ import { DriftPublishSweeper } from './drift-publish.sweeper.js';
  *
  * The trigger half is not here: `DriftTriggerService` is provided by
  * `ConnectorsModule`, beside the two webhook controllers that call it.
+ *
+ * `VerificationCoreModule` for the page flags (docs/features/39): a finding
+ * asks for a check, a merged pull request declares the page outdated.
  */
 @Module({
-  imports: [PrismaModule, AiModule, ConnectorsCoreModule],
+  imports: [PrismaModule, AiModule, ConnectorsCoreModule, VerificationCoreModule],
   providers: [DriftPublishSweeper],
 })
 export class DriftModule {}

@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { GraphModule } from '../graph/graph.module.js';
 import { EmbeddingModule } from '../embedding/embedding.module.js';
 import { FulltextModule } from '../fulltext/fulltext.module.js';
+import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
+import { VerificationPolicyModule } from '../verification/verification-policy.module.js';
 import { SearchService } from './search.service.js';
 
 /**
@@ -17,7 +19,10 @@ import { SearchService } from './search.service.js';
  * server and no auth guard registered to enforce its `@Access`.
  */
 @Module({
-  imports: [GraphModule, EmbeddingModule, FulltextModule],
+  // FeedbackCoreModule for the open-report count and VerificationPolicyModule
+  // for the trust switch and the inactivity window (docs/features/39): both
+  // leaves, both worker-safe.
+  imports: [GraphModule, EmbeddingModule, FulltextModule, FeedbackCoreModule, VerificationPolicyModule],
   providers: [SearchService],
   exports: [SearchService],
 })

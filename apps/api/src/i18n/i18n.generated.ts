@@ -265,6 +265,9 @@ export type I18nTranslations = {
             "contentIsDraft": string;
             "uploadMissing": string;
             "revisionNotDraft": string;
+            "archived": string;
+            "ownerNotMember": string;
+            "foreignIds": string;
         };
         "branch": {
             "notFound": string;
@@ -396,6 +399,7 @@ export type I18nTranslations = {
             "findingInFlight": string;
             "findingNoDocument": string;
             "findingOrphan": string;
+            "findingNotStale": string;
             "findingNoRelations": string;
             "findingDocumentGone": string;
             "assistantDisabled": string;

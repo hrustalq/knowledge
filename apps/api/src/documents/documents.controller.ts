@@ -45,6 +45,11 @@ import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { sendPageMarkdown } from '../ai-readable/ai-readable.http.js';
 import { prefersMarkdown, wantsFrontmatter } from '../ai-readable/render.js';
 
+/** A query-string boolean: `1`, `true` and `yes` are on; anything else, including absence, is off. */
+function flag(value?: string): boolean {
+  return value === '1' || value === 'true' || value === 'yes';
+}
+
 /** Query facets arrive comma-separated; a singular alias folds in beside them. */
 function csv(value?: string, single?: string): string[] {
   const parts = (value ?? '').split(',').map((v) => v.trim()).filter(Boolean);
@@ -87,6 +92,7 @@ export class DocumentsController {
     required: false,
     description: 'Comma-separated frontmatter tags; bare name or `tag:` entity key',
   })
+  @ApiQuery({ name: 'includeArchived', required: false, description: '1 to include archived pages (docs/features/39)' })
   list(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('limit') limit?: string,
@@ -96,6 +102,7 @@ export class DocumentsController {
     @Query('categories') categories?: string,
     @Query('projectIds') projectIds?: string,
     @Query('tags') tags?: string,
+    @Query('includeArchived') includeArchived?: string,
   ) {
     // The singular params predate the facets and still work; each is folded
     // into its plural so callers never have to know which one won.
@@ -103,6 +110,7 @@ export class DocumentsController {
       categories: csv(categories, category),
       projectIds: csv(projectIds, projectId),
       tags: csv(tags),
+      includeArchived: flag(includeArchived),
     });
   }
 
@@ -114,15 +122,18 @@ export class DocumentsController {
   @ApiQuery({ name: 'projectId', required: false, description: 'Restrict to one project' })
   @ApiQuery({ name: 'parentId', required: false, description: 'Children of this node; omit for the top level' })
   @ApiQuery({ name: 'depth', required: false, description: 'Levels to load below parentId; omit to load all of them' })
+  @ApiQuery({ name: 'includeArchived', required: false, description: '1 to include archived pages (docs/features/39)' })
   tree(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('projectId') projectId?: string,
     @Query('parentId') parentId?: string,
     @Query('depth') depth?: string,
+    @Query('includeArchived') includeArchived?: string,
   ) {
     return this.documents.getTree(workspaceId, projectId || undefined, {
       parentId: parentId || null,
       ...(depth ? { depth: Number(depth) } : {}),
+      includeArchived: flag(includeArchived),
     });
   }
 
@@ -172,24 +183,9 @@ export class DocumentsController {
     return this.documents.moveDocument(id, dto, principal?.userId);
   }
 
-  @Post(':id/verify')
-  @Access('editor', 'document')
-  @ApiOperation({
-    summary:
-      'Stamp the page as verified at its current head (docs/features/38). ' +
-      'The stamp reads as outdated once the head moves; nothing is written then',
-  })
-  @ApiResponse({ status: 409, description: 'The page has no finalized head revision to vouch for' })
-  verify(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
-    return this.documents.verifyDocument(id, principal.userId);
-  }
-
-  @Delete(':id/verify')
-  @Access('editor', 'document')
-  @ApiOperation({ summary: 'Remove the verification stamp' })
-  unverify(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
-    return this.documents.unverifyDocument(id, principal.userId);
-  }
+  // `:id/verify`, `:id/verification-request`, `:id/outdated`, `:id/archive` and
+  // `:id/unarchive` live in VerificationController (docs/features/39), mounted
+  // on the same prefix.
 
   @Get(':id/content')
   @Access('viewer', 'document')

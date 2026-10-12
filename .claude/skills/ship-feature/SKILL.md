@@ -117,21 +117,34 @@ markdown body get eaten by the shell.
 
 ## Stage 2 — the branch, linked to the issue
 
-Branch **from `main`** with `gh issue develop`, which creates the branch on the
-remote and links it in the issue's _Development_ panel:
+Pick the base first, then branch with `gh issue develop`, which creates the
+branch on the remote and links it in the issue's _Development_ panel:
 
 ```bash
 git fetch origin
-gh issue develop <N> --base main --name feat/<N>-<short-name> --checkout
+git diff --stat origin/main origin/dev | tail -1      # empty = same tree
+gh issue develop <N> --base <main|dev> --name feat/<N>-<short-name> --checkout
 ```
 
 `<N>-` in the name matches the house pattern (`fix/110-provider-account-errors`).
-`main` is the last state that ran in production, the honest base for new work.
-Use `--base dev` only when the change builds on something unreleased already
-merged there.
+Which base:
 
-`--base main` also records `main` as the branch's PR base in git config, so a
-bare `gh pr create` will target `main`. Always pass `--base dev` in Stage 3.
+- **`dev` and `main` carry the same tree** (the diff above is empty — the usual
+  state right after a release): branch from **`dev`**. The content is identical,
+  but `main`'s history also holds every promotion merge commit, which `dev`
+  never has. A branch cut from `main` therefore lists all of them as "commits"
+  on its PR into `dev` — a dozen empty `Merge pull request #N from hrustalq/dev`
+  rows above your one real commit. The squash merge drops them, so nothing is
+  harmed, but the PR is unreadable and a reviewer cannot tell at a glance what
+  is in it. (#119 shipped this way.)
+- **`dev` is ahead of `main`** and the change must **not** depend on what is
+  unreleased there: branch from **`main`**, the last state that ran in
+  production. This is what keeps a hotfix-shaped change honest.
+- **`dev` is ahead** and the change builds on something already merged there
+  (a later phase of a milestone, say): branch from **`dev`**.
+
+`--base` also records that branch as the PR base in git config, so a bare
+`gh pr create` will target it. Always pass `--base dev` in Stage 3.
 
 If `--checkout` is refused because the tree is dirty, the branch still exists on
 the remote: `git fetch origin && git switch -c feat/<N>-<short-name> --track
@@ -286,7 +299,7 @@ first. Approval to merge is not approval to deploy.
 
 ## Stage 7 — watch, then verify
 
-The run builds both images sequentially (a 3.8 GB box cannot afford parallel
+The run builds both images sequentially (the Colima VM cannot afford parallel
 `tsc`), applies migrations, rolls out, then gates on loopback health and the
 public endpoint.
 
@@ -349,6 +362,11 @@ was designed around.
 - **Never squash the promotion PR**, and never force a fast-forward of one
   branch onto the other. `main` keeps `dev`'s commits reachable; that is what
   makes the next promotion's merge base correct.
+- **A branch cut from `main` lists every promotion merge on its PR into `dev`.**
+  Those `Merge pull request #N from hrustalq/dev` rows are reachable from
+  `main` and never from `dev`; they carry nothing and the squash drops them,
+  but they bury the real commit. Branch from `dev` whenever the two trees are
+  equal (Stage 2).
 - **There is no sync step, and adding one is the mistake.** The promotion merge
   commit already carries `dev`'s exact tree onto `main`, and the next promotion
   PR's merge base is the previous `dev` head — so the branches never drift in
@@ -386,10 +404,10 @@ Code only, and only because every migration is required to run against the
 previous release's image:
 
 ```bash
-ssh knowledge-prod
+ssh macmini
 docker tag knowledge-api:vX.Y.Z knowledge-api:latest
 docker tag knowledge-web:vX.Y.Z knowledge-web:latest
-docker compose -f /srv/knowledge/docker-compose.prod.yml up -d
+docker compose -f ~/Homelab/infra/knowledge/docker-compose.prod.yml up -d
 ```
 
 ## Reporting

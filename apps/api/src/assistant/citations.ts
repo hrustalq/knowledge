@@ -1,5 +1,5 @@
 import type { AnswerCitation, AnswerSignals, AssistantSource, AssistantToolCall } from '@knowledge/contracts';
-import { assistantSourceKey, isWebSource } from '@knowledge/contracts';
+import { assistantSourceKey, isWebSource, verificationIsStale } from '@knowledge/contracts';
 import { FREE_TOOLS } from './assistant-tool-types.js';
 
 /**
@@ -235,7 +235,9 @@ export const CITATION_CLAUSE =
   '"… [S1, S3]". Cite only labels you were actually given; a label you did not see is stripped from your ' +
   'answer and counts against it. A sentence that comes from no page — a greeting, a summary of your own ' +
   'steps, a statement that the workspace does not cover something — carries no label. Never put labels ' +
-  'inside code blocks.';
+  'inside code blocks. Each search result also carries a verification `status`: prefer verified pages, and ' +
+  'when you rely on one that is outdated, expired or edited since verification, say so in the sentence that ' +
+  'cites it.';
 
 /**
  * The observable facts `assessAnswer` reads, gathered from the finished turn.
@@ -267,8 +269,12 @@ export function answerSignals(input: {
     citedSources: cited.length,
     unknownCitations: final.unknown,
     maxScore: scores.length ? Math.max(...scores) : null,
+    // A stamp that no longer vouches for the page (edited since, expired, or
+    // declared outdated — docs/features/39) counts as stale beside plain age.
     staleSources: pages.filter(
-      (s) => s.verification === 'outdated' || (s.changedAt !== undefined && Date.parse(s.changedAt) < staleBefore),
+      (s) =>
+        (s.verification !== undefined && verificationIsStale(s.verification)) ||
+        (s.changedAt !== undefined && Date.parse(s.changedAt) < staleBefore),
     ).length,
     flaggedSources: pages.filter((s) => s.verification === 'flagged').length,
     verifiedSources: pages.filter((s) => s.verification === 'verified').length,

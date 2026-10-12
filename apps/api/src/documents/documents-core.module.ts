@@ -6,6 +6,8 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { ProjectsCoreModule } from '../projects/projects-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
+import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
+import { VerificationPolicyModule } from '../verification/verification-policy.module.js';
 import { DocumentsService } from './documents.service.js';
 
 /**
@@ -34,6 +36,10 @@ import { DocumentsService } from './documents.service.js';
     // Writing a page subscribes its author to it (docs/features/22). Core, so
     // this stays worker-loadable.
     NotificationsCoreModule,
+    // The open-report count that turns a stamp into `flagged` (docs/features/38)
+    // and the workspace's freshness policy (docs/features/39). Both leaves.
+    FeedbackCoreModule,
+    VerificationPolicyModule,
   ],
   providers: [DocumentsService],
   exports: [DocumentsService],

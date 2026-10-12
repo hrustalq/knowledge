@@ -72,7 +72,7 @@ import KnowledgeIssuesRail from '@/components/knowledge/KnowledgeIssuesRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
-import { useMembers } from '@/components/merge-requests/use-members'
+import VerificationBar from '@/components/verification/VerificationBar.vue'
 
 const { t } = useI18n()
 
@@ -82,6 +82,10 @@ const store = useDocumentsStore()
 const events = useEventsStore()
 
 const RAIL_WIDGETS = [
+  // What the page reads as and who answers for it (docs/features/39): a fact
+  // about the page, so it heads the rail, and a widget like the rest so it
+  // folds away and is remembered the same way.
+  { id: 'verification', label: t('verification.title'), icon: BadgeCheck, expandable: false },
   { id: 'overview', label: t('rail.overview'), icon: Info, expandable: false },
   { id: 'frontmatter', label: t('rail.frontmatter'), icon: Braces, expandable: false },
   { id: 'revisions', label: t('rail.history'), icon: History, expandable: true },
@@ -153,65 +157,11 @@ let timer: ReturnType<typeof setInterval> | undefined
 
 /* ---------------------------------------------------------- verification */
 
-// The manual stamp (docs/features/38): one button that reads the derived state
-// and does the one thing that state calls for. Unverified → stamp it; verified
-// → take the stamp off; outdated (the head moved since) → stamp the new head.
-// A viewer sees the state and cannot change it.
-const { memberOf } = useMembers()
-const verification = computed(() => detail.value?.document.verification ?? 'unverified')
-const verifierName = computed(() => {
-  const id = detail.value?.document.verifiedBy
-  return id ? (memberOf(id)?.displayName ?? id.slice(0, 8)) : ''
-})
-const verifyLabel = computed(() => {
-  const d = detail.value
-  if (!d) return ''
-  switch (verification.value) {
-    case 'verified':
-      return t('documents.verify.verified', { n: d.revision.revisionNumber })
-    case 'outdated':
-      return t('documents.verify.outdated')
-    // An open report outranks the stamp (docs/features/38, phase 3): the
-    // button names it, and the Issues widget is where it is dealt with.
-    case 'flagged':
-      return t('documents.verify.flagged')
-    default:
-      return t('documents.verify.action')
-  }
-})
-const verifyTitle = computed(() => {
-  const d = detail.value
-  if (!d) return ''
-  const when = d.document.verifiedAt ? relativeTime(d.document.verifiedAt) : ''
-  switch (verification.value) {
-    case 'flagged':
-      return t('documents.verify.flaggedHint')
-    case 'verified':
-      return auth.canEdit
-        ? t('documents.verify.removeHint', { who: verifierName.value, when })
-        : t('documents.verify.verifiedBy', { who: verifierName.value, when })
-    case 'outdated':
-      return auth.canEdit
-        ? t('documents.verify.reverifyHint', { who: verifierName.value, when })
-        : t('documents.verify.outdatedBy', { who: verifierName.value, when })
-    default:
-      return t('documents.verify.actionHint')
-  }
-})
-const verifying = ref(false)
-
-async function toggleVerify() {
-  if (!detail.value || verifying.value || !auth.canEdit) return
-  verifying.value = true
-  try {
-    const method = verification.value === 'verified' ? 'DELETE' : 'POST'
-    detail.value = await apiFetch<DocumentDetailResponse>(`/v1/documents/${documentId.value}/verify`, { method })
-  } catch (e) {
-    toast.error(errorMessage(e, t))
-  } finally {
-    verifying.value = false
-  }
-}
+// The status bar (components/verification/VerificationBar, docs/features/39)
+// owns the stamp, the flag, the owner and the archive state; this page only
+// hands it the detail and takes the detail back. Archived pages are
+// read-only: the Edit action goes, and the editor route sends you back here.
+const archived = computed(() => !!detail.value?.document.archivedAt)
 
 /* ------------------------------------------------------------ page data */
 
@@ -420,6 +370,13 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
   const openIssues = issues?.filter((i) => isOpenIssueStatus(i.status)).length ?? 0
 
   return {
+    // The collapsed row carries the state itself — the one word that decides
+    // whether to open it.
+    verification: detail.value
+      ? archived.value
+        ? t('verification.archived.badge')
+        : t(`verification.state.${detail.value.document.verification ?? 'unverified'}`)
+      : null,
     overview: detail.value ? `#${detail.value.revision.revisionNumber}` : null,
     // The collapsed row carries the one fact that decides whether to open it:
     // which system this page answers to, or nothing at all.
@@ -489,7 +446,15 @@ watch(documentId, () => {
 watch(
   () => events.lastEvent,
   (e) => {
-    if (!e || e.documentId !== documentId.value || !e.type.startsWith('revision.')) return
+    if (!e || e.documentId !== documentId.value) return
+    // Verification, ownership and archive events (docs/features/39) change
+    // what the bar says and nothing else: the detail is re-read, the
+    // content is not. Comments have their own query and are not re-read here.
+    if (e.type.startsWith('document.')) {
+      if (!e.type.startsWith('document.comment.')) void load()
+      return
+    }
+    if (!e.type.startsWith('revision.')) return
     const before = detail.value?.revision.revisionId
     // Relations are re-extracted by any indexing pass, so they are always worth
     // re-reading. Content is not: a revision's bytes are immutable, so the only
@@ -550,25 +515,8 @@ watch(
           :title="detail.document.title"
           :revision-id="viewingRevision"
         />
-        <!-- The verification stamp (docs/features/38) sits with the other
-             facts-about-the-page actions. A viewer sees it only when there is
-             something to see; an editor can always stamp. -->
-        <Button
-          v-if="auth.canEdit || verification !== 'unverified'"
-          variant="ghost"
-          size="sm"
-          class="kn-verify"
-          :data-tone="verification"
-          :disabled="!auth.canEdit || verifying"
-          :aria-pressed="verification === 'verified'"
-          :title="verifyTitle"
-          @click="toggleVerify"
-        >
-          <BadgeCheck class="size-3.5" />
-          {{ verifyLabel }}
-        </Button>
         <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
-        <Button v-if="auth.canEdit" variant="outline" size="sm" as-child>
+        <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
           <RouterLink
             :to="`/documents/${detail.document.documentId}/edit`"
             :title="hasUnstaged ? t('editor.unstaged.label') : undefined"
@@ -596,6 +544,7 @@ watch(
         <PageRail
           :widgets="visibleWidgets"
           surface="document"
+          :default-open="['verification', 'overview']"
           :previews="previewFor"
           @expand="expanded = $event"
         >
@@ -603,6 +552,17 @@ watch(
                being read, not to the facts about it. -->
           <template #before>
             <TocRail v-if="headings.length > 1" :headings="headings" />
+          </template>
+
+          <!-- Hidden while reading an old revision: the stamp is about the head. -->
+          <template #widget-verification>
+            <VerificationBar
+              v-if="!viewingRevision"
+              :detail="detail"
+              @update:detail="detail = $event"
+              @reload="load()"
+            />
+            <p v-else class="text-xs text-muted-foreground">{{ t('verification.headOnly') }}</p>
           </template>
 
           <!-- What this page *is*: the facts a reader checks before trusting it. -->
@@ -763,20 +723,3 @@ watch(
     <AskAssistant :document-id="documentId" :title="detail.document.title" />
   </template>
 </template>
-
-<style scoped>
-/* The stamp's glyph takes the state's hue; the button itself stays quiet. */
-.kn-verify[data-tone='verified'] > svg {
-  color: var(--color-emerald-500, #10b981);
-}
-.kn-verify[data-tone='outdated'] > svg {
-  color: var(--color-amber-500, #f59e0b);
-}
-.kn-verify[data-tone='unverified'] > svg {
-  opacity: 0.6;
-}
-/* A report stands against the page: the one state drawn in the destructive hue. */
-.kn-verify[data-tone='flagged'] > svg {
-  color: var(--destructive);
-}
-</style>

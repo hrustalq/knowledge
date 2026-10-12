@@ -23,8 +23,10 @@ import {
   CONNECTOR_KIND_INFO,
   DRIFT_CHECK_CONFIG_KEY,
   DRIFT_CHECK_MODES,
+  DRIFT_FLAG_PAGES_CONFIG_KEY,
   connectorKindInfo,
   driftCheckMode,
+  driftFlagPages,
 } from '@knowledge/contracts'
 import type {
   ConnectorConflictPolicy,
@@ -100,6 +102,8 @@ const isGitKind = computed(() => kind.value === 'codebase' || kind.value === 'ma
  */
 const driftField = computed(() => info.value?.fields.find((f) => f.key === DRIFT_CHECK_CONFIG_KEY) ?? null)
 const driftMode = computed(() => driftCheckMode(context.value?.config))
+/** Whether the check also flags the pages it finds wrong (docs/features/39). On unless turned off. */
+const driftFlags = computed(() => driftFlagPages(context.value?.config))
 
 /**
  * The installation this connector authenticates as, if any.
@@ -586,6 +590,21 @@ function startOver() {
                 </SelectContent>
               </Select>
               <span class="text-muted-foreground block text-xs">{{ t('connectors.driftCheckHint') }}</span>
+            </label>
+
+            <!-- The page flags (docs/features/39): what the check found wrong
+                 is asked for a look, and declared outdated once the pull
+                 request merges. Written as a string like every other field. -->
+            <label v-if="driftMode !== 'off'" class="flex items-start gap-2">
+              <Checkbox
+                :model-value="driftFlags"
+                class="mt-0.5"
+                @update:model-value="setField(DRIFT_FLAG_PAGES_CONFIG_KEY, $event ? 'true' : 'false')"
+              />
+              <span class="text-sm">
+                {{ t('connectors.driftFlagPages') }}
+                <span class="text-muted-foreground block text-xs">{{ t('connectors.driftFlagPagesHint') }}</span>
+              </span>
             </label>
 
             <label v-if="driftMode !== 'off'" class="block space-y-1.5">

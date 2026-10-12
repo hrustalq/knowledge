@@ -85,6 +85,7 @@
     "search": "Search",
     "mergeRequests": "Merge requests",
     "workflows": "Workflows",
+    "knowledgeHealth": "Knowledge health",
     "assistant": "Assistant",
     "settings": "Settings",
     "activity": "Activity",
@@ -221,19 +222,7 @@
     "commentDeleted": "Comment deleted",
     "revisionNumber": "Revision #{n}",
     "viewingRevision": "Viewing revision {id} — commenting is off while reading history.",
-    "provenance": "{extractor} · confidence {confidence}",
-    "verify": {
-      "action": "Verify",
-      "actionHint": "Mark this page as checked and correct at its current revision",
-      "verified": "Verified · #{n}",
-      "verifiedBy": "Verified by {who} {when}",
-      "removeHint": "Verified by {who} {when}. Click to remove the stamp.",
-      "outdated": "Verified · outdated",
-      "outdatedBy": "Verified by {who} {when}, but the page has changed since",
-      "reverifyHint": "Verified by {who} {when}, but the page has changed since. Click to verify the current revision.",
-      "flagged": "Reported",
-      "flaggedHint": "A reader or an agent reported a problem with this page. See the Reports widget in the rail."
-    }
+    "provenance": "{extractor} · confidence {confidence}"
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -298,6 +287,8 @@
       "propose": "Report and propose page updates"
     },
     "driftCheckHint": "When a pull or merge request opens or gets new commits, the Sentinel agent checks the pages it may make wrong and comments on it once, updating that comment on every push. Propose also opens a merge request here for every page it drafted a fix for.",
+    "driftFlagPages": "Flag the pages it finds wrong",
+    "driftFlagPagesHint": "A drift finding asks the page's owner for a check; merging the pull request marks the page outdated until somebody verifies it.",
     "webhookSecretKeep": "Leave empty to keep the current secret",
     "driftWebhookHint": "GitLab, or a GitHub repository hook added by hand: send Merge request / Pull request events to this connector's webhook, signed with this secret.",
     "driftWebhookApp": "This repository is connected through the GitHub App, whose webhook already delivers pull requests — a secret is only needed for a hook added by hand.",
@@ -1270,10 +1261,13 @@
       "fetched": "Read {when}",
       "factTitle": "How this fact reached the answer",
       "verification": {
-        "verified": "Verified",
-        "outdated": "Verified at an older revision",
-        "unverified": "Not verified",
-        "flagged": "Reported"
+        "verified": "@:verification.state.verified",
+        "outdated": "@:verification.state.outdated",
+        "unverified": "@:verification.state.unverified",
+        "flagged": "@:verification.state.flagged",
+        "edited": "@:verification.state.edited",
+        "expired": "@:verification.state.expired",
+        "requested": "@:verification.state.requested"
       },
       "fact": {
         "explicit": "From the page text",
@@ -1659,6 +1653,9 @@
       "createPage": "Create page",
       "pageCreated": "Created the page \"{title}\"",
       "viewProposal": "View merge request",
+      "markOutdated": "Mark outdated",
+      "markedOutdated": "Marked \"{title}\" outdated",
+      "outdatedMarked": "Marked outdated",
       "applyRelations": "Apply relations",
       "relationsApplied": "Opened a merge request: {title}",
       "nothingToApply": "The page already declares these relations — nothing to propose."
@@ -2874,6 +2871,7 @@
       "review": "Reviews",
       "comment": "Comments",
       "document": "Page changes",
+      "verification": "Verification",
       "job": "Runs"
     },
     "categoryHint": {
@@ -2881,6 +2879,7 @@
       "review": "Merge requests you author, are assigned, or are asked to review.",
       "comment": "New discussion on something you follow.",
       "document": "A page you follow was edited, renamed or moved.",
+      "verification": "A page you own needs a check, was marked outdated, is about to expire, or was handed to you.",
       "job": "A workflow, agent, import or sync you started finished."
     },
     "reason": {
@@ -2924,7 +2923,12 @@
       "import.parsed": "an import is ready to review",
       "import.failed": "an import failed",
       "connector.run.failed": "a sync failed",
-      "knowledge-issue.reported": "reported a problem with this page"
+      "knowledge-issue.reported": "reported a problem with this page",
+      "document.verification-requested": "asked for this page to be verified",
+      "document.outdated": "marked this page outdated",
+      "document.verification-expiring": "the verification of this page is about to expire",
+      "document.verification-expired": "the verification of this page has expired",
+      "document.owner-changed": "made you the owner of this page"
     }
   },
   "connect": {
@@ -3086,5 +3090,233 @@
     "copyFailed": "Could not copy to the clipboard",
     "tooLongCopied": "The page is too long for a link, so it was copied. Paste it into the chat.",
     "failed": "Could not load the page"
+  },
+  "verification": {
+    "title": "Verification",
+    "headOnly": "Verification is about the current head; go back to it to see or change the stamp.",
+    "state": {
+      "verified": "Verified",
+      "expired": "Verification expired",
+      "edited": "Edited since verified",
+      "requested": "Verification requested",
+      "outdated": "Outdated",
+      "flagged": "Reported",
+      "unverified": "Not verified"
+    },
+    "inactive": "Inactive",
+    "inactiveHint": "No edits, comments or checks for a while",
+    "note": "Note",
+    "describe": {
+      "verified": "Verified by {who} {when}",
+      "expires": "expires {when}",
+      "neverExpires": "never expires",
+      "edited": "Verified by {who} {when}; the page has changed since",
+      "expired": "Verified by {who} {when}; the review interval has passed",
+      "requested": "{who} asked for a check {when}",
+      "outdated": "Marked outdated by {who} {when}",
+      "flagged": "A reader or an agent reported a problem with this page — see Reports in the rail",
+      "unverified": "Nobody has verified this page yet"
+    },
+    "source": {
+      "sentinel": "the sentinel",
+      "curator": "the curator",
+      "mcp": "an agent over MCP",
+      "someone": "somebody"
+    },
+    "sourceLink": "Open the pull request",
+    "owner": "Owner",
+    "unowned": "Unowned",
+    "changeOwner": "Change owner",
+    "searchMembers": "Search members…",
+    "noMembers": "No member matches that.",
+    "action": {
+      "verify": "Verify",
+      "verified": "Verified",
+      "verifyAt": "Verify at #{n}",
+      "request": "Request a check",
+      "outdated": "Mark outdated",
+      "clear": "Clear verification",
+      "archive": "Archive page",
+      "unarchive": "Unarchive",
+      "more": "More page actions"
+    },
+    "interval": {
+      "title": "review interval",
+      "default": "Workspace default",
+      "days": "{n} day | {n} days",
+      "never": "Never expires"
+    },
+    "requestDialog": {
+      "title": "Request verification",
+      "description": "The owner is told this page needs a check. Say what looks wrong or out of date.",
+      "notePlaceholder": "What should be checked?",
+      "submit": "Request"
+    },
+    "outdatedDialog": {
+      "title": "Mark outdated",
+      "description": "Readers, search and the assistant are told this page is wrong until somebody verifies it again.",
+      "notePlaceholder": "What is wrong?",
+      "submit": "Mark outdated"
+    },
+    "archiveDialog": {
+      "title": "Archive “{title}”?",
+      "description": "The page leaves the tree, lists, search and the assistant. It stays readable by its link and is read-only until unarchived.",
+      "withDescendants": "Also archive the pages under it",
+      "confirm": "Archive"
+    },
+    "archived": {
+      "badge": "Archived",
+      "banner": "Archived {when} by {who}. The page is read-only until it is unarchived.",
+      "editorBlocked": "This page is archived. Unarchive it to edit.",
+      "showArchived": "Show archived",
+      "hideArchived": "Hide archived pages"
+    },
+    "toast": {
+      "verified": "Page verified",
+      "cleared": "Verification cleared",
+      "requested": "Verification requested",
+      "outdated": "Page marked outdated",
+      "ownerChanged": "Owner updated",
+      "archived": "Page archived",
+      "unarchived": "Page restored"
+    }
+  },
+  "health": {
+    "title": "Knowledge health",
+    "subtitleIntro": "Which pages are stale, unowned, empty or put away — and one action over many of them.",
+    "subtitle": "{count} live page {scope} | {count} live pages {scope}",
+    "tab": {
+      "pages": "Pages",
+      "settings": "Settings"
+    },
+    "presets": "Presets",
+    "preset": {
+      "all": "All",
+      "stale": "Needs attention",
+      "unowned": "Unowned",
+      "empty": "Empty",
+      "expired": "Expired",
+      "edited": "Edited since verified",
+      "outdated": "Outdated",
+      "requested": "Requested",
+      "flagged": "Reported",
+      "inactive": "Inactive",
+      "archived": "Archived"
+    },
+    "presetHint": {
+      "all": "Every live page",
+      "stale": "Expired, outdated or inactive",
+      "unowned": "No member answers for the page",
+      "empty": "A body under the workspace's empty-page threshold",
+      "expired": "The review interval has passed since the last verification",
+      "edited": "Changed since it was verified",
+      "outdated": "Declared wrong by a person or by a merged pull request",
+      "requested": "Somebody asked for a check",
+      "flagged": "A reader or an agent reported a problem",
+      "inactive": "No edit, comment or check for the inactivity window",
+      "archived": "Put away; hidden from lists, search and the assistant"
+    },
+    "search": "Search by title…",
+    "owner": {
+      "label": "Owner",
+      "any": "Any owner"
+    },
+    "sort": {
+      "label": "Sort",
+      "activity": "Least recent activity first",
+      "title": "Title, A to Z"
+    },
+    "column": {
+      "title": "Page",
+      "status": "State",
+      "owner": "Owner",
+      "verified": "Verified",
+      "activity": "Last activity"
+    },
+    "selectAll": "Select every loaded page",
+    "selectRow": "Select “{title}”",
+    "preview": "Preview",
+    "previewRoot": "Top level",
+    "openPage": "Open page",
+    "emptyChip": "Empty",
+    "emptyHint": "The body is under the workspace's empty-page threshold",
+    "children": "{n} page under it | {n} pages under it",
+    "verifiedBy": "{who}, {when}",
+    "expires": "expires {when}",
+    "neverExpires": "never expires",
+    "noRows": "No pages here.",
+    "noRowsHint": "Every live page is verified, owned and active — or nothing has been published yet.",
+    "noRowsNarrowed": "No pages match this narrowing.",
+    "clearNarrowing": "Clear",
+    "bulk": {
+      "toolbar": "Bulk actions",
+      "selected": "{n} selected | {n} selected",
+      "verify": "Verify",
+      "reassign": "Reassign",
+      "more": "More",
+      "request": "Request a check",
+      "outdated": "Mark outdated",
+      "clear": "Clear verification",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "deselect": "Deselect (Esc)",
+      "archiveDialog": {
+        "title": "Archive {n} page? | Archive {n} pages?",
+        "description": "Each page and everything under it leaves the tree, lists, search and the assistant. They stay readable by link and can be unarchived.",
+        "confirm": "Archive"
+      },
+      "failed": "{title}: {reason}",
+      "failedMore": "{n} more page could not be changed | {n} more pages could not be changed",
+      "reason": {
+        "archived": "the page is archived",
+        "no-head": "no published revision to verify",
+        "not-found": "page not found",
+        "unknown": "refused"
+      }
+    },
+    "toast": {
+      "verify": "Verified {n} page | Verified {n} pages",
+      "request": "Asked for a check on {n} page | Asked for a check on {n} pages",
+      "outdated": "Marked {n} page outdated | Marked {n} pages outdated",
+      "clear": "Cleared verification on {n} page | Cleared verification on {n} pages",
+      "reassign": "Reassigned {n} page | Reassigned {n} pages",
+      "archive": "Archived {n} page | Archived {n} pages",
+      "unarchive": "Restored {n} page | Restored {n} pages"
+    },
+    "settings": {
+      "title": "Freshness policy",
+      "intro": "What applies to this workspace. An empty field means the server default applies; a value here overrides it for every page in the workspace.",
+      "readOnly": "Read-only — a workspace admin can change these",
+      "applies": "Applies:",
+      "default": "Default: {value}",
+      "saved": "Policy saved",
+      "days": "{n} day | {n} days",
+      "chars": "{n} character | {n} characters",
+      "on": "On",
+      "off": "Off",
+      "inherit": "Default ({value})",
+      "key": {
+        "reviewIntervalDays": {
+          "label": "Review interval",
+          "hint": "Days a verification holds when the page sets no interval of its own; 0 means it never expires"
+        },
+        "remindBeforeDays": {
+          "label": "Remind before expiry",
+          "hint": "Days before a verification expires that the owner is reminded; 0 turns reminders off"
+        },
+        "inactiveAfterDays": {
+          "label": "Inactive after",
+          "hint": "Days without an edit, comment or check before a page reads inactive; 0 disables the reading"
+        },
+        "emptyMaxChars": {
+          "label": "Empty-page threshold",
+          "hint": "A page whose body is this many characters or fewer reads empty"
+        },
+        "trustRanking": {
+          "label": "Trust-aware ranking",
+          "hint": "Multiply search scores by each page's verification state, so verified pages rank above outdated ones"
+        }
+      }
+    }
   }
 }

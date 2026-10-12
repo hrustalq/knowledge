@@ -23,7 +23,7 @@ import { computed, onMounted, onServerPrefetch, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { FileText, List, ListTree, Loader2, Network, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
+import { Archive, FileText, List, ListTree, Loader2, Network, Plus, SlidersHorizontal, Upload, X } from 'lucide-vue-next'
 import { formatDate } from '@/lib/format'
 import { labelFor } from '@/lib/labels'
 import { useAuthStore } from '@/stores/auth'
@@ -40,6 +40,7 @@ import { toast } from 'vue-sonner'
 import DocumentFacets from '@/components/knowledge/DocumentFacets.vue'
 import GraphCanvas from '@/components/graph/GraphCanvas.vue'
 import { toGraphNodes } from '@/components/graph/graph-model'
+import { needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
 
 const { t } = useI18n()
 
@@ -76,6 +77,14 @@ const view = ref<View>('graph')
  */
 const filtersOpen = ref(false)
 const showFilters = computed(() => view.value === 'list')
+
+/**
+ * Archived pages (docs/features/39) are hidden by default and shown on
+ * request, on the two views that list rows. The graph never shows them: a
+ * put-away page keeps its edges, and drawing it would make the graph the one
+ * place archive did not apply.
+ */
+const showArchivedSwitch = computed(() => view.value !== 'graph')
 
 function setFacet(key: 'categories' | 'projectIds' | 'tags', value: string[]) {
   void store.setFilters({ ...store.filters, [key]: value } as typeof store.filters)
@@ -198,6 +207,19 @@ watch(virtualRows, (rows) => {
       </div>
 
       <Button
+        v-if="showArchivedSwitch"
+        variant="outline"
+        size="sm"
+        :aria-pressed="store.showArchived"
+        :class="store.showArchived ? 'border-primary/40 bg-primary/10 text-primary' : ''"
+        :title="store.showArchived ? t('verification.archived.hideArchived') : t('verification.archived.showArchived')"
+        @click="store.setShowArchived(!store.showArchived)"
+      >
+        <Archive class="size-4" />
+        <span class="hidden sm:inline">{{ t('verification.archived.showArchived') }}</span>
+      </Button>
+
+      <Button
         v-if="showFilters"
         variant="outline"
         size="sm"
@@ -303,7 +325,27 @@ watch(virtualRows, (rows) => {
                   :class="statusDot(store.items[row.index]!.headRevisionStatus)"
                   :title="store.items[row.index]!.headRevisionStatus ?? 'draft'"
                 />
-                <span class="truncate text-sm font-medium">{{ store.items[row.index]!.title }}</span>
+                <span
+                  class="truncate text-sm font-medium"
+                  :class="store.items[row.index]!.archivedAt ? 'text-muted-foreground line-through decoration-muted-foreground/40' : ''"
+                >{{ store.items[row.index]!.title }}</span>
+                <span
+                  v-if="store.items[row.index]!.archivedAt"
+                  class="grid shrink-0 place-items-center text-muted-foreground/70"
+                  role="img"
+                  :aria-label="t('verification.archived.badge')"
+                  :title="t('verification.archived.badge')"
+                >
+                  <Archive class="size-3.5" aria-hidden="true" />
+                </span>
+                <span
+                  v-else-if="needsAttention(store.items[row.index]!.verification)"
+                  class="size-1.5 shrink-0 rounded-full"
+                  :class="verificationDotClass(store.items[row.index]!.verification)"
+                  role="img"
+                  :aria-label="t(`verification.state.${store.items[row.index]!.verification}`)"
+                  :title="t(`verification.state.${store.items[row.index]!.verification}`)"
+                />
                 <Badge variant="outline" class="hidden shrink-0 text-xs sm:inline-flex">
                   {{ labelFor(t, 'category', store.items[row.index]!.category) }}
                 </Badge>

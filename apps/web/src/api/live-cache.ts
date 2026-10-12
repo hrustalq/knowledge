@@ -69,11 +69,23 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     invalidate: (e) =>
       e.documentId ? [['/v1/documents/{id}/threads', { id: e.documentId }]] : [],
   },
-  { on: 'document.*', invalidate: () => [['/v1/documents'], ['/v1/documents/tree']] },
+  {
+    // The knowledge-health dashboard (docs/features/40) derives every row's
+    // state from the same columns a document.* event announces a change to —
+    // the stamp, the flag, the owner, the archive mark — and the counts on its
+    // strip from the same rows. The summary is a second key, not a prefix of
+    // the first: a query key's leading element is matched whole.
+    on: 'document.*',
+    invalidate: () => [['/v1/documents'], ['/v1/documents/tree'], ['/v1/knowledge-health'], ['/v1/knowledge-health/summary']],
+  },
   {
     on: 'revision.*',
     invalidate: (e) => [
       ['/v1/documents'],
+      // A finalized revision moves last_activity_at and body_chars, which are
+      // the dashboard's "inactive" and "empty".
+      ['/v1/knowledge-health'],
+      ['/v1/knowledge-health/summary'],
       ...(e.documentId
         ? [
             ['/v1/documents/{id}', { id: e.documentId }],

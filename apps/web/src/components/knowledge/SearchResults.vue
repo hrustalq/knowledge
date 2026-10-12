@@ -7,6 +7,7 @@ import { SearchX } from 'lucide-vue-next'
 import type { SearchResponse } from '@knowledge/contracts'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import VerificationBadge from '@/components/verification/VerificationBadge.vue'
 
 const { t } = useI18n()
 
@@ -75,7 +76,17 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
             @click="emit('navigate')"
           >
             <div class="flex items-baseline justify-between gap-3">
-              <span class="truncate text-sm font-medium">{{ r.title }}</span>
+              <span class="flex min-w-0 items-center gap-2">
+                <span class="truncate text-sm font-medium">{{ r.title }}</span>
+                <!-- The trust the re-rank read (docs/features/39), so a reader can
+                     see why a weaker match sits above a stronger one. Unverified
+                     is the ordinary state and says nothing. -->
+                <VerificationBadge
+                  v-if="r.trust && r.trust.status !== 'unverified'"
+                  :state="r.trust.status"
+                  size="xs"
+                />
+              </span>
               <!-- Scores round to 0 under the stub embedding provider; a column
                    of zeroes reads as broken, so show one only when it says something. -->
               <span

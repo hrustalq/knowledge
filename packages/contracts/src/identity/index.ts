@@ -39,6 +39,13 @@ export interface MeResponse {
   isAdmin: boolean;
   /** UI + API language (docs/features/18). 'en' for the dev principal, which has no users row. */
   locale: Locale;
+  /** The address is proven (docs/features/41). Always true for the dev principal. */
+  emailVerified: boolean;
+  /**
+   * AUTH_REQUIRE_VERIFIED_EMAIL: while `emailVerified` is false, every route but
+   * /me, logout and resend-verification answers 403 `emailUnverified`.
+   */
+  emailVerificationRequired: boolean;
   /** Empty in dev mode (the dev principal is admin+operator everywhere). */
   memberships: WorkspaceMembership[];
 }
@@ -183,7 +190,20 @@ export interface UrlTicketResponse {
 export interface ForgotPasswordResponse {
   /** Always true — the endpoint never reveals whether the email exists. */
   ok: boolean;
-  /** Reset token echoed back in development only (no mail provider configured). */
+  /** Reset token echoed back outside production only, so a dev flow needs no inbox. */
+  debugToken?: string;
+}
+
+/** POST /v1/auth/verify-email (docs/features/41). */
+export interface VerifyEmailResponse {
+  ok: boolean;
+}
+
+/** POST /v1/auth/resend-verification. `alreadyVerified` = nothing was sent. */
+export interface ResendVerificationResponse {
+  ok: boolean;
+  alreadyVerified: boolean;
+  /** Verification token echoed back outside production only. */
   debugToken?: string;
 }
 
@@ -205,6 +225,8 @@ export interface UserSummary {
   /** Disabled users cannot authenticate (sessions and API keys stop working). */
   disabled: boolean;
   hasPassword: boolean;
+  /** users.email_verified_at is set (docs/features/41). */
+  emailVerified: boolean;
   hasApiKey: boolean;
   createdAt: string;
   memberships: WorkspaceMembership[];

@@ -96,7 +96,8 @@ Everything is hashed; nothing reversible is stored.
 | Password        | —      | **scrypt** via `node:crypto`, no dependencies |
 | Session token   | `ks_`  | SHA-256 in `sessions`                          |
 | API key         | `kn_`  | SHA-256 in `api_keys` (many per user)          |
-| Reset token     | `kr_`  | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN`  |
+| Reset token     | `kr_`  | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN` (an invite: `AUTH_INVITE_TTL_HOURS`) |
+| Verify token    | `kv_`  | SHA-256 + the address it was sent to, single-use, TTL `AUTH_VERIFY_TTL_HOURS` |
 | URL ticket      | `kt_`  | SHA-256 key in Redis, `GETDEL` on use, TTL `AUTH_URL_TICKET_TTL_SEC` (60 s) |
 
 API keys are **shown once** — at bootstrap, or on Settings → Connect AI — and
@@ -110,9 +111,14 @@ are managed from a session only — never with another key. See
 401 on both token kinds. Resetting a password, disabling a user, or an admin
 overriding a password all **revoke sessions**.
 
-There is no mailer: **reset links are logged**, and echoed as `debugToken`
-outside production. Signup auto-joins `AUTH_DEFAULT_WORKSPACE_ID` as
-`AUTH_DEFAULT_ROLE`.
+Reset, invite and verify links are **mailed** by the worker
+([features/41](../features/41-mail.md)); under the default `MAIL_TRANSPORT=log`
+the whole message lands in the worker log instead. Reset and verify tokens are
+also echoed as `debugToken` outside production. Signup auto-joins
+`AUTH_DEFAULT_WORKSPACE_ID` as `AUTH_DEFAULT_ROLE` and mails a confirmation
+link; any followed link sets `users.email_verified_at`. With
+`AUTH_REQUIRE_VERIFIED_EMAIL=true`, an unverified **session** reaches only the
+`@UnverifiedOk` routes (403 `emailUnverified` elsewhere, WS close 4403).
 
 ## The trusted-operator escape hatch
 
@@ -151,7 +157,9 @@ controllers, and controllers must not load in the worker
 
 ```
 POST /v1/auth/signup | login | forgot-password | reset-password   @Public()
-POST /v1/auth/logout | change-password                            authenticated
+POST /v1/auth/verify-email                                        @Public()
+POST /v1/auth/logout | resend-verification                        authenticated, @UnverifiedOk()
+POST /v1/auth/change-password                                     authenticated
 GET  /v1/me   PATCH /v1/me                                        self
 GET/POST/PATCH /v1/users                                          @PlatformAdmin()
 GET/POST /v1/workspaces                                           creator → admin+operator
@@ -165,6 +173,7 @@ GET  /v1/audit-logs                                               admin
 - ACLs stop at the workspace. There are no project-level roles; projects are
   organizational only ([feature 11](../features/11-projects.md)). The `'project'`
   guard source is the hook if that ever changes.
-- No mailer, so password reset is operationally manual outside development.
+- Mail is outbound only: no bounce handling, so a dead address stays unverified
+  rather than being flagged.
 - The trusted-operator query is read-only by construction but still trusts the
   blocklist; it is an escape hatch, not a query API.

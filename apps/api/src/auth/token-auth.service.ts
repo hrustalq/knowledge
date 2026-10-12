@@ -34,6 +34,20 @@ export class TokenAuthService {
   }
 
   /**
+   * AUTH_REQUIRE_VERIFIED_EMAIL (docs/features/41): a login session whose
+   * address is unproven may reach only the `@UnverifiedOk` routes. One
+   * predicate, read by AuthGuard and the live gateway alike, so the socket is
+   * not a way around the gate. API keys are minted by an admin and pass.
+   */
+  blocksUnverified(principal: Principal): boolean {
+    return (
+      principal.mode === 'session' &&
+      principal.emailVerified === false &&
+      this.config.get<boolean>('AUTH_REQUIRE_VERIFIED_EMAIL') === true
+    );
+  }
+
+  /**
    * A credential that arrived in `?token=` on a `@QueryTokenOk` route (#102).
    * A URL outlives the request that carried it (access logs, history,
    * `Referer`), so it may hold only what is cheap to leak:
@@ -66,6 +80,7 @@ export class TokenAuthService {
       mode: 'session',
       isAdmin: session.user.isAdmin,
       locale: asLocale(session.user.locale),
+      emailVerified: session.user.emailVerifiedAt !== null,
       sessionId: session.id,
     };
   }
@@ -90,6 +105,7 @@ export class TokenAuthService {
       mode: 'api-key',
       isAdmin: user.isAdmin,
       locale: asLocale(user.locale),
+      emailVerified: user.emailVerifiedAt !== null,
       apiKey: { id: row.id, scope: row.scope === 'read' ? 'read' : 'write', workspaceId: row.workspaceId },
     };
   }

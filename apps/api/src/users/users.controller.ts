@@ -28,9 +28,9 @@ export class UsersController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a user (optional initial password; platform admin)' })
-  create(@Body() dto: CreateUserDto): Promise<UserSummary> {
-    return this.users.create(dto);
+  @ApiOperation({ summary: 'Create a user (platform admin); without a password, the user is mailed an invite to set one' })
+  create(@CurrentPrincipal() principal: Principal, @Body() dto: CreateUserDto): Promise<UserSummary> {
+    return this.users.create(principal, dto);
   }
 
   @Patch(':id')

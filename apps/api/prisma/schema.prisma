@@ -459,12 +459,17 @@ model User {
   // Cache-buster for the avatar URL. The key can be reused on replace, so
   // without this every reader keeps the picture they already fetched.
   avatarUpdatedAt DateTime? @map("avatar_updated_at") @db.Timestamptz
+  // When the address was proven to reach this person (docs/features/41): a
+  // followed verify, reset or invite link. Null = unproven. The migration
+  // backfilled created_at for every account that existed before mail did.
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  memberships    WorkspaceMember[]
-  sessions       Session[]
-  passwordResets PasswordResetToken[]
-  apiKeys        ApiKey[]
+  memberships        WorkspaceMember[]
+  sessions           Session[]
+  passwordResets     PasswordResetToken[]
+  emailVerifications EmailVerificationToken[]
+  apiKeys            ApiKey[]
 
   @@map("users")
 }
@@ -516,6 +521,9 @@ model PasswordResetToken {
   id        String    @id @default(uuid()) @db.Uuid
   userId    String    @map("user_id") @db.Uuid
   tokenHash String    @unique @map("token_hash")
+  // 'reset' | 'invite' (docs/features/41). An invite is a reset the person did
+  // not ask for: same redemption, longer TTL, different mail and heading.
+  purpose   String    @default("reset")
   expiresAt DateTime  @map("expires_at") @db.Timestamptz
   usedAt    DateTime? @map("used_at") @db.Timestamptz
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -524,6 +532,24 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+// Single-use `kv_` email verification tokens (docs/features/41; SHA-256 only).
+// `email` is the address the link was sent to: verifying proves THAT address,
+// so a token minted before an address change cannot verify the new one.
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  email     String
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("email_verification_tokens")
 }
 
 model WorkspaceMember {
@@ -1843,6 +1869,9 @@ model Notification {
   metadata    Json    @default("{}")
 
   readAt    DateTime? @map("read_at") @db.Timestamptz
+  /// Claimed by the mail processor with one guarded update (docs/features/41):
+  /// one email per row, however many times it later coalesces.
+  emailedAt DateTime? @map("emailed_at") @db.Timestamptz
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   // The badge and the unread-first list; also the coalescing lookup, which
@@ -1866,6 +1895,8 @@ model NotificationPreference {
   mutedCategories    Json    @default("[]") @map("muted_categories")
   /// Commenting on something subscribes you to it (GitHub's default).
   autoWatchOnComment Boolean @default(true) @map("auto_watch_on_comment")
+  /// Email mentions, review requests and assignments (docs/features/41).
+  emailDirected      Boolean @default(true) @map("email_directed")
 
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

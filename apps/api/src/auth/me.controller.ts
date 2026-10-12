@@ -6,9 +6,11 @@ import type {
   ListApiKeysResponse,
   MeResponse,
   RotateApiKeyResponse,
-  WorkspaceRole,
 } from '@knowledge/contracts';
-import { CurrentPrincipal } from './access.decorator.js';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../config/env.js';
+import { toMeResponse } from './me-response.js';
+import { CurrentPrincipal, UnverifiedOk } from './access.decorator.js';
 import { AccessService } from './access.service.js';
 import type { Principal } from './principal.js';
 import { UpdateMeDto } from './me.dto.js';
@@ -32,9 +34,12 @@ export class MeController {
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
     private readonly apiKeys: ApiKeysService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   @Patch()
+  // Changing the language is how a Russian speaker gets a verify mail they can read.
+  @UnverifiedOk()
   @ApiOperation({ summary: "Update the caller's own display name and language (docs/features/18)" })
   async update(
     @CurrentPrincipal() principal: Principal,
@@ -97,20 +102,11 @@ export class MeController {
   }
 
   private async meOf(principal: Principal): Promise<MeResponse> {
-    const memberships = await this.access.memberships(principal);
-    return {
-      userId: principal.userId,
-      email: principal.email,
-      displayName: principal.displayName,
-      avatarUrl: principal.avatarUrl,
-      mode: principal.mode,
-      isAdmin: principal.isAdmin,
-      locale: principal.locale,
-      memberships: memberships.map((m) => ({
-        workspaceId: m.workspaceId,
-        role: m.role as WorkspaceRole,
-        trustedOperator: m.trustedOperator,
-      })),
-    };
+    return toMeResponse(
+      principal,
+      await this.access.memberships(principal),
+      this.config.get('AUTH_REQUIRE_VERIFIED_EMAIL', { infer: true }),
+    );
   }
+
 }

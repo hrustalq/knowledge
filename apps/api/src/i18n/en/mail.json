@@ -1,0 +1,48 @@
+{
+  "greeting": "Hi {name},",
+  "verifyEmail": {
+    "subject": "Confirm your email address",
+    "body": "Confirm that this address belongs to you so it can be used to reach you. The link is valid for {hours} hours.",
+    "action": "Confirm email",
+    "footer": "You are receiving this because an account was created with this address. If it was not you, ignore this message."
+  },
+  "passwordReset": {
+    "subject": "Reset your password",
+    "body": "Somebody asked to reset the password for your account. The link is valid for {minutes} minutes and can be used once.",
+    "action": "Choose a new password",
+    "footer": "If you did not ask for this, ignore this message — your password stays as it is."
+  },
+  "invite": {
+    "subject": "You have been invited to Knowledge",
+    "body": "An account has been created for you.",
+    "bodyBy": "{inviter} created an account for you.",
+    "expiry": "Choose a password to sign in. The link is valid for {hours} hours.",
+    "action": "Set your password",
+    "footer": "If you were not expecting this, ignore this message."
+  },
+  "passwordChanged": {
+    "subject": "Your password was changed",
+    "body": "The password for your account was just changed, and every other session was signed out.",
+    "notYou": "If this was not you, reset your password now.",
+    "action": "Reset password",
+    "footer": "This is a security notice and is sent regardless of your notification settings."
+  },
+  "notification": {
+    "mention": {
+      "subject": "{actor} mentioned you in {title}",
+      "body": "{actor} mentioned you in “{title}”."
+    },
+    "reviewRequested": {
+      "subject": "{actor} asked you to review {title}",
+      "body": "{actor} asked you to review “{title}”."
+    },
+    "assigned": {
+      "subject": "{actor} assigned you {title}",
+      "body": "{actor} assigned “{title}” to you."
+    },
+    "action": "Open",
+    "footer": "You are receiving this because you were named directly. Change what reaches your email at {url}"
+  },
+  "someone": "Someone",
+  "untitled": "an untitled page"
+}

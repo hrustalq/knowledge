@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { EventsPublisher } from './events.publisher.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
+import { MailQueueModule } from '../mail/mail-queue.module.js';
 
 /**
  * Publisher only — safe to import from the worker and MCP contexts.
@@ -11,7 +12,8 @@ import { NotificationsCoreModule } from '../notifications/notifications-core.mod
  * `EventsPublisher` would turn this into one.
  */
 @Module({
-  imports: [NotificationsCoreModule],
+  // MailQueueModule: announce() hands directed notifications to the mailer.
+  imports: [NotificationsCoreModule, MailQueueModule],
   providers: [EventsPublisher],
   exports: [EventsPublisher],
 })

@@ -1,8 +1,9 @@
-import { createHash, randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -11,17 +12,22 @@ import { ConfigService } from '@nestjs/config';
 import type {
   AuthSessionResponse,
   ForgotPasswordResponse,
-  MeResponse,
-  WorkspaceRole,
+  ResendVerificationResponse,
 } from '@knowledge/contracts';
 import type { User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
+import { MailProducer } from '../mail/mail.producer.js';
 import { hashPassword, verifyPassword } from './password.js';
 import type { Principal } from './principal.js';
 import { SessionsService } from './sessions.service.js';
+import { hashToken, mintToken } from './auth-tokens.js';
+import { toMeResponse } from './me-response.js';
 import { asLocale } from '../i18n/locale.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
+
+/** Floor between two verification mails to one person — a resend button is easy to hold down. */
+const RESEND_COOLDOWN_MS = 60_000;
 
 /**
  * Auth flow (login / signup / password restoration) layered on Phase 5 auth.
@@ -36,7 +42,13 @@ export class AuthFlowService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly sessions: SessionsService,
+    private readonly mail: MailProducer,
   ) {}
+
+  /** `debugToken` outside production: a dev or e2e flow must not need an inbox. */
+  private get echoTokens(): boolean {
+    return this.config.get<string>('NODE_ENV') !== 'production';
+  }
 
   async signup(email: string, displayName: string, password: string): Promise<AuthSessionResponse> {
     if (!this.config.get<boolean>('AUTH_SIGNUP_ENABLED')) {
@@ -47,8 +59,15 @@ export class AuthFlowService {
     if (existing) throw new ConflictException(t('error.auth.emailTaken'));
 
     const user = await this.prisma.user.create({
-      data: { email: normalized, displayName: displayName.trim(), passwordHash: await hashPassword(password) },
+      data: {
+        email: normalized,
+        displayName: displayName.trim(),
+        passwordHash: await hashPassword(password),
+        // The language the signup form was in, so the first mail can be read.
+        locale: currentLocale(),
+      },
     });
+    await this.sendVerification(user);
 
     // Auto-join the default workspace (demo by default) so the app is usable
     // right after signup. Skipped silently when unset or not yet created.
@@ -83,37 +102,39 @@ export class AuthFlowService {
     const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (!user || user.disabledAt) return { ok: true }; // no account enumeration
 
-    const token = `kr_${randomBytes(32).toString('hex')}`;
+    const { token, tokenHash } = mintToken('kr_');
     const ttlMin = this.config.get<number>('AUTH_RESET_TTL_MIN') ?? 30;
     await this.prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: createHash('sha256').update(token).digest('hex'),
-        expiresAt: new Date(Date.now() + ttlMin * 60_000),
-      },
+      data: { userId: user.id, tokenHash, purpose: 'reset', expiresAt: new Date(Date.now() + ttlMin * 60_000) },
     });
-
-    // No mail provider yet: the reset link goes to the API log (operator hands
-    // it to the user). Swap for a mailer without touching the token flow.
-    const link = `${this.config.get<string>('WEB_BASE_URL')}/reset-password?token=${token}`;
-    this.logger.warn(`Password reset requested for ${user.email} — link (valid ${ttlMin} min): ${link}`);
-
-    const isDev = this.config.get<string>('NODE_ENV') !== 'production';
-    return isDev ? { ok: true, debugToken: token } : { ok: true };
+    // Queued, never sent inline: the response takes the same time whether or
+    // not the account exists. The link itself is not logged here — under
+    // MAIL_TRANSPORT=log the worker prints the whole message, and under smtp a
+    // reset link in a log file is a credential in a log file.
+    await this.mail.enqueue({ template: 'password-reset', userId: user.id, token });
+    this.logger.log(`Password reset requested for user ${user.id}`);
+    return this.echoTokens ? { ok: true, debugToken: token } : { ok: true };
   }
 
+  /**
+   * Redeems a `kr_` token, whichever mail carried it: a reset the person asked
+   * for, or an invite an admin sent (docs/features/41). Either way the link
+   * arrived at the address, so following it also proves the address.
+   */
   async resetPassword(token: string, password: string): Promise<void> {
-    const reset = await this.prisma.passwordResetToken.findUnique({
-      where: { tokenHash: createHash('sha256').update(token).digest('hex') },
-    });
+    const reset = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: hashToken(token) } });
     if (!reset || reset.usedAt || reset.expiresAt < new Date()) {
       throw new BadRequestException(t('error.auth.invalidResetToken'));
     }
+    const now = new Date();
     await this.prisma.$transaction([
-      this.prisma.passwordResetToken.update({ where: { id: reset.id }, data: { usedAt: new Date() } }),
+      this.prisma.passwordResetToken.update({ where: { id: reset.id }, data: { usedAt: now } }),
       this.prisma.user.update({ where: { id: reset.userId }, data: { passwordHash: await hashPassword(password) } }),
+      this.prisma.user.updateMany({ where: { id: reset.userId, emailVerifiedAt: null }, data: { emailVerifiedAt: now } }),
     ]);
     await this.sessions.revokeAllForUser(reset.userId); // stolen-session hygiene
+    // An invite sets a first password; there was no previous one to warn about.
+    if (reset.purpose !== 'invite') await this.mail.enqueue({ template: 'password-changed', userId: reset.userId });
   }
 
   async changePassword(principal: Principal, currentPassword: string, newPassword: string): Promise<void> {
@@ -124,26 +145,84 @@ export class AuthFlowService {
     }
     await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(newPassword) } });
     await this.sessions.revokeAllForUser(user.id, principal.sessionId);
+    await this.mail.enqueue({ template: 'password-changed', userId: user.id });
+  }
+
+  /**
+   * Redeem a `kv_` link (docs/features/41). The token proves the address it
+   * was sent to, so it verifies only while that is still the account's
+   * address. One guarded update per row: a double click spends it once.
+   */
+  async verifyEmail(token: string): Promise<void> {
+    const row = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash: hashToken(token) },
+      include: { user: true },
+    });
+    const now = new Date();
+    if (!row || row.expiresAt < now || row.user.email !== row.email || row.user.disabledAt) {
+      throw new BadRequestException(t('error.auth.invalidVerifyToken'));
+    }
+    const spent = await this.prisma.emailVerificationToken.updateMany({
+      where: { id: row.id, usedAt: null },
+      data: { usedAt: now },
+    });
+    // Already used: fine if it already verified (the second tab of a double
+    // click), refused otherwise.
+    if (spent.count === 0 && !row.user.emailVerifiedAt) {
+      throw new BadRequestException(t('error.auth.invalidVerifyToken'));
+    }
+    await this.prisma.user.updateMany({ where: { id: row.userId, emailVerifiedAt: null }, data: { emailVerifiedAt: now } });
+  }
+
+  async resendVerification(principal: Principal): Promise<ResendVerificationResponse> {
+    if (principal.mode === 'dev') throw new BadRequestException(t('error.auth.noVerifyInDevMode'));
+    const user = await this.prisma.user.findUnique({ where: { id: principal.userId } });
+    if (!user) throw new UnauthorizedException(t('error.auth.invalidSession'));
+    if (user.emailVerifiedAt) return { ok: true, alreadyVerified: true };
+
+    const last = await this.prisma.emailVerificationToken.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    if (last && Date.now() - last.createdAt.getTime() < RESEND_COOLDOWN_MS) {
+      throw new HttpException(
+        { statusCode: HttpStatus.TOO_MANY_REQUESTS, message: t('error.auth.verifyTooSoon') },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    const token = await this.sendVerification(user);
+    return this.echoTokens ? { ok: true, alreadyVerified: false, debugToken: token } : { ok: true, alreadyVerified: false };
+  }
+
+  private async sendVerification(user: User): Promise<string> {
+    const { token, tokenHash } = mintToken('kv_');
+    const hours = this.config.get<number>('AUTH_VERIFY_TTL_HOURS') ?? 48;
+    await this.prisma.emailVerificationToken.create({
+      data: { userId: user.id, email: user.email, tokenHash, expiresAt: new Date(Date.now() + hours * 3_600_000) },
+    });
+    await this.mail.enqueue({ template: 'verify-email', userId: user.id, token });
+    return token;
   }
 
   /** Session + MeResponse for signup/login responses. */
   private async openSession(user: User): Promise<AuthSessionResponse> {
     const { token, session } = await this.sessions.create(user.id);
     const memberships = await this.prisma.workspaceMember.findMany({ where: { userId: user.id } });
-    const me: MeResponse = {
-      userId: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      avatarUrl: userAvatarUrl(user),
-      mode: 'session',
-      isAdmin: user.isAdmin,
-      locale: asLocale(user.locale),
-      memberships: memberships.map((m) => ({
-        workspaceId: m.workspaceId,
-        role: m.role as WorkspaceRole,
-        trustedOperator: m.trustedOperator,
-      })),
-    };
+    const me = toMeResponse(
+      {
+        userId: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: userAvatarUrl(user),
+        mode: 'session',
+        isAdmin: user.isAdmin,
+        locale: asLocale(user.locale),
+        emailVerified: user.emailVerifiedAt !== null,
+      },
+      memberships,
+      this.config.get<boolean>('AUTH_REQUIRE_VERIFIED_EMAIL') === true,
+    );
     return { token, expiresAt: session.expiresAt.toISOString(), me };
   }
 }

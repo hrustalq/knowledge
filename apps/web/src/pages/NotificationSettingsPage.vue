@@ -21,7 +21,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { RouterLink } from 'vue-router'
 import { useVirtualList } from '@vueuse/core'
-import { Bell, Eye } from 'lucide-vue-next'
+import { Bell, Eye, Mail } from 'lucide-vue-next'
 import type {
   ListNotificationSubscriptionsResponse,
   NotificationCategory,
@@ -127,7 +127,9 @@ async function load() {
   }
 }
 
-async function save(patch: Partial<Pick<NotificationPreferences, 'mutedCategories' | 'autoWatchOnComment'>>) {
+async function save(
+  patch: Partial<Pick<NotificationPreferences, 'mutedCategories' | 'autoWatchOnComment' | 'emailDirected'>>,
+) {
   if (!prefs.value) return
   saving.value = true
   const previous = { ...prefs.value }
@@ -230,6 +232,26 @@ onMounted(load)
             </Button>
           </li>
         </ul>
+
+        <!-- Not a category: the same directed rows, also delivered by mail
+             (docs/features/41). A muted category above still wins. -->
+        <div class="flex items-center gap-3 border-t px-5 py-3">
+          <Mail class="size-4 shrink-0 text-muted-foreground" />
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-medium">{{ t('notifications.emailTitle') }}</span>
+            <span class="block text-xs text-muted-foreground">{{ t('notifications.emailHint') }}</span>
+          </span>
+          <Button
+            :variant="prefs?.emailDirected ? 'default' : 'outline'"
+            size="sm"
+            class="shrink-0"
+            :disabled="saving"
+            :aria-pressed="!!prefs?.emailDirected"
+            @click="save({ emailDirected: !prefs?.emailDirected })"
+          >
+            {{ prefs?.emailDirected ? t('notifications.on') : t('notifications.off') }}
+          </Button>
+        </div>
       </section>
 
       <!-- What the caller follows: the rule that adds things, then the things -->

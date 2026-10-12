@@ -225,6 +225,7 @@ function setPassword(user: UserSummary) {
             <div class="flex flex-wrap gap-1">
               <Badge v-if="user.isAdmin" variant="default">{{ t('users.platformAdminBadge') }}</Badge>
               <Badge v-if="user.disabled" variant="destructive">{{ t('users.disabledBadge') }}</Badge>
+              <Badge v-if="!user.emailVerified" variant="secondary">{{ t('users.unverifiedBadge') }}</Badge>
               <Badge v-if="!user.disabled && !user.isAdmin" variant="outline">{{ t('users.activeBadge') }}</Badge>
             </div>
           </TableCell>

@@ -792,6 +792,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/auth/resend-verification",
+      "tag": "auth",
+      "summary": "Mail a fresh confirmation link to the caller's address (at most one a minute)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/auth/reset-password",
       "tag": "auth",
       "summary": "Set a new password with a kr_ reset token; revokes all sessions",
@@ -818,6 +828,16 @@
       "role": null,
       "source": null,
       "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/verify-email",
+      "tag": "auth",
+      "summary": "Confirm the account address with the kv_ token from the mailed link (docs/features/41)",
+      "role": null,
+      "source": null,
+      "public": true,
       "platformAdmin": false
     },
     {
@@ -2254,7 +2274,7 @@
       "method": "PUT",
       "path": "/v1/notifications/preferences",
       "tag": "notifications",
-      "summary": "Mute categories, or stop auto-watching what the caller comments on",
+      "summary": "Mute categories, stop auto-watching what the caller comments on, or stop directed email",
       "role": "viewer",
       "source": "body",
       "public": false,
@@ -2404,7 +2424,7 @@
       "method": "POST",
       "path": "/v1/users",
       "tag": "users",
-      "summary": "Create a user (optional initial password; platform admin)",
+      "summary": "Create a user (platform admin); without a password, the user is mailed an invite to set one",
       "role": null,
       "source": null,
       "public": false,

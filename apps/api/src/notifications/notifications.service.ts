@@ -827,28 +827,30 @@ export class NotificationsService {
       workspaceId,
       mutedCategories: row ? asCategories(row.mutedCategories) : [],
       autoWatchOnComment: row?.autoWatchOnComment ?? true,
+      emailDirected: row?.emailDirected ?? true,
     };
   }
 
   async updatePreferences(
     workspaceId: string,
     userId: string,
-    patch: { mutedCategories?: NotificationCategory[]; autoWatchOnComment?: boolean },
+    patch: { mutedCategories?: NotificationCategory[]; autoWatchOnComment?: boolean; emailDirected?: boolean },
   ): Promise<NotificationPreferences> {
     const current = await this.preferences(workspaceId, userId);
     const next = {
       mutedCategories: patch.mutedCategories ?? current.mutedCategories,
       autoWatchOnComment: patch.autoWatchOnComment ?? current.autoWatchOnComment,
+      emailDirected: patch.emailDirected ?? current.emailDirected,
+    };
+    const data = {
+      mutedCategories: next.mutedCategories as object,
+      autoWatchOnComment: next.autoWatchOnComment,
+      emailDirected: next.emailDirected,
     };
     await this.prisma.notificationPreference.upsert({
       where: { userId_workspaceId: { userId, workspaceId } },
-      update: { mutedCategories: next.mutedCategories as object, autoWatchOnComment: next.autoWatchOnComment },
-      create: {
-        userId,
-        workspaceId,
-        mutedCategories: next.mutedCategories as object,
-        autoWatchOnComment: next.autoWatchOnComment,
-      },
+      update: data,
+      create: { userId, workspaceId, ...data },
     });
     return { workspaceId, ...next };
   }

@@ -31,7 +31,7 @@ in the pull request that introduces them — see
   templates need `admin`, project ones `editor`. MCP gains
   `knowledge_list_templates` and `knowledge_get_template`, and
   `knowledge_create_document` takes `templateRef` + `values` instead of
-  `content`. The gallery and editor UI follow in later releases. (#PR)
+  `content`. The gallery and editor UI follow in later releases. (#146)
 
 ### Fixed
 
@@ -57,7 +57,7 @@ in the pull request that introduces them — see
   (`page_templates`, `page_template_versions`) and two nullable columns on
   `documents` (`template_ref`, `template_version`). The previous image runs
   against it unchanged, so a code rollback needs no database step. No new env
-  vars; built-in templates live in code and are never seeded. (#PR)
+  vars; built-in templates live in code and are never seeded. (#146)
 
 ## [0.17.0] — 2026-10-12
 

@@ -2110,7 +2110,8 @@
     "connectors": "Connected to",
     "people": "People",
     "pages": "Pages",
-    "glossary": "Glossary"
+    "glossary": "Glossary",
+    "site": "Site"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -3543,11 +3544,14 @@
     "allowShareLinksHint": "Editors can create a read-only link to a page (and its subpages) that opens without signing in.",
     "allowPasswordless": "Links without a password or expiry",
     "allowPasswordlessHint": "Off: a link that never expires must have a password.",
+    "allowPublicSites": "Public docs sites",
+    "allowPublicSitesHint": "Admins can publish a project as a read-only site that opens without signing in.",
     "inherit": "Default (off)",
     "on": "On",
     "off": "Off",
     "applies": "Applies: {value}",
     "ceilingOff": "PUBLIC_SHARING_ENABLED is off on this server, so no link works whatever is set here.",
+    "sitesCeilingOff": "PUBLIC_SITES_ENABLED is off on this server, so no site opens whatever is set here.",
     "maxTtl": "This server caps every link at {days} days (SHARE_LINK_MAX_TTL_DAYS).",
     "saved": "Publishing settings saved",
     "inventory": "Links in this workspace",
@@ -3562,5 +3566,107 @@
       "revoked": "Revoked"
     },
     "adminOnly": "Only workspace admins can change publishing."
+  },
+  "site": {
+    "title": "Published site",
+    "subtitle": "This project as a read-only docs site anyone with the address can read.",
+    "ceilingOff": "PUBLIC_SITES_ENABLED is off on this server, so no site can be published and existing ones do not open.",
+    "disabled": "Public sites are turned off for this workspace. A site can be set up, but it cannot go live until an admin turns them on.",
+    "openPublishing": "Open publishing settings",
+    "noneReadOnly": "This project has no published site.",
+    "createIntro": "Pick an address and what to publish. The site starts as a draft: nothing is public until you publish it.",
+    "slug": "Address",
+    "slugHint": "2–40 lowercase letters, digits and single hyphens.",
+    "slugChangeHint": "Changing the address breaks links to the old one at once.",
+    "root": "What to publish",
+    "wholeProject": "The whole project",
+    "create": "Create site",
+    "created": "Site created — building its first version",
+    "saved": "Site saved",
+    "publish": "Publish",
+    "unpublish": "Unpublish",
+    "publishedToast": "The site is live",
+    "unpublishedToast": "The site is no longer public",
+    "status": {
+      "draft": "Draft",
+      "live": "Live",
+      "unpublished": "Unpublished"
+    },
+    "tab": {
+      "general": "General",
+      "theme": "Theme",
+      "versions": "Versions"
+    },
+    "seoIndexable": "Let search engines index the site",
+    "seoIndexableHint": "Off: every page says noindex. Older versions are never indexed either way.",
+    "deleteTitle": "Delete the site",
+    "deleteHint": "Removes the site and every version’s snapshot, and frees the address. The pages themselves are not touched.",
+    "delete": "Delete site…",
+    "deleteConfirm": "Delete it",
+    "deleted": "Site deleted",
+    "theme": {
+      "primaryColor": "Accent colour",
+      "primaryColorDark": "Accent colour, dark mode",
+      "colourHint": "Use #rrggbb, or leave empty for the default.",
+      "font": "Font",
+      "fonts": {
+        "system": "System sans-serif",
+        "serif": "Serif",
+        "rounded": "Rounded",
+        "mono": "Monospace"
+      },
+      "showLogo": "Show the project’s avatar as the logo",
+      "headerLinks": "Header links",
+      "linkLabel": "Label",
+      "addLink": "Add link",
+      "footer": "Footer text",
+      "reset": "Discard changes",
+      "preview": "Preview",
+      "previewCurrent": "Current page",
+      "previewOther": "Another page",
+      "previewLink": "A link in the text"
+    },
+    "versionsIntro": "Each version is a snapshot of the pages, pinned to the revision each one showed when it was built. A live version rebuilds itself shortly after a page changes; a frozen one only when you rebuild it. Readers keep the old snapshot until a new one is complete.",
+    "col": {
+      "version": "Version",
+      "source": "Reads from",
+      "build": "Last build"
+    },
+    "default": "Default",
+    "kind": {
+      "live": "Live",
+      "frozen": "Frozen"
+    },
+    "kindHint": {
+      "live": "follows its branch",
+      "frozen": "a snapshot taken now"
+    },
+    "defaultBranches": "Each page’s default branch",
+    "building": "Building…",
+    "failed": "Build failed",
+    "builtSummary": "{n} pages · {when}",
+    "warnings": "{n} warning | {n} warnings",
+    "warning": {
+      "headNotIndexed": "its latest change is not indexed yet; the previous indexed revision is published",
+      "noIndexedRevision": "no indexed revision on this branch; left out",
+      "pageLimit": "the site reached its page limit; the rest was left out"
+    },
+    "rebuild": "Rebuild",
+    "freeze": "Freeze",
+    "unfreeze": "Follow branch",
+    "makeDefault": "Make default",
+    "addVersion": "Add version",
+    "versionName": "Name",
+    "versionSlug": "Address segment",
+    "versionSlugAuto": "From the name",
+    "versionKind": "Kind",
+    "sourceBranch": "Branch",
+    "sourceBranchHint": "Each page is read from the branch with this name; a page that has no such branch uses its default branch.",
+    "versionCreated": "Version added — building it",
+    "card": {
+      "none": "Not published",
+      "manage": "Manage site",
+      "setUp": "Set up a site"
+    }
   }
 }

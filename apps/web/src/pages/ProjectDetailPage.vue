@@ -157,6 +157,12 @@ async function onDeleted(result: DeleteProjectResponse) {
           >
             {{ t('project.openOverview') }}
           </RouterLink>
+          <RouterLink
+            :to="`/settings/projects/${project.projectId}/site`"
+            class="text-primary text-xs hover:underline"
+          >
+            {{ t('site.title') }}
+          </RouterLink>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <Badge v-if="project.projectId === store.activeId" variant="secondary">{{ t('project.active') }}</Badge>

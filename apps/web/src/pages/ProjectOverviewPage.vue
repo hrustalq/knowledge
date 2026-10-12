@@ -22,12 +22,13 @@ import {
   BookMarked,
   FileText,
   GitMerge,
+  Globe,
   Info,
   Plug,
   Users,
   Workflow as WorkflowIcon,
 } from 'lucide-vue-next'
-import type { ListActivityResponse, ProjectOverviewResponse } from '@knowledge/contracts'
+import type { ListActivityResponse, ProjectOverviewResponse, ProjectSiteResponse } from '@knowledge/contracts'
 import { apiQueryOptions } from '@/api/queries'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -39,10 +40,12 @@ import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import UserChip from '@/components/people/UserChip.vue'
 import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
 import { useProjectsStore } from '@/stores/projects'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const route = useRoute()
 const projects = useProjectsStore()
+const auth = useAuthStore()
 
 const RAIL_WIDGETS = [
   { id: 'overview', label: t('rail.overview'), icon: Info, expandable: false },
@@ -52,6 +55,7 @@ const RAIL_WIDGETS = [
   { id: 'glossary', label: t('rail.glossary'), icon: BookMarked, expandable: false },
   { id: 'connectors', label: t('rail.connectors'), icon: Plug, expandable: false },
   { id: 'workflows', label: t('rail.workflows'), icon: WorkflowIcon, expandable: false },
+  { id: 'site', label: t('rail.site'), icon: Globe, expandable: false },
 ] as const
 type RailWidget = (typeof RAIL_WIDGETS)[number]['id']
 
@@ -73,6 +77,12 @@ const activityPreview = useQuery(
     }),
   ),
 )
+
+/** The published site (docs/features/44), if there is one — a status, not the settings. */
+const siteQuery = useQuery(
+  computed(() => apiQueryOptions('/v1/projects/{id}/site', { path: { id: projectId.value } })),
+)
+const site = computed(() => (siteQuery.data.value as ProjectSiteResponse | undefined)?.site ?? null)
 
 /**
  * `?tab=` opens a widget rather than selecting one: several can be open at
@@ -103,6 +113,8 @@ const visibleWidgets = computed(() => {
     if (w.id === 'connectors') return c.connectors > 0
     if (w.id === 'workflows') return c.workflows > 0
     if (w.id === 'merge-requests') return c.openMergeRequests > 0
+    // A site is worth a row once it exists, or for someone who could set one up.
+    if (w.id === 'site') return site.value !== null || auth.canAdminWorkspace
     return true
   })
 })
@@ -121,6 +133,7 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
     glossary: c?.glossaryTerms ? t('count.terms', { n: c.glossaryTerms }, c.glossaryTerms) : null,
     connectors: c?.connectors ? t('count.connected', { n: c.connectors }, c.connectors) : null,
     workflows: c?.workflows ? t('count.workflows', { n: c.workflows }, c.workflows) : null,
+    site: site.value ? t(`site.status.${site.value.status}`) : t('site.card.none'),
   }
 })
 
@@ -270,6 +283,20 @@ const isActive = computed(() => projectId.value === projects.activeId)
             :limit="12"
             height="20rem"
           />
+
+          <div v-else-if="w.id === 'site'" class="space-y-2 text-sm">
+            <a
+              v-if="site?.status === 'live'"
+              :href="site.url"
+              target="_blank"
+              rel="noopener"
+              class="block truncate text-primary hover:underline"
+            >{{ site.url }}</a>
+            <p v-else-if="!site" class="text-muted-foreground">{{ t('site.card.none') }}</p>
+            <RouterLink :to="`/settings/projects/${project.projectId}/site`" class="text-primary hover:underline">
+              {{ site ? t('site.card.manage') : t('site.card.setUp') }}
+            </RouterLink>
+          </div>
 
           <p v-else class="text-sm text-muted-foreground">
             {{ t('project.railElsewhere') }}

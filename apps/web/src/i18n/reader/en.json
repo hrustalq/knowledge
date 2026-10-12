@@ -20,5 +20,22 @@
     "notFoundTitle": "This link does not work",
     "notFoundBody": "It may have expired or been revoked, or the address is incomplete. Ask whoever sent it for a new one.",
     "diagramFailed": "This diagram could not be drawn."
+  },
+  "siteReader": {
+    "pages": "Pages",
+    "onThisPage": "On this page",
+    "versionLabel": "Version: {name}",
+    "updated": "Updated {date}",
+    "previous": "Previous",
+    "next": "Next",
+    "toggleTheme": "Toggle dark mode",
+    "siteNotFoundTitle": "This site does not exist",
+    "siteNotFoundBody": "It may have been taken down, or the address is wrong.",
+    "pageNotFoundTitle": "Page not found",
+    "pageNotFoundBody": "This page is not part of this version of the site. It may have been moved or renamed.",
+    "backHome": "Go to the home page",
+    "outdatedVersion": "You are reading {name}, not the current version.",
+    "toCurrent": "Go to the current version",
+    "emptySite": "Nothing is published here yet."
   }
 }

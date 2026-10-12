@@ -290,6 +290,21 @@ export class AccessService {
     return share.workspaceId;
   }
 
+  async workspaceOfSite(siteId: string): Promise<string> {
+    const site = await this.prisma.publishedSite.findUnique({ where: { id: siteId }, select: { workspaceId: true } });
+    if (!site) throw new NotFoundException(t('error.site.notFound'));
+    return site.workspaceId;
+  }
+
+  async workspaceOfSiteVersion(versionId: string): Promise<string> {
+    const version = await this.prisma.siteVersion.findUnique({
+      where: { id: versionId },
+      select: { site: { select: { workspaceId: true } } },
+    });
+    if (!version) throw new NotFoundException(t('error.site.versionNotFound'));
+    return version.site.workspaceId;
+  }
+
   async workspaceOfJob(jobId: string): Promise<string> {
     const job = await this.prisma.ingestionJob.findUnique({
       where: { id: jobId },

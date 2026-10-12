@@ -22,6 +22,9 @@ export default defineConfig(({ isSsrBuild }) => ({
     },
   },
   server: {
+    // A published site's own host in dev (docs/features/44), e.g.
+    // PUBLISH_BASE_DOMAIN=docs.localhost → <slug>.docs.localhost:5173.
+    ...(process.env.PUBLISH_BASE_DOMAIN ? { allowedHosts: [`.${process.env.PUBLISH_BASE_DOMAIN}`] } : {}),
     proxy: {
       '/api': {
         target: process.env.API_URL_INTERNAL ?? 'http://localhost:3000',

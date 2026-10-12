@@ -35,11 +35,16 @@ the render, and every API call that render makes on one trace
 
 ### The public entry
 
-`/s/*` is matched before any cookie is read and rendered by a second entry,
+`/s/*` (a share link), `/pub/<slug>/*` (a published site in path mode) and
+every path on a host under `PUBLISH_BASE_DOMAIN` (a site on its own host) are
+matched before any cookie is read and rendered by a second entry,
 `src/entry-public.ts`, into its own shell, `reader.html`, with its own client
-entry and app (`public-main.ts`: no router, Pinia, query client or auth guard)
-(docs/features/43). It receives only the language, the `kn_share_*` cookies and
-the visitor's `X-Forwarded-For`; `kn_token` never reaches a public render. Its
+entry and app (`public-main.ts`: no router, Pinia, query client or auth guard;
+`SharePage` or `SitePage` by the view resolved) (docs/features/43, 44). It
+receives only the language, the `kn_share_*` cookies and the visitor's
+`X-Forwarded-For`; `kn_token` never reaches a public render. The render
+returns its own headers (a share's no-referrer/noindex/no-store, a site's
+robots rule) and may answer with a redirect to a page's one canonical URL. Its
 page body is HTML from `lib/markdown/public-render.server.ts`, which sanitizes
 with `SANITIZE_CONFIG` over a jsdom window. That is the one server-side
 sanitizer, and the reason `MarkdownView` can keep rendering nothing during SSR.

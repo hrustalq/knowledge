@@ -2401,6 +2401,106 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/public/shares/{token}",
+      "tag": "public",
+      "summary": "A shared page: its title and the pages the link reaches, or `locked` when a password is needed",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/shares/{token}/pages/{documentId}",
+      "tag": "public",
+      "summary": "One page the link reaches: title and markdown body, frontmatter stripped",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/public/shares/{token}/unlock",
+      "tag": "public",
+      "summary": "Enter a link’s password; sets an httpOnly cookie for SHARE_UNLOCK_TTL_MIN",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/shares",
+      "tag": "publishing",
+      "summary": "A page’s live share links, and what the workspace allows",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/shares",
+      "tag": "publishing",
+      "summary": "Create a public, read-only link to the page (and optionally its subpages)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/shares/{id}",
+      "tag": "publishing",
+      "summary": "Revoke a link. It stops working at once; the row stays in the inventory",
+      "role": "editor",
+      "source": "share-link",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/shares/{id}",
+      "tag": "publishing",
+      "summary": "Change a link’s expiry, password or subtree",
+      "role": "editor",
+      "source": "share-link",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/publishing-settings",
+      "tag": "publishing",
+      "summary": "The publishing switches: what applies, the workspace override, and the deployment ceiling",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/workspaces/{id}/publishing-settings",
+      "tag": "publishing",
+      "summary": "Override the publishing switches; null on a key goes back to the default (off)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/shares",
+      "tag": "publishing",
+      "summary": "Every share link in the workspace, revoked and expired included",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/search",
       "tag": "search",
@@ -3410,6 +3510,32 @@
         },
         {
           "name": "includeArchived",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_share_page",
+      "description": "Create a public, read-only link to a page (docs/features/43) that anyone with the URL can open without signing in — only when a person asked for one. includeSubtree also shares every page under it. Without expiresInDays the link never expires, which most workspaces only allow with a password. Fails with 403 when the workspace has sharing switched off. Returns the URL; revoke it from the page's Share menu.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "includeSubtree",
+          "optional": true
+        },
+        {
+          "name": "expiresInDays",
+          "optional": true
+        },
+        {
+          "name": "password",
           "optional": true
         }
       ]

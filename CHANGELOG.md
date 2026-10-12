@@ -90,6 +90,20 @@ in the pull request that introduces them — see
   `produces.templateRef` on a step, and `POST /v1/imports/:id/submit` accepts
   `templateRef`.
 
+- **Public share links.** An editor can hand a page, or a page and everything
+  under it, to someone who never signs in: **Share** in the page header creates
+  a read-only link with an optional password and an expiry (1, 7 or 30 days, or
+  never). The link opens a server-rendered copy of the page at `/s/<token>`.
+  The text is in the HTML before any script runs; comments, history, authors
+  and frontmatter are not served. Revoking a link, its expiry, or switching
+  sharing off ends access on the very next request. Anything outside the shared
+  page or subtree, including an attachment of another page, answers 404, the
+  same as a link that does not exist. Sharing is **off** until a workspace
+  admin turns it on in **Settings → Publishing**, which also lists every link
+  in the workspace. A link that never expires needs a password unless the
+  admin allows otherwise. Over MCP, `knowledge_share_page` creates one (editor;
+  hidden from read-only keys). (#77)
+
 ### Fixed
 
 - **File uploads and attachments work in production.** Every upload (editor
@@ -115,6 +129,18 @@ in the pull request that introduces them — see
   `documents` (`template_ref`, `template_version`). The previous image runs
   against it unchanged, so a code rollback needs no database step. No new env
   vars; built-in templates live in code and are never seeded. (#146)
+- Share links (#77): migration `20261012200000_share_links` is expand-only
+  (two new tables, `share_links` and `publishing_settings`), so a code rollback
+  needs no database step. New env vars, all with defaults, none required:
+  `PUBLIC_SHARING_ENABLED` (`true`; the ceiling over the workspace switch,
+  which itself defaults to off), `SHARE_LINK_MAX_TTL_DAYS` (`0` = no cap),
+  `SHARE_UNLOCK_TTL_MIN` (`720`), `PUBLIC_RATE_LIMIT_PER_MIN` (`120` per IP)
+  and `PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN` (`10` per IP and link). Rate limits
+  and password sessions are kept in the existing Redis. Without
+  `SETTINGS_ENCRYPTION_KEY` a link is shown once, at creation, and cannot be
+  copied again later. The web image gains `jsdom` (server-side sanitising of
+  public pages) and a second built app, `reader.html`; no Caddyfile change,
+  since `/s/*` already reaches the web container and `/api/*` the API.
 
 ## [0.17.0] — 2026-10-12
 

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="<!--app-lang-->">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The public reader's shell (docs/features/43): entry-public renders the
+         page into it. No web fonts — an anonymous reader's browser makes no
+         request to a third party on our behalf. -->
+    <script>
+      // Apply the saved theme before paint to avoid a light-mode flash.
+      try {
+        var t = localStorage.getItem('kn_theme')
+        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) {}
+    </script>
+    <!--app-css-->
+    <!--app-head-->
+  </head>
+  <body>
+    <div id="app"><!--app-html--></div>
+    <script type="module" src="/src/entry-public-client.ts"></script>
+  </body>
+</html>

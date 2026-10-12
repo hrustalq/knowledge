@@ -20,5 +20,6 @@
   "id": "identifier",
   "savedFilter": "saved filter id",
   "sourcePolicy": "source policy id",
-  "template": "template id"
+  "template": "template id",
+  "shareLink": "share link id"
 }

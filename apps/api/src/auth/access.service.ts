@@ -284,6 +284,12 @@ export class AccessService {
     return template.workspaceId;
   }
 
+  async workspaceOfShareLink(shareId: string): Promise<string> {
+    const share = await this.prisma.shareLink.findUnique({ where: { id: shareId }, select: { workspaceId: true } });
+    if (!share) throw new NotFoundException(t('error.share.notFound'));
+    return share.workspaceId;
+  }
+
   async workspaceOfJob(jobId: string): Promise<string> {
     const job = await this.prisma.ingestionJob.findUnique({
       where: { id: jobId },

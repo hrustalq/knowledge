@@ -157,6 +157,20 @@ export const envSchema = z.object({
    * and `/content` stays JSON-only.
    */
   AI_READABLE_ENABLED: boolish(true),
+  /**
+   * Share links (docs/features/43, issue #77). PUBLIC_SHARING_ENABLED is the
+   * ceiling over every workspace's `publishing_settings` switch: false refuses
+   * new links and 404s every existing one, whatever the workspace says.
+   */
+  PUBLIC_SHARING_ENABLED: boolish(true),
+  /** Longest a share link may live, in days; a longer or never-expiring request is cut to it. 0 = no cap. */
+  SHARE_LINK_MAX_TTL_DAYS: z.coerce.number().int().min(0).default(0),
+  /** How long a password-unlocked share stays open in one browser. */
+  SHARE_UNLOCK_TTL_MIN: z.coerce.number().int().positive().default(720),
+  /** Per-IP requests a minute across the anonymous /v1/public routes. */
+  PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
+  /** Password attempts per IP and link in 15 minutes before the unlock answers 429. */
+  PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN: z.coerce.number().int().positive().default(10),
   /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
   LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
   /** Cap on bytes streamed in one llms-full.txt (20 MB). */

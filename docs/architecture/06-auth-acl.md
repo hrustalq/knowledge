@@ -168,6 +168,17 @@ POST /v1/graph/query                                              trusted_operat
 GET  /v1/audit-logs                                               admin
 ```
 
+## The public surface
+
+`/v1/public/*` (docs/features/43) is the one place an anonymous request reads
+content. Its controllers are `@Public()`, so both guards step aside, and
+authorisation is the service's job: `PublicSharesService` resolves the `kp_`
+token on every request and confines every read to the scope the link names,
+answering 404 for anything outside it. `PublicRateLimitGuard` caps it per IP,
+counting `X-Forwarded-For` only when the peer is internal (Caddy, the web SSR).
+The `share-link` source resolves a link id to its workspace for the
+authenticated management routes, like every other source.
+
 ## Limits
 
 - ACLs stop at the workspace. There are no project-level roles; projects are

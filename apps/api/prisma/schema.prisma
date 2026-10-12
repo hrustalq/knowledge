@@ -84,6 +84,7 @@ model Document {
   mergeRequests MergeRequest[]
   attachments   Attachment[]
   threads       DocumentThread[]
+  shareLinks    ShareLink[]
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -2099,4 +2100,46 @@ model PageTemplateVersion {
 
   @@unique([templateId, version])
   @@map("page_template_versions")
+}
+
+/// A public, read-only link to one page, or to a page and its subtree
+/// (docs/features/43, issue #77 phase 1).
+///
+/// Only the SHA-256 of the `kp_` token is looked up; `token_cipher` is the same
+/// token under the secret box (AES-256-GCM, SETTINGS_ENCRYPTION_KEY) so an
+/// editor can copy the link again. Null when no key is configured: the link
+/// is then shown once, at creation. Revoking keeps the row, for the inventory.
+/// No FK on workspace_id or created_by, per house policy.
+model ShareLink {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  documentId     String    @map("document_id") @db.Uuid
+  includeSubtree Boolean   @default(false) @map("include_subtree")
+  tokenHash      String    @unique @map("token_hash")
+  tokenCipher    String?   @map("token_cipher")
+  /// scrypt (auth/password.ts). Changing it ends every unlocked session.
+  passwordHash   String?   @map("password_hash")
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id])
+
+  @@index([documentId])
+  @@index([workspaceId, createdAt])
+  @@map("share_links")
+}
+
+/// Per-workspace publishing switches (docs/features/43): a sparse override of
+/// a code default that is `false` for anything public, so an empty table is
+/// exactly "nothing is public". PUBLIC_SHARING_ENABLED is the ceiling above it.
+model PublishingSettings {
+  workspaceId             String   @id @map("workspace_id") @db.Uuid
+  allowShareLinks         Boolean? @map("allow_share_links")
+  /// Allow a link with neither a password nor an expiry.
+  allowPasswordlessShares Boolean? @map("allow_passwordless_shares")
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("publishing_settings")
 }

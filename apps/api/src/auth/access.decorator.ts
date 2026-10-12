@@ -29,6 +29,7 @@ export type WorkspaceSource =
   | 'workflow-definition' // :id path param is a workflow definition id (docs/features/17)
   | 'workflow-run' // :id path param is a workflow run id (docs/features/17)
   | 'template' // :id path param is a page template id (issue #69)
+  | 'share-link' // :id path param is a share link id (docs/features/43)
   | 'connector' // :id path param is a connector id (docs/features/19)
   | 'connector-run' // :runId path param is a connector run id (docs/features/19)
   | 'workspace'; // :id path param IS the workspace id (existence-checked)

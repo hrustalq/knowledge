@@ -51,6 +51,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   // Sets a page's declared verification flag (docs/features/39). There is
   // deliberately no verify tool: a stamp is a person's act.
   'knowledge_flag_document',
+  // Puts a page in front of people outside the workspace (docs/features/43).
+  'knowledge_share_page',
 ]);
 
 /**

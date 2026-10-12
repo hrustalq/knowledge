@@ -15,6 +15,7 @@
     "./content": "./src/content/index.ts",
     "./workflows": "./src/workflows/index.ts",
     "./templates": "./src/templates/index.ts",
+    "./publishing": "./src/publishing/index.ts",
     "./connectors": "./src/connectors/index.ts",
     "./observability": "./src/observability/index.ts"
   },

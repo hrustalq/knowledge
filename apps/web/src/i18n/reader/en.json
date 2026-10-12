@@ -1,0 +1,24 @@
+{
+  "shareReader": {
+    "pages": "Pages",
+    "onThisPage": "On this page",
+    "noHeadings": "This page has no headings yet.",
+    "updated": "Updated {date}",
+    "expires": "Link expires {date}",
+    "truncated": "Only the first {n} pages are listed.",
+    "open": "Open",
+    "download": "Download",
+    "pdfFallback": "Download the PDF",
+    "toggleTheme": "Toggle dark mode",
+    "sharedWithYou": "Shared page",
+    "lockedTitle": "This page is password-protected",
+    "lockedBody": "Enter the password you were given with the link.",
+    "password": "Password",
+    "unlock": "Open page",
+    "unlocking": "Checking…",
+    "unlockFailed": "Could not check the password. Try again.",
+    "notFoundTitle": "This link does not work",
+    "notFoundBody": "It may have expired or been revoked, or the address is incomplete. Ask whoever sent it for a new one.",
+    "diagramFailed": "This diagram could not be drawn."
+  }
+}

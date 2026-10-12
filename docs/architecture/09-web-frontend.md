@@ -33,6 +33,19 @@ and the id is passed into the render, which is what puts the browser's request,
 the render, and every API call that render makes on one trace
 ([07-api-client-errors.md](07-api-client-errors.md) for where it resurfaces).
 
+### The public entry
+
+`/s/*` is matched before any cookie is read and rendered by a second entry,
+`src/entry-public.ts`, into its own shell, `reader.html`, with its own client
+entry and app (`public-main.ts`: no router, Pinia, query client or auth guard)
+(docs/features/43). It receives only the language, the `kn_share_*` cookies and
+the visitor's `X-Forwarded-For`; `kn_token` never reaches a public render. Its
+page body is HTML from `lib/markdown/public-render.server.ts`, which sanitizes
+with `SANITIZE_CONFIG` over a jsdom window. That is the one server-side
+sanitizer, and the reason `MarkdownView` can keep rendering nothing during SSR.
+Vite builds both apps in one pass (`rolldownOptions.input`), and the reader
+carries its own small i18n catalog rather than sharing the app's.
+
 ## A fresh app per request
 
 `src/main.ts` is a factory, not a module-scope app:

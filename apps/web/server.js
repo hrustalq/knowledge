@@ -33,6 +33,14 @@ const devStyles = isProduction ? '' : '<link rel="stylesheet" href="/src/style.c
 const templateHtml = isProduction
   ? await fs.readFile('./dist/client/index.html', 'utf-8')
   : ''
+// The public reader's shell (docs/features/43): a second app in the same build.
+const readerTemplateHtml = isProduction
+  ? await fs.readFile('./dist/client/reader.html', 'utf-8')
+  : ''
+
+// `/s/<token>` and `/s/<token>/<documentId>` — a share link. Kept in step with
+// SHARE_PATH in src/entry-public.ts, which re-checks it.
+const PUBLIC_PATH = /^\/s\/[^/?#]+(?:\/[^/?#]+)?\/?(?:[?#].*)?$/
 
 // Create http server
 const app = express()
@@ -100,10 +108,88 @@ function readCookie(header, name) {
   return null
 }
 
+/**
+ * Only the share-unlock cookies, rebuilt as a Cookie header. A public render
+ * must never carry `kn_token` to the API: the reader is anonymous even when
+ * the person opening the link happens to be signed in to the app.
+ */
+function shareCookies(header) {
+  if (!header) return ''
+  return header
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => /^kn_share_[0-9a-f-]{36}=/i.test(part))
+    .join('; ')
+}
+
+/** The visitor's address chain plus the peer, as Caddy would forward it to the API. */
+function forwardedFor(req) {
+  const prior = req.headers['x-forwarded-for']
+  const peer = req.socket.remoteAddress
+  return [typeof prior === 'string' ? prior : null, peer].filter(Boolean).join(', ') || null
+}
+
+/**
+ * A share link (docs/features/43): the public entry, its own shell, and the
+ * headers every share response carries — the token is in the URL, so no
+ * Referer may take it elsewhere, nothing may index or cache it, and a revoke
+ * must end it on the next request.
+ */
+async function renderPublic(req, res, url) {
+  let template
+  let render
+  if (!isProduction) {
+    template = await fs.readFile('./reader.html', 'utf-8')
+    template = await vite.transformIndexHtml(url, template)
+    render = (await vite.ssrLoadModule('/src/entry-public.ts')).render
+  } else {
+    template = readerTemplateHtml
+    render = (await import('./dist/server/entry-public.js')).render
+  }
+  const locale = resolveLocale(readCookie(req.headers.cookie, 'kn_lang'), req.headers['accept-language'])
+  const headerTraceId = res.getHeader('x-request-id')
+  let rendered
+  try {
+    rendered = await render(url, {
+      locale,
+      shareCookies: shareCookies(req.headers.cookie),
+      forwardedFor: forwardedFor(req),
+      traceId: typeof headerTraceId === 'string' ? headerTraceId : null,
+    })
+  } catch (e) {
+    // The API's per-address cap, passed on as itself rather than as a 500.
+    if (e?.status === 429) {
+      res.status(429).set({ 'Retry-After': '60', 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }).end('Too Many Requests')
+      return
+    }
+    throw e
+  }
+  const html = template
+    .replace(`<!--app-lang-->`, locale)
+    .replace(`<!--app-css-->`, devStyles)
+    .replace(`<!--app-head-->`, rendered.head ?? '')
+    .replace(`<!--app-html-->`, rendered.html ?? '')
+  res
+    .status(rendered.status ?? 200)
+    .set({
+      'Content-Type': 'text/html',
+      'Referrer-Policy': 'no-referrer',
+      'X-Robots-Tag': 'noindex, nofollow',
+      'Cache-Control': 'no-store',
+    })
+    .send(html)
+}
+
 // Serve HTML
 app.use('*all', async (req, res) => {
   try {
     const url = req.originalUrl.replace(base, '')
+    // Checked first, before any cookie is read: a public render takes nothing
+    // from the member app's request context.
+    if (PUBLIC_PATH.test(req.originalUrl)) {
+      await renderPublic(req, res, req.originalUrl)
+      return
+    }
 
     /** @type {string} */
     let template

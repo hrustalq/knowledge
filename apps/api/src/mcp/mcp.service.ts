@@ -12,6 +12,8 @@ import {
   KNOWLEDGE_ISSUE_KINDS,
   KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS,
   VERIFICATION_FLAGS,
+  SHARE_PASSWORD_MAX_CHARS,
+  SHARE_PASSWORD_MIN_CHARS,
   VERIFICATION_NOTE_MAX_CHARS,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
@@ -41,6 +43,7 @@ import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 import { KnowledgeIssuesService } from '../feedback/knowledge-issues.service.js';
 import { VerificationService } from '../verification/verification.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
+import { ShareLinksService } from '../publishing/share-links.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
@@ -126,6 +129,7 @@ export class McpService {
     private readonly issues: KnowledgeIssuesService,
     private readonly verification: VerificationService,
     private readonly templates: TemplatesService,
+    private readonly shareLinks: ShareLinksService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -327,6 +331,46 @@ export class McpService {
           state,
           verification: doc?.verification ?? state,
           ownerId: doc?.ownerId ?? null,
+        });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_share_page',
+      {
+        description:
+          'Create a public, read-only link to a page (docs/features/43) that anyone with the URL can open without ' +
+          'signing in — only when a person asked for one. includeSubtree also shares every page under it. Without ' +
+          'expiresInDays the link never expires, which most workspaces only allow with a password. Fails with 403 ' +
+          'when the workspace has sharing switched off. Returns the URL; revoke it from the page\'s Share menu.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          documentId: z.string().uuid(),
+          includeSubtree: z.boolean().optional(),
+          expiresInDays: z.number().int().min(1).max(3650).optional(),
+          password: z.string().min(SHARE_PASSWORD_MIN_CHARS).max(SHARE_PASSWORD_MAX_CHARS).optional(),
+        },
+      },
+      async ({ workspaceId, documentId, includeSubtree, expiresInDays, password }) => {
+        // The REST twin is POST /v1/documents/:id/shares, editor.
+        await guard.doc(documentId, 'editor');
+        const res = await this.shareLinks.create(
+          documentId,
+          {
+            includeSubtree: includeSubtree ?? false,
+            expiresAt: expiresInDays ? new Date(Date.now() + expiresInDays * 86_400_000).toISOString() : null,
+            ...(password ? { password } : {}),
+          },
+          principal.userId,
+        );
+        return this.json({
+          workspaceId,
+          documentId,
+          shareId: res.share.id,
+          url: res.url,
+          includeSubtree: res.share.includeSubtree,
+          expiresAt: res.share.expiresAt,
+          hasPassword: res.share.hasPassword,
         });
       },
     );

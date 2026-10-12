@@ -598,6 +598,16 @@ export type I18nTranslations = {
                 "invalidRelation": string;
             };
         };
+        "share": {
+            "notFound": string;
+            "disabledByWorkspace": string;
+            "passwordRequired": string;
+            "passwordInvalid": string;
+            "expiryInPast": string;
+            "rateLimited": string;
+            "unlockRateLimited": string;
+            "locked": string;
+        };
     };
     "import": {
         "stage": {
@@ -808,6 +818,7 @@ export type I18nTranslations = {
         "savedFilter": string;
         "sourcePolicy": string;
         "template": string;
+        "shareLink": string;
     };
     "validation": {
         "isDefined": string;

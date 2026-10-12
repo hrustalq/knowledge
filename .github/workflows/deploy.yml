@@ -35,7 +35,11 @@ jobs:
   deploy:
     # A fork that somehow triggers this workflow still cannot run it.
     if: github.repository == 'hrustalq/knowledge'
-    runs-on: [self-hosted, linux, x64, knowledge-prod]
+    # The Mac mini (arm64). Docker is Colima, a brew service started at login;
+    # the runner is a LaunchAgent, so both come back after a reboot because the
+    # box auto-logs-in. Public traffic arrives via a Cloudflare Worker and
+    # Tailscale Funnel to caddy on 127.0.0.1:8088, never a port on this machine.
+    runs-on: [self-hosted, macOS, ARM64, knowledge-macmini]
     environment: production
     timeout-minutes: 60
 
@@ -44,8 +48,8 @@ jobs:
       # uniquely identifies the build. Neither is `latest`, which moves.
       VERSION: ${{ github.ref_name }}
       SHA: ${{ github.sha }}
-      DEPLOY_DIR: /srv/knowledge
-      COMPOSE: docker compose -f /srv/knowledge/docker-compose.prod.yml
+      DEPLOY_DIR: /Users/hrustalq/Homelab/infra/knowledge
+      COMPOSE: docker compose -f /Users/hrustalq/Homelab/infra/knowledge/docker-compose.prod.yml
 
     steps:
       # Full history: the ancestry check below needs more than the tagged commit.
@@ -69,7 +73,7 @@ jobs:
           fi
           echo "$VERSION is on main"
 
-      # The stack runs out of /srv/knowledge, not out of the runner workspace,
+      # The stack runs out of $DEPLOY_DIR, not out of the runner workspace,
       # which CI rewrites on every job. Only config crosses over; .env is
       # hand-managed on the box and is never touched here.
       - name: Sync deployment config
@@ -78,8 +82,9 @@ jobs:
           install -m 644 Caddyfile              "$DEPLOY_DIR/Caddyfile"
           test -f "$DEPLOY_DIR/.env" || { echo "::error::$DEPLOY_DIR/.env is missing — create it from .env.production.example"; exit 1; }
 
-      # SEQUENTIALLY, never in parallel: two concurrent tsc processes against a
-      # 3.8 GB ceiling is the likeliest way this box OOMs. Each image is tagged
+      # SEQUENTIALLY, never in parallel: the Colima VM (10 GB) also holds the
+      # running stack, and two concurrent tsc builds beside it is the likeliest
+      # way it OOMs. Each image is tagged
       # with the version, the commit SHA and latest, so a rollback is a retag
       # rather than a rebuild:
       #   docker tag knowledge-api:v0.4.0 knowledge-api:latest && compose up -d

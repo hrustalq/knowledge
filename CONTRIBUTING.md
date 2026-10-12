@@ -182,10 +182,10 @@ out, and gates on loopback health plus the public endpoint.
 Code rolls back by retag; **the database does not roll back at all**.
 
 ```bash
-ssh knowledge-prod
+ssh macmini
 docker tag knowledge-api:vX.Y.Z knowledge-api:latest
 docker tag knowledge-web:vX.Y.Z knowledge-web:latest
-docker compose -f /srv/knowledge/docker-compose.prod.yml up -d
+docker compose -f ~/Homelab/infra/knowledge/docker-compose.prod.yml up -d
 ```
 
 This only works because every migration is required to run against the previous
@@ -233,7 +233,7 @@ Skipping the backport means the next release silently reverts the hotfix.
 4. **A new required env var with no default is a breaking change** — `env.ts`
    validates with zod and fails fast, so a missing variable does not degrade, it
    refuses to boot. Give it a default, or write the **Operations** entry.
-5. **Never commit secrets.** `/srv/knowledge/.env` is hand-managed on the box and
+5. **Never commit secrets.** `~/Homelab/infra/knowledge/.env` is hand-managed on the Mac mini and
    no workflow touches it.
 6. **`deploy.yml` never runs on `pull_request`** — it is self-hosted and this repo
    is public. Do not add a trigger a fork can cause.

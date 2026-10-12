@@ -299,7 +299,7 @@ first. Approval to merge is not approval to deploy.
 
 ## Stage 7 — watch, then verify
 
-The run builds both images sequentially (a 3.8 GB box cannot afford parallel
+The run builds both images sequentially (the Colima VM cannot afford parallel
 `tsc`), applies migrations, rolls out, then gates on loopback health and the
 public endpoint.
 
@@ -404,10 +404,10 @@ Code only, and only because every migration is required to run against the
 previous release's image:
 
 ```bash
-ssh knowledge-prod
+ssh macmini
 docker tag knowledge-api:vX.Y.Z knowledge-api:latest
 docker tag knowledge-web:vX.Y.Z knowledge-web:latest
-docker compose -f /srv/knowledge/docker-compose.prod.yml up -d
+docker compose -f ~/Homelab/infra/knowledge/docker-compose.prod.yml up -d
 ```
 
 ## Reporting

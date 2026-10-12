@@ -1,16 +1,20 @@
-# Production stack for knowledge-prod. Lives at /srv/knowledge/docker-compose.prod.yml
+# Production stack on the Mac mini. Lives at
+# ~/Homelab/infra/knowledge/docker-compose.prod.yml
 # alongside a hand-managed .env (chmod 600) that this file both interpolates from
 # and injects into containers.
 #
 # Images are built and tagged by .github/workflows/deploy.yml, NOT here — there
-# is deliberately no `build:` section, because /srv/knowledge holds no source
+# is deliberately no `build:` section, because the deploy dir holds no source
 # tree and a stray `compose up` must never try to build one.
 #   TAG=<sha> docker compose -f docker-compose.prod.yml up -d
 #
-# EXPOSURE: only caddy publishes publicly (80/443). The four datastores get no
+# EXPOSURE: nothing publishes publicly. The public path is a Cloudflare Worker
+# on knowledge.hrustalq.dev -> Tailscale Funnel on the Mac mini -> caddy on
+# 127.0.0.1:8088 (a Cloudflare Tunnel cannot connect from this network: its
+# handshake is filtered on every egress available). The four datastores get no
 # host binding at all — a deliberate break from docker-compose.yml, which
-# publishes all of them on 0.0.0.0. api and web bind loopback only, so the
-# existing `make smoke` still works when run on the box.
+# publishes all of them on 0.0.0.0. api and web bind loopback only, for smoke
+# checks on the box.
 
 name: knowledge
 
@@ -19,11 +23,12 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      # Tailscale Funnel's target (`tailscale funnel --bg 8088`), and the
+      # loopback smoke check. Loopback only: Funnel connects from the host.
+      - "127.0.0.1:8088:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data # certificates — losing this re-issues and can hit rate limits
+      - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - api
@@ -93,7 +98,7 @@ services:
     image: arcadedata/arcadedb:latest
     restart: unless-stopped
     environment:
-      # Heap is capped on purpose: this is a 3.8 GB box that also builds images.
+      # Heap is capped on purpose: the Colima VM (10 GB) also builds images.
       # Unbounded, the JVM sizes itself against total RAM and starves everything else.
       # defaultDatabases grammar is <db>[(<user>:<password>[:<group>])*] — the
       # THIRD element is the group, and omitting it is NOT harmless. `[root:<pw>]`
@@ -106,7 +111,7 @@ services:
       # These comments MUST stay outside the `>-` block below: inside a folded
       # scalar a `#` is literal text, not a comment, and would be handed to the JVM.
       JAVA_OPTS: >-
-        -Xms256m -Xmx512m
+        -Xms256m -Xmx1g
         -Darcadedb.server.rootPassword=${ARCADE_PASSWORD:?set ARCADE_PASSWORD in .env}
         -Darcadedb.server.defaultDatabases=${ARCADE_DB:-knowledge}[${ARCADE_USER:-root}:${ARCADE_PASSWORD}:admin]
     volumes:
@@ -199,12 +204,12 @@ services:
   # retrieved. Reached as WEB_SEARCH_URL=http://searxng:8080.
   #
   # This service MUST stay in this file, not just on the box: deploy.yml
-  # installs this file over /srv/knowledge/docker-compose.prod.yml and then runs
+  # installs this file over the deploy dir copy and then runs
   # `up -d --remove-orphans`, so a service that exists only on the box is
   # deleted by the next release.
   #
   # ./searxng is NOT the repo's searxng/ — deploy.yml syncs only this file and
-  # the Caddyfile. /srv/knowledge/searxng/settings.yml is hand-managed beside
+  # the Caddyfile. <deploy dir>/searxng/settings.yml is hand-managed beside
   # .env, because it carries a generated secret_key that must not be the dev
   # placeholder the repo copy ships.
   searxng:

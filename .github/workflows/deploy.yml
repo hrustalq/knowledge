@@ -90,14 +90,64 @@ jobs:
           fi
           echo "$VERSION is on main"
 
+      # The `production` environment is the source of truth for configuration
+      # (#134): its variables and secrets become $DEPLOY_DIR/.env on every
+      # deploy, which compose both interpolates from and injects into containers.
+      # A hand edit on the box lasts until the next release — change the
+      # environment instead (Settings -> Environments, or
+      # scripts/env-to-github.mjs). The file stays on disk so a manual
+      # `docker compose run …` on the box still sees the same config.
+      #
+      # Both maps reach jq through env and $ENV, never through the script text
+      # or argv. Only UPPER_SNAKE names are kept, which drops the github_token
+      # every secrets map carries. Values are written single-quoted, which
+      # compose reads literally (no `$` interpolation, no ` #` comment), so the
+      # two characters it cannot carry — a newline and a single quote — fail
+      # here instead of truncating a secret.
+      #
+      # Fails before anything is built or synced: a key .env.production.example
+      # gives a value to must be present, and no value may still be CHANGE_ME.
+      - name: Render .env from the production environment
+        env:
+          ENV_VARS: ${{ toJSON(vars) }}
+          ENV_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          set -euo pipefail
+          umask 077
+          next="$DEPLOY_DIR/.env.next"
+          trap 'rm -f "$next"' EXIT
+          jq -rn '
+            def named: with_entries(select(.key | test("^[A-Z][A-Z0-9_]*$")));
+            ($ENV.ENV_VARS | fromjson | named) as $v
+            | ($ENV.ENV_SECRETS | fromjson | named) as $s
+            | ([$v | keys[] | select(. as $k | $s | has($k))]) as $both
+            | if ($both | length) > 0 then error("set as both a variable and a secret: \($both | join(", "))") else . end
+            | ($v + $s) | to_entries | sort_by(.key)[]
+            | if (.value | test("[\n\r\u0027]")) then error("\(.key): a newline or single quote cannot be written to .env")
+              elif (.value | contains("CHANGE_ME")) then error("\(.key) is still the CHANGE_ME placeholder")
+              else "\(.key)=\u0027\(.value)\u0027" end
+          ' > "$next"
+          missing=""
+          for key in $(grep -E '^[A-Z][A-Z0-9_]*=.' .env.production.example | cut -d= -f1); do
+            grep -q "^$key=" "$next" || missing="$missing $key"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing from the production environment:$missing"
+            exit 1
+          fi
+          if [ -f "$DEPLOY_DIR/.env" ]; then install -m 600 "$DEPLOY_DIR/.env" "$DEPLOY_DIR/.env.bak"; fi
+          mv "$next" "$DEPLOY_DIR/.env"
+          echo "rendered $(wc -l < "$DEPLOY_DIR/.env" | tr -d ' ') keys into $DEPLOY_DIR/.env"
+
       # The stack runs out of $DEPLOY_DIR, not out of the runner workspace,
-      # which CI rewrites on every job. Only config crosses over; .env is
-      # hand-managed on the box and is never touched here.
+      # which CI rewrites on every job. searxng/settings.yml is the repo copy:
+      # its secret_key is a dev placeholder that SEARXNG_SECRET overrides.
       - name: Sync deployment config
         run: |
           install -m 644 docker-compose.prod.yml "$DEPLOY_DIR/docker-compose.prod.yml"
           install -m 644 Caddyfile              "$DEPLOY_DIR/Caddyfile"
-          test -f "$DEPLOY_DIR/.env" || { echo "::error::$DEPLOY_DIR/.env is missing — create it from .env.production.example"; exit 1; }
+          install -d -m 755 "$DEPLOY_DIR/searxng"
+          install -m 644 searxng/settings.yml   "$DEPLOY_DIR/searxng/settings.yml"
 
       # SEQUENTIALLY, never in parallel: the Colima VM (10 GB) also holds the
       # running stack, and two concurrent tsc builds beside it is the likeliest

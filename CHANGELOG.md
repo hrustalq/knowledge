@@ -64,6 +64,24 @@ in the pull request that introduces them — see
   locked out or sent old news.
 - Local dev: `make infra-up-mailpit` starts a loopback mail catcher (SMTP `:1025`,
   inbox `http://localhost:8025`).
+- **Production config now lives in the GitHub `production` environment, and
+  the next deploy fails until it is filled.** `deploy.yml` writes
+  `~/Homelab/infra/knowledge/.env` from that environment's variables and
+  secrets on every deploy (0600, previous copy kept as `.env.bak`). A hand edit
+  on the box therefore lasts only until the next release: rotate a secret in
+  Settings › Environments, then redeploy. The deploy stops before building if a
+  key that `.env.production.example` gives a value to is missing, or a value
+  still contains `CHANGE_ME`, a newline or a single quote. **Before tagging,**
+  fill the environment once from the box's current file (dry run first, then
+  `--apply`):
+  `ssh macmini 'cat ~/Homelab/infra/knowledge/.env' | node scripts/env-to-github.mjs .env.production.example -`.
+  Names containing `PASSWORD`, `SECRET` or `TOKEN`, names ending `_KEY`, and
+  `DATABASE_URL` / `MAIL_SMTP_URL` become secrets; everything else becomes a variable. (#134)
+- **New required secret `SEARXNG_SECRET`**, SearXNG's `server.secret_key`. The
+  deploy now ships the repo's `searxng/settings.yml` over the hand-managed copy
+  on the box, and the secret overrides that file's dev placeholder:
+  `openssl rand -hex 32 | gh secret set SEARXNG_SECRET --env production`.
+  Rotating it only invalidates SearXNG's own cookies. (#134)
 
 ## [0.15.0] — 2026-10-12
 

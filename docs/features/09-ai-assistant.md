@@ -71,6 +71,8 @@ context engineering / prompt injection:
 
 ## Future work
 
-- Autogeneration of documents from templates + graph context.
+- ~~Autogeneration of documents from templates + graph context.~~ Shipped as
+  "Fill with AI" in [42](42-page-templates.md): the editor's assistant fills a
+  template's sections as `edit_draft` suggestions.
 - Review comments anchored to line ranges; MR-diff review mode.
 - MCP tools (`knowledge_review_draft`) for agent-side authoring.

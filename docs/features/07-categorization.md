@@ -26,5 +26,7 @@ Every document gets a category: `process`, `use-case`, `contract`, `erd`,
 
 ## Future work
 
-- Per-category templates in the editor (pre-filled frontmatter/skeleton).
+- ~~Per-category templates in the editor (pre-filled frontmatter/skeleton).~~
+  Shipped as page templates ([42](42-page-templates.md)): a template carries a
+  default category, tags and relations rather than a category owning a template.
 - Category-scoped default relation types (e.g. `contract` → `IMPLEMENTS`).

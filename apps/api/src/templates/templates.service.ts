@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import type { PageTemplate, PageTemplateVersion, Prisma } from '@prisma/client';
 import {
   BUILT_IN_TEMPLATE_KEYS,
+  FRONTMATTER_KEY_ALIASES,
   builtInTemplateRef,
   isBuiltInTemplateKey,
   missingRequiredPlaceholders,
@@ -26,6 +27,11 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { composeFrontmatter } from '../common/frontmatter.js';
+import {
+  readFrontmatterRelations,
+  readFrontmatterTags,
+  type FrontmatterRelation,
+} from '../common/relations.js';
 // t.ts's currentLocale honours `withLocale`, so a worker or MCP render answers
 // in the language its caller pinned rather than the default.
 import { currentLocale, t } from '../i18n/t.js';
@@ -73,6 +79,35 @@ export interface RenderTemplateInput {
   values?: TemplateValues;
   projectId?: string;
   parentId?: string;
+}
+
+export interface TemplateDefaultsInput {
+  workspaceId: string;
+  ref: TemplateRef;
+  version?: number;
+  /** The `{{title}}` system placeholder. */
+  title: string;
+  projectId?: string;
+  parentId?: string;
+  authorId?: string;
+  /** Refuse an archived template, as `render` does. Off for a workflow pinned to one. */
+  live?: boolean;
+}
+
+/** What a template contributes to a page whose body somebody else writes. */
+export interface TemplateDefaults {
+  ref: TemplateRef;
+  version: number;
+  name: string;
+  meta: TemplateMeta;
+  /** The body with system placeholders filled and declared ones left as `{{name}}`. */
+  skeleton: string;
+  /** `titlePattern` with system placeholders filled, when the template has one. */
+  titlePattern: string | null;
+  tags: string[];
+  relations: FrontmatterRelation[];
+  /** Inherited frontmatter other than `tags`/`relations` (under any spelling). */
+  frontmatter: Record<string, unknown>;
 }
 
 type RowWithCount = PageTemplate & { _count: { versions: number } };
@@ -294,6 +329,61 @@ export class TemplatesService {
       frontmatter,
       body,
       markdown: composeFrontmatter(body, frontmatter),
+    };
+  }
+
+  /**
+   * A template for a writer that has no placeholder values: a workflow's
+   * `ai.draft` model, or an import whose body already exists. System
+   * placeholders are filled; declared ones stay `{{name}}` in the skeleton for
+   * the model to fill from its source. A default tag or relation that needs a
+   * declared value is dropped (`renderTemplateFrontmatter`), never written as an
+   * empty key — so what survives is only what is true of every page made from
+   * the template.
+   */
+  async defaults(input: TemplateDefaultsInput): Promise<TemplateDefaults> {
+    const template = await this.resolve(input.workspaceId, input.ref, input.version);
+    if (input.live && template.row?.archivedAt) {
+      throw new ConflictException(t('error.template.archived', { name: template.name }));
+    }
+    const { meta } = template.parsed;
+    const [project, parent, authorName] = await Promise.all([
+      input.projectId ? this.projects.requireProjectInWorkspace(input.projectId, input.workspaceId) : null,
+      input.parentId
+        ? this.prisma.document.findFirst({
+            where: { id: input.parentId, workspaceId: input.workspaceId },
+            select: { title: true },
+          })
+        : null,
+      input.authorId ? this.displayName(input.authorId) : undefined,
+    ]);
+    const ctx = {
+      locale: currentLocale(),
+      title: input.title.trim() || template.name,
+      author: authorName ?? '',
+      project: project?.name ?? '',
+      parent: parent?.title ?? '',
+    };
+    // With no declarations, `renderTemplate` fills only system names and leaves
+    // every declared `{{name}}` literal — the skeleton a model fills in.
+    const systemOnly: TemplateMeta = { ...meta, placeholders: [] };
+    const rendered = renderTemplateFrontmatter(template.parsed.data, meta, {}, ctx);
+    const frontmatter = Object.fromEntries(
+      Object.entries(rendered).filter(([key]) => {
+        const folded = key.normalize('NFC').trim().toLowerCase();
+        return folded !== 'tags' && folded !== 'relations' && FRONTMATTER_KEY_ALIASES[folded] === undefined;
+      }),
+    );
+    return {
+      ref: template.ref,
+      version: template.version,
+      name: template.name,
+      meta,
+      skeleton: renderTemplate(template.parsed.body, systemOnly, {}, ctx),
+      titlePattern: meta.titlePattern?.trim() ? renderTemplateTitle(systemOnly, {}, ctx) : null,
+      tags: readFrontmatterTags(rendered),
+      relations: readFrontmatterRelations(rendered),
+      frontmatter,
     };
   }
 

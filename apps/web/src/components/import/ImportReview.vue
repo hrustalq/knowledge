@@ -15,16 +15,22 @@
  * half a document and says nothing is the failure this flow exists to prevent —
  * so the losses sit beside the text, legible while you read it, rather than in
  * a toast that has already gone.
+ *
+ * It also offers a page template (issue #69). An imported document says what it
+ * says, so the template does not restructure it: its tags and relations are
+ * merged in on submit, and its category becomes the default filing.
  */
 import { useI18n } from 'vue-i18n'
-import { computed, ref } from 'vue'
-import { AlertTriangle, ChevronDown, FolderTree, ScanText } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { AlertTriangle, ChevronDown, FolderTree, LayoutTemplate, ScanText } from 'lucide-vue-next'
 import type { ImportJobInfo, ImportMeta } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import { Collapse } from '@/components/ui/collapse'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import RichEditor from '@/components/editor/RichEditor.vue'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
+import { useTemplatesStore } from '@/stores/templates'
 import { PARSER_ICONS } from './formats'
 import { formatBytes } from '@/lib/format'
 
@@ -43,12 +49,22 @@ const emit = defineEmits<{ back: [] }>()
 
 const title = defineModel<string>('title', { required: true })
 const markdown = defineModel<string>('markdown', { required: true })
+/** `''` for none — a Select item cannot carry an empty value, hence `NO_TEMPLATE`. */
+const templateRef = defineModel<string>('templateRef', { default: '' })
 
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
 const warningsOpen = ref(false)
 
 const projects = useProjectsStore()
 const documents = useDocumentsStore()
+const templates = useTemplatesStore()
+onMounted(() => void templates.ensureLoaded())
+
+const NO_TEMPLATE = '__none__'
+const templateValue = computed({
+  get: () => templateRef.value || NO_TEMPLATE,
+  set: (value: string) => (templateRef.value = value === NO_TEMPLATE ? '' : value),
+})
 
 const ParserIcon = computed(() => (props.job.parser ? PARSER_ICONS[props.job.parser] : ScanText))
 
@@ -175,6 +191,23 @@ const empty = computed(() => markdown.value.trim().length === 0)
           <span>{{ destination.join(' › ') }}</span>
         </p>
         <Button variant="outline" size="sm" @click="emit('back')">{{ t('import.changeDestination') }}</Button>
+      </section>
+
+      <section class="space-y-3 border-t p-4">
+        <h2 class="flex items-center gap-2 text-sm font-semibold">
+          <LayoutTemplate class="size-4 text-muted-foreground" aria-hidden="true" />
+          {{ t('import.template') }}
+        </h2>
+        <Select v-model="templateValue">
+          <SelectTrigger class="w-full" :aria-label="t('import.template')"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="NO_TEMPLATE">{{ t('import.noTemplate') }}</SelectItem>
+            <SelectItem v-for="tpl in templates.offered" :key="tpl.ref" :value="tpl.ref">
+              {{ `${tpl.icon ?? ''} ${tpl.name}`.trim() }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p class="text-xs text-muted-foreground">{{ t('import.templateHint') }}</p>
       </section>
     </aside>
   </div>

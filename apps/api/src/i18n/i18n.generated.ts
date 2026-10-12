@@ -847,6 +847,7 @@ export type I18nTranslations = {
             "missingPrompt": string;
             "producesNeedsCategory": string;
             "unknownRelationType": string;
+            "unknownTemplate": string;
             "deadEnd": string;
             "maxItemsRange": string;
             "fanOutIgnored": string;

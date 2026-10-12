@@ -72,6 +72,23 @@ in the pull request that introduces them — see
   of markdown. Built-in agents get the two read tools; a custom agent has to
   add them to its tool list. `POST /v1/assistant/threads/:id/messages` accepts
   `draft.template` (`{ ref, version }`).
+- **Templates in workflows and import.** A workflow's drafting step can name
+  a page template ("Written into template" in the step panel). Its drafts then
+  keep the template's headings, fill its placeholders from the source page or
+  say `TODO:`, and carry the template's tags and relations. A page approved
+  from such a draft records the template and version it was written against.
+  The "Break a page into its parts" and "Entity → use cases → contracts and
+  screens" starter patterns now use the built-in use-case and API-spec
+  templates. Saving a
+  workflow whose step names a template that does not exist in the workspace,
+  or that is archived, is refused with the step marked; workflows saved before
+  a template was archived keep running. The import review step has a Template
+  field: the imported text is kept as is, and the page gets the template's
+  category, tags and relations. "Save as template instead" turns the reviewed
+  text into a template and drops the import. Images from the original are not
+  carried into the template. `PATCH`/`POST /v1/workflows` accept
+  `produces.templateRef` on a step, and `POST /v1/imports/:id/submit` accepts
+  `templateRef`.
 
 ### Fixed
 

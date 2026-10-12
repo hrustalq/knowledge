@@ -1,4 +1,4 @@
-import type { WorkflowGraph } from '@knowledge/contracts'
+import { builtInTemplateRef, type WorkflowGraph } from '@knowledge/contracts'
 import { FileStack, Layers, PenLine, Sparkles } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -14,6 +14,10 @@ import type { Component } from 'vue'
  * They are plain data built through `t()`, so the titles and the prompts arrive
  * in the operator's own language — a step called "Use cases" whose prompt is in
  * English is a chain that will produce English pages in a Russian workspace.
+ *
+ * The drafting steps write into the built-in page templates (issue #69), so a
+ * chain's pages come out shaped like the ones people write by hand from the
+ * gallery — and carry the template's tags from their first revision.
  *
  * Blank is last. It is the escape hatch, not the front door.
  */
@@ -57,7 +61,12 @@ export function workflowPatterns(t: T): WorkflowPattern[] {
             fanOut: false,
             autoApprove: false,
             prompt: { user: p('breakdown.writePrompt') },
-            produces: { category: 'use-case', relationToParent: 'IMPLEMENTS', nestUnderParent: true },
+            produces: {
+              category: 'use-case',
+              relationToParent: 'IMPLEMENTS',
+              nestUnderParent: true,
+              templateRef: builtInTemplateRef('use-case'),
+            },
           },
         ],
       },
@@ -88,7 +97,12 @@ export function workflowPatterns(t: T): WorkflowPattern[] {
             fanOut: false,
             autoApprove: false,
             prompt: { user: p('twoLevel.endpointsPrompt') },
-            produces: { category: 'contract', relationToParent: 'IMPLEMENTS', nestUnderParent: true },
+            produces: {
+              category: 'contract',
+              relationToParent: 'IMPLEMENTS',
+              nestUnderParent: true,
+              templateRef: builtInTemplateRef('api-spec'),
+            },
           },
           {
             id: 'screens',

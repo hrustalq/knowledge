@@ -4638,6 +4638,11 @@ export interface components {
             category?: "process" | "use-case" | "contract" | "erd" | "architecture" | "guide" | "reference" | "other";
             /** Format: uuid */
             parentId?: string | null;
+            /**
+             * @description A template uuid or `builtin:<key>`
+             * @example builtin:entity
+             */
+            templateRef?: string;
         };
         WorkflowDraftMessageDto: {
             /** @enum {string} */

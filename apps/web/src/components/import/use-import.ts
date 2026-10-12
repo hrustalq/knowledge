@@ -149,6 +149,7 @@ export function useImport() {
     projectId?: string
     category?: DocumentCategory
     parentId?: string | null
+    templateRef?: string
   }): Promise<SubmitImportResponse | null> {
     const id = job.value?.importId
     if (!id) return null

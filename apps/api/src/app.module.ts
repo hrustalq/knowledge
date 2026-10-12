@@ -31,6 +31,8 @@ import { McpHttpModule } from './mcp/mcp-http.module.js';
 import { AiReadableModule } from './ai-readable/ai-readable.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
 import { VerificationModule } from './verification/verification.module.js';
+import { PublishingModule } from './publishing/publishing.module.js';
+import { PublicModule } from './public/public.module.js';
 
 @Module({
   imports: [
@@ -73,6 +75,10 @@ import { VerificationModule } from './verification/verification.module.js';
     // Page verification, archive and the knowledge-health dashboard
     // (docs/features/39 + 40, issue #66). API-only: the controllers.
     VerificationModule,
+    // Share links (docs/features/43, issue #77). API-only: the management
+    // routes, and the anonymous /v1/public reader with its rate limiter.
+    PublishingModule,
+    PublicModule,
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,

@@ -137,6 +137,10 @@ export function createRouter() {
           // (by ref, so an untouched built-in with no row id is linkable) and
           // `new`; the page reads the param, since all three share the rail.
           { path: 'templates/:ref?', component: () => import('@/pages/TemplatesSettingsPage.vue') },
+          // Publishing (docs/features/43): the workspace's public-link switches
+          // and the inventory of every link. Gated in the page on
+          // auth.canAdminWorkspace, as AI settings are; the API enforces admin.
+          { path: 'publishing', component: () => import('@/pages/PublishingSettingsPage.vue') },
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on
           // auth.canAdminWorkspace and the API enforces the admin role.

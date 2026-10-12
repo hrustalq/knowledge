@@ -132,6 +132,13 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
       list: vi.fn(async () => ({ templates: [{ ref: 'builtin:adr' }] })),
       getByRef: vi.fn(async (_ws: string, ref: string) => ({ ref, meta: { placeholders: [] } })),
     },
+    shareLinks: {
+      create: vi.fn(async (documentId: string, input: { includeSubtree: boolean }) => ({
+        share: { id: 'sh-1', documentId, includeSubtree: input.includeSubtree, expiresAt: null, hasPassword: true },
+        url: 'https://kb.example.com/s/kp_x',
+        requestedExpiresAt: null,
+      })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -142,6 +149,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     feedback: deps.feedback,
     verification: deps.verification,
     templates: deps.templates,
+    shareLinks: deps.shareLinks,
   };
 }
 
@@ -260,6 +268,37 @@ describe('McpService over a principal', () => {
     });
     expect(refused.isError).toBe(true);
     expect(verification.flag).toHaveBeenCalledTimes(1);
+  });
+
+  it('knowledge_share_page needs editor, is hidden from a read-only key, and returns the link (docs/features/43)', async () => {
+    const doc = '44444444-4444-4444-8444-444444444444';
+    const reader = service(accessWith('editor'));
+    const readClient = await connect(reader.mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    expect((await readClient.listTools()).tools.map((t) => t.name)).not.toContain('knowledge_share_page');
+
+    const viewer = service(accessWith('viewer'));
+    (viewer.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
+    const viewerClient = await connect(viewer.mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A }));
+    const refused = await viewerClient.callTool({ name: 'knowledge_share_page', arguments: { workspaceId: WS_A, documentId: doc } });
+    expect(refused.isError).toBe(true);
+    expect(viewer.shareLinks.create).not.toHaveBeenCalled();
+
+    const editor = service(accessWith('editor'));
+    (editor.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
+    const p = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A });
+    const client = await connect(editor.mcp, p);
+    const res = await client.callTool({
+      name: 'knowledge_share_page',
+      arguments: { workspaceId: WS_A, documentId: doc, includeSubtree: true, password: 'hunter22' },
+    });
+    expect(res.isError).toBeFalsy();
+    expect(editor.shareLinks.create).toHaveBeenCalledWith(
+      doc,
+      { includeSubtree: true, expiresAt: null, password: 'hunter22' },
+      p.userId,
+    );
+    const body = JSON.parse((res.content as Array<{ text: string }>)[0]!.text) as { url: string };
+    expect(body.url).toBe('https://kb.example.com/s/kp_x');
   });
 
   it('knowledge_feedback stores a vote as the caller with surface mcp, and insists on a reason for a down-vote', async () => {

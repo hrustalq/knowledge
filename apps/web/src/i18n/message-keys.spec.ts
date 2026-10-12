@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import en from './messages/en.json'
+import app from './messages/en.json'
+import reader from './reader/en.json'
 
 /**
  * Every static `t('…')` key in the web source must resolve to a message in
@@ -16,6 +17,9 @@ import en from './messages/en.json'
  * variable) cannot be resolved statically and is the caller's responsibility.
  */
 const SRC = join(import.meta.dirname, '..')
+
+// The public reader's catalog is separate (docs/features/43) but resolves the same way.
+const en = { ...app, ...reader }
 
 // `t(`, `$t(`, `te(`, `tm(` — but not `emit(`, `split(`, or `x.t(` on some other object.
 const CALL = /(?<![\w$.])\$?(?:t|te|tm)\(\s*(['"])([^'"`\n]+?)\1/g
@@ -79,7 +83,7 @@ describe('web i18n message keys', () => {
       ...Array.from(source.matchAll(/labelFor\([^,]*,\s*'([^']+)'/g), (m) => `${m[1]!}.`),
     ]
 
-    const unused = leafKeys(en).filter(
+    const unused = leafKeys(app).filter(
       (key) =>
         !literals.has(key) &&
         !prefixes.some((prefix) => key.startsWith(prefix)) &&

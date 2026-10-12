@@ -83,6 +83,7 @@ import KnowledgeIssuesRail from '@/components/knowledge/KnowledgeIssuesRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
+import SharePopover from '@/components/knowledge/SharePopover.vue'
 import VerificationBar from '@/components/verification/VerificationBar.vue'
 
 const { t } = useI18n()
@@ -564,6 +565,9 @@ watch(
           :revision-id="viewingRevision"
         />
         <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
+        <!-- Handing the page to people outside the workspace is an editor's act
+             (docs/features/43); the server checks the role and the workspace switch. -->
+        <SharePopover v-if="auth.canEdit && !archived" :document-id="detail.document.documentId" />
         <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
           <RouterLink
             :to="`/documents/${detail.document.documentId}/edit`"

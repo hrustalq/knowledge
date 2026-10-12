@@ -18,6 +18,7 @@ import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { KnowledgeIssuesModule } from '../feedback/knowledge-issues.module.js';
 import { VerificationCoreModule } from '../verification/verification-core.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
+import { PublishingCoreModule } from '../publishing/publishing-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -61,6 +62,8 @@ import { McpService } from './mcp.service.js';
     VerificationCoreModule,
     // knowledge_list_templates / knowledge_get_template (issue #69). Controller-free.
     TemplatesCoreModule,
+    // knowledge_share_page (docs/features/43). Controller-free and auth-free.
+    PublishingCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

@@ -392,5 +392,15 @@
       "invalidPlaceholder": "Placeholder \"{detail}\" is not valid: use letters, digits, - and _, a known kind, a unique name, and none of title, date, author, project or parent",
       "invalidRelation": "Relation {detail} is not one the graph accepts: check its type, and that every placeholder in its target is declared"
     }
+  },
+  "share": {
+    "notFound": "This link does not exist, has expired or was revoked",
+    "disabledByWorkspace": "Public links are turned off for this workspace",
+    "passwordRequired": "A link that never expires needs a password in this workspace — set one or choose an expiry",
+    "passwordInvalid": "Wrong password",
+    "expiryInPast": "The expiry must be in the future",
+    "rateLimited": "Too many requests — try again in a minute",
+    "unlockRateLimited": "Too many password attempts — try again later",
+    "locked": "This link is password-protected"
   }
 }

@@ -42,7 +42,7 @@ in the pull request that introduces them — see
   then records which template and version it came from and shows a "From
   template" chip. Unpublished edits keep that provenance across a reload.
   `POST /v1/documents` gains `template.provenanceOnly` for clients that upload
-  the body themselves, as the editor does. (#69)
+  the body themselves, as the editor does. (#147)
 
 ### Fixed
 

@@ -40,6 +40,7 @@ import { ProvenanceService } from '../feedback/provenance.service.js';
 import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 import { KnowledgeIssuesService } from '../feedback/knowledge-issues.service.js';
 import { VerificationService } from '../verification/verification.service.js';
+import { TemplatesService } from '../templates/templates.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
@@ -124,6 +125,7 @@ export class McpService {
     private readonly feedback: AnswerFeedbackService,
     private readonly issues: KnowledgeIssuesService,
     private readonly verification: VerificationService,
+    private readonly templates: TemplatesService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -957,31 +959,83 @@ export class McpService {
       'knowledge_create_document',
       {
         description:
-          'Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status "indexed"). To change an existing page, branch and open a merge request instead.',
+          'Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status "indexed"). To change an existing page, branch and open a merge request instead. ' +
+          'To start from a template (an ADR, RFC, runbook…), pass templateRef and the placeholder values knowledge_get_template lists — with no content the server fills the template in; with content, yours wins and the template is recorded as where the page came from.',
         inputSchema: {
           workspaceId: z.string().uuid(),
           projectId: z.string().uuid().describe('From knowledge_whoami or knowledge_list_projects'),
           title: z.string().min(1).max(300),
-          content: z.string().min(1).describe('Markdown body; YAML frontmatter is allowed and indexed'),
+          content: z
+            .string()
+            .min(1)
+            .optional()
+            .describe('Markdown body; YAML frontmatter is allowed and indexed. Required unless templateRef is given'),
           parentId: z.string().uuid().optional().describe('Nest under this page'),
-          category: z.enum(DOCUMENT_CATEGORIES).optional(),
+          category: z.enum(DOCUMENT_CATEGORIES).optional().describe('Defaults to the template’s category'),
+          templateRef: z
+            .string()
+            .optional()
+            .describe('A template id or builtin:<key> from knowledge_list_templates'),
+          templateVersion: z.number().int().positive().optional().describe('Pin a version; the current one when omitted'),
+          values: z
+            .record(z.string(), z.string())
+            .optional()
+            .describe('Placeholder values by name: text, an ISO date, or a user/page id, as knowledge_get_template declares'),
         },
       },
-      async ({ workspaceId, projectId, title, content, parentId, category }) => {
+      async ({ workspaceId, projectId, title, content, parentId, category, templateRef, templateVersion, values }) => {
         await guard.ws(workspaceId, 'editor');
+        if (!content && !templateRef) throw new Error('Pass content, or a templateRef to start from.');
         return this.json(
           await this.documents.createDocument(
             {
               workspaceId,
               projectId,
               title,
-              content: { mode: 'inline', format: 'markdown', text: content },
+              ...(content ? { content: { mode: 'inline', format: 'markdown', text: content } } : {}),
               ...(parentId ? { parentId } : {}),
               ...(category ? { category } : {}),
+              ...(templateRef ? { template: { ref: templateRef, version: templateVersion, values } } : {}),
             },
             principal.userId,
           ),
         );
+      },
+    );
+
+    // ------------------------------------------------------------ templates
+    // Read-only (issue #69): an agent picks a shape here and writes through
+    // knowledge_create_document, so WRITE_TOOLS does not grow.
+    server.registerTool(
+      'knowledge_list_templates',
+      {
+        description:
+          'List the page templates offered in a workspace (built-ins such as builtin:adr, builtin:runbook, builtin:postmortem, plus the workspace\'s own). Pass projectId to include that project\'s templates.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          projectId: z.string().uuid().optional(),
+        },
+      },
+      async ({ workspaceId, projectId }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.templates.list({ workspaceId, ...(projectId ? { projectId } : {}) }));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_get_template',
+      {
+        description:
+          'One template: its markdown source, category, default tags and relations, and the placeholders (name, kind, required) to pass as values to knowledge_create_document.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          templateRef: z.string().describe('A template id or builtin:<key>'),
+          version: z.number().int().positive().optional(),
+        },
+      },
+      async ({ workspaceId, templateRef, version }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(await this.templates.getByRef(workspaceId, templateRef, version));
       },
     );
 

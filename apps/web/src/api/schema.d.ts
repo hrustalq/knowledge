@@ -2994,6 +2994,157 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The template gallery: built-ins (in the caller’s language) merged with the workspace’s own
+         * @description With `projectId`, workspace-wide templates plus that project’s. Archived templates and hidden built-ins only with `includeArchived`.
+         */
+        get: operations["TemplatesController_list"];
+        put?: never;
+        /**
+         * Create a template, or override a built-in (`builtInKey`)
+         * @description A project template needs `editor`; a workspace-wide template or a built-in override needs `admin`.
+         */
+        post: operations["TemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/built-in/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A built-in template as this workspace sees it — its override when it has one */
+        get: operations["TemplatesController_getBuiltIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fill a template in without writing anything
+         * @description Substitutes system and declared placeholders and returns the title, body and frontmatter a page would start from. Undeclared and escaped `{{…}}` stay literal. 400 `details.missing` when a required value is absent.
+         */
+        post: operations["TemplatesController_render"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A template with its source and parsed metadata (current version unless `version` is given) */
+        get: operations["TemplatesController_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Reset a built-in to its shipped default by deleting the workspace’s override
+         * @description Only built-in overrides can be deleted. A custom template is archived instead: pages record it.
+         */
+        delete: operations["TemplatesController_remove"];
+        options?: never;
+        head?: never;
+        /** Update a template; a changed source appends a version, a rename does not */
+        patch: operations["TemplatesController_update"];
+        trace?: never;
+    };
+    "/v1/templates/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Version history, newest first */
+        get: operations["TemplatesController_versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/{id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One past version */
+        get: operations["TemplatesController_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a custom template: hidden from the gallery, still resolvable by its pages */
+        post: operations["TemplatesController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/templates/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring an archived template back into the gallery */
+        post: operations["TemplatesController_unarchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/markdown": {
         parameters: {
             query?: never;
@@ -3556,6 +3707,19 @@ export interface components {
             type: "DESCRIBES" | "DEPENDS_ON" | "IMPLEMENTS" | "RELATED_TO" | "OWNED_BY" | "SUPERSEDES" | "CONTRADICTS";
             target: components["schemas"]["RelationTargetDto"];
         };
+        DocumentTemplateDto: {
+            /**
+             * @description A template uuid or `builtin:<key>`
+             * @example builtin:adr
+             */
+            ref: string;
+            /** @description The version rendered; the current one when omitted */
+            version?: number;
+            /** @description Placeholder values by name, used when the server renders (no `content`) */
+            values?: {
+                [key: string]: string;
+            };
+        };
         CreateDocumentDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -3578,6 +3742,8 @@ export interface components {
              * @description Feature 08 nesting: create under this document
              */
             parentId?: string;
+            /** @description Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default. */
+            template?: components["schemas"]["DocumentTemplateDto"];
         };
         UpdateDocumentDto: {
             title?: string;
@@ -4555,6 +4721,64 @@ export interface components {
         ValidateWorkflowDto: {
             /** @description Defaults to the stored graph */
             graph?: components["schemas"]["WorkflowGraphDto"];
+        };
+        RenderTemplateDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * @description A template uuid or `builtin:<key>`
+             * @example builtin:adr
+             */
+            ref: string;
+            /** @description Pin a version; the current one when omitted */
+            version?: number;
+            /** @description The page title as typed — the `{{title}}` system placeholder */
+            title?: string;
+            /** @description Placeholder values by name: text, an ISO date, or a user/page id, by kind */
+            values?: {
+                [key: string]: string;
+            };
+            /**
+             * Format: uuid
+             * @description Fills `{{project}}`
+             */
+            projectId?: string;
+            /**
+             * Format: uuid
+             * @description Fills `{{parent}}`
+             */
+            parentId?: string;
+        };
+        CreateTemplateDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * Format: uuid
+             * @description Scope the template to one project; omit for workspace-wide, which needs `admin`
+             */
+            projectId?: string | null;
+            /**
+             * @description Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it
+             * @enum {string}
+             */
+            builtInKey?: "adr" | "rfc" | "runbook" | "postmortem" | "api-spec" | "use-case" | "entity";
+            /** @description Required for a custom template; a built-in override inherits the built-in name */
+            name?: string;
+            description?: string | null;
+            /** @description An emoji */
+            icon?: string | null;
+            /** @description Markdown with frontmatter; the reserved `template:` key carries category, titlePattern and placeholders */
+            source?: string;
+            /** @description False hides a built-in from the gallery */
+            enabled?: boolean;
+        };
+        UpdateTemplateDto: {
+            name?: string;
+            description?: string | null;
+            icon?: string | null;
+            /** @description A changed source appends a new version; an identical one does not */
+            source?: string;
+            enabled?: boolean;
         };
         SetMessageFeedbackDto: {
             /** @enum {string} */
@@ -14578,6 +14802,466 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Adds this project’s templates to the workspace-wide ones */
+                projectId?: string;
+                /** @description Include archived templates and hidden built-ins (the settings view). Off by default. */
+                includeArchived?: boolean;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_getBuiltIn: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description A past version; the current one when omitted */
+                version?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_render: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_get: {
+        parameters: {
+            query?: {
+                /** @description A past version; the current one when omitted */
+                version?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_remove: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_versions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_version: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_archive: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    TemplatesController_unarchive: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

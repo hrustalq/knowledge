@@ -24,6 +24,7 @@ import { GlossaryModule } from './glossary/glossary.module.js';
 import { ImportModule } from './import/import.module.js';
 import { WorkflowsModule } from './workflows/workflows.module.js';
 import { WorkflowMaterializeModule } from './workflows/workflow-materialize.module.js';
+import { TemplatesModule } from './templates/templates.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { McpHttpModule } from './mcp/mcp-http.module.js';
@@ -61,6 +62,9 @@ import { VerificationModule } from './verification/verification.module.js';
     // API-only: materialisation writes pages, so it runs here and not in the
     // MCP process, which imports WorkflowsModule for its read/start tools.
     WorkflowMaterializeModule,
+    // Page templates (issue #69). API-only: the controller; DocumentsCoreModule
+    // loads TemplatesCoreModule on its own to create a page from one.
+    TemplatesModule,
     // Plain-markdown reads for agents (issue #68). API-only: carries a controller.
     AiReadableModule,
     // Votes on answers (docs/features/38, issue #67 phase 2). API-only: the

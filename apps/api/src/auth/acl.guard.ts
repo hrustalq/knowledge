@@ -133,6 +133,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfWorkflowDefinition(uuid(req.params?.id, 'workflow'));
       case 'workflow-run':
         return this.access.workspaceOfWorkflowRun(uuid(req.params?.id, 'workflowRun'));
+      case 'template':
+        return this.access.workspaceOfTemplate(uuid(req.params?.id, 'template'));
       case 'connector':
         return this.access.workspaceOfConnector(uuid(req.params?.id, 'connector'));
       case 'connector-run':

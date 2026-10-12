@@ -15158,6 +15158,700 @@
         ]
       }
     },
+    "/v1/templates": {
+      "get": {
+        "description": "With `projectId`, workspace-wide templates plus that project’s. Archived templates and hidden built-ins only with `includeArchived`.",
+        "operationId": "TemplatesController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Adds this project’s templates to the workspace-wide ones",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeArchived",
+            "required": false,
+            "in": "query",
+            "description": "Include archived templates and hidden built-ins (the settings view). Off by default.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The template gallery: built-ins (in the caller’s language) merged with the workspace’s own",
+        "tags": [
+          "templates"
+        ]
+      },
+      "post": {
+        "description": "A project template needs `editor`; a workspace-wide template or a built-in override needs `admin`.",
+        "operationId": "TemplatesController_create",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a template, or override a built-in (`builtInKey`)",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/v1/templates/built-in/{key}": {
+      "get": {
+        "operationId": "TemplatesController_getBuiltIn",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "A past version; the current one when omitted",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A built-in template as this workspace sees it — its override when it has one",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/v1/templates/render": {
+      "post": {
+        "description": "Substitutes system and declared placeholders and returns the title, body and frontmatter a page would start from. Undeclared and escaped `{{…}}` stay literal. 400 `details.missing` when a required value is absent.",
+        "operationId": "TemplatesController_render",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Fill a template in without writing anything",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/v1/templates/{id}": {
+      "get": {
+        "operationId": "TemplatesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "A past version; the current one when omitted",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A template with its source and parsed metadata (current version unless `version` is given)",
+        "tags": [
+          "templates"
+        ]
+      },
+      "patch": {
+        "operationId": "TemplatesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update a template; a changed source appends a version, a rename does not",
+        "tags": [
+          "templates"
+        ]
+      },
+      "delete": {
+        "description": "Only built-in overrides can be deleted. A custom template is archived instead: pages record it.",
+        "operationId": "TemplatesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reset a built-in to its shipped default by deleting the workspace’s override",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/v1/templates/{id}/versions": {
+      "get": {
+        "operationId": "TemplatesController_versions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Version history, newest first",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/v1/templates/{id}/versions/{version}": {
+      "get": {
+        "operationId": "TemplatesController_version",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One past version",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/v1/templates/{id}/archive": {
+      "post": {
+        "operationId": "TemplatesController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Archive a custom template: hidden from the gallery, still resolvable by its pages",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/v1/templates/{id}/unarchive": {
+      "post": {
+        "operationId": "TemplatesController_unarchive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Bring an archived template back into the gallery",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
     "/v1/documents/{id}/markdown": {
       "get": {
         "operationId": "AiReadableController_markdown",
@@ -17208,7 +17902,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.15.0",
+    "version": "0.17.0",
     "contact": {}
   },
   "tags": [],
@@ -17574,6 +18268,30 @@
           "target"
         ]
       },
+      "DocumentTemplateDto": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "description": "A template uuid or `builtin:<key>`",
+            "example": "builtin:adr"
+          },
+          "version": {
+            "type": "number",
+            "description": "The version rendered; the current one when omitted"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Placeholder values by name, used when the server renders (no `content`)"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      },
       "CreateDocumentDto": {
         "type": "object",
         "properties": {
@@ -17617,6 +18335,14 @@
             "type": "string",
             "format": "uuid",
             "description": "Feature 08 nesting: create under this document"
+          },
+          "template": {
+            "description": "Start from a template (issue #69). Without `content` the template is rendered server-side: its title pattern, body, tags and relations become the page, and its category is the default.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentTemplateDto"
+              }
+            ]
           }
         },
         "required": [
@@ -20343,6 +21069,124 @@
                 "$ref": "#/components/schemas/WorkflowGraphDto"
               }
             ]
+          }
+        }
+      },
+      "RenderTemplateDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ref": {
+            "type": "string",
+            "description": "A template uuid or `builtin:<key>`",
+            "example": "builtin:adr"
+          },
+          "version": {
+            "type": "number",
+            "description": "Pin a version; the current one when omitted"
+          },
+          "title": {
+            "type": "string",
+            "description": "The page title as typed — the `{{title}}` system placeholder"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Placeholder values by name: text, an ISO date, or a user/page id, by kind"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Fills `{{project}}`"
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Fills `{{parent}}`"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "ref"
+        ]
+      },
+      "CreateTemplateDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Scope the template to one project; omit for workspace-wide, which needs `admin`"
+          },
+          "builtInKey": {
+            "type": "string",
+            "enum": [
+              "adr",
+              "rfc",
+              "runbook",
+              "postmortem",
+              "api-spec",
+              "use-case",
+              "entity"
+            ],
+            "description": "Override this built-in for the workspace (`admin`): with `source` to customise it, with `enabled: false` to hide it"
+          },
+          "name": {
+            "type": "string",
+            "description": "Required for a custom template; a built-in override inherits the built-in name"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true,
+            "description": "An emoji"
+          },
+          "source": {
+            "type": "string",
+            "description": "Markdown with frontmatter; the reserved `template:` key carries category, titlePattern and placeholders"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "False hides a built-in from the gallery"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
+      },
+      "UpdateTemplateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "description": "A changed source appends a new version; an identical one does not"
+          },
+          "enabled": {
+            "type": "boolean"
           }
         }
       },

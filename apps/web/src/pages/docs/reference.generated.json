@@ -2412,6 +2412,116 @@
     },
     {
       "method": "GET",
+      "path": "/v1/templates",
+      "tag": "templates",
+      "summary": "The template gallery: built-ins (in the caller’s language) merged with the workspace’s own",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/templates",
+      "tag": "templates",
+      "summary": "Create a template, or override a built-in (`builtInKey`)",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/templates/{id}",
+      "tag": "templates",
+      "summary": "Reset a built-in to its shipped default by deleting the workspace’s override",
+      "role": "admin",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/templates/{id}",
+      "tag": "templates",
+      "summary": "A template with its source and parsed metadata (current version unless `version` is given)",
+      "role": "viewer",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/templates/{id}",
+      "tag": "templates",
+      "summary": "Update a template; a changed source appends a version, a rename does not",
+      "role": "editor",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/templates/{id}/archive",
+      "tag": "templates",
+      "summary": "Archive a custom template: hidden from the gallery, still resolvable by its pages",
+      "role": "editor",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/templates/{id}/unarchive",
+      "tag": "templates",
+      "summary": "Bring an archived template back into the gallery",
+      "role": "editor",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/templates/{id}/versions",
+      "tag": "templates",
+      "summary": "Version history, newest first",
+      "role": "viewer",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/templates/{id}/versions/{version}",
+      "tag": "templates",
+      "summary": "One past version",
+      "role": "viewer",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/templates/built-in/{key}",
+      "tag": "templates",
+      "summary": "A built-in template as this workspace sees it — its override when it has one",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/templates/render",
+      "tag": "templates",
+      "summary": "Fill a template in without writing anything",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/users",
       "tag": "users",
       "summary": "List all users with their workspace memberships (platform admin)",
@@ -2736,7 +2846,7 @@
     },
     {
       "name": "knowledge_create_document",
-      "description": "Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status \"indexed\"). To change an existing page, branch and open a merge request instead.",
+      "description": "Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status \"indexed\"). To change an existing page, branch and open a merge request instead. To start from a template (an ADR, RFC, runbook…), pass templateRef and the placeholder values knowledge_get_template lists — with no content the server fills the template in; with content, yours wins and the template is recorded as where the page came from.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -2752,7 +2862,7 @@
         },
         {
           "name": "content",
-          "optional": false
+          "optional": true
         },
         {
           "name": "parentId",
@@ -2760,6 +2870,18 @@
         },
         {
           "name": "category",
+          "optional": true
+        },
+        {
+          "name": "templateRef",
+          "optional": true
+        },
+        {
+          "name": "templateVersion",
+          "optional": true
+        },
+        {
+          "name": "values",
           "optional": true
         }
       ]
@@ -2969,6 +3091,24 @@
       ]
     },
     {
+      "name": "knowledge_get_template",
+      "description": "One template: its markdown source, category, default tags and relations, and the placeholders (name, kind, required) to pass as values to knowledge_create_document.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "templateRef",
+          "optional": false
+        },
+        {
+          "name": "version",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_get_workflow_run",
       "description": "A workflow run with its frozen step graph and its node tree — every intermediate result, including drafts still awaiting review.",
       "inputs": [
@@ -3132,6 +3272,20 @@
         },
         {
           "name": "branch",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_templates",
+      "description": "List the page templates offered in a workspace (built-ins such as builtin:adr, builtin:runbook, builtin:postmortem, plus the workspace's own). Pass projectId to include that project's templates.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "projectId",
           "optional": true
         }
       ]

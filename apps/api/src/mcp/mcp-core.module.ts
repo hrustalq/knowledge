@@ -17,6 +17,7 @@ import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js'
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { KnowledgeIssuesModule } from '../feedback/knowledge-issues.module.js';
 import { VerificationCoreModule } from '../verification/verification-core.module.js';
+import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -58,6 +59,8 @@ import { McpService } from './mcp.service.js';
     KnowledgeIssuesModule,
     // knowledge_flag_document (docs/features/39). Controller-free and auth-free.
     VerificationCoreModule,
+    // knowledge_list_templates / knowledge_get_template (issue #69). Controller-free.
+    TemplatesCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

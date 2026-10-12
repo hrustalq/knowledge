@@ -92,6 +92,13 @@ export interface DocumentSummary {
   inactive?: boolean;
   archivedAt?: string | null;
   archivedBy?: string | null;
+  /**
+   * The template this page was created from (issue #69): a template uuid or
+   * `builtin:<key>`, and the version it was rendered at. Null for a page that
+   * started blank or from an import — the true state of every older page.
+   */
+  templateRef?: string | null;
+  templateVersion?: number | null;
 }
 
 export interface RevisionInfo {
@@ -380,6 +387,13 @@ export const KNOWN_EVENT_TYPES = [
   'workflow.created',
   'workflow.updated',
   'workflow.deleted',
+  // Page templates (issue #69). Trackable, not notifiable — like the AI
+  // settings above, a template edit is configuration, not news.
+  'template.created',
+  'template.updated',
+  'template.archived',
+  'template.unarchived',
+  'template.reset',
   'glossary.term.created',
   'glossary.term.updated',
   'glossary.term.deleted',

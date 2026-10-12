@@ -346,3 +346,37 @@ describe('AUTH_REQUIRE_VERIFIED_EMAIL', () => {
     expect(auth(true).blocksUnverified(DEV_PRINCIPAL)).toBe(false);
   });
 });
+
+describe('SMTP credentials', async () => {
+  const { smtpOptions } = await import('../src/mail/mail.transport.js');
+  const { validateEnv } = await import('../src/config/env.js');
+  const { createTransport } = await import('nodemailer');
+
+  it('takes host, port and TLS from the URL and auth verbatim from MAIL_SMTP_USER / MAIL_SMTP_PASS', () => {
+    const opts = smtpOptions(
+      config({ MAIL_SMTP_URL: 'smtps://smtp.timeweb.ru:465', MAIL_SMTP_USER: 'kb@x.ru', MAIL_SMTP_PASS: 'p@ss:w/rd%' }) as never,
+    );
+    const { host, port, secure, auth } = (createTransport(opts) as unknown as { options: Record<string, unknown> }).options;
+    expect({ host, port, secure, auth }).toEqual({
+      host: 'smtp.timeweb.ru',
+      port: 465,
+      secure: true,
+      auth: { user: 'kb@x.ru', pass: 'p@ss:w/rd%' },
+    });
+  });
+
+  it('leaves a URL with its own userinfo untouched when no user is set', () => {
+    expect(smtpOptions(config({ MAIL_SMTP_URL: 'smtps://a:b@h:465', MAIL_SMTP_USER: '' }) as never)).toEqual({
+      url: 'smtps://a:b@h:465',
+    });
+  });
+
+  it('refuses credentials in both places rather than silently preferring the URL', () => {
+    const base = Object.fromEntries(
+      ['DATABASE_URL', 'REDIS_URL', 'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'ARCADE_URL', 'ARCADE_DB', 'ARCADE_USER', 'ARCADE_PASSWORD'].map((k) => [k, 'x']),
+    );
+    const env = { ...base, MAIL_TRANSPORT: 'smtp', MAIL_SMTP_URL: 'smtps://a:b@h:465', MAIL_SMTP_USER: 'u', MAIL_SMTP_PASS: 'p' };
+    expect(() => validateEnv(env)).toThrow(/MAIL_SMTP_USER.*keep one/);
+    expect(() => validateEnv({ ...env, MAIL_SMTP_URL: 'smtps://h:465' })).not.toThrow();
+  });
+});

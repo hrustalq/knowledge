@@ -56,7 +56,11 @@ and an operator with no relay still has the link: it is in the worker log now
 instead of the API log.
 
 `MAIL_TRANSPORT=smtp` sends through `MAIL_SMTP_URL` with nodemailer (`smtps://`
-implicit TLS on 465, `smtp://` + STARTTLS on 587, credentials URL-encoded).
+implicit TLS on 465, `smtp://` + STARTTLS on 587). Credentials go either in
+the URL's userinfo, URL-encoded, or in `MAIL_SMTP_USER` / `MAIL_SMTP_PASS`
+verbatim beside a credential-free URL (`smtps://smtp.timeweb.ru:465`), which
+lets the URL stay a plain variable in the GitHub `production` environment.
+Both at once refuses to boot: nodemailer would silently prefer the URL's.
 SMTP rather than a vendor API because every provider speaks it, so changing
 provider is an env change. The worker checks the relay at boot (connect +
 auth, nothing sent) and logs the result without failing. On a network that

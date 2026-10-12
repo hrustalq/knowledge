@@ -104,11 +104,15 @@ export const envSchema = z.object({
   /**
    * Mailer (docs/features/41). `log` writes each message to the worker log and
    * sends nothing — the default, so dev and CI never open a socket. `smtp`
-   * sends through MAIL_SMTP_URL (`smtp://` STARTTLS or `smtps://` implicit TLS,
-   * credentials URL-encoded in the userinfo), which any provider accepts.
+   * sends through MAIL_SMTP_URL (`smtp://` STARTTLS or `smtps://` implicit TLS),
+   * which any provider accepts. Credentials go either in the URL's userinfo,
+   * URL-encoded, or in MAIL_SMTP_USER / MAIL_SMTP_PASS verbatim — never both.
    */
   MAIL_TRANSPORT: z.enum(['log', 'smtp']).default('log'),
   MAIL_SMTP_URL: z.string().default(''),
+  /** SMTP auth beside a credential-free MAIL_SMTP_URL, so the URL can be a plain variable. */
+  MAIL_SMTP_USER: z.string().default(''),
+  MAIL_SMTP_PASS: z.string().default(''),
   /** RFC 5322 From — the domain is the one SPF/DKIM must be set up for. */
   MAIL_FROM: z.string().default('Knowledge <no-reply@localhost>'),
   /** Operator switch for notification mail; auth mail is unaffected. */
@@ -476,6 +480,15 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+function smtpUrlHasUserinfo(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return Boolean(parsed.username || parsed.password);
+  } catch {
+    return false;
+  }
+}
+
 /** Fail-fast env validation, plugged into @nestjs/config `validate`. */
 export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
@@ -485,6 +498,10 @@ export function validateEnv(config: Record<string, unknown>): Env {
   // Opting into SMTP without a server would otherwise boot, then fail every send.
   if (parsed.data.MAIL_TRANSPORT === 'smtp' && !parsed.data.MAIL_SMTP_URL) {
     throw new Error('Invalid environment:\n  MAIL_SMTP_URL: required when MAIL_TRANSPORT=smtp');
+  }
+  // nodemailer would silently prefer the URL's userinfo — refuse rather than pick one.
+  if (parsed.data.MAIL_SMTP_USER && smtpUrlHasUserinfo(parsed.data.MAIL_SMTP_URL)) {
+    throw new Error('Invalid environment:\n  MAIL_SMTP_USER: set, but MAIL_SMTP_URL also carries credentials — keep one');
   }
   return parsed.data;
 }

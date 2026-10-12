@@ -5,6 +5,17 @@ import type { Env } from '../config/env.js';
 import type { RenderedMail } from './mail.templates.js';
 
 /**
+ * MAIL_SMTP_URL supplies host, port and TLS; MAIL_SMTP_USER / MAIL_SMTP_PASS,
+ * when set, become `auth` as-is (no URL-encoding). validateEnv refuses a URL
+ * that also carries credentials, so there is only ever one source.
+ */
+export function smtpOptions(config: ConfigService<Env, true>) {
+  const url = config.get('MAIL_SMTP_URL', { infer: true });
+  const user = config.get('MAIL_SMTP_USER', { infer: true });
+  return user ? { url, auth: { user, pass: config.get('MAIL_SMTP_PASS', { infer: true }) } } : { url };
+}
+
+/**
  * The one place a message leaves the process (docs/features/41).
  *
  * `log` is the default and sends nothing: dev, CI and `make api-schema` never
@@ -24,7 +35,7 @@ export class MailTransport {
   constructor(config: ConfigService<Env, true>) {
     this.mode = config.get('MAIL_TRANSPORT', { infer: true });
     this.from = config.get('MAIL_FROM', { infer: true });
-    this.smtp = this.mode === 'smtp' ? createTransport(config.get('MAIL_SMTP_URL', { infer: true })) : null;
+    this.smtp = this.mode === 'smtp' ? createTransport(smtpOptions(config)) : null;
   }
 
   get transport(): Env['MAIL_TRANSPORT'] {

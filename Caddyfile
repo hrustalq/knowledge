@@ -10,6 +10,8 @@
 #   apps/web/src/api/live.ts:24-25   WebSocket is wss://<host>/api/v1/events/ws
 #   apps/web/src/lib/api.ts:378-384  resolveAssetUrl prefixes attachments/avatars
 # In development the Vite middleware strips that prefix (vite.config.ts:19).
+# The one other path a browser follows is a presigned object URL under
+# /<S3_BUCKET>/, which goes straight to MinIO (#144, route below).
 # Production server.js installs NO such proxy, so stripping it is this file's job
 # and `handle_path` must mirror Vite's rewrite exactly.
 
@@ -38,13 +40,30 @@
 		reverse_proxy api:3000
 	}
 
+	# Object storage, for presigned URLs only (#144). The API signs browser
+	# URLs for S3_PUBLIC_ENDPOINT (this site), path-style, so every one starts
+	# with /<bucket>/. `handle`, not `handle_path`: MinIO needs the bucket
+	# segment. Nothing else of MinIO is routed — no console, no admin API, and
+	# the bucket is private, so an unsigned request is refused by MinIO itself.
+	# No SSR route starts with /knowledge/ (/knowledge-health does not match).
+	#
+	# SigV4 signs the Host. The Worker reaches Funnel as the *.ts.net name and
+	# carries the public host in X-Forwarded-Host, so restore it here or every
+	# signature fails with SignatureDoesNotMatch.
+	handle /{$S3_BUCKET:knowledge}/* {
+		reverse_proxy minio:9000 {
+			header_up Host {header.X-Forwarded-Host}
+		}
+	}
+
 	# Everything else is the SSR app.
 	handle {
 		reverse_proxy web:5173
 	}
 
 	# `?token=` still authenticates SSE and <img> requests (the @QueryTokenOk
-	# routes, #102), so mask its value before the URI reaches the access log.
+	# routes, #102), and a presigned object URL is a bearer credential until it
+	# expires, so mask both before the URI reaches the access log.
 	# Authorization and Cookie headers are already redacted by Caddy's default.
 	log {
 		output stderr
@@ -53,6 +72,7 @@
 			fields {
 				request>uri query {
 					replace token REDACTED
+					replace X-Amz-Signature REDACTED
 				}
 			}
 		}

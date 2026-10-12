@@ -27,6 +27,9 @@ services:
       # Tailscale Funnel's target (`tailscale funnel --bg 8088`), and the
       # loopback smoke check. Loopback only: Funnel connects from the host.
       - "127.0.0.1:8088:80"
+    environment:
+      # The Caddyfile routes /<bucket>/* to MinIO for presigned URLs (#144).
+      S3_BUCKET: ${S3_BUCKET:-knowledge}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -34,6 +37,7 @@ services:
     depends_on:
       - api
       - web
+      - minio
 
   postgres:
     image: postgres:17-alpine

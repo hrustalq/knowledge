@@ -22,19 +22,31 @@ export interface HeadResult {
 @Injectable()
 export class StorageService {
   private readonly s3: S3Client;
+  /**
+   * Signs the URLs a browser follows, and nothing else. SigV4 signs the Host,
+   * so a URL signed for `minio:9000` cannot be repaired by rewriting its host
+   * afterwards — it has to be signed for the public origin in the first place.
+   * Presigning makes no network call, so this client never has to reach it.
+   */
+  private readonly presigner: S3Client;
   private readonly bucket: string;
 
   constructor(config: ConfigService<Env, true>) {
     this.bucket = config.get('S3_BUCKET', { infer: true });
-    this.s3 = new S3Client({
-      endpoint: config.get('S3_ENDPOINT', { infer: true }),
-      region: config.get('S3_REGION', { infer: true }),
-      forcePathStyle: config.get('S3_FORCE_PATH_STYLE', { infer: true }),
-      credentials: {
-        accessKeyId: config.get('S3_ACCESS_KEY', { infer: true }),
-        secretAccessKey: config.get('S3_SECRET_KEY', { infer: true }),
-      },
-    });
+    const endpoint = config.get('S3_ENDPOINT', { infer: true });
+    const publicEndpoint = config.get('S3_PUBLIC_ENDPOINT', { infer: true });
+    const client = (url: string) =>
+      new S3Client({
+        endpoint: url,
+        region: config.get('S3_REGION', { infer: true }),
+        forcePathStyle: config.get('S3_FORCE_PATH_STYLE', { infer: true }),
+        credentials: {
+          accessKeyId: config.get('S3_ACCESS_KEY', { infer: true }),
+          secretAccessKey: config.get('S3_SECRET_KEY', { infer: true }),
+        },
+      });
+    this.s3 = client(endpoint);
+    this.presigner = publicEndpoint ? client(publicEndpoint) : this.s3;
   }
 
   /**
@@ -89,7 +101,7 @@ export class StorageService {
 
   async presignPut(objectKey: string, contentType: string, expiresInSeconds = 900): Promise<string> {
     const cmd = new PutObjectCommand({ Bucket: this.bucket, Key: objectKey, ContentType: contentType });
-    return getSignedUrl(this.s3, cmd, { expiresIn: expiresInSeconds });
+    return getSignedUrl(this.presigner, cmd, { expiresIn: expiresInSeconds });
   }
 
   /**
@@ -110,7 +122,7 @@ export class StorageService {
       ResponseContentType: opts.contentType,
       ResponseContentDisposition: `${opts.disposition}; filename="${opts.filename.replace(/["\\]/g, '')}"`,
     });
-    return getSignedUrl(this.s3, cmd, { expiresIn: opts.expiresInSeconds ?? 900 });
+    return getSignedUrl(this.presigner, cmd, { expiresIn: opts.expiresInSeconds ?? 900 });
   }
 
   /**

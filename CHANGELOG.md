@@ -13,6 +13,29 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **File uploads and attachments work in production.** Every upload (editor
+  attachments, user and project avatars, the import wizard) and every attached
+  image or avatar was handed a URL at `http://minio:9000`, a host only the
+  server can reach, so the browser's upload failed and images did not render.
+  Those URLs are now signed for the public site, which proxies the bucket's
+  path to object storage; the storage console and admin API stay private.
+  (#144)
+
+### Operations
+
+- New optional env var `S3_PUBLIC_ENDPOINT` (empty by default = today's
+  behaviour, presigning against `S3_ENDPOINT`). Production needs the variable
+  `S3_PUBLIC_ENDPOINT=https://knowledge.hrustalq.dev` in the GitHub
+  `production` environment **before** the tag is pushed — deploy refuses to run
+  without it, since `.env.production.example` now gives it a value. The
+  `Caddyfile` routes `/<S3_BUCKET>/*` to MinIO and restores the `Host` from
+  `X-Forwarded-Host`, which the `knowledge-edge` Worker sets; the caddy
+  container is recreated by this deploy. No migration. (#144)
+
 ## [0.17.0] — 2026-10-12
 
 ### Added

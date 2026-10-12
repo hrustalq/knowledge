@@ -51,6 +51,15 @@ export const envSchema = z.object({
   S3_SECRET_KEY: z.string().min(1),
   S3_BUCKET: z.string().min(1),
   S3_FORCE_PATH_STYLE: boolish(true),
+  /**
+   * Origin the browser reaches object storage at, when it differs from
+   * S3_ENDPOINT (#144). Production talks to `http://minio:9000` over the Docker
+   * network, a host no browser can resolve; presigned URLs are signed for this
+   * origin instead, and the reverse proxy routes `/${S3_BUCKET}/*` to MinIO.
+   * Empty = presign against S3_ENDPOINT, which is right whenever the API and the
+   * browser share one (dev: http://localhost:9000).
+   */
+  S3_PUBLIC_ENDPOINT: z.string().optional().default(''),
 
   ARCADE_URL: z.string().min(1),
   ARCADE_DB: z.string().min(1),

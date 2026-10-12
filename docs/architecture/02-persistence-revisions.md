@@ -57,6 +57,14 @@ workspaces/{ws}/documents/{doc}/revisions/{rev}/normalized.json
 The bucket is versioned, and clients upload directly via presigned PUT — **the
 API never streams file bodies**.
 
+A presigned URL is signed for the host it names, so it is signed for the host
+the _browser_ will use: `S3_PUBLIC_ENDPOINT` when set, `S3_ENDPOINT` otherwise
+(`StorageService` keeps a second, presign-only client for this). In production
+the API reaches MinIO at `http://minio:9000`, and the browser reaches the bucket
+at `https://knowledge.hrustalq.dev/knowledge/…`, which the `Caddyfile` proxies to
+MinIO with the `Host` the URL was signed for. Only the bucket's path is routed;
+the MinIO console and admin API stay off the public path.
+
 ## Branching
 
 `POST /v1/documents/:id/branches` forks from a finalized revision, defaulting to

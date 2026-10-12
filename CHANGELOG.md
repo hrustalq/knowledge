@@ -57,7 +57,7 @@ in the pull request that introduces them — see
   template, finding its `{{placeholders}}`. Controls follow the API's rule:
   project templates are editors', workspace-wide and built-in ones admins'.
   Template details from the API now include `frontmatter`, so an editor can
-  keep keys it does not model. (#69)
+  keep keys it does not model. (#148)
 
 ### Fixed
 

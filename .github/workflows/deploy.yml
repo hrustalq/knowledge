@@ -105,6 +105,9 @@ jobs:
       # two characters it cannot carry — a newline and a single quote — fail
       # here instead of truncating a secret.
       #
+      # GitHub refuses names starting GITHUB_, so the API's GITHUB_* keys are
+      # stored as GH_* and renamed back here (#138). The API reads no GH_* name.
+      #
       # Fails before anything is built or synced: a key .env.production.example
       # gives a value to must be present, and no value may still be CHANGE_ME.
       - name: Render .env from the production environment
@@ -117,7 +120,8 @@ jobs:
           next="$DEPLOY_DIR/.env.next"
           trap 'rm -f "$next"' EXIT
           jq -rn '
-            def named: with_entries(select(.key | test("^[A-Z][A-Z0-9_]*$")));
+            def named: with_entries(select(.key | test("^[A-Z][A-Z0-9_]*$"))
+              | .key |= (if startswith("GH_") then "GITHUB_" + .[3:] else . end));
             ($ENV.ENV_VARS | fromjson | named) as $v
             | ($ENV.ENV_SECRETS | fromjson | named) as $s
             | ([$v | keys[] | select(. as $k | $s | has($k))]) as $both

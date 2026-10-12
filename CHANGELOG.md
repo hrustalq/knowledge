@@ -139,6 +139,14 @@ edited | outdated | requested | flagged | inactive | archived`, owner, project
   has left stay unowned. `document_revisions.body_chars` is not backfilled
   (content lives in object storage): "empty page" reads as unknown for existing
   revisions until the sweeper of a later #66 part fills it. (#66)
+- Production moved off the `knowledge-prod` VPS, which is unreachable, to the
+  Mac mini. `deploy.yml` now runs on the `knowledge-macmini` runner (macOS,
+  ARM64, Colima) and rolls out `~/Homelab/infra/knowledge`; `.env`,
+  `searxng/settings.yml` and `admin-bootstrap.txt` live there, hand-managed as
+  before. Nothing on the box listens publicly: a Cloudflare Worker on
+  `knowledge.hrustalq.dev` forwards to the Mac mini's Tailscale Funnel, which
+  serves caddy on `127.0.0.1:8088` (plain HTTP, no ACME). The VPS's data was
+  not recoverable, so production started from an empty database. (#126)
 
 ## [0.14.0] — 2026-10-10
 

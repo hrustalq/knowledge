@@ -58,6 +58,20 @@ in the pull request that introduces them — see
   project templates are editors', workspace-wide and built-in ones admins'.
   Template details from the API now include `frontmatter`, so an editor can
   keep keys it does not model. (#148)
+- **Fill a template with AI.** The template gallery has an optional "Describe
+  the page for AI" box. With it filled in, the editor opens on the skeleton
+  with the assistant beside it, and the description goes in as the first
+  message. The assistant fills the template's sections as suggestions you keep
+  or discard, keeps the headings, and writes `TODO:` where it has nothing to go
+  on. Nothing is saved until you publish. While a new page started from a
+  template is still unpublished, every assistant turn knows which template it
+  came from. The template's instructions for the assistant are passed as
+  workspace-written hints, not as rules the model must follow. The assistant
+  also gains `list_templates` and `get_template` tools, and its
+  `create_document` tool takes a `templateRef` and placeholder `values` instead
+  of markdown. Built-in agents get the two read tools; a custom agent has to
+  add them to its tool list. `POST /v1/assistant/threads/:id/messages` accepts
+  `draft.template` (`{ ref, version }`).
 
 ### Fixed
 

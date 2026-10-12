@@ -409,6 +409,19 @@ export const ASSISTANT_DRAFT_MAX_CHARS = 100_000;
 export interface AssistantDraft {
   title: string;
   markdown: string;
+  /**
+   * The template this new page was started from (issue #69). Tells the turn
+   * the draft is a skeleton to fill in, section by section; the template's
+   * own notes ride along wrapped as untrusted. A ref the workspace cannot
+   * resolve is ignored rather than refused — the draft is still a draft.
+   */
+  template?: AssistantDraftTemplate;
+}
+
+export interface AssistantDraftTemplate {
+  /** A template id or `builtin:<key>` (`TemplateRef`). */
+  ref: string;
+  version: number;
 }
 
 /**
@@ -1114,6 +1127,9 @@ export const ASSISTANT_TOOL_NAMES = [
   'list_relations',
   /** Browse the page tree, so placement is a decision (docs/features/08). */
   'list_document_tree',
+  /** The page templates on offer, and one template's skeleton (issue #69). */
+  'list_templates',
+  'get_template',
   'ask_user',
   'request_agent_mode',
   'render_component',

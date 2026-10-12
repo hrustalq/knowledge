@@ -1,7 +1,7 @@
 // One place that decides how a tool call looks and reads, so the live trail
 // and the finished transcript can never label the same call differently.
 import {
-  FileCode2, FilePlus2, FileText, FolderTree, Globe, LayoutTemplate, Link, ListTree, MessageCircleQuestion, Network,
+  FileCode2, FilePlus2, FileText, FolderTree, Globe, LayoutList, LayoutPanelTop, LayoutTemplate, Link, ListTree, MessageCircleQuestion, Network,
   CircleDot, MessageSquarePlus, PenLine, Search, SearchCode, SquarePen, TicketPlus, Wand2, Wrench,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
@@ -22,6 +22,10 @@ const TOOLS: Record<string, ToolVocabulary> = {
   // followed what pages mean to each other, this one only looked at where they
   // sit, and a reader deciding how much to trust an answer wants to know which.
   list_document_tree: { icon: FolderTree, running: 'tool.list_document_tree.running', done: 'tool.list_document_tree.done' },
+  // Issue #69. Not LayoutTemplate: that is render_component's, and a reader
+  // should not take "looked at the page templates" for "showed a component".
+  list_templates: { icon: LayoutList, running: 'tool.list_templates.running', done: 'tool.list_templates.done' },
+  get_template: { icon: LayoutPanelTop, running: 'tool.get_template.running', done: 'tool.get_template.done' },
   render_component: { icon: LayoutTemplate, running: 'tool.render_component.running', done: 'tool.render_component.done' },
   create_document: { icon: FilePlus2, running: 'tool.create_document.running', done: 'tool.create_document.done' },
   propose_update: { icon: SquarePen, running: 'tool.propose_update.running', done: 'tool.propose_update.done' },

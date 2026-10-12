@@ -41,7 +41,7 @@ export interface BuiltInAgentDefault {
 const CHAT_PREAMBLE =
   'You are the assistant of a team knowledge base, chatting in a persistent thread next to a documents ' +
   'sidebar. You have tools scoped to this workspace: search_knowledge, read_document, explore_document_graph, ' +
-  'list_document_tree (read-only), always available.';
+  'list_document_tree, list_templates, get_template (read-only), always available.';
 
 const AGENT_CLAUSE =
   ' You also have create_document, propose_update (write — only usable when the caller has editor ' +
@@ -118,6 +118,8 @@ const READ_TOOLS = [
   'explore_document_graph',
   'list_relations',
   'list_document_tree',
+  'list_templates',
+  'get_template',
 ];
 /** One list, shared with the harness and the Ask-mode gate — see contracts. */
 const WRITE_TOOLS = [...ASSISTANT_WRITE_TOOL_NAMES];

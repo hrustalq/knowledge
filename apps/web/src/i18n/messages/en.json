@@ -2578,6 +2578,14 @@
       "running": "Browsing the page tree",
       "done": "Browsed the page tree"
     },
+    "list_templates": {
+      "running": "Looking at the page templates",
+      "done": "Looked at the page templates"
+    },
+    "get_template": {
+      "running": "Reading a page template",
+      "done": "Read a page template"
+    },
     "task_list": {
       "running": "Listing issues",
       "done": "Listed issues"
@@ -3377,7 +3385,11 @@
       "insertTitle": "Insert a template",
       "insertWhere": "The skeleton goes in at the cursor, and its tags and relations join the page's. Nothing is saved until you publish.",
       "insertPick": "Pick a template on the left to insert its skeleton here.",
-      "insert": "Insert"
+      "insert": "Insert",
+      "describeForAi": "Describe the page for AI (optional)",
+      "describeForAiPlaceholder": "What should this page say? e.g. We are moving search from Elasticsearch to OpenSearch because…",
+      "describeForAiHint": "The assistant fills the sections in as suggestions you keep or discard. Nothing is saved until you publish.",
+      "createWithAi": "Open and fill with AI"
     },
     "placeholderKind": {
       "text": "Text",

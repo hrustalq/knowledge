@@ -234,7 +234,13 @@ const aiPending = computed(() => editorRef.value?.aiPending ?? EMPTY_PENDING)
 let disconnectDraft: (() => void) | null = null
 onMounted(() => {
   disconnectDraft = connectDraft({
-    read: () => ({ title: title.value, markdown: editorRef.value?.flush() ?? body.value }),
+    read: () => ({
+      title: title.value,
+      markdown: editorRef.value?.flush() ?? body.value,
+      // A new page started from a template is a skeleton to fill (issue #69);
+      // once published it is a page like any other, and the turn says so.
+      ...(!isEdit.value && template.value ? { template: template.value } : {}),
+    }),
     edit: (edit) => {
       // The author asked for this; make sure they can watch it happen.
       if (!aiOpen.value) setAiOpen(true)
@@ -452,7 +458,26 @@ async function followOpening() {
   if (route.query.template || route.query.parent || route.query.project) {
     await router.replace({ path: route.path, hash: route.hash })
   }
-  if (ref) await openTemplate(ref)
+  if (!ref) return
+  // Taken before rendering, so a render that fails and reopens the gallery
+  // does not leave the request behind for some later visit to send.
+  const prompt = templates.takeFill(ref)
+  await openTemplate(ref)
+  if (prompt && template.value?.ref === ref) await fillWithAi(prompt)
+}
+
+/**
+ * "Describe the page for AI" (issue #69): open the assistant on the skeleton
+ * and send the description as the first turn. The draft bridge carries the
+ * page and its template, so what comes back is `edit_draft` suggestions in
+ * the template's sections — nothing is kept until the author accepts it, and
+ * nothing is saved until they publish.
+ */
+async function fillWithAi(prompt: string) {
+  setAiOpen(true)
+  // The panel mounts on first open; the skeleton reaches the editor on the same tick.
+  await nextTick()
+  await aiPanel.value?.fill(prompt)
 }
 
 // The editor is reused when a new instruction arrives while it is open — the

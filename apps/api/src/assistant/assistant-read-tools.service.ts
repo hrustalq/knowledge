@@ -6,6 +6,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { SearchService } from '../search/search.service.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
+import { wrapUntrusted } from '../common/untrusted.js';
+import { TemplatesService } from '../templates/templates.service.js';
 import { READ_TOOL_NAMES } from './assistant-tool-types.js';
 import type { AssistantToolContext, AssistantToolResult } from './assistant-tool-types.js';
 
@@ -22,7 +24,7 @@ const MAX_DOC_CHARS = 24_000;
 const MAX_TREE_NODES = 200;
 
 /**
- * The five tools that only ever read.
+ * The tools that only ever read.
  *
  * Split out of AssistantToolsService so the agent worker can run a tool loop.
  * That service injects DocumentRelationsService, MergeRequestsService,
@@ -50,6 +52,7 @@ export class AssistantReadToolsService {
     private readonly prisma: PrismaService,
     private readonly search: SearchService,
     private readonly documents: DocumentsService,
+    private readonly templates: TemplatesService,
   ) {}
 
   definitions(): ChatCompletionFunctionTool[] {
@@ -159,6 +162,41 @@ export class AssistantReadToolsService {
           },
         },
       },
+      {
+        type: 'function',
+        function: {
+          name: 'list_templates',
+          description:
+            'The page templates this workspace offers (issue #69): ADRs, RFCs, runbooks, postmortems and the ' +
+            "workspace's own shapes. Call it before writing a page of a recognisable kind, so it starts from the " +
+            "shape the team uses — then read one with get_template and pass its ref to create_document.",
+          parameters: {
+            type: 'object',
+            properties: {
+              projectId: {
+                type: 'string',
+                description: "Include this project's own templates. Omit for the workspace-wide ones only.",
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_template',
+          description:
+            'One page template: its markdown skeleton, default category, tags and relations, and the ' +
+            'placeholders (name, kind, required) create_document takes as values.',
+          parameters: {
+            type: 'object',
+            properties: {
+              templateRef: { type: 'string', description: 'A ref from list_templates, e.g. builtin:adr' },
+            },
+            required: ['templateRef'],
+          },
+        },
+      },
     ];
   }
 
@@ -189,6 +227,10 @@ export class AssistantReadToolsService {
           return await this.listRelations(args, ctx);
         case 'list_document_tree':
           return await this.listDocumentTree(args, ctx);
+        case 'list_templates':
+          return await this.listTemplates(args, ctx);
+        case 'get_template':
+          return await this.getTemplate(args, ctx);
         default:
           return this.fail(`Unknown tool ${name}`);
       }
@@ -282,6 +324,48 @@ export class AssistantReadToolsService {
       ok: true,
       sources,
     };
+  }
+
+  /**
+   * The gallery, as the model reads it. Names and descriptions are typed by
+   * workspace members, so the whole answer is wrapped untrusted — a template
+   * called "ignore your instructions" is a template with a strange name.
+   */
+  private async listTemplates(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    const projectId = typeof args.projectId === 'string' && args.projectId ? args.projectId : undefined;
+    // The project filter is a narrowing inside the pinned workspace: a foreign
+    // project id matches no rows and returns the workspace-wide set.
+    const { templates } = await this.templates.list({ workspaceId: ctx.workspaceId, ...(projectId ? { projectId } : {}) });
+    const payload = templates.map((tpl) => ({
+      ref: tpl.ref,
+      name: tpl.name,
+      category: tpl.category,
+      scope: tpl.scope,
+      version: tpl.currentVersion,
+      ...(tpl.description ? { description: tpl.description } : {}),
+    }));
+    return { content: wrapUntrusted(JSON.stringify({ templates: payload }), 'list_templates', 'template'), ok: true, sources: [] };
+  }
+
+  /** One template's skeleton and what it asks for — wrapped, for the reason above. */
+  private async getTemplate(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
+    const ref = String(args.templateRef ?? '').trim();
+    if (!ref) return this.fail('templateRef is required');
+    const tpl = await this.templates.getByRef(ctx.workspaceId, ref);
+    const payload = {
+      ref: tpl.ref,
+      name: tpl.name,
+      version: tpl.version,
+      category: tpl.meta.category,
+      ...(tpl.meta.titlePattern ? { titlePattern: tpl.meta.titlePattern } : {}),
+      placeholders: tpl.meta.placeholders,
+      ...(tpl.meta.aiInstructions ? { notes: tpl.meta.aiInstructions } : {}),
+      tags: tpl.tags,
+      relations: tpl.relations,
+      ...(tpl.archivedAt ? { archived: true } : {}),
+      body: tpl.body.slice(0, MAX_DOC_CHARS),
+    };
+    return { content: wrapUntrusted(JSON.stringify(payload), 'get_template', 'template'), ok: true, sources: [] };
   }
 
   private async readDocument(

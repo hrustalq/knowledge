@@ -17,6 +17,10 @@
  * Create and handed to the editor through the store, because only the server
  * can turn a user or page id into a label inside the workspace. Nothing is
  * written until the author publishes in the editor.
+ *
+ * "Describe the page for AI" rides along the same way: the editor opens the
+ * assistant on the skeleton and sends the description as its first turn, so
+ * the sections fill in as suggestions the author keeps or discards.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -37,6 +41,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -71,6 +76,8 @@ const selectedRef = ref<string | null>(null)
 const query = ref('')
 const title = ref('')
 const values = ref<TemplateValues>({})
+/** "Describe the page for AI" — empty means open the skeleton as it is. */
+const describe = ref('')
 const detail = ref<TemplateDetail | null>(null)
 const detailError = ref<string | null>(null)
 const loadingDetail = ref(false)
@@ -89,6 +96,7 @@ watch(
     query.value = ''
     title.value = target.value.title ?? ''
     values.value = {}
+    describe.value = ''
     triedCreate.value = false
     selectedRef.value = target.value.ref ?? null
   },
@@ -210,6 +218,8 @@ async function create() {
       return
     }
     templates.rendered = rendered
+    const prompt = describe.value.trim()
+    templates.fill = prompt ? { ref: rendered.templateRef, prompt } : null
     templates.closeGallery()
     await router.push({ path: '/create', query: editorQuery(rendered.templateRef) })
   } catch (e) {
@@ -326,6 +336,19 @@ function scopeLabel(scope: string): string {
                 :missing="preview?.missing ?? []"
                 :show-missing="triedCreate"
               />
+              <div v-if="!inserting" class="space-y-1.5">
+                <Label for="kn-tpl-describe">{{ t('templates.gallery.describeForAi') }}</Label>
+                <Textarea
+                  id="kn-tpl-describe"
+                  v-model="describe"
+                  rows="3"
+                  maxlength="4000"
+                  :placeholder="t('templates.gallery.describeForAiPlaceholder')"
+                  @keydown.enter.meta.prevent="create"
+                  @keydown.enter.ctrl.prevent="create"
+                />
+                <p class="text-muted-foreground text-xs">{{ t('templates.gallery.describeForAiHint') }}</p>
+              </div>
             </form>
 
             <section :aria-label="t('templates.gallery.preview')">
@@ -356,7 +379,9 @@ function scopeLabel(scope: string): string {
               ? t('common.creating')
               : inserting
                 ? t('templates.gallery.insert')
-                : t('templates.gallery.create')
+                : describe.trim() && selectedRef !== null
+                  ? t('templates.gallery.createWithAi')
+                  : t('templates.gallery.create')
           }}
         </Button>
       </DialogFooter>

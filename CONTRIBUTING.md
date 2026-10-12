@@ -233,8 +233,12 @@ Skipping the backport means the next release silently reverts the hotfix.
 4. **A new required env var with no default is a breaking change** — `env.ts`
    validates with zod and fails fast, so a missing variable does not degrade, it
    refuses to boot. Give it a default, or write the **Operations** entry.
-5. **Never commit secrets.** `~/Homelab/infra/knowledge/.env` is hand-managed on the Mac mini and
-   no workflow touches it.
+5. **Never commit secrets.** Production config lives in the GitHub `production`
+   environment; `deploy.yml` renders `~/Homelab/infra/knowledge/.env` from it
+   on every deploy, so edit the environment, not the box. Any key
+   `.env.production.example` gives a value to is required: add it to the
+   environment before the release that introduces it, or the deploy refuses to
+   start (`scripts/env-to-github.mjs` fills it from a file).
 6. **`deploy.yml` never runs on `pull_request`** — it is self-hosted and this repo
    is public. Do not add a trigger a fork can cause.
 7. **New routes need `@Access(role, source)`**, or they are authenticated-only with

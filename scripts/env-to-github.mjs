@@ -8,6 +8,8 @@
 //     node scripts/env-to-github.mjs .env.production.example - [--apply]
 //
 // Credential-shaped names become secrets, the rest variables. Prints names, never values.
+// GitHub refuses names starting GITHUB_, so those are stored as GH_* — deploy.yml renames
+// them back (#138).
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
@@ -53,13 +55,15 @@ for (const [key, { value, from }] of [...merged].sort(([a], [b]) => a.localeComp
     continue;
   }
   const kind = SECRET.test(key) ? 'secret' : 'variable';
-  console.log(`${kind.padEnd(8)}  ${key.padEnd(32)}  ${from}`);
+  const name = key.replace(/^GITHUB_/, 'GH_');
+  const shown = name === key ? key : `${key} -> ${name}`;
+  console.log(`${kind.padEnd(8)}  ${shown.padEnd(32)}  ${from}`);
   if (!apply) continue;
   const scope = ['--env', ENVIRONMENT, '--repo', REPO];
   const res =
     kind === 'secret'
-      ? spawnSync('gh', ['secret', 'set', key, ...scope], { input: value, stdio: ['pipe', 'ignore', 'inherit'] })
-      : spawnSync('gh', ['variable', 'set', key, ...scope, '--body', value], { stdio: ['ignore', 'ignore', 'inherit'] });
+      ? spawnSync('gh', ['secret', 'set', name, ...scope], { input: value, stdio: ['pipe', 'ignore', 'inherit'] })
+      : spawnSync('gh', ['variable', 'set', name, ...scope, '--body', value], { stdio: ['ignore', 'ignore', 'inherit'] });
   if (res.status !== 0) failed = true;
 }
 

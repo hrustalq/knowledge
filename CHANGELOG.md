@@ -76,7 +76,10 @@ in the pull request that introduces them — see
   `--apply`):
   `ssh macmini 'cat ~/Homelab/infra/knowledge/.env' | node scripts/env-to-github.mjs .env.production.example -`.
   Names containing `PASSWORD`, `SECRET` or `TOKEN`, names ending `_KEY`, and
-  `DATABASE_URL` / `MAIL_SMTP_URL` become secrets; everything else becomes a variable. (#134)
+  `DATABASE_URL` / `MAIL_SMTP_URL` become secrets; everything else becomes a variable.
+  GitHub refuses names starting `GITHUB_`, so store those as `GH_*`
+  (`GH_API_URL`, `GH_APP_ID`, …); the script does this for you and the deploy
+  renames them back. (#134, #138)
 - **New required secret `SEARXNG_SECRET`**, SearXNG's `server.secret_key`. The
   deploy now ships the repo's `searxng/settings.yml` over the hand-managed copy
   on the box, and the secret overrides that file's dev placeholder:

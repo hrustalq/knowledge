@@ -36,6 +36,8 @@ import { ActivityService } from '../activity/activity.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { WorkflowProducer } from './workflow.producer.js';
 import { WorkflowRunnerService } from './workflow-runner.service.js';
+import { templateIssues } from './workflow-templates.js';
+import { TemplatesService } from '../templates/templates.service.js';
 import type {
   CreateWorkflowDto,
   ListWorkflowRunsQueryDto,
@@ -74,6 +76,7 @@ export class WorkflowsService {
     private readonly projects: ProjectsService,
     private readonly producer: WorkflowProducer,
     private readonly runner: WorkflowRunnerService,
+    private readonly templates: TemplatesService,
   ) {}
 
   // ------------------------------------------------------------ definitions
@@ -97,7 +100,7 @@ export class WorkflowsService {
 
   async create(dto: CreateWorkflowDto, userId?: string): Promise<WorkflowDefinitionInfo> {
     if (dto.projectId) await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
-    this.compileOrThrow(dto.graph);
+    await this.assertValid(dto.workspaceId, dto.graph);
 
     const row = await this.prisma.workflowDefinition
       .create({
@@ -132,7 +135,7 @@ export class WorkflowsService {
   async update(id: string, dto: UpdateWorkflowDto, userId?: string): Promise<WorkflowDefinitionInfo> {
     const existing = await this.requireDefinition(id);
     if (dto.projectId) await this.projects.requireProjectInWorkspace(dto.projectId, existing.workspaceId);
-    if (dto.graph) this.compileOrThrow(dto.graph);
+    if (dto.graph) await this.assertValid(existing.workspaceId, dto.graph);
 
     const row = await this.prisma.workflowDefinition.update({
       where: { id },
@@ -191,8 +194,9 @@ export class WorkflowsService {
 
   /** The editor's live check — reports issues instead of throwing. */
   async validate(id: string, graph?: WorkflowGraph): Promise<{ valid: boolean; issues: WorkflowValidationIssue[] }> {
-    const target = graph ?? ((await this.requireDefinition(id)).graph as unknown as WorkflowGraph);
-    const issues = validateGraph(target);
+    const definition = await this.requireDefinition(id);
+    const target = graph ?? (definition.graph as unknown as WorkflowGraph);
+    const issues = [...validateGraph(target), ...(await templateIssues(this.templates, definition.workspaceId, target))];
     return {
       valid: !issues.some((i) => i.severity === 'error'),
       issues: localizeIssues(issues),
@@ -419,9 +423,17 @@ export class WorkflowsService {
         t('error.workflow.nodeNotAwaitingReview', { status: t(`status.node.${node.status}`) }),
       );
     }
+    // Which template the draft was written against is the executor's record,
+    // not something a reviewer's edit sets — the DTO does not carry it, so it
+    // is put back from the stored draft rather than lost on the first save.
+    const stored = (node.draft ?? null) as WorkflowNodeDraft | null;
+    const provenance =
+      stored?.templateRef && stored.templateVersion
+        ? { templateRef: stored.templateRef, templateVersion: stored.templateVersion }
+        : {};
     const updated = await this.prisma.workflowRunNode.update({
       where: { id: nodeId },
-      data: { draft: draft as unknown as Prisma.InputJsonValue },
+      data: { draft: { ...draft, ...provenance } as unknown as Prisma.InputJsonValue },
     });
     return this.toNodeInfo(updated);
   }
@@ -597,20 +609,29 @@ export class WorkflowsService {
 
   // ----------------------------------------------------------------- helpers
 
+  /** The compiler's rules, then the ones only the database can answer (`templateIssues`). */
+  private async assertValid(workspaceId: string, graph: WorkflowGraph): Promise<void> {
+    this.compileOrThrow(graph);
+    const issues = await templateIssues(this.templates, workspaceId, graph);
+    if (issues.length > 0) throw this.invalidGraph(issues);
+  }
+
   private compileOrThrow(graph: WorkflowGraph) {
     try {
       return compileDefinition(graph);
     } catch (e) {
-      if (e instanceof WorkflowDefinitionError) {
-        throw new BadRequestException({
-          statusCode: 400,
-          message: t('error.workflow.invalidGraph'),
-          reason: 'invalid-graph',
-          issues: localizeIssues(e.issues),
-        });
-      }
+      if (e instanceof WorkflowDefinitionError) throw this.invalidGraph(e.issues);
       throw e;
     }
+  }
+
+  private invalidGraph(issues: WorkflowValidationIssue[]): BadRequestException {
+    return new BadRequestException({
+      statusCode: 400,
+      message: t('error.workflow.invalidGraph'),
+      reason: 'invalid-graph',
+      issues: localizeIssues(issues),
+    });
   }
 
   private async requireDefinition(id: string): Promise<WorkflowDefinition> {

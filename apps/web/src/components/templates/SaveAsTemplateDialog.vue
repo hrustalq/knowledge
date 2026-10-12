@@ -62,6 +62,8 @@ export interface SaveAsTemplatePage {
 
 const props = defineProps<{ page: SaveAsTemplatePage | null }>()
 const open = defineModel<boolean>('open', { required: true })
+/** After the template exists — the import's "Save as template instead" then drops its staging. */
+const emit = defineEmits<{ saved: [TemplateDetail] }>()
 
 const { t } = useI18n()
 const router = useRouter()
@@ -149,6 +151,7 @@ async function save() {
       }),
     })
     open.value = false
+    emit('saved', created)
     void templates.refresh()
     toast.success(t('templates.saveAs.saved', { name: created.name }), {
       action: { label: t('templates.saveAs.openSettings'), onClick: () => void router.push(`/settings/templates/${created.ref}`) },

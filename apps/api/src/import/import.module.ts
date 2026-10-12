@@ -4,6 +4,7 @@ import { ProjectsModule } from '../projects/projects.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { ActivityModule } from '../activity/activity.module.js';
 import { ImportQueueModule } from './import-queue.module.js';
+import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { ImportController } from './import.controller.js';
 import { ImportService } from './import.service.js';
 
@@ -17,7 +18,7 @@ import { ImportService } from './import.service.js';
  * worker.module.ts.
  */
 @Module({
-  imports: [StorageModule, ProjectsModule, DocumentsModule, ActivityModule, ImportQueueModule],
+  imports: [StorageModule, ProjectsModule, DocumentsModule, ActivityModule, ImportQueueModule, TemplatesCoreModule],
   controllers: [ImportController],
   providers: [ImportService],
 })

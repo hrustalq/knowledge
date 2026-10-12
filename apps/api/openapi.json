@@ -20772,6 +20772,11 @@
             "type": "string",
             "format": "uuid",
             "nullable": true
+          },
+          "templateRef": {
+            "type": "string",
+            "description": "A template uuid or `builtin:<key>`",
+            "example": "builtin:entity"
           }
         },
         "required": [

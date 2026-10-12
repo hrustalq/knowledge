@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { ArrowRight, Trash2 } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useTemplatesStore } from '@/stores/templates'
 import { STEP_KINDS, stepKind } from './workflow-ui'
 
 const { t } = useI18n()
@@ -60,6 +61,11 @@ function setKind(kind: WorkflowStepKind) {
     // Switching kind keeps the prompt: doing it by accident should not throw
     // away what someone wrote.
     ...(kind === 'ai.generate' || kind === 'ai.draft' ? { prompt: props.step.prompt ?? { user: '' } } : {}),
+    // Only a drafting step writes into a template; a ref left on another kind
+    // would still be checked on save while shaping nothing.
+    ...(kind !== 'ai.draft' && props.step.produces?.templateRef
+      ? { produces: { ...props.step.produces, templateRef: undefined } }
+      : {}),
   })
 }
 
@@ -94,6 +100,41 @@ function setProduces(fields: Partial<NonNullable<WorkflowStep['produces']>>) {
   patch({
     produces: { category: 'other', relationToParent: 'IMPLEMENTS', ...props.step.produces, ...fields },
   })
+}
+
+/**
+ * The page template an `ai.draft` step writes into (issue #69). Only a drafting
+ * step fills a body, so only it is offered one. Picking a template files its
+ * pages under the template's category — still changeable beside it.
+ */
+const templates = useTemplatesStore()
+onMounted(() => void templates.ensureLoaded())
+
+const NO_TEMPLATE = '__none__'
+const canTemplate = computed(() => props.step.kind === 'ai.draft' && Boolean(props.step.produces))
+const templateOptions = computed(() => {
+  const current = props.step.produces?.templateRef
+  const offered = templates.offered.map((tpl) => ({ ref: tpl.ref, label: `${tpl.icon ?? ''} ${tpl.name}`.trim() }))
+  // An archived template, or one this project does not offer, still has to
+  // show as the step's value rather than as a blank select.
+  if (current && !offered.some((o) => o.ref === current)) {
+    offered.push({ ref: current, label: templates.byRef(current)?.name ?? current })
+  }
+  return offered
+})
+
+// Named here rather than left to the Select: the roster loads after the panel
+// opens, and a Select whose items arrive late shows its raw value — the ref.
+const templateLabel = computed(() => {
+  const current = props.step.produces?.templateRef
+  return current ? templateOptions.value.find((o) => o.ref === current)?.label ?? current : t('workflow.form.noTemplate')
+})
+
+function setTemplate(value: unknown) {
+  const ref = String(value)
+  if (ref === NO_TEMPLATE) return setProduces({ templateRef: undefined })
+  const summary = templates.byRef(ref)
+  setProduces({ templateRef: ref, ...(summary ? { category: summary.category } : {}) })
 }
 
 const nextSteps = computed(() =>
@@ -256,6 +297,25 @@ const promptPlaceholder = computed(() =>
         <p class="text-muted-foreground text-[11px] leading-snug">
           {{ t('workflow.form.nestingHint') }}
         </p>
+        <label v-if="canTemplate" class="block space-y-1.5">
+          <span class="text-muted-foreground text-xs font-medium">{{ t('workflow.form.template') }}</span>
+          <Select
+            :model-value="step.produces.templateRef ?? NO_TEMPLATE"
+            :disabled="!canManage"
+            @update:model-value="setTemplate"
+          >
+            <SelectTrigger class="w-full"><SelectValue>{{ templateLabel }}</SelectValue></SelectTrigger>
+            <SelectContent>
+              <SelectItem :value="NO_TEMPLATE">{{ t('workflow.form.noTemplate') }}</SelectItem>
+              <SelectItem v-for="option in templateOptions" :key="option.ref" :value="option.ref">
+                {{ option.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <span class="text-muted-foreground block text-[11px] leading-snug">
+            {{ t('workflow.form.templateHint') }}
+          </span>
+        </label>
       </div>
 
       <label v-if="step.fanOut" class="block space-y-1.5">

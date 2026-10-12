@@ -692,7 +692,10 @@
       "nestingHint": "New pages are nested under the page they came from and linked back to it.",
       "maxItemsHint": "items, so one long list cannot open hundreds of cards.",
       "nothingAfter": "Nothing runs after this step.",
-      "dragHint": "Or drag between the dots on the canvas."
+      "dragHint": "Or drag between the dots on the canvas.",
+      "template": "Written into template",
+      "noTemplate": "No template",
+      "templateHint": "Drafts keep the template's headings and carry its tags and relations. Picking one files pages under its category."
     },
     "outcome": {
       "items": "A list of items",
@@ -2012,7 +2015,12 @@
     },
     "couldNotCreatePage": "The page could not be created",
     "pageCreatedWithAttachment": "Page created — the original file is attached",
-    "pageCreated": "Page created"
+    "pageCreated": "Page created",
+    "template": "Template",
+    "noTemplate": "No template",
+    "templateHint": "Adds the template's tags and relations and files the page under its category. The text stays as imported.",
+    "saveAsTemplate": "Save as template instead",
+    "templateDropsImages": "Images from the original stay with the import, so the template won't include them."
   },
   "project": {
     "active": "active",

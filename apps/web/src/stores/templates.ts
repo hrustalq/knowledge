@@ -12,11 +12,24 @@ import { offeredTemplates } from '@/lib/templates'
 
 /** Where a page started from the gallery goes. */
 export interface GalleryTarget {
+  /**
+   * `create` opens the editor on a new page; `insert` (the editor's
+   * `/template`) hands the render back to the page being written instead.
+   */
+  mode?: 'create' | 'insert'
   /** Preselect this template, e.g. when the editor could not render it without values. */
   ref?: TemplateRef
   parentId?: string | null
   projectId?: string | null
+  /** Insert mode: the page's title as it stands — the `{{title}}` a section is rendered with. */
+  title?: string
 }
+
+/**
+ * Where an insert-mode render goes. Outside the store's state on purpose: a
+ * callback is not state, and state is what SSR serializes.
+ */
+let insertHandler: ((rendered: RenderTemplateResponse) => void) | null = null
 
 /**
  * The page templates available in the active project (issue #69), and the
@@ -39,7 +52,12 @@ export const useTemplatesStore = defineStore('templates', {
   state: () => ({
     templates: [] as TemplateSummary[],
     loaded: false,
-    /** In-flight fetch, so concurrent consumers share one request. */
+    /**
+     * In-flight fetch, so concurrent consumers share one request. Client-only:
+     * a Promise serializes to `{}`, so a store whose SSR pass started a fetch
+     * would hydrate believing one is still running, and never load. Call
+     * `ensureLoaded` from a mount hook or a user action, never from setup.
+     */
     pending: null as Promise<void> | null,
     gallery: { open: false, target: {} as GalleryTarget },
     /**
@@ -107,10 +125,23 @@ export const useTemplatesStore = defineStore('templates', {
     },
 
     openGallery(target: GalleryTarget = {}) {
-      this.gallery = { open: true, target }
+      insertHandler = null
+      this.gallery = { open: true, target: { ...target, mode: 'create' } }
+    },
+    /** The gallery in insert mode: `onInsert` receives the render, and nothing navigates. */
+    openInsertGallery(target: Omit<GalleryTarget, 'mode'>, onInsert: (rendered: RenderTemplateResponse) => void) {
+      insertHandler = onInsert
+      this.gallery = { open: true, target: { ...target, mode: 'insert' } }
     },
     closeGallery() {
       this.gallery.open = false
+    },
+    /** Hand an insert-mode render to whoever opened the gallery, once. */
+    deliverInsert(rendered: RenderTemplateResponse): boolean {
+      const handler = insertHandler
+      insertHandler = null
+      handler?.(rendered)
+      return handler !== null
     },
     /** The gallery's render for `ref`, once: a second editor visit must not reuse it. */
     takeRendered(ref: TemplateRef): RenderTemplateResponse | null {

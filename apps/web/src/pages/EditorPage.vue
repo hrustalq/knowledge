@@ -20,13 +20,14 @@
 //
 // A new page can start from a template (issue #69): `/create?template=` opens
 // on the skeleton the gallery rendered, and the template is sent as provenance
-// when the page is created.
+// when the page is created. `/template` inserts one at the cursor of any page,
+// and "Save as template" goes the other way.
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
-import { History, MoreHorizontal, Settings2, Sparkles, X } from 'lucide-vue-next'
+import { History, LayoutTemplate, MoreHorizontal, Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
@@ -102,6 +103,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import RichEditor from '@/components/editor/RichEditor.vue'
+import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
 import { useWorkingCopy } from '@/components/editor/use-working-copy'
 import DiffView from '@/components/knowledge/DiffView.vue'
 import EditorAiPanel from '@/components/editor/EditorAiPanel.vue'
@@ -461,6 +463,52 @@ watch(
     if (baseFields.value && readOpening()) void followOpening()
   },
 )
+
+/** Where a `/template` insert renders against: the page as it stands. */
+const templateContext = computed(() => ({
+  title: title.value.trim(),
+  parentId: parentId.value || null,
+  projectId: projectId.value || null,
+}))
+
+/**
+ * `/template` put a skeleton at the cursor; lay its tags, relations and
+ * category over the page the way the gallery's render is (`mergeTemplateDefaults`).
+ * A new page that held nothing else was started from the template, so it is
+ * recorded as provenance too; a section added to a page already being written
+ * is not where that page came from.
+ */
+function applyInsertedTemplate(rendered: RenderTemplateResponse, intoEmptyPage: boolean) {
+  const fm = readFrontmatter(rendered.frontmatter)
+  const merged = mergeTemplateDefaults(currentFields(), { category: rendered.category, relations: fm.relations, tags: fm.tags })
+  category.value = merged.category as DocumentCategory
+  relationRows.value = merged.relations
+  tags.value = merged.tags
+  otherFrontmatter.value = { ...fm.other, ...otherFrontmatter.value }
+  if (intoEmptyPage && !isEdit.value && !template.value) {
+    template.value = { ref: rendered.templateRef, version: rendered.templateVersion }
+    if (!title.value.trim()) title.value = rendered.title
+  }
+}
+
+/* ---------------------------------------------------- save as template */
+
+const saveAsOpen = ref(false)
+const saveAsPage = ref<SaveAsTemplatePage | null>(null)
+
+function openSaveAs() {
+  const markdown = editorRef.value?.flush() ?? body.value
+  saveAsPage.value = {
+    title: title.value,
+    body: markdown,
+    category: category.value,
+    tags: tags.value.split(',').map((tag) => tag.trim()).filter(Boolean),
+    relations: relationRows.value.filter((r) => r.type && r.key.trim()).map((r) => ({ type: r.type, target: r.key.trim() })),
+    other: otherFrontmatter.value,
+    projectId: projectId.value || null,
+  }
+  saveAsOpen.value = true
+}
 
 /** The template's name, for the header, once the roster knows it. */
 const templateName = computed(() => (template.value ? (templates.byRef(template.value.ref)?.name ?? null) : null))
@@ -895,16 +943,19 @@ onBeforeUnmount(() => {
                controls you reach for least fold into one menu. -->
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="sm:hidden" :aria-label="t('editor.moreActions')">
+              <Button variant="ghost" size="icon-sm" :aria-label="t('editor.moreActions')">
                 <MoreHorizontal class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" class="w-44">
-              <DropdownMenuItem @select="settingsOpen = true">
+            <DropdownMenuContent align="end" class="w-48">
+              <DropdownMenuItem class="sm:hidden" @select="settingsOpen = true">
                 <Settings2 class="size-4" /> {{ t('editor.settings') }}
               </DropdownMenuItem>
-              <DropdownMenuItem @select="cancel">
+              <DropdownMenuItem class="sm:hidden" @select="cancel">
                 <X class="size-4" /> {{ t('common.cancel') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="openSaveAs">
+                <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -943,7 +994,9 @@ onBeforeUnmount(() => {
               v-model="body"
               :pages="mentionablePages"
               :resolve-document-id="ensureDocumentId"
+              :template-context="templateContext"
               @ready="onEditorReady"
+              @apply-template-defaults="applyInsertedTemplate"
             >
               <template #lede>
                 <textarea
@@ -1137,5 +1190,7 @@ onBeforeUnmount(() => {
         </div>
       </SheetContent>
     </Sheet>
+
+    <SaveAsTemplateDialog v-model:open="saveAsOpen" :page="saveAsPage" />
   </div>
 </template>

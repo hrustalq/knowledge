@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { TemplateMeta, TemplateSummary } from '@knowledge/contracts'
-import { groupTemplates, matchesTemplate, offeredTemplates, previewTemplate } from './templates'
+import { composeTemplateSource, type TemplateDetail } from '@knowledge/contracts'
+import { htmlToMarkdown } from '@/lib/markdown/serialize'
+import {
+  canWriteTemplate,
+  groupTemplates,
+  matchesTemplate,
+  offeredTemplates,
+  previewTemplate,
+  templateSourceFields,
+  unescapePlaceholders,
+} from './templates'
 
 const summary = (overrides: Partial<TemplateSummary>): TemplateSummary => ({
   ref: 'builtin:adr',
@@ -95,3 +105,64 @@ describe('previewTemplate', () => {
     expect(preview.body).toMatch(/^12 окт\.? 2026/)
   })
 })
+
+describe('settings role gating', () => {
+  it('lets an editor write project templates only, and an admin everything', () => {
+    expect(canWriteTemplate('project', 'editor')).toBe(true)
+    expect(canWriteTemplate('workspace', 'editor')).toBe(false)
+    expect(canWriteTemplate('built-in', 'editor')).toBe(false)
+    for (const scope of ['project', 'workspace', 'built-in'] as const) {
+      expect(canWriteTemplate(scope, 'admin')).toBe(true)
+      expect(canWriteTemplate(scope, 'viewer')).toBe(false)
+      expect(canWriteTemplate(scope, null)).toBe(false)
+    }
+  })
+})
+
+describe('a template body written in the rich editor', () => {
+  it('is escaped by the serializer, which is why the unescape exists', () => {
+    const written = htmlToMarkdown('<p>Due {{due_date}}</p>')
+    expect(written).not.toContain('{{due_date}}')
+    expect(unescapePlaceholders(written)).toContain('{{due_date}}')
+  })
+
+  it('keeps its placeholders after the editor escapes underscores', () => {
+    expect(unescapePlaceholders('Due {{due\\_date}} for {{ owner\\_id }}; snake\\_case prose stays')).toBe(
+      'Due {{due_date}} for {{ owner_id }}; snake\\_case prose stays',
+    )
+  })
+
+  it('leaves an escaped placeholder escaped', () => {
+    expect(unescapePlaceholders('\\\\{{literal\\_one}}')).toBe('\\\\{{literal_one}}')
+  })
+
+  it('round-trips through the fields an editor holds', () => {
+    const detail = {
+      meta: { category: 'guide', placeholders: [{ name: 'service', kind: 'entity' }] },
+      tags: ['runbook'],
+      relations: [{ type: 'DESCRIBES', target: 'service:{{service}}' }],
+      frontmatter: { tags: ['runbook'], glossary: false },
+      body: '# {{title}}\n',
+    } as unknown as TemplateDetail
+    const fields = templateSourceFields(detail)
+    fields.meta.placeholders[0].required = true
+    expect(detail.meta.placeholders[0].required).toBeUndefined()
+    expect(composeTemplateSource(fields)).toBe(
+      [
+        '---',
+        '"glossary": false',
+        'tags: ["runbook"]',
+        'relations:',
+        '  - type: "DESCRIBES"',
+        '    target: "service:{{service}}"',
+        'template:',
+        '  category: "guide"',
+        '  placeholders:',
+        '    - {"name":"service","kind":"entity","required":true}',
+        '---',
+        '# {{title}}\n',
+      ].join('\n'),
+    )
+  })
+})
+

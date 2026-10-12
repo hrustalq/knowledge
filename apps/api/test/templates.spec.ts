@@ -3,6 +3,8 @@ import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import {
   BUILT_IN_TEMPLATE_KEYS,
+  composeTemplateSource,
+  detectPlaceholders,
   missingRequiredPlaceholders,
   parseTemplateRef,
   renderTemplate,
@@ -162,6 +164,68 @@ describe('template sources', () => {
     refuse('---\ntemplate:\n  placeholders: [{ name: a, kind: html }]\n---\nx', 'invalidPlaceholder');
     refuse('---\ntemplate:\n  category: adr\n---\nx', 'invalidMeta');
     refuse('---\ntemplate: [1]\n---\nx', 'invalidMeta');
+  });
+
+  // The settings editor and "Save as template" write sources with a form, not
+  // a YAML box (phase 4). What they write must be what this parser reads.
+  it.each(BUILT_IN_TEMPLATE_KEYS.flatMap((key) => [[key, 'en'], [key, 'ru']] as const))(
+    'composeTemplateSource round-trips built-in %s (%s) through the parser',
+    (key, locale) => {
+      const before = parseTemplateSource(BUILT_IN_TEMPLATES[key].text[locale].source);
+      const source = composeTemplateSource({
+        meta: before.meta,
+        tags: before.tags,
+        relations: before.relations,
+        other: before.data,
+        body: before.body,
+      });
+      const after = parseTemplateSource(source);
+      expect(after.meta).toEqual(before.meta);
+      expect(after.tags).toEqual(before.tags);
+      expect(after.relations).toEqual(before.relations);
+      expect(after.body).toBe(before.body);
+    },
+  );
+
+  it('composeTemplateSource quotes what YAML would misread, keeps unmodelled keys and drops alias spellings', () => {
+    const source = composeTemplateSource({
+      meta: {
+        category: 'guide',
+        titlePattern: 'Runbook: {{service}} # {{title}}',
+        placeholders: [{ name: 'service', kind: 'entity', required: true, label: 'Service: name' }],
+        aiInstructions: 'Say "TODO:" where unsure.\nKeep headings.',
+      },
+      tags: ['runbook', 'on-call: yes'],
+      relations: [{ type: 'DESCRIBES', target: 'service:{{service}}' }],
+      other: { glossary: false, теги: ['dup'], template: { category: 'other' } },
+      body: '\n\n# {{title}}\n',
+    });
+    const parsed = parseTemplateSource(source);
+    expect(parsed.meta.titlePattern).toBe('Runbook: {{service}} # {{title}}');
+    expect(parsed.meta.placeholders).toEqual([{ name: 'service', kind: 'entity', required: true, label: 'Service: name' }]);
+    expect(parsed.meta.aiInstructions).toBe('Say "TODO:" where unsure.\nKeep headings.');
+    expect(parsed.tags).toEqual(['runbook', 'on-call: yes']);
+    expect(parsed.relations).toEqual([{ type: 'DESCRIBES', target: 'service:{{service}}' }]);
+    expect(parsed.data).toMatchObject({ glossary: false });
+    expect(parsed.data).not.toHaveProperty('теги');
+    expect(parsed.body).toBe('# {{title}}\n');
+  });
+
+  it('detectPlaceholders adds what a text uses, keeps what is declared, and never declares a system name', () => {
+    const detected = detectPlaceholders(
+      {
+        body: '# {{title}} by {{ owner }} — {{owner}}, {{due_date}}, \\{{literal}}',
+        tags: ['{{team}}'],
+        relations: [{ type: 'DESCRIBES', target: 'service:{{service}}' }],
+      },
+      [{ name: 'owner', kind: 'user', required: true }],
+    );
+    expect(detected).toEqual([
+      { name: 'owner', kind: 'user', required: true },
+      { name: 'due_date', kind: 'text' },
+      { name: 'team', kind: 'text' },
+      { name: 'service', kind: 'entity' },
+    ]);
   });
 });
 

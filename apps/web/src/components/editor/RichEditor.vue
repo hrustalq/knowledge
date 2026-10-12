@@ -54,9 +54,16 @@ import {
   Trash2,
   Type,
   Workflow,
+  LayoutTemplate,
 } from 'lucide-vue-next'
 import { markdownToHtml } from '@/lib/markdown/render'
-import type { AssistantDraftEdit, GlossaryExclusion, GlossaryTerm } from '@knowledge/contracts'
+import type {
+  AssistantDraftEdit,
+  GlossaryExclusion,
+  GlossaryTerm,
+  RenderTemplateResponse,
+} from '@knowledge/contracts'
+import { useTemplatesStore } from '@/stores/templates'
 import type { PageRefResolver } from '@/lib/page-refs'
 import { fromWatch } from '@/lib/rx-vue'
 import { PANEL_META, PANEL_TYPES, type PanelType } from '@/lib/markdown/nodes'
@@ -87,6 +94,7 @@ import {
   type MarkdownSync,
 } from './editor-streams'
 import CommandMenu, { type CommandItem } from './CommandMenu.vue'
+import { slashItemMatches, TEMPLATE_SLASH_KEYWORDS } from './slash-match'
 import PagePickerDialog from './PagePickerDialog.vue'
 import LinkDialog from './LinkDialog.vue'
 import EditorToolbar from './EditorToolbar.vue'
@@ -116,6 +124,16 @@ export interface MentionableAgent {
   key: string
   name: string
   description?: string
+}
+
+/**
+ * Where a `/template` insert lands (issue #69): what the render fills
+ * `{{title}}`, `{{project}}` and `{{parent}}` with.
+ */
+export interface TemplateInsertContext {
+  title?: string
+  parentId?: string | null
+  projectId?: string | null
 }
 
 const { t } = useI18n()
@@ -172,6 +190,13 @@ const props = withDefaults(
     glossaryTerms?: GlossaryTerm[]
     /** Occurrences on this page that are not mentions, despite matching. */
     glossaryExclusions?: GlossaryExclusion[]
+    /**
+     * Offers `/template` (issue #69), which inserts a template's body at the
+     * cursor and emits `apply-template-defaults` for its tags, relations and
+     * category. Opt-in: only a host that keeps page settings can take those,
+     * and a template body landing in a page without them would lose its links.
+     */
+    templateContext?: TemplateInsertContext
   }>(),
   {
     pages: () => [],
@@ -191,6 +216,12 @@ const emit = defineEmits<{
   'outdated-anchors': [ids: string[]]
   /** The editor exists and holds `modelValue`, parsed. */
   ready: []
+  /**
+   * A `/template` insert landed: the host merges what the body alone does not
+   * carry. `intoEmptyPage` when the page held nothing else — the host may
+   * treat that page as started from the template.
+   */
+  'apply-template-defaults': [rendered: RenderTemplateResponse, intoEmptyPage: boolean]
 }>()
 
 const editor = shallowRef<Editor | null>(null)
@@ -282,6 +313,28 @@ function openLinkDialog() {
   linkOpen.value = true
 }
 
+const templates = useTemplatesStore()
+
+/**
+ * `/template`: the gallery, in insert mode. The slash text is already gone, so
+ * the selection is where the author typed it, and it survives the dialog — a
+ * ProseMirror selection is state, not DOM focus.
+ */
+function openTemplates() {
+  const context = props.templateContext
+  if (!context) return
+  templates.openInsertGallery(
+    { title: context.title, parentId: context.parentId ?? null, projectId: context.projectId ?? null },
+    (rendered) => {
+      const instance = editor.value
+      if (!instance || instance.isDestroyed) return
+      const intoEmptyPage = instance.isEmpty
+      instance.chain().focus().insertContent(toHtml(rendered.body)).run()
+      emit('apply-template-defaults', rendered, intoEmptyPage)
+    },
+  )
+}
+
 function insertMention(page: MentionablePage) {
   editor.value
     ?.chain()
@@ -323,6 +376,7 @@ const SLASH_ITEMS: (CommandItem & { run: (e: CoreEditor) => void })[] = [
   { id: 'layout2', group: t('toolbar.group.structure'), label: t('toolbar.twoColumns'), icon: Columns2, keywords: 'section layout', run: (e) => e.chain().focus().setLayout(2).run() },
   { id: 'layout3', group: t('toolbar.group.structure'), label: t('toolbar.threeColumns'), icon: Columns3, keywords: 'section layout', run: (e) => e.chain().focus().setLayout(3).run() },
   { id: 'toc', group: t('toolbar.group.structure'), label: t('toolbar.tableOfContents'), icon: Type, keywords: 'outline headings', run: (e) => e.chain().focus().setToc().run() },
+  { id: 'template', group: t('toolbar.group.structure'), label: t('toolbar.template'), icon: LayoutTemplate, keywords: TEMPLATE_SLASH_KEYWORDS, run: () => openTemplates() },
 
   // Russian keywords are carried here because `menuItems` filters on
   // label + keywords + group: without them a Russian-locale author typing
@@ -336,9 +390,11 @@ const SLASH_ITEMS: (CommandItem & { run: (e: CoreEditor) => void })[] = [
 ]
 
 /** Blocks that belong in a page but not in a comment. */
-const COMPACT_EXCLUDED = new Set(['layout2', 'layout3', 'toc', 'drawing', 'expand', 'api'])
+const COMPACT_EXCLUDED = new Set(['layout2', 'layout3', 'toc', 'drawing', 'expand', 'api', 'template'])
 const slashItems = computed(() =>
-  props.compact ? SLASH_ITEMS.filter((i) => !COMPACT_EXCLUDED.has(i.id)) : SLASH_ITEMS,
+  SLASH_ITEMS.filter(
+    (i) => !(props.compact && COMPACT_EXCLUDED.has(i.id)) && (i.id !== 'template' || !!props.templateContext),
+  ),
 )
 
 const menuItems = computed<CommandItem[]>(() => {
@@ -346,11 +402,7 @@ const menuItems = computed<CommandItem[]>(() => {
   if (!state) return []
   const query = state.query.trim().toLowerCase()
   if (state.kind === 'slash') {
-    const items = slashItems.value
-    if (!query) return items
-    return items.filter((i) =>
-      `${i.label} ${i.keywords ?? ''} ${i.group}`.toLowerCase().includes(query),
-    )
+    return slashItems.value.filter((i) => slashItemMatches(i, query))
   }
   // One sigil, two vocabularies. People first: `@` means a person everywhere
   // else, and a page can also be reached by `/` and by the toolbar, while a

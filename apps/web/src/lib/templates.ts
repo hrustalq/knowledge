@@ -15,8 +15,10 @@ import {
   type TemplateDetail,
   type TemplateRenderContext,
   type TemplateScope,
+  type TemplateSourceFields,
   type TemplateSummary,
   type TemplateValues,
+  type WorkspaceRole,
 } from '@knowledge/contracts'
 
 /** Narrowest first: the gallery lists what is most specific to where you are writing at the top. */
@@ -75,6 +77,41 @@ export function previewTemplate(
     title: renderTemplateTitle(detail.meta, values, ctx),
     body: renderTemplate(detail.body, detail.meta, values, ctx),
     missing: missingRequiredPlaceholders(detail.meta, values),
+  }
+}
+
+/**
+ * Whether a role may change a template of this scope — the API's rule, so a
+ * control is hidden where the request would 403. A project template is an
+ * editor's; a workspace-wide one or a built-in changes what every project is
+ * offered, which is an admin's, as with a workflow definition.
+ */
+export function canWriteTemplate(scope: TemplateScope, role: WorkspaceRole | null | undefined): boolean {
+  if (role === 'admin') return true
+  return scope === 'project' && role === 'editor'
+}
+
+/**
+ * Undo the rich editor's markdown escaping inside `{{…}}`.
+ *
+ * Turndown escapes `_` to `\_` in text, which is right for prose and wrong
+ * here: `{{due\_date}}` is no longer a placeholder the renderer can match, so
+ * a template body written in the rich editor would silently stop filling in.
+ * An escaped placeholder (`\{{x}}`, written to keep one literal) comes back
+ * from turndown as `\\{{x}}`, which renders to the same `{{x}}` — left alone.
+ */
+export function unescapePlaceholders(markdown: string): string {
+  return markdown.replace(/\{\{\s*[A-Za-z][A-Za-z0-9_\\-]*\s*\}\}/g, (match) => match.replace(/\\_/g, '_'))
+}
+
+/** A template detail as the fields an editor holds — the inverse of `composeTemplateSource`. */
+export function templateSourceFields(detail: Pick<TemplateDetail, 'meta' | 'tags' | 'relations' | 'frontmatter' | 'body'>): TemplateSourceFields {
+  return {
+    meta: { ...detail.meta, placeholders: detail.meta.placeholders.map((p) => ({ ...p })) },
+    tags: [...detail.tags],
+    relations: detail.relations.map((r) => ({ ...r })),
+    other: { ...(detail.frontmatter ?? {}) },
+    body: detail.body,
   }
 }
 

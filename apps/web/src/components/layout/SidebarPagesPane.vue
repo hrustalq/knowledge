@@ -16,13 +16,20 @@
 import { useI18n } from 'vue-i18n'
 import { computed, provide, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { ChevronLeft, FileUp, Plus } from 'lucide-vue-next'
+import { ChevronDown, ChevronLeft, FilePlus2, FileUp, LayoutTemplate, Plus } from 'lucide-vue-next'
 import type { DocumentTreeNode } from '@knowledge/contracts'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
+import { useTemplatesStore } from '@/stores/templates'
 import { TREE_INDENT, useSidebarStore } from '@/stores/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import SidebarTreeNode from './SidebarTreeNode.vue'
 import TreeDragLayer from '@/components/knowledge/TreeDragLayer.vue'
 import { provideTreeDnd } from '@/components/knowledge/tree-dnd'
@@ -37,6 +44,7 @@ const auth = useAuthStore()
 const projects = useProjectsStore()
 const store = useDocumentsStore()
 const sidebar = useSidebarStore()
+const templates = useTemplatesStore()
 const route = useRoute()
 
 // No active project means the API is answering workspace-wide, so the title
@@ -142,13 +150,41 @@ const shift = computed(() => Math.max(0, focusDepth.value - sidebar.treeDepthBud
         >
           <FileUp class="size-3.5" />
         </RouterLink>
-        <RouterLink
-          to="/create"
-          :title="t('nav.newPage')"
-          class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-6 place-items-center rounded transition-colors"
-        >
-          <Plus class="size-4" />
-        </RouterLink>
+        <!-- Split: the `+` still makes a blank page in one click, and the
+             chevron beside it is the way to every other start (issue #69). -->
+        <div class="flex">
+          <RouterLink
+            to="/create"
+            :title="t('nav.newPage')"
+            class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-6 place-items-center rounded-l transition-colors"
+          >
+            <Plus class="size-4" />
+          </RouterLink>
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <button
+                type="button"
+                class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid h-6 w-3.5 place-items-center rounded-r transition-colors"
+                :aria-label="t('nav.newPageOptions')"
+                :title="t('nav.newPageOptions')"
+              >
+                <ChevronDown class="size-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-52">
+              <DropdownMenuItem as-child>
+                <RouterLink to="/create">
+                  <FilePlus2 class="size-3.5" />
+                  {{ t('nav.blankPage') }}
+                </RouterLink>
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="templates.openGallery()">
+                <LayoutTemplate class="size-3.5" />
+                {{ t('nav.newPageFromTemplate') }}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
 
@@ -164,7 +200,10 @@ const shift = computed(() => Math.max(0, focusDepth.value - sidebar.treeDepthBud
       <p v-else-if="store.tree.length === 0" class="text-muted-foreground px-2.5 pt-1 text-xs">
         {{ t('nav.noPages') }}<template v-if="auth.canEdit">
           —
-          <RouterLink to="/create" class="text-primary hover:underline">{{ t('nav.createFirstPage') }}</RouterLink></template>.
+          <RouterLink to="/create" class="text-primary hover:underline">{{ t('nav.createFirstPage') }}</RouterLink>
+          {{ t('nav.or') }}
+          <button type="button" class="text-primary hover:underline" @click="templates.openGallery()">
+            {{ t('nav.startFromTemplate') }}</button></template>.
       </p>
       <ul v-else class="space-y-px">
         <SidebarTreeNode

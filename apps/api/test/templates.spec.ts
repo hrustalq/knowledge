@@ -562,6 +562,20 @@ describe('creating a page from a template', () => {
     expect(template).toEqual({ ref: 'builtin:adr', version: 1 });
   });
 
+  it('provenanceOnly records the template without rendering, even with no content (the editor uploads the body)', async () => {
+    const resolve = vi.fn(async () => ({ ref: 'builtin:adr', version: 2, parsed: { meta: { category: 'architecture' } } }));
+    const render = vi.fn();
+    const { dto, template } = await documents({ resolve, render }).applyTemplate(
+      { ...base, template: { ref: 'builtin:adr', version: 2, provenanceOnly: true } },
+      USER,
+    );
+    expect(render).not.toHaveBeenCalled();
+    expect(resolve).toHaveBeenCalledWith(WS, 'builtin:adr', 2);
+    expect(dto).toMatchObject({ title: 'Use Postgres', category: 'architecture' });
+    expect(dto).not.toHaveProperty('content');
+    expect(template).toEqual({ ref: 'builtin:adr', version: 2 });
+  });
+
   it('a page with no template is untouched', async () => {
     const { dto, template } = await documents({}).applyTemplate({ ...base }, USER);
     expect(dto).toEqual(base);

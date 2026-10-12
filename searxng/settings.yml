@@ -39,8 +39,10 @@ engines:
     disabled: false
 
 server:
-  # Dev-only value. Generate a real one for any shared deployment:
-  #   openssl rand -hex 32
+  # Dev-only value. $SEARXNG_SECRET overrides it, which is how production gets
+  # a real one: deploy.yml ships this file as-is and docker-compose.prod.yml
+  # passes the secret from the GitHub `production` environment (#134).
+  #   openssl rand -hex 32 | gh secret set SEARXNG_SECRET --env production
   secret_key: "knowledge-dev-only-change-me"
   limiter: false
   image_proxy: false

@@ -99,6 +99,14 @@ export class UpdateNotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
   autoWatchOnComment?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Email mentions, review requests and assignments (docs/features/41). Defaults to true; omit to leave unchanged.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  emailDirected?: boolean;
 }
 
 /** Query params shared by the list and unread-count reads. */

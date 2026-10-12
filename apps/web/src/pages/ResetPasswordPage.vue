@@ -14,6 +14,8 @@ const route = useRoute()
 const router = useRouter()
 
 const token = computed(() => (typeof route.query.token === 'string' ? route.query.token : ''))
+/** An admin-created account's first password (docs/features/41): same redemption, different words. */
+const invite = computed(() => route.query.invite === '1')
 const password = ref('')
 const confirm = ref('')
 const busy = ref(false)
@@ -29,7 +31,7 @@ async function submit() {
       method: 'POST',
       body: JSON.stringify({ token: token.value, password: password.value }),
     })
-    toast.success(t('auth.passwordUpdated'))
+    toast.success(invite.value ? t('auth.passwordSet') : t('auth.passwordUpdated'))
     await router.push('/login')
   } catch (e) {
     toast.error((e as Error).message)
@@ -43,8 +45,10 @@ async function submit() {
   <div class="w-full max-w-[25rem]">
     <Card class="border-0 bg-transparent shadow-none sm:border sm:bg-card sm:shadow-sm">
       <CardHeader class="text-center">
-        <h1 data-slot="card-title" class="leading-none font-semibold">{{ t('auth.chooseNewPassword') }}</h1>
-        <CardDescription>{{ t('auth.resetSignsOutEverywhere') }}</CardDescription>
+        <h1 data-slot="card-title" class="leading-none font-semibold">
+          {{ invite ? t('auth.inviteTitle') : t('auth.chooseNewPassword') }}
+        </h1>
+        <CardDescription>{{ invite ? t('auth.inviteSubtitle') : t('auth.resetSignsOutEverywhere') }}</CardDescription>
       </CardHeader>
       <CardContent>
         <p v-if="!token" class="text-sm text-muted-foreground">
@@ -66,7 +70,7 @@ async function submit() {
             <label class="text-sm font-medium" for="confirm">{{ t('auth.confirmPassword') }}</label>
             <Input id="confirm" v-model="confirm" type="password" required autocomplete="new-password" />
           </div>
-          <Button class="w-full" type="submit" :disabled="busy">{{ busy ? t('common.saving') : t('auth.resetSubmit') }}</Button>
+          <Button class="w-full" type="submit" :disabled="busy">{{ busy ? t('common.saving') : invite ? t('auth.inviteSubmit') : t('auth.resetSubmit') }}</Button>
         </form>
       </CardContent>
     </Card>

@@ -218,6 +218,10 @@ export type I18nTranslations = {
             "currentPasswordIncorrect": string;
             "signupDisabled": string;
             "emailTaken": string;
+            "emailUnverified": string;
+            "invalidVerifyToken": string;
+            "verifyTooSoon": string;
+            "noVerifyInDevMode": string;
             "platformAdminRequired": string;
             "notMember": string;
             "roleRequired": string;
@@ -644,6 +648,54 @@ export type I18nTranslations = {
             "drafted": string;
         };
     };
+    "mail": {
+        "greeting": string;
+        "verifyEmail": {
+            "subject": string;
+            "body": string;
+            "action": string;
+            "footer": string;
+        };
+        "passwordReset": {
+            "subject": string;
+            "body": string;
+            "action": string;
+            "footer": string;
+        };
+        "invite": {
+            "subject": string;
+            "body": string;
+            "bodyBy": string;
+            "expiry": string;
+            "action": string;
+            "footer": string;
+        };
+        "passwordChanged": {
+            "subject": string;
+            "body": string;
+            "notYou": string;
+            "action": string;
+            "footer": string;
+        };
+        "notification": {
+            "mention": {
+                "subject": string;
+                "body": string;
+            };
+            "reviewRequested": {
+                "subject": string;
+                "body": string;
+            };
+            "assigned": {
+                "subject": string;
+                "body": string;
+            };
+            "action": string;
+            "footer": string;
+        };
+        "someone": string;
+        "untitled": string;
+    };
     "mention": {
         "failed": string;
         "timedOut": string;
@@ -652,12 +704,6 @@ export type I18nTranslations = {
         "providerDisabled": string;
         "notConversational": string;
         "modelMissing": string;
-    };
-    "notification": {
-        "passwordReset": {
-            "subject": string;
-            "body": string;
-        };
     };
     "prompt": {
         "localeDirective": string;

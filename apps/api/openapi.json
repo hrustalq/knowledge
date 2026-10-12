@@ -505,6 +505,114 @@
         ]
       }
     },
+    "/v1/auth/verify-email": {
+      "post": {
+        "operationId": "AuthFlowController_verifyEmail",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Confirm the account address with the kv_ token from the mailed link (docs/features/41)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/resend-verification": {
+      "post": {
+        "operationId": "AuthFlowController_resendVerification",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mail a fresh confirmation link to the caller's address (at most one a minute)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v1/auth/url-ticket": {
       "post": {
         "operationId": "AuthFlowController_urlTicket",
@@ -926,7 +1034,7 @@
             }
           }
         },
-        "summary": "Create a user (optional initial password; platform admin)",
+        "summary": "Create a user (platform admin); without a password, the user is mailed an invite to set one",
         "tags": [
           "users"
         ]
@@ -7947,7 +8055,7 @@
             }
           }
         },
-        "summary": "Mute categories, or stop auto-watching what the caller comments on",
+        "summary": "Mute categories, stop auto-watching what the caller comments on, or stop directed email",
         "tags": [
           "notifications"
         ]
@@ -17100,7 +17208,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.14.0",
+    "version": "0.15.0",
     "contact": {}
   },
   "tags": [],
@@ -17180,6 +17288,18 @@
         "required": [
           "token",
           "password"
+        ]
+      },
+      "VerifyEmailDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "kv_ token from the confirmation link"
+          }
+        },
+        "required": [
+          "token"
         ]
       },
       "ChangePasswordDto": {
@@ -18337,6 +18457,10 @@
           "autoWatchOnComment": {
             "type": "boolean",
             "description": "Commenting on something starts watching it. Defaults to true; omit to leave unchanged."
+          },
+          "emailDirected": {
+            "type": "boolean",
+            "description": "Email mentions, review requests and assignments (docs/features/41). Defaults to true; omit to leave unchanged."
           }
         },
         "required": [

@@ -1,13 +1,16 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { ListUsersResponse, UserSummary, WorkspaceRole } from '@knowledge/contracts';
 import type { Prisma, User, WorkspaceMember } from '@prisma/client';
 import { hashPassword } from '../auth/password.js';
 import type { Principal } from '../auth/principal.js';
 import { SessionsService } from '../auth/sessions.service.js';
+import { mintToken } from '../auth/auth-tokens.js';
+import { MailProducer } from '../mail/mail.producer.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import type { CreateUserDto, UpdateUserDto } from './users.dto.js';
-import { t } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 
 /** Users management (platform admin surface — AclGuard enforces @PlatformAdmin). */
 
@@ -18,6 +21,8 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessions: SessionsService,
+    private readonly mail: MailProducer,
+    private readonly config: ConfigService,
   ) {}
 
   async list(): Promise<ListUsersResponse> {
@@ -28,7 +33,7 @@ export class UsersService {
     return { users: users.map((u) => this.toSummary(u)) };
   }
 
-  async create(dto: CreateUserDto): Promise<UserSummary> {
+  async create(actor: Principal, dto: CreateUserDto): Promise<UserSummary> {
     const email = dto.email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException(t('error.auth.emailTaken'));
@@ -38,9 +43,27 @@ export class UsersService {
         displayName: dto.displayName.trim(),
         isAdmin: dto.isAdmin ?? false,
         passwordHash: dto.password ? await hashPassword(dto.password) : null,
+        // The admin's language is the best guess at the team's; the person
+        // can switch it after signing in.
+        locale: currentLocale(),
       },
       include: { memberships: true, apiKeys: ACTIVE_KEY },
     });
+    // No password: the only way in is a link, so mail one (docs/features/41).
+    // A redeemed invite also proves the address, the way a reset does.
+    if (!dto.password) {
+      const { token, tokenHash } = mintToken('kr_');
+      const hours = this.config.get<number>('AUTH_INVITE_TTL_HOURS') ?? 72;
+      await this.prisma.passwordResetToken.create({
+        data: { userId: user.id, tokenHash, purpose: 'invite', expiresAt: new Date(Date.now() + hours * 3_600_000) },
+      });
+      await this.mail.enqueue({
+        template: 'invite',
+        userId: user.id,
+        token,
+        inviter: actor.mode === 'dev' ? null : actor.displayName,
+      });
+    }
     return this.toSummary(user);
   }
 
@@ -71,6 +94,7 @@ export class UsersService {
     if (dto.disabled === true || dto.password !== undefined) {
       await this.sessions.revokeAllForUser(userId);
     }
+    if (dto.password !== undefined) await this.mail.enqueue({ template: 'password-changed', userId });
     return this.toSummary(updated);
   }
 
@@ -83,6 +107,7 @@ export class UsersService {
       isAdmin: user.isAdmin,
       disabled: user.disabledAt !== null,
       hasPassword: user.passwordHash !== null,
+      emailVerified: user.emailVerifiedAt !== null,
       hasApiKey: user.apiKeys.length > 0,
       createdAt: user.createdAt.toISOString(),
       memberships: user.memberships.map((m) => ({

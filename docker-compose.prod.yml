@@ -1,7 +1,8 @@
 # Production stack on the Mac mini. Lives at
 # ~/Homelab/infra/knowledge/docker-compose.prod.yml
-# alongside a hand-managed .env (chmod 600) that this file both interpolates from
-# and injects into containers.
+# alongside a .env (chmod 600) that this file both interpolates from and injects
+# into containers. deploy.yml renders that .env from the GitHub `production`
+# environment on every deploy (#134) — edit the environment, not the file.
 #
 # Images are built and tagged by .github/workflows/deploy.yml, NOT here — there
 # is deliberately no `build:` section, because the deploy dir holds no source
@@ -208,10 +209,10 @@ services:
   # `up -d --remove-orphans`, so a service that exists only on the box is
   # deleted by the next release.
   #
-  # ./searxng is NOT the repo's searxng/ — deploy.yml syncs only this file and
-  # the Caddyfile. <deploy dir>/searxng/settings.yml is hand-managed beside
-  # .env, because it carries a generated secret_key that must not be the dev
-  # placeholder the repo copy ships.
+  # ./searxng/settings.yml IS the repo's searxng/settings.yml — deploy.yml
+  # syncs it like the Caddyfile. Its secret_key is the dev placeholder, which
+  # SEARXNG_SECRET below overrides (SearXNG reads server.secret_key from that
+  # variable when it is set), so the real secret lives in the environment.
   searxng:
     image: searxng/searxng:latest
     restart: unless-stopped
@@ -224,6 +225,7 @@ services:
     # upstreams it scrapes.
     environment:
       SEARXNG_BASE_URL: "http://searxng:8080/"
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?set SEARXNG_SECRET in the production environment}
     volumes:
       - ./searxng:/etc/searxng:ro
     healthcheck:

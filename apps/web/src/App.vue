@@ -28,7 +28,9 @@ const queryClient = useQueryClient()
 // (the events endpoint needs a ?token= ticket in AUTH_MODE=api-key). The live
 // WebSocket (tracked-entity updates → query-cache patching) starts alongside.
 watchEffect(() => {
-  if (!import.meta.env.SSR && auth.authenticated) {
+  // A gated account (unconfirmed address under AUTH_REQUIRE_VERIFIED_EMAIL)
+  // would only collect 403s and a refused socket.
+  if (!import.meta.env.SSR && auth.authenticated && !auth.verificationPending) {
     events.connect(t)
     startLive({ queryClient })
   }

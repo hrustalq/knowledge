@@ -65,6 +65,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 38  | Answer provenance, confidence, verify stamp, votes | [features/38-answer-provenance.md](features/38-answer-provenance.md)   | ✅ phases 1–4 of #67 |
 | 39  | Page verification, ownership, freshness, archive | [features/39-page-verification.md](features/39-page-verification.md) | 🚧 #66: API + ranking + MCP |
 | 40  | Knowledge health (dashboard API, bulk, settings) | [features/40-knowledge-health.md](features/40-knowledge-health.md)   | 🚧 #66: API |
+| 41  | Mail (verification, reset, invites, directed notifications) | [features/41-mail.md](features/41-mail.md) | ✅ #132 |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

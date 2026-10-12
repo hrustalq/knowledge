@@ -1,8 +1,11 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import type { ListAuditLogsResponse, MeResponse, WorkspaceRole } from '@knowledge/contracts';
-import { Access, CurrentPrincipal } from './access.decorator.js';
+import { ConfigService } from '@nestjs/config';
+import type { ListAuditLogsResponse, MeResponse } from '@knowledge/contracts';
+import type { Env } from '../config/env.js';
+import { Access, CurrentPrincipal, UnverifiedOk } from './access.decorator.js';
+import { toMeResponse } from './me-response.js';
 import { AccessService } from './access.service.js';
 import { AuditService } from './audit.service.js';
 import type { Principal } from './principal.js';
@@ -13,26 +16,18 @@ export class AuthController {
   constructor(
     private readonly access: AccessService,
     private readonly audit: AuditService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Resolved caller identity + workspace memberships (Phase 5)' })
+  @UnverifiedOk()
   async me(@CurrentPrincipal() principal: Principal): Promise<MeResponse> {
-    const memberships = await this.access.memberships(principal);
-    return {
-      userId: principal.userId,
-      email: principal.email,
-      displayName: principal.displayName,
-      avatarUrl: principal.avatarUrl,
-      mode: principal.mode,
-      isAdmin: principal.isAdmin,
-      locale: principal.locale,
-      memberships: memberships.map((m) => ({
-        workspaceId: m.workspaceId,
-        role: m.role as WorkspaceRole,
-        trustedOperator: m.trustedOperator,
-      })),
-    };
+    return toMeResponse(
+      principal,
+      await this.access.memberships(principal),
+      this.config.get('AUTH_REQUIRE_VERIFIED_EMAIL', { infer: true }),
+    );
   }
 
   @Get('audit-logs')

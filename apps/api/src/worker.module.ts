@@ -6,6 +6,7 @@ import { ImportWorkerModule } from './import/import-worker.module.js';
 import { WorkflowWorkerModule } from './workflows/workflow-worker.module.js';
 import { ConnectorWorkerModule } from './connectors/connector-worker.module.js';
 import { AgentWorkerModule } from './agents/agent-worker.module.js';
+import { MailWorkerModule } from './mail/mail-worker.module.js';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AgentWorkerModule } from './agents/agent-worker.module.js';
     WorkflowWorkerModule,
     ConnectorWorkerModule,
     AgentWorkerModule,
+    MailWorkerModule,
   ],
 })
 export class WorkerModule {}

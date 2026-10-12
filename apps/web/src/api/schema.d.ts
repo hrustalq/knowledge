@@ -140,6 +140,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm the account address with the kv_ token from the mailed link (docs/features/41) */
+        post: operations["AuthFlowController_verifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/resend-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mail a fresh confirmation link to the caller's address (at most one a minute) */
+        post: operations["AuthFlowController_resendVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/url-ticket": {
         parameters: {
             query?: never;
@@ -239,7 +273,7 @@ export interface paths {
         /** List all users with their workspace memberships (platform admin) */
         get: operations["UsersController_list"];
         put?: never;
-        /** Create a user (optional initial password; platform admin) */
+        /** Create a user (platform admin); without a password, the user is mailed an invite to set one */
         post: operations["UsersController_create"];
         delete?: never;
         options?: never;
@@ -1542,7 +1576,7 @@ export interface paths {
         };
         /** The caller's notification preferences, with the code defaults folded in */
         get: operations["NotificationsController_preferences"];
-        /** Mute categories, or stop auto-watching what the caller comments on */
+        /** Mute categories, stop auto-watching what the caller comments on, or stop directed email */
         put: operations["NotificationsController_updatePreferences"];
         post?: never;
         delete?: never;
@@ -3416,6 +3450,10 @@ export interface components {
             token: string;
             password: string;
         };
+        VerifyEmailDto: {
+            /** @description kv_ token from the confirmation link */
+            token: string;
+        };
         ChangePasswordDto: {
             currentPassword: string;
             newPassword: string;
@@ -3829,6 +3867,8 @@ export interface components {
             mutedCategories?: ("mention" | "review" | "comment" | "document" | "verification" | "job")[];
             /** @description Commenting on something starts watching it. Defaults to true; omit to leave unchanged. */
             autoWatchOnComment?: boolean;
+            /** @description Email mentions, review requests and assignments (docs/features/41). Defaults to true; omit to leave unchanged. */
+            emailDirected?: boolean;
         };
         MarkNotificationsReadDto: {
             workspaceId: string;
@@ -5004,6 +5044,86 @@ export interface operations {
                 "application/json": components["schemas"]["ResetPasswordDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AuthFlowController_verifyEmail: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyEmailDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AuthFlowController_resendVerification: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

@@ -32,6 +32,7 @@ const principal: Principal = { ...DEV_PRINCIPAL, mode: 'api-key', isAdmin: false
 
 /** api-key mode: GOOD resolves, anything else (or nothing) is a 401. */
 const tokenAuth = {
+  blocksUnverified: () => false,
   resolve: vi.fn(async (token: string | undefined) => {
     if (token === GOOD) return principal;
     throw new UnauthorizedException('no');
@@ -179,7 +180,7 @@ describe('live WebSocket keeps its own ?token= path', () => {
       get: (k: string) =>
         ({ LIVE_WS_ENABLED: true, LIVE_TRACKED_EVENTS: '', LIVE_WS_MAX_SUBSCRIPTIONS: 10 })[k],
     };
-    const gw = new LiveGateway(config as never, { resolve } as never, {} as never, {} as never);
+    const gw = new LiveGateway(config as never, { resolve, blocksUnverified: () => false } as never, {} as never, {} as never);
     const socket = { on: vi.fn(), close: vi.fn(), send: vi.fn() };
     await gw.handleConnection(socket as never, {
       url: `/v1/events/ws?token=${GOOD}`,

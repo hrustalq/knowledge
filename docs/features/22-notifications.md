@@ -163,6 +163,13 @@ relationship to `ASSISTANT_*` — an empty table means everybody gets everything
 - **Digests.** Coalescing already collapses the repetition a digest exists to
   hide, so there was nothing left for one to do.
 
+## Email
+
+Mentions, review requests and assignments are also mailed, once per inbox row,
+to a confirmed address, unless the person turns `email_directed` off. The
+hand-off is `EventsPublisher.announce`, the point both doors already meet. See
+[feature 41](41-mail.md#notification-mail).
+
 ## Verification
 
 `make check`, then against the real database (all pass):

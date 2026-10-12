@@ -13,6 +13,79 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.16.0] — 2026-10-12
+
+### Added
+
+- **The platform sends email.** Signup mails a link to confirm the address,
+  `forgot-password` mails the reset link instead of writing it to the API log,
+  and every password change (reset, change-password, an admin's override) sends
+  a "your password was changed" notice. Messages are in the recipient's
+  language (en/ru). New routes: `POST /v1/auth/verify-email` (public, takes the
+  `kv_` token) and `POST /v1/auth/resend-verification` (at most once a minute).
+  `GET /v1/me` reports `emailVerified` and `emailVerificationRequired`; an
+  unconfirmed account sees a banner with a Resend button. (#132)
+- **Admin-created accounts get an invite.** Creating a user in Settings › Access
+  without a password now emails them a link to set one (valid
+  `AUTH_INVITE_TTL_HOURS`, 72 by default) instead of leaving them to discover
+  password reset. The accounts list marks unconfirmed addresses. (#132)
+- **Mentions, review requests and assignments reach your inbox by email.** One
+  email per notification, however much activity later piles onto it, and only
+  to a confirmed address; watch-driven page edits stay in the app. Turn it off
+  per workspace under Notifications › Settings › Email. (#132)
+- **Optionally require a confirmed address.** With
+  `AUTH_REQUIRE_VERIFIED_EMAIL=true`, an unconfirmed login session can only see
+  who it is, change its language, sign out and ask for a new link; everything
+  else answers `403` with `details.reason: "emailUnverified"`. API keys are
+  unaffected. Off by default. (#132)
+
+### Operations
+
+- **Nothing is sent until you configure a relay.** The default
+  `MAIL_TRANSPORT=log` writes every message, links included, to the **worker**
+  log (reset links used to be in the **API** log). To send, set
+  `MAIL_TRANSPORT=smtp` and `MAIL_SMTP_URL` (`smtps://user:pass@host:465` or
+  `smtp://…:587`, URL-encoded credentials) and a `MAIL_FROM` on a domain whose
+  SPF and DKIM records the provider has given you; without them mail lands in
+  spam. `MAIL_TRANSPORT=smtp` with an empty `MAIL_SMTP_URL` refuses to boot.
+  Prove the box can reach the relay first:
+  `docker compose exec api node dist/scripts/send-test-mail.main.js --to you@example.com`
+  (or `make mail-test to=…` locally). The worker also logs the relay check at
+  boot.
+- New env vars, all defaulted: `MAIL_TRANSPORT` (`log`), `MAIL_SMTP_URL` (empty),
+  `MAIL_FROM` (`Knowledge <no-reply@localhost>`), `MAIL_NOTIFICATIONS_ENABLED`
+  (`true`), `AUTH_VERIFY_TTL_HOURS` (48), `AUTH_INVITE_TTL_HOURS` (72),
+  `AUTH_REQUIRE_VERIFIED_EMAIL` (`false`).
+- Migration `20261012120000_mailer` is expand-only and survives a rollback to
+  0.15.0. It adds `users.email_verified_at`, `notifications.emailed_at`,
+  `notification_preferences.email_directed`, `password_reset_tokens.purpose` and
+  the `email_verification_tokens` table, and backfills every existing account as
+  verified and every existing notification as already mailed, so nobody is
+  locked out or sent old news.
+- Local dev: `make infra-up-mailpit` starts a loopback mail catcher (SMTP `:1025`,
+  inbox `http://localhost:8025`).
+- **Production config now lives in the GitHub `production` environment, and
+  the next deploy fails until it is filled.** `deploy.yml` writes
+  `~/Homelab/infra/knowledge/.env` from that environment's variables and
+  secrets on every deploy (0600, previous copy kept as `.env.bak`). A hand edit
+  on the box therefore lasts only until the next release: rotate a secret in
+  Settings › Environments, then redeploy. The deploy stops before building if a
+  key that `.env.production.example` gives a value to is missing, or a value
+  still contains `CHANGE_ME`, a newline or a single quote. **Before tagging,**
+  fill the environment once from the box's current file (dry run first, then
+  `--apply`):
+  `ssh macmini 'cat ~/Homelab/infra/knowledge/.env' | node scripts/env-to-github.mjs .env.production.example -`.
+  Names containing `PASSWORD`, `SECRET` or `TOKEN`, names ending `_KEY`, and
+  `DATABASE_URL` / `MAIL_SMTP_URL` become secrets; everything else becomes a variable.
+  GitHub refuses names starting `GITHUB_`, so store those as `GH_*`
+  (`GH_API_URL`, `GH_APP_ID`, …); the script does this for you and the deploy
+  renames them back. (#134, #138)
+- **New required secret `SEARXNG_SECRET`**, SearXNG's `server.secret_key`. The
+  deploy now ships the repo's `searxng/settings.yml` over the hand-managed copy
+  on the box, and the secret overrides that file's dev placeholder:
+  `openssl rand -hex 32 | gh secret set SEARXNG_SECRET --env production`.
+  Rotating it only invalidates SearXNG's own cookies. (#134)
+
 ## [0.15.0] — 2026-10-12
 
 ### Added
@@ -1286,7 +1359,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.15.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/hrustalq/knowledge/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/hrustalq/knowledge/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/hrustalq/knowledge/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/hrustalq/knowledge/compare/v0.12.0...v0.13.0

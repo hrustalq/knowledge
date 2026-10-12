@@ -111,6 +111,10 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       // withLocale so exceptions thrown deep inside tokenAuth come back
       // translated — their ambient t() has no request context out here.
       const principal = await withLocale(locale, () => this.tokenAuth.resolve(token));
+      if (this.tokenAuth.blocksUnverified(principal)) {
+        socket.close(4403, 'email unverified');
+        return;
+      }
       this.state.set(socket, { principal, subscriptions: new Map(), alive: true });
     } catch (e) {
       this.sendError(socket, e);

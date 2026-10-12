@@ -369,5 +369,28 @@
   },
   "agent": {
     "disabled": "Agent \"{key}\" is disabled."
+  },
+  "template": {
+    "notFound": "Template {ref} not found",
+    "versionNotFound": "Template {ref} has no version {version}",
+    "nameTaken": "A template named \"{name}\" already exists here",
+    "nameRequired": "A template needs a name",
+    "sourceRequired": "A template needs a source",
+    "archived": "Template \"{name}\" is archived — unarchive it to create pages from it",
+    "placeholderMissing": "Fill in the required placeholders: {names}",
+    "valueTooLong": "The value of \"{name}\" is longer than {max} characters",
+    "limitReached": "This workspace already has {max} templates",
+    "builtInWorkspaceOnly": "A built-in template can only be customised for the whole workspace, not for one project",
+    "alreadyCustomized": "This built-in template is already customised in this workspace — update that one instead",
+    "builtInNotArchivable": "A built-in template is hidden, not archived — set enabled to false",
+    "notDeletable": "Only a customised built-in can be deleted (that resets it); archive a custom template instead",
+    "source": {
+      "tooLong": "The template is longer than {detail} characters",
+      "invalidFrontmatter": "The template's frontmatter is not valid YAML: {detail}",
+      "invalidMeta": "The template: block is not valid: {detail}",
+      "tooManyPlaceholders": "A template can declare at most {detail} placeholders",
+      "invalidPlaceholder": "Placeholder \"{detail}\" is not valid: use letters, digits, - and _, a known kind, a unique name, and none of title, date, author, project or parent",
+      "invalidRelation": "Relation {detail} is not one the graph accepts: check its type, and that every placeholder in its target is declared"
+    }
   }
 }

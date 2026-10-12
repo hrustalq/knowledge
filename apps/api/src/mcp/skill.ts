@@ -103,6 +103,15 @@ export function renderSkill(input: SkillInput): string {
 3. It indexes in the background — ${toolRef('knowledge_get_document')} reports \`headRevisionStatus: "indexed"\` when search can
    find it. Link the user to \`${webUrl}/documents/<documentId>\`.
 
+### Start a page from a template
+
+Decisions, proposals, runbooks and incident reviews have a house shape. ${toolRef('knowledge_list_templates')} lists them
+(\`builtin:adr\`, \`builtin:rfc\`, \`builtin:runbook\`, \`builtin:postmortem\`, \`builtin:api-spec\`, \`builtin:use-case\`,
+\`builtin:entity\`, plus the workspace's own); ${toolRef('knowledge_get_template')} shows a template's sections and the
+placeholders it expects. Pass \`templateRef\` and \`values\` to ${toolRef('knowledge_create_document')}: without \`content\`
+the server fills the skeleton in, with \`content\` (the skeleton, written out) yours is published and the template is
+recorded as the page's origin. Either way the template's tags and relations link the page into the graph.
+
 ### Change an existing page — always through a merge request
 
 1. ${toolRef('knowledge_get_document_content')} — the whole current markdown. Note \`revisionId\`: it is your base.

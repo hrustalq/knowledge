@@ -128,9 +128,21 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         document: { documentId, verification: state, ownerId: 'owner-1' },
       })),
     },
+    templates: {
+      list: vi.fn(async () => ({ templates: [{ ref: 'builtin:adr' }] })),
+      getByRef: vi.fn(async (_ws: string, ref: string) => ({ ref, meta: { placeholders: [] } })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
-  return { mcp, search, documents, provenance: deps.provenance, feedback: deps.feedback, verification: deps.verification };
+  return {
+    mcp,
+    search,
+    documents,
+    provenance: deps.provenance,
+    feedback: deps.feedback,
+    verification: deps.verification,
+    templates: deps.templates,
+  };
 }
 
 async function connect(mcp: McpService, principal: Principal) {
@@ -160,6 +172,36 @@ describe('McpService over a principal', () => {
     const offered = (await reader.listTools()).tools.map((t) => t.name);
     expect(offered).toContain('knowledge_search');
     for (const name of WRITE_TOOLS) expect(offered).not.toContain(name);
+  });
+
+  it('offers the template reads to a read-only key and fills a page in from a template (issue #69)', async () => {
+    const { mcp, templates, documents } = service(accessWith('editor'));
+    const reader = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const offered = (await reader.listTools()).tools.map((t) => t.name);
+    expect(offered).toEqual(expect.arrayContaining(['knowledge_list_templates', 'knowledge_get_template']));
+    expect(offered).not.toContain('knowledge_create_document');
+    const got = await reader.callTool({ name: 'knowledge_get_template', arguments: { workspaceId: WS_A, templateRef: 'builtin:adr' } });
+    expect(got.isError).toBeFalsy();
+    expect(templates.getByRef).toHaveBeenCalledWith(WS_A, 'builtin:adr', undefined);
+
+    const writer = await connect(mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }));
+    const project = '55555555-5555-4555-8555-555555555555';
+    const neither = await writer.callTool({
+      name: 'knowledge_create_document',
+      arguments: { workspaceId: WS_A, projectId: project, title: 'x' },
+    });
+    expect(neither.isError).toBe(true);
+    expect(documents.createDocument).not.toHaveBeenCalled();
+
+    const created = await writer.callTool({
+      name: 'knowledge_create_document',
+      arguments: { workspaceId: WS_A, projectId: project, title: 'Use Postgres', templateRef: 'builtin:adr', values: { number: '1' } },
+    });
+    expect(created.isError).toBeFalsy();
+    expect(documents.createDocument).toHaveBeenCalledWith(
+      { workspaceId: WS_A, projectId: project, title: 'Use Postgres', template: { ref: 'builtin:adr', version: undefined, values: { number: '1' } } },
+      expect.any(String),
+    );
   });
 
   it('checks the workspace before the service runs', async () => {

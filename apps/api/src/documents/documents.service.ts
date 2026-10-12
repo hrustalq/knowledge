@@ -54,6 +54,7 @@ import {
 } from '@knowledge/contracts';
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { expiryFor, VerificationPolicyService } from '../verification/verification-policy.service.js';
+import { TemplatesService } from '../templates/templates.service.js';
 import { t } from '../i18n/t.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
@@ -98,14 +99,16 @@ export class DocumentsService {
     private readonly notifications: NotificationsService,
     private readonly provenance: ProvenanceService,
     private readonly policy: VerificationPolicyService,
+    private readonly templates: TemplatesService,
   ) {}
 
-  async createDocument(dto: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
-    const contentType = dto.content ? `text/${dto.content.format}` : 'text/markdown';
-
+  async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
     // Workspace > Project > Document: a project id from another tenant must
     // never silently re-parent the page.
-    await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
+    await this.projects.requireProjectInWorkspace(input.projectId, input.workspaceId);
+
+    const { dto, template } = await this.applyTemplate(input, authorId);
+    const contentType = dto.content ? `text/${dto.content.format}` : 'text/markdown';
 
     // Feature 08: nested creation — the parent must exist in the same project.
     let parent: { path: string; depth: number } | null = null;
@@ -141,6 +144,8 @@ export class DocumentsService {
           path: `${parent?.path ?? '/'}${id}/`,
           depth: (parent?.depth ?? -1) + 1,
           position,
+          templateRef: template?.ref ?? null,
+          templateVersion: template?.version ?? null,
         },
       });
       const branch = await this.prisma.documentBranch.create({
@@ -199,7 +204,12 @@ export class DocumentsService {
         actor: authorId,
         action: 'document.created',
         documentId: document.id,
-        metadata: { title: dto.title, category: dto.category ?? 'other', projectId: dto.projectId },
+        metadata: {
+          title: dto.title,
+          category: dto.category ?? 'other',
+          projectId: dto.projectId,
+          ...(template ? { templateRef: template.ref, templateVersion: template.version } : {}),
+        },
       }),
     );
     // Writing a page is watching it (docs/features/22). A subscription row
@@ -214,6 +224,52 @@ export class DocumentsService {
     );
 
     return { documentId: document.id, revisionId: revision.id, branch: 'main', status };
+  }
+
+  /**
+   * A page started from a template (issue #69).
+   *
+   * Without `content` — an MCP agent or an API-first caller — the template is
+   * rendered here: its title pattern, body and frontmatter become the page,
+   * and the `tags:`/`relations:` in that frontmatter become graph edges at
+   * indexing like any hand-written page's. With `content` — the editor, which
+   * rendered the skeleton and let the author change it — what the author
+   * publishes wins, and the template is recorded as provenance once it is
+   * known to resolve. Either way the template's category is only a default.
+   */
+  private async applyTemplate(
+    dto: CreateDocumentDto,
+    authorId: string,
+  ): Promise<{ dto: CreateDocumentDto; template: { ref: string; version: number } | null }> {
+    if (!dto.template) return { dto, template: null };
+    if (dto.content) {
+      const resolved = await this.templates.resolve(dto.workspaceId, dto.template.ref, dto.template.version);
+      return {
+        dto: { ...dto, category: dto.category ?? resolved.parsed.meta.category },
+        template: { ref: resolved.ref, version: resolved.version },
+      };
+    }
+    const rendered = await this.templates.render(
+      {
+        workspaceId: dto.workspaceId,
+        ref: dto.template.ref,
+        version: dto.template.version,
+        title: dto.title,
+        values: dto.template.values,
+        projectId: dto.projectId,
+        parentId: dto.parentId,
+      },
+      { id: authorId },
+    );
+    return {
+      dto: {
+        ...dto,
+        title: rendered.title,
+        category: dto.category ?? rendered.category,
+        content: { mode: 'inline', format: 'markdown', text: rendered.markdown },
+      },
+      template: { ref: rendered.templateRef, version: rendered.templateVersion },
+    };
   }
 
   async createUpload(
@@ -493,6 +549,8 @@ export class DocumentsService {
     | 'inactive'
     | 'archivedAt'
     | 'archivedBy'
+    | 'templateRef'
+    | 'templateVersion'
   > {
     return {
       verifiedAt: d.verifiedAt?.toISOString() ?? null,
@@ -509,6 +567,10 @@ export class DocumentsService {
       inactive: isInactive(d.lastActivityAt, inactiveAfterDays),
       archivedAt: d.archivedAt?.toISOString() ?? null,
       archivedBy: d.archivedBy,
+      // Provenance (issue #69) rides along: every caller of this already wants
+      // the full page row, and a second spread at each would be a third place to forget.
+      templateRef: d.templateRef,
+      templateVersion: d.templateVersion,
     };
   }
 

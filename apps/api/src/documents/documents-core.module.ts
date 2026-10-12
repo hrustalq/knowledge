@@ -8,6 +8,7 @@ import { StorageModule } from '../storage/storage.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { VerificationPolicyModule } from '../verification/verification-policy.module.js';
+import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { DocumentsService } from './documents.service.js';
 
 /**
@@ -40,6 +41,8 @@ import { DocumentsService } from './documents.service.js';
     // and the workspace's freshness policy (docs/features/39). Both leaves.
     FeedbackCoreModule,
     VerificationPolicyModule,
+    // Creating a page from a template (issue #69). Core, so still worker-loadable.
+    TemplatesCoreModule,
   ],
   providers: [DocumentsService],
   exports: [DocumentsService],

@@ -15,6 +15,24 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- **Page templates, API and MCP.** A workspace now has a template gallery: seven
+  built-ins in English and Russian (ADR, RFC, runbook, postmortem, API
+  specification, use case, domain entity) plus its own templates, scoped to the
+  workspace or one project, each with an immutable version history. A template
+  carries a default category, tags and typed relations, so a page created from
+  it is linked into the graph from its first revision. Placeholders
+  (`{{number}}`, `{{component}}`…) are declared and typed (text, date, user,
+  page, entity); anything undeclared stays literal. `GET/POST/PATCH
+  /v1/templates`, `POST /v1/templates/render`, and `POST /v1/documents` accepts
+  a `template` to start from, recording `templateRef`/`templateVersion` on the
+  page. Built-ins can be customised, hidden or reset per workspace; workspace-wide
+  templates need `admin`, project ones `editor`. MCP gains
+  `knowledge_list_templates` and `knowledge_get_template`, and
+  `knowledge_create_document` takes `templateRef` + `values` instead of
+  `content`. The gallery and editor UI follow in later releases. (#146)
+
 ### Fixed
 
 - **File uploads and attachments work in production.** Every upload (editor
@@ -35,6 +53,11 @@ in the pull request that introduces them — see
   `Caddyfile` routes `/<S3_BUCKET>/*` to MinIO and restores the `Host` from
   `X-Forwarded-Host`, which the `knowledge-edge` Worker sets; the caddy
   container is recreated by this deploy. No migration. (#144)
+- Migration `20261012180000_page_templates` is expand-only: two new tables
+  (`page_templates`, `page_template_versions`) and two nullable columns on
+  `documents` (`template_ref`, `template_version`). The previous image runs
+  against it unchanged, so a code rollback needs no database step. No new env
+  vars; built-in templates live in code and are never seeded. (#146)
 
 ## [0.17.0] — 2026-10-12
 

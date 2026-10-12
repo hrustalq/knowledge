@@ -70,6 +70,12 @@ model Document {
   /// lists, tree, search and MCP unless asked for; readable by id; read-only.
   archivedAt            DateTime? @map("archived_at") @db.Timestamptz
   archivedBy            String?   @map("archived_by") @db.Uuid
+  /// Provenance (issue #69): the template this page was created from — a
+  /// `page_templates.id` or `builtin:<key>` — and the version it was rendered
+  /// at. No FK on purpose: archiving or resetting a template must not touch
+  /// the pages made from it. Null = the page did not start from a template.
+  templateRef           String?   @map("template_ref")
+  templateVersion       Int?      @map("template_version")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   project       Project            @relation(fields: [projectId], references: [id])
@@ -2031,4 +2037,66 @@ model EntityAlias {
   @@unique([workspaceId, alias])
   @@index([workspaceId, canonicalKey])
   @@map("entity_aliases")
+}
+
+/// A page template (issue #69). Deliberately NOT a document: a document is
+/// indexed, and a skeleton full of `{{placeholders}}` would surface in search,
+/// the graph and the assistant's retrieval as facts about nothing. Closer to
+/// WorkflowDefinition — data plus a version — than to a page.
+///
+/// Built-in templates live in code and are never seeded. A row with
+/// `builtInKey` set is a workspace's override of one: its own versions
+/// (customised), `enabled = false` (hidden), or both. "Reset to default"
+/// deletes that row, so an empty table reproduces the built-in gallery exactly.
+model PageTemplate {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  /// Null = offered in every project of the workspace (WorkflowDefinition precedent).
+  projectId      String?   @map("project_id") @db.Uuid
+  /// BUILT_IN_TEMPLATE_KEYS value when this row overrides a built-in; null for a custom template.
+  builtInKey     String?   @map("built_in_key")
+  name           String
+  description    String?
+  /// An emoji.
+  icon           String?
+  /// Denormalized from the current version's meta, so a list filters in SQL.
+  category       String    @default("other")
+  /// The version a new page is rendered at. A built-in override with no
+  /// versions of its own (hidden only) keeps the code version here.
+  currentVersion Int       @default(1) @map("current_version")
+  /// False on a built-in override = "hide this built-in".
+  enabled        Boolean   @default(true)
+  /// Soft: hidden from the gallery, still resolvable by pages and workflows pinned to it.
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz
+  createdBy      String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  versions PageTemplateVersion[]
+
+  // Name uniqueness per (workspace, project) is enforced app-side: NULL
+  // project ids are distinct to a unique index, and a partial one is not
+  // expressible in Prisma.
+  @@index([workspaceId, projectId])
+  @@index([workspaceId, builtInKey])
+  @@map("page_templates")
+}
+
+/// One immutable version of a template. A source change appends a row and
+/// bumps `PageTemplate.currentVersion`; a name or icon change does not.
+model PageTemplateVersion {
+  id         String   @id @default(uuid()) @db.Uuid
+  templateId String   @map("template_id") @db.Uuid
+  version    Int
+  /// Markdown including YAML frontmatter; the reserved `template:` key holds TemplateMeta.
+  source     String
+  /// The parsed and validated TemplateMeta — what the API serves.
+  meta       Json
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  template PageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  @@map("page_template_versions")
 }

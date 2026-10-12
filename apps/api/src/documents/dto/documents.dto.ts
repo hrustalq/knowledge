@@ -79,6 +79,34 @@ export class RelationInputDto {
   target!: RelationTargetDto;
 }
 
+/**
+ * The template a page starts from (issue #69). With no `content`, the server
+ * renders it; with `content` (the editor, which rendered and edited it
+ * already), the content wins and this is recorded as provenance only.
+ */
+export class DocumentTemplateDto {
+  @ApiProperty({ description: 'A template uuid or `builtin:<key>`', example: 'builtin:adr' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  ref!: string;
+
+  @ApiPropertyOptional({ description: 'The version rendered; the current one when omitted' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  version?: number;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: { type: 'string' },
+    description: 'Placeholder values by name, used when the server renders (no `content`)',
+  })
+  @IsOptional()
+  @IsObject()
+  values?: Record<string, string>;
+}
+
 export class CreateDocumentDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
@@ -117,6 +145,18 @@ export class CreateDocumentDto {
   @IsOptional()
   @IsUUID()
   parentId?: string;
+
+  @ApiPropertyOptional({
+    type: DocumentTemplateDto,
+    description:
+      'Start from a template (issue #69). Without `content` the template is rendered server-side: its title ' +
+      'pattern, body, tags and relations become the page, and its category is the default.',
+  })
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => DocumentTemplateDto)
+  template?: DocumentTemplateDto;
 }
 
 export class UpdateDocumentDto {

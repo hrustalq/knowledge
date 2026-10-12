@@ -575,6 +575,29 @@ export type I18nTranslations = {
         "agent": {
             "disabled": string;
         };
+        "template": {
+            "notFound": string;
+            "versionNotFound": string;
+            "nameTaken": string;
+            "nameRequired": string;
+            "sourceRequired": string;
+            "archived": string;
+            "placeholderMissing": string;
+            "valueTooLong": string;
+            "limitReached": string;
+            "builtInWorkspaceOnly": string;
+            "alreadyCustomized": string;
+            "builtInNotArchivable": string;
+            "notDeletable": string;
+            "source": {
+                "tooLong": string;
+                "invalidFrontmatter": string;
+                "invalidMeta": string;
+                "tooManyPlaceholders": string;
+                "invalidPlaceholder": string;
+                "invalidRelation": string;
+            };
+        };
     };
     "import": {
         "stage": {
@@ -784,6 +807,7 @@ export type I18nTranslations = {
         "id": string;
         "savedFilter": string;
         "sourcePolicy": string;
+        "template": string;
     };
     "validation": {
         "isDefined": string;

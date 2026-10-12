@@ -270,6 +270,20 @@ export class AccessService {
     return run.workspaceId;
   }
 
+  /**
+   * A template shapes every page created from it, and a workspace-wide one is
+   * offered in every project — so, like a workflow definition, the ACL resolves
+   * from the row rather than a caller-supplied `?workspaceId=` (issue #69).
+   */
+  async workspaceOfTemplate(templateId: string): Promise<string> {
+    const template = await this.prisma.pageTemplate.findUnique({
+      where: { id: templateId },
+      select: { workspaceId: true },
+    });
+    if (!template) throw new NotFoundException(t('error.template.notFound', { ref: templateId }));
+    return template.workspaceId;
+  }
+
   async workspaceOfJob(jobId: string): Promise<string> {
     const job = await this.prisma.ingestionJob.findUnique({
       where: { id: jobId },

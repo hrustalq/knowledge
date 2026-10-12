@@ -1,9 +1,9 @@
-# Reverse proxy for knowledge.hrustalq.dev, behind a Cloudflare tunnel.
+# Reverse proxy for knowledge.hrustalq.dev on the Mac mini.
 #
-# TLS ends at Cloudflare's edge. cloudflared (the `cloudflared-tunnel` container
-# in ~/Homelab/infra) reaches this container over the shared infra_tunnel-network
-# as http://knowledge-caddy:80, so Caddy serves plain HTTP and issues no
-# certificates. Nothing on the Mac mini listens publicly.
+# The public path is a Cloudflare Worker on knowledge.hrustalq.dev, which
+# forwards to this Mac mini's Tailscale Funnel URL, which Funnel delivers to
+# 127.0.0.1:8088 -> this container. TLS ends at Cloudflare and again at Funnel,
+# so Caddy serves plain HTTP and issues no certificates.
 #
 # The whole browser surface of this app is /api/* — verified in three places:
 #   apps/web/src/api/http.ts:86-88   baseURL defaults to '/api'
@@ -16,15 +16,16 @@
 {
 	auto_https off
 	servers {
-		# cloudflared connects from the compose network; the visitor's address
-		# arrives in Cf-Connecting-Ip, which only the tunnel can set here.
+		# Funnel reaches Caddy through Docker's loopback port forward, so the
+		# peer is always private; the Worker puts the visitor's address in
+		# X-Forwarded-For.
 		trusted_proxies static private_ranges
-		client_ip_headers Cf-Connecting-Ip X-Forwarded-For
+		client_ip_headers X-Forwarded-For
 	}
 }
 
-# Any Host: cloudflared forwards the public hostname unchanged, and a bare :80
-# also answers the loopback smoke check on 127.0.0.1:8088.
+# Any Host: requests arrive with the Funnel hostname, and a bare :80 also
+# answers the loopback smoke check on 127.0.0.1:8088.
 :80 {
 	encode zstd gzip
 

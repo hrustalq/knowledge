@@ -37,8 +37,8 @@ jobs:
     if: github.repository == 'hrustalq/knowledge'
     # The Mac mini (arm64). Docker is Colima, a brew service started at login;
     # the runner is a LaunchAgent, so both come back after a reboot because the
-    # box auto-logs-in. Public traffic arrives through the Cloudflare tunnel in
-    # ~/Homelab/infra, never through a port on this machine.
+    # box auto-logs-in. Public traffic arrives via a Cloudflare Worker and
+    # Tailscale Funnel to caddy on 127.0.0.1:8088, never a port on this machine.
     runs-on: [self-hosted, macOS, ARM64, knowledge-macmini]
     environment: production
     timeout-minutes: 60

@@ -8,11 +8,13 @@
 # tree and a stray `compose up` must never try to build one.
 #   TAG=<sha> docker compose -f docker-compose.prod.yml up -d
 #
-# EXPOSURE: nothing publishes publicly. The public path is Cloudflare's edge ->
-# the cloudflared container in ~/Homelab/infra -> caddy, over the external
-# infra_tunnel-network. The four datastores get no host binding at all — a
-# deliberate break from docker-compose.yml, which publishes all of them on
-# 0.0.0.0. caddy, api and web bind loopback only, for smoke checks on the box.
+# EXPOSURE: nothing publishes publicly. The public path is a Cloudflare Worker
+# on knowledge.hrustalq.dev -> Tailscale Funnel on the Mac mini -> caddy on
+# 127.0.0.1:8088 (a Cloudflare Tunnel cannot connect from this network: its
+# handshake is filtered on every egress available). The four datastores get no
+# host binding at all — a deliberate break from docker-compose.yml, which
+# publishes all of them on 0.0.0.0. api and web bind loopback only, for smoke
+# checks on the box.
 
 name: knowledge
 
@@ -21,17 +23,13 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
+      # Tailscale Funnel's target (`tailscale funnel --bg 8088`), and the
+      # loopback smoke check. Loopback only: Funnel connects from the host.
       - "127.0.0.1:8088:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    networks:
-      default:
-      tunnel:
-        # The cloudflared ingress rule targets http://knowledge-caddy:80. A bare
-        # `caddy` would be ambiguous on a network other stacks share.
-        aliases: [knowledge-caddy]
     depends_on:
       - api
       - web
@@ -233,13 +231,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-
-networks:
-  # Owned by ~/Homelab/infra (created once with `docker network create
-  # infra_tunnel-network`); this stack only joins it.
-  tunnel:
-    external: true
-    name: infra_tunnel-network
 
 volumes:
   pgdata:

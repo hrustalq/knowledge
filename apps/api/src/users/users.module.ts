@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { MailQueueModule } from '../mail/mail-queue.module.js';
 import { UsersController } from './users.controller.js';
 import { UsersService } from './users.service.js';
 
@@ -9,7 +10,7 @@ import { UsersService } from './users.service.js';
  * depends on the global auth guards.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, MailQueueModule],
   controllers: [UsersController],
   providers: [UsersService],
 })

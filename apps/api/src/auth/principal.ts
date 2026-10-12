@@ -30,6 +30,12 @@ export interface Principal {
    * the web mirrors into kn_lang at sign-in.
    */
   locale: Locale;
+  /**
+   * users.email_verified_at is set (docs/features/41). Absent means not
+   * applicable — the dev principal and an agent's run owner — and reads as
+   * verified, so only a real account can be held up by it.
+   */
+  emailVerified?: boolean;
   /** Set when authenticated via a ks_ session token — lets logout revoke exactly this session. */
   sessionId?: string;
   /**

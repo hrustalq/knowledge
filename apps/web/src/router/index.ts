@@ -21,6 +21,7 @@ export function createRouter() {
       { path: '/signup', component: () => import('@/pages/SignupPage.vue'), meta: { public: true, authCard: true } },
       { path: '/forgot-password', component: () => import('@/pages/ForgotPasswordPage.vue'), meta: { public: true, authCard: true } },
       { path: '/reset-password', component: () => import('@/pages/ResetPasswordPage.vue'), meta: { public: true, authCard: true } },
+      { path: '/verify-email', component: () => import('@/pages/VerifyEmailPage.vue'), meta: { public: true, authCard: true } },
       { path: '/403', component: () => import('@/pages/ForbiddenPage.vue'), meta: { public: true } },
       // App (authenticated — guard redirects to /login when AUTH_MODE=api-key)
       // meta.fill: the pages landing leads with a graph canvas, which needs a
@@ -209,6 +210,8 @@ export function createRouter() {
  * - unauthenticated on a protected route → /login (401 flow)
  * - authenticated on /login|/signup → /documents
  * - non-platform-admin on an admin route → /403 (RBAC)
+ * - unconfirmed address under AUTH_REQUIRE_VERIFIED_EMAIL → /verify-email
+ *   (docs/features/41); every other route would only answer 403 anyway
  */
 export function installAuthGuard(router: Router, pinia: Pinia) {
   router.beforeEach(async (to) => {
@@ -221,6 +224,7 @@ export function installAuthGuard(router: Router, pinia: Pinia) {
     if (!auth.authenticated) {
       return { path: '/login', query: to.fullPath === '/documents' ? {} : { redirect: to.fullPath } }
     }
+    if (auth.verificationPending) return { path: '/verify-email' }
     if (to.meta.platformAdmin && !auth.isAdmin && !auth.isDev) return { path: '/403' }
     return true
   })
@@ -368,7 +372,7 @@ function clearPaneNames(): HTMLElement[] {
  * A path that is not on the list — /403 shares this shell — sorts after every
  * path that is, so arriving reads as going forward and leaving as coming back.
  */
-const AUTH_ORDER = ['/login', '/signup', '/forgot-password', '/reset-password']
+const AUTH_ORDER = ['/login', '/signup', '/forgot-password', '/reset-password', '/verify-email']
 
 export function authSlideDirection(toPath: string, fromPath: string): 'fwd' | 'back' {
   const rank = (path: string) => {

@@ -110,7 +110,7 @@ export class NotificationsController {
 
   @Put('preferences')
   @Access('viewer', 'body')
-  @ApiOperation({ summary: "Mute categories, or stop auto-watching what the caller comments on" })
+  @ApiOperation({ summary: 'Mute categories, stop auto-watching what the caller comments on, or stop directed email' })
   updatePreferences(
     @Body() dto: UpdateNotificationPreferencesDto,
     @CurrentPrincipal() principal: Principal,
@@ -118,6 +118,7 @@ export class NotificationsController {
     return this.notifications.updatePreferences(dto.workspaceId, principal.userId, {
       mutedCategories: dto.mutedCategories,
       autoWatchOnComment: dto.autoWatchOnComment,
+      emailDirected: dto.emailDirected,
     });
   }
 

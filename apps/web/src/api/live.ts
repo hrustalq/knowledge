@@ -70,8 +70,9 @@ export class LiveClient {
     }
     socket.onclose = (ev) => {
       this.socket = null
-      // 4401 = auth refused — reconnecting with the same token is pointless.
-      if (this.closed || ev.code === 4401) return
+      // 4401 = auth refused, 4403 = address unverified under
+      // AUTH_REQUIRE_VERIFIED_EMAIL — reconnecting with the same token is pointless.
+      if (this.closed || ev.code === 4401 || ev.code === 4403) return
       this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelay)
       this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX_MS)
     }

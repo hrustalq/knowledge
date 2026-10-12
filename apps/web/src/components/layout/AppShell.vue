@@ -17,7 +17,9 @@ import { RouterView, useRoute } from 'vue-router'
 import { Toaster } from '@/components/ui/sonner'
 import SearchSheet from '@/components/knowledge/SearchSheet.vue'
 import { useSidebarStore } from '@/stores/sidebar'
+import { useAuthStore } from '@/stores/auth'
 import AppSidebar from './AppSidebar.vue'
+import VerifyEmailBanner from './VerifyEmailBanner.vue'
 import AppTopbar from './AppTopbar.vue'
 import AppBreadcrumbs from './AppBreadcrumbs.vue'
 import { useCrumbs } from './breadcrumbs'
@@ -35,11 +37,20 @@ const crumbs = useCrumbs()
  */
 const showCrumbs = computed(() => !route.meta.bare && crumbs.value.length > 0)
 
-/** `h-14` on the topbar and `h-9` on the strip, in the unit the consumers want. */
+/** An unconfirmed address (docs/features/41), until dismissed for this load. */
+const auth = useAuthStore()
+const bannerDismissed = ref(false)
+const showVerifyBanner = computed(
+  () => !!auth.me && auth.me.mode !== 'dev' && !auth.me.emailVerified && !bannerDismissed.value,
+)
+
+/** `h-14` topbar, `h-10` verify banner, `h-9` strip, in the unit the consumers want. */
 const TOPBAR_REM = 3.5
+const BANNER_REM = 2.5
 const CRUMBS_REM = 2.25
 const chromeHeight = computed(
-  () => `${showCrumbs.value ? TOPBAR_REM + CRUMBS_REM : TOPBAR_REM}rem`,
+  () =>
+    `${TOPBAR_REM + (showVerifyBanner.value ? BANNER_REM : 0) + (showCrumbs.value ? CRUMBS_REM : 0)}rem`,
 )
 
 /**
@@ -110,6 +121,11 @@ watch(
 
     <div class="flex min-w-0 flex-1 flex-col">
       <AppTopbar @toggle-sidebar="toggleSidebar" />
+      <VerifyEmailBanner
+        v-if="showVerifyBanner && auth.me"
+        :email="auth.me.email"
+        @dismiss="bannerDismissed = true"
+      />
       <AppBreadcrumbs v-if="showCrumbs" :crumbs="crumbs" />
       <!--
         Two content modes.

@@ -171,6 +171,11 @@ infra-up-opensearch: ## Start infra INCLUDING the optional OpenSearch BM25 node 
 	$(COMPOSE) --profile opensearch up -d
 	$(COMPOSE) --profile opensearch ps
 
+.PHONY: infra-up-mailpit
+infra-up-mailpit: ## Start infra INCLUDING the optional Mailpit catcher (:1025 SMTP, :8025 inbox; set MAIL_TRANSPORT=smtp)
+	$(COMPOSE) --profile mailpit up -d
+	$(COMPOSE) --profile mailpit ps
+
 .PHONY: infra-up-searxng
 infra-up-searxng: ## Start infra INCLUDING the optional SearXNG web-search node (set WEB_SEARCH_URL + WEB_ACCESS_MODE)
 	$(COMPOSE) --profile searxng up -d
@@ -227,6 +232,12 @@ db-reset: ## DESTRUCTIVE: drop & recreate DB, replay all migrations
 .PHONY: db-studio
 db-studio: ## Open Prisma Studio on the local DB
 	$(API) exec prisma studio
+
+.PHONY: mail-test
+mail-test: ## Send one message through MAIL_TRANSPORT and report the result: make mail-test to=you@x.dev
+	@[ -n "$(to)" ] || (echo "Usage: make mail-test to=<email>"; exit 1)
+	$(API) run build >/dev/null
+	node --env-file=apps/api/.env apps/api/dist/scripts/send-test-mail.main.js --to $(to)
 
 .PHONY: auth-bootstrap
 auth-bootstrap: ## Phase 5: create user + API key + workspace membership: make auth-bootstrap email=you@x.dev [workspace_id=<uuid>] [role=admin] [operator=true]
@@ -298,7 +309,7 @@ env-validate: ## Validate apps/api/.env against the API's zod schema (fail-fast 
 # ---------------------------------------------------------------- smoke / e2e
 
 .PHONY: smoke
-smoke: ## Quick health check: api /docs, web /, arcadedb, minio, postgres, redis, searxng
+smoke: ## Quick health check: api /docs, web /, arcadedb, minio, postgres, redis, searxng, mailpit
 	@curl -sfo /dev/null http://localhost:3000/docs   && echo "✔ api      :3000/docs"   || echo "✖ api      :3000 (make dev-api)"
 	@curl -sfo /dev/null http://localhost:5173/       && echo "✔ web      :5173"        || echo "✖ web      :5173 (make dev-web)"
 	@curl -sfo /dev/null http://localhost:2480/api/v1/ready && echo "✔ arcadedb :2480" || echo "✖ arcadedb :2480 (make infra-up)"
@@ -308,3 +319,4 @@ smoke: ## Quick health check: api /docs, web /, arcadedb, minio, postgres, redis
 	@# Queries the JSON API, not just the port: SearXNG ships with json off, and an
 	@# instance answering HTML to every API call looks exactly like a broken integration.
 	@curl -sf "http://localhost:8888/search?q=ping&format=json" >/dev/null 2>&1 && echo "✔ searxng  :8888 (json)" || echo "- searxng  :8888 optional (make infra-up-searxng)"
+	@curl -sfo /dev/null http://localhost:8025/livez 2>&1 && echo "✔ mailpit  :8025" || echo "- mailpit  :8025 optional (make infra-up-mailpit)"

@@ -4,12 +4,21 @@ import type {
   AuthSessionResponse,
   ForgotPasswordResponse,
   LogoutResponse,
+  ResendVerificationResponse,
   ResetPasswordResponse,
   UrlTicketResponse,
+  VerifyEmailResponse,
 } from '@knowledge/contracts';
-import { CurrentPrincipal, Public, ReadKeyOk } from './access.decorator.js';
+import { CurrentPrincipal, Public, ReadKeyOk, UnverifiedOk } from './access.decorator.js';
 import { AuthFlowService } from './auth-flow.service.js';
-import { ChangePasswordDto, ForgotPasswordDto, LoginDto, ResetPasswordDto, SignupDto } from './auth-flow.dto.js';
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  LoginDto,
+  ResetPasswordDto,
+  SignupDto,
+  VerifyEmailDto,
+} from './auth-flow.dto.js';
 import type { Principal } from './principal.js';
 import { UrlTicketsService } from './url-tickets.service.js';
 
@@ -43,6 +52,7 @@ export class AuthFlowController {
 
   @HttpCode(200)
   @Post('logout')
+  @UnverifiedOk()
   @ApiOperation({ summary: 'Revoke the current session token (no-op for API keys / dev mode)' })
   async logout(@CurrentPrincipal() principal: Principal): Promise<LogoutResponse> {
     await this.flow.logout(principal);
@@ -64,6 +74,23 @@ export class AuthFlowController {
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<ResetPasswordResponse> {
     await this.flow.resetPassword(dto.token, dto.password);
     return { ok: true };
+  }
+
+  @Public()
+  @HttpCode(200)
+  @Post('verify-email')
+  @ApiOperation({ summary: 'Confirm the account address with the kv_ token from the mailed link (docs/features/41)' })
+  async verifyEmail(@Body() dto: VerifyEmailDto): Promise<VerifyEmailResponse> {
+    await this.flow.verifyEmail(dto.token);
+    return { ok: true };
+  }
+
+  @HttpCode(200)
+  @Post('resend-verification')
+  @UnverifiedOk()
+  @ApiOperation({ summary: "Mail a fresh confirmation link to the caller's address (at most one a minute)" })
+  resendVerification(@CurrentPrincipal() principal: Principal): Promise<ResendVerificationResponse> {
+    return this.flow.resendVerification(principal);
   }
 
   /**

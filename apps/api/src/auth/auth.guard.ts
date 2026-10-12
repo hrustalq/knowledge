@@ -1,6 +1,7 @@
-import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import { ForbiddenException, HttpStatus, Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PUBLIC_META, QUERY_TOKEN_OK_META } from './access.decorator.js';
+import { PUBLIC_META, QUERY_TOKEN_OK_META, UNVERIFIED_OK_META } from './access.decorator.js';
+import { t } from '../i18n/t.js';
 import { TokenAuthService } from './token-auth.service.js';
 import { bindTrace } from '@knowledge/observability';
 
@@ -48,6 +49,17 @@ export class AuthGuard implements CanActivate {
     // Every record emitted downstream carries the caller, without a single
     // service having to accept a userId argument purely to log it.
     bindTrace({ userId: req.principal.userId });
+
+    if (
+      this.tokenAuth.blocksUnverified(req.principal) &&
+      !this.reflector.getAllAndOverride<boolean>(UNVERIFIED_OK_META, [ctx.getHandler(), ctx.getClass()])
+    ) {
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        message: t('error.auth.emailUnverified'),
+        reason: 'emailUnverified',
+      });
+    }
     return true;
   }
 }

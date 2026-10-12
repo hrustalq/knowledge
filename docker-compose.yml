@@ -122,6 +122,16 @@ services:
       timeout: 5s
       retries: 12
 
+  # Feature 41 optional mail catcher (docs/features/41). Not started by default:
+  # make infra-up-mailpit  (+ MAIL_TRANSPORT=smtp, MAIL_SMTP_URL=smtp://localhost:1025
+  # in apps/api/.env). Accepts anything on :1025 and delivers nowhere — every
+  # message lands in the inbox at http://localhost:8025 instead. Loopback only:
+  # it relays nothing, but its UI shows every reset link it has ever caught.
+  mailpit:
+    image: axllent/mailpit:v1.31
+    profiles: ["mailpit"]
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+
 volumes:
   pgdata:
   miniodata:

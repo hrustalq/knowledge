@@ -62,3 +62,10 @@ export class ChangePasswordDto {
   @MaxLength(200, { message: vmsg('maxLength') })
   newPassword!: string;
 }
+
+export class VerifyEmailDto {
+  @ApiProperty({ description: 'kv_ token from the confirmation link' })
+  @IsString()
+  @IsNotEmpty()
+  token!: string;
+}

@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AuthCoreModule } from './auth-core.module.js';
+import { MailQueueModule } from '../mail/mail-queue.module.js';
 import { AclGuard } from './acl.guard.js';
 import { ApiKeysService } from './api-keys.service.js';
 import { AuditService } from './audit.service.js';
@@ -22,7 +23,7 @@ import { UrlTicketsService } from './url-tickets.service.js';
  */
 @Global()
 @Module({
-  imports: [PrismaModule, AuthCoreModule],
+  imports: [PrismaModule, AuthCoreModule, MailQueueModule],
   controllers: [AuthController, AuthFlowController, MeController],
   providers: [
     AuditService,

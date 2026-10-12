@@ -87,8 +87,32 @@ export const envSchema = z.object({
   /** Workspace new signups auto-join (empty disables). Defaults to the demo workspace. */
   AUTH_DEFAULT_WORKSPACE_ID: z.string().default('11111111-1111-4111-8111-111111111111'),
   AUTH_DEFAULT_ROLE: z.enum(['viewer', 'editor', 'admin']).default('viewer'),
-  /** Public base URL of the web app — used in password-reset links (logged; no mailer yet). */
+  /** Public base URL of the web app — every link a mail carries is built on it (docs/features/41). */
   WEB_BASE_URL: z.string().default('http://localhost:5173'),
+  /** Lifetime of a `kv_` email-verification link. */
+  AUTH_VERIFY_TTL_HOURS: z.coerce.number().int().positive().default(48),
+  /** Lifetime of an invite (a `kr_` token with purpose 'invite') — longer than a reset, nobody asked for it. */
+  AUTH_INVITE_TTL_HOURS: z.coerce.number().int().positive().default(72),
+  /**
+   * Refuse session principals whose address is unproven (403 `emailUnverified`)
+   * everywhere but the routes that let them prove it. Off by default: an
+   * unverified person can work and is nagged by a banner. API keys are minted
+   * by an admin and are never refused for this.
+   */
+  AUTH_REQUIRE_VERIFIED_EMAIL: boolish(false),
+
+  /**
+   * Mailer (docs/features/41). `log` writes each message to the worker log and
+   * sends nothing — the default, so dev and CI never open a socket. `smtp`
+   * sends through MAIL_SMTP_URL (`smtp://` STARTTLS or `smtps://` implicit TLS,
+   * credentials URL-encoded in the userinfo), which any provider accepts.
+   */
+  MAIL_TRANSPORT: z.enum(['log', 'smtp']).default('log'),
+  MAIL_SMTP_URL: z.string().default(''),
+  /** RFC 5322 From — the domain is the one SPF/DKIM must be set up for. */
+  MAIL_FROM: z.string().default('Knowledge <no-reply@localhost>'),
+  /** Operator switch for notification mail; auth mail is unaffected. */
+  MAIL_NOTIFICATIONS_ENABLED: boolish(true),
 
   /** Phase 5 optional BM25 layer (plan.md §11) — 'none' keeps search vector-only. */
   FULLTEXT_PROVIDER: z.enum(['none', 'opensearch']).default('none'),
@@ -457,6 +481,10 @@ export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
     throw new Error(`Invalid environment:\n${parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n')}`);
+  }
+  // Opting into SMTP without a server would otherwise boot, then fail every send.
+  if (parsed.data.MAIL_TRANSPORT === 'smtp' && !parsed.data.MAIL_SMTP_URL) {
+    throw new Error('Invalid environment:\n  MAIL_SMTP_URL: required when MAIL_TRANSPORT=smtp');
   }
   return parsed.data;
 }

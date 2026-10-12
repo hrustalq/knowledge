@@ -5,6 +5,8 @@ import type { KnowledgeEvent } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { EVENTS_CHANNEL } from './events.constants.js';
 import { NotificationsService, type NotificationDelivery } from '../notifications/notifications.service.js';
+import { MailProducer } from '../mail/mail.producer.js';
+import { isMailedReason } from '../mail/mail.types.js';
 
 /**
  * Publish side of the live-event bus (docs/features/04): fire-and-forget
@@ -34,6 +36,7 @@ export class EventsPublisher implements OnModuleDestroy {
   constructor(
     config: ConfigService<Env, true>,
     private readonly notifications: NotificationsService,
+    private readonly mail: MailProducer,
   ) {
     this.redis = new Redis(config.get('REDIS_URL', { infer: true }), {
       lazyConnect: true,
@@ -90,8 +93,19 @@ export class EventsPublisher implements OnModuleDestroy {
    * callers hand the deliveries here. Without this, the three notifications
    * addressed at a person by name were the only ones that wrote a row and no
    * frame, and the badge stayed stale until the next navigation.
+   *
+   * Also where directed notifications are handed to the mailer
+   * (docs/features/41), for the same reason the frame is published here: it is
+   * the one place both doors meet. Only the reason is checked at this end;
+   * whether the person gets an email at all (verified address, preference,
+   * already mailed) is decided by the processor when it sends.
    */
   async announce(workspaceId: string, deliveries: NotificationDelivery[]): Promise<void> {
+    for (const { notification } of deliveries) {
+      if (isMailedReason(notification.reason)) {
+        await this.mail.enqueue({ template: 'notification', notificationId: notification.id });
+      }
+    }
     try {
       for (const { userId, notification } of deliveries) {
         const frame: KnowledgeEvent = {

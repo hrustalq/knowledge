@@ -15,6 +15,12 @@ export const useAuthStore = defineStore('auth', {
     /** AUTH_MODE=none — no login UI, full access. */
     isDev: (s) => s.me?.mode === 'dev',
     isAdmin: (s) => s.me?.isAdmin ?? false,
+    /**
+     * AUTH_REQUIRE_VERIFIED_EMAIL is on and this address is unconfirmed: the API
+     * refuses everything but /me, logout and resend, so the app is a single
+     * card until the mailed link is followed (docs/features/41).
+     */
+    verificationPending: (s) => !!s.me && s.me.emailVerificationRequired && !s.me.emailVerified,
     /** Caller's role in the active workspace ('admin' for dev/platform admins). */
     role(): WorkspaceRole | null {
       if (!this.me) return null

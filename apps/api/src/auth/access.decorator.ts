@@ -6,6 +6,7 @@ export const PUBLIC_META = 'knowledge:public';
 export const PLATFORM_ADMIN_META = 'knowledge:platform-admin';
 export const READ_KEY_OK_META = 'knowledge:read-key-ok';
 export const QUERY_TOKEN_OK_META = 'knowledge:query-token-ok';
+export const UNVERIFIED_OK_META = 'knowledge:unverified-ok';
 
 /** Where AclGuard finds the workspace id for a route (resolved in PostgreSQL). */
 export type WorkspaceSource =
@@ -66,6 +67,14 @@ export const ReadKeyOk = () => SetMetadata(READ_KEY_OK_META, true);
  * test/query-token.spec.ts, so adding a route here is a reviewed decision.
  */
 export const QueryTokenOk = () => SetMetadata(QUERY_TOKEN_OK_META, true);
+
+/**
+ * A route a session with an unproven address may still call while
+ * AUTH_REQUIRE_VERIFIED_EMAIL is on (docs/features/41): the ones it needs to
+ * see who it is, change its language, sign out and ask for the link again.
+ * Everything else answers 403 `emailUnverified` until the link is followed.
+ */
+export const UnverifiedOk = () => SetMetadata(UNVERIFIED_OK_META, true);
 
 /** Injects the Principal that AuthGuard attached to the request. */
 export const CurrentPrincipal = createParamDecorator(

@@ -284,6 +284,11 @@ export interface NotificationPreferences {
   mutedCategories: NotificationCategory[];
   /** Commenting on something subscribes you to it (GitHub's default). */
   autoWatchOnComment: boolean;
+  /**
+   * Mentions, review requests and assignments also go to email
+   * (docs/features/41) — once per inbox row, only to a confirmed address.
+   */
+  emailDirected: boolean;
 }
 
 

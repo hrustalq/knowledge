@@ -155,7 +155,8 @@
     "or": "or",
     "startFromTemplate": "start from a template",
     "templates": "Templates",
-    "publishing": "Publishing"
+    "publishing": "Publishing",
+    "exports": "Exports"
   },
   "role": {
     "viewer": "Viewer",
@@ -264,7 +265,8 @@
     "notificationsHint": "Mentions, reviews, what you follow",
     "connectHint": "MCP clients, API keys, skill",
     "templatesHint": "Page shapes to start from",
-    "publishingHint": "Public links to pages"
+    "publishingHint": "Public links to pages",
+    "exportsHint": "Files you exported"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -2982,6 +2984,8 @@
       "agent.run.failed": "an agent run failed",
       "import.parsed": "an import is ready to review",
       "import.failed": "an import failed",
+      "export.completed": "an export is ready to download",
+      "export.failed": "an export failed",
       "connector.run.failed": "a sync failed",
       "knowledge-issue.reported": "reported a problem with this page",
       "document.verification-requested": "asked for this page to be verified",
@@ -3693,6 +3697,76 @@
       "verifiedToast": "{hostname} is verified",
       "removed": "{hostname} removed",
       "copyFailed": "Couldn't copy — select the value and copy it by hand."
+    }
+  },
+  "export": {
+    "action": "Export…",
+    "actionProject": "Export project",
+    "queued": "Export started",
+    "queuedHint": "It runs in the background — you will be notified when the file is ready.",
+    "viewExports": "View exports",
+    "download": "Download",
+    "pdfUnavailable": "Not set up on this server: PDF needs a Gotenberg service (GOTENBERG_URL).",
+    "dialog": {
+      "title": "Export “{title}”",
+      "titleProject": "Export the project “{title}”",
+      "description": "The file is kept for {hours} hours, then deleted. Only you and the workspace admins can download it.",
+      "format": "Format",
+      "includeSubtree": "Include subpages",
+      "branch": "Branch",
+      "branchPlaceholder": "Default branch",
+      "branchHint": "Pages without this branch are exported from their default branch.",
+      "start": "Export",
+      "starting": "Starting…"
+    },
+    "format": {
+      "zip": "Markdown (ZIP)",
+      "html": "HTML site (ZIP)",
+      "pdf": "PDF"
+    },
+    "formatHint": {
+      "zip": "The pages as markdown with their frontmatter, attachments and a manifest — for backup or moving elsewhere.",
+      "html": "A small website that opens offline: a contents page, one page per file, images included.",
+      "pdf": "One document to read or print: a page break per page, diagrams drawn."
+    },
+    "scope": {
+      "page": "page",
+      "subtree": "page and subpages",
+      "project": "project"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Ready",
+      "failed": "Failed",
+      "expired": "Expired"
+    },
+    "stage": {
+      "collecting": "Collecting pages",
+      "rendering": "Rendering",
+      "converting": "Making the PDF",
+      "packaging": "Packaging"
+    },
+    "error": {
+      "tooLarge": "Too large",
+      "renderFailed": "Rendering failed",
+      "convertFailed": "PDF conversion failed",
+      "formatUnavailable": "Format not available",
+      "timedOut": "Timed out",
+      "failed": "Failed"
+    },
+    "page": {
+      "title": "Exports",
+      "subtitle": "Files you exported from pages and projects. Each one is kept for a while, then deleted.",
+      "subtitleAdmin": "Files exported from pages and projects in this workspace, by anyone. Each one is kept for a while, then deleted.",
+      "empty": "Nothing exported yet. Use “Export…” in a page’s menu, the page tree or a project’s page.",
+      "colWhat": "Exported",
+      "colFormat": "Format",
+      "colStatus": "Status",
+      "colBy": "By",
+      "colCreated": "Asked",
+      "summary": "{pages} pages · {size}",
+      "expires": "deleted {when}"
     }
   }
 }

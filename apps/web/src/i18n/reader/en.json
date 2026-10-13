@@ -47,5 +47,17 @@
   },
   "common": {
     "close": "Close"
+  },
+  "exportReader": {
+    "contents": "Contents",
+    "exportedOn": "Exported {date}",
+    "pageCount": {
+      "one": "{n} page",
+      "few": "{n} pages",
+      "many": "{n} pages",
+      "other": "{n} pages"
+    },
+    "subpages": "In this section",
+    "home": "Contents"
   }
 }

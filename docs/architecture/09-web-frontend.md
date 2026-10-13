@@ -64,6 +64,18 @@ site's `sitemap.xml`, `robots.txt`, `llms*.txt` and `<page>.md` to
 `/v1/public/sites/*`, with no cookie or credential, through the same `relay`
 the AI-readable routes use.
 
+### The export renderer
+
+`POST /_internal/export/render` (`server/export-render.js`, mounted before
+the host check) is how the worker gets an export's HTML
+([feature 45](../features/45-export.md)). It calls a third SSR module,
+`src/export-render.ts`, which renders each page with `renderPublicMarkdown`
+and wraps the pages in the app's own stylesheets: `styles/tokens.css` (the
+palette, kept out of `style.css`'s Tailwind entry so it can be inlined) and
+`styles/editor.css`. It answers only an internal peer whose request carries no
+`X-Forwarded-*` header, which is never a request through Caddy. The module is a
+third SSR input in `vite.config.ts`.
+
 ## A fresh app per request
 
 `src/main.ts` is a factory, not a module-scope app:

@@ -132,6 +132,19 @@ services:
     profiles: ["mailpit"]
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
 
+  # Issue #77 phase 2c optional PDF converter (docs/features/45). Not started by
+  # default:  make infra-up-gotenberg  (+ GOTENBERG_URL=http://localhost:3100 in
+  # apps/api/.env). Exports send it the HTML and every image as files, so its
+  # Chromium never needs the network — and must not have it: a page can embed
+  # any URL, and whatever Chromium fetched would be printed into a PDF the
+  # requester downloads. The allow-list keeps it to its own upload folder.
+  # Loopback only, on 3100 because the API owns 3000.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    profiles: ["gotenberg"]
+    ports: ["127.0.0.1:3100:3000"]
+    command: ["gotenberg", "--chromium-allow-list=^file:///tmp/.*", "--api-timeout=300s"]
+
 volumes:
   pgdata:
   miniodata:

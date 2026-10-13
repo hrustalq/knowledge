@@ -41,6 +41,19 @@ in the pull request that introduces them — see
   process for as long as the API confirms nothing they show has changed.
   Unpublishing still ends a site on the very next request. A large page went
   from about 105 ms to about 21 ms on the dev stack. (#77)
+- **Export.** A page, a page with its subpages, or a whole project can be
+  exported from the page's ⋯ menu or the project page by anyone who can read
+  it, and from the page tree's row menu by editors. Three formats: **Markdown (ZIP)**, the
+  sources with their frontmatter, attachments and a `manifest.json` describing
+  the tree; an **HTML site (ZIP)** that opens offline, with a contents page,
+  breadcrumbs, subpages and previous/next, and images included; and **PDF**,
+  one document with a page break per page and diagrams drawn, where the
+  deployment has Gotenberg (images hosted elsewhere are left out of a PDF). Exports run in the background: the exports page
+  (Settings → Exports) shows progress, the inbox says when one is ready, and
+  the file can be downloaded for 72 hours. An export of more than 500 pages is
+  refused before it starts. DOCX is not offered: Gotenberg converts only to
+  PDF. MCP gains `knowledge_export` and `knowledge_get_export`, both open to
+  read-only keys. (#77)
 
 ### Operations
 
@@ -71,6 +84,27 @@ in the pull request that introduces them — see
   for a few hundred pages). No version is rebuilt for it.
 - New web env var `SITE_RENDER_CACHE_MB` (default `32`; `0` turns the render
   cache off), passed by `docker-compose.prod.yml`. Production needs no change.
+- Migration `20261013230000_export_jobs` adds the `export_jobs` table.
+  Expand-only: the previous release never reads it, and a rollback needs no
+  down migration. Finished files live in MinIO under
+  `workspaces/{ws}/exports/{id}/` and are deleted after `EXPORT_TTL_HOURS` by
+  the API.
+- New env vars, all with defaults: `GOTENBERG_URL` (empty: no PDF),
+  `WEB_INTERNAL_URL` (`http://localhost:5173`), `EXPORT_MAX_PAGES` (`500`),
+  `EXPORT_MAX_BYTES` (256 MB), `EXPORT_TTL_HOURS` (`72`),
+  `EXPORT_CONCURRENCY` (`2`) and `EXPORT_TIMEOUT_MS` (10 minutes).
+  `docker-compose.prod.yml` sets `WEB_INTERNAL_URL=http://web:5173` on the
+  worker, so production needs no change for ZIP and HTML.
+- The web server has a new route, `POST /_internal/export/render`, that the
+  worker calls to render an export. It answers only a peer on the internal
+  network whose request carries no `X-Forwarded-*` header — Caddy always adds
+  one — so it is unreachable through the front proxy.
+- **PDF is opt-in.** `docker compose --profile gotenberg up -d gotenberg` and
+  `GOTENBERG_URL=http://gotenberg:3000` (in dev: `make infra-up-gotenberg` and
+  `http://localhost:3100`). The image is about 1 GB. Its Chromium is started
+  with `--chromium-allow-list=^file:///tmp/.*`: keep that flag on any
+  Gotenberg you point at, or a page that embeds an internal URL gets it
+  fetched from inside your network and printed into the PDF.
 
 ## [0.18.0] — 2026-10-13
 

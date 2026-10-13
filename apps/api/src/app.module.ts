@@ -33,6 +33,7 @@ import { FeedbackModule } from './feedback/feedback.module.js';
 import { VerificationModule } from './verification/verification.module.js';
 import { PublishingModule } from './publishing/publishing.module.js';
 import { PublicModule } from './public/public.module.js';
+import { ExportModule } from './export/export.module.js';
 
 @Module({
   imports: [
@@ -79,6 +80,9 @@ import { PublicModule } from './public/public.module.js';
     // routes, and the anonymous /v1/public reader with its rate limiter.
     PublishingModule,
     PublicModule,
+    // Exports (docs/features/45, issue #77 phase 2c). API-only: the routes and
+    // the expiry sweeper; the building is ExportWorkerModule's.
+    ExportModule,
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,

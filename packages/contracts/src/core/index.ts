@@ -334,6 +334,10 @@ export const KNOWN_EVENT_TYPES = [
   'import.parsed',
   'import.failed',
   'import.submitted',
+  // An export finished or gave up (issue #77 phase 2c). Published by the
+  // worker; reaches the person who asked for it through the run-owner rule.
+  'export.completed',
+  'export.failed',
   'workflow-run.started',
   'workflow-run.paused',
   'workflow-run.resumed',

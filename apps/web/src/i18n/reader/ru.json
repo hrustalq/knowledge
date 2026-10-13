@@ -47,5 +47,17 @@
   },
   "common": {
     "close": "Закрыть"
+  },
+  "exportReader": {
+    "contents": "Содержание",
+    "exportedOn": "Экспортировано {date}",
+    "pageCount": {
+      "one": "{n} страница",
+      "few": "{n} страницы",
+      "many": "{n} страниц",
+      "other": "{n} страницы"
+    },
+    "subpages": "В этом разделе",
+    "home": "Содержание"
   }
 }

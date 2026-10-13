@@ -426,5 +426,19 @@
     "domainExists": "This site already has “{hostname}”",
     "domainLimit": "A site has at most {max} domains",
     "customDomainsOff": "Custom domains are turned off on this deployment"
+  },
+  "export": {
+    "notFound": "This export does not exist",
+    "notYours": "Only the person who asked for an export, or an admin, can see it",
+    "tooManyPages": "This export would hold {count} pages; at most {max} can be exported at once",
+    "nothingToExport": "There is nothing to export here: no page in scope has a readable revision",
+    "formatUnavailable": "PDF export is not set up on this deployment",
+    "notReady": "This export is not finished yet",
+    "expired": "This export has expired — export again to get a new file",
+    "tooLarge": "This export is larger than {max} — export fewer pages",
+    "renderFailed": "The pages could not be rendered: {detail}",
+    "convertFailed": "The PDF could not be made: {detail}",
+    "timedOut": "The export took too long and was stopped",
+    "failed": "The export failed: {detail}"
   }
 }

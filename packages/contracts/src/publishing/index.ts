@@ -1,8 +1,10 @@
-// Public publishing (issue #77): share links today; published sites, versions
-// and export follow in later phases and add their types here.
+// Public publishing (issue #77): share links, published sites with their
+// versions and domains, and export.
 //
 // Buildless package: no enums, no relative cross-file imports (see
 // src/index.ts).
+
+import type { Locale } from '@knowledge/contracts/core';
 
 // ---------------------------------------------------------------------------
 // Share links (docs/features/43)
@@ -687,4 +689,156 @@ export function publicSiteSearchPath(siteId: string): string {
 /** The public attachment route for an attachment of a page in a version's snapshot. */
 export function publicSiteAttachmentPath(siteId: string, versionId: string, attachmentId: string): string {
   return `/v1/public/sites/${encodeURIComponent(siteId)}/versions/${encodeURIComponent(versionId)}/attachments/${encodeURIComponent(attachmentId)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Export (issue #77 phase 2c, docs/features/45)
+//
+// A page, a page and its subpages, or a whole project, written out as a file a
+// member downloads: markdown sources in a ZIP, an offline HTML bundle, or a
+// PDF. The worker collects and packages; the web renders the HTML, so the
+// reader's parser stays the only one (`renderExport`, apps/web).
+// ---------------------------------------------------------------------------
+
+export const EXPORT_SCOPES = ['page', 'subtree', 'project'] as const;
+export type ExportScope = (typeof EXPORT_SCOPES)[number];
+
+/**
+ * What an export can be written as. `pdf` needs a Gotenberg sidecar
+ * (GOTENBERG_URL); the other two need nothing beyond the worker. DOCX is not
+ * here: Gotenberg converts only *to* PDF, and a format the code cannot emit
+ * must not be offered.
+ */
+export const EXPORT_FORMATS = ['zip', 'html', 'pdf'] as const;
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
+/** queued → running → completed | failed; a completed file becomes `expired` after EXPORT_TTL_HOURS. */
+export const EXPORT_STATUSES = ['queued', 'running', 'completed', 'failed', 'expired'] as const;
+export type ExportStatus = (typeof EXPORT_STATUSES)[number];
+
+/** Still in flight: the exports page polls while any row says so. */
+export function isActiveExportStatus(status: string): boolean {
+  return status === 'queued' || status === 'running';
+}
+
+/** What the worker is doing right now, as a message key under `export.stage.*` (web) — never free text. */
+export const EXPORT_STAGES = ['collecting', 'rendering', 'converting', 'packaging'] as const;
+export type ExportStage = (typeof EXPORT_STAGES)[number];
+
+/** Why an export failed, as a key the web translates; `message` carries the detail. */
+export const EXPORT_ERROR_CODES = ['tooLarge', 'renderFailed', 'convertFailed', 'formatUnavailable', 'timedOut', 'failed'] as const;
+export type ExportErrorCode = (typeof EXPORT_ERROR_CODES)[number];
+
+export interface ExportJobSummary {
+  id: string;
+  workspaceId: string;
+  scope: ExportScope;
+  format: ExportFormat;
+  documentId: string | null;
+  projectId: string | null;
+  /** The branch asked for; null = each page's default branch. */
+  branch: string | null;
+  /** The page's or project's name when the export was asked for. */
+  title: string;
+  status: ExportStatus;
+  stage: ExportStage | null;
+  pageCount: number | null;
+  sizeBytes: number | null;
+  error: { code: ExportErrorCode; message: string } | null;
+  requestedBy: string;
+  createdAt: string;
+  completedAt: string | null;
+  /** When the file is deleted; set once it is written. */
+  expiresAt: string | null;
+}
+
+export interface ExportListResponse {
+  exports: ExportJobSummary[];
+}
+
+export interface ExportCapabilitiesResponse {
+  /** Formats this deployment can write; `pdf` is false without GOTENBERG_URL. */
+  formats: Record<ExportFormat, boolean>;
+  maxPages: number;
+  ttlHours: number;
+}
+
+/** `manifest.json` at the root of a ZIP export: enough for an import to rebuild the tree. */
+export const EXPORT_MANIFEST_VERSION = 1;
+
+export interface ExportManifestAttachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  /** Inside the archive. */
+  path: string;
+}
+
+export interface ExportManifestPage {
+  documentId: string;
+  title: string;
+  category: string;
+  /** The nearest exported ancestor; null at the top of the export. */
+  parentId: string | null;
+  position: number;
+  depth: number;
+  revisionId: string;
+  branch: string;
+  /** The markdown source, frontmatter included, inside the archive. */
+  path: string;
+  attachments: ExportManifestAttachment[];
+}
+
+export interface ExportManifest {
+  format: 'knowledge-export';
+  version: typeof EXPORT_MANIFEST_VERSION;
+  exportedAt: string;
+  workspaceId: string;
+  scope: ExportScope;
+  rootDocumentId: string | null;
+  projectId: string | null;
+  branch: string | null;
+  title: string;
+  /** Reading order: parents before children, siblings by position then title. */
+  pages: ExportManifestPage[];
+}
+
+/**
+ * The worker's request to the web renderer (`POST /_internal/export/render`).
+ * Every path is relative to the root of what is being built: the bundle's
+ * root for `html`, Gotenberg's flat upload folder for `pdf`.
+ */
+export interface ExportRenderRequest {
+  format: Exclude<ExportFormat, 'zip'>;
+  locale: Locale;
+  title: string;
+  exportedAt: string;
+  pages: ExportRenderPage[];
+  /** attachmentId → where its bytes will sit. An attachment missing here is dropped from the output. */
+  assets: Record<string, string>;
+}
+
+export interface ExportRenderPage {
+  documentId: string;
+  title: string;
+  depth: number;
+  /** `html`: the page's file (`pages/guides/install.html`). Unused by `pdf`, which is one document. */
+  path: string;
+  /** Frontmatter already stripped. */
+  markdown: string;
+}
+
+export interface ExportRenderResponse {
+  /** Text files to write beside the assets: `index.html`, page files, scripts. */
+  files: { path: string; content: string }[];
+}
+
+/** The window flag the PDF's print script raises once diagrams are drawn; Gotenberg waits for it. */
+export const EXPORT_PRINT_READY_FLAG = '__KN_PRINT_READY__';
+
+export interface ExportDownloadResponse {
+  /** A presigned URL that downloads the file; valid for a few minutes. */
+  url: string;
+  filename: string;
 }

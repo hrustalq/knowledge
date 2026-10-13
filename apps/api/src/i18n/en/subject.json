@@ -24,5 +24,6 @@
   "shareLink": "share link id",
   "site": "site id",
   "siteVersion": "site version id",
-  "siteDomain": "site domain id"
+  "siteDomain": "site domain id",
+  "export": "export job id"
 }

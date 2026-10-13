@@ -11,7 +11,7 @@
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FilePlus2, LayoutTemplate, MoreHorizontal, MoveRight } from 'lucide-vue-next'
+import { Download, FilePlus2, LayoutTemplate, MoreHorizontal, MoveRight } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { RouterLink } from 'vue-router'
 import {
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTemplatesStore } from '@/stores/templates'
 import MoveToDialog from './MoveToDialog.vue'
+import ExportDialog from './ExportDialog.vue'
 
 /**
  * Two roots (the menu and its dialog), so an inherited `class` has nowhere to
@@ -34,6 +35,7 @@ const props = defineProps<{ documentId: string; title: string; disabled?: boolea
 
 const { t } = useI18n()
 const dialogOpen = ref(false)
+const exportOpen = ref(false)
 const templates = useTemplatesStore()
 </script>
 
@@ -70,6 +72,11 @@ const templates = useTemplatesStore()
         <MoveRight class="size-3.5" />
         {{ t('tree.dnd.moveTo') }}
       </DropdownMenuItem>
+      <!-- A row stands for its branch here, so subpages start ticked (docs/features/45). -->
+      <DropdownMenuItem @select="exportOpen = true">
+        <Download class="size-3.5" />
+        {{ t('export.action') }}
+      </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
 
@@ -79,4 +86,5 @@ const templates = useTemplatesStore()
     :title="title"
     @failed="(message: string) => toast.error(message)"
   />
+  <ExportDialog v-model:open="exportOpen" :target="{ kind: 'document', documentId, title }" subtree />
 </template>

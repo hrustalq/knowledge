@@ -198,6 +198,28 @@ export const envSchema = z.object({
   SITE_CUSTOM_DOMAINS: boolish(true),
   /** Tick of PublishingSweeper: pending domain checks and lost site builds. */
   PUBLISHING_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  /**
+   * Export (issue #77 phase 2c, docs/features/45). PDF goes through a Gotenberg
+   * sidecar's Chromium (`make infra-up-gotenberg`); empty = no PDF, and the
+   * dialog says why. ZIP and HTML need nothing beyond the worker.
+   */
+  GOTENBERG_URL: z.string().default(''),
+  /**
+   * Where the worker reaches the web server, which renders an export's HTML
+   * with the reader's own parser (`POST /_internal/export/render`). In compose
+   * that is the web service by name, not WEB_BASE_URL.
+   */
+  WEB_INTERNAL_URL: z.string().default('http://localhost:5173'),
+  /** Most pages one export may hold; a larger request is refused before it is queued. */
+  EXPORT_MAX_PAGES: z.coerce.number().int().positive().default(500),
+  /** Most bytes one export may hold — sources, attachments and the file written (256 MB). */
+  EXPORT_MAX_BYTES: z.coerce.number().int().positive().default(268_435_456),
+  /** How long a finished export can be downloaded before its file is deleted. */
+  EXPORT_TTL_HOURS: z.coerce.number().int().positive().default(72),
+  /** Exports one worker builds at once. */
+  EXPORT_CONCURRENCY: z.coerce.number().int().positive().default(2),
+  /** Wall-clock ceiling for rendering and converting one export; past twice this the sweeper fails it. */
+  EXPORT_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
   /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
   LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
   /** Cap on bytes streamed in one llms-full.txt (20 MB). */

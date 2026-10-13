@@ -5,6 +5,7 @@ import { traceMiddleware } from '@knowledge/observability/express'
 import { aiReadableMiddleware } from './server/ai-readable.js'
 import { createRenderCache, renderCacheKey } from './server/render-cache.js'
 import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files.js'
+import { exportRenderRoute } from './server/export-render.js'
 
 // Constants
 const isProduction = process.env.NODE_ENV === 'production'
@@ -74,6 +75,19 @@ const app = express()
 // Registered first, so Vite's middlewares and the SSR handler both run inside
 // the scope and every response carries x-request-id — static asset 404s included.
 app.use(traceMiddleware)
+
+// The worker's export renderer (docs/features/45), before anything that reads
+// a host or a cookie: it is a call from inside the network, not a page view.
+app.use(
+  exportRenderRoute({
+    express,
+    logger,
+    loadRenderer: async () =>
+      isProduction
+        ? (await import('./dist/server/export-render.js')).renderExport
+        : (await vite.ssrLoadModule('/src/export-render.ts')).renderExport,
+  }),
+)
 
 // Whose host is this? Decided once, before anything reads a cookie: a site's
 // host is the public reader's all the way down.

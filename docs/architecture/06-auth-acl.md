@@ -189,6 +189,14 @@ the peer is internal (Caddy, the web SSR). The `share-link`, `site`,
 `site-version` and `site-domain` sources resolve their ids to a workspace for
 the authenticated management routes, like every other source.
 
+Exports ([feature 45](../features/45-export.md)) are member-only. Asking for
+one is `viewer` on the page or project it covers, so the guard resolves the
+workspace from that id. The `export` source covers the job itself, and the
+service narrows it further to the requester or an admin, since the row says who
+exported what. The web's `POST /_internal/export/render` is not an API route
+at all: the web server answers it only for an internal peer with no
+`X-Forwarded-*` header, which no request through Caddy can be.
+
 ## Limits
 
 - ACLs stop at the workspace. There are no project-level roles; projects are

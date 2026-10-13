@@ -1741,6 +1741,66 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/documents/{id}/exports",
+      "tag": "exports",
+      "summary": "Export a page, or a page and its subpages, as ZIP, HTML or PDF",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/exports",
+      "tag": "exports",
+      "summary": "Your exports in a workspace, newest first; an admin sees everyone’s",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/exports/{id}",
+      "tag": "exports",
+      "summary": "One export — polled while it runs",
+      "role": "viewer",
+      "source": "export",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/exports/{id}/download",
+      "tag": "exports",
+      "summary": "A short-lived URL to the finished file",
+      "role": "viewer",
+      "source": "export",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/exports/capabilities",
+      "tag": "exports",
+      "summary": "Which formats this deployment can write, and the limits",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{id}/exports",
+      "tag": "exports",
+      "summary": "Export every page of a project as ZIP, HTML or PDF",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/glossary",
       "tag": "glossary",
@@ -3249,6 +3309,36 @@
       ]
     },
     {
+      "name": "knowledge_export",
+      "description": "Export a page, a page and its subpages, or a whole project as a file a person can download (docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an offline site, zipped) or pdf (only where the deployment has Gotenberg). Give documentId, or projectId for a whole project. Runs in the background: returns the export id — poll knowledge_get_export for the download URL.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "format",
+          "optional": false
+        },
+        {
+          "name": "documentId",
+          "optional": true
+        },
+        {
+          "name": "includeSubtree",
+          "optional": true
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        },
+        {
+          "name": "branch",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_feedback",
       "description": "Rate an answer you built from knowledge_search: up or down, with a reason on down. Quote the search's traceId so a re-vote updates the same row. Votes and reasons are what turns a bad answer into documentation work; nothing else changes.",
       "inputs": [
@@ -3361,6 +3451,20 @@
         {
           "name": "revisionId",
           "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_export",
+      "description": "One export: its status (queued | running | completed | failed | expired), page count and size, and — once completed — a download URL valid for a few minutes. Only the person who asked for it, or an admin, sees it.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "exportId",
+          "optional": false
         }
       ]
     },

@@ -638,6 +638,7 @@ export type I18nTranslations = {
             "audiencePageNotInSite": string;
             "visitorSecretNeedsKey": string;
             "signInReturnInvalid": string;
+            "embedOriginInvalid": string;
         };
         "export": {
             "notFound": string;
@@ -652,6 +653,12 @@ export type I18nTranslations = {
             "convertFailed": string;
             "timedOut": string;
             "failed": string;
+        };
+        "publicAsk": {
+            "budgetExhausted": string;
+            "rateLimited": string;
+            "unavailable": string;
+            "notEnabled": string;
         };
     };
     "import": {

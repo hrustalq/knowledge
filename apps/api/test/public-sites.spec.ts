@@ -69,6 +69,9 @@ function fakePrisma() {
     theme: { primaryColor: '#123456', font: 'serif', headerLinks: [{ label: 'x', url: 'javascript:alert(1)' }] },
     seoIndexable: true,
     defaultVersionId: V_LATEST,
+    askEnabled: false,
+    askDailyBudget: null as number | null,
+    embedOrigins: ['https://shop.acme.com'],
     createdAt: built,
     updatedAt: built,
   };
@@ -155,6 +158,7 @@ function env(overrides: Record<string, unknown> = {}) {
     SITE_CUSTOM_DOMAINS: true,
     LLMS_FULL_MAX_DOCS: 2000,
     LLMS_FULL_MAX_BYTES: 20_000_000,
+    PUBLIC_ASK_DAILY_BUDGET: 200,
     ...overrides,
   };
   return { get: (k: string) => values[k] };
@@ -299,6 +303,31 @@ describe('PublicSitesService.resolve', () => {
   });
 });
 
+describe('PublicSitesService — Ask (issue #77 phase 3)', () => {
+  it('resolve says whether the site answers questions; the flag is part of the tag', async () => {
+    const { service, prisma } = reader();
+    const off = await service.resolveTagged({ slug: 'acme', path: '/' });
+    expect(off.body!.site.ask).toBe(false);
+    prisma.site.askEnabled = true;
+    const on = await service.resolveTagged({ slug: 'acme', path: '/' });
+    expect(on.body!.site.ask).toBe(true);
+    expect(on.etag).not.toBe(off.etag);
+  });
+
+  it('widget: 404 unless Ask is on and the ceiling leaves a budget; then the chrome and embed origins', async () => {
+    const { service, prisma } = reader();
+    await expect(service.widget({ slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
+    prisma.site.askEnabled = true;
+    await expect(service.widget({ slug: 'acme' })).resolves.toMatchObject({
+      site: { id: SITE, title: 'Acme Docs' },
+      embedOrigins: ['https://shop.acme.com'],
+    });
+    const capped = reader({ PUBLIC_ASK_DAILY_BUDGET: 0 });
+    capped.prisma.site.askEnabled = true;
+    await expect(capped.service.widget({ slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
 describe('PublicSitesService.attachmentUrl', () => {
   it('serves an attachment of a page in the version’s snapshot', async () => {
     const { service } = reader();
@@ -326,6 +355,9 @@ function manager(opts: { enabled?: boolean } = {}) {
     theme: {},
     seoIndexable: true,
     defaultVersionId: V_LATEST,
+    askEnabled: false,
+    askDailyBudget: null as number | null,
+    embedOrigins: [] as string[],
     createdAt: new Date(),
     updatedAt: new Date(),
     versions: [{ id: V_LATEST, siteId: SITE, name: 'Latest', slug: 'latest', kind: 'live', sourceBranch: null, status: 'ready', builtAt: new Date(), pageCount: 1, warnings: [], error: null, createdBy: WS, createdAt: new Date() }],
@@ -355,7 +387,13 @@ function manager(opts: { enabled?: boolean } = {}) {
   const settings = new PublishingSettingsService(prisma as never, config as never);
   const builds = { enqueue: vi.fn(async () => undefined) };
   const activity = { record: vi.fn(async () => undefined) };
-  return { prisma, site, builds, service: new SitesService(prisma as never, settings, activity as never, builds as never, config as never) };
+  const aiConfig = { resolveFor: vi.fn(async () => ({ enabled: true })) };
+  return {
+    prisma,
+    site,
+    builds,
+    service: new SitesService(prisma as never, settings, activity as never, builds as never, config as never, aiConfig as never),
+  };
 }
 
 describe('SitesService', () => {
@@ -387,6 +425,22 @@ describe('SitesService', () => {
     const err = await manager().service.update(SITE, { theme: { primaryColor: 'blue' } }).catch((e) => e);
     expect(err).toBeInstanceOf(BadRequestException);
     expect(err.getResponse()).toMatchObject({ fields: ['primaryColor'] });
+  });
+
+  it('stores Ask settings: origins normalized and deduplicated, the budget shown under the env ceiling', async () => {
+    const { service } = manager();
+    const summary = await service.update(SITE, {
+      askEnabled: true,
+      askDailyBudget: 5000,
+      embedOrigins: ['https://Shop.example.com/help?x=1', 'https://shop.example.com'],
+    });
+    expect(summary.ask).toEqual({ enabled: true, dailyBudget: 5000, effectiveDailyBudget: 200, embedOrigins: ['https://shop.example.com'] });
+  });
+
+  it('refuses an embed origin that is not one, naming it', async () => {
+    const err = await manager().service.update(SITE, { embedOrigins: ['https://ok.example.com', 'http://plain.example.com', '*'] }).catch((e) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.getResponse()).toMatchObject({ invalid: ['http://plain.example.com', '*'] });
   });
 
   it('refuses a version address that a top-level page already uses, rather than shadowing it', async () => {

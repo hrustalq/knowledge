@@ -3,6 +3,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Prisma, PublishedSite, SiteDomain, SiteVersion, SiteVersionPage } from '@prisma/client';
 import {
+  effectiveSiteAskBudget,
   normalizeHostname,
   normalizeSiteTheme,
   siteHomeDocumentId,
@@ -14,6 +15,7 @@ import {
   type PublicSiteResolveResponse,
   type PublicSiteTreeNode,
   type PublicSiteVersionRef,
+  type PublicSiteWidgetResponse,
   type SiteViewer,
 } from '@knowledge/contracts';
 import { AttachmentsService } from '../attachments/attachments.service.js';
@@ -32,7 +34,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const MAX_PATH_CHARS = 2000;
 
 /** Bumped when the resolve answer changes shape, so every cached render goes stale. */
-const RESOLVE_FORMAT_VERSION = 2;
+const RESOLVE_FORMAT_VERSION = 3;
 
 /**
  * A snapshot row without its search text (up to 100k characters a page),
@@ -176,6 +178,7 @@ export class PublicSitesService {
         rootUrl: this.rootUrl(site),
         restricted,
         signInUrl: restricted ? this.signInUrl(site.id) : null,
+        ask: this.askOn(site),
       },
       viewer: viewer.kind,
       version: { ...this.versionRef(version, site), id: version.id, builtAt: version.builtAt.toISOString() },
@@ -332,6 +335,37 @@ export class PublicSitesService {
       throw this.notFound();
     }
     return this.attachments.readUrl(attachment.documentId, attachment.id, download);
+  }
+
+  /**
+   * What the Ask widget's frame needs (issue #77 phase 3), by slug or host:
+   * the site's chrome and the origins that may frame it. 404 unless the site
+   * is live and answers questions, so a frame on a site without Ask renders
+   * nothing and the embed script never shows its button.
+   */
+  async widget(query: { slug?: string; host?: string }): Promise<PublicSiteWidgetResponse> {
+    const site = await this.find(query);
+    if (!this.askOn(site)) throw this.notFound();
+    const project = await this.prisma.project.findUnique({
+      where: { id: site.projectId },
+      select: { name: true, avatarKey: true, avatarEmoji: true, avatarColor: true, avatarUpdatedAt: true },
+    });
+    const theme = normalizeSiteTheme(site.theme);
+    return {
+      site: {
+        id: site.id,
+        title: project?.name ?? site.slug,
+        theme,
+        logo: theme.showLogo && project ? this.logo(site.id, project) : null,
+        rootUrl: this.rootUrl(site),
+      },
+      embedOrigins: site.embedOrigins,
+    };
+  }
+
+  /** Ask is on and the budget under the env ceiling leaves it something to answer with. */
+  private askOn(site: PublishedSite): boolean {
+    return site.askEnabled && effectiveSiteAskBudget(site.askDailyBudget, this.config.get('PUBLIC_ASK_DAILY_BUDGET', { infer: true })) > 0;
   }
 
   /** The project's uploaded avatar, which a theme may show as the site's logo. */

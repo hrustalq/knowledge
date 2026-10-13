@@ -573,6 +573,8 @@ export interface PublishedSiteSummary {
   versions: SiteVersionSummary[];
   /** Its own hostnames, oldest first (issue #77 phase 2b). */
   domains: SiteDomainSummary[];
+  /** The Ask widget (issue #77 phase 3). */
+  ask: SiteAskSettings;
   createdAt: string;
   updatedAt: string;
 }
@@ -591,6 +593,10 @@ export interface ProjectSiteResponse {
     customDomains: boolean;
     /** A suggestion for a new site, from the project name. */
     suggestedSlug: string;
+    /** PUBLIC_ASK_DAILY_BUDGET: the most answers a day any site may give; 0 turns Ask off everywhere. */
+    askDailyCeiling: number;
+    /** The workspace has a model configured, so Ask can answer at all. */
+    askModelConfigured: boolean;
   };
 }
 
@@ -844,6 +850,8 @@ export interface PublicSiteResolveResponse {
     restricted: boolean;
     /** The app page that signs a member in to this site; the reader appends `return`. Null when nothing is restricted. */
     signInUrl: string | null;
+    /** The site answers questions (issue #77 phase 3): the reader offers Ask. */
+    ask: boolean;
   };
   /** Who the API read this as: decides what `tree` and `page` contain. */
   viewer: SiteViewerKind;
@@ -883,6 +891,109 @@ export interface PublicSiteSearchResponse {
 export function publicSiteSearchPath(siteId: string): string {
   return `/v1/public/sites/${encodeURIComponent(siteId)}/search`;
 }
+
+// ---------------------------------------------------------------------------
+// Ask (issue #77 phase 3, docs/features/44)
+//
+// A site may answer questions from its own published pages: in its reader,
+// and in a widget other sites embed (`<script src="<site>/widget.js">`). The
+// answer is one model call over passages retrieved from the version's
+// snapshot only, the passages the viewer may read, with every citation
+// settled server-side against what was retrieved. Nothing is stored; each
+// answer counts against the site's daily budget.
+// ---------------------------------------------------------------------------
+
+export const SITE_ASK_MIN_CHARS = 3;
+export const SITE_ASK_MAX_CHARS = 500;
+/** The most sites that may frame the widget. */
+export const SITE_EMBED_ORIGINS_MAX = 20;
+/** The highest per-site daily budget an admin may ask for; the env ceiling still applies. */
+export const SITE_ASK_BUDGET_MAX = 100_000;
+
+export interface SiteAskSettings {
+  enabled: boolean;
+  /** Answers a day this site asks for; null takes PUBLIC_ASK_DAILY_BUDGET. */
+  dailyBudget: number | null;
+  /** What applies: the asked budget under the env ceiling. 0 = Ask does not answer. */
+  effectiveDailyBudget: number;
+  /** Origins allowed to frame the widget (`Content-Security-Policy: frame-ancestors`). */
+  embedOrigins: string[];
+}
+
+/** The budget that applies: what the site asks for (null = the ceiling), never above the ceiling. */
+export function effectiveSiteAskBudget(asked: number | null, ceiling: number): number {
+  return Math.max(0, Math.min(asked ?? ceiling, ceiling));
+}
+
+/**
+ * An embed origin as stored: `scheme://host[:port]`, lower-cased, nothing
+ * after it. https only, except plain http on a loopback host for local
+ * testing. Null for anything else, so a path, a wildcard or a pasted page URL
+ * with a query is refused rather than guessed at — except that a pasted page
+ * URL is reduced to its origin, which is what anyone pasting one means.
+ */
+export function normalizeEmbedOrigin(raw: string): string | null {
+  const value = raw.trim();
+  if (!value || value.length > 300 || /[\s*'"]/.test(value)) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password) return null;
+  const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) return null;
+  if (!url.hostname.includes('.') && !loopback) return null;
+  return url.origin.toLowerCase();
+}
+
+// POST /v1/public/sites/:siteId/ask
+export interface PublicSiteAskRequest {
+  question: string;
+  /** A version slug; omitted = the default version. */
+  version?: string;
+}
+
+/** A passage an answer rests on, as a public page of the site. */
+export interface PublicSiteAskSource {
+  /** `S1`, `S2`, …: the label the answer's `[S#]` markers name. */
+  cite: string;
+  documentId: string;
+  title: string;
+  /** Headings above the passage, outermost first; the reader links to the last one's anchor. */
+  headingPath: string[];
+  /** The page's absolute URL on the site, without an anchor. */
+  url: string;
+}
+
+export interface PublicSiteAskResponse {
+  /** Markdown with `[S#]` markers, each naming one of `sources`; empty when nothing on the site matched. */
+  answer: string;
+  /** The sources the answer cites, in label order. */
+  sources: PublicSiteAskSource[];
+}
+
+/** The Ask route of a site. */
+export function publicSiteAskPath(siteId: string): string {
+  return `/v1/public/sites/${encodeURIComponent(siteId)}/ask`;
+}
+
+// GET /v1/public/sites/widget?slug=|host= — what the widget's frame needs.
+export interface PublicSiteWidgetResponse {
+  site: {
+    id: string;
+    title: string;
+    theme: SiteTheme;
+    logo: PublicSiteLogo;
+    rootUrl: string;
+  };
+  /** The origins that may frame it; the site's own are always allowed. */
+  embedOrigins: string[];
+}
+
+/** The path below a site root that serves the widget's frame. A top-level page slugged `_widget` is shadowed by it. */
+export const SITE_WIDGET_PATH = '/_widget';
 
 /** The public attachment route for an attachment of a page in a version's snapshot. */
 export function publicSiteAttachmentPath(siteId: string, versionId: string, attachmentId: string): string {

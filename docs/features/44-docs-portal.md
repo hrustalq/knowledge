@@ -405,6 +405,88 @@ of the render cache: those renders are one reader's, and caching them would
 only evict the anonymous render everyone shares. It forwards `kn_site_*`
 cookies to the API beside `kn_share_*`, and never `kn_token`.
 
+## Ask (phase 3)
+
+A site can answer questions from its own pages: an **Ask** button beside
+search in the reader, and a widget other sites embed. An admin turns it on
+in the site's **Ask** tab. It is off for every existing site.
+
+**One call, no tools** (`PublicAskService`, `public/public-ask.service.ts`).
+There is no tool harness, no thread and no principal. A question goes
+through these steps:
+
+1. The live-site check every public route makes, then Ask on with a budget
+   left (otherwise a 404 `publicAsk.notEnabled`).
+2. The per-address rate (`PUBLIC_ASK_RATE_PER_MIN`, Redis, **fails closed**:
+   an answer costs money). 429 `publicAsk.rateLimited`.
+3. The workspace's model (`resolveFor(ws, 'chat')`) and its AI budget
+   (`assertWithinBudget(ws, siteId)`). Either missing is a 503
+   `publicAsk.unavailable`: a visitor never sees the provider's own wording.
+4. Retrieval, from the version's snapshot rows **this viewer may read**
+   (`visibleRows`, the reader's own rule, so a hidden page is never ranked,
+   quoted or cited):
+   - **semantic:** the question's embedding against the chunks of exactly
+     those rows' pinned revisions (`GraphService.searchRevisionChunks`). This
+     works for live or history chunks, so a frozen version answers from what
+     it froze. A chunk whose document does not match its pinned row is dropped.
+   - **keyword:** Postgres FTS over the same rows' `search_vector`, with the
+     words **ORed** (site search ANDs them, which suits typing, not asking),
+     and an excerpt per page from `ts_headline`.
+   - Fused by reciprocal rank at page level: at most 5 pages and 2 passages
+     a page, each up to 1,500 characters, labelled `S1…`. An embedding outage
+     leaves the keyword leg; nothing at all answers `{answer: '', sources: []}`
+     **without spending the budget**.
+5. The site's daily budget (`askDailyBudget ?? PUBLIC_ASK_DAILY_BUDGET`,
+   never above the env, Redis, per UTC day, fails closed). 429
+   `publicAsk.budgetExhausted` with `retryAfter` to midnight UTC.
+6. One completion. The passages go in the user turn inside
+   `wrapUntrusted(…, 'page')`; the rules go in the system turn. The call is
+   billed as `public_ask` with `userId` = the site's id, and AI usage labels
+   it `site: <slug>`.
+7. `finalizeCitations` against the labels handed out: a label the model
+   invented is stripped, and `sources` are the cited passages as absolute
+   page URLs (the home at the version root, a non-default version under its
+   segment) plus their heading path for the anchor.
+
+**The reader** (`SiteAsk.vue`) is the same panel in both places: the reader's
+sheet and the widget's frame. It loads the markdown parser, DOMPurify and the
+citation pass (`lib/citations.ts`, shared with the app's assistant, as are the
+chip styles in `styles/citations.css`) only on the first answer. A chip or a
+source opens the page at the passage's heading. In the reader it asks with
+the reader's cookie, so a signed-in reader's answers may draw on pages others
+cannot see.
+
+**The widget.** `<script src="<site>/widget.js" async></script>`:
+
+- **`widget.js`** (`apps/web/server/site-widget.js`) is the same bytes for
+  every site. It is served at `/widget.js` on a site's host and at
+  `/pub/<slug>/widget.js`, cacheable for an hour, `Cross-Origin-Resource-Policy:
+  cross-origin`. It derives its frame from its own `src`, so it carries no
+  site id and asks the API nothing. It draws a button and a panel in a
+  closed shadow root, and accepts messages only from that frame's origin
+  and window.
+- **The frame** is `<site>/_widget`, a page of the site itself rendered by
+  the public entry (`SiteWidget.vue`). It is same-origin with the site's API,
+  so **no CORS**. Its `Content-Security-Policy: frame-ancestors 'self'
+  <site origin> <embedOrigins…>` is the whole embed check: anywhere else, the
+  browser refuses the frame. It answers 404 (and `frame-ancestors 'none'`)
+  when Ask is off.
+- The frame posts `ready` (with the label and the theme's primary colour)
+  only once it has mounted with Ask on, and the button stays hidden until
+  then. So a page on an unlisted origin, or one embedding a site without
+  Ask, shows nothing. `close` and `focus` are the other two messages. None
+  carries anything a stranger could use.
+- An embedded frame is usually cross-site, so the site's `SameSite=Lax`
+  cookie is not sent and it answers from public pages. A same-site embedder
+  (`docs.example.com` on `example.com`) does send it.
+
+**Settings** (`SiteAskPanel.vue`): on/off, answers a day (empty = the env
+value), the effective budget beside it with a note when the env caps it,
+embed origins one per line (`normalizeEmbedOrigin`: https, or http on a
+loopback host; a pasted URL is reduced to its origin; at most 20), and the
+snippet with a copy button. Warnings show when the workspace has no model or
+the env turns Ask off.
+
 ## Member UI
 
 - **Project settings → Published site** (`SiteSettingsPage.vue`,
@@ -426,6 +508,7 @@ cookies to the API beside `kn_share_*`, and never `kn_token`.
     `name=value, value` line each), and visitor sign-in: generate, replace or
     turn off the secret (both of the last two ask a second time, inline), the
     secret shown once with a copy button, and an example payload and link.
+  - **Ask**: see above.
 - **`/site-sign-in`** (`SiteSignInPage.vue`): the member hand-off above. It
   says why when it cannot sign someone in (no access to the workspace, a link
   that is not for this site).
@@ -450,6 +533,8 @@ cookies to the API beside `kn_share_*`, and never `kn_token`.
 | `PUT /v1/sites/:id/audiences/:documentId`, `DELETE …` | admin (`site`); 400 `site.audiencePageNotInSite` / `site.audienceClaimsInvalid`, 409 `site.audienceRuleLimit` (200) |
 | `POST /v1/sites/:id/visitor-secret`, `DELETE …` | admin (`site`); 409 `site.visitorSecretNeedsKey` without `SETTINGS_ENCRYPTION_KEY` |
 | `POST /v1/sites/:id/sign-in` | viewer (`site`); 400 `site.signInReturnInvalid` |
+| `GET /v1/public/sites/widget?slug=\|host=` | public: the widget frame's chrome and `embedOrigins`; 404 when Ask is off |
+| `POST /v1/public/sites/:id/ask` `{question, version?}` | public: 404 `publicAsk.notEnabled`, 429 `publicAsk.rateLimited` / `publicAsk.budgetExhausted`, 503 `publicAsk.unavailable` |
 | `GET /v1/public/sites/:id/session?code=\|jwt_token=&return=`, `POST …/session/end` | public: always a 302 back to `return` (a path on the same origin, else `/`), with the cookie set when the code or token was good |
 
 `WorkspaceSource` gains `site`, `site-version` and `site-domain`, each
@@ -463,8 +548,8 @@ destination may have its own). Deleting pages removes their snapshot rows
 
 ## Limits
 
-- Search is keyword only. There is no semantic search over a site: the vector
-  index is workspace-wide and capped, and cannot be confined to a snapshot.
+- Search is keyword only. Ask has a semantic leg (scoped to the snapshot's
+  pinned revisions); the search box does not.
 - Search needs JavaScript. There is no server-rendered results page.
 - Production serves sites in path mode only: its TLS ends at Cloudflare, so a
   base domain or a custom domain needs the edge to route those hosts first.
@@ -482,7 +567,14 @@ destination may have its own). Deleting pages removes their snapshot rows
 - A site sign-in is per origin. A site served on both its subdomain and a
   custom domain needs a sign-in on each, and sign-in returns to the address
   the reader came from.
-- The Ask widget (the rest of phase 3) is not built.
+- Ask is one question, one answer: no follow-ups and no streaming. Nothing is
+  stored, so there is no history and no feedback on a public answer.
+- Ask's semantic leg scans the snapshot's chunks in Node, capped at 5,000
+  chunks like workspace search; past that it ranks an arbitrary subset and
+  logs an error.
+- The daily budget counts questions that reach the model, including ones the
+  provider then refuses.
+- A top-level page slugged `_widget` is shadowed by the widget's frame.
 - `source_branch` falls back per page, so a "v2" version can mix branched and
   default pages. That is deliberate: a docs team branches the few pages that
   change.

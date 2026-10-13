@@ -1,17 +1,24 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   ValidateIf,
 } from 'class-validator';
 import {
+  SITE_ASK_BUDGET_MAX,
   SITE_AUDIENCE_RULE_KINDS,
+  SITE_EMBED_ORIGINS_MAX,
   SITE_FONTS,
   SITE_THEME_LIMITS,
   SITE_VERSION_KINDS,
@@ -94,6 +101,36 @@ export class UpdateSiteDto {
   @IsOptional()
   @IsUUID()
   defaultVersionId?: string;
+
+  @ApiPropertyOptional({ description: 'The site answers questions from its pages, in the reader and the embeddable widget' })
+  @IsOptional()
+  @IsBoolean()
+  askEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 0,
+    maximum: SITE_ASK_BUDGET_MAX,
+    description: 'Answers a day. null takes PUBLIC_ASK_DAILY_BUDGET, which also caps it',
+  })
+  @ValidateIf((o: UpdateSiteDto) => o.askDailyBudget !== undefined && o.askDailyBudget !== null)
+  @IsInt()
+  @Min(0)
+  @Max(SITE_ASK_BUDGET_MAX)
+  askDailyBudget?: number | null;
+
+  @ApiPropertyOptional({
+    type: [String],
+    maxItems: SITE_EMBED_ORIGINS_MAX,
+    description: 'Origins allowed to embed the widget, e.g. https://example.com. Replaces the list',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(SITE_EMBED_ORIGINS_MAX)
+  @IsString({ each: true })
+  @MaxLength(300, { each: true, message: vmsg('maxLength') })
+  embedOrigins?: string[];
 }
 
 export class CreateSiteVersionDto {

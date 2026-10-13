@@ -65,6 +65,15 @@ in the pull request that introduces them — see
   no sign it exists: it is missing from the nav and search, and its address,
   attachments and `.md` answer 404. `sitemap.xml` and `llms.txt` list public
   pages only. Replacing the visitor secret signs every visitor out. (#77)
+- **Ask on published sites.** An admin can let a site answer questions from
+  its own pages on the site's new **Ask** tab. Readers get an Ask button beside
+  search, and other sites can embed a widget with
+  `<script src="<site>/widget.js" async></script>`, but only on the origins
+  the admin lists (anywhere else, the browser refuses it). Answers are drawn
+  only from the published pages the reader may see, at the revisions the
+  version shows; every sentence links to the page it rests on. Each site has
+  a daily budget of answers; past it, visitors are told to come back tomorrow.
+  Usage shows in AI usage as **Site Ask**, labelled with the site. (#77)
 
 ### Operations
 
@@ -127,6 +136,15 @@ in the pull request that introduces them — see
   sign-in lasts. Visitor sign-in also needs `SETTINGS_ENCRYPTION_KEY` (already
   set in production) to store the site's secret; without it the Audience tab
   says so and members-only rules still work.
+- Migration `20261014120000_site_ask` adds `ask_enabled` (default `false`),
+  nullable `ask_daily_budget` and `embed_origins` (default empty) to
+  `published_sites`. Expand-only: the previous release ignores them, and a
+  rollback needs no down migration (the widget and Ask button simply go away).
+- New env vars, both with defaults: `PUBLIC_ASK_DAILY_BUDGET` (`200`; the most
+  answers one site may give a day, a ceiling over each site's own setting; `0`
+  turns Ask off everywhere) and `PUBLIC_ASK_RATE_PER_MIN` (`6`, per address).
+  Ask answers with the workspace's chat model and counts against its AI
+  budget; a workspace without a model says "unavailable".
 
 ## [0.18.0] — 2026-10-13
 

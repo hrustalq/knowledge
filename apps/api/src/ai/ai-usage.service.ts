@@ -410,6 +410,12 @@ export class AiUsageService {
       select: { id: true, email: true, displayName: true },
     });
     const map = new Map(users.map((u) => [u.id, u.email || u.displayName]));
+    // A published site's Ask bills the site itself (`public_ask`, issue #77 phase 3).
+    const others = unique.filter((id) => !map.has(id));
+    if (others.length) {
+      const sites = await this.prisma.publishedSite.findMany({ where: { id: { in: others } }, select: { id: true, slug: true } });
+      for (const site of sites) map.set(site.id, `site: ${site.slug}`);
+    }
     for (const id of unique) {
       if (!map.has(id) && id === '00000000-0000-0000-0000-000000000000') map.set(id, 'dev (AUTH_MODE=none)');
     }

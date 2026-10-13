@@ -797,6 +797,43 @@ export class GraphService {
   }
 
   /**
+   * Semantic search over the chunks of the given revisions only, live or not —
+   * a published version pins revisions that may since have become history
+   * (issue #77 phase 3, a site's Ask). The caller owns the list, so nothing
+   * outside it can rank; the workspace predicate still applies.
+   */
+  async searchRevisionChunks(workspaceId: string, revisionIds: readonly string[], queryEmbedding: number[], k: number): Promise<ChunkHit[]> {
+    if (!revisionIds.length) return [];
+    const rows = await this.arcade.query<{
+      chunkId: string;
+      documentId: string;
+      revisionId: string;
+      text: string;
+      headingPath: string[];
+      embedding: number[];
+    }>(
+      'sql',
+      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND revisionId IN :revisionIds LIMIT ${CHUNK_SCAN_LIMIT}`,
+      { workspaceId, revisionIds: [...revisionIds] },
+    );
+    if (rows.length >= CHUNK_SCAN_LIMIT) {
+      this.logger.error(`Revision-scoped vector search hit the ${CHUNK_SCAN_LIMIT}-chunk scan cap; ranking an arbitrary subset.`);
+    }
+    return rows
+      .filter((r) => Array.isArray(r.embedding) && r.embedding.length === queryEmbedding.length)
+      .map((r) => ({
+        chunkId: r.chunkId,
+        documentId: r.documentId,
+        revisionId: r.revisionId,
+        text: r.text ?? '',
+        headingPath: r.headingPath ?? [],
+        score: cosine(queryEmbedding, r.embedding),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, k);
+  }
+
+  /**
    * Phase 5 trusted-operator queries (plan.md §9): read-only, single
    * statement, row-capped. The caller's query is wrapped in an outer SELECT
    * carrying the mandatory workspace predicate, so rows without a matching

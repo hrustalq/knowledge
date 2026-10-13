@@ -5,9 +5,11 @@ import {
   type PublicSharePage,
   type PublicShareResponse,
   type PublicSiteResolveResponse,
+  type PublicSiteWidgetResponse,
 } from '@knowledge/contracts'
 import {
   SITE_VISITOR_TOKEN_PARAM,
+  SITE_WIDGET_PATH,
   publicShareAttachmentPath,
   publicSiteAttachmentPath,
   publicSiteSessionPath,
@@ -266,6 +268,7 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
     signInUrl: res.site.signInUrl
       ? `${res.site.signInUrl}&return=${encodeURIComponent(`${site.rootUrl}${requested.slice(prefix.length) || '/'}`)}`
       : null,
+    ask: res.site.ask,
   }
   const themeCss = siteThemeCss(site.theme)
   const baseHead = themeCss ? [`<style>${themeCss}</style>`] : []
@@ -338,6 +341,76 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   }
 }
 
+/**
+ * The Ask widget's frame (issue #77 phase 3): `<site>/_widget`, on the site's
+ * host or under `/pub/<slug>`. The site, if it answers questions, or null.
+ * A top-level page slugged `_widget` is shadowed by it.
+ */
+function widgetSite(url: string, ctx: PublicRenderContext): { slug: string } | { host: string } | null {
+  const match = ctx.siteHost ? null : SITE_PATH.exec(url)
+  const path = (match ? match[2] || '/' : url).split(/[?#]/)[0].replace(/\/+$/, '')
+  if (path !== SITE_WIDGET_PATH) return null
+  if (match) return { slug: match[1] }
+  return ctx.siteHost ? { host: ctx.siteHost } : null
+}
+
+/**
+ * Who may frame the widget: the site's own origins and the ones its admin
+ * listed. Nobody else — the browser refuses the frame, which is the whole of
+ * the embed check. Origins come normalized (scheme://host[:port]) from the API.
+ */
+function frameAncestors(widget: PublicSiteWidgetResponse | null): string {
+  if (!widget) return "frame-ancestors 'none'"
+  const own = (() => {
+    try {
+      return new URL(widget.site.rootUrl).origin
+    } catch {
+      return null
+    }
+  })()
+  const origins = [...new Set([own, ...widget.embedOrigins].filter((o): o is string => !!o && /^https?:\/\/[a-z0-9.:[\]-]+$/i.test(o)))]
+  return `frame-ancestors 'self' ${origins.join(' ')}`.trim()
+}
+
+async function renderWidget(key: { slug: string } | { host: string }, ctx: PublicRenderContext): Promise<PublicRenderResult> {
+  let widget: PublicSiteWidgetResponse | null = null
+  try {
+    widget = await apiGet<PublicSiteWidgetResponse>(`/v1/public/sites/widget?${new URLSearchParams(key)}`, ctx)
+  } catch (err) {
+    if (!(err instanceof ApiAnswer && err.status === 404)) throw err
+  }
+  const site = widget
+    ? {
+        ...widget.site,
+        logo: widget.site.logo?.kind === 'image' ? { kind: 'image' as const, url: `${apiPublic}${widget.site.logo.url}` } : widget.site.logo,
+      }
+    : null
+  const state: PublicReaderState = { locale: ctx.locale, apiBase: apiPublic, view: { kind: 'site-widget', site } }
+  const { app } = createPublicApp(state)
+  const html = await renderToString(app)
+  const messages = siteReaderMessages(ctx.locale)
+  const themeCss = site ? siteThemeCss(site.theme) : ''
+  const head = [
+    `<title>${escapeHtml(site ? messages.askTitle.replace('{site}', site.title) : messages.askWidgetUnavailable)}</title>`,
+    '<meta name="robots" content="noindex, nofollow">',
+    themeCss ? `<style>${themeCss}</style>` : '',
+    stateScript(state),
+  ]
+    .filter(Boolean)
+    .join('\n    ')
+  return {
+    html,
+    head,
+    status: site ? 200 : 404,
+    headers: {
+      'Content-Security-Policy': frameAncestors(widget),
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
+  }
+}
+
 /** A name for the <title>, in the reader's language. */
 function titleFor(view: PublicReaderView, locale: Locale): string {
   if (view.kind === 'share') return view.page.title
@@ -354,6 +427,8 @@ function stateScript(state: PublicReaderState): string {
 }
 
 export async function render(url: string, ctx: PublicRenderContext): Promise<PublicRenderResult> {
+  const widget = widgetSite(url, ctx)
+  if (widget) return renderWidget(widget, ctx)
   const isShare = !ctx.siteHost && SHARE_PATH.test(url)
   const resolved = isShare ? { ...(await resolveShareView(url, ctx)), head: [] as string[], noindex: true } : await resolveSiteView(url, ctx)
   if ('redirect' in resolved && resolved.redirect) {

@@ -38,6 +38,17 @@ export interface PublicSiteChrome {
    */
   viewer: SiteViewerKind
   signInUrl: string | null
+  /** The site answers questions (issue #77 phase 3): the header offers Ask. */
+  ask: boolean
+}
+
+/** The Ask widget's frame (issue #77 phase 3): the site's chrome without its pages. */
+export interface PublicSiteWidget {
+  id: string
+  title: string
+  theme: SiteTheme
+  logo: PublicSiteLogo
+  rootUrl: string
 }
 
 /**
@@ -61,6 +72,7 @@ export type PublicReaderView =
           })
         | null
     }
+  | { kind: 'site-widget'; site: PublicSiteWidget | null }
   | { kind: 'locked'; token: string }
   | {
       kind: 'share'

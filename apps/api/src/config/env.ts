@@ -202,6 +202,14 @@ export const envSchema = z.object({
    * also held to the token's own `exp`.
    */
   SITE_VISITOR_TTL_MIN: z.coerce.number().int().positive().default(1440),
+  /**
+   * Ask on published sites (issue #77 phase 3): the most answers one site may
+   * give a day. A ceiling over each site's own budget, not only its default;
+   * 0 turns Ask off everywhere.
+   */
+  PUBLIC_ASK_DAILY_BUDGET: z.coerce.number().int().min(0).default(200),
+  /** Questions per minute from one address, across every site. */
+  PUBLIC_ASK_RATE_PER_MIN: z.coerce.number().int().positive().default(6),
   /** Tick of PublishingSweeper: pending domain checks and lost site builds. */
   PUBLISHING_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   /**

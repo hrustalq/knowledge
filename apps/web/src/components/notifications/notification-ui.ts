@@ -77,6 +77,7 @@ export function notificationLink(entry: NotificationEntry): string | null {
   if (entry.type.startsWith('agent.run.')) return '/settings/ai?tab=runs'
   if (entry.type.startsWith('connector.run.')) return '/settings/connectors?tab=runs'
   if (entry.type.startsWith('import.')) return entry.documentId ? `/documents/${entry.documentId}` : '/upload'
+  if (entry.type.startsWith('export.')) return '/settings/exports'
   if (entry.documentId) return `/documents/${entry.documentId}`
   return null
 }

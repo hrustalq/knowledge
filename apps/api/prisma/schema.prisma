@@ -2268,3 +2268,51 @@ model SiteVersionPage {
   @@index([documentId])
   @@map("site_version_pages")
 }
+
+/// One export of a page, a subtree or a project (issue #77 phase 2c,
+/// docs/features/45): the request, the worker's progress and where the file
+/// is. The row is what the exports page polls; the bytes are in MinIO under
+/// `workspaces/{ws}/exports/{id}/`, deleted after `expires_at` by the API's
+/// ExportSweeper, which keeps the row as `expired`.
+///
+/// No FK anywhere, mirroring import_jobs: a page or project deleted while its
+/// export runs must not take the row (or the finished file) with it, and the
+/// title is kept for the same reason. No FK on workspace_id or requested_by,
+/// per house policy.
+model ExportJob {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// EXPORT_SCOPES: page | subtree | project.
+  scope       String
+  documentId  String? @map("document_id") @db.Uuid
+  projectId   String? @map("project_id") @db.Uuid
+  /// Per-page branch name, falling back to each page's default; null = default.
+  branch      String?
+  /// EXPORT_FORMATS: zip | html | pdf.
+  format      String
+  /// The page's or project's name when the export was asked for.
+  title       String
+
+  /// EXPORT_STATUSES: queued → running → completed | failed; completed → expired.
+  status    String  @default("queued")
+  /// EXPORT_STAGES, while running.
+  stage     String?
+  pageCount Int?    @map("page_count")
+  s3Key     String? @map("s3_key")
+  sizeBytes Int?    @map("size_bytes")
+  /// `{ code: ExportErrorCode, message }`.
+  error     Json?
+
+  /// Language of whoever asked, frozen: the worker renders the contents page
+  /// and dates in it, and has no request to read Accept-Language from.
+  locale      String    @default("en")
+  requestedBy String    @map("requested_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+
+  @@index([workspaceId, createdAt])
+  @@index([status, expiresAt])
+  @@map("export_jobs")
+}

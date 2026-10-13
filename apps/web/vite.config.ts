@@ -17,7 +17,12 @@ export default defineConfig(({ isSsrBuild }) => ({
       // public reader, each with its own HTML shell and SSR entry, so nothing
       // of the app shell ships to an anonymous reader.
       input: (isSsrBuild
-        ? { 'entry-server': 'src/entry-server.ts', 'entry-public': 'src/entry-public.ts' }
+        ? {
+            'entry-server': 'src/entry-server.ts',
+            'entry-public': 'src/entry-public.ts',
+            // The worker's export renderer (docs/features/45), called by server.js.
+            'export-render': 'src/export-render.ts',
+          }
         : { main: 'index.html', reader: 'reader.html' }) as Record<string, string>,
     },
   },

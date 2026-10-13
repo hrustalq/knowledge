@@ -38,10 +38,22 @@ export interface PublicHeading {
 }
 
 export interface PublicRenderOptions {
-  /** The reader URL of a page this link reaches, or null to unlink a reference to it. */
+  /**
+   * The reader URL of a page this link reaches, or null to unlink a reference
+   * to it. A `#heading` on the reference is kept unless the URL has its own.
+   */
   pageHref: (documentId: string) => string | null
-  /** The public URL of an attachment of a page in scope. */
-  attachmentHref: (attachmentId: string, download: boolean) => string
+  /**
+   * The public URL of an attachment of a page in scope, or null when there is
+   * none (an export that left the file out): the image goes, a link keeps its
+   * text, a file card keeps its name.
+   */
+  attachmentHref: (attachmentId: string, download: boolean) => string | null
+  /**
+   * Prefixed to every heading id and in-page `#anchor`, so pages printed one
+   * after another in one document (an export) keep their anchors apart.
+   */
+  idPrefix?: string
   /** Chrome strings, already in the reader's language. */
   labels: {
     onThisPage: string
@@ -73,7 +85,7 @@ export function renderPublicMarkdown(markdown: string, options: PublicRenderOpti
   const host = doc.createElement('div')
   host.innerHTML = purify.sanitize(markdownToHtml(markdown ?? ''), { ...SANITIZE_CONFIG }) as unknown as string
 
-  const headings = assignHeadingIds(host)
+  const headings = assignHeadingIds(host, options.idPrefix ?? '')
   wrapTables(host, doc)
   rewriteLinks(host, doc, options)
   rewriteImages(host, options)
@@ -84,7 +96,7 @@ export function renderPublicMarkdown(markdown: string, options: PublicRenderOpti
   return { html: host.innerHTML, headings, description: describe(host) }
 }
 
-function assignHeadingIds(root: HTMLElement): PublicHeading[] {
+function assignHeadingIds(root: HTMLElement, prefix: string): PublicHeading[] {
   const headings: PublicHeading[] = []
   const seen = new Map<string, number>()
   for (const el of root.querySelectorAll<HTMLElement>('h1, h2, h3')) {
@@ -95,6 +107,7 @@ function assignHeadingIds(root: HTMLElement): PublicHeading[] {
     const count = seen.get(id) ?? 0
     seen.set(id, count + 1)
     if (count > 0) id = `${id}-${count}`
+    id = prefix + id
     el.id = id
     headings.push({ id, text, level: Number(el.tagName[1]) })
   }
@@ -129,13 +142,19 @@ function rewriteLinks(root: HTMLElement, doc: Document, options: PublicRenderOpt
         a.replaceWith(span)
         continue
       }
-      a.setAttribute('href', target + (page[2] ?? ''))
+      a.setAttribute('href', target.includes('#') ? target : target + (page[2] ?? ''))
       a.removeAttribute(KN.mention)
       continue
     }
     const attachment = parseAttachmentPath(href)
     if (attachment) {
-      a.setAttribute('href', options.attachmentHref(attachment.attachmentId, false))
+      const target = options.attachmentHref(attachment.attachmentId, false)
+      if (target) a.setAttribute('href', target)
+      else unwrap(a)
+      continue
+    }
+    if (href.startsWith('#') && options.idPrefix) {
+      a.setAttribute('href', `#${options.idPrefix}${href.slice(1)}`)
       continue
     }
     // Anything else on this origin is the app, behind its login.
@@ -147,8 +166,13 @@ function rewriteImages(root: HTMLElement, options: PublicRenderOptions) {
   for (const img of root.querySelectorAll<HTMLImageElement>('img[src]')) {
     const src = img.getAttribute('src') ?? ''
     const attachment = parseAttachmentPath(src)
-    if (attachment) {
-      img.setAttribute('src', options.attachmentHref(attachment.attachmentId, false))
+    const target = attachment ? options.attachmentHref(attachment.attachmentId, false) : null
+    if (attachment && !target) {
+      img.remove()
+      continue
+    }
+    if (target) {
+      img.setAttribute('src', target)
     } else if (src.startsWith('/') && !src.startsWith('//')) {
       // An avatar or any other member-only path: there is nothing to show.
       img.remove()
@@ -178,6 +202,17 @@ function renderFiles(root: HTMLElement, doc: Document, options: PublicRenderOpti
     const card = doc.createElement('div')
     card.className = 'kn-block kn-file'
     card.dataset.kind = kind
+    if (!href || !download) {
+      card.dataset.missing = ''
+      card.innerHTML = `
+      <div class="kn-file-head">
+        <span class="kn-file-glyph" aria-hidden="true">${kind === 'pdf' ? 'PDF' : 'FILE'}</span>
+        <span class="kn-file-name">${escapeHtml(name)}</span>
+        ${size ? `<span class="kn-file-size">${escapeHtml(labels.formatBytes(size))}</span>` : ''}
+      </div>`
+      node.replaceWith(card)
+      continue
+    }
     card.innerHTML = `
       <div class="kn-file-head">
         <span class="kn-file-glyph" aria-hidden="true">${kind === 'pdf' ? 'PDF' : 'FILE'}</span>

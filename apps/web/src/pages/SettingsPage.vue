@@ -10,6 +10,7 @@ import {
   BookMarked,
   BookOpen,
   Bot,
+  Download,
   FolderKanban,
   Globe,
   LayoutTemplate,
@@ -32,6 +33,8 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/profile', label: t('nav.profile'), icon: UserRound, hint: t('settings.profileHint') },
   { to: '/settings/notifications', label: t('nav.notifications'), icon: Bell, hint: t('settings.notificationsHint') },
   { to: '/settings/connect', label: t('nav.connect'), icon: Bot, hint: t('settings.connectHint') },
+  // Open to every role: an export is a reader's act, and this lists your own.
+  { to: '/settings/exports', label: t('nav.exports'), icon: Download, hint: t('settings.exportsHint') },
   { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
   { to: '/settings/glossary', label: t('nav.glossary'), icon: BookMarked, hint: t('settings.glossaryHint') },
   { to: '/settings/templates', label: t('nav.templates'), icon: LayoutTemplate, hint: t('settings.templatesHint') },

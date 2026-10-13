@@ -43,8 +43,8 @@ export function notificationReasonRank(reason: string): number {
  * The inbox's grouping, and the unit a person can switch off.
  *
  * Cut by what somebody would actually mute rather than by which subsystem
- * emitted the event: `job` covers a workflow run, an agent run, an import and a
- * connector sync because they are one thing to the reader — background work
+ * emitted the event: `job` covers a workflow run, an agent run, an import, an
+ * export and a connector sync because they are one thing to the reader — background work
  * they started, now finished.
  */
 export const NOTIFICATION_CATEGORIES = ['mention', 'review', 'comment', 'document', 'verification', 'job'] as const;
@@ -126,6 +126,8 @@ const NOTIFIED_JOB_TYPES: readonly string[] = [
   'agent.run.failed',
   'import.parsed',
   'import.failed',
+  'export.completed',
+  'export.failed',
   'connector.run.failed',
   // "Your pull is staged and waiting on you" — the `workflow-node.awaiting-review`
   // role. The per-item events are deliberately absent: a 500-page space would

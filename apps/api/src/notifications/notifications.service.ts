@@ -461,6 +461,13 @@ export class NotificationsService {
       });
       return job?.createdBy ?? null;
     }
+    if (event.type.startsWith('export.')) {
+      const job = await this.prisma.exportJob.findUnique({
+        where: { id },
+        select: { requestedBy: true },
+      });
+      return job?.requestedBy ?? null;
+    }
     if (event.type.startsWith('connector.run.')) {
       const run = await this.prisma.connectorRun.findUnique({
         where: { id },

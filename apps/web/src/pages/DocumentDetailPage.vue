@@ -26,6 +26,7 @@ import {
   BadgeCheck,
   BookA,
   Braces,
+  Download,
   Flag,
   GitMerge,
   History,
@@ -69,6 +70,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
+import ExportDialog from '@/components/knowledge/ExportDialog.vue'
 import { PageLayout, PageRail, PageState } from '@/components/layout/page'
 import TocRail from '@/components/knowledge/TocRail.vue'
 import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
@@ -170,6 +172,8 @@ const templateChip = computed(() => {
   const name = templates.byRef(ref)?.name
   return name ? t('documents.fromTemplate', { name, version }) : t('documents.fromTemplateUnnamed', { version })
 })
+/** "Export…" (docs/features/45): a reader's act, so the menu is offered to every role. */
+const exportOpen = ref(false)
 /** "Save as template": the page as it is shown — an older revision, when one is being read. */
 const saveAsOpen = ref(false)
 const saveAsPage = computed<SaveAsTemplatePage | null>(() => {
@@ -579,14 +583,17 @@ watch(
             <span v-if="hasUnstaged" class="sr-only">{{ t('editor.unstaged.label') }}</span>
           </RouterLink>
         </Button>
-        <DropdownMenu v-if="auth.canEdit && saveAsPage">
+        <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-sm" :aria-label="t('documents.moreActions')">
               <MoreHorizontal class="size-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" class="w-48">
-            <DropdownMenuItem @select="saveAsOpen = true">
+            <DropdownMenuItem @select="exportOpen = true">
+              <Download class="size-4" /> {{ t('export.action') }}
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="auth.canEdit && saveAsPage" @select="saveAsOpen = true">
               <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -787,5 +794,9 @@ watch(
     <AskAssistant :document-id="documentId" :title="detail.document.title" />
 
     <SaveAsTemplateDialog v-model:open="saveAsOpen" :page="saveAsPage" />
+    <ExportDialog
+      v-model:open="exportOpen"
+      :target="{ kind: 'document', documentId: detail.document.documentId, title: detail.document.title }"
+    />
   </template>
 </template>

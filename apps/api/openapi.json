@@ -19679,6 +19679,377 @@
         ]
       }
     },
+    "/v1/exports/capabilities": {
+      "get": {
+        "operationId": "ExportController_capabilities",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Which formats this deployment can write, and the limits",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/exports": {
+      "get": {
+        "operationId": "ExportController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Your exports in a workspace, newest first; an admin sees everyone’s",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/documents/{id}/exports": {
+      "post": {
+        "operationId": "ExportController_exportDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDocumentExportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Too many pages (details.reason export.tooManyPages) or nothing to export"
+          },
+          "409": {
+            "description": "PDF without Gotenberg (details.reason export.formatUnavailable)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Export a page, or a page and its subpages, as ZIP, HTML or PDF",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/projects/{id}/exports": {
+      "post": {
+        "operationId": "ExportController_exportProject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectExportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Too many pages (details.reason export.tooManyPages) or nothing to export"
+          },
+          "409": {
+            "description": "PDF without Gotenberg (details.reason export.formatUnavailable)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Export every page of a project as ZIP, HTML or PDF",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/exports/{id}": {
+      "get": {
+        "operationId": "ExportController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One export — polled while it runs",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/exports/{id}/download": {
+      "get": {
+        "operationId": "ExportController_download",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Not finished (details.reason export.notReady)"
+          },
+          "410": {
+            "description": "The file was deleted after EXPORT_TTL_HOURS (details.reason export.expired)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A short-lived URL to the finished file",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
     "/v1/mcp": {
       "post": {
         "operationId": "McpController_handle",
@@ -23795,6 +24166,56 @@
         },
         "required": [
           "password"
+        ]
+      },
+      "CreateDocumentExportDto": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "zip",
+              "html",
+              "pdf"
+            ],
+            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+          },
+          "branch": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "description": "Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches"
+          },
+          "includeSubtree": {
+            "type": "boolean",
+            "description": "Also export every page under this one. Omitted: false"
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
+      "CreateProjectExportDto": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "zip",
+              "html",
+              "pdf"
+            ],
+            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+          },
+          "branch": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "description": "Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches"
+          }
+        },
+        "required": [
+          "format"
         ]
       },
       "ApiErrorResponse": {

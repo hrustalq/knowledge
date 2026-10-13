@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/vue-query'
 import {
   Activity as ActivityIcon,
   BookMarked,
+  Download,
   FileText,
   GitMerge,
   Globe,
@@ -39,6 +40,7 @@ import ActivityFeed from '@/components/knowledge/ActivityFeed.vue'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
 import UserChip from '@/components/people/UserChip.vue'
 import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
+import ExportDialog from '@/components/knowledge/ExportDialog.vue'
 import { useProjectsStore } from '@/stores/projects'
 import { useAuthStore } from '@/stores/auth'
 
@@ -46,6 +48,8 @@ const { t } = useI18n()
 const route = useRoute()
 const projects = useProjectsStore()
 const auth = useAuthStore()
+/** "Export project" (docs/features/45): open to every reader of the project. */
+const exportOpen = ref(false)
 
 const RAIL_WIDGETS = [
   { id: 'overview', label: t('rail.overview'), icon: Info, expandable: false },
@@ -171,10 +175,17 @@ const isActive = computed(() => projectId.value === projects.activeId)
         <Button v-if="!isActive" variant="outline" size="sm" @click="projects.switchProject(project.projectId)">
           {{ t('project.setAsActive') }}
         </Button>
+        <Button variant="outline" size="sm" @click="exportOpen = true">
+          <Download class="size-3.5" /> {{ t('export.actionProject') }}
+        </Button>
         <Button as-child variant="ghost" size="sm">
           <RouterLink :to="`/settings/projects/${project.projectId}`">{{ t('nav.settings') }}</RouterLink>
         </Button>
       </div>
+      <ExportDialog
+        v-model:open="exportOpen"
+        :target="{ kind: 'project', projectId: project.projectId, title: project.name }"
+      />
     </header>
 
     <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_28rem]">

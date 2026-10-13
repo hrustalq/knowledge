@@ -152,6 +152,11 @@ services:
     restart: unless-stopped
     init: true
     env_file: [.env]
+    environment:
+      # Exports (docs/features/45): the worker asks the web container to render
+      # an export's HTML over the compose network, never through Caddy — the
+      # route answers only callers that came through no proxy.
+      WEB_INTERNAL_URL: http://web:5173
     volumes:
       - applogs:/app/logs
     depends_on:
@@ -185,6 +190,18 @@ services:
       # worker.main boots six Nest modules before any processor registers.
       start_period: 60s
       retries: 3
+
+  # PDF export (docs/features/45), opt-in: not started by `up -d`. To turn PDF
+  # on, `docker compose --profile gotenberg up -d gotenberg` and set
+  # GOTENBERG_URL=http://gotenberg:3000 in .env (~1 GB image: Chromium +
+  # LibreOffice). No ports: only the worker talks to it. Its Chromium is held
+  # to its own upload folder — a page can embed any URL, and whatever it
+  # fetched would be printed into a PDF the requester downloads.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    profiles: ["gotenberg"]
+    restart: unless-stopped
+    command: ["gotenberg", "--chromium-allow-list=^file:///tmp/.*", "--api-timeout=300s"]
 
   web:
     image: knowledge-web:${TAG:-latest}

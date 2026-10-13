@@ -632,6 +632,20 @@ export type I18nTranslations = {
             "domainLimit": string;
             "customDomainsOff": string;
         };
+        "export": {
+            "notFound": string;
+            "notYours": string;
+            "tooManyPages": string;
+            "nothingToExport": string;
+            "formatUnavailable": string;
+            "notReady": string;
+            "expired": string;
+            "tooLarge": string;
+            "renderFailed": string;
+            "convertFailed": string;
+            "timedOut": string;
+            "failed": string;
+        };
     };
     "import": {
         "stage": {
@@ -846,6 +860,7 @@ export type I18nTranslations = {
         "site": string;
         "siteVersion": string;
         "siteDomain": string;
+        "export": string;
     };
     "validation": {
         "isDefined": string;

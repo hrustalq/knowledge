@@ -1,0 +1,86 @@
+/*
+ * An exported page (docs/features/45): the chrome around editor.css's
+ * `.markdown-body`, for an offline HTML bundle and for print. Inlined by
+ * src/export-render.ts after tokens.css and editor.css, so a page reads the
+ * way it does in the app. No web fonts: an export opens offline, and Gotenberg's
+ * Chromium makes no network request.
+ */
+
+:root {
+  --font-display: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+  color-scheme: light;
+}
+
+html { background: var(--background); }
+body {
+  margin: 0;
+  color: var(--foreground);
+  font-family: var(--font-display);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.kn-export-shell {
+  max-width: calc(var(--kn-measure) + 4rem);
+  margin: 0 auto;
+  padding: 2.5rem 2rem 4rem;
+}
+
+.kn-export-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.kn-export-crumbs li + li::before { content: '/'; margin-right: 0.35rem; opacity: 0.6; }
+.kn-export-crumbs a { color: inherit; }
+
+.kn-export-cover { margin-bottom: 2rem; }
+.kn-export-title { font-size: 2rem; font-weight: 700; line-height: 1.2; margin: 0 0 0.4rem; }
+.kn-export-meta { margin: 0; font-size: 0.875rem; color: var(--muted-foreground); }
+
+.kn-export-page-title { font-size: 1.9rem; font-weight: 700; line-height: 1.2; margin: 0 0 1rem; }
+
+.kn-export-contents h2 { font-size: 1.1rem; margin: 0 0 0.6rem; }
+.kn-export-contents ol { margin: 0; padding: 0; list-style: none; }
+.kn-export-contents li { padding-left: calc(var(--depth, 0) * 1.1rem); margin: 0.2rem 0; }
+.kn-export-contents a { color: var(--foreground); text-decoration: none; }
+.kn-export-contents a:hover { color: var(--primary); text-decoration: underline; }
+
+.kn-export-children { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.kn-export-children h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--muted-foreground); }
+.kn-export-children ul { margin: 0; padding-left: 1.1rem; }
+
+.kn-export-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+.kn-export-pager a { color: var(--primary); text-decoration: none; }
+.kn-export-pager a:hover { text-decoration: underline; }
+.kn-export-pager .kn-export-next { margin-left: auto; text-align: right; }
+
+/* A file card whose bytes are not in the export: its name, no links. */
+.kn-file[data-missing] .kn-file-links { display: none; }
+
+/* Print (PDF): one page per page, no screen padding, nothing that only works on screen. */
+@media print {
+  .kn-export-shell { max-width: none; padding: 0; }
+  .kn-export-cover { padding-top: 30vh; break-after: page; }
+  .kn-export-contents { break-after: page; }
+  .kn-export-page + .kn-export-page { break-before: page; }
+  .kn-export-page-title { break-after: avoid; }
+  .markdown-body :is(h1, h2, h3, h4) { break-after: avoid; }
+  .markdown-body :is(pre, table, figure, img, .kn-mermaid-figure, .kn-panel) { break-inside: avoid; }
+  .markdown-body a { color: inherit; }
+  .kn-table-scroll { overflow: visible !important; }
+  details > summary { list-style: none; }
+}

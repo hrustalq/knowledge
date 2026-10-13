@@ -146,6 +146,7 @@ export function createRouter() {
           // and the inventory of every link. Gated in the page on
           // auth.canAdminWorkspace, as AI settings are; the API enforces admin.
           { path: 'publishing', component: () => import('@/pages/PublishingSettingsPage.vue') },
+          { path: 'exports', component: () => import('@/pages/ExportsPage.vue') },
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on
           // auth.canAdminWorkspace and the API enforces the admin role.

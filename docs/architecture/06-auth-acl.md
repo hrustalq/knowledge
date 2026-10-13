@@ -189,6 +189,18 @@ the peer is internal (Caddy, the web SSR). The `share-link`, `site`,
 `site-version` and `site-domain` sources resolve their ids to a workspace for
 the authenticated management routes, like every other source.
 
+A site may keep pages from the public (issue #77 phase 3, feature 44
+"Audiences"). That makes the public surface aware of a reader, but never of
+the app's session: a site sign-in is its own httpOnly `kn_site_<siteId>`
+cookie on the site's origin, mapped in Redis to a member (re-checked against
+`workspace_members` and `users.disabled_at` on every request) or a visitor
+(the claims of a customer-signed HS256 JWT, bound to the site's current
+secret). A member gets there through one authenticated route,
+`POST /v1/sites/:id/sign-in` (`viewer` on `site`), which mints a one-time code
+only for a return address that is one of the site's own; the public
+`…/session` route spends it. Every failure reads as anonymous, and a hidden
+page is a 404, never a 403.
+
 Exports ([feature 45](../features/45-export.md)) are member-only. Asking for
 one is `viewer` on the page or project it covers, so the guard resolves the
 workspace from that id. The `export` source covers the job itself, and the

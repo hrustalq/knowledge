@@ -25,7 +25,10 @@ import { PublicSiteFilesService } from '../src/public/public-site-files.service.
  * - paths: version segments, the home page, and a version switch that keeps
  *   the reader on the same page;
  * - management: create needs the switch, slugs are checked, a version may not
- *   shadow a top-level page, and the default version cannot be deleted.
+ *   shadow a top-level page, and the default version cannot be deleted;
+ * - audiences (phase 3): a page kept from the reader is absent everywhere —
+ *   tree, path, alternates, attachments, sitemap, llms.txt, `.md` — as a 404,
+ *   never a 403, and the ETags move when a restamp changes who sees what.
  */
 
 const WS = '11111111-1111-4111-8111-111111111111';
@@ -74,11 +77,22 @@ function fakePrisma() {
     { id: V_OLD, siteId: SITE, name: 'v1', slug: 'v1', kind: 'frozen', builtAt: built, createdAt: new Date(2) },
     { id: V_UNBUILT, siteId: SITE, name: 'next', slug: 'next', kind: 'live', builtAt: null, createdAt: new Date(3) },
   ];
-  const pages = [
-    { versionId: V_LATEST, documentId: DOC_HOME, revisionId: 'home-r3', parentId: null, position: 0, depth: 0, slugPath: 'welcome', title: 'Welcome' },
-    { versionId: V_LATEST, documentId: DOC_INSTALL, revisionId: 'install-r5', parentId: DOC_HOME, position: 0, depth: 1, slugPath: 'welcome/install', title: 'Install' },
+  const pages: Array<{
+    versionId: string;
+    documentId: string;
+    revisionId: string;
+    parentId: string | null;
+    position: number;
+    depth: number;
+    slugPath: string;
+    title: string;
+    audience: string;
+    audienceClaims: unknown;
+  }> = [
+    { versionId: V_LATEST, documentId: DOC_HOME, revisionId: 'home-r3', parentId: null, position: 0, depth: 0, slugPath: 'welcome', title: 'Welcome', audience: 'public', audienceClaims: null },
+    { versionId: V_LATEST, documentId: DOC_INSTALL, revisionId: 'install-r5', parentId: DOC_HOME, position: 0, depth: 1, slugPath: 'welcome/install', title: 'Install', audience: 'public', audienceClaims: null },
     // The frozen version pinned older revisions, and had no install page yet.
-    { versionId: V_OLD, documentId: DOC_HOME, revisionId: 'home-r1', parentId: null, position: 0, depth: 0, slugPath: 'welcome', title: 'Welcome' },
+    { versionId: V_OLD, documentId: DOC_HOME, revisionId: 'home-r1', parentId: null, position: 0, depth: 0, slugPath: 'welcome', title: 'Welcome', audience: 'public', audienceClaims: null },
   ];
   const domains = [
     { id: 'd-1', siteId: SITE, hostname: 'docs.acme.com', verifiedAt: new Date('2026-10-13T00:00:00Z') as Date | null },
@@ -155,8 +169,17 @@ function reader(envOverrides: Record<string, unknown> = {}) {
   };
   const attachments = { readUrl: vi.fn(async (doc: string, att: string) => `https://s3/${doc}/${att}`) };
   const avatars = { presignedGet: vi.fn(async () => 'https://s3/avatar') };
-  const service = new PublicSitesService(prisma as never, settings, documents as never, attachments as never, avatars as never, config as never);
-  return { prisma, service, documents, attachments };
+  const sessions = { viewer: vi.fn(async () => ({ kind: 'anonymous' })) };
+  const service = new PublicSitesService(
+    prisma as never,
+    settings,
+    documents as never,
+    attachments as never,
+    avatars as never,
+    config as never,
+    sessions as never,
+  );
+  return { prisma, service, documents, attachments, sessions };
 }
 
 describe('site helpers (contracts)', () => {
@@ -530,5 +553,102 @@ describe('PublicSitesService.resolveTagged (the render cache’s check)', () => 
     const { etag } = await service.resolveTagged({ slug: 'acme', path: '/' });
     prisma.site.status = 'draft';
     await expect(service.resolveTagged({ slug: 'acme', path: '/' }, etag)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('audiences: a page the reader may not see does not exist for them', () => {
+  /** Install (a child of the home) kept to members in the latest version. */
+  function restricted(stamp: { audience: string; audienceClaims?: unknown } = { audience: 'members' }) {
+    const r = files();
+    const row = r.prisma.pages.find((p) => p.versionId === V_LATEST && p.documentId === DOC_INSTALL)!;
+    row.audience = stamp.audience;
+    row.audienceClaims = stamp.audienceClaims ?? null;
+    return r;
+  }
+
+  it('anonymous: gone from the tree, its path answers no page, and the site says it has more', async () => {
+    const { service } = restricted();
+    const res = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    expect(res.tree.map((n) => n.documentId)).toEqual([DOC_HOME]);
+    expect(res.page).toBeNull();
+    expect(res.viewer).toBe('anonymous');
+    expect(res.site.restricted).toBe(true);
+    expect(res.site.signInUrl).toBe(`https://kb.example.com/site-sign-in?site=${SITE}`);
+  });
+
+  it('a site with every page public offers no sign-in', async () => {
+    const res = await files().service.resolve({ slug: 'acme', path: '/' });
+    expect(res.site).toMatchObject({ restricted: false, signInUrl: null });
+  });
+
+  it('a member sees it, and the cookie is what decides', async () => {
+    const { service, sessions } = restricted();
+    sessions.viewer.mockResolvedValue({ kind: 'member' });
+    const res = await service.resolve({ slug: 'acme', path: '/welcome/install' }, 'kn_site_x=1');
+    expect(sessions.viewer).toHaveBeenCalledWith(expect.objectContaining({ id: SITE }), 'kn_site_x=1');
+    expect(res.page?.documentId).toBe(DOC_INSTALL);
+    expect(res.viewer).toBe('member');
+  });
+
+  it('a visitors page: only a visitor whose claims match; members-only pages stay hidden from visitors', async () => {
+    const { service, sessions } = restricted({ audience: 'visitors', audienceClaims: { plan: ['pro'] } });
+    sessions.viewer.mockResolvedValue({ kind: 'visitor', claims: { plan: 'free' } });
+    expect((await service.resolve({ slug: 'acme', path: '/welcome/install' })).page).toBeNull();
+    sessions.viewer.mockResolvedValue({ kind: 'visitor', claims: { plan: ['basic', 'pro'] } });
+    expect((await service.resolve({ slug: 'acme', path: '/welcome/install' })).page?.documentId).toBe(DOC_INSTALL);
+
+    const members = restricted({ audience: 'members' });
+    members.sessions.viewer.mockResolvedValue({ kind: 'visitor', claims: { plan: 'pro' } });
+    expect((await members.service.resolve({ slug: 'acme', path: '/welcome/install' })).page).toBeNull();
+  });
+
+  it('a child of a hidden page is hidden too, even if its own stamp says public', async () => {
+    const { service, prisma } = files();
+    prisma.pages.find((p) => p.versionId === V_LATEST && p.documentId === DOC_HOME)!.audience = 'members';
+    const res = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    expect(res.tree).toEqual([]);
+    expect(res.page).toBeNull();
+  });
+
+  it('the ETag differs between viewers, so a cached render never crosses a sign-in', async () => {
+    const { service, sessions } = restricted();
+    const anonymous = await service.resolveTagged({ slug: 'acme', path: '/' });
+    sessions.viewer.mockResolvedValue({ kind: 'member' });
+    const member = await service.resolveTagged({ slug: 'acme', path: '/' }, anonymous.etag);
+    expect(member.body).not.toBeNull();
+    expect(member.etag).not.toBe(anonymous.etag);
+  });
+
+  it('an attachment of a hidden page is a 404; the member gets it', async () => {
+    const { service, sessions } = restricted();
+    await expect(service.attachmentUrl(SITE, V_LATEST, ATT_INSTALL, false)).rejects.toBeInstanceOf(NotFoundException);
+    sessions.viewer.mockResolvedValue({ kind: 'member' });
+    await expect(service.attachmentUrl(SITE, V_LATEST, ATT_INSTALL, false, 'kn_site_x=1')).resolves.toContain(DOC_INSTALL);
+  });
+
+  it('another version does not name it as an alternate to a reader who may not see it there', async () => {
+    const { service, prisma } = files();
+    prisma.pages.push({ versionId: V_OLD, documentId: DOC_INSTALL, revisionId: 'install-r1', parentId: DOC_HOME, position: 0, depth: 1, slugPath: 'welcome/install', title: 'Install', audience: 'members', audienceClaims: null });
+    const res = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    expect(res.page?.alternates).toEqual([]);
+  });
+
+  it('sitemap, llms.txt and llms-full.txt list public pages only, whoever asks; the .md is a 404', async () => {
+    const { files: f, sessions } = restricted();
+    sessions.viewer.mockResolvedValue({ kind: 'member' }); // never consulted
+    expect((await f.sitemap({ slug: 'acme' })).body).not.toContain('install');
+    expect((await f.llmsIndex({ slug: 'acme' })).body).not.toContain('Install');
+    expect((await f.llmsFullPlan({ slug: 'acme' })).pages.map((p) => p.documentId)).toEqual([DOC_HOME]);
+    await expect(f.markdown({ slug: 'acme', path: 'welcome/install' })).rejects.toBeInstanceOf(NotFoundException);
+    expect(sessions.viewer).not.toHaveBeenCalled();
+  });
+
+  it('a restamp alone (no build) changes the files’ ETags', async () => {
+    const { files: f, prisma } = files();
+    const before = await f.sitemap({ slug: 'acme' });
+    prisma.pages.find((p) => p.versionId === V_LATEST && p.documentId === DOC_INSTALL)!.audience = 'members';
+    const after = await f.sitemap({ slug: 'acme' }, before.etag);
+    expect(after.body).not.toBeNull();
+    expect(after.etag).not.toBe(before.etag);
   });
 });

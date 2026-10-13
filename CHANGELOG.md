@@ -54,6 +54,17 @@ in the pull request that introduces them — see
   refused before it starts. DOCX is not offered: Gotenberg converts only to
   PDF. MCP gains `knowledge_export` and `knowledge_get_export`, both open to
   read-only keys. (#77)
+- **Site audiences.** An admin can keep parts of a published site from the
+  public on the site's new **Audience** tab. A rule on a page covers it and
+  everything below it: **Members** pages are for workspace members, who sign
+  in to the site through the app; **Visitors** pages are also open to people
+  your own backend signs in, by sending them to any site page with
+  `?jwt_token=` holding an HS256 JWT signed with the site's secret, optionally
+  only when its claims match (`plan=pro`). Rules apply to every version at once,
+  frozen ones included, with no rebuild. A reader who may not see a page gets
+  no sign it exists: it is missing from the nav and search, and its address,
+  attachments and `.md` answer 404. `sitemap.xml` and `llms.txt` list public
+  pages only. Replacing the visitor secret signs every visitor out. (#77)
 
 ### Operations
 
@@ -105,6 +116,17 @@ in the pull request that introduces them — see
   with `--chromium-allow-list=^file:///tmp/.*`: keep that flag on any
   Gotenberg you point at, or a page that embeds an internal URL gets it
   fetched from inside your network and printed into the PDF.
+- Migration `20261014090000_site_audiences` adds the `site_audience_rules`
+  table, `audience` (default `'public'`) and nullable `audience_claims` to
+  `site_version_pages`, and two nullable visitor-secret columns to
+  `published_sites`. Expand-only: the previous release runs against it and
+  shows every page, as it always did, so a rollback needs no down migration —
+  but **a rollback makes restricted pages public again** until the release
+  that reads the rules is back.
+- New env var `SITE_VISITOR_TTL_MIN` (default `1440`): how long a site
+  sign-in lasts. Visitor sign-in also needs `SETTINGS_ENCRYPTION_KEY` (already
+  set in production) to store the site's secret; without it the Audience tab
+  says so and members-only rules still work.
 
 ## [0.18.0] — 2026-10-13
 

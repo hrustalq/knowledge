@@ -5,6 +5,7 @@ import type {
   PublicSiteTreeNode,
   PublicSiteVersionRef,
   SiteTheme,
+  SiteViewerKind,
 } from '@knowledge/contracts'
 import { siteHomeDocumentId, sitePagePath } from '@knowledge/contracts/publishing'
 import type { PublicHeading } from '@/lib/markdown/public-render.server'
@@ -30,6 +31,13 @@ export interface PublicSiteChrome {
   version: PublicSiteVersionRef
   versions: PublicSiteVersionRef[]
   tree: PublicSiteTreeNode[]
+  /**
+   * Who the API read this as, and how to change it (issue #77 phase 3). The
+   * reader offers sign-in only on a site with pages that are not public, and
+   * sign-out to anyone signed in.
+   */
+  viewer: SiteViewerKind
+  signInUrl: string | null
 }
 
 /**

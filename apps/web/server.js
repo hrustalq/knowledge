@@ -162,17 +162,24 @@ function readCookie(header, name) {
 }
 
 /**
- * Only the share-unlock cookies, rebuilt as a Cookie header. A public render
- * must never carry `kn_token` to the API: the reader is anonymous even when
- * the person opening the link happens to be signed in to the app.
+ * Only the share-unlock and site sign-in cookies, rebuilt as a Cookie header.
+ * A public render must never carry `kn_token` to the API: the reader is
+ * anonymous even when the person opening the link happens to be signed in to
+ * the app. A site sign-in (`kn_site_<id>`, issue #77 phase 3) is the site's
+ * own session, opened on the site's origin for that site alone.
  */
 function shareCookies(header) {
   if (!header) return ''
   return header
     .split(';')
     .map((part) => part.trim())
-    .filter((part) => /^kn_share_[0-9a-f-]{36}=/i.test(part))
+    .filter((part) => /^kn_(?:share|site)_[0-9a-f-]{36}=/i.test(part))
     .join('; ')
+}
+
+/** Does the request carry a site sign-in? Its render is that reader's, never the shared one. */
+function hasSiteSession(header) {
+  return !!header && /(?:^|;\s*)kn_site_[0-9a-f-]{36}=/i.test(header)
 }
 
 /** The visitor's address chain plus the peer, as Caddy would forward it to the API. */
@@ -201,7 +208,10 @@ async function renderPublic(req, res, url, siteHost) {
   }
   const locale = resolveLocale(readCookie(req.headers.cookie, 'kn_lang'), req.headers['accept-language'])
   const headerTraceId = res.getHeader('x-request-id')
-  const cacheKey = renderCache.enabled ? renderCacheKey({ siteHost, url, locale }) : null
+  // A signed-in reader may see pages others do not. The API's ETag already
+  // tells the renders apart, but caching them here would only evict the
+  // anonymous render everyone else shares.
+  const cacheKey = renderCache.enabled && !hasSiteSession(req.headers.cookie) ? renderCacheKey({ siteHost, url, locale }) : null
   const cached = cacheKey ? renderCache.get(cacheKey) : null
   let rendered
   try {

@@ -26,9 +26,18 @@ function liveSite() {
   return { id: SITE, defaultVersion: latest, versions: [latest, old] };
 }
 
-function searcher(rows: Array<Record<string, string>> = []) {
-  const sites = { findById: vi.fn(async (id: string) => (id === SITE ? liveSite() : Promise.reject(new NotFoundException()))) };
-  const prisma = { $queryRaw: vi.fn(async (_strings: TemplateStringsArray, ..._values: unknown[]) => rows) };
+/** A version's snapshot rows as the audience filter reads them; all public unless a spec says otherwise. */
+type StampRow = { documentId: string; parentId: string | null; audience: string; audienceClaims: unknown };
+
+function searcher(rows: Array<Record<string, string>> = [], stamps: StampRow[] = [], viewer: unknown = { kind: 'anonymous' }) {
+  const sites = {
+    findById: vi.fn(async (id: string) => (id === SITE ? liveSite() : Promise.reject(new NotFoundException()))),
+    viewer: vi.fn(async () => viewer),
+  };
+  const prisma = {
+    $queryRaw: vi.fn(async (_strings: TemplateStringsArray, ..._values: unknown[]) => rows),
+    siteVersionPage: { findMany: vi.fn(async () => stamps) },
+  };
   return { sites, prisma, service: new PublicSiteSearchService(sites as never, prisma as never) };
 }
 

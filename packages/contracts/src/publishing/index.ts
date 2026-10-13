@@ -595,6 +595,195 @@ export interface ProjectSiteResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Audiences (issue #77 phase 3, docs/features/44)
+//
+// A site can keep pages from the public. A rule on a page restricts it and
+// everything below it to `members` (anyone with a role in the workspace,
+// signed in through the app) or `visitors` (a person the customer's own
+// backend vouches for with a signed JWT, optionally only when its claims
+// match). Rules only restrict, and they add up down the tree, so a subpage is
+// never more open than its parent: its URL, which carries the parent's slug,
+// and its place in the nav could not be shown without the parent.
+//
+// Every version's snapshot rows carry the folded result (`audience` +
+// `audienceClaims`), restamped whenever a rule changes, so a reader filters
+// on the row alone and a frozen version follows the rules of today.
+// ---------------------------------------------------------------------------
+
+/** Who a snapshot row is shown to. `public` is the absence of any rule above it. */
+export const SITE_AUDIENCES = ['public', 'visitors', 'members'] as const;
+export type SiteAudience = (typeof SITE_AUDIENCES)[number];
+
+/** What a rule may ask for. `public` is not a rule: removing the rules is. */
+export const SITE_AUDIENCE_RULE_KINDS = ['visitors', 'members'] as const;
+export type SiteAudienceRuleKind = (typeof SITE_AUDIENCE_RULE_KINDS)[number];
+
+/**
+ * Claim requirements of a `visitors` rule: each key must be in the visitor's
+ * JWT with a value (or, for an array claim, any element) among the listed
+ * ones, e.g. `{ "plan": ["pro", "enterprise"] }`. Null or `{}`: any valid
+ * token will do.
+ */
+export type SiteAudienceClaims = Record<string, string[]>;
+
+export const SITE_AUDIENCE_CLAIM_LIMITS = { keys: 10, values: 50, keyChars: 64, valueChars: 200 } as const;
+const CLAIM_KEY = /^[A-Za-z0-9_.:-]+$/;
+
+/**
+ * Who is reading. `member` is a workspace member signed in through the app,
+ * and sees every page; `visitor` carries the claims of the JWT it signed in
+ * with.
+ */
+export type SiteViewer =
+  | { kind: 'anonymous' }
+  | { kind: 'member' }
+  | { kind: 'visitor'; claims: Record<string, unknown> };
+
+export type SiteViewerKind = SiteViewer['kind'];
+
+/** Why a claims object is refused, as field paths; empty when it is fine. */
+export function siteAudienceClaimsErrors(input: unknown): string[] {
+  if (input === null || input === undefined) return [];
+  if (typeof input !== 'object' || Array.isArray(input)) return ['claims'];
+  const entries = Object.entries(input as Record<string, unknown>);
+  const errors: string[] = [];
+  if (entries.length > SITE_AUDIENCE_CLAIM_LIMITS.keys) errors.push('claims');
+  for (const [key, values] of entries) {
+    if (!key || key.length > SITE_AUDIENCE_CLAIM_LIMITS.keyChars || !CLAIM_KEY.test(key)) errors.push(`claims.${key}`);
+    else if (
+      !Array.isArray(values) ||
+      values.length === 0 ||
+      values.length > SITE_AUDIENCE_CLAIM_LIMITS.values ||
+      values.some((v) => typeof v !== 'string' || !v.trim() || v.length > SITE_AUDIENCE_CLAIM_LIMITS.valueChars)
+    ) {
+      errors.push(`claims.${key}`);
+    }
+  }
+  return errors;
+}
+
+/** Trimmed, deduplicated and key-sorted; null when nothing is required. Assumes `siteAudienceClaimsErrors` passed. */
+export function normalizeAudienceClaims(input: unknown): SiteAudienceClaims | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const out: SiteAudienceClaims = {};
+  for (const key of Object.keys(input).sort()) {
+    const values = (input as Record<string, unknown>)[key];
+    if (!Array.isArray(values)) continue;
+    const kept = [...new Set(values.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter(Boolean))];
+    if (kept.length) out[key] = kept;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** Both sets of requirements at once: a key in both keeps only the values both allow (possibly none, which nobody matches). */
+export function mergeAudienceClaims(a: SiteAudienceClaims | null, b: SiteAudienceClaims | null): SiteAudienceClaims | null {
+  if (!a) return b;
+  if (!b) return a;
+  const out: SiteAudienceClaims = { ...a };
+  for (const [key, values] of Object.entries(b)) out[key] = key in out ? out[key].filter((v) => values.includes(v)) : values;
+  return Object.fromEntries(Object.entries(out).sort(([x], [y]) => x.localeCompare(y)));
+}
+
+/** Does a visitor's token satisfy the requirements? Only string, number and boolean claim values compare. */
+export function audienceClaimsMatch(required: SiteAudienceClaims | null | undefined, claims: Record<string, unknown>): boolean {
+  if (!required) return true;
+  for (const [key, allowed] of Object.entries(required)) {
+    const raw = claims[key];
+    const values = Array.isArray(raw) ? raw : [raw];
+    const ok = values.some((v) => (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') && allowed.includes(String(v)));
+    if (!ok) return false;
+  }
+  return true;
+}
+
+export interface SiteAudienceRuleInput {
+  audience: SiteAudienceRuleKind;
+  claims: SiteAudienceClaims | null;
+}
+
+/** A row's stamp: the strictest audience on its way down from the top, with every `visitors` rule's claims combined. */
+export interface SiteAudienceStamp {
+  audience: SiteAudience;
+  claims: SiteAudienceClaims | null;
+}
+
+const AUDIENCE_RANK: Record<SiteAudience, number> = { public: 0, visitors: 1, members: 2 };
+
+/**
+ * Fold the rules met on a page's path (`documents.path` ids, top first,
+ * the page itself last) into its stamp. `members` outranks `visitors`, which
+ * outranks `public`; claims are only kept while the stamp is `visitors`.
+ */
+export function foldSiteAudience(pathIds: readonly string[], rules: ReadonlyMap<string, SiteAudienceRuleInput>): SiteAudienceStamp {
+  let audience: SiteAudience = 'public';
+  let claims: SiteAudienceClaims | null = null;
+  for (const id of pathIds) {
+    const rule = rules.get(id);
+    if (!rule) continue;
+    if (AUDIENCE_RANK[rule.audience] > AUDIENCE_RANK[audience]) audience = rule.audience;
+    if (rule.audience === 'visitors') claims = mergeAudienceClaims(claims, rule.claims);
+  }
+  return { audience, claims: audience === 'visitors' ? claims : null };
+}
+
+/** May this viewer read a row with this stamp? */
+export function siteViewerCanSee(stamp: { audience: string; audienceClaims?: unknown }, viewer: SiteViewer): boolean {
+  if (stamp.audience === 'public') return true;
+  if (viewer.kind === 'member') return true;
+  if (stamp.audience === 'visitors' && viewer.kind === 'visitor') {
+    return audienceClaimsMatch((stamp.audienceClaims ?? null) as SiteAudienceClaims | null, viewer.claims);
+  }
+  return false;
+}
+
+export interface SiteAudienceRule {
+  documentId: string;
+  documentTitle: string;
+  audience: SiteAudienceRuleKind;
+  claims: SiteAudienceClaims | null;
+  updatedAt: string;
+}
+
+// GET /v1/sites/:id/audiences
+export interface SiteAudiencesResponse {
+  rules: SiteAudienceRule[];
+  visitorAuth: {
+    /** A JWT secret is set: visitor sign-in works. */
+    configured: boolean;
+    setAt: string | null;
+    /** SETTINGS_ENCRYPTION_KEY is set, so a secret can be stored at all. */
+    canStore: boolean;
+  };
+  /** How long a sign-in lasts, SITE_VISITOR_TTL_MIN. */
+  sessionTtlMinutes: number;
+}
+
+// POST /v1/sites/:id/visitor-secret — the only time the secret is shown.
+export interface SiteVisitorSecretResponse {
+  secret: string;
+  setAt: string;
+}
+
+// POST /v1/sites/:id/sign-in
+export interface SiteSignInResponse {
+  /** Where to send the browser: the site's own session route, carrying a one-time code. */
+  url: string;
+}
+
+/** The cookie a site's sign-in sets on the site's own origin. */
+export function siteSessionCookieName(siteId: string): string {
+  return `kn_site_${siteId}`;
+}
+
+/** The query parameter a customer's backend appends to any site URL to sign a visitor in. */
+export const SITE_VISITOR_TOKEN_PARAM = 'jwt_token';
+
+/** The site's session route, on whatever origin the reader is on (Caddy and Vite strip `/api`). */
+export function publicSiteSessionPath(siteId: string): string {
+  return `/v1/public/sites/${encodeURIComponent(siteId)}/session`;
+}
+
+// ---------------------------------------------------------------------------
 // The anonymous site reader (GET /v1/public/sites/…). Like the share shapes:
 // nothing here carries an author, a revision id, frontmatter or history.
 // ---------------------------------------------------------------------------
@@ -648,7 +837,16 @@ export interface PublicSiteResolveResponse {
     logo: PublicSiteLogo;
     /** Absolute URL of the site root, for canonical links. */
     rootUrl: string;
+    /**
+     * Some pages of this version are not public (issue #77 phase 3): the
+     * reader offers members a way to sign in. Says nothing about which pages.
+     */
+    restricted: boolean;
+    /** The app page that signs a member in to this site; the reader appends `return`. Null when nothing is restricted. */
+    signInUrl: string | null;
   };
+  /** Who the API read this as: decides what `tree` and `page` contain. */
+  viewer: SiteViewerKind;
   version: PublicSiteVersionRef & { id: string; builtAt: string };
   versions: PublicSiteVersionRef[];
   tree: PublicSiteTreeNode[];

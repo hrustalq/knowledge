@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import {
   SITE_SEARCH_MAX_CHARS,
   SITE_SEARCH_MAX_RESULTS,
@@ -8,7 +9,7 @@ import {
 } from '@knowledge/contracts';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { PublicSitesService } from './public-sites.service.js';
+import { PublicSitesService, visibleRows } from './public-sites.service.js';
 
 /** Words a query is cut to; past this, a query is a paste, not a search. */
 const MAX_TERMS = 8;
@@ -58,7 +59,9 @@ export function snippetParts(headline: string): PublicSiteSearchSnippetPart[] {
  * revision. So a result can only be a page of that version, at the revision
  * that version shows: a draft, a page added since the build, or one the
  * snapshot left out has no row here to match. Keyword only; no embedding
- * path, so nothing from the workspace-wide vector index can leak in.
+ * path, so nothing from the workspace-wide vector index can leak in. Rows the
+ * reader may not see (issue #77 phase 3) are filtered in the same statement,
+ * so a hidden page is never ranked, counted or quoted.
  */
 @Injectable()
 export class PublicSiteSearchService {
@@ -67,12 +70,14 @@ export class PublicSiteSearchService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async search(siteId: string, query: { q?: string; version?: string }): Promise<PublicSiteSearchResponse> {
+  async search(siteId: string, query: { q?: string; version?: string }, cookieHeader?: string): Promise<PublicSiteSearchResponse> {
     const site = await this.sites.findById(siteId);
     const version = query.version ? site.versions.find((v) => v.slug === query.version) : site.defaultVersion;
     if (!version) throw new NotFoundException(t('error.site.notFound'));
     const tsquery = siteSearchQuery(query.q ?? '');
     if (!tsquery) return { results: [] };
+    const visible = await this.visibleFilter(site, version.id, cookieHeader);
+    if (visible === null) return { results: [] };
 
     // Ranked and cut in the inner query; the headline, which re-parses the
     // body, is computed for the survivors only.
@@ -85,6 +90,7 @@ export class PublicSiteSearchService {
         FROM site_version_pages
         WHERE version_id = ${version.id}::uuid
           AND search_vector @@ to_tsquery('russian', ${tsquery})
+          ${visible}
         ORDER BY rank DESC, depth, position
         LIMIT ${SITE_SEARCH_MAX_RESULTS}
       ) hit
@@ -98,5 +104,27 @@ export class PublicSiteSearchService {
         snippet: snippetParts(r.snippet ?? ''),
       })),
     };
+  }
+
+  /**
+   * The SQL condition that keeps a viewer to the rows they may read: nothing
+   * for a version that is all theirs, an id list otherwise, and null when
+   * they may read no row at all.
+   */
+  private async visibleFilter(
+    site: Awaited<ReturnType<PublicSitesService['findById']>>,
+    versionId: string,
+    cookieHeader: string | undefined,
+  ): Promise<Prisma.Sql | null> {
+    const rows = await this.prisma.siteVersionPage.findMany({
+      where: { versionId },
+      orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+      select: { documentId: true, parentId: true, audience: true, audienceClaims: true },
+    });
+    if (rows.every((r) => r.audience === 'public')) return Prisma.empty;
+    const visible = visibleRows(rows, await this.sites.viewer(site, cookieHeader));
+    if (visible.length === rows.length) return Prisma.empty;
+    if (!visible.length) return null;
+    return Prisma.sql`AND document_id = ANY(${visible.map((r) => r.documentId)}::uuid[])`;
   }
 }

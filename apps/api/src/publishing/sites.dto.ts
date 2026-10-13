@@ -10,7 +10,15 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
-import { SITE_FONTS, SITE_THEME_LIMITS, SITE_VERSION_KINDS, type SiteFont, type SiteVersionKind } from '@knowledge/contracts';
+import {
+  SITE_AUDIENCE_RULE_KINDS,
+  SITE_FONTS,
+  SITE_THEME_LIMITS,
+  SITE_VERSION_KINDS,
+  type SiteAudienceRuleKind,
+  type SiteFont,
+  type SiteVersionKind,
+} from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 /**
@@ -143,4 +151,28 @@ export class AddSiteDomainDto {
   @IsNotEmpty()
   @MaxLength(300, { message: vmsg('maxLength') })
   hostname!: string;
+}
+
+export class SetSiteAudienceRuleDto {
+  @ApiProperty({ enum: SITE_AUDIENCE_RULE_KINDS, description: '`members`: signed-in workspace members only; `visitors`: also people signed in with a JWT from your backend' })
+  @IsIn(SITE_AUDIENCE_RULE_KINDS)
+  audience!: SiteAudienceRuleKind;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: { type: 'array', items: { type: 'string' } },
+    nullable: true,
+    description: '`visitors` only: claims the JWT must carry, each with one of the listed values, e.g. {"plan":["pro"]}. Omitted or null: any valid token',
+  })
+  @ValidateIf((o: SetSiteAudienceRuleDto) => o.claims !== undefined && o.claims !== null)
+  @IsObject()
+  claims?: Record<string, string[]> | null;
+}
+
+export class SiteSignInDto {
+  @ApiProperty({ maxLength: 2000, description: 'The site page to come back to, as an absolute URL on one of the site’s own addresses' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000, { message: vmsg('maxLength') })
+  returnUrl!: string;
 }

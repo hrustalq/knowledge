@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * /settings/projects/:id/site (docs/features/44, issue #77 phases 2a–2b): a
- * project's published site — its address, root page, look, versions and
- * custom domains.
+ * /settings/projects/:id/site (docs/features/44, issue #77 phases 2a–3): a
+ * project's published site — its address, root page, look, versions, custom
+ * domains and who may read which part of it (SiteAudiencePanel).
  *
  * Reading it is open to anyone who can read the project; every control is an
  * admin's, as the routes behind it are. While the workspace switch (or the
@@ -48,6 +48,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageState } from '@/components/layout/page'
+import SiteAudiencePanel from '@/components/projects/SiteAudiencePanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -112,8 +113,10 @@ function previewUrl(slug: string): string {
 
 // ---------------------------------------------------------------- tabs
 // Hand-rolled (CLAUDE.md); `?tab=` opens one, it is not two-way state.
-const TABS = ['general', 'theme', 'versions', 'domains'] as const
+const TABS = ['general', 'theme', 'versions', 'domains', 'audience'] as const
 type Tab = (typeof TABS)[number]
+/** Who may read which pages is an admin's to see as well as to change: the rules name restricted pages. */
+const visibleTabs = computed(() => TABS.filter((id) => id !== 'audience' || canManage.value))
 const tab = ref<Tab>(TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'general')
 
 // ---------------------------------------------------------------- create
@@ -459,7 +462,7 @@ const backToProject = () => router.push(`/settings/projects/${projectId.value}`)
 
         <div class="flex gap-1 border-b" role="tablist">
           <button
-            v-for="id in TABS"
+            v-for="id in visibleTabs"
             :key="id"
             type="button"
             role="tab"
@@ -595,6 +598,8 @@ const backToProject = () => router.push(`/settings/projects/${projectId.value}`)
         </form>
 
         <!-- Domains -->
+        <SiteAudiencePanel v-else-if="tab === 'audience' && canManage" :site="site" :pages="pageOptions" :can-manage="canManage" />
+
         <div v-else-if="tab === 'domains'" class="max-w-3xl space-y-6">
           <p
             v-if="!policy.customDomains"

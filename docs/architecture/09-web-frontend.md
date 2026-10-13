@@ -41,8 +41,10 @@ rendered by a second entry,
 `src/entry-public.ts`, into its own shell, `reader.html`, with its own client
 entry and app (`public-main.ts`: no router, Pinia, query client or auth guard;
 `SharePage` or `SitePage` by the view resolved) (docs/features/43, 44). It
-receives only the language, the `kn_share_*` cookies and the visitor's
-`X-Forwarded-For`; `kn_token` never reaches a public render. The render
+receives only the language, the `kn_share_*` and `kn_site_*` cookies (share
+unlocks and site sign-ins, both scoped to one link or site) and the visitor's
+`X-Forwarded-For`; `kn_token` never reaches a public render. A request with a
+`kn_site_*` cookie skips the site render cache: its render is one reader's. The render
 returns its own headers (a share's no-referrer/noindex/no-store, a site's
 robots rule) and may answer with a redirect to a page's one canonical URL. Its
 page body is HTML from `lib/markdown/public-render.server.ts`, which sanitizes

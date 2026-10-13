@@ -18874,6 +18874,313 @@
         ]
       }
     },
+    "/v1/sites/{id}/audiences": {
+      "get": {
+        "operationId": "SitesController_listAudiences",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Who may read which part of the site: the audience rules and whether visitor sign-in is set up",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/sites/{id}/audiences/{documentId}": {
+      "put": {
+        "operationId": "SitesController_setAudience",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSiteAudienceRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Not a page of this site, or the claims are malformed (details.reason site.audiencePageNotInSite | site.audienceClaimsInvalid)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Keep a page and everything below it from the public. Applies to every version at once",
+        "tags": [
+          "publishing"
+        ]
+      },
+      "delete": {
+        "operationId": "SitesController_removeAudience",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a page’s rule: it is public again unless a rule above it says otherwise",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/sites/{id}/visitor-secret": {
+      "post": {
+        "operationId": "SitesController_rotateVisitorSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "SETTINGS_ENCRYPTION_KEY is not set (details.reason site.visitorSecretNeedsKey)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set a new secret for visitor JWTs (HS256), shown once. The old one stops working, and its sessions end",
+        "tags": [
+          "publishing"
+        ]
+      },
+      "delete": {
+        "operationId": "SitesController_clearVisitorSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Turn visitor sign-in off. Open visitor sessions end at once",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
     "/v1/public/shares/{token}": {
       "get": {
         "operationId": "PublicSharesController_view",
@@ -19224,6 +19531,150 @@
           }
         },
         "summary": "Search one version of a live site: its published pages only, at the revisions it shows",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/{siteId}/session": {
+      "get": {
+        "operationId": "PublicSitesController_openSession",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": false,
+            "in": "query",
+            "description": "A one-time sign-in code from POST /v1/sites/:id/sign-in",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jwt_token",
+            "required": false,
+            "in": "query",
+            "description": "A visitor JWT (HS256) signed with the site’s visitor secret; `exp` is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "return",
+            "required": false,
+            "in": "query",
+            "description": "Where to go afterwards: a path on this same origin. Anything else goes to `/`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Back to `return` on this origin, with the cookie set when the code or token was good"
+          },
+          "404": {
+            "description": "No live site with this id"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Exchange a sign-in code or visitor JWT for the site’s session cookie, then redirect back",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/{siteId}/session/end": {
+      "post": {
+        "operationId": "PublicSitesController_endSession",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sign out of the site: the session ends at once and the cookie is cleared",
         "tags": [
           "public"
         ]
@@ -19676,6 +20127,76 @@
         "summary": "May a TLS certificate be issued for this hostname? 200 for a site’s subdomain or verified custom domain",
         "tags": [
           "public"
+        ]
+      }
+    },
+    "/v1/sites/{id}/sign-in": {
+      "post": {
+        "operationId": "SiteSignInController_signIn",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteSignInDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "The return URL is not on one of the site’s addresses (details.reason site.signInReturnInvalid)"
+          },
+          "404": {
+            "description": "No live site with this id"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A one-time sign-in to a live site for the calling member: the URL to send the browser to",
+        "tags": [
+          "publishing"
         ]
       }
     },
@@ -24156,6 +24677,33 @@
           "hostname"
         ]
       },
+      "SetSiteAudienceRuleDto": {
+        "type": "object",
+        "properties": {
+          "audience": {
+            "type": "string",
+            "enum": [
+              "visitors",
+              "members"
+            ],
+            "description": "`members`: signed-in workspace members only; `visitors`: also people signed in with a JWT from your backend"
+          },
+          "claims": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "nullable": true,
+            "description": "`visitors` only: claims the JWT must carry, each with one of the listed values, e.g. {\"plan\":[\"pro\"]}. Omitted or null: any valid token"
+          }
+        },
+        "required": [
+          "audience"
+        ]
+      },
       "UnlockShareDto": {
         "type": "object",
         "properties": {
@@ -24166,6 +24714,19 @@
         },
         "required": [
           "password"
+        ]
+      },
+      "SiteSignInDto": {
+        "type": "object",
+        "properties": {
+          "returnUrl": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "The site page to come back to, as an absolute URL on one of the site’s own addresses"
+          }
+        },
+        "required": [
+          "returnUrl"
         ]
       },
       "CreateDocumentExportDto": {

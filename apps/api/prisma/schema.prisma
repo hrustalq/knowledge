@@ -8,20 +8,20 @@ datasource db {
 }
 
 model Document {
-  id            String   @id @default(uuid()) @db.Uuid
-  workspaceId   String   @map("workspace_id") @db.Uuid
+  id                    String    @id @default(uuid()) @db.Uuid
+  workspaceId           String    @map("workspace_id") @db.Uuid
   // Workspace > Project > Document. Denormalized against projects.workspace_id
   // on purpose: the S3 key layout, the graph predicate, ingestion_jobs and
   // activity_log all key off workspace_id, so it stays. Services enforce
   // project.workspaceId === document.workspaceId on create and on move.
-  projectId     String   @map("project_id") @db.Uuid
-  title         String
-  defaultBranch String   @default("main") @map("default_branch")
+  projectId             String    @map("project_id") @db.Uuid
+  title                 String
+  defaultBranch         String    @default("main") @map("default_branch")
   // Feature 07 categorization: constrained in the API layer (DOCUMENT_CATEGORIES).
-  category      String   @default("other")
+  category              String    @default("other")
   // Feature 08 nesting: Confluence-style hierarchy; no FK so children of a
   // deleted/legacy parent surface as roots instead of breaking.
-  parentId      String?  @map("parent_id") @db.Uuid
+  parentId              String?   @map("parent_id") @db.Uuid
   /// Ancestor ids root-first INCLUDING self, slash-delimited at both ends:
   /// `/<rootId>/<midId>/<selfId>/`. Ids, not titles — a rename would otherwise
   /// rewrite a whole subtree. Text, not ltree: the schema installs no Postgres
@@ -29,21 +29,21 @@ model Document {
   ///
   /// Delimiters on both ends are load-bearing. They make the cycle check a
   /// plain `includes('/<id>/')` and stop `/a/ab/` prefix-matching `/a/abc/`.
-  path          String   @default("/pending/")
+  path                  String    @default("/pending/")
   /// Ids in `path` minus one; a root is 0. Denormalized so a breadcrumb costs
   /// no walk (docs/features/08).
-  depth         Int      @default(0)
+  depth                 Int       @default(0)
   /// Sort key among siblings. Backfilled from the title order the tree was
   /// drawn in before this column existed, so the migration changes nothing on
   /// screen; manual reordering is the upgrade it makes possible.
-  position      Int      @default(0)
+  position              Int       @default(0)
   /// Manual verification stamp (docs/features/38): a person said "this page is
   /// right" at `verified_revision_id`. Whether it still holds is derived against
   /// the head at read time (`verificationStateFor`), never stored. No FK on
   /// verified_by, per house policy on user columns. Nullable: no backfill.
-  verifiedAt         DateTime? @map("verified_at") @db.Timestamptz
-  verifiedBy         String?   @map("verified_by") @db.Uuid
-  verifiedRevisionId String?   @map("verified_revision_id") @db.Uuid
+  verifiedAt            DateTime? @map("verified_at") @db.Timestamptz
+  verifiedBy            String?   @map("verified_by") @db.Uuid
+  verifiedRevisionId    String?   @map("verified_revision_id") @db.Uuid
   /// Ownership, freshness, declared state and archive (docs/features/39, #66).
   /// The stamp above IS the verified state; nothing stored says "verified".
   /// `verification_flag` holds the one state a person or agent *declares*
@@ -76,15 +76,16 @@ model Document {
   /// the pages made from it. Null = the page did not start from a template.
   templateRef           String?   @map("template_ref")
   templateVersion       Int?      @map("template_version")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  project       Project            @relation(fields: [projectId], references: [id])
-  branches      DocumentBranch[]
-  revisions     DocumentRevision[]
-  mergeRequests MergeRequest[]
-  attachments   Attachment[]
-  threads       DocumentThread[]
-  shareLinks    ShareLink[]
+  project           Project            @relation(fields: [projectId], references: [id])
+  branches          DocumentBranch[]
+  revisions         DocumentRevision[]
+  mergeRequests     MergeRequest[]
+  attachments       Attachment[]
+  threads           DocumentThread[]
+  shareLinks        ShareLink[]
+  siteAudienceRules SiteAudienceRule[]
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -652,31 +653,31 @@ model AssistantThread {
 }
 
 model AssistantMessage {
-  id        String   @id @default(uuid()) @db.Uuid
-  threadId  String   @map("thread_id") @db.Uuid
-  role      String
-  content   String
+  id         String   @id @default(uuid()) @db.Uuid
+  threadId   String   @map("thread_id") @db.Uuid
+  role       String
+  content    String
   // AssistantToolCall[] trace (tool, arguments, ok) — JSON, same shape as the
   // one-shot /ask response; also how the sidebar derives "documents touched".
-  toolCalls Json     @default("[]") @map("tool_calls")
+  toolCalls  Json     @default("[]") @map("tool_calls")
   // AssistantAskSource[] the reply grounded on, for citation chips.
-  sources   Json     @default("[]")
+  sources    Json     @default("[]")
   // AssistantUiBlock[] — generative UI: existing components (GraphView/ActivityFeed/SearchWidget)
   // the assistant asked the chat pane to render inline for this turn.
-  uiBlocks  Json     @default("[]") @map("ui_blocks")
+  uiBlocks   Json     @default("[]") @map("ui_blocks")
   // AssistantPrompt | null — the turn ended by asking the user something
   // (pick one of these / tick the ones that apply / switch to Agent mode).
   // Nullable rather than a default so "asked nothing" and "asked something"
   // stay distinguishable, and the column can be added without a backfill.
-  prompt    Json?
+  prompt     Json?
   // AnswerCitation[] — sentence spans of `content` and the source labels each
   // rests on (docs/features/38). Empty for user turns and pre-feature rows.
-  citations Json     @default("[]")
+  citations  Json     @default("[]")
   // AnswerConfidence | null — derived at the end of the turn from observable
   // signals. Nullable so pre-feature rows and user turns read as "not assessed"
   // rather than as a level.
   confidence Json?
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   thread AssistantThread @relation(fields: [threadId], references: [id])
 
@@ -693,8 +694,8 @@ model AssistantMessage {
 /// a rewind deletes messages, and a vote that outlives its message is still a
 /// data point for the surveyor and the backtest.
 model AnswerFeedback {
-  id               String    @id @default(uuid()) @db.Uuid
-  workspaceId      String    @map("workspace_id") @db.Uuid
+  id               String   @id @default(uuid()) @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
   /// ANSWER_SIGNAL_KINDS: vote | low-confidence | no-answer
   kind             String
   /// ANSWER_SURFACES: assistant | editor-assistant | ask | mcp
@@ -706,18 +707,18 @@ model AnswerFeedback {
   comment          String?
   /// The question, as asked. User content: purged by retention (phase 3).
   query            String
-  answerExcerpt    String?   @map("answer_excerpt")
-  threadId         String?   @map("thread_id") @db.Uuid
-  messageId        String?   @map("message_id") @db.Uuid
+  answerExcerpt    String?  @map("answer_excerpt")
+  threadId         String?  @map("thread_id") @db.Uuid
+  messageId        String?  @map("message_id") @db.Uuid
   /// MCP: the knowledge_search call the agent built its answer from.
-  traceId          String?   @map("trace_id")
-  citedDocumentIds Json      @default("[]") @map("cited_document_ids")
+  traceId          String?  @map("trace_id")
+  citedDocumentIds Json     @default("[]") @map("cited_document_ids")
   /// AnswerConfidence snapshot at answer time.
   confidence       Json?
-  createdBy        String    @map("created_by") @db.Uuid
-  apiKeyId         String?   @map("api_key_id") @db.Uuid
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy        String   @map("created_by") @db.Uuid
+  apiKeyId         String?  @map("api_key_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   // One vote per person per message. NULL message_id rows (ask, mcp) are
   // exempt — SQL unique treats NULLs as distinct — and dedupe differently.
@@ -2151,29 +2152,34 @@ model PublishingSettings {
 /// phase 2a). One per project. Public routes never read a branch head: they
 /// read a version's snapshot (`site_version_pages`) and nothing else.
 model PublishedSite {
-  id               String   @id @default(uuid()) @db.Uuid
-  workspaceId      String   @map("workspace_id") @db.Uuid
-  projectId        String   @unique @map("project_id") @db.Uuid
+  id                  String    @id @default(uuid()) @db.Uuid
+  workspaceId         String    @map("workspace_id") @db.Uuid
+  projectId           String    @unique @map("project_id") @db.Uuid
   /// `<slug>.PUBLISH_BASE_DOMAIN`, or `/pub/<slug>` in path mode. A DNS label.
-  slug             String   @unique
+  slug                String    @unique
   /// PUBLISHED_SITE_STATUSES: draft | live | unpublished. Only `live` is served.
-  status           String   @default("draft")
+  status              String    @default("draft")
   /// Null publishes the whole project; otherwise that page and its subtree.
   /// No FK: a deleted root leaves the site empty rather than blocking the delete.
-  rootDocumentId   String?  @map("root_document_id") @db.Uuid
+  rootDocumentId      String?   @map("root_document_id") @db.Uuid
   /// SiteTheme (contracts), always written through normalizeSiteTheme.
-  theme            Json     @default("{}")
-  seoIndexable     Boolean  @default(true) @map("seo_indexable")
+  theme               Json      @default("{}")
+  seoIndexable        Boolean   @default(true) @map("seo_indexable")
   /// The version served without a version segment. No FK (it points into
   /// this site's own versions, which cascade from it).
-  defaultVersionId String?  @map("default_version_id") @db.Uuid
-  createdBy        String   @map("created_by") @db.Uuid
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  defaultVersionId    String?   @map("default_version_id") @db.Uuid
+  /// The HS256 secret a customer's backend signs visitor JWTs with (issue #77
+  /// phase 3), under the secret box. Null: visitor sign-in is off.
+  visitorSecretCipher String?   @map("visitor_secret_cipher")
+  visitorSecretSetAt  DateTime? @map("visitor_secret_set_at") @db.Timestamptz
+  createdBy           String    @map("created_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  project  Project       @relation(fields: [projectId], references: [id])
-  versions SiteVersion[]
-  domains  SiteDomain[]
+  project       Project            @relation(fields: [projectId], references: [id])
+  versions      SiteVersion[]
+  domains       SiteDomain[]
+  audienceRules SiteAudienceRule[]
 
   @@index([workspaceId])
   @@map("published_sites")
@@ -2242,24 +2248,30 @@ model SiteVersion {
 /// published, and deleting a page removes its rows explicitly
 /// (ProjectCascadeService).
 model SiteVersionPage {
-  versionId  String  @map("version_id") @db.Uuid
-  documentId String  @map("document_id") @db.Uuid
-  revisionId String  @map("revision_id") @db.Uuid
+  versionId      String                   @map("version_id") @db.Uuid
+  documentId     String                   @map("document_id") @db.Uuid
+  revisionId     String                   @map("revision_id") @db.Uuid
   /// The nearest published ancestor; null for a top-level page of the site.
-  parentId   String? @map("parent_id") @db.Uuid
-  position   Int
-  depth      Int
+  parentId       String?                  @map("parent_id") @db.Uuid
+  position       Int
+  depth          Int
   /// `guides/install`; '' for the root page of a site published from one page.
-  slugPath   String  @map("slug_path")
-  title      String
+  slugPath       String                   @map("slug_path")
+  title          String
   /// Site search (issue #77 phase 2b-2): the pinned revision's headings and
   /// body as plain text, written by the build. Snippets are cut from the body.
-  searchHeadings String @default("") @map("search_headings")
-  searchBody     String @default("") @map("search_body")
+  searchHeadings String                   @default("") @map("search_headings")
+  searchBody     String                   @default("") @map("search_body")
   /// title (A) + headings (B) + body (C) under the `russian` configuration,
   /// which stems English words too. Set by raw SQL after the rows are written;
   /// null = not indexed yet (SiteSearchTextService backfills it).
   searchVector   Unsupported("tsvector")? @map("search_vector")
+  /// SITE_AUDIENCES (issue #77 phase 3): the site's audience rules folded down
+  /// this page's path. Written by the build and restamped on every rule change,
+  /// so a frozen version follows today's rules without changing its content.
+  audience       String                   @default("public")
+  /// SiteAudienceClaims a `visitors` page requires; null = any visitor.
+  audienceClaims Json?                    @map("audience_claims")
 
   version SiteVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
@@ -2267,6 +2279,30 @@ model SiteVersionPage {
   @@unique([versionId, slugPath])
   @@index([documentId])
   @@map("site_version_pages")
+}
+
+/// A site's audience rule (issue #77 phase 3, docs/features/44): this page and
+/// everything below it are kept from the public. Rules only restrict and add up
+/// down the tree (`foldSiteAudience`), so a subpage is never more open than its
+/// parent. Per site, not per version: every version's snapshot is restamped
+/// from these rows (`SiteAudienceStamper`).
+model SiteAudienceRule {
+  siteId     String   @map("site_id") @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  /// SITE_AUDIENCE_RULE_KINDS: visitors | members
+  audience   String
+  /// SiteAudienceClaims for a `visitors` rule; null = any signed-in visitor.
+  claims     Json?
+  createdBy  String   @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  site     PublishedSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  document Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, documentId])
+  @@index([documentId])
+  @@map("site_audience_rules")
 }
 
 /// One export of a page, a subtree or a project (issue #77 phase 2c,

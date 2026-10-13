@@ -51,6 +51,11 @@ interface TextSink {
  * Every URL is absolute against the site's canonical root (its first verified
  * domain, else its subdomain or path), and every page URL is the one the
  * reader serves it at, home rule included.
+ *
+ * Public pages only, whoever asks (issue #77 phase 3): these files are for
+ * crawlers and agents and never vary by cookie. A page kept to members or
+ * visitors is left out, and its `.md` is a 404. Since a rule change restamps
+ * rows without a build, the restricted ids are part of every ETag here.
  */
 @Injectable()
 export class PublicSiteFilesService {
@@ -74,7 +79,7 @@ export class PublicSiteFilesService {
     if (!site.seoIndexable) throw this.notFound();
     const version = site.defaultVersion;
     const root = this.sites.rootUrl(site);
-    const etag = this.etag('sitemap', site, version, [root]);
+    const etag = this.etag('sitemap', site, version, [root, await this.restricted(version.id)]);
     if (matches(ifNoneMatch, etag)) return { etag, body: null };
 
     const rows = await this.rows(version.id);
@@ -121,7 +126,12 @@ export class PublicSiteFilesService {
     const root = this.sites.rootUrl(site);
     const title = await this.title(site);
     const others = site.versions.filter((v) => v.id !== version.id);
-    const etag = this.etag('llms', site, version, [root, title, others.map((v) => [v.id, v.slug, v.name])]);
+    const etag = this.etag('llms', site, version, [
+      root,
+      title,
+      others.map((v) => [v.id, v.slug, v.name]),
+      await this.restricted(version.id),
+    ]);
     if (matches(ifNoneMatch, etag)) return { etag, body: null };
 
     const rows = await this.rows(version.id);
@@ -157,7 +167,7 @@ export class PublicSiteFilesService {
     const versionSlug = this.segment(site, version);
     const prefix = versionSlug ? `${root}/${encodeURIComponent(versionSlug)}` : root;
     return {
-      etag: this.etag('llms-full', site, version, [root, title, caps]),
+      etag: this.etag('llms-full', site, version, [root, title, caps, await this.restricted(version.id)]),
       header: renderFullHeader({ title, indexUrl: `${prefix}/llms.txt` }),
       pages: this.ordered(rows).map((r) => ({
         documentId: r.documentId,
@@ -251,9 +261,10 @@ export class PublicSiteFilesService {
     return version.id === site.defaultVersionId ? null : version.slug;
   }
 
+  /** The version's public rows. A public stamp folds down from public ancestors, so no row here hangs from a hidden one. */
   private rows(versionId: string): Promise<SnapshotRow[]> {
     return this.prisma.siteVersionPage.findMany({
-      where: { versionId },
+      where: { versionId, audience: 'public' },
       orderBy: [{ depth: 'asc' }, { position: 'asc' }],
       select: SNAPSHOT_ROW,
     });
@@ -274,6 +285,16 @@ export class PublicSiteFilesService {
         s3Key: '',
       })),
     ).map((p) => ({ ...byId.get(p.id)!, depth: p.depth }));
+  }
+
+  /** Ids of the version's pages kept from the public, sorted: what a restamp can change without a build. */
+  private async restricted(versionId: string): Promise<string[]> {
+    const rows = await this.prisma.siteVersionPage.findMany({
+      where: { versionId, audience: { not: 'public' } },
+      select: { documentId: true },
+      orderBy: { documentId: 'asc' },
+    });
+    return rows.map((r) => r.documentId);
   }
 
   private async title(site: LiveSite): Promise<string> {

@@ -47,12 +47,14 @@
 	# the bucket is private, so an unsigned request is refused by MinIO itself.
 	# No SSR route starts with /knowledge/ (/knowledge-health does not match).
 	#
-	# SigV4 signs the Host. The Worker reaches Funnel as the *.ts.net name and
-	# carries the public host in X-Forwarded-Host, so restore it here or every
-	# signature fails with SignatureDoesNotMatch.
+	# SigV4 signs the Host, and every URL is signed for S3_PUBLIC_ENDPOINT's
+	# host, so MinIO must see exactly that or it answers SignatureDoesNotMatch.
+	# Neither request header can say it: the Worker reaches Funnel as the
+	# *.ts.net name, and Funnel overwrites the X-Forwarded-Host the Worker sets
+	# with that same name. So the host is configuration, not a header.
 	handle /{$S3_BUCKET:knowledge}/* {
 		reverse_proxy minio:9000 {
-			header_up Host {header.X-Forwarded-Host}
+			header_up Host {$S3_PUBLIC_HOST}
 		}
 	}
 

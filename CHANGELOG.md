@@ -13,6 +13,23 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Downloads from object storage work again in production: export files
+  (PDF, ZIP, HTML), page attachments and avatars. Each one failed with
+  `403 SignatureDoesNotMatch`, because Tailscale Funnel replaces the
+  `X-Forwarded-Host` that Caddy used to rebuild the host the URL was signed
+  for. Caddy now sets that host from configuration. (#167)
+
+### Operations
+
+- The `caddy` service takes a new optional variable, `S3_PUBLIC_HOST`. It must
+  be `S3_PUBLIC_ENDPOINT`'s host; `docker-compose.prod.yml` defaults it to
+  `knowledge.hrustalq.dev`, so production needs no change. Set it in the
+  `production` environment only if `S3_PUBLIC_ENDPOINT` moves. (#167)
+
 ## [0.19.0] — 2026-10-14
 
 ### Added

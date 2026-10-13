@@ -68,6 +68,7 @@ function linkText(s: string): string {
 export interface IndexLink {
   id: string;
   title: string;
+  /** The link's note after `: `; empty for none. */
   category: string;
   depth: number;
   url: string;
@@ -84,7 +85,7 @@ export function renderLlmsIndex(input: {
     if (s.pages.length === 0) continue;
     lines.push(`## ${s.heading}`, '');
     for (const p of s.pages) {
-      lines.push(`${'  '.repeat(p.depth)}- [${linkText(p.title)}](${p.url}): ${p.category}`);
+      lines.push(`${'  '.repeat(p.depth)}- [${linkText(p.title)}](${p.url})${p.category ? `: ${p.category}` : ''}`);
     }
     lines.push('');
   }

@@ -211,28 +211,41 @@ export function aiReadableMiddleware({ apiBase, readCookie, fetch = globalThis.f
       res.status(401).set({ 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
       return res.end(UNAUTHORIZED_HINT)
     }
-    if (upstream.status >= 400) {
-      // Agents read this: plain text, not the API's JSON envelope.
-      const msg = await errorText(upstream)
-      res.status(upstream.status).set({ 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
-      return res.end(`${upstream.status} ${msg}\n`)
-    }
-
-    res.status(upstream.status)
-    for (const h of PASS_HEADERS) {
-      const v = upstream.headers.get(h)
-      if (v == null) continue
-      if (h === 'vary') appendVary(res, v)
-      else res.setHeader(h, v)
-    }
-    if (!upstream.body || upstream.status === 304 || req.method === 'HEAD') return res.end()
-
-    const body = Readable.fromWeb(upstream.body)
-    body.on('error', (err) => {
-      logger?.warn({ msg: 'ai-readable stream aborted', route: req.originalUrl, err })
-      res.destroy(err)
-    })
-    res.on('close', () => body.destroy())
-    body.pipe(res)
+    return relay(req, res, upstream, logger)
   }
+}
+
+/**
+ * Send an API answer on as this response: an error as one plain-text line
+ * (agents read it, not the API's JSON envelope), anything else with the
+ * API's own status, cache and type headers and its body streamed through.
+ * Shared with the site files (site-files.js).
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {Response} upstream
+ * @param {{ warn: (o: object) => void } | undefined} logger
+ */
+export async function relay(req, res, upstream, logger) {
+  if (upstream.status >= 400) {
+    const msg = await errorText(upstream)
+    res.status(upstream.status).set({ 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
+    return res.end(`${upstream.status} ${msg}\n`)
+  }
+
+  res.status(upstream.status)
+  for (const h of PASS_HEADERS) {
+    const v = upstream.headers.get(h)
+    if (v == null) continue
+    if (h === 'vary') appendVary(res, v)
+    else res.setHeader(h, v)
+  }
+  if (!upstream.body || upstream.status === 304 || req.method === 'HEAD') return res.end()
+
+  const body = Readable.fromWeb(upstream.body)
+  body.on('error', (err) => {
+    logger?.warn({ msg: 'upstream stream aborted', route: req.originalUrl, err })
+    res.destroy(err)
+  })
+  res.on('close', () => body.destroy())
+  body.pipe(res)
 }

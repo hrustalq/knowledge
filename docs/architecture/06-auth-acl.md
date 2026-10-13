@@ -8,10 +8,10 @@ _before_ any graph or storage query is issued.
 
 `AUTH_MODE` switches the whole posture:
 
-| Mode                | Behaviour                                                                 |
-| ------------------- | -------------------------------------------------------------------------- |
-| `none` _(default)_  | Every request is a synthetic **dev principal** with full access             |
-| `api-key`           | `Authorization: Bearer` resolved against sessions or API keys               |
+| Mode               | Behaviour                                                       |
+| ------------------ | --------------------------------------------------------------- |
+| `none` _(default)_ | Every request is a synthetic **dev principal** with full access |
+| `api-key`          | `Authorization: Bearer` resolved against sessions or API keys   |
 
 `none` is what keeps the demo and local web flows working with no signup. It is
 also why **ACLs cannot be tested in dev mode** — bootstrap a key instead
@@ -46,6 +46,7 @@ is execution order**: `AuthGuard` → `AclGuard`.
    mints a ticket first with `POST /v1/auth/url-ticket` (header credential
    only; `@ReadKeyOk`) and puts that in `?token=`. `test/url-tickets.spec.ts`
    pins the rules.
+
 2. **`AclGuard`** reads `@Access(role, source)` metadata, resolves the target
    **workspace in PostgreSQL**, and 403s on failure.
 
@@ -91,14 +92,14 @@ cannot be demoted or removed.**
 
 Everything is hashed; nothing reversible is stored.
 
-| Secret          | Prefix | Storage                                       |
-| --------------- | ------ | --------------------------------------------- |
-| Password        | —      | **scrypt** via `node:crypto`, no dependencies |
-| Session token   | `ks_`  | SHA-256 in `sessions`                          |
-| API key         | `kn_`  | SHA-256 in `api_keys` (many per user)          |
-| Reset token     | `kr_`  | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN` (an invite: `AUTH_INVITE_TTL_HOURS`) |
-| Verify token    | `kv_`  | SHA-256 + the address it was sent to, single-use, TTL `AUTH_VERIFY_TTL_HOURS` |
-| URL ticket      | `kt_`  | SHA-256 key in Redis, `GETDEL` on use, TTL `AUTH_URL_TICKET_TTL_SEC` (60 s) |
+| Secret        | Prefix | Storage                                                                            |
+| ------------- | ------ | ---------------------------------------------------------------------------------- |
+| Password      | —      | **scrypt** via `node:crypto`, no dependencies                                      |
+| Session token | `ks_`  | SHA-256 in `sessions`                                                              |
+| API key       | `kn_`  | SHA-256 in `api_keys` (many per user)                                              |
+| Reset token   | `kr_`  | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN` (an invite: `AUTH_INVITE_TTL_HOURS`) |
+| Verify token  | `kv_`  | SHA-256 + the address it was sent to, single-use, TTL `AUTH_VERIFY_TTL_HOURS`      |
+| URL ticket    | `kt_`  | SHA-256 key in Redis, `GETDEL` on use, TTL `AUTH_URL_TICKET_TTL_SEC` (60 s)        |
 
 API keys are **shown once** — at bootstrap, or on Settings → Connect AI — and
 never retrievable. A key may be **read-only**, **pinned to one workspace**, or
@@ -177,10 +178,16 @@ cached: `PublicSharesService` resolves the `kp_` token and confines every read
 to the scope the link names; `PublicSitesService` resolves a live site (status,
 workspace switch, env ceiling) and reads only its version's snapshot
 (`site_version_pages`), never a branch head. Both answer 404 for anything
-outside. `PublicRateLimitGuard` caps them per IP, counting `X-Forwarded-For`
-only when the peer is internal (Caddy, the web SSR). The `share-link`, `site`
-and `site-version` sources resolve their ids to a workspace for the
-authenticated management routes, like every other source.
+outside. A site's files (`sitemap.xml`, `robots.txt`, `llms*.txt`, a page's
+`.md`) go through the same `PublicSitesService.find` and read the same
+snapshot rows. `GET /v1/public/domains/allow` is Caddy's on-demand TLS check:
+200 only for a hostname the platform routes to a site (an existing site's
+`<slug>.PUBLISH_BASE_DOMAIN`, or a custom domain proven by its TXT record),
+so certificates are never requested for names nobody claimed.
+`PublicRateLimitGuard` caps them per IP, counting `X-Forwarded-For` only when
+the peer is internal (Caddy, the web SSR). The `share-link`, `site`,
+`site-version` and `site-domain` sources resolve their ids to a workspace for
+the authenticated management routes, like every other source.
 
 ## Limits
 

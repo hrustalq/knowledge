@@ -18687,6 +18687,193 @@
         ]
       }
     },
+    "/v1/sites/{id}/domains": {
+      "post": {
+        "operationId": "SitesController_addDomain",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSiteDomainDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Not a hostname, or one of the platform’s own (details.reason site.domainInvalid | site.domainReserved)"
+          },
+          "403": {
+            "description": "SITE_CUSTOM_DOMAINS is off (details.reason site.customDomainsOff)"
+          },
+          "409": {
+            "description": "Verified for another site, already on this one, or the limit is reached"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Claim a hostname for the site. It is served once a DNS TXT record proves control of it",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/site-domains/{id}/verify": {
+      "post": {
+        "operationId": "SitesController_verifyDomain",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Look the TXT record up now. Answers the domain either way; `lastError` says why it is not verified",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/site-domains/{id}": {
+      "delete": {
+        "operationId": "SitesController_removeDomain",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a hostname from the site. It stops resolving at once and is free to claim again",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
     "/v1/public/shares/{token}": {
       "get": {
         "operationId": "PublicSharesController_view",
@@ -18964,6 +19151,456 @@
         ]
       }
     },
+    "/v1/public/sites/sitemap.xml": {
+      "get": {
+        "operationId": "PublicSiteFilesController_sitemap",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "304": {
+            "description": "Unchanged since the ETag sent in If-None-Match"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "sitemap.xml of the default version, absolute canonical URLs. 404 when the site is not indexable",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/robots.txt": {
+      "get": {
+        "operationId": "PublicSiteFilesController_robots",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "robots.txt: allow everything with the sitemap, or disallow everything when the site is not indexable",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/llms.txt": {
+      "get": {
+        "operationId": "PublicSiteFilesController_llms",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "llms.txt of a version: its pages as markdown links in reading order, then the other versions",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/llms-full.txt": {
+      "get": {
+        "operationId": "PublicSiteFilesController_llmsFull",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Every page of a version at its published revision, concatenated and streamed (LLMS_FULL_MAX_DOCS / _BYTES)",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/markdown": {
+      "get": {
+        "operationId": "PublicSiteFilesController_markdown",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": false,
+            "in": "query",
+            "description": "The page path below the site root without `.md`, e.g. `v1/guides/install`; `index` is a version’s home",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "No live site there, or no page at that path"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One page as markdown at its published revision (the reader serves it at `<page>.md`)",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/domains/allow": {
+      "get": {
+        "operationId": "PublicDomainsController_allow",
+        "parameters": [
+          {
+            "name": "domain",
+            "required": false,
+            "in": "query",
+            "description": "The hostname Caddy is about to request a certificate for",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The hostname belongs to a site"
+          },
+          "404": {
+            "description": "Not a hostname this platform serves"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "May a TLS certificate be issued for this hostname? 200 for a site’s subdomain or verified custom domain",
+        "tags": [
+          "public"
+        ]
+      }
+    },
     "/v1/mcp": {
       "post": {
         "operationId": "McpController_handle",
@@ -19209,7 +19846,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.17.0",
+    "version": "0.18.0",
     "contact": {}
   },
   "tags": [],
@@ -23056,6 +23693,19 @@
             "description": "A change rebuilds the version"
           }
         }
+      },
+      "AddSiteDomainDto": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string",
+            "maxLength": 253,
+            "description": "A hostname you control, e.g. docs.example.com. A pasted URL is reduced to its host"
+          }
+        },
+        "required": [
+          "hostname"
+        ]
       },
       "UnlockShareDto": {
         "type": "object",

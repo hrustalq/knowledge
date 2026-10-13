@@ -3,6 +3,7 @@ import express from 'express'
 import { configureBacktest, createRootLogger, envLogLevel } from '@knowledge/observability'
 import { traceMiddleware } from '@knowledge/observability/express'
 import { aiReadableMiddleware } from './server/ai-readable.js'
+import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files.js'
 
 // Constants
 const isProduction = process.env.NODE_ENV === 'production'
@@ -43,19 +44,21 @@ const readerTemplateHtml = isProduction
 // step with SHARE_PATH and SITE_PATH in src/entry-public.ts, which re-check them.
 const PUBLIC_PATH = /^\/(?:s\/[^/?#]+(?:\/[^/?#]+)?\/?|pub\/[a-z0-9-]+(?:\/[^?#]*)?)(?:[?#].*)?$/
 
-// Sites on their own host: `<slug>.<PUBLISH_BASE_DOMAIN>` (docs/features/44).
-// The same variable the API reads; empty means path mode only.
-const PUBLISH_BASE_DOMAIN = (process.env.PUBLISH_BASE_DOMAIN ?? '').trim().toLowerCase().replace(/^\.+|\.+$/g, '')
+const API_INTERNAL = process.env.API_URL_INTERNAL ?? 'http://localhost:3000'
 
-/** The site host this request came in on, or null for the app's own host. */
-function siteHostOf(req) {
-  if (!PUBLISH_BASE_DOMAIN) return null
-  const host = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '')
-  const suffix = `.${PUBLISH_BASE_DOMAIN}`
-  if (!host.endsWith(suffix)) return null
-  const label = host.slice(0, -suffix.length)
-  return label && !label.includes('.') ? host : null
-}
+// Sites on their own host (docs/features/44): `<slug>.<PUBLISH_BASE_DOMAIN>`,
+// the same variable the API reads (empty = path mode only), or a verified
+// custom domain, asked of the API. The app's own host (WEB_BASE_URL) is never
+// a site's and is never looked up.
+const PUBLISH_BASE_DOMAIN = (process.env.PUBLISH_BASE_DOMAIN ?? '').trim().toLowerCase().replace(/^\.+|\.+$/g, '')
+const APP_HOST = (() => {
+  try {
+    return process.env.WEB_BASE_URL ? new URL(process.env.WEB_BASE_URL).hostname.toLowerCase() : null
+  } catch {
+    return null
+  }
+})()
+const siteHostOf = createSiteHostResolver({ apiBase: API_INTERNAL, baseDomain: PUBLISH_BASE_DOMAIN, appHost: APP_HOST })
 
 // Create http server
 const app = express()
@@ -64,18 +67,30 @@ const app = express()
 // the scope and every response carries x-request-id — static asset 404s included.
 app.use(traceMiddleware)
 
+// Whose host is this? Decided once, before anything reads a cookie: a site's
+// host is the public reader's all the way down.
+app.use(async (req, res, next) => {
+  try {
+    res.locals.siteHost = await siteHostOf(req, forwardedFor(req))
+  } catch {
+    res.locals.siteHost = null
+  }
+  next()
+})
+
 // AI-readable URLs (issue #68): /documents/:id.md, Accept: text/markdown on
 // /documents/:id, /llms.txt and the per-workspace/project llms files, proxied
 // to the API. Mounted before Vite and the static handler so neither claims a
 // `.md`/`.txt` path first, and in both branches (dev and production) alike.
-const aiReadable = aiReadableMiddleware({
-  apiBase: process.env.API_URL_INTERNAL ?? 'http://localhost:3000',
-  readCookie,
-  logger,
-})
-// Not on a site's host: there, `/llms.txt` belongs to the site (phase 2b), not
-// to the workspace a member's cookie would name.
-app.use((req, res, next) => (siteHostOf(req) ? next() : aiReadable(req, res, next)))
+const aiReadable = aiReadableMiddleware({ apiBase: API_INTERNAL, readCookie, logger })
+// Not on a site's host: there, `/llms.txt` belongs to the site, not to the
+// workspace a member's cookie would name.
+app.use((req, res, next) => (res.locals.siteHost ? next() : aiReadable(req, res, next)))
+
+// A site's sitemap.xml, robots.txt, llms(-full).txt and `<page>.md`, on its
+// host or under /pub/<slug> (issue #77 phase 2b). Before Vite and sirv, like
+// the AI-readable routes, so neither claims the path first.
+app.use(siteFilesMiddleware({ apiBase: API_INTERNAL, forwardedFor, logger }))
 
 // Add Vite or respective production middlewares
 /** @type {import('vite').ViteDevServer | undefined} */
@@ -202,7 +217,7 @@ app.use('*all', async (req, res) => {
     const url = req.originalUrl.replace(base, '')
     // Checked first, before any cookie is read: a public render takes nothing
     // from the member app's request context.
-    const siteHost = siteHostOf(req)
+    const siteHost = res.locals.siteHost
     if (siteHost || PUBLIC_PATH.test(req.originalUrl)) {
       await renderPublic(req, res, req.originalUrl, siteHost)
       return

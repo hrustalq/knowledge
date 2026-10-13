@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { PublishedSite, SiteVersion, SiteVersionPage } from '@prisma/client';
+import type { PublishedSite, SiteDomain, SiteVersion, SiteVersionPage } from '@prisma/client';
 import {
+  normalizeHostname,
   normalizeSiteTheme,
+  siteHomeDocumentId,
+  sitePagePath,
   siteRootUrl,
   type PublicSiteLogo,
   type PublicSitePage,
@@ -24,7 +27,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const MAX_PATH_CHARS = 2000;
 
 type BuiltVersion = SiteVersion & { builtAt: Date };
-type LiveSite = PublishedSite & { versions: BuiltVersion[]; defaultVersion: BuiltVersion };
+/** A site that may be read: live, allowed, and built. `domains` holds its verified hostnames, oldest first. */
+export type LiveSite = PublishedSite & { versions: BuiltVersion[]; defaultVersion: BuiltVersion; domains: SiteDomain[] };
+
+/** How a request names a site: its slug (path mode, or a base-domain host), or a custom hostname. */
+export type SiteKey = { slug: string } | { hostname: string };
 
 export interface ResolveQuery {
   /** Path mode: `/pub/<slug>/…`. */
@@ -63,26 +70,9 @@ export class PublicSitesService {
   ) {}
 
   async resolve(query: ResolveQuery): Promise<PublicSiteResolveResponse> {
-    const slug = query.slug ?? (query.host ? this.slugFromHost(query.host) : null);
-    if (!slug) throw this.notFound();
-    const site = await this.liveSite({ slug });
+    const site = await this.find(query);
     const path = (query.path ?? '').slice(0, MAX_PATH_CHARS);
-    const segments = path
-      .split('/')
-      .filter(Boolean)
-      .map((s) => {
-        try {
-          return decodeURIComponent(s);
-        } catch {
-          return s;
-        }
-      });
-
-    // A version owns a URL's first segment; the default version has none of
-    // its own (its slug also works, and the reader redirects to the bare path).
-    const named = segments.length ? site.versions.find((v) => v.slug === segments[0]) : undefined;
-    const version = named ?? site.defaultVersion;
-    const slugPath = (named ? segments.slice(1) : segments).join('/');
+    const { version, slugPath } = this.splitPath(site, path);
 
     const rows = await this.prisma.siteVersionPage.findMany({
       where: { versionId: version.id },
@@ -104,10 +94,7 @@ export class PublicSitesService {
         theme,
         seoIndexable: site.seoIndexable,
         logo: theme.showLogo && project ? this.logo(site.id, project) : null,
-        rootUrl: siteRootUrl(site.slug, {
-          baseDomain: this.config.get('PUBLISH_BASE_DOMAIN', { infer: true }),
-          webBaseUrl: this.config.get('WEB_BASE_URL', { infer: true }),
-        }),
+        rootUrl: this.rootUrl(site),
       },
       version: { ...this.versionRef(version, site), id: version.id, builtAt: version.builtAt.toISOString() },
       versions: site.versions.map((v) => this.versionRef(v, site)),
@@ -120,8 +107,75 @@ export class PublicSitesService {
           position: r.position,
         }),
       ),
-      page: page ? await this.pageBody(page) : null,
+      page: page ? await this.pageBody(page, site, version) : null,
     };
+  }
+
+  /**
+   * The live site a request names, by slug or host. 404 for anything that is
+   * not a live, allowed, built site — the one authorisation check every
+   * public site route goes through.
+   */
+  async find(query: { slug?: string; host?: string }): Promise<LiveSite> {
+    const key = query.slug ? { slug: query.slug } : query.host ? this.siteKeyFromHost(query.host) : null;
+    if (!key) throw this.notFound();
+    return this.liveSite(key);
+  }
+
+  /** A version's first segment and the slug path below it. */
+  splitPath(site: LiveSite, path: string): { version: BuiltVersion; slugPath: string } {
+    const segments = path
+      .slice(0, MAX_PATH_CHARS)
+      .split('/')
+      .filter(Boolean)
+      .map((s) => {
+        try {
+          return decodeURIComponent(s);
+        } catch {
+          return s;
+        }
+      });
+    // A version owns a URL's first segment; the default version has none of
+    // its own (its slug also works, and the reader redirects to the bare path).
+    const named = segments.length ? site.versions.find((v) => v.slug === segments[0]) : undefined;
+    return { version: named ?? site.defaultVersion, slugPath: (named ? segments.slice(1) : segments).join('/') };
+  }
+
+  /**
+   * Absolute URL of the site's root, for canonical links, the sitemap and
+   * llms.txt: its first verified domain while custom domains are routed, else
+   * its subdomain or path.
+   */
+  rootUrl(site: LiveSite): string {
+    const customDomains = this.config.get('SITE_CUSTOM_DOMAINS', { infer: true });
+    return siteRootUrl(site.slug, {
+      baseDomain: this.config.get('PUBLISH_BASE_DOMAIN', { infer: true }),
+      webBaseUrl: this.config.get('WEB_BASE_URL', { infer: true }),
+      domain: customDomains ? (site.domains[0]?.hostname ?? null) : null,
+    });
+  }
+
+  /**
+   * Caddy's on-demand TLS `ask` (`/v1/public/domains/allow`): may a
+   * certificate be issued for this name? Yes for a name this platform routes
+   * to a site its workspace may publish — a `<slug>.PUBLISH_BASE_DOMAIN` of an
+   * existing site, or a verified custom domain — live or not, so a site that
+   * goes live later is already reachable over HTTPS. Anything else is no, so
+   * a stranger pointing names at the server cannot make it request
+   * certificates for them.
+   */
+  async hostAllowed(rawHost: string): Promise<boolean> {
+    const key = this.siteKeyFromHost(rawHost);
+    if (!key) return false;
+    const site =
+      'slug' in key
+        ? await this.prisma.publishedSite.findUnique({ where: { slug: key.slug }, select: { workspaceId: true } })
+        : (await this.prisma.siteDomain.findFirst({
+            where: { hostname: key.hostname, verifiedAt: { not: null } },
+            select: { site: { select: { workspaceId: true } } },
+          }))?.site;
+    if (!site) return false;
+    return (await this.settings.effective(site.workspaceId)).allowPublicSites;
   }
 
   /** A presigned URL for an attachment of a page in this version's snapshot. */
@@ -150,15 +204,21 @@ export class PublicSitesService {
     });
   }
 
-  /** `<slug>.PUBLISH_BASE_DOMAIN` → slug; any other host names no site (custom domains are phase 2b). */
-  slugFromHost(rawHost: string): string | null {
+  /**
+   * A request host → the site it names: `<slug>.PUBLISH_BASE_DOMAIN` by slug
+   * (one label only, so `a.b.<base>` names nothing), any other host as a
+   * custom domain while SITE_CUSTOM_DOMAINS is on. The base domain itself and
+   * malformed hosts name nothing.
+   */
+  siteKeyFromHost(rawHost: string): SiteKey | null {
+    const host = normalizeHostname(rawHost.trim().replace(/:\d+$/, ''));
+    if (!host) return null;
     const base = this.config.get('PUBLISH_BASE_DOMAIN', { infer: true });
-    if (!base) return null;
-    const host = rawHost.trim().toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
-    const suffix = `.${base}`;
-    if (!host.endsWith(suffix)) return null;
-    const label = host.slice(0, -suffix.length);
-    return label && !label.includes('.') ? label : null;
+    if (base && (host === base || host.endsWith(`.${base}`))) {
+      const label = host === base ? '' : host.slice(0, -(base.length + 1));
+      return label && !label.includes('.') ? { slug: label } : null;
+    }
+    return this.config.get('SITE_CUSTOM_DOMAINS', { infer: true }) ? { hostname: host } : null;
   }
 
   // -------------------------------------------------------------------------
@@ -168,11 +228,27 @@ export class PublicSitesService {
   }
 
   /** The site, if it is live, its workspace allows sites, and its default version has built. */
-  private async liveSite(where: { slug: string } | { id: string }): Promise<LiveSite> {
-    if ('id' in where && !UUID_RE.test(where.id)) throw this.notFound();
+  private async liveSite(key: SiteKey | { id: string }): Promise<LiveSite> {
+    if ('id' in key && !UUID_RE.test(key.id)) throw this.notFound();
+    let where: { slug: string } | { id: string };
+    if ('hostname' in key) {
+      if (!this.config.get('SITE_CUSTOM_DOMAINS', { infer: true })) throw this.notFound();
+      const domain = await this.prisma.siteDomain.findFirst({
+        where: { hostname: key.hostname, verifiedAt: { not: null } },
+        select: { siteId: true },
+      });
+      if (!domain) throw this.notFound();
+      where = { id: domain.siteId };
+    } else {
+      where = key;
+    }
     const site = await this.prisma.publishedSite.findUnique({
       where,
-      include: { versions: { where: { builtAt: { not: null } }, orderBy: { createdAt: 'asc' } } },
+      include: {
+        versions: { where: { builtAt: { not: null } }, orderBy: { createdAt: 'asc' } },
+        // The first verified name is the canonical root (see rootUrl).
+        domains: { where: { verifiedAt: { not: null } }, orderBy: { verifiedAt: 'asc' } },
+      },
     });
     if (!site || site.status !== 'live') throw this.notFound();
     if (!(await this.settings.effective(site.workspaceId)).allowPublicSites) throw this.notFound();
@@ -191,7 +267,8 @@ export class PublicSitesService {
    * home — never to a 404 for a page the reader was just looking at.
    */
   private pickPage(rows: SiteVersionPage[], slugPath: string, from: string | undefined): SiteVersionPage | null {
-    const home = rows.find((r) => r.slugPath === '') ?? rows.find((r) => r.depth === 0) ?? null;
+    const homeId = siteHomeDocumentId(rows);
+    const home = rows.find((r) => r.documentId === homeId) ?? null;
     if (!slugPath) return home;
     const exact = rows.find((r) => r.slugPath === slugPath);
     if (exact) return exact;
@@ -199,7 +276,7 @@ export class PublicSitesService {
     return null;
   }
 
-  private async pageBody(row: SiteVersionPage): Promise<PublicSitePage | null> {
+  private async pageBody(row: SiteVersionPage, site: LiveSite, version: BuiltVersion): Promise<PublicSitePage | null> {
     // The one content path (CLAUDE.md), at the revision the snapshot pinned.
     // A revision that can no longer be read (its page was deleted) is as
     // absent as a page that was never published.
@@ -215,7 +292,35 @@ export class PublicSitesService {
       slugPath: row.slugPath,
       markdown: content.markdown,
       updatedAt: revision?.finalizedAt?.toISOString() ?? null,
+      alternates: await this.alternates(row.documentId, site, version),
     };
+  }
+
+  /**
+   * Where the same page lives in the site's other built versions. Two reads
+   * whatever the version count: the page's rows, and each version's top level
+   * (to know whether the page is that version's home, which lives at its root).
+   */
+  private async alternates(documentId: string, site: LiveSite, current: BuiltVersion): Promise<PublicSitePage['alternates']> {
+    const others = site.versions.filter((v) => v.id !== current.id);
+    if (!others.length) return [];
+    const ids = others.map((v) => v.id);
+    const [mine, tops] = await Promise.all([
+      this.prisma.siteVersionPage.findMany({ where: { documentId, versionId: { in: ids } }, select: { versionId: true, slugPath: true } }),
+      this.prisma.siteVersionPage.findMany({
+        where: { versionId: { in: ids }, parentId: null },
+        select: { versionId: true, documentId: true, parentId: true, slugPath: true, position: true },
+      }),
+    ]);
+    const out: PublicSitePage['alternates'] = [];
+    for (const v of others) {
+      const row = mine.find((r) => r.versionId === v.id);
+      if (!row) continue;
+      const isHome = siteHomeDocumentId(tops.filter((t) => t.versionId === v.id)) === documentId;
+      const ref = this.versionRef(v, site);
+      out.push({ version: ref, path: sitePagePath('', ref.isDefault ? null : v.slug, isHome ? '' : row.slugPath) });
+    }
+    return out;
   }
 
   private versionRef(version: SiteVersion, site: PublishedSite): PublicSiteVersionRef {

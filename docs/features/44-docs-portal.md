@@ -1,11 +1,12 @@
 # 44 — Published sites
 
-Issue [#77](https://github.com/hrustalq/knowledge/issues/77), phase 2a of
-public publishing. A project, or one page and its subtree, published as a
-read-only docs site: a nav tree, an outline, previous/next, a theme, and
-versions. Anyone with the address can read it without signing in. Search,
-`sitemap.xml`/`robots.txt`, `llms.txt`, custom domains and Caddy on-demand TLS
-are phase 2b; audiences and the Ask widget are phase 3. Share links
+Issue [#77](https://github.com/hrustalq/knowledge/issues/77), phases 2a and
+2b of public publishing. A project, or one page and its subtree, published as
+a read-only docs site: a nav tree, an outline, previous/next, a theme, and
+versions. Anyone with the address can read it without signing in. Phase 2b
+adds custom domains, `sitemap.xml`/`robots.txt`, `llms.txt` and pages as
+markdown; site search and the render cache follow in a second 2b PR;
+audiences and the Ask widget are phase 3. Share links
 ([43](43-share-links.md)) are the other half of the same issue and share its
 switches, rate limiter and reader.
 
@@ -104,8 +105,10 @@ page's versions two ways: the live versions of its project's site (a page that
 is new or was moved in) and the live versions that already publish it (a page
 moved out to another project must leave the old site too). Frozen versions are
 never touched. On boot it requeues any version still saying `building`: crash
-recovery for a build lost with Redis. The periodic sweep for stuck builds is
-phase 2b's `PublishingSweeper`.
+recovery for a build lost with Redis. `PublishingSweeper` (API, every
+`PUBLISHING_SWEEP_INTERVAL_MS`) covers the case where nothing restarted: a
+version still `building` 15 minutes after its last status write
+(`site_versions.updated_at`) is requeued, claimed by one guarded update.
 
 Builds create no page and attribute no act, so the worker completes them
 itself. The API records `site.created|updated|published|unpublished|deleted`
@@ -137,6 +140,75 @@ per-IP `PublicRateLimitGuard` as shares, `Cache-Control: no-store`):
   relations. The response types are their own (`PublicSiteResolveResponse`),
   not member DTOs.
 
+## Custom domains (phase 2b)
+
+A site may also answer on hostnames its owner controls (`site_domains`, at
+most `SITE_MAX_DOMAINS` = 5 per site, unique across the deployment).
+
+- **Claiming.** An admin adds a hostname on the **Domains** tab. It is
+  normalized to one spelling (`normalizeHostname`, contracts: lower-case
+  IDNA, no scheme, path, port or trailing dot) and refused when it is one of
+  the platform's own names (the app and API hosts, the base domain and
+  anything under it, `.localhost`). The tab shows two records: a `CNAME` to
+  `<slug>.PUBLISH_BASE_DOMAIN` (or the app's host in path mode) and a `TXT`
+  at `_knowledge.<hostname>` holding `knowledge-site-verification=<token>`.
+- **Proving.** Only the TXT record proves control. `SiteDomainsService.lookup`
+  joins split TXT strings and tells three failures apart: `txtMissing` (DNS
+  answered, no record of ours), `txtMismatch` (ours, another token) and
+  `dnsError` (DNS did not answer). **Check now** looks it up at once;
+  `PublishingSweeper` re-checks pending names every 5 minutes on their first
+  day, hourly for the rest of a week, then stops. The verify write is guarded
+  on `verified_at IS NULL`, so a click and a sweep record it once.
+- **Holding.** An unproven claim holds nothing: another site adding the same
+  name replaces it, and whoever proves control first keeps it. A verified
+  name is refused to everyone else (409 `site.domainTaken`) until its admin
+  removes it. Verified names are never re-checked, so deleting the TXT record
+  afterwards does not take a site down; the cost is that a name whose owner
+  changes stays with the site that proved it until removed.
+- **Serving.** A verified domain resolves to its site in `resolve`, and the
+  first verified one becomes the site's canonical root: canonical links,
+  `og:url`, the sitemap and `llms.txt` all use it, wherever the page was
+  opened.
+- **Certificates.** `GET /v1/public/domains/allow?domain=` is Caddy's
+  on-demand TLS `ask`. It answers 200 for an existing site's
+  `<slug>.PUBLISH_BASE_DOMAIN` and for a verified custom domain, while the
+  site's workspace allows sites, live or not (a site published later is
+  already reachable over HTTPS), and 404 for everything else.
+  `Caddyfile.sites.example` is the configuration for an install where Caddy
+  faces the internet.
+- **The switch.** `SITE_CUSTOM_DOMAINS` (default `true`) says whether this
+  deployment routes custom hostnames at all. Off: the tab says so, adding or
+  checking a domain is 403 `site.customDomainsOff`, no custom host resolves,
+  the sweeper skips them, and canonical URLs fall back to the subdomain or
+  path. Production runs it **off**: TLS there ends at a Cloudflare Worker in
+  front of Tailscale Funnel, so Caddy can issue no certificates.
+
+## Machine-readable files (phase 2b)
+
+Generated per request from the version's snapshot rows, the same rows the
+reader renders, so they cannot name a page the site does not publish
+(`PublicSiteFilesService`, `GET /v1/public/sites/{sitemap.xml, robots.txt,
+llms.txt, llms-full.txt, markdown}?slug=|host=`). The web serves them at the
+site's own paths (`server/site-files.js`), on its host or under `/pub/<slug>`:
+
+| Path | Answers |
+| --- | --- |
+| `/sitemap.xml` | The default version's pages at their canonical URLs (the home at `/`), `lastmod` from the pinned revision. Older versions are left out, as their pages say `noindex`. 404 when the site is not indexable. |
+| `/robots.txt` | `Allow: /` plus the sitemap, or `Disallow: /` when the site is not indexable. |
+| `[/<version>]/llms.txt` | The llmstxt.org index of a version: pages as `.md` links in reading order, then the other versions' `llms.txt`. |
+| `[/<version>]/llms-full.txt` | Every page of the version at its pinned revision, streamed under `LLMS_FULL_MAX_DOCS` / `_BYTES`. |
+| `/<page path>.md` | One page as markdown at its pinned revision. The home also keeps its own slug (`/welcome.md`); a version's `index.md` is its home. |
+
+They are revalidated on every use (`Cache-Control: public, no-cache`) against
+an ETag over the version id, its `built_at` and the site's root, so a 304
+costs the site lookup and nothing else, and an unpublish ends them at once.
+The `.md` and `llms*` files say `noindex`: they duplicate the HTML pages.
+
+Each page's `<head>` also gains `<link rel="alternate">` to the same page in
+every other built version that has it, and to its own `.md`. The resolve
+answer carries those `alternates`, so the version switcher links straight to
+the page rather than through `?from=`.
+
 ## The reader (web)
 
 The share reader's public entry (`entry-public.ts`, `reader.html`,
@@ -144,11 +216,14 @@ The share reader's public entry (`entry-public.ts`, `reader.html`,
 `SharePage.vue` from the view the server resolved.
 
 - **Dispatch.** `server.js` sends `/pub/<slug>/…` to the public entry, and so
-  any path on a host under `PUBLISH_BASE_DOMAIN` (the web container reads the
-  same variable; `docker-compose.prod.yml` passes it). On a site host the
-  AI-readable middleware is skipped: `/llms.txt` there belongs to the site
-  (2b), not to a member's workspace. As for shares, nothing from the member's
-  cookies reaches a site render.
+  any path on a site's host: one under `PUBLISH_BASE_DOMAIN` (the web container
+  reads the same variable; `docker-compose.prod.yml` passes it), or a verified
+  custom domain, asked of the API once a minute per host (see
+  [09](../architecture/09-web-frontend.md)). The host is `X-Forwarded-Host`
+  when the peer is internal, else `Host`. On a site host the AI-readable
+  middleware is skipped: `/llms.txt` there belongs to the site, not to a
+  member's workspace. As for shares, nothing from the member's cookies reaches
+  a site render.
 - **One URL per page.** The home page lives at the version root, every other
   page at `[/<version>]/<slug path>`. Any other path that resolved to a page
   (the default version's own segment, the home's own slug, a version switch's
@@ -173,7 +248,8 @@ The share reader's public entry (`entry-public.ts`, `reader.html`,
 - **Head.** `<title>`, description, canonical (absolute, from the site root
   URL), `og:*`, `twitter:card`. `noindex` (meta and `X-Robots-Tag`) when the
   site is not indexable, on every non-default version, and on a 404.
-  `Cache-Control: no-cache`; the render cache is 2b.
+  `Cache-Control: no-cache`. Plus `<link rel="alternate">` to the page in the
+  other versions and as markdown (phase 2b).
 
 ## Member UI
 
@@ -205,9 +281,11 @@ The share reader's public entry (`entry-public.ts`, `reader.html`,
 | `POST /v1/sites/:id/publish`, `…/unpublish` | admin (`site`) |
 | `POST /v1/sites/:id/versions` | admin (`site`); 409 `site.versionSlugTaken` / `site.versionSlugShadowsPage` / `site.versionLimit` |
 | `PATCH /v1/site-versions/:id`, `POST …/rebuild`, `DELETE …` | admin (`site-version`); deleting the default is 409 |
+| `POST /v1/sites/:id/domains` | admin (`site`); 400 `site.domainInvalid` / `site.domainReserved`, 403 `site.customDomainsOff`, 409 `site.domainExists` / `site.domainTaken` / `site.domainLimit` |
+| `POST /v1/site-domains/:id/verify`, `DELETE /v1/site-domains/:id` | admin (`site-domain`); verify answers the domain either way, with `lastError` |
 
-`WorkspaceSource` gains `site` and `site-version`, each resolved to its
-workspace in PostgreSQL before the handler runs. Site management is not on MCP:
+`WorkspaceSource` gains `site`, `site-version` and `site-domain`, each
+resolved to its workspace in PostgreSQL before the handler runs. Site management is not on MCP:
 publishing is an admin act and stays in the UI.
 
 **Deletes.** A project's site goes with the project in every delete mode
@@ -217,11 +295,15 @@ destination may have its own). Deleting pages removes their snapshot rows
 
 ## Limits
 
-- No search, `sitemap.xml`, `robots.txt`, `llms.txt`, custom domains or render
-  cache yet (phase 2b). A subdomain under `PUBLISH_BASE_DOMAIN` needs 2b's Caddy
-  on-demand TLS block in production; path mode works today.
+- No site search and no render cache yet (the second phase 2b PR). Site pages
+  send `Cache-Control: no-cache` and render per request.
+- Production serves sites in path mode only: its TLS ends at Cloudflare, so a
+  base domain or a custom domain needs the edge to route those hosts first.
+  `Caddyfile.sites.example` covers an install where Caddy faces the internet.
 - Slugs come from titles, so renaming a page changes its URL at the next
   build. There is no redirect history.
+- A verified domain stays verified; one whose owner changes stays with the
+  site that proved it until an admin removes it.
 - Everything a viewer can read can be published by an admin. When page-level
   permissions land, builds must refuse restricted pages.
 - `source_branch` falls back per page, so a "v2" version can mix branched and
@@ -232,3 +314,5 @@ destination may have its own). Deleting pages removes their snapshot rows
   build.
 - A site lists every page of its version in the reader's state blob, which is
   fine at hundreds of pages and heavy at the 2000 cap.
+- A top-level page whose slug is `index` takes `/index.md` from the home page;
+  the home is still `/<its slug>.md`.

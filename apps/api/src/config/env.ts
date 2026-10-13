@@ -189,6 +189,15 @@ export const envSchema = z.object({
   SITE_BUILD_DEBOUNCE_MS: z.coerce.number().int().min(0).default(30_000),
   /** Most pages one site version publishes; the rest is cut and the build says so. */
   SITE_MAX_PAGES: z.coerce.number().int().positive().default(2000),
+  /**
+   * Whether sites may answer on their own hostnames (issue #77 phase 2b). The
+   * front proxy must route those hosts here and terminate TLS for them (Caddy
+   * on-demand TLS, see Caddyfile.sites.example). false: admins are told so,
+   * adding a domain is refused, and no custom hostname resolves.
+   */
+  SITE_CUSTOM_DOMAINS: boolish(true),
+  /** Tick of PublishingSweeper: pending domain checks and lost site builds. */
+  PUBLISHING_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
   LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
   /** Cap on bytes streamed in one llms-full.txt (20 MB). */

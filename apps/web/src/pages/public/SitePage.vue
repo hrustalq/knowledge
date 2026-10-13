@@ -57,9 +57,15 @@ const next = computed(() => (index.value >= 0 && index.value < allRows.value.len
 const toc = computed(() => page.value?.headings.filter((h) => h.level > 1) ?? [])
 const date = (iso: string) => formatDate(iso, props.state.locale)
 
-/** A version switch keeps the reader on the same page when the target version has it (`?from=`). */
+/**
+ * A version switch keeps the reader on the same page: straight to it when the
+ * server knows where it lives there, else through `?from=`, which lands on
+ * the target version's home when it does not have the page.
+ */
 function versionHref(target: { slug: string; name: string; isDefault: boolean }): string {
   if (!site.value) return '#'
+  const alternate = page.value?.alternates.find((a) => a.versionSlug === target.slug)
+  if (alternate) return alternate.href
   const isHome = !page.value || page.value.documentId === homeId.value
   const base = siteHref(site.value, target, page.value?.slugPath ?? '', isHome)
   return page.value && !isHome ? `${base}?from=${page.value.documentId}` : base

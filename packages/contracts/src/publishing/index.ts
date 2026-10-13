@@ -405,13 +405,16 @@ export function slugifyPath(text: string): string {
 }
 
 /**
- * The URL of a site's root. With PUBLISH_BASE_DOMAIN set, a subdomain on the
- * scheme WEB_BASE_URL uses; without it, path mode under the app's own origin.
+ * The URL of a site's root. A verified custom domain wins (it is the name the
+ * owner chose, so canonical links use it); then a subdomain of
+ * PUBLISH_BASE_DOMAIN; without either, path mode under the app's own origin.
+ * The scheme follows WEB_BASE_URL, so a plain-http dev stack links plain http.
  */
-export function siteRootUrl(slug: string, opts: { baseDomain: string; webBaseUrl: string }): string {
+export function siteRootUrl(slug: string, opts: { baseDomain: string; webBaseUrl: string; domain?: string | null }): string {
   const web = opts.webBaseUrl.replace(/\/+$/, '');
+  const scheme = web.startsWith('http://') ? 'http' : 'https';
+  if (opts.domain) return `${scheme}://${opts.domain}`;
   if (opts.baseDomain) {
-    const scheme = web.startsWith('http://') ? 'http' : 'https';
     const port = (() => {
       try {
         const u = new URL(web);
@@ -436,6 +439,102 @@ export const SITE_PATH_PREFIX = '/pub/';
 export function sitePagePath(prefix: string, versionSlug: string | null, slugPath: string): string {
   const parts = [versionSlug, ...slugPath.split('/')].filter((p): p is string => !!p).map(encodeURIComponent);
   return `${prefix}/${parts.join('/')}`;
+}
+
+/**
+ * The plain-markdown URL of a page, below the site's root prefix: its slug
+ * path plus `.md` (the home keeps its own slug here, so `/welcome.md` works
+ * beside `/`). A page at slug path `''` — the root of a site published from
+ * one page — is `index.md` under its version.
+ */
+export function siteMarkdownPath(prefix: string, versionSlug: string | null, slugPath: string): string {
+  if (!slugPath) return `${sitePagePath(prefix, versionSlug, '').replace(/\/$/, '')}/index.md`;
+  return `${sitePagePath(prefix, versionSlug, slugPath)}.md`;
+}
+
+/**
+ * A site's home page: the root page of a site published from one page (slug
+ * path `''`), otherwise the first top-level page in reading order. The API's
+ * resolve, its sitemap and llms.txt, and the web reader all ask this, so a
+ * page never has one URL in the nav and another in the sitemap.
+ */
+export function siteHomeDocumentId(
+  tree: ReadonlyArray<{ documentId: string; parentId: string | null; slugPath: string; position: number }>,
+): string | null {
+  return (
+    tree.find((n) => n.slugPath === '')?.documentId ??
+    tree.filter((n) => n.parentId === null).sort((a, b) => a.position - b.position)[0]?.documentId ??
+    null
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Custom domains (issue #77 phase 2b)
+//
+// A site may also answer on hostnames its owner controls. A name is served
+// only once proven: a TXT record at `_knowledge.<hostname>` holding the
+// domain's token. Unique across the deployment.
+// ---------------------------------------------------------------------------
+
+/** Most hostnames one site may claim. */
+export const SITE_MAX_DOMAINS = 5;
+
+/** The TXT record proving control of `<hostname>` lives at `<label>.<hostname>`. */
+export const SITE_DOMAIN_TXT_LABEL = '_knowledge';
+/** …and holds `<prefix><token>`. */
+export const SITE_DOMAIN_TXT_PREFIX = 'knowledge-site-verification=';
+
+/**
+ * Why the last check did not verify a domain:
+ * - `txtMissing`: DNS answered, and no record carries our prefix;
+ * - `txtMismatch`: a record carries our prefix, with another token;
+ * - `dnsError`: DNS did not answer (timeout, SERVFAIL); tried again later.
+ */
+export const SITE_DOMAIN_CHECK_ERRORS = ['txtMissing', 'txtMismatch', 'dnsError'] as const;
+export type SiteDomainCheckError = (typeof SITE_DOMAIN_CHECK_ERRORS)[number];
+
+const HOST_LABEL_RE = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
+
+/**
+ * A hostname as typed or pasted (`Docs.Acme.com.`, `https://docs.acme.com/`,
+ * `документы.рф`), reduced to the one spelling the platform stores and
+ * compares: lower-case ASCII (IDNA), no scheme, path, port or trailing dot.
+ * Null for anything that is not a public DNS name: one label, an IP address,
+ * a port, credentials.
+ */
+export function normalizeHostname(raw: string): string | null {
+  let value = raw.trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '');
+  value = value.replace(/[/?#].*$/, '').replace(/\.$/, '');
+  if (!value || /[:@\s\\]/.test(value)) return null;
+  let host: string;
+  try {
+    host = new URL(`http://${value}`).hostname;
+  } catch {
+    return null;
+  }
+  if (host.length > 253) return null;
+  const labels = host.split('.');
+  if (labels.length < 2 || !labels.every((l) => HOST_LABEL_RE.test(l))) return null;
+  // An all-digit last label is an IPv4 address, never a TLD.
+  if (/^[0-9]+$/.test(labels[labels.length - 1])) return null;
+  return host;
+}
+
+export interface SiteDomainSummary {
+  id: string;
+  hostname: string;
+  /** Served, and given a certificate, only once verified. */
+  verified: boolean;
+  verifiedAt: string | null;
+  lastCheckAt: string | null;
+  lastError: SiteDomainCheckError | null;
+  /** The TXT record to create: its name… */
+  txtName: string;
+  /** …and its value. */
+  txtValue: string;
+  /** Where the hostname's CNAME (or A record) should point: this deployment's site host for the site. */
+  dnsTarget: string;
+  createdAt: string;
 }
 
 export interface SiteVersionSummary {
@@ -467,9 +566,11 @@ export interface PublishedSiteSummary {
   theme: SiteTheme;
   seoIndexable: boolean;
   defaultVersionId: string | null;
-  /** Where the site is (or would be) served. */
+  /** Where the site is (or would be) served: its first verified domain, else its subdomain or path. */
   url: string;
   versions: SiteVersionSummary[];
+  /** Its own hostnames, oldest first (issue #77 phase 2b). */
+  domains: SiteDomainSummary[];
   createdAt: string;
   updatedAt: string;
 }
@@ -484,6 +585,8 @@ export interface ProjectSiteResponse {
     ceiling: boolean;
     /** PUBLISH_BASE_DOMAIN, or null in path mode. */
     baseDomain: string | null;
+    /** SITE_CUSTOM_DOMAINS: whether this deployment routes custom hostnames at all. */
+    customDomains: boolean;
     /** A suggestion for a new site, from the project name. */
     suggestedSlug: string;
   };
@@ -524,6 +627,12 @@ export interface PublicSitePage {
   markdown: string;
   /** When the published revision was finalized. */
   updatedAt: string | null;
+  /**
+   * The same page in the site's other built versions: each version and the
+   * page's path there below the site root (the home is the version root).
+   * Drives `<link rel="alternate">` and lets the switcher link straight to it.
+   */
+  alternates: { version: PublicSiteVersionRef; path: string }[];
 }
 
 // GET /v1/public/sites/resolve?slug=|host=&path=&from=

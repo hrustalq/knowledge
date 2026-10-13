@@ -2402,6 +2402,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/public/domains/allow",
+      "tag": "public",
+      "summary": "May a TLS certificate be issued for this hostname? 200 for a site’s subdomain or verified custom domain",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/public/shares/{token}",
       "tag": "public",
       "summary": "A shared page: its title and the pages the link reaches, or `locked` when a password is needed",
@@ -2432,9 +2442,59 @@
     },
     {
       "method": "GET",
+      "path": "/v1/public/sites/llms-full.txt",
+      "tag": "public",
+      "summary": "Every page of a version at its published revision, concatenated and streamed (LLMS_FULL_MAX_DOCS / _BYTES)",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/llms.txt",
+      "tag": "public",
+      "summary": "llms.txt of a version: its pages as markdown links in reading order, then the other versions",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/markdown",
+      "tag": "public",
+      "summary": "One page as markdown at its published revision (the reader serves it at `<page>.md`)",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/public/sites/resolve",
       "tag": "public",
       "summary": "A site, version and page for a slug or host plus a path: everything one render needs",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/robots.txt",
+      "tag": "public",
+      "summary": "robots.txt: allow everything with the sitemap, or disallow everything when the site is not indexable",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/sitemap.xml",
+      "tag": "public",
+      "summary": "sitemap.xml of the default version, absolute canonical URLs. 404 when the site is not indexable",
       "role": null,
       "source": null,
       "public": true,
@@ -2502,6 +2562,26 @@
     },
     {
       "method": "DELETE",
+      "path": "/v1/site-domains/{id}",
+      "tag": "publishing",
+      "summary": "Remove a hostname from the site. It stops resolving at once and is free to claim again",
+      "role": "admin",
+      "source": "site-domain",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/site-domains/{id}/verify",
+      "tag": "publishing",
+      "summary": "Look the TXT record up now. Answers the domain either way; `lastError` says why it is not verified",
+      "role": "admin",
+      "source": "site-domain",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
       "path": "/v1/site-versions/{id}",
       "tag": "publishing",
       "summary": "Delete a version and its snapshot. The default version cannot be deleted",
@@ -2545,6 +2625,16 @@
       "path": "/v1/sites/{id}",
       "tag": "publishing",
       "summary": "Change the address, root page, theme, indexing or default version",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/domains",
+      "tag": "publishing",
+      "summary": "Claim a hostname for the site. It is served once a DNS TXT record proves control of it",
       "role": "admin",
       "source": "site",
       "public": false,

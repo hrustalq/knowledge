@@ -3595,7 +3595,8 @@
     "tab": {
       "general": "General",
       "theme": "Theme",
-      "versions": "Versions"
+      "versions": "Versions",
+      "domains": "Domains"
     },
     "seoIndexable": "Let search engines index the site",
     "seoIndexableHint": "Off: every page says noindex. Older versions are never indexed either way.",
@@ -3667,6 +3668,31 @@
       "none": "Not published",
       "manage": "Manage site",
       "setUp": "Set up a site"
+    },
+    "domains": {
+      "off": "Custom domains are turned off on this server (SITE_CUSTOM_DOMAINS): the hostnames below are kept but do not open the site.",
+      "intro": "Serve the site on a hostname you control. Point it at this server with the CNAME record, then add the TXT record to prove it is yours. The site answers there once the domain is verified, and its links and sitemap use the first verified domain.",
+      "none": "No domains yet.",
+      "verified": "Verified",
+      "pending": "Waiting for DNS",
+      "verify": "Check now",
+      "remove": "Remove {hostname}",
+      "verifiedHint": "Verified {when}. The TXT record is no longer needed; the CNAME is.",
+      "pendingHint": "Checked automatically every few minutes for the first day, then hourly for a week. DNS changes can take a while to show.",
+      "checked": "checked {when}",
+      "error": {
+        "txtMissing": "The TXT record was not found.",
+        "txtMismatch": "A TXT record was found, but with a different value. Copy the value again.",
+        "dnsError": "DNS did not answer. It will be tried again."
+      },
+      "add": "Add a domain",
+      "addButton": "Add",
+      "invalid": "Enter a hostname such as docs.example.com.",
+      "limit": "A site has at most {max} domains.",
+      "added": "Domain added. Create the DNS records below.",
+      "verifiedToast": "{hostname} is verified",
+      "removed": "{hostname} removed",
+      "copyFailed": "Couldn't copy — select the value and copy it by hand."
     }
   }
 }

@@ -6,7 +6,7 @@ import {
   type PublicShareResponse,
   type PublicSiteResolveResponse,
 } from '@knowledge/contracts'
-import { publicShareAttachmentPath, publicSiteAttachmentPath } from '@knowledge/contracts/publishing'
+import { publicShareAttachmentPath, publicSiteAttachmentPath, siteMarkdownPath } from '@knowledge/contracts/publishing'
 import { formatBytes } from './lib/format'
 import { escapeHtml } from './lib/markdown/nodes'
 import { renderPublicMarkdown, type PublicRenderOptions } from './lib/markdown/public-render.server'
@@ -25,8 +25,8 @@ import { siteThemeCss } from './pages/public/site-theme'
  * The public SSR entry (docs/features/43, 44):
  * - `/s/:token[/:documentId]` — a share link;
  * - `/pub/:slug/…` — a published site in path mode;
- * - any path on a site's own host (`<slug>.PUBLISH_BASE_DOMAIN`), which
- *   server.js recognises and passes as `siteHost`.
+ * - any path on a site's own host (`<slug>.PUBLISH_BASE_DOMAIN` or a verified
+ *   custom domain), which server.js recognises and passes as `siteHost`.
  *
  * Its own entry and its own app, beside entry-server.ts, so an anonymous
  * reader never loads the app shell, the stores or a member's credentials.
@@ -247,6 +247,7 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   // to be indexed: older versions would compete with it for the same query.
   const noindex = !site.seoIndexable || !version.isDefault
   const canonical = `${site.rootUrl}${canonicalPath.slice(prefix.length) || '/'}`
+  const markdownUrl = `${site.rootUrl}${siteMarkdownPath('', version.isDefault ? null : version.slug, res.page.slugPath)}`
   const head = [
     ...baseHead,
     `<link rel="canonical" href="${escapeHtml(canonical)}">`,
@@ -256,6 +257,11 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
     `<meta property="og:url" content="${escapeHtml(canonical)}">`,
     body.description ? `<meta property="og:description" content="${escapeHtml(body.description)}">` : '',
     '<meta name="twitter:card" content="summary">',
+    // The same page in the site's other versions, and as plain markdown.
+    ...res.page.alternates.map(
+      (a) => `<link rel="alternate" href="${escapeHtml(`${site.rootUrl}${a.path}`)}" title="${escapeHtml(a.version.name)}">`,
+    ),
+    `<link rel="alternate" type="text/markdown" href="${escapeHtml(markdownUrl)}">`,
   ]
   return {
     view: {
@@ -268,6 +274,7 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
         html: body.html,
         headings: body.headings,
         updatedAt: res.page.updatedAt,
+        alternates: res.page.alternates.map((a) => ({ versionSlug: a.version.slug, href: `${prefix}${a.path}` })),
       },
     },
     status: 200,
@@ -320,8 +327,7 @@ export async function render(url: string, ctx: PublicRenderContext): Promise<Pub
   const headers: Record<string, string> = isShare
     ? SHARE_HEADERS
     : {
-        // Re-rendered per request for now: unpublishing must end a site at once
-        // (a render cache keyed on the build arrives with phase 2b).
+        // Re-rendered per request: unpublishing must end a site at once.
         'Cache-Control': 'no-cache',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         ...(resolved.noindex ? { 'X-Robots-Tag': 'noindex' } : {}),

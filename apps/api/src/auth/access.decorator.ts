@@ -32,6 +32,7 @@ export type WorkspaceSource =
   | 'share-link' // :id path param is a share link id (docs/features/43)
   | 'site' // :id path param is a published site id (docs/features/44)
   | 'site-version' // :id path param is a site version id (resolved through its site; docs/features/44)
+  | 'site-domain' // :id path param is a site domain id (resolved through its site; docs/features/44)
   | 'connector' // :id path param is a connector id (docs/features/19)
   | 'connector-run' // :runId path param is a connector run id (docs/features/19)
   | 'workspace'; // :id path param IS the workspace id (existence-checked)

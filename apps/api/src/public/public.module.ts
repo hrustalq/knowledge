@@ -6,6 +6,8 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { PublishingCoreModule } from '../publishing/publishing-core.module.js';
 import { PublicRateLimiter, PublicRateLimitGuard } from './public-rate-limit.js';
 import { PublicSharesController } from './public-shares.controller.js';
+import { PublicDomainsController, PublicSiteFilesController } from './public-site-files.controller.js';
+import { PublicSiteFilesService } from './public-site-files.service.js';
 import { PublicSitesController } from './public-sites.controller.js';
 import { PublicSitesService } from './public-sites.service.js';
 import { PublicSharesService } from './public-shares.service.js';
@@ -19,7 +21,15 @@ import { ShareUnlockService } from './share-unlock.service.js';
  */
 @Module({
   imports: [PrismaModule, PublishingCoreModule, DocumentsCoreModule, AttachmentsModule, AvatarsModule],
-  controllers: [PublicSharesController, PublicSitesController],
-  providers: [PublicStore, PublicRateLimiter, PublicRateLimitGuard, ShareUnlockService, PublicSharesService, PublicSitesService],
+  controllers: [PublicSharesController, PublicSitesController, PublicSiteFilesController, PublicDomainsController],
+  providers: [
+    PublicStore,
+    PublicRateLimiter,
+    PublicRateLimitGuard,
+    ShareUnlockService,
+    PublicSharesService,
+    PublicSitesService,
+    PublicSiteFilesService,
+  ],
 })
 export class PublicModule {}

@@ -305,6 +305,15 @@ export class AccessService {
     return version.site.workspaceId;
   }
 
+  async workspaceOfSiteDomain(domainId: string): Promise<string> {
+    const domain = await this.prisma.siteDomain.findUnique({
+      where: { id: domainId },
+      select: { site: { select: { workspaceId: true } } },
+    });
+    if (!domain) throw new NotFoundException(t('error.site.domainNotFound'));
+    return domain.site.workspaceId;
+  }
+
   async workspaceOfJob(jobId: string): Promise<string> {
     const job = await this.prisma.ingestionJob.findUnique({
       where: { id: jobId },

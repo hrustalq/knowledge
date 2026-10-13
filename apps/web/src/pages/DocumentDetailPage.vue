@@ -17,6 +17,7 @@ import { formatDateTime } from '@/lib/format'
 import { errorMessage } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
 import { hasWorkingCopy } from '@/lib/working-copy'
+import { readFrontmatter } from '@/lib/page-source'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
@@ -28,6 +29,8 @@ import {
   Flag,
   GitMerge,
   History,
+  LayoutTemplate,
+  MoreHorizontal,
   Plug,
   Info,
   Pencil,
@@ -54,10 +57,18 @@ import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useEventsStore } from '@/stores/events'
+import { useTemplatesStore } from '@/stores/templates'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
 import { PageLayout, PageRail, PageState } from '@/components/layout/page'
 import TocRail from '@/components/knowledge/TocRail.vue'
 import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
@@ -72,6 +83,7 @@ import KnowledgeIssuesRail from '@/components/knowledge/KnowledgeIssuesRail.vue'
 import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
+import SharePopover from '@/components/knowledge/SharePopover.vue'
 import VerificationBar from '@/components/verification/VerificationBar.vue'
 
 const { t } = useI18n()
@@ -140,6 +152,39 @@ const content = ref<DocumentContentResponse | null>(null)
 const contentError = ref<string | null>(null)
 const relations = ref<ListDocumentRelationsResponse['relations'] | null>(null)
 const error = ref<string | null>(null)
+
+/**
+ * The template this page was created from (issue #69), named once the roster
+ * knows it. The roster includes archived templates, so a page still names a
+ * template nobody can start from any more.
+ */
+const templates = useTemplatesStore()
+const templateRef = computed(() => detail.value?.document.templateRef ?? null)
+watch(templateRef, (ref) => {
+  if (ref) void templates.ensureLoaded()
+})
+const templateChip = computed(() => {
+  const ref = templateRef.value
+  if (!ref) return null
+  const version = detail.value?.document.templateVersion ?? 1
+  const name = templates.byRef(ref)?.name
+  return name ? t('documents.fromTemplate', { name, version }) : t('documents.fromTemplateUnnamed', { version })
+})
+/** "Save as template": the page as it is shown — an older revision, when one is being read. */
+const saveAsOpen = ref(false)
+const saveAsPage = computed<SaveAsTemplatePage | null>(() => {
+  if (!detail.value || !content.value) return null
+  const fm = readFrontmatter(content.value.frontmatter)
+  return {
+    title: detail.value.document.title,
+    body: content.value.markdown,
+    category: detail.value.document.category,
+    tags: fm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+    relations: fm.relations.map((r) => ({ type: r.type, target: r.key })),
+    other: fm.other,
+    projectId: detail.value.document.projectId,
+  }
+})
 const headings = ref<{ id: string; text: string; level: number }[]>([])
 const outdatedThreads = ref<string[]>([])
 /**
@@ -489,6 +534,10 @@ watch(
       <template #status>
         <Badge variant="outline">{{ labelFor(t, 'category', detail.document.category) }}</Badge>
         <Badge :variant="statusVariant(detail.revision.status)">{{ detail.revision.status }}</Badge>
+        <Badge v-if="templateChip" variant="outline" class="text-muted-foreground gap-1 font-normal">
+          <LayoutTemplate class="size-3" aria-hidden="true" />
+          {{ templateChip }}
+        </Badge>
       </template>
 
       <template #actions>
@@ -516,6 +565,9 @@ watch(
           :revision-id="viewingRevision"
         />
         <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
+        <!-- Handing the page to people outside the workspace is an editor's act
+             (docs/features/43); the server checks the role and the workspace switch. -->
+        <SharePopover v-if="auth.canEdit && !archived" :document-id="detail.document.documentId" />
         <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
           <RouterLink
             :to="`/documents/${detail.document.documentId}/edit`"
@@ -527,6 +579,18 @@ watch(
             <span v-if="hasUnstaged" class="sr-only">{{ t('editor.unstaged.label') }}</span>
           </RouterLink>
         </Button>
+        <DropdownMenu v-if="auth.canEdit && saveAsPage">
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="icon-sm" :aria-label="t('documents.moreActions')">
+              <MoreHorizontal class="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="w-48">
+            <DropdownMenuItem @select="saveAsOpen = true">
+              <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </template>
 
       <template #meta>
@@ -721,5 +785,7 @@ watch(
 
     <!-- Ask-AI chat about this page -->
     <AskAssistant :document-id="documentId" :title="detail.document.title" />
+
+    <SaveAsTemplateDialog v-model:open="saveAsOpen" :page="saveAsPage" />
   </template>
 </template>

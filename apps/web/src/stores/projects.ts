@@ -4,6 +4,7 @@ import { apiFetch, getProjectId, getWorkspaceId, setActiveProject } from '@/lib/
 import { useDocumentsStore } from '@/stores/documents'
 import { useGlossaryStore } from '@/stores/glossary'
 import { useWorkflowsStore } from '@/stores/workflows'
+import { useTemplatesStore } from '@/stores/templates'
 import { useSidebarNavStore } from '@/stores/sidebar-nav'
 
 /**
@@ -54,14 +55,16 @@ export const useProjectsStore = defineStore('projects', {
       this.activeId = projectId
       setActiveProject(projectId)
       useSidebarNavStore().openPages()
-      // The glossary (14) and the workflow roster (17) are project-scoped too,
-      // so they rescope alongside the page tree rather than decorating the new
-      // project's pages with the previous one's vocabulary, or offering chains
-      // that would write into the project you just left.
+      // The glossary (14), the workflow roster (17) and the templates (#69)
+      // are project-scoped too, so they rescope alongside the page tree rather
+      // than decorating the new project's pages with the previous one's
+      // vocabulary, or offering chains and templates that would write into the
+      // project you just left.
       await Promise.all([
         useDocumentsStore().rescope(),
         useGlossaryStore().rescope(),
         useWorkflowsStore().rescope(),
+        useTemplatesStore().rescope(),
       ])
     },
   },

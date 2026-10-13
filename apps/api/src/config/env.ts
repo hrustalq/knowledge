@@ -51,6 +51,15 @@ export const envSchema = z.object({
   S3_SECRET_KEY: z.string().min(1),
   S3_BUCKET: z.string().min(1),
   S3_FORCE_PATH_STYLE: boolish(true),
+  /**
+   * Origin the browser reaches object storage at, when it differs from
+   * S3_ENDPOINT (#144). Production talks to `http://minio:9000` over the Docker
+   * network, a host no browser can resolve; presigned URLs are signed for this
+   * origin instead, and the reverse proxy routes `/${S3_BUCKET}/*` to MinIO.
+   * Empty = presign against S3_ENDPOINT, which is right whenever the API and the
+   * browser share one (dev: http://localhost:9000).
+   */
+  S3_PUBLIC_ENDPOINT: z.string().optional().default(''),
 
   ARCADE_URL: z.string().min(1),
   ARCADE_DB: z.string().min(1),
@@ -148,6 +157,38 @@ export const envSchema = z.object({
    * and `/content` stays JSON-only.
    */
   AI_READABLE_ENABLED: boolish(true),
+  /**
+   * Share links (docs/features/43, issue #77). PUBLIC_SHARING_ENABLED is the
+   * ceiling over every workspace's `publishing_settings` switch: false refuses
+   * new links and 404s every existing one, whatever the workspace says.
+   */
+  PUBLIC_SHARING_ENABLED: boolish(true),
+  /** Longest a share link may live, in days; a longer or never-expiring request is cut to it. 0 = no cap. */
+  SHARE_LINK_MAX_TTL_DAYS: z.coerce.number().int().min(0).default(0),
+  /** How long a password-unlocked share stays open in one browser. */
+  SHARE_UNLOCK_TTL_MIN: z.coerce.number().int().positive().default(720),
+  /** Per-IP requests a minute across the anonymous /v1/public routes. */
+  PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
+  /** Password attempts per IP and link in 15 minutes before the unlock answers 429. */
+  PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN: z.coerce.number().int().positive().default(10),
+  /**
+   * Published sites (docs/features/44, issue #77). PUBLIC_SITES_ENABLED is the
+   * ceiling over the workspace's `allow_public_sites` switch: false refuses to
+   * publish and 404s every live site.
+   */
+  PUBLIC_SITES_ENABLED: boolish(true),
+  /**
+   * Sites are served at `<slug>.<PUBLISH_BASE_DOMAIN>`. Empty = path mode,
+   * `${WEB_BASE_URL}/pub/<slug>`. The web SSR reads the same variable.
+   */
+  PUBLISH_BASE_DOMAIN: z
+    .string()
+    .default('')
+    .transform((v) => v.trim().toLowerCase().replace(/^\.+|\.+$/g, '')),
+  /** How long a live version waits after a change before it rebuilds; later changes in the window ride along. */
+  SITE_BUILD_DEBOUNCE_MS: z.coerce.number().int().min(0).default(30_000),
+  /** Most pages one site version publishes; the rest is cut and the build says so. */
+  SITE_MAX_PAGES: z.coerce.number().int().positive().default(2000),
   /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
   LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
   /** Cap on bytes streamed in one llms-full.txt (20 MB). */

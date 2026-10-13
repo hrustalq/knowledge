@@ -11,6 +11,8 @@ import {
   BookOpen,
   Bot,
   FolderKanban,
+  Globe,
+  LayoutTemplate,
   Plug,
   ShieldCheck,
   Sparkles,
@@ -32,6 +34,9 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/connect', label: t('nav.connect'), icon: Bot, hint: t('settings.connectHint') },
   { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
   { to: '/settings/glossary', label: t('nav.glossary'), icon: BookMarked, hint: t('settings.glossaryHint') },
+  { to: '/settings/templates', label: t('nav.templates'), icon: LayoutTemplate, hint: t('settings.templatesHint') },
+
+  { to: '/settings/publishing', label: t('nav.publishing'), icon: Globe, hint: t('settings.publishingHint') },
   // Members, roles and — for a platform admin — the accounts themselves, all
   // under one row. Accounts used to be a second row beside this one, which put
   // "can this person sign in" and "what may they do here" in two places and

@@ -19,5 +19,9 @@
   "connectorRun": "connector run id",
   "id": "identifier",
   "savedFilter": "saved filter id",
-  "sourcePolicy": "source policy id"
+  "sourcePolicy": "source policy id",
+  "template": "template id",
+  "shareLink": "share link id",
+  "site": "site id",
+  "siteVersion": "site version id"
 }

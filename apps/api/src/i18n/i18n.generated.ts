@@ -575,6 +575,56 @@ export type I18nTranslations = {
         "agent": {
             "disabled": string;
         };
+        "template": {
+            "notFound": string;
+            "versionNotFound": string;
+            "nameTaken": string;
+            "nameRequired": string;
+            "sourceRequired": string;
+            "archived": string;
+            "placeholderMissing": string;
+            "valueTooLong": string;
+            "limitReached": string;
+            "builtInWorkspaceOnly": string;
+            "alreadyCustomized": string;
+            "builtInNotArchivable": string;
+            "notDeletable": string;
+            "source": {
+                "tooLong": string;
+                "invalidFrontmatter": string;
+                "invalidMeta": string;
+                "tooManyPlaceholders": string;
+                "invalidPlaceholder": string;
+                "invalidRelation": string;
+            };
+        };
+        "share": {
+            "notFound": string;
+            "disabledByWorkspace": string;
+            "passwordRequired": string;
+            "passwordInvalid": string;
+            "expiryInPast": string;
+            "rateLimited": string;
+            "unlockRateLimited": string;
+            "locked": string;
+        };
+        "site": {
+            "notFound": string;
+            "versionNotFound": string;
+            "disabledByWorkspace": string;
+            "exists": string;
+            "slugInvalid": string;
+            "slugReserved": string;
+            "slugTaken": string;
+            "rootNotInProject": string;
+            "themeInvalid": string;
+            "versionSlugInvalid": string;
+            "versionSlugTaken": string;
+            "versionSlugShadowsPage": string;
+            "versionLimit": string;
+            "versionNotBuilt": string;
+            "defaultVersionDelete": string;
+        };
     };
     "import": {
         "stage": {
@@ -784,6 +834,10 @@ export type I18nTranslations = {
         "id": string;
         "savedFilter": string;
         "sourcePolicy": string;
+        "template": string;
+        "shareLink": string;
+        "site": string;
+        "siteVersion": string;
     };
     "validation": {
         "isDefined": string;
@@ -823,6 +877,7 @@ export type I18nTranslations = {
             "missingPrompt": string;
             "producesNeedsCategory": string;
             "unknownRelationType": string;
+            "unknownTemplate": string;
             "deadEnd": string;
             "maxItemsRange": string;
             "fanOutIgnored": string;

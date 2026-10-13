@@ -9,6 +9,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -79,6 +80,44 @@ export class RelationInputDto {
   target!: RelationTargetDto;
 }
 
+/**
+ * The template a page starts from (issue #69). With no `content`, the server
+ * renders it; with `content`, the content wins and this is recorded as
+ * provenance only. The editor sends neither — its body goes to storage by
+ * presigned upload — so it says `provenanceOnly` instead.
+ */
+export class DocumentTemplateDto {
+  @ApiProperty({ description: 'A template uuid or `builtin:<key>`', example: 'builtin:adr' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  ref!: string;
+
+  @ApiPropertyOptional({ description: 'The version rendered; the current one when omitted' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  version?: number;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: { type: 'string' },
+    description: 'Placeholder values by name, used when the server renders (no `content`)',
+  })
+  @IsOptional()
+  @IsObject()
+  values?: Record<string, string>;
+
+  @ApiPropertyOptional({
+    description:
+      'Record the template as provenance and render nothing, even without `content`: the caller uploads the ' +
+      'body itself (the editor, which rendered the skeleton and let the author change it). Off when omitted.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  provenanceOnly?: boolean;
+}
+
 export class CreateDocumentDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
@@ -117,6 +156,18 @@ export class CreateDocumentDto {
   @IsOptional()
   @IsUUID()
   parentId?: string;
+
+  @ApiPropertyOptional({
+    type: DocumentTemplateDto,
+    description:
+      'Start from a template (issue #69). Without `content` the template is rendered server-side: its title ' +
+      'pattern, body, tags and relations become the page, and its category is the default.',
+  })
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => DocumentTemplateDto)
+  template?: DocumentTemplateDto;
 }
 
 export class UpdateDocumentDto {

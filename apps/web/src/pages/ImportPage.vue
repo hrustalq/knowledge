@@ -20,6 +20,11 @@
 // The one authored moment is the progress ring's handoff from the browser's
 // upload to the worker's parse — see ParseProgress.
 //
+// TEMPLATES (issue #69). The review step may name a page template: its
+// category becomes the filing, its tags and relations are merged into the page
+// on submit. Or the reviewed text becomes a template itself — "Save as
+// template instead" — and the import is dropped, since nothing was imported.
+//
 // The wizard holds an import id, not the work. The row on the server is the
 // truth, so closing the tab mid-parse loses nothing and coming back rejoins it.
 import { useI18n } from 'vue-i18n'
@@ -27,11 +32,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { ArrowLeft, RotateCcw } from 'lucide-vue-next'
-import type { DocumentCategory } from '@knowledge/contracts'
+import { DOCUMENT_CATEGORIES, type DocumentCategory, type TemplateDetail } from '@knowledge/contracts'
 import { getWorkspaceId } from '@/lib/api'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
+import { useAuthStore } from '@/stores/auth'
+import { useTemplatesStore } from '@/stores/templates'
 import { Button } from '@/components/ui/button'
+import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
 import DestinationFields from '@/components/import/DestinationFields.vue'
 import FileDropZone from '@/components/import/FileDropZone.vue'
 import ImportReview from '@/components/import/ImportReview.vue'
@@ -47,6 +55,8 @@ const MAX_BYTES = 52_428_800
 const router = useRouter()
 const projects = useProjectsStore()
 const documents = useDocumentsStore()
+const auth = useAuthStore()
+const templates = useTemplatesStore()
 
 const file = ref<File | null>(null)
 const projectId = ref(projects.activeId ?? '')
@@ -55,6 +65,17 @@ const parentId = ref('')
 
 const title = ref('')
 const markdown = ref('')
+const templateRef = ref('')
+
+// Picking a template files the page under its category — the same default the
+// gallery and a workflow step apply — and the filing can still be changed.
+watch(templateRef, (picked) => {
+  const next = templates.byRef(picked)?.category
+  if (next && (DOCUMENT_CATEGORIES as readonly string[]).includes(next)) category.value = next
+})
+
+const saveAsOpen = ref(false)
+const saveAsPage = ref<SaveAsTemplatePage | null>(null)
 
 /** Set when the review step sends you back to correct only the filing. */
 const editingDestination = ref(false)
@@ -166,6 +187,7 @@ async function create(): Promise<void> {
     projectId: projectId.value,
     category: category.value,
     parentId: parentId.value || null,
+    ...(templateRef.value ? { templateRef: templateRef.value } : {}),
   })
   if (!res) {
     toast.error(error.value ?? t('import.couldNotCreatePage'))
@@ -176,11 +198,40 @@ async function create(): Promise<void> {
   await router.push(`/documents/${res.documentId}`)
 }
 
+/**
+ * Images the parser staged live under the import and go when it is dropped,
+ * so a template cannot keep them; the author is told rather than left with a
+ * template full of broken links.
+ */
+const STAGED_IMAGE_RE = /!\[[^\]]*\]\([^)\s]*\/v1\/imports\/[0-9a-f-]{36}\/images\/\d+[^)]*\)\n?/g
+
+function openSaveAsTemplate(): void {
+  const body = reviewRef.value?.flush() ?? markdown.value
+  const stripped = body.replace(STAGED_IMAGE_RE, '')
+  if (stripped !== body) toast.info(t('import.templateDropsImages'))
+  saveAsPage.value = {
+    title: title.value,
+    body: stripped,
+    category: category.value,
+    tags: [],
+    relations: [],
+    other: {},
+    projectId: projectId.value || null,
+  }
+  saveAsOpen.value = true
+}
+
+async function savedAsTemplate(created: TemplateDetail): Promise<void> {
+  await throwAway()
+  await router.push(`/settings/templates/${created.ref}`)
+}
+
 async function throwAway(): Promise<void> {
   await discard()
   file.value = null
   title.value = ''
   markdown.value = ''
+  templateRef.value = ''
   editingDestination.value = false
 }
 
@@ -273,6 +324,7 @@ function tryAgain(): void {
             :warnings="content.warnings"
             :project-id="projectId"
             :category="category"
+            v-model:template-ref="templateRef"
             :parent-id="parentId"
             @back="editingDestination = true"
           />
@@ -314,6 +366,9 @@ function tryAgain(): void {
           <Button :disabled="busy || !title.trim()" @click="create">
             {{ busy ? t('import.creatingPage') : t('import.createPage') }}
           </Button>
+          <Button v-if="auth.canEdit" variant="outline" :disabled="busy" @click="openSaveAsTemplate">
+            {{ t('import.saveAsTemplate') }}
+          </Button>
           <Button variant="ghost" :disabled="busy" @click="throwAway">{{ t('common.discard') }}</Button>
         </template>
 
@@ -329,6 +384,8 @@ function tryAgain(): void {
         </template>
       </div>
     </footer>
+
+    <SaveAsTemplateDialog v-model:open="saveAsOpen" :page="saveAsPage" @saved="savedAsTemplate" />
   </div>
 </template>
 

@@ -12,6 +12,7 @@ import { WorkflowDraftService } from './workflow-draft.service.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
+import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 
 /**
  * Dynamic document workflows (docs/features/17). Stays out of WorkerModule —
@@ -42,6 +43,7 @@ import { AssistantClientModule } from '../assistant/assistant-client.module.js';
     AgentCoreModule,
     AiCoreModule,
     AssistantClientModule,
+    TemplatesCoreModule,
   ],
   controllers: [WorkflowsController, DocumentWorkflowsController],
   providers: [WorkflowsService, WorkflowMaterializerService, WorkflowDraftService],

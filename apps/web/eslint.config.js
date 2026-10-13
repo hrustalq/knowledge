@@ -39,6 +39,10 @@ const LOCALE_FORMATTING = [
   },
 ]
 
+// The app's catalogs, and the public reader's own small one (docs/features/43):
+// kept apart so a reader's bundle never carries the app's whole catalog.
+const I18N_LOCALE_DIR = ['./src/i18n/messages/*.json', './src/i18n/reader/*.json']
+
 export default [
   // Pre-existing disable comments belong to no configured rule here.
   { linterOptions: { reportUnusedDisableDirectives: 'off' } },
@@ -51,7 +55,7 @@ export default [
     },
     plugins: { '@intlify/vue-i18n': vueI18n },
     settings: {
-      'vue-i18n': { localeDir: './src/i18n/messages/*.json', messageSyntaxVersion: '^11.0.0' },
+      'vue-i18n': { localeDir: I18N_LOCALE_DIR, messageSyntaxVersion: '^11.0.0' },
     },
     rules: {
       '@intlify/vue-i18n/no-raw-text': [
@@ -77,7 +81,7 @@ export default [
     languageOptions: { parser: tseslint.parser, sourceType: 'module' },
     plugins: { '@intlify/vue-i18n': vueI18n },
     settings: {
-      'vue-i18n': { localeDir: './src/i18n/messages/*.json', messageSyntaxVersion: '^11.0.0' },
+      'vue-i18n': { localeDir: I18N_LOCALE_DIR, messageSyntaxVersion: '^11.0.0' },
     },
     rules: {
       '@intlify/vue-i18n/no-missing-keys': 'error',

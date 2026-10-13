@@ -66,6 +66,9 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 39  | Page verification, ownership, freshness, archive | [features/39-page-verification.md](features/39-page-verification.md) | 🚧 #66: API + ranking + MCP |
 | 40  | Knowledge health (dashboard API, bulk, settings) | [features/40-knowledge-health.md](features/40-knowledge-health.md)   | 🚧 #66: API |
 | 41  | Mail (verification, reset, invites, directed notifications) | [features/41-mail.md](features/41-mail.md) | ✅ #132 |
+| 42  | Page templates (gallery, `/template`, AI fill, workflows, import) | [features/42-page-templates.md](features/42-page-templates.md) | ✅ #69 |
+| 43  | Share links (public read-only page/subtree, password, expiry, revoke) | [features/43-share-links.md](features/43-share-links.md) | ✅ #77 phase 1 |
+| 44  | Published sites (docs site per project, snapshots, versions, theme) | [features/44-docs-portal.md](features/44-docs-portal.md) | 🚧 #77 phase 2a |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

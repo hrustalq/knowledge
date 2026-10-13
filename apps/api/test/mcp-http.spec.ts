@@ -128,9 +128,29 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         document: { documentId, verification: state, ownerId: 'owner-1' },
       })),
     },
+    templates: {
+      list: vi.fn(async () => ({ templates: [{ ref: 'builtin:adr' }] })),
+      getByRef: vi.fn(async (_ws: string, ref: string) => ({ ref, meta: { placeholders: [] } })),
+    },
+    shareLinks: {
+      create: vi.fn(async (documentId: string, input: { includeSubtree: boolean }) => ({
+        share: { id: 'sh-1', documentId, includeSubtree: input.includeSubtree, expiresAt: null, hasPassword: true },
+        url: 'https://kb.example.com/s/kp_x',
+        requestedExpiresAt: null,
+      })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
-  return { mcp, search, documents, provenance: deps.provenance, feedback: deps.feedback, verification: deps.verification };
+  return {
+    mcp,
+    search,
+    documents,
+    provenance: deps.provenance,
+    feedback: deps.feedback,
+    verification: deps.verification,
+    templates: deps.templates,
+    shareLinks: deps.shareLinks,
+  };
 }
 
 async function connect(mcp: McpService, principal: Principal) {
@@ -160,6 +180,36 @@ describe('McpService over a principal', () => {
     const offered = (await reader.listTools()).tools.map((t) => t.name);
     expect(offered).toContain('knowledge_search');
     for (const name of WRITE_TOOLS) expect(offered).not.toContain(name);
+  });
+
+  it('offers the template reads to a read-only key and fills a page in from a template (issue #69)', async () => {
+    const { mcp, templates, documents } = service(accessWith('editor'));
+    const reader = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const offered = (await reader.listTools()).tools.map((t) => t.name);
+    expect(offered).toEqual(expect.arrayContaining(['knowledge_list_templates', 'knowledge_get_template']));
+    expect(offered).not.toContain('knowledge_create_document');
+    const got = await reader.callTool({ name: 'knowledge_get_template', arguments: { workspaceId: WS_A, templateRef: 'builtin:adr' } });
+    expect(got.isError).toBeFalsy();
+    expect(templates.getByRef).toHaveBeenCalledWith(WS_A, 'builtin:adr', undefined);
+
+    const writer = await connect(mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }));
+    const project = '55555555-5555-4555-8555-555555555555';
+    const neither = await writer.callTool({
+      name: 'knowledge_create_document',
+      arguments: { workspaceId: WS_A, projectId: project, title: 'x' },
+    });
+    expect(neither.isError).toBe(true);
+    expect(documents.createDocument).not.toHaveBeenCalled();
+
+    const created = await writer.callTool({
+      name: 'knowledge_create_document',
+      arguments: { workspaceId: WS_A, projectId: project, title: 'Use Postgres', templateRef: 'builtin:adr', values: { number: '1' } },
+    });
+    expect(created.isError).toBeFalsy();
+    expect(documents.createDocument).toHaveBeenCalledWith(
+      { workspaceId: WS_A, projectId: project, title: 'Use Postgres', template: { ref: 'builtin:adr', version: undefined, values: { number: '1' } } },
+      expect.any(String),
+    );
   });
 
   it('checks the workspace before the service runs', async () => {
@@ -218,6 +268,37 @@ describe('McpService over a principal', () => {
     });
     expect(refused.isError).toBe(true);
     expect(verification.flag).toHaveBeenCalledTimes(1);
+  });
+
+  it('knowledge_share_page needs editor, is hidden from a read-only key, and returns the link (docs/features/43)', async () => {
+    const doc = '44444444-4444-4444-8444-444444444444';
+    const reader = service(accessWith('editor'));
+    const readClient = await connect(reader.mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    expect((await readClient.listTools()).tools.map((t) => t.name)).not.toContain('knowledge_share_page');
+
+    const viewer = service(accessWith('viewer'));
+    (viewer.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
+    const viewerClient = await connect(viewer.mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A }));
+    const refused = await viewerClient.callTool({ name: 'knowledge_share_page', arguments: { workspaceId: WS_A, documentId: doc } });
+    expect(refused.isError).toBe(true);
+    expect(viewer.shareLinks.create).not.toHaveBeenCalled();
+
+    const editor = service(accessWith('editor'));
+    (editor.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
+    const p = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A });
+    const client = await connect(editor.mcp, p);
+    const res = await client.callTool({
+      name: 'knowledge_share_page',
+      arguments: { workspaceId: WS_A, documentId: doc, includeSubtree: true, password: 'hunter22' },
+    });
+    expect(res.isError).toBeFalsy();
+    expect(editor.shareLinks.create).toHaveBeenCalledWith(
+      doc,
+      { includeSubtree: true, expiresAt: null, password: 'hunter22' },
+      p.userId,
+    );
+    const body = JSON.parse((res.content as Array<{ text: string }>)[0]!.text) as { url: string };
+    expect(body.url).toBe('https://kb.example.com/s/kp_x');
   });
 
   it('knowledge_feedback stores a vote as the caller with surface mcp, and insists on a reason for a down-vote', async () => {

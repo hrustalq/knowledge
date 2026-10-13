@@ -1,5 +1,6 @@
 import type { DocumentCategory, RelationInput } from '@knowledge/contracts/documents';
 import type { AuthorableRelationType } from '@knowledge/contracts/graph';
+import type { TemplateRef } from '@knowledge/contracts/templates';
 
 // ---------------------------------------------------------------------------
 // A workflow definition is a graph of steps run against a source page: one
@@ -81,6 +82,14 @@ export interface WorkflowStepProduces {
   relationToParent: AuthorableRelationType;
   /** Nest the produced page under the parent page (feature 08). */
   nestUnderParent?: boolean;
+  /**
+   * The page template (issue #69) an `ai.draft` step writes into: its headings
+   * are the structure the model must keep, its default tags and relations are
+   * merged into the draft, and the materialized page records it as provenance.
+   * Checked against the workspace when the definition is saved
+   * (`unknownTemplate`), since `validateGraph` has no database to ask.
+   */
+  templateRef?: TemplateRef;
 }
 
 /** Scope handed to a step's tools and search — the "filters" of the feature. */
@@ -167,6 +176,8 @@ export type WorkflowIssueCode =
   | 'producesNeedsCategory'
   /** `produces.relationToParent` names an edge type the graph would refuse. */
   | 'unknownRelationType'
+  /** `produces.templateRef` names no template in this workspace, or an archived one. */
+  | 'unknownTemplate'
   | 'deadEnd'
   | 'maxItemsRange'
   | 'fanOutIgnored'
@@ -198,6 +209,9 @@ export interface WorkflowNodeDraft {
   relations?: RelationInput[];
   /** Free-form summary the model produced alongside the body, shown in the tree. */
   summary?: string;
+  /** The template this draft was written against, at the version it was read — carried to the page as provenance. */
+  templateRef?: TemplateRef;
+  templateVersion?: number;
 }
 
 export interface WorkflowRunNodeInfo {

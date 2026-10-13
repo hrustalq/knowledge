@@ -125,6 +125,7 @@ WORKDIR /app/apps/api
 RUN node --input-type=module -e "\
 await import('@knowledge/contracts'); \
 await import('@knowledge/contracts/core'); \
+await import('@knowledge/contracts/publishing'); \
 await import('@knowledge/observability'); \
 await import('@knowledge/observability/express'); \
 await import('@knowledge/workflow'); \

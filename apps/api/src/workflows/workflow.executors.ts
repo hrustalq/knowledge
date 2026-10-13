@@ -4,7 +4,9 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import type { WorkflowRun, WorkflowRunNode } from '@prisma/client';
 import { AUTHORABLE_RELATION_TYPES } from '@knowledge/contracts';
 import type { RelationInput, WorkflowNodeDraft, WorkflowStep } from '@knowledge/contracts';
-import { normalizeRelation } from '../common/relations.js';
+import { normalizeRelation, relationKey } from '../common/relations.js';
+import { wrapUntrusted } from '../common/untrusted.js';
+import { TemplatesService, type TemplateDefaults } from '../templates/templates.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
@@ -20,6 +22,20 @@ const MAX_TASK_COMMENTS = 5;
 
 const MAX_DRAFT_RELATIONS = 20;
 const MAX_DRAFT_TAGS = 20;
+/** The template skeleton handed to a drafting model — a structure, not a second source page. */
+const MAX_SKELETON_CHARS = 24_000;
+const MAX_TEMPLATE_NOTES_CHARS = 4_000;
+
+/**
+ * Appended to a drafting step's system prompt when its `produces.templateRef`
+ * names a template. Trusted and code-owned; the template itself travels in the
+ * user turn, wrapped untrusted (`templateBlock`).
+ */
+const TEMPLATE_RULE =
+  'The page is written into a page template, given below as a skeleton. Keep its headings, in their order, ' +
+  'and fill every section from the source material. Replace each remaining {{placeholder}} with a value the ' +
+  'source supports, or with "TODO:" and what is missing — never invent one. Follow the title pattern when ' +
+  'there is one. Return the filled-in page as "markdown"; never return the skeleton unchanged.';
 
 /** What a step produced: either a fan-out list, or one node's draft. */
 export type StepResult =
@@ -52,6 +68,7 @@ export class WorkflowExecutors {
     private readonly agents: AgentRegistryService,
     private readonly skills: AiSkillsService,
     private readonly workItems: ConnectorWorkItemsService,
+    private readonly templates: TemplatesService,
   ) {}
 
   async run(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
@@ -181,6 +198,20 @@ export class WorkflowExecutors {
 
     const context = await this.gather(node, run);
     const title = context.parentTitle || context.title;
+    // Resolved at draft time, at its current version — which is what the node
+    // records, so the page can say which shape it was written against even
+    // after the template moves on. An archived template still resolves: the
+    // definition was valid when it was saved, and a run in flight should not
+    // fail because somebody tidied the gallery.
+    const template = step.produces?.templateRef
+      ? await this.templates.defaults({
+          workspaceId: run.workspaceId,
+          ref: step.produces.templateRef,
+          title,
+          projectId: run.projectId,
+          authorId: run.createdBy,
+        })
+      : null;
 
     const messages: ChatCompletionMessageParam[] = [
       {
@@ -197,6 +228,7 @@ export class WorkflowExecutors {
           'A relation target is a stable entity key such as "service:identity" — reuse the spelling the source page already uses, since a near-miss key creates a second entity rather than linking to the first.',
           'Declare only relations the source material actually supports; return [] rather than guessing. Tags are not relations.',
           'Stay grounded in the source material; say plainly when something is not specified.',
+          template ? TEMPLATE_RULE : '',
           await this.skillText(run.workspaceId, step, drafter),
         ]
           .filter(Boolean)
@@ -210,6 +242,7 @@ export class WorkflowExecutors {
           `\n\nWrite the page for: ${title}`,
           context.parentSummary ? `\n\nWhat it covers: ${context.parentSummary}` : '',
           `\n\n--- SOURCE: ${context.title} ---\n${context.markdown}`,
+          template ? `\n\nFollow this structure exactly:\n${this.templateBlock(template)}` : '',
         ].join(''),
       },
     ];
@@ -228,8 +261,9 @@ export class WorkflowExecutors {
     // the DTO and written by the materializer — and no executor ever produced
     // them. That is the same declared-and-ignored defect `WorkflowStep.tools`
     // was (docs/features/20).
-    const relations = this.parseRelations(parsed.relations);
-    const tags = this.parseTags(parsed.tags);
+    const relations = this.withTemplateRelations(template, this.parseRelations(parsed.relations));
+    const tags = this.parseTags([...(template?.tags ?? []), ...this.asArray(parsed.tags)]);
+    const frontmatter = { ...template?.frontmatter, ...(tags.length > 0 ? { tags } : {}) };
 
     return {
       kind: 'draft',
@@ -238,9 +272,61 @@ export class WorkflowExecutors {
         markdown,
         summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
         ...(relations.length > 0 ? { relations } : {}),
-        ...(tags.length > 0 ? { frontmatter: { tags } } : {}),
+        ...(Object.keys(frontmatter).length > 0 ? { frontmatter } : {}),
+        ...(template ? { templateRef: template.ref, templateVersion: template.version } : {}),
       },
     };
+  }
+
+  /**
+   * The template as the drafting model sees it (issue #69). Everything in it —
+   * name, description, notes, placeholder labels and the skeleton itself — was
+   * typed by a workspace member, so it is wrapped untrusted: a structure to
+   * follow, never instructions (CLAUDE.md trust boundary). The rule that says
+   * to follow it is `TEMPLATE_RULE`, which is code.
+   */
+  private templateBlock(template: TemplateDefaults): string {
+    const placeholders = template.meta.placeholders.map(
+      (p) => `- {{${p.name}}}: ${p.label ?? p.name}${p.hint ? ` (e.g. ${p.hint})` : ''}`,
+    );
+    const notes = [
+      `Template: ${template.name} (${template.ref}, version ${template.version})`,
+      template.meta.description?.trim() ? `Description: ${template.meta.description.trim()}` : '',
+      template.titlePattern ? `Title pattern: ${template.titlePattern}` : '',
+      placeholders.length ? `Placeholders to fill:\n${placeholders.join('\n')}` : '',
+      template.meta.aiInstructions?.trim() ? `Notes for whoever fills it in:\n${template.meta.aiInstructions.trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, MAX_TEMPLATE_NOTES_CHARS);
+    return wrapUntrusted(
+      `${notes}\n\n--- SKELETON ---\n${template.skeleton.slice(0, MAX_SKELETON_CHARS)}`,
+      'template',
+      'template',
+    );
+  }
+
+  /**
+   * The template's default relations first, so the model's cap never pushes
+   * out what every page of this kind declares; then the model's, de-duplicated
+   * on the pair the graph uniques on.
+   */
+  private withTemplateRelations(template: TemplateDefaults | null, proposed: RelationInput[]): RelationInput[] {
+    if (!template?.relations.length) return proposed;
+    const out: RelationInput[] = [...template.relations];
+    const seen = new Set(out.map(relationKey));
+    for (const relation of proposed) {
+      if (out.length >= MAX_DRAFT_RELATIONS + template.relations.length) break;
+      const key = relationKey(relation);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(relation);
+    }
+    return out;
+  }
+
+  private asArray(value: unknown): unknown[] {
+    return Array.isArray(value) ? value : [];
   }
 
   /**

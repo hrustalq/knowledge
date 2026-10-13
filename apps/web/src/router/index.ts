@@ -128,11 +128,24 @@ export function createRouter() {
             path: 'projects',
             component: () => import('@/pages/ProjectsPage.vue'),
             // Third rail: the roster lives in the shell, the selection here.
-            children: [{ path: ':id?', component: () => import('@/pages/ProjectDetailPage.vue') }],
+            children: [
+              // A project's published site (docs/features/44). The page gates
+              // its controls on auth.canAdminWorkspace; the API enforces admin.
+              { path: ':id/site', component: () => import('@/pages/SiteSettingsPage.vue') },
+              { path: ':id?', component: () => import('@/pages/ProjectDetailPage.vue') },
+            ],
           },
           // Glossary: workspace vocabulary; the page gates writes on the
           // editor role, and reading it is open to any member.
           { path: 'glossary', component: () => import('@/pages/GlossaryPage.vue') },
+          // Page templates (issue #69). One route for the roster, a template
+          // (by ref, so an untouched built-in with no row id is linkable) and
+          // `new`; the page reads the param, since all three share the rail.
+          { path: 'templates/:ref?', component: () => import('@/pages/TemplatesSettingsPage.vue') },
+          // Publishing (docs/features/43): the workspace's public-link switches
+          // and the inventory of every link. Gated in the page on
+          // auth.canAdminWorkspace, as AI settings are; the API enforces admin.
+          { path: 'publishing', component: () => import('@/pages/PublishingSettingsPage.vue') },
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on
           // auth.canAdminWorkspace and the API enforces the admin role.

@@ -270,6 +270,41 @@ export class AccessService {
     return run.workspaceId;
   }
 
+  /**
+   * A template shapes every page created from it, and a workspace-wide one is
+   * offered in every project — so, like a workflow definition, the ACL resolves
+   * from the row rather than a caller-supplied `?workspaceId=` (issue #69).
+   */
+  async workspaceOfTemplate(templateId: string): Promise<string> {
+    const template = await this.prisma.pageTemplate.findUnique({
+      where: { id: templateId },
+      select: { workspaceId: true },
+    });
+    if (!template) throw new NotFoundException(t('error.template.notFound', { ref: templateId }));
+    return template.workspaceId;
+  }
+
+  async workspaceOfShareLink(shareId: string): Promise<string> {
+    const share = await this.prisma.shareLink.findUnique({ where: { id: shareId }, select: { workspaceId: true } });
+    if (!share) throw new NotFoundException(t('error.share.notFound'));
+    return share.workspaceId;
+  }
+
+  async workspaceOfSite(siteId: string): Promise<string> {
+    const site = await this.prisma.publishedSite.findUnique({ where: { id: siteId }, select: { workspaceId: true } });
+    if (!site) throw new NotFoundException(t('error.site.notFound'));
+    return site.workspaceId;
+  }
+
+  async workspaceOfSiteVersion(versionId: string): Promise<string> {
+    const version = await this.prisma.siteVersion.findUnique({
+      where: { id: versionId },
+      select: { site: { select: { workspaceId: true } } },
+    });
+    if (!version) throw new NotFoundException(t('error.site.versionNotFound'));
+    return version.site.workspaceId;
+  }
+
   async workspaceOfJob(jobId: string): Promise<string> {
     const job = await this.prisma.ingestionJob.findUnique({
       where: { id: jobId },

@@ -53,7 +53,7 @@ export interface AssistantToolResult {
 }
 
 /**
- * The five tools that only ever read the workspace. Owned by
+ * The tools that only ever read the workspace. Owned by
  * AssistantReadToolsService, which re-exports the set; declared here so the
  * parallel-safe union below can be built without importing a service file.
  */
@@ -63,6 +63,10 @@ export const READ_TOOL_NAMES = new Set([
   'explore_document_graph',
   'list_relations',
   'list_document_tree',
+  // Page templates (issue #69). A template is workspace data like a page:
+  // reading one changes nothing, so it batches with the other reads.
+  'list_templates',
+  'get_template',
 ]);
 
 /**

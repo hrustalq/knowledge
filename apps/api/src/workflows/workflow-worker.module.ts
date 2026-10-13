@@ -10,6 +10,7 @@ import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
 import { WorkflowCoreModule } from './workflow-core.module.js';
+import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { WorkflowExecutors } from './workflow.executors.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { WorkflowProcessor } from './workflow.processor.js';
@@ -54,6 +55,9 @@ import { WorkflowTriggerService } from './workflow-trigger.service.js';
     // than silently at the first flow that uses the step.
     ConnectorWorkItemsModule,
     WorkflowCoreModule,
+    // An `ai.draft` step writes into a page template (issue #69). The core
+    // half only: the controller's module pulls auth, which the worker cannot load.
+    TemplatesCoreModule,
   ],
   providers: [
     WorkflowExecutors,

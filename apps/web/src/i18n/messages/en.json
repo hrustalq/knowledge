@@ -148,7 +148,14 @@
     "projectGoesInto": "Goes into {scope}. You can add more later.",
     "noWorkspacePermission": "You do not have permission to create a workspace here.",
     "scopeCreated": "{name} created",
-    "invitePeopleTo": "Invite people to {scope} so they can work in it."
+    "invitePeopleTo": "Invite people to {scope} so they can work in it.",
+    "newPageOptions": "More ways to start a page",
+    "blankPage": "Blank page",
+    "newPageFromTemplate": "From template…",
+    "or": "or",
+    "startFromTemplate": "start from a template",
+    "templates": "Templates",
+    "publishing": "Publishing"
   },
   "role": {
     "viewer": "Viewer",
@@ -239,7 +246,10 @@
     "commentDeleted": "Comment deleted",
     "revisionNumber": "Revision #{n}",
     "viewingRevision": "Viewing revision {id} — commenting is off while reading history.",
-    "provenance": "{extractor} · confidence {confidence}"
+    "provenance": "{extractor} · confidence {confidence}",
+    "fromTemplate": "From template: {name} v{version}",
+    "fromTemplateUnnamed": "From a template, v{version}",
+    "moreActions": "More actions"
   },
   "settings": {
     "projectsHint": "Organize documents",
@@ -252,7 +262,9 @@
     "docsHint": "How all of this works",
     "profileHint": "Name, language, password",
     "notificationsHint": "Mentions, reviews, what you follow",
-    "connectHint": "MCP clients, API keys, skill"
+    "connectHint": "MCP clients, API keys, skill",
+    "templatesHint": "Page shapes to start from",
+    "publishingHint": "Public links to pages"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -682,7 +694,10 @@
       "nestingHint": "New pages are nested under the page they came from and linked back to it.",
       "maxItemsHint": "items, so one long list cannot open hundreds of cards.",
       "nothingAfter": "Nothing runs after this step.",
-      "dragHint": "Or drag between the dots on the canvas."
+      "dragHint": "Or drag between the dots on the canvas.",
+      "template": "Written into template",
+      "noTemplate": "No template",
+      "templateHint": "Drafts keep the template's headings and carry its tags and relations. Picking one files pages under its category."
     },
     "outcome": {
       "items": "A list of items",
@@ -1008,6 +1023,11 @@
         "proposed": "proposed a fix for a report on",
         "resolved": "resolved a report on",
         "dismissed": "dismissed a report on"
+      },
+      "share": {
+        "created": "shared a public link to",
+        "updated": "changed a public link to",
+        "revoked": "revoked a public link to"
       }
     },
     "loading": "Loading activity…",
@@ -1331,7 +1351,9 @@
       "positionLast": "{title}: last in {parent}.",
       "rowMenu": "Actions for {title}",
       "topLevel": "Top level"
-    }
+    },
+    "newChild": "New child page",
+    "newChildFromTemplate": "New child page from template…"
   },
   "graph": {
     "depth": "Depth",
@@ -2000,7 +2022,12 @@
     },
     "couldNotCreatePage": "The page could not be created",
     "pageCreatedWithAttachment": "Page created — the original file is attached",
-    "pageCreated": "Page created"
+    "pageCreated": "Page created",
+    "template": "Template",
+    "noTemplate": "No template",
+    "templateHint": "Adds the template's tags and relations and files the page under its category. The text stays as imported.",
+    "saveAsTemplate": "Save as template instead",
+    "templateDropsImages": "Images from the original stay with the import, so the template won't include them."
   },
   "project": {
     "active": "active",
@@ -2083,7 +2110,8 @@
     "connectors": "Connected to",
     "people": "People",
     "pages": "Pages",
-    "glossary": "Glossary"
+    "glossary": "Glossary",
+    "site": "Site"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -2367,7 +2395,8 @@
       "leaveTitle": "Leave with unstaged changes?",
       "leaveBody": "Kept, they stay in this browser and are restored when you reopen the page. Discarded, the page stays as published.",
       "keepAndLeave": "Keep and leave",
-      "dontAskAgain": "Don’t ask again"
+      "dontAskAgain": "Don’t ask again",
+      "otherNewPage": "You were writing another new page in this browser. Restoring it replaces this one — review the diff before you publish."
     },
     "moreActions": "More actions",
     "publish": "Publish",
@@ -2376,7 +2405,9 @@
     "expandSection": "Expand section",
     "mentioned": "Mentioned: {name}",
     "statusColor": "Status: {color}",
-    "untitledPage": "Untitled page"
+    "untitledPage": "Untitled page",
+    "fromTemplate": "from {name}",
+    "fromATemplate": "from a template"
   },
   "toolbar": {
     "formatting": "Formatting",
@@ -2454,7 +2485,8 @@
     "heading4": "Heading 4",
     "left": "Left",
     "right": "Right",
-    "more": "More formatting"
+    "more": "More formatting",
+    "template": "Template"
   },
   "hints": {
     "noProjects": "No projects in this workspace yet.",
@@ -2561,6 +2593,14 @@
     "list_document_tree": {
       "running": "Browsing the page tree",
       "done": "Browsed the page tree"
+    },
+    "list_templates": {
+      "running": "Looking at the page templates",
+      "done": "Looked at the page templates"
+    },
+    "get_template": {
+      "running": "Reading a page template",
+      "done": "Read a page template"
     },
     "task_list": {
       "running": "Listing issues",
@@ -3337,6 +3377,296 @@
           "hint": "Multiply search scores by each page's verification state, so verified pages rank above outdated ones"
         }
       }
+    }
+  },
+  "templates": {
+    "gallery": {
+      "title": "New page from template",
+      "search": "Search templates",
+      "blank": "Blank page",
+      "blankDescription": "An empty page. Pick a template on the left to start from a structure instead.",
+      "groups": {
+        "project": "This project",
+        "workspace": "Workspace",
+        "builtIn": "Built-in"
+      },
+      "preview": "Preview",
+      "pageTitle": "Page title",
+      "create": "Open in editor",
+      "required": "Required",
+      "pickPerson": "Pick a person",
+      "pickPage": "Pick a page",
+      "whereTop": "Goes into {project}, at the top level. Nothing is saved until you publish.",
+      "whereUnder": "Goes into {project}, under “{parent}”. Nothing is saved until you publish.",
+      "insertTitle": "Insert a template",
+      "insertWhere": "The skeleton goes in at the cursor, and its tags and relations join the page's. Nothing is saved until you publish.",
+      "insertPick": "Pick a template on the left to insert its skeleton here.",
+      "insert": "Insert",
+      "describeForAi": "Describe the page for AI (optional)",
+      "describeForAiPlaceholder": "What should this page say? e.g. We are moving search from Elasticsearch to OpenSearch because…",
+      "describeForAiHint": "The assistant fills the sections in as suggestions you keep or discard. Nothing is saved until you publish.",
+      "createWithAi": "Open and fill with AI"
+    },
+    "placeholderKind": {
+      "text": "Text",
+      "date": "Date",
+      "user": "Person",
+      "page": "Page",
+      "entity": "Entity key"
+    },
+    "placeholders": {
+      "none": "No placeholders: pages start from the text exactly as written.",
+      "name": "Name",
+      "label": "Label",
+      "kind": "Kind",
+      "hint": "Hint or example",
+      "remove": "Remove {name}",
+      "add": "Add placeholder",
+      "detect": "Detect from text"
+    },
+    "fields": {
+      "icon": "Icon",
+      "name": "Name",
+      "description": "Description",
+      "scope": "Offered in",
+      "category": "Category",
+      "titlePattern": "Title pattern",
+      "titlePatternHint": "How the page title is built, e.g. {example}. Empty: the title as typed.",
+      "placeholders": "Placeholders",
+      "placeholdersHint": "Asked for when a page is created. Only names declared here are filled in; any other {example} stays as written.",
+      "tags": "Tags pages inherit",
+      "relations": "Relations pages inherit",
+      "relationTarget": "Target entity key",
+      "aiInstructions": "Instructions for the assistant",
+      "aiInstructionsHint": "Used when a page is filled in with AI. Passed on as guidance from your workspace, not as rules the assistant must obey.",
+      "body": "Body",
+      "bodyHint": "Write placeholders as {example}; {system} are always available. To keep one literal, write {escaped}."
+    },
+    "scope": {
+      "projectNamed": "This project ({project})",
+      "noProject": "The page is in no project.",
+      "workspace": "Every project in the workspace",
+      "workspaceHint": "Changes what every project is offered.",
+      "adminOnly": "Needs the admin role."
+    },
+    "saveAs": {
+      "action": "Save as template",
+      "title": "Save page as template",
+      "description": "The page's text becomes the template's body, and its tags and relations become what pages created from it inherit. The page itself is not changed.",
+      "placeholdersHint": "Found from the {example} in the page. With none, the template is a fixed structure to fill in by hand.",
+      "save": "Save template",
+      "saved": "Template “{name}” saved",
+      "openSettings": "Open"
+    },
+    "settings": {
+      "new": "New template",
+      "newHint": "A template is a page shape: its body, the placeholders asked for when a page is created, and the tags and relations those pages inherit.",
+      "none": "No templates.",
+      "pick": "Pick a template to see its shape and history.",
+      "notFound": "This template is not offered in the active project.",
+      "use": "New page from it",
+      "customise": "Customise",
+      "hide": "Hide",
+      "show": "Show",
+      "reset": "Reset to default",
+      "archive": "Archive",
+      "unarchive": "Restore",
+      "archived": "Archived",
+      "hidden": "Hidden",
+      "customized": "Customised",
+      "shape": "Shape",
+      "readOnly": "Only editors can change project templates.",
+      "adminOnly": "Only admins can change workspace-wide and built-in templates.",
+      "customiseHint": "Customising changes this template for the whole workspace. Its name and description stay the product's, in each reader's language. Saving adds a version after the shipped one; Reset brings the shipped one back.",
+      "create": "Create template",
+      "created": "Template “{name}” created",
+      "saved": "“{name}” saved as v{version}",
+      "archivedToast": "“{name}” archived",
+      "unarchivedToast": "“{name}” restored",
+      "hiddenToast": "“{name}” is hidden from the gallery",
+      "shownToast": "“{name}” is offered again",
+      "resetToast": "“{name}” is back to the shipped version",
+      "resetTitle": "Reset “{name}”?",
+      "resetBody": "This workspace's versions of the template are deleted and the shipped one is offered again. Pages already created from it keep their text and still say which version they came from."
+    },
+    "history": {
+      "title": "History",
+      "shipped": "Shipped with the product",
+      "someone": "Someone",
+      "by": "{who}, {when}",
+      "current": "current",
+      "onlyOne": "Only one version so far.",
+      "compare": "v{version} compared with",
+      "pick": "Version"
+    },
+    "version": "v{version}"
+  },
+  "share": {
+    "button": "Share",
+    "title": "Share publicly",
+    "intro": "Anyone with the link can read this page without signing in. Comments, history and authors stay private.",
+    "disabled": "Public links are off in this workspace.",
+    "disabledAdmin": "Turn them on in Settings → Publishing.",
+    "disabledAsk": "Ask a workspace admin to turn them on.",
+    "includeSubtree": "Include subpages",
+    "expiry": "Expires",
+    "expiryPreset": {
+      "1d": "In 1 day",
+      "7d": "In 7 days",
+      "30d": "In 30 days",
+      "never": "Never"
+    },
+    "password": "Password",
+    "passwordHint": "At least {n} characters. Readers enter it once per browser.",
+    "passwordNeeded": "A link that never expires needs a password here.",
+    "create": "Create link",
+    "creating": "Creating…",
+    "created": "Link created",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied",
+    "shownOnce": "Copy it now: this server keeps no copy it can show again.",
+    "clamped": "Asked for {asked}; this server caps links at {days} days, so it expires {applied}.",
+    "active": "Active links",
+    "none": "No public links to this page yet.",
+    "withSubpages": "with subpages",
+    "withPassword": "password",
+    "expiresOn": "expires {date}",
+    "neverExpires": "never expires",
+    "notCopyable": "link shown once",
+    "revoke": "Revoke",
+    "revoked": "Link revoked — it stops working now",
+    "failed": "Could not change the link"
+  },
+  "publishing": {
+    "title": "Publishing",
+    "subtitle": "What this workspace may show to people who are not signed in.",
+    "allowShareLinks": "Public share links",
+    "allowShareLinksHint": "Editors can create a read-only link to a page (and its subpages) that opens without signing in.",
+    "allowPasswordless": "Links without a password or expiry",
+    "allowPasswordlessHint": "Off: a link that never expires must have a password.",
+    "allowPublicSites": "Public docs sites",
+    "allowPublicSitesHint": "Admins can publish a project as a read-only site that opens without signing in.",
+    "inherit": "Default (off)",
+    "on": "On",
+    "off": "Off",
+    "applies": "Applies: {value}",
+    "ceilingOff": "PUBLIC_SHARING_ENABLED is off on this server, so no link works whatever is set here.",
+    "sitesCeilingOff": "PUBLIC_SITES_ENABLED is off on this server, so no site opens whatever is set here.",
+    "maxTtl": "This server caps every link at {days} days (SHARE_LINK_MAX_TTL_DAYS).",
+    "saved": "Publishing settings saved",
+    "inventory": "Links in this workspace",
+    "inventoryEmpty": "No share links yet.",
+    "colPage": "Page",
+    "colStatus": "Status",
+    "colExpires": "Expires",
+    "colCreated": "Created",
+    "status": {
+      "active": "Active",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    },
+    "adminOnly": "Only workspace admins can change publishing."
+  },
+  "site": {
+    "title": "Published site",
+    "subtitle": "This project as a read-only docs site anyone with the address can read.",
+    "ceilingOff": "PUBLIC_SITES_ENABLED is off on this server, so no site can be published and existing ones do not open.",
+    "disabled": "Public sites are turned off for this workspace. A site can be set up, but it cannot go live until an admin turns them on.",
+    "openPublishing": "Open publishing settings",
+    "noneReadOnly": "This project has no published site.",
+    "createIntro": "Pick an address and what to publish. The site starts as a draft: nothing is public until you publish it.",
+    "slug": "Address",
+    "slugHint": "2–40 lowercase letters, digits and single hyphens.",
+    "slugChangeHint": "Changing the address breaks links to the old one at once.",
+    "root": "What to publish",
+    "wholeProject": "The whole project",
+    "create": "Create site",
+    "created": "Site created — building its first version",
+    "saved": "Site saved",
+    "publish": "Publish",
+    "unpublish": "Unpublish",
+    "publishedToast": "The site is live",
+    "unpublishedToast": "The site is no longer public",
+    "status": {
+      "draft": "Draft",
+      "live": "Live",
+      "unpublished": "Unpublished"
+    },
+    "tab": {
+      "general": "General",
+      "theme": "Theme",
+      "versions": "Versions"
+    },
+    "seoIndexable": "Let search engines index the site",
+    "seoIndexableHint": "Off: every page says noindex. Older versions are never indexed either way.",
+    "deleteTitle": "Delete the site",
+    "deleteHint": "Removes the site and every version’s snapshot, and frees the address. The pages themselves are not touched.",
+    "delete": "Delete site…",
+    "deleteConfirm": "Delete it",
+    "deleted": "Site deleted",
+    "theme": {
+      "primaryColor": "Accent colour",
+      "primaryColorDark": "Accent colour, dark mode",
+      "colourHint": "Use #rrggbb, or leave empty for the default.",
+      "font": "Font",
+      "fonts": {
+        "system": "System sans-serif",
+        "serif": "Serif",
+        "rounded": "Rounded",
+        "mono": "Monospace"
+      },
+      "showLogo": "Show the project’s avatar as the logo",
+      "headerLinks": "Header links",
+      "linkLabel": "Label",
+      "addLink": "Add link",
+      "footer": "Footer text",
+      "reset": "Discard changes",
+      "preview": "Preview",
+      "previewCurrent": "Current page",
+      "previewOther": "Another page",
+      "previewLink": "A link in the text"
+    },
+    "versionsIntro": "Each version is a snapshot of the pages, pinned to the revision each one showed when it was built. A live version rebuilds itself shortly after a page changes; a frozen one only when you rebuild it. Readers keep the old snapshot until a new one is complete.",
+    "col": {
+      "version": "Version",
+      "source": "Reads from",
+      "build": "Last build"
+    },
+    "default": "Default",
+    "kind": {
+      "live": "Live",
+      "frozen": "Frozen"
+    },
+    "kindHint": {
+      "live": "follows its branch",
+      "frozen": "a snapshot taken now"
+    },
+    "defaultBranches": "Each page’s default branch",
+    "building": "Building…",
+    "failed": "Build failed",
+    "builtSummary": "{n} pages · {when}",
+    "warnings": "{n} warning | {n} warnings",
+    "warning": {
+      "headNotIndexed": "its latest change is not indexed yet; the previous indexed revision is published",
+      "noIndexedRevision": "no indexed revision on this branch; left out",
+      "pageLimit": "the site reached its page limit; the rest was left out"
+    },
+    "rebuild": "Rebuild",
+    "freeze": "Freeze",
+    "unfreeze": "Follow branch",
+    "makeDefault": "Make default",
+    "addVersion": "Add version",
+    "versionName": "Name",
+    "versionSlug": "Address segment",
+    "versionSlugAuto": "From the name",
+    "versionKind": "Kind",
+    "sourceBranch": "Branch",
+    "sourceBranchHint": "Each page is read from the branch with this name; a page that has no such branch uses its default branch.",
+    "versionCreated": "Version added — building it",
+    "card": {
+      "none": "Not published",
+      "manage": "Manage site",
+      "setUp": "Set up a site"
     }
   }
 }

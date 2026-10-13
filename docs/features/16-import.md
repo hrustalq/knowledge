@@ -75,6 +75,11 @@ to their new attachment URLs, then writes the markdown once and finalizes — so
 the page has exactly one revision whose image links have always worked, rather
 than a first revision full of dead links and a second one fixing them.
 
+A submit may name a page template (`templateRef`, [42](42-page-templates.md)).
+Its category becomes the default filing and its tags and relations are merged
+into the reviewed markdown's frontmatter; the body is not restructured. The
+review step can also save the text as a template instead, dropping the import.
+
 ## Module split
 
 The house rule, applied twice:

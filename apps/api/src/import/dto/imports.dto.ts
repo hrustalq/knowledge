@@ -93,4 +93,16 @@ export class SubmitImportDto {
   @ValidateIf((o: SubmitImportDto) => o.parentId !== undefined && o.parentId !== null)
   @Matches(UUID_RE, { message: vmsg('isUuid') })
   parentId?: string | null;
+
+  /**
+   * Issue #69: a template whose defaults the page takes — its category (unless
+   * `category` is sent), its tags and its relations, merged into the reviewed
+   * markdown's frontmatter. The body is not restructured. Recorded on the page
+   * as provenance.
+   */
+  @ApiPropertyOptional({ description: 'A template uuid or `builtin:<key>`', example: 'builtin:entity' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80, { message: vmsg('maxLength') })
+  templateRef?: string;
 }

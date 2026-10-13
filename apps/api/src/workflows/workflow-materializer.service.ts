@@ -4,6 +4,7 @@ import type { RelationInput, WorkflowNodeDraft, WorkflowStep } from '@knowledge/
 import { PrismaService } from '../prisma/prisma.service.js';
 import { writeFrontmatter } from '../common/frontmatter.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { TemplatesService } from '../templates/templates.service.js';
 import { t } from '../i18n/t.js';
 
 /**
@@ -23,6 +24,7 @@ export class WorkflowMaterializerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
+    private readonly templates: TemplatesService,
   ) {}
 
   /**
@@ -66,6 +68,7 @@ export class WorkflowMaterializerService {
         : []),
     ];
     const parentDocumentId = parent?.id ?? null;
+    const template = await this.provenanceOf(run, draft);
 
     const created = await this.documents.createDocument(
       {
@@ -78,6 +81,9 @@ export class WorkflowMaterializerService {
           ? { parentId: parentDocumentId }
           : {}),
         relations,
+        // `content` is present, so this is recorded rather than rendered: the
+        // draft already carries the template's structure and defaults.
+        ...(template ? { template } : {}),
       },
       userId,
     );
@@ -87,6 +93,28 @@ export class WorkflowMaterializerService {
     await this.documents.finalizeRevision(created.documentId, created.revisionId);
     this.logger.log(`Workflow run ${run.id} materialised node ${node.id} as ${created.documentId}`);
     return created.documentId;
+  }
+
+  /**
+   * The template the draft was written against, if it still resolves at that
+   * version. A customised built-in that was reset since drafting has lost its
+   * versions; provenance is a label, and losing it must not strand a node a
+   * person has already approved in `materializing`.
+   */
+  private async provenanceOf(
+    run: WorkflowRun,
+    draft: WorkflowNodeDraft,
+  ): Promise<{ ref: string; version: number } | null> {
+    if (!draft.templateRef || !draft.templateVersion) return null;
+    try {
+      const resolved = await this.templates.resolve(run.workspaceId, draft.templateRef, draft.templateVersion);
+      return { ref: resolved.ref, version: resolved.version };
+    } catch {
+      this.logger.warn(
+        `Workflow run ${run.id}: template ${draft.templateRef} v${draft.templateVersion} no longer resolves; materialising without provenance`,
+      );
+      return null;
+    }
   }
 
   private async parentDocumentOf(

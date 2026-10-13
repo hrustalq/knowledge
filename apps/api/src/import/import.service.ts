@@ -27,6 +27,8 @@ import { StorageService } from '../storage/storage.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { TemplatesService, type TemplateDefaults } from '../templates/templates.service.js';
+import { applyTemplateDefaults } from '../templates/apply-defaults.js';
 import { ImportProducer } from './import.producer.js';
 import type { CreateImportDto, SubmitImportDto } from './dto/imports.dto.js';
 import { t } from '../i18n/t.js';
@@ -50,6 +52,7 @@ export class ImportService {
     private readonly documents: DocumentsService,
     private readonly activity: ActivityService,
     private readonly producer: ImportProducer,
+    private readonly templates: TemplatesService,
     config: ConfigService<Env, true>,
   ) {
     this.maxBytes = config.get('IMPORT_MAX_BYTES', { infer: true });
@@ -218,6 +221,19 @@ export class ImportService {
     await this.projects.requireProjectInWorkspace(projectId, row.workspaceId);
     const parentId = dto.parentId === undefined ? row.parentId : dto.parentId;
     if (parentId) await this.requireParent(parentId, projectId);
+    // Resolved out here for the same reason: an unknown or archived template is
+    // a 404/409 before anything is claimed.
+    const template = dto.templateRef
+      ? await this.templates.defaults({
+          workspaceId: row.workspaceId,
+          ref: dto.templateRef,
+          title: dto.title,
+          projectId,
+          ...(parentId ? { parentId } : {}),
+          ...(userId ? { authorId: userId } : {}),
+          live: true,
+        })
+      : null;
 
     // The page, its attachments and `import_jobs.status` commit together.
     // Previously the status write followed a committed `createDocument`, so a
@@ -230,7 +246,7 @@ export class ImportService {
     // heavily illustrated PDF stays in seconds — but an import is a
     // once-per-document act, not a hot path, and correctness is worth the
     // held connection. The `ConnectorStagingService.createPage` precedent.
-    return this.prisma.withTransaction(() => this.writePage(row, dto, projectId, parentId, userId), {
+    return this.prisma.withTransaction(() => this.writePage(row, dto, projectId, parentId, template, userId), {
       timeout: 120_000,
       maxWait: 10_000,
     });
@@ -241,6 +257,7 @@ export class ImportService {
     dto: SubmitImportDto,
     projectId: string,
     parentId: string | null,
+    template: TemplateDefaults | null,
     userId?: string,
   ): Promise<SubmitImportResponse> {
     // The claim, first and inside the boundary. `status !== 'parsed'` above is
@@ -274,8 +291,11 @@ export class ImportService {
         workspaceId: row.workspaceId,
         projectId,
         title: dto.title.trim() || row.sourceFilename,
-        category: (dto.category ?? row.category) as DocumentCategory,
+        category: (dto.category ?? template?.meta.category ?? row.category) as DocumentCategory,
         ...(parentId ? { parentId } : {}),
+        // No `content` here — the markdown is written below — so provenance
+        // must say it renders nothing, or the server would render the skeleton.
+        ...(template ? { template: { ref: template.ref, version: template.version, provenanceOnly: true } } : {}),
       },
       userId,
     );
@@ -284,7 +304,8 @@ export class ImportService {
     // provenance: where a claim came from is worth as much as the claim.
     const attachmentId = await this.promoteOriginal(row, created.documentId, userId);
 
-    const markdown = await this.promoteImages(row, created.documentId, dto.markdown, userId);
+    const reviewed = template ? applyTemplateDefaults(dto.markdown, template) : dto.markdown;
+    const markdown = await this.promoteImages(row, created.documentId, reviewed, userId);
     const revision = await this.prisma.documentRevision.findUnique({ where: { id: created.revisionId } });
     if (!revision) throw new NotFoundException(t('error.import.revisionVanished', { id: created.revisionId }));
     await this.storage.putObjectText(revision.s3Key, markdown, 'text/markdown');
@@ -301,7 +322,12 @@ export class ImportService {
         action: 'import.submitted',
         documentId: created.documentId,
         subjectId: created.documentId,
-        metadata: { filename: row.sourceFilename, parser: row.parser, title: dto.title },
+        metadata: {
+          filename: row.sourceFilename,
+          parser: row.parser,
+          title: dto.title,
+          ...(template ? { templateRef: template.ref, templateVersion: template.version } : {}),
+        },
       });
       // Staging is cleared once the page owns everything worth keeping — and
       // only once it is durable. Deleting the staged objects before the commit

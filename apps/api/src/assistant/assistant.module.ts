@@ -16,6 +16,7 @@ import { AssistantThreadsService } from './assistant-threads.service.js';
 import { AssistantController } from './assistant.controller.js';
 import { AiModule } from '../ai/ai.module.js';
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
+import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 
 // AiModule is a forwardRef because the dependency genuinely runs both ways:
 // a turn needs the workspace's AI config, and the settings page's "Test
@@ -52,6 +53,8 @@ import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
     ConnectorWorkItemsModule,
     // Provenance for cited pages (docs/features/38): resolved once per answer.
     FeedbackCoreModule,
+    // The template a draft started from (issue #69), for the fill clause.
+    TemplatesCoreModule,
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],

@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   AUTHORABLE_RELATION_TYPES,
+  BUILT_IN_TEMPLATE_KEYS,
   DOCUMENT_CATEGORIES,
   WORKFLOW_STEP_KINDS,
+  builtInTemplateRef,
   isAuthorableRelationType,
+  parseTemplateRef,
   type DocumentCategory,
   type DraftWorkflowResponse,
   type WorkflowDraftMessage,
@@ -19,6 +22,8 @@ import type { Principal } from '../auth/principal.js';
 import { localizeIssues } from '../i18n/workflow-messages.js';
 import { t } from '../i18n/t.js';
 import type { DraftWorkflowDto } from './workflows.dto.js';
+import { TemplatesService } from '../templates/templates.service.js';
+import { templateIssues } from './workflow-templates.js';
 
 /**
  * The architect: designing a workflow by describing it (docs/features/17).
@@ -79,6 +84,9 @@ const RESPONSE_CONTRACT =
   'Set "done" to false and leave "steps" empty while you are still asking. Set it to true when "steps" ' +
   'holds the whole design. Exactly one step must have nothing pointing at it — that is where a run starts. ' +
   '"fanOut" is true only on "ai.generate". Omit "produces" on a step that writes no page. ' +
+  'An "ai.draft" step may add "templateRef" to "produces" to write its pages into a page template; keep a ' +
+  'templateRef already on the canvas, and otherwise use only one of: ' +
+  `${BUILT_IN_TEMPLATE_KEYS.map(builtInTemplateRef).join(', ')}. ` +
   `"category" must be one of: ${DOCUMENT_CATEGORIES.join(', ')}. ` +
   `"relationToParent" is one of: ${AUTHORABLE_RELATION_TYPES.join(', ')}. ` +
   `At most ${MAX_STEPS} steps.`;
@@ -91,6 +99,7 @@ export class WorkflowDraftService {
     private readonly agents: AgentRegistryService,
     private readonly client: AssistantClient,
     private readonly aiUsage: AiUsageService,
+    private readonly templates: TemplatesService,
   ) {}
 
   async draft(dto: DraftWorkflowDto, principal: Principal): Promise<DraftWorkflowResponse> {
@@ -134,7 +143,7 @@ export class WorkflowDraftService {
     }
 
     const graph: WorkflowGraph = { steps };
-    const issues = validateGraph(graph);
+    const issues = [...validateGraph(graph), ...(await templateIssues(this.templates, dto.workspaceId, graph))];
     return {
       enabled: true,
       reply: reply || t('workflow.draft.designed'),
@@ -242,6 +251,11 @@ function readProduces(value: unknown): WorkflowStepProduces | null {
     // Feature 08's nesting: a produced page belongs under the page it came
     // from, which is what makes the chain legible in the tree afterwards.
     nestUnderParent: true,
+    // Kept only when it is shaped like a ref; whether this workspace has it is
+    // `templateIssues`' question, reported beside the proposal.
+    ...(typeof record.templateRef === 'string' && parseTemplateRef(record.templateRef)
+      ? { templateRef: record.templateRef.trim() }
+      : {}),
   };
 }
 

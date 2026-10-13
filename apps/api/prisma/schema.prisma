@@ -70,6 +70,12 @@ model Document {
   /// lists, tree, search and MCP unless asked for; readable by id; read-only.
   archivedAt            DateTime? @map("archived_at") @db.Timestamptz
   archivedBy            String?   @map("archived_by") @db.Uuid
+  /// Provenance (issue #69): the template this page was created from — a
+  /// `page_templates.id` or `builtin:<key>` — and the version it was rendered
+  /// at. No FK on purpose: archiving or resetting a template must not touch
+  /// the pages made from it. Null = the page did not start from a template.
+  templateRef           String?   @map("template_ref")
+  templateVersion       Int?      @map("template_version")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   project       Project            @relation(fields: [projectId], references: [id])
@@ -78,6 +84,7 @@ model Document {
   mergeRequests MergeRequest[]
   attachments   Attachment[]
   threads       DocumentThread[]
+  shareLinks    ShareLink[]
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -431,6 +438,7 @@ model Project {
   documents     Document[]
   glossaryTerms GlossaryTerm[]
   connectors    Connector[]
+  site          PublishedSite?
 
   @@index([workspaceId, createdAt])
   @@map("projects")
@@ -2031,4 +2039,197 @@ model EntityAlias {
   @@unique([workspaceId, alias])
   @@index([workspaceId, canonicalKey])
   @@map("entity_aliases")
+}
+
+/// A page template (issue #69). Deliberately NOT a document: a document is
+/// indexed, and a skeleton full of `{{placeholders}}` would surface in search,
+/// the graph and the assistant's retrieval as facts about nothing. Closer to
+/// WorkflowDefinition — data plus a version — than to a page.
+///
+/// Built-in templates live in code and are never seeded. A row with
+/// `builtInKey` set is a workspace's override of one: its own versions
+/// (customised), `enabled = false` (hidden), or both. "Reset to default"
+/// deletes that row, so an empty table reproduces the built-in gallery exactly.
+model PageTemplate {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  /// Null = offered in every project of the workspace (WorkflowDefinition precedent).
+  projectId      String?   @map("project_id") @db.Uuid
+  /// BUILT_IN_TEMPLATE_KEYS value when this row overrides a built-in; null for a custom template.
+  builtInKey     String?   @map("built_in_key")
+  name           String
+  description    String?
+  /// An emoji.
+  icon           String?
+  /// Denormalized from the current version's meta, so a list filters in SQL.
+  category       String    @default("other")
+  /// The version a new page is rendered at. A built-in override with no
+  /// versions of its own (hidden only) keeps the code version here.
+  currentVersion Int       @default(1) @map("current_version")
+  /// False on a built-in override = "hide this built-in".
+  enabled        Boolean   @default(true)
+  /// Soft: hidden from the gallery, still resolvable by pages and workflows pinned to it.
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz
+  createdBy      String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  versions PageTemplateVersion[]
+
+  // Name uniqueness per (workspace, project) is enforced app-side: NULL
+  // project ids are distinct to a unique index, and a partial one is not
+  // expressible in Prisma.
+  @@index([workspaceId, projectId])
+  @@index([workspaceId, builtInKey])
+  @@map("page_templates")
+}
+
+/// One immutable version of a template. A source change appends a row and
+/// bumps `PageTemplate.currentVersion`; a name or icon change does not.
+model PageTemplateVersion {
+  id         String   @id @default(uuid()) @db.Uuid
+  templateId String   @map("template_id") @db.Uuid
+  version    Int
+  /// Markdown including YAML frontmatter; the reserved `template:` key holds TemplateMeta.
+  source     String
+  /// The parsed and validated TemplateMeta — what the API serves.
+  meta       Json
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  template PageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  @@map("page_template_versions")
+}
+
+/// A public, read-only link to one page, or to a page and its subtree
+/// (docs/features/43, issue #77 phase 1).
+///
+/// Only the SHA-256 of the `kp_` token is looked up; `token_cipher` is the same
+/// token under the secret box (AES-256-GCM, SETTINGS_ENCRYPTION_KEY) so an
+/// editor can copy the link again. Null when no key is configured: the link
+/// is then shown once, at creation. Revoking keeps the row, for the inventory.
+/// No FK on workspace_id or created_by, per house policy.
+model ShareLink {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  documentId     String    @map("document_id") @db.Uuid
+  includeSubtree Boolean   @default(false) @map("include_subtree")
+  tokenHash      String    @unique @map("token_hash")
+  tokenCipher    String?   @map("token_cipher")
+  /// scrypt (auth/password.ts). Changing it ends every unlocked session.
+  passwordHash   String?   @map("password_hash")
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id])
+
+  @@index([documentId])
+  @@index([workspaceId, createdAt])
+  @@map("share_links")
+}
+
+/// Per-workspace publishing switches (docs/features/43): a sparse override of
+/// a code default that is `false` for anything public, so an empty table is
+/// exactly "nothing is public". PUBLIC_SHARING_ENABLED is the ceiling above it.
+model PublishingSettings {
+  workspaceId             String   @id @map("workspace_id") @db.Uuid
+  allowShareLinks         Boolean? @map("allow_share_links")
+  /// Allow a link with neither a password nor an expiry.
+  allowPasswordlessShares Boolean? @map("allow_passwordless_shares")
+  /// Allow publishing a project as a public docs site (docs/features/44).
+  allowPublicSites        Boolean? @map("allow_public_sites")
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("publishing_settings")
+}
+
+/// A project published as a read-only docs site (docs/features/44, issue #77
+/// phase 2a). One per project. Public routes never read a branch head: they
+/// read a version's snapshot (`site_version_pages`) and nothing else.
+model PublishedSite {
+  id               String   @id @default(uuid()) @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  projectId        String   @unique @map("project_id") @db.Uuid
+  /// `<slug>.PUBLISH_BASE_DOMAIN`, or `/pub/<slug>` in path mode. A DNS label.
+  slug             String   @unique
+  /// PUBLISHED_SITE_STATUSES: draft | live | unpublished. Only `live` is served.
+  status           String   @default("draft")
+  /// Null publishes the whole project; otherwise that page and its subtree.
+  /// No FK: a deleted root leaves the site empty rather than blocking the delete.
+  rootDocumentId   String?  @map("root_document_id") @db.Uuid
+  /// SiteTheme (contracts), always written through normalizeSiteTheme.
+  theme            Json     @default("{}")
+  seoIndexable     Boolean  @default(true) @map("seo_indexable")
+  /// The version served without a version segment. No FK (it points into
+  /// this site's own versions, which cascade from it).
+  defaultVersionId String?  @map("default_version_id") @db.Uuid
+  createdBy        String   @map("created_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  project  Project       @relation(fields: [projectId], references: [id])
+  versions SiteVersion[]
+
+  @@index([workspaceId])
+  @@map("published_sites")
+}
+
+/// A named view of a site: `live` follows a branch and rebuilds itself,
+/// `frozen` is a snapshot that changes only when rebuilt by hand.
+model SiteVersion {
+  id           String    @id @default(uuid()) @db.Uuid
+  siteId       String    @map("site_id") @db.Uuid
+  name         String
+  /// URL segment for a non-default version. Unique per site.
+  slug         String
+  /// SITE_VERSION_KINDS: live | frozen
+  kind         String
+  /// Branch name each page is read from; a page without it falls back to its
+  /// own default branch. Null = every page's default branch.
+  sourceBranch String?   @map("source_branch")
+  /// SITE_VERSION_STATUSES: the last build attempt. What is served is whatever
+  /// the last successful build wrote (`built_at` not null).
+  status       String    @default("building")
+  builtAt      DateTime? @map("built_at") @db.Timestamptz
+  pageCount    Int       @default(0) @map("page_count")
+  /// SiteBuildWarning[] from the last successful build.
+  warnings     Json      @default("[]")
+  error        String?
+  createdBy    String    @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  site  PublishedSite     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  pages SiteVersionPage[]
+
+  @@unique([siteId, slug])
+  @@map("site_versions")
+}
+
+/// The materialised snapshot: one row per published page, pinning the
+/// revision it shows. Replaced as a whole, in one transaction, per build.
+/// No FK on document_id/revision_id: a frozen version is a record of what was
+/// published, and deleting a page removes its rows explicitly
+/// (ProjectCascadeService).
+model SiteVersionPage {
+  versionId  String  @map("version_id") @db.Uuid
+  documentId String  @map("document_id") @db.Uuid
+  revisionId String  @map("revision_id") @db.Uuid
+  /// The nearest published ancestor; null for a top-level page of the site.
+  parentId   String? @map("parent_id") @db.Uuid
+  position   Int
+  depth      Int
+  /// `guides/install`; '' for the root page of a site published from one page.
+  slugPath   String  @map("slug_path")
+  title      String
+
+  version SiteVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@id([versionId, documentId])
+  @@unique([versionId, slugPath])
+  @@index([documentId])
+  @@map("site_version_pages")
 }

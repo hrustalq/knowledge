@@ -2401,10 +2401,330 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/public/shares/{token}",
+      "tag": "public",
+      "summary": "A shared page: its title and the pages the link reaches, or `locked` when a password is needed",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/shares/{token}/pages/{documentId}",
+      "tag": "public",
+      "summary": "One page the link reaches: title and markdown body, frontmatter stripped",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/public/shares/{token}/unlock",
+      "tag": "public",
+      "summary": "Enter a link’s password; sets an httpOnly cookie for SHARE_UNLOCK_TTL_MIN",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/resolve",
+      "tag": "public",
+      "summary": "A site, version and page for a slug or host plus a path: everything one render needs",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/shares",
+      "tag": "publishing",
+      "summary": "A page’s live share links, and what the workspace allows",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/documents/{id}/shares",
+      "tag": "publishing",
+      "summary": "Create a public, read-only link to the page (and optionally its subpages)",
+      "role": "editor",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/site",
+      "tag": "publishing",
+      "summary": "The project’s published site, if any, and what the workspace allows",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{id}/site",
+      "tag": "publishing",
+      "summary": "Create the project’s site (a draft) with a live “Latest” version, and build it",
+      "role": "admin",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/shares/{id}",
+      "tag": "publishing",
+      "summary": "Revoke a link. It stops working at once; the row stays in the inventory",
+      "role": "editor",
+      "source": "share-link",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/shares/{id}",
+      "tag": "publishing",
+      "summary": "Change a link’s expiry, password or subtree",
+      "role": "editor",
+      "source": "share-link",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/site-versions/{id}",
+      "tag": "publishing",
+      "summary": "Delete a version and its snapshot. The default version cannot be deleted",
+      "role": "admin",
+      "source": "site-version",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/site-versions/{id}",
+      "tag": "publishing",
+      "summary": "Rename a version, freeze or unfreeze it, or point it at another branch (rebuilds)",
+      "role": "admin",
+      "source": "site-version",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/site-versions/{id}/rebuild",
+      "tag": "publishing",
+      "summary": "Re-snapshot the version now. Readers keep the old snapshot until the new one is complete",
+      "role": "admin",
+      "source": "site-version",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/sites/{id}",
+      "tag": "publishing",
+      "summary": "Delete the site and its versions. Pages are untouched; the address is freed",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/sites/{id}",
+      "tag": "publishing",
+      "summary": "Change the address, root page, theme, indexing or default version",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/publish",
+      "tag": "publishing",
+      "summary": "Put the site live: anyone with the address can read it",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/unpublish",
+      "tag": "publishing",
+      "summary": "Take the site down. It stops resolving at once; its configuration is kept",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/versions",
+      "tag": "publishing",
+      "summary": "Add a version: `live` follows a branch, `frozen` is a snapshot taken now",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/publishing-settings",
+      "tag": "publishing",
+      "summary": "The publishing switches: what applies, the workspace override, and the deployment ceiling",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/workspaces/{id}/publishing-settings",
+      "tag": "publishing",
+      "summary": "Override the publishing switches; null on a key goes back to the default (off)",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/workspaces/{id}/shares",
+      "tag": "publishing",
+      "summary": "Every share link in the workspace, revoked and expired included",
+      "role": "admin",
+      "source": "workspace",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/search",
       "tag": "search",
       "summary": "Search indexed chunks: semantic, keyword (BM25) or hybrid (RRF fusion + graph expansion)",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/templates",
+      "tag": "templates",
+      "summary": "The template gallery: built-ins (in the caller’s language) merged with the workspace’s own",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/templates",
+      "tag": "templates",
+      "summary": "Create a template, or override a built-in (`builtInKey`)",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/templates/{id}",
+      "tag": "templates",
+      "summary": "Reset a built-in to its shipped default by deleting the workspace’s override",
+      "role": "admin",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/templates/{id}",
+      "tag": "templates",
+      "summary": "A template with its source and parsed metadata (current version unless `version` is given)",
+      "role": "viewer",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/templates/{id}",
+      "tag": "templates",
+      "summary": "Update a template; a changed source appends a version, a rename does not",
+      "role": "editor",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/templates/{id}/archive",
+      "tag": "templates",
+      "summary": "Archive a custom template: hidden from the gallery, still resolvable by its pages",
+      "role": "editor",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/templates/{id}/unarchive",
+      "tag": "templates",
+      "summary": "Bring an archived template back into the gallery",
+      "role": "editor",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/templates/{id}/versions",
+      "tag": "templates",
+      "summary": "Version history, newest first",
+      "role": "viewer",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/templates/{id}/versions/{version}",
+      "tag": "templates",
+      "summary": "One past version",
+      "role": "viewer",
+      "source": "template",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/templates/built-in/{key}",
+      "tag": "templates",
+      "summary": "A built-in template as this workspace sees it — its override when it has one",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/templates/render",
+      "tag": "templates",
+      "summary": "Fill a template in without writing anything",
       "role": "viewer",
       "source": "body",
       "public": false,
@@ -2736,7 +3056,7 @@
     },
     {
       "name": "knowledge_create_document",
-      "description": "Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status \"indexed\"). To change an existing page, branch and open a merge request instead.",
+      "description": "Create a new page from markdown in a project, optionally nested under another page. It is indexed in the background (poll knowledge_get_document for status \"indexed\"). To change an existing page, branch and open a merge request instead. To start from a template (an ADR, RFC, runbook…), pass templateRef and the placeholder values knowledge_get_template lists — with no content the server fills the template in; with content, yours wins and the template is recorded as where the page came from.",
       "inputs": [
         {
           "name": "workspaceId",
@@ -2752,7 +3072,7 @@
         },
         {
           "name": "content",
-          "optional": false
+          "optional": true
         },
         {
           "name": "parentId",
@@ -2760,6 +3080,18 @@
         },
         {
           "name": "category",
+          "optional": true
+        },
+        {
+          "name": "templateRef",
+          "optional": true
+        },
+        {
+          "name": "templateVersion",
+          "optional": true
+        },
+        {
+          "name": "values",
           "optional": true
         }
       ]
@@ -2969,6 +3301,24 @@
       ]
     },
     {
+      "name": "knowledge_get_template",
+      "description": "One template: its markdown source, category, default tags and relations, and the placeholders (name, kind, required) to pass as values to knowledge_create_document.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "templateRef",
+          "optional": false
+        },
+        {
+          "name": "version",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_get_workflow_run",
       "description": "A workflow run with its frozen step graph and its node tree — every intermediate result, including drafts still awaiting review.",
       "inputs": [
@@ -3137,6 +3487,20 @@
       ]
     },
     {
+      "name": "knowledge_list_templates",
+      "description": "List the page templates offered in a workspace (built-ins such as builtin:adr, builtin:runbook, builtin:postmortem, plus the workspace's own). Pass projectId to include that project's templates.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_list_work_items",
       "description": "Issues and pull requests on a connected repository, with the page each one is attached to. Use it to find out what work is open against something before writing about it. A \"merged\" pull request finished; a \"closed\" one was abandoned.",
       "inputs": [
@@ -3256,6 +3620,32 @@
         },
         {
           "name": "includeArchived",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_share_page",
+      "description": "Create a public, read-only link to a page (docs/features/43) that anyone with the URL can open without signing in — only when a person asked for one. includeSubtree also shares every page under it. Without expiresInDays the link never expires, which most workspaces only allow with a password. Fails with 403 when the workspace has sharing switched off. Returns the URL; revoke it from the page's Share menu.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "includeSubtree",
+          "optional": true
+        },
+        {
+          "name": "expiresInDays",
+          "optional": true
+        },
+        {
+          "name": "password",
           "optional": true
         }
       ]

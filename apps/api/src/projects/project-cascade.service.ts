@@ -176,6 +176,12 @@ export class ProjectCascadeService {
     await tx.ingestionJob.deleteMany({ where: { revisionId: revs } });
 
     await tx.attachment.deleteMany({ where: docs });
+    // A public link to a page that is gone must stop resolving, and its FK
+    // would refuse the delete below anyway (docs/features/43).
+    await tx.shareLink.deleteMany({ where: docs });
+    // A published snapshot names the page and pins a revision that is about to
+    // go; the row would resolve to nothing (docs/features/44).
+    await tx.siteVersionPage.deleteMany({ where: docs });
     await tx.documentRevision.deleteMany({ where: docs });
     await tx.documentBranch.deleteMany({ where: docs });
 

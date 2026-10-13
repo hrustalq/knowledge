@@ -17,12 +17,17 @@
 // Edits are a working copy until published (lib/working-copy): kept in this
 // browser as they are made, restored when the page is reopened, reviewable as
 // a diff against the published head, and discarded only on request.
+//
+// A new page can start from a template (issue #69): `/create?template=` opens
+// on the skeleton the gallery rendered, and the template is sent as provenance
+// when the page is created. `/template` inserts one at the cursor of any page,
+// and "Save as template" goes the other way.
 import { useI18n } from 'vue-i18n'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { onKeyStroke, useStorage } from '@vueuse/core'
-import { History, MoreHorizontal, Settings2, Sparkles, X } from 'lucide-vue-next'
+import { History, LayoutTemplate, MoreHorizontal, Settings2, Sparkles, X } from 'lucide-vue-next'
 import {
   AUTHORABLE_RELATION_TYPES,
   DOCUMENT_CATEGORIES,
@@ -33,6 +38,7 @@ import {
   type DocumentContentResponse,
   type DocumentDetailResponse,
   type FinalizeRevisionResponse,
+  type RenderTemplateResponse,
   type RevisionInfo,
 } from '@knowledge/contracts'
 import { ApiError, apiFetch, getWorkspaceId } from '@/lib/api'
@@ -43,10 +49,12 @@ import { formatDateTime } from '@/lib/format'
 import { lineDiff } from '@/lib/line-diff'
 import {
   buildSource,
+  mergeTemplateDefaults,
   readFrontmatter,
   samePage,
   type PageFields,
   type RelationRow,
+  type TemplateProvenance,
 } from '@/lib/page-source'
 import {
   readWorkingCopy,
@@ -56,6 +64,7 @@ import {
 } from '@/lib/working-copy'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
+import { useTemplatesStore } from '@/stores/templates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -94,6 +103,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import RichEditor from '@/components/editor/RichEditor.vue'
+import SaveAsTemplateDialog, { type SaveAsTemplatePage } from '@/components/templates/SaveAsTemplateDialog.vue'
 import { useWorkingCopy } from '@/components/editor/use-working-copy'
 import DiffView from '@/components/knowledge/DiffView.vue'
 import EditorAiPanel from '@/components/editor/EditorAiPanel.vue'
@@ -106,6 +116,7 @@ const route = useRoute()
 const router = useRouter()
 const store = useDocumentsStore()
 const projects = useProjectsStore()
+const templates = useTemplatesStore()
 
 const editId = ref<string | null>((route.params.id as string | undefined) ?? null)
 const isEdit = computed(() => editId.value !== null)
@@ -120,6 +131,8 @@ const body = ref('')
 const message = ref('')
 const relationRows = ref<RelationRow[]>([])
 const tags = ref('')
+/** The template this new page started from, recorded when it is created. */
+const template = ref<TemplateProvenance | null>(null)
 /**
  * Every frontmatter key this editor does not model.
  *
@@ -132,6 +145,33 @@ const tags = ref('')
  */
 const otherFrontmatter = ref<Record<string, unknown>>({})
 const headRevisionId = ref<string | null>(null)
+
+/**
+ * `/create?parent=&project=&template=` (issue #69): where a new page goes and
+ * what it starts from. An opening instruction, like `?tab=` — read once, then
+ * dropped from the address, because from then on the working copy is what
+ * remembers the page, provenance included.
+ *
+ * Placement is read during setup so the server paints the right parent and
+ * project; the template is applied once the editor is ready (`openTemplate`).
+ */
+let openingTemplate: string | null = null
+
+function readOpening(): boolean {
+  if (isEdit.value) return false
+  const param = (name: string) => (typeof route.query[name] === 'string' ? (route.query[name] as string) : '')
+  const parent = param('parent')
+  const project = param('project')
+  const ref = param('template')
+  if (!parent && !project && !ref) return false
+  if (project) projectId.value = project
+  if (parent) parentId.value = parent
+  openingTemplate = ref || null
+  return true
+}
+/** An instruction arrived with this visit, so a stored new-page draft is offered, not restored over it. */
+const opened = readOpening()
+
 /**
  * A draft revision created by `ensureDocumentId` and not yet written to.
  *
@@ -194,7 +234,13 @@ const aiPending = computed(() => editorRef.value?.aiPending ?? EMPTY_PENDING)
 let disconnectDraft: (() => void) | null = null
 onMounted(() => {
   disconnectDraft = connectDraft({
-    read: () => ({ title: title.value, markdown: editorRef.value?.flush() ?? body.value }),
+    read: () => ({
+      title: title.value,
+      markdown: editorRef.value?.flush() ?? body.value,
+      // A new page started from a template is a skeleton to fill (issue #69);
+      // once published it is a page like any other, and the turn says so.
+      ...(!isEdit.value && template.value ? { template: template.value } : {}),
+    }),
     edit: (edit) => {
       // The author asked for this; make sure they can watch it happen.
       if (!aiOpen.value) setAiOpen(true)
@@ -265,6 +311,7 @@ function currentFields(): PageFields {
     relations: relationRows.value.map((r) => ({ type: r.type, key: r.key, name: r.name })),
     tags: tags.value,
     message: message.value,
+    template: template.value,
   }
 }
 
@@ -277,6 +324,7 @@ function applyFields(fields: PageFields) {
   relationRows.value = fields.relations.map((r) => ({ ...r }))
   tags.value = fields.tags
   message.value = fields.message
+  template.value = fields.template ?? null
 }
 
 /**
@@ -293,9 +341,10 @@ const workingCopy = useWorkingCopy({
   fields: currentFields,
   base: () => {
     const base = baseFields.value
-    // A page that does not exist yet has no project to move from: picking one
-    // (or the active one arriving late) is placement, not an edit worth keeping.
-    return base && !isEdit.value ? { ...base, projectId: projectId.value } : base
+    // A page that does not exist yet has no project or parent to move from:
+    // picking one (or the active project arriving late, or a "New child page"
+    // arriving on an open editor) is placement, not an edit worth keeping.
+    return base && !isEdit.value ? { ...base, projectId: projectId.value, parentId: parentId.value } : base
   },
   documentId: () => editId.value,
   baseRevisionId: () => headRevisionId.value,
@@ -312,6 +361,7 @@ function onEditorReady() {
   editorRef.value?.flush()
   baseFields.value = { ...currentFields(), message: '' }
   offerWorkingCopy()
+  void followOpening()
 }
 
 /**
@@ -328,7 +378,9 @@ function offerWorkingCopy() {
     removeWorkingCopy(storageKey.value)
     return
   }
-  if (stored.baseRevisionId === headRevisionId.value) {
+  // A new page asked for by a link — a parent, a template — is not the draft
+  // this browser was keeping: that one is offered, not restored over it.
+  if (stored.baseRevisionId === headRevisionId.value && !opened) {
     applyFields(stored)
     workingCopy.adopt(stored)
     toast.info(t('editor.unstaged.restored', { when: formatDateTime(new Date(stored.savedAt)) }))
@@ -356,6 +408,142 @@ function discardUnstaged() {
   workingCopy.discard()
   reviewOpen.value = false
 }
+
+/* --------------------------------------------------------- templates */
+
+/**
+ * Lay a rendered template over the page. The gallery's render is used when it
+ * made one; a reload or a pasted link renders here instead, and when that
+ * needs values only the gallery asks for, the gallery opens on the template.
+ *
+ * Nothing already on the page is replaced: a title or text typed before the
+ * template arrived stays, with the skeleton after it, and tags and relations
+ * are a union (`mergeTemplateDefaults`).
+ */
+async function openTemplate(ref: string) {
+  let rendered = templates.takeRendered(ref)
+  if (!rendered) {
+    try {
+      rendered = await apiFetch<RenderTemplateResponse>('/v1/templates/render', {
+        method: 'POST',
+        body: JSON.stringify({
+          workspaceId: getWorkspaceId(),
+          ref,
+          ...(title.value.trim() ? { title: title.value.trim() } : {}),
+          ...(projectId.value ? { projectId: projectId.value } : {}),
+          ...(parentId.value ? { parentId: parentId.value } : {}),
+        }),
+      })
+    } catch (e) {
+      toast.error(errorMessage(e, t))
+      templates.openGallery({ ref, parentId: parentId.value || null, projectId: projectId.value || null })
+      return
+    }
+  }
+  const fm = readFrontmatter(rendered.frontmatter)
+  const page = editorRef.value?.flush() ?? body.value
+  applyFields({
+    ...mergeTemplateDefaults(currentFields(), { category: rendered.category, relations: fm.relations, tags: fm.tags }),
+    title: title.value.trim() ? title.value : rendered.title,
+    body: page.trim() ? `${page.trimEnd()}\n\n${rendered.body}` : rendered.body,
+    template: { ref: rendered.templateRef, version: rendered.templateVersion },
+  })
+  otherFrontmatter.value = { ...fm.other, ...otherFrontmatter.value }
+}
+
+/** Act on the visit's opening instruction once the editor can take it, then drop it from the address. */
+async function followOpening() {
+  const ref = openingTemplate
+  openingTemplate = null
+  if (route.query.template || route.query.parent || route.query.project) {
+    await router.replace({ path: route.path, hash: route.hash })
+  }
+  if (!ref) return
+  // Taken before rendering, so a render that fails and reopens the gallery
+  // does not leave the request behind for some later visit to send.
+  const prompt = templates.takeFill(ref)
+  await openTemplate(ref)
+  if (prompt && template.value?.ref === ref) await fillWithAi(prompt)
+}
+
+/**
+ * "Describe the page for AI" (issue #69): open the assistant on the skeleton
+ * and send the description as the first turn. The draft bridge carries the
+ * page and its template, so what comes back is `edit_draft` suggestions in
+ * the template's sections — nothing is kept until the author accepts it, and
+ * nothing is saved until they publish.
+ */
+async function fillWithAi(prompt: string) {
+  setAiOpen(true)
+  // The panel mounts on first open; the skeleton reaches the editor on the same tick.
+  await nextTick()
+  await aiPanel.value?.fill(prompt)
+}
+
+// The editor is reused when a new instruction arrives while it is open — the
+// tree's "New page from template" while on /create — so it is read again here.
+watch(
+  () => route.query,
+  () => {
+    if (baseFields.value && readOpening()) void followOpening()
+  },
+)
+
+/** Where a `/template` insert renders against: the page as it stands. */
+const templateContext = computed(() => ({
+  title: title.value.trim(),
+  parentId: parentId.value || null,
+  projectId: projectId.value || null,
+}))
+
+/**
+ * `/template` put a skeleton at the cursor; lay its tags, relations and
+ * category over the page the way the gallery's render is (`mergeTemplateDefaults`).
+ * A new page that held nothing else was started from the template, so it is
+ * recorded as provenance too; a section added to a page already being written
+ * is not where that page came from.
+ */
+function applyInsertedTemplate(rendered: RenderTemplateResponse, intoEmptyPage: boolean) {
+  const fm = readFrontmatter(rendered.frontmatter)
+  const merged = mergeTemplateDefaults(currentFields(), { category: rendered.category, relations: fm.relations, tags: fm.tags })
+  category.value = merged.category as DocumentCategory
+  relationRows.value = merged.relations
+  tags.value = merged.tags
+  otherFrontmatter.value = { ...fm.other, ...otherFrontmatter.value }
+  if (intoEmptyPage && !isEdit.value && !template.value) {
+    template.value = { ref: rendered.templateRef, version: rendered.templateVersion }
+    if (!title.value.trim()) title.value = rendered.title
+  }
+}
+
+/* ---------------------------------------------------- save as template */
+
+const saveAsOpen = ref(false)
+const saveAsPage = ref<SaveAsTemplatePage | null>(null)
+
+function openSaveAs() {
+  const markdown = editorRef.value?.flush() ?? body.value
+  saveAsPage.value = {
+    title: title.value,
+    body: markdown,
+    category: category.value,
+    tags: tags.value.split(',').map((tag) => tag.trim()).filter(Boolean),
+    relations: relationRows.value.filter((r) => r.type && r.key.trim()).map((r) => ({ type: r.type, target: r.key.trim() })),
+    other: otherFrontmatter.value,
+    projectId: projectId.value || null,
+  }
+  saveAsOpen.value = true
+}
+
+/** The template's name, for the header, once the roster knows it. */
+const templateName = computed(() => (template.value ? (templates.byRef(template.value.ref)?.name ?? null) : null))
+watch(
+  template,
+  (value) => {
+    if (value) void templates.ensureLoaded()
+  },
+  { immediate: true },
+)
 
 /* ---------------------------------------------------------- review */
 
@@ -458,6 +646,15 @@ onMounted(async () => {
   }
 })
 
+/**
+ * Provenance for `POST /v1/documents`. `provenanceOnly`, because the body goes
+ * to storage afterwards: without it the server would render the template
+ * itself and finalize a skeleton the author never published.
+ */
+function templateProvenance() {
+  return template.value ? { template: { ...template.value, provenanceOnly: true } } : {}
+}
+
 /** The source file for the page as it stands — see `buildSource`. */
 function pageSource(markdown: string): string {
   return buildSource({ body: markdown, relations: relationRows.value, tags: tags.value }, otherFrontmatter.value)
@@ -487,6 +684,7 @@ async function ensureDocumentId(): Promise<string | null> {
         title: title.value.trim() || t('editor.untitledPage'),
         category: category.value,
         ...(parentId.value ? { parentId: parentId.value } : {}),
+        ...templateProvenance(),
       }),
     })
     editId.value = res.documentId
@@ -571,6 +769,7 @@ async function save() {
           title: title.value,
           category: category.value,
           ...(parentId.value ? { parentId: parentId.value } : {}),
+          ...templateProvenance(),
         }),
       })
       // The body goes to storage, not through the API — see publishRevision.
@@ -727,6 +926,9 @@ onBeforeUnmount(() => {
         <div class="kn-page-crumb">
           <strong>{{ projectName }}</strong>
           <span class="kn-page-state">{{ isEdit ? t('editor.editing') : t('editor.newPage') }}</span>
+          <span v-if="!isEdit && template" class="kn-page-state">
+            {{ templateName ? t('editor.fromTemplate', { name: templateName }) : t('editor.fromATemplate') }}
+          </span>
           <!-- The working copy's state, and the way into what it holds. -->
           <button
             v-if="unstaged"
@@ -766,16 +968,19 @@ onBeforeUnmount(() => {
                controls you reach for least fold into one menu. -->
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="sm:hidden" :aria-label="t('editor.moreActions')">
+              <Button variant="ghost" size="icon-sm" :aria-label="t('editor.moreActions')">
                 <MoreHorizontal class="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" class="w-44">
-              <DropdownMenuItem @select="settingsOpen = true">
+            <DropdownMenuContent align="end" class="w-48">
+              <DropdownMenuItem class="sm:hidden" @select="settingsOpen = true">
                 <Settings2 class="size-4" /> {{ t('editor.settings') }}
               </DropdownMenuItem>
-              <DropdownMenuItem @select="cancel">
+              <DropdownMenuItem class="sm:hidden" @select="cancel">
                 <X class="size-4" /> {{ t('common.cancel') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="openSaveAs">
+                <LayoutTemplate class="size-4" /> {{ t('templates.saveAs.action') }}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -801,7 +1006,9 @@ onBeforeUnmount(() => {
                 <p class="font-medium">
                   {{ t('editor.unstaged.staleTitle', { when: formatDateTime(new Date(staleCopy.savedAt)) }) }}
                 </p>
-                <p class="text-muted-foreground">{{ t('editor.unstaged.staleBody') }}</p>
+                <p class="text-muted-foreground">
+                  {{ isEdit ? t('editor.unstaged.staleBody') : t('editor.unstaged.otherNewPage') }}
+                </p>
               </div>
               <Button size="sm" variant="ghost" @click="discardStale">{{ t('editor.unstaged.discard') }}</Button>
               <Button size="sm" variant="outline" @click="restoreStale">{{ t('editor.unstaged.restore') }}</Button>
@@ -812,7 +1019,9 @@ onBeforeUnmount(() => {
               v-model="body"
               :pages="mentionablePages"
               :resolve-document-id="ensureDocumentId"
+              :template-context="templateContext"
               @ready="onEditorReady"
+              @apply-template-defaults="applyInsertedTemplate"
             >
               <template #lede>
                 <textarea
@@ -1006,5 +1215,7 @@ onBeforeUnmount(() => {
         </div>
       </SheetContent>
     </Sheet>
+
+    <SaveAsTemplateDialog v-model:open="saveAsOpen" :page="saveAsPage" />
   </div>
 </template>

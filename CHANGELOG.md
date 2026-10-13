@@ -13,6 +13,166 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.18.0] — 2026-10-13
+
+### Added
+
+- **Page templates, API and MCP.** A workspace now has a template gallery: seven
+  built-ins in English and Russian (ADR, RFC, runbook, postmortem, API
+  specification, use case, domain entity) plus its own templates, scoped to the
+  workspace or one project, each with an immutable version history. A template
+  carries a default category, tags and typed relations, so a page created from
+  it is linked into the graph from its first revision. Placeholders
+  (`{{number}}`, `{{component}}`…) are declared and typed (text, date, user,
+  page, entity); anything undeclared stays literal. `GET/POST/PATCH
+  /v1/templates`, `POST /v1/templates/render`, and `POST /v1/documents` accepts
+  a `template` to start from, recording `templateRef`/`templateVersion` on the
+  page. Built-ins can be customised, hidden or reset per workspace; workspace-wide
+  templates need `admin`, project ones `editor`. MCP gains
+  `knowledge_list_templates` and `knowledge_get_template`, and
+  `knowledge_create_document` takes `templateRef` + `values` instead of
+  `content`. The gallery and editor UI follow in later releases. (#146)
+- **New page from a template.** The page tree's `+` has a chevron beside it
+  with "From template…", a page's ⋯ menu gains "New child page" and "New child
+  page from template…", and an empty tree offers the gallery too. The gallery
+  groups the project's, the workspace's and the built-in templates, asks for
+  the placeholders a template declares (people and pages are picked, not
+  typed), previews the filled-in skeleton, and opens the editor on it with the
+  parent already set. Nothing is saved until the author publishes; the page
+  then records which template and version it came from and shows a "From
+  template" chip. Unpublished edits keep that provenance across a reload.
+  `POST /v1/documents` gains `template.provenanceOnly` for clients that upload
+  the body themselves, as the editor does. (#147)
+- **Templates in settings, `/template` in the editor, and Save as template.**
+  Settings → Templates lists every template the project can see, archived ones
+  and hidden built-ins included, with each one's shape and version history (a
+  diff between any two versions). Templates are written with a form and the
+  rich editor rather than YAML: placeholders, title pattern, the tags and
+  relations pages inherit, and instructions for the assistant. A built-in can
+  be customised (its versions continue from the shipped one), hidden, shown
+  again or reset; a custom template can be archived and restored. Typing
+  `/template` (or `/шаблон`) in a page inserts a template's skeleton at the
+  cursor and adds its tags and relations to the page. "Save as template" in a
+  page's ⋯ menu, in the document view and in the editor, turns the page into a
+  template, finding its `{{placeholders}}`. Controls follow the API's rule:
+  project templates are editors', workspace-wide and built-in ones admins'.
+  Template details from the API now include `frontmatter`, so an editor can
+  keep keys it does not model. (#148)
+- **Fill a template with AI.** The template gallery has an optional "Describe
+  the page for AI" box. With it filled in, the editor opens on the skeleton
+  with the assistant beside it, and the description goes in as the first
+  message. The assistant fills the template's sections as suggestions you keep
+  or discard, keeps the headings, and writes `TODO:` where it has nothing to go
+  on. Nothing is saved until you publish. While a new page started from a
+  template is still unpublished, every assistant turn knows which template it
+  came from. The template's instructions for the assistant are passed as
+  workspace-written hints, not as rules the model must follow. The assistant
+  also gains `list_templates` and `get_template` tools, and its
+  `create_document` tool takes a `templateRef` and placeholder `values` instead
+  of markdown. Built-in agents get the two read tools; a custom agent has to
+  add them to its tool list. `POST /v1/assistant/threads/:id/messages` accepts
+  `draft.template` (`{ ref, version }`).
+- **Templates in workflows and import.** A workflow's drafting step can name
+  a page template ("Written into template" in the step panel). Its drafts then
+  keep the template's headings, fill its placeholders from the source page or
+  say `TODO:`, and carry the template's tags and relations. A page approved
+  from such a draft records the template and version it was written against.
+  The "Break a page into its parts" and "Entity → use cases → contracts and
+  screens" starter patterns now use the built-in use-case and API-spec
+  templates. Saving a
+  workflow whose step names a template that does not exist in the workspace,
+  or that is archived, is refused with the step marked; workflows saved before
+  a template was archived keep running. The import review step has a Template
+  field: the imported text is kept as is, and the page gets the template's
+  category, tags and relations. "Save as template instead" turns the reviewed
+  text into a template and drops the import. Images from the original are not
+  carried into the template. `PATCH`/`POST /v1/workflows` accept
+  `produces.templateRef` on a step, and `POST /v1/imports/:id/submit` accepts
+  `templateRef`.
+
+- **Public share links.** An editor can hand a page, or a page and everything
+  under it, to someone who never signs in: **Share** in the page header creates
+  a read-only link with an optional password and an expiry (1, 7 or 30 days, or
+  never). The link opens a server-rendered copy of the page at `/s/<token>`.
+  The text is in the HTML before any script runs; comments, history, authors
+  and frontmatter are not served. Revoking a link, its expiry, or switching
+  sharing off ends access on the very next request. Anything outside the shared
+  page or subtree, including an attachment of another page, answers 404, the
+  same as a link that does not exist. Sharing is **off** until a workspace
+  admin turns it on in **Settings → Publishing**, which also lists every link
+  in the workspace. A link that never expires needs a password unless the
+  admin allows otherwise. Over MCP, `knowledge_share_page` creates one (editor;
+  hidden from read-only keys). (#77)
+- **Published docs sites.** A project, or one page and everything under it,
+  can now be published as a read-only docs site that anyone with the address
+  can read: a page tree, an "On this page" outline, previous/next links and the
+  project's avatar as its logo, rendered on the server so the text is there
+  without JavaScript. Set it up from **Project settings → Published site**
+  (admins): pick the address, then the accent colour, font, header links and
+  footer, and publish. Sites are served at `/pub/<address>`, or at
+  `<address>.<PUBLISH_BASE_DOMAIN>` when a base domain is configured. Readers
+  see a snapshot, never a branch head: only indexed revisions are published,
+  the "Latest" version rebuilds itself shortly after a page changes, and a
+  version you add can be frozen as it is now (`v1.0`) or follow a named branch,
+  with a version switcher that keeps the reader on the same page. A page whose
+  latest change failed to index keeps showing its previous revision, and the
+  version lists it as a warning. Unpublishing, or turning sites off, takes a
+  site down on the next request. Like share links, sites are **off** until a
+  workspace admin allows them in **Settings → Publishing**. Search, sitemap,
+  `llms.txt` and custom domains come with the next phase. (#77)
+
+### Fixed
+
+- **File uploads and attachments work in production.** Every upload (editor
+  attachments, user and project avatars, the import wizard) and every attached
+  image or avatar was handed a URL at `http://minio:9000`, a host only the
+  server can reach, so the browser's upload failed and images did not render.
+  Those URLs are now signed for the public site, which proxies the bucket's
+  path to object storage; the storage console and admin API stay private.
+  (#144)
+
+### Operations
+
+- New optional env var `S3_PUBLIC_ENDPOINT` (empty by default = today's
+  behaviour, presigning against `S3_ENDPOINT`). Production needs the variable
+  `S3_PUBLIC_ENDPOINT=https://knowledge.hrustalq.dev` in the GitHub
+  `production` environment **before** the tag is pushed — deploy refuses to run
+  without it, since `.env.production.example` now gives it a value. The
+  `Caddyfile` routes `/<S3_BUCKET>/*` to MinIO and restores the `Host` from
+  `X-Forwarded-Host`, which the `knowledge-edge` Worker sets; the caddy
+  container is recreated by this deploy. No migration. (#144)
+- Migration `20261012180000_page_templates` is expand-only: two new tables
+  (`page_templates`, `page_template_versions`) and two nullable columns on
+  `documents` (`template_ref`, `template_version`). The previous image runs
+  against it unchanged, so a code rollback needs no database step. No new env
+  vars; built-in templates live in code and are never seeded. (#146)
+- Share links (#77): migration `20261012200000_share_links` is expand-only
+  (two new tables, `share_links` and `publishing_settings`), so a code rollback
+  needs no database step. New env vars, all with defaults, none required:
+  `PUBLIC_SHARING_ENABLED` (`true`; the ceiling over the workspace switch,
+  which itself defaults to off), `SHARE_LINK_MAX_TTL_DAYS` (`0` = no cap),
+  `SHARE_UNLOCK_TTL_MIN` (`720`), `PUBLIC_RATE_LIMIT_PER_MIN` (`120` per IP)
+  and `PUBLIC_UNLOCK_ATTEMPTS_PER_15MIN` (`10` per IP and link). Rate limits
+  and password sessions are kept in the existing Redis. Without
+  `SETTINGS_ENCRYPTION_KEY` a link is shown once, at creation, and cannot be
+  copied again later. The web image gains `jsdom` (server-side sanitising of
+  public pages) and a second built app, `reader.html`; no Caddyfile change,
+  since `/s/*` already reaches the web container and `/api/*` the API.
+- Published sites (#77): migration `20261013090000_published_sites` is
+  expand-only (three new tables, `published_sites`, `site_versions` and
+  `site_version_pages`, and one nullable column,
+  `publishing_settings.allow_public_sites`), so a code rollback needs no
+  database step; a rolled-back image simply serves no sites. New env vars, all
+  with defaults, none required: `PUBLIC_SITES_ENABLED` (`true`; the ceiling
+  over the workspace switch, which defaults to off), `PUBLISH_BASE_DOMAIN`
+  (empty = path mode, `/pub/<slug>`), `SITE_BUILD_DEBOUNCE_MS` (`30000`) and
+  `SITE_MAX_PAGES` (`2000`). Builds run in the worker on a new BullMQ queue,
+  `site-build`, in the existing Redis. `docker-compose.prod.yml` now passes
+  `PUBLISH_BASE_DOMAIN` to the web container as well. Leave it empty in
+  production for now: a subdomain needs the Caddy on-demand TLS block that
+  ships with the next phase, and `/pub/*` already reaches the web container
+  with no Caddyfile change.
+
 ## [0.17.0] — 2026-10-12
 
 ### Added
@@ -1377,7 +1537,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.17.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/hrustalq/knowledge/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/hrustalq/knowledge/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/hrustalq/knowledge/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/hrustalq/knowledge/compare/v0.14.0...v0.15.0

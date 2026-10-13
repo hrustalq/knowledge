@@ -1,10 +1,12 @@
 import {
   Controller,
   Get,
+  Headers,
   Injectable,
   Param,
   Query,
   Redirect,
+  Res,
   UseGuards,
   UseInterceptors,
   type CallHandler,
@@ -15,10 +17,11 @@ import { ApiExcludeEndpoint, ApiOperation, ApiPropertyOptional, ApiResponse, Api
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import type { Response } from 'express';
 import type { Observable } from 'rxjs';
-import type { PublicSiteResolveResponse } from '@knowledge/contracts';
+import { SITE_SEARCH_MAX_CHARS, type PublicSiteResolveResponse, type PublicSiteSearchResponse } from '@knowledge/contracts';
 import { Public } from '../auth/access.decorator.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { PublicRateLimitGuard } from './public-rate-limit.js';
+import { PublicSiteSearchService } from './public-site-search.service.js';
 import { PublicSitesService } from './public-sites.service.js';
 
 export class ResolveSiteQueryDto {
@@ -47,6 +50,20 @@ export class ResolveSiteQueryDto {
   from?: string;
 }
 
+export class SearchSiteQueryDto {
+  @ApiPropertyOptional({ description: 'The words to look for; fewer than 2 characters answers no results' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(SITE_SEARCH_MAX_CHARS)
+  q?: string;
+
+  @ApiPropertyOptional({ description: 'A version slug; omitted = the default version' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  version?: string;
+}
+
 /**
  * What the reader's API answers must not be: cached past an unpublish, or
  * indexed as a page of its own. The site's pages carry their own robots rules,
@@ -65,7 +82,8 @@ class SiteResponseHeaders implements NestInterceptor {
 /**
  * The anonymous site reader's API (docs/features/44). `@Public()`, rate-limited
  * per address like the share reader; `PublicSitesService` confines every read
- * to a live site's built snapshot. `resolve` is declared before `:siteId`.
+ * to a live site's built snapshot, and search reads nothing else. `resolve` is
+ * declared before `:siteId`.
  */
 @ApiTags('public')
 @Controller('v1/public/sites')
@@ -73,13 +91,42 @@ class SiteResponseHeaders implements NestInterceptor {
 @UseGuards(PublicRateLimitGuard)
 @UseInterceptors(SiteResponseHeaders)
 export class PublicSitesController {
-  constructor(private readonly sites: PublicSitesService) {}
+  constructor(
+    private readonly sites: PublicSitesService,
+    private readonly search: PublicSiteSearchService,
+  ) {}
 
+  /**
+   * Conditional: the web reader sends the ETag of the render it cached, and a
+   * 304 lets it serve that render without the page body being read at all
+   * (issue #77 phase 2b-2).
+   */
   @Get('resolve')
   @ApiOperation({ summary: 'A site, version and page for a slug or host plus a path: everything one render needs' })
+  @ApiResponse({ status: 304, description: 'The If-None-Match tag still names this answer' })
   @ApiResponse({ status: 404, description: 'No live site there, or sites are off for its workspace' })
-  resolve(@Query() query: ResolveSiteQueryDto): Promise<PublicSiteResolveResponse> {
-    return this.sites.resolve(query);
+  async resolve(
+    @Query() query: ResolveSiteQueryDto,
+    @Headers('if-none-match') ifNoneMatch: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<PublicSiteResolveResponse | undefined> {
+    const { etag, body } = await this.sites.resolveTagged(query, ifNoneMatch);
+    res.setHeader('ETag', etag);
+    if (!body) {
+      res.status(304);
+      return undefined;
+    }
+    return body;
+  }
+
+  @Get(':siteId/search')
+  @ApiOperation({ summary: "Search one version of a live site: its published pages only, at the revisions it shows" })
+  @ApiResponse({ status: 404, description: 'No live site with this id, or no such version' })
+  searchSite(
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Query() query: SearchSiteQueryDto,
+  ): Promise<PublicSiteSearchResponse> {
+    return this.search.search(siteId, query);
   }
 
   @Get(':siteId/logo')

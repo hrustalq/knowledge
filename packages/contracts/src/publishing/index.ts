@@ -654,6 +654,36 @@ export interface PublicSiteResolveResponse {
   page: PublicSitePage | null;
 }
 
+// GET /v1/public/sites/:siteId/search?q=&version= (issue #77 phase 2b-2)
+
+/** Shorter queries answer nothing: one letter matches most of a site. */
+export const SITE_SEARCH_MIN_CHARS = 2;
+export const SITE_SEARCH_MAX_CHARS = 200;
+export const SITE_SEARCH_MAX_RESULTS = 20;
+
+/** A run of snippet text. `hit` marks words the query matched; the reader highlights them, never as HTML. */
+export interface PublicSiteSearchSnippetPart {
+  text: string;
+  hit: boolean;
+}
+
+export interface PublicSiteSearchResult {
+  documentId: string;
+  title: string;
+  slugPath: string;
+  /** Empty when the page has no body text; the title matched. */
+  snippet: PublicSiteSearchSnippetPart[];
+}
+
+export interface PublicSiteSearchResponse {
+  results: PublicSiteSearchResult[];
+}
+
+/** The search route of a site; `version` is a version slug, omitted for the default. */
+export function publicSiteSearchPath(siteId: string): string {
+  return `/v1/public/sites/${encodeURIComponent(siteId)}/search`;
+}
+
 /** The public attachment route for an attachment of a page in a version's snapshot. */
 export function publicSiteAttachmentPath(siteId: string, versionId: string, attachmentId: string): string {
   return `/v1/public/sites/${encodeURIComponent(siteId)}/versions/${encodeURIComponent(versionId)}/attachments/${encodeURIComponent(attachmentId)}`;

@@ -2442,6 +2442,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/public/sites/{siteId}/search",
+      "tag": "public",
+      "summary": "Search one version of a live site: its published pages only, at the revisions it shows",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/public/sites/llms-full.txt",
       "tag": "public",
       "summary": "Every page of a version at its published revision, concatenated and streamed (LLMS_FULL_MAX_DOCS / _BYTES)",

@@ -203,6 +203,9 @@ services:
       # Serving sites on other hosts also needs the edge to route them here
       # with TLS, which this deployment's does not yet (Caddyfile.sites.example).
       WEB_BASE_URL: ${WEB_BASE_URL:-}
+      # Cached site page renders (issue #77 phase 2b-2), revalidated with the
+      # API on every request; 0 = off.
+      SITE_RENDER_CACHE_MB: ${SITE_RENDER_CACHE_MB:-32}
     ports:
       - "127.0.0.1:5173:5173"
     volumes:

@@ -6,6 +6,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { watchDebounced } from '@vueuse/core'
 import { ExternalLink } from 'lucide-vue-next'
+import { createFocusReturn } from '@/lib/search-shortcut'
 import { useProjectsStore } from '@/stores/projects'
 import { useSearchUiStore } from '@/stores/search-ui'
 import { useWorkspacesStore } from '@/stores/workspaces'
@@ -62,34 +63,14 @@ function focusQuery() {
   void nextTick(() => panelEl.value?.focusQuery())
 }
 
-/**
- * The sheet is opened programmatically (topbar button, "/" or ⌘K), so reka-ui
- * has no SheetTrigger to hand focus back to on close. Left alone, focus stays
- * inside the dismissed dialog: keyboard users are stranded, and the next "/"
- * lands in the hidden query input as literal text instead of reopening.
- *
- * This has to run from reka-ui's own closeAutoFocus hook — restoring on a
- * watcher races the dialog's post-close focus handling and loses.
- */
-let restoreFocusEl: HTMLElement | null = null
+// Opened programmatically, so focus is handed back by hand (search-shortcut.ts).
+const focusReturn = createFocusReturn('global-search-trigger')
 watch(
   () => ui.open,
   (isOpen) => {
-    if (isOpen && !import.meta.env.SSR) {
-      restoreFocusEl = document.activeElement as HTMLElement | null
-    }
+    if (isOpen) focusReturn.remember()
   },
 )
-
-function onCloseAutoFocus(e: Event) {
-  e.preventDefault()
-  const previous = restoreFocusEl
-  restoreFocusEl = null
-  const trigger = document.getElementById('global-search-trigger')
-  const target = trigger ?? (previous?.isConnected ? previous : null)
-  if (target && typeof target.focus === 'function') target.focus()
-  else (document.activeElement as HTMLElement | null)?.blur()
-}
 
 // Toggling a facet re-runs the query — but only once there are results to
 // refine, so flipping filters before the first search fires nothing.
@@ -130,7 +111,7 @@ watch(() => route.fullPath, () => ui.close())
       side="right"
       class="w-full gap-0 p-0 sm:max-w-3xl lg:max-w-5xl"
       @open-auto-focus.prevent="focusQuery"
-      @close-auto-focus="onCloseAutoFocus"
+      @close-auto-focus="focusReturn.onCloseAutoFocus"
     >
       <SheetHeader class="sr-only">
         <SheetTitle>{{ t('nav.search') }}</SheetTitle>

@@ -6,7 +6,8 @@
  * a share: no router, no stores, no auth. Every page is a full server render
  * of the version's snapshot, so navigation is plain links — the nav, the
  * version switcher and prev/next all work with JavaScript off, which is also
- * what a crawler sees. The client only upgrades mermaid and the theme toggle.
+ * what a crawler sees. The client only upgrades mermaid and the theme toggle,
+ * and adds search (SiteSearch), which has no server-rendered form.
  *
  * The nav shows the top level and the open path to the current page, the way
  * docs sites do: a 500-page tree drawn whole is a list nobody reads.
@@ -17,6 +18,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Menu, Moon, Sun }
 import { formatDate } from '@/lib/format'
 import { toggleTheme } from '@/lib/theme'
 import PublicMarkdown from '@/components/public/PublicMarkdown.vue'
+import SiteSearch from './SiteSearch.vue'
 import { siteHomeId, siteHref, treeRows, type PublicReaderState } from './reader-state'
 
 const props = defineProps<{ state: PublicReaderState }>()
@@ -120,6 +122,8 @@ const currentVersion = computed(() => site.value?.versions.find((v) => v.isDefau
           </details>
 
           <span class="flex-1" />
+
+          <SiteSearch v-if="site.tree.length" :site="site" :api-base="state.apiBase" />
 
           <nav v-if="site.theme.headerLinks.length" class="hidden items-center gap-4 text-sm md:flex">
             <a

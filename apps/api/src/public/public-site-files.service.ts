@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { SiteVersion, SiteVersionPage } from '@prisma/client';
+import type { SiteVersion } from '@prisma/client';
 import { siteHomeDocumentId, siteMarkdownPath, sitePagePath } from '@knowledge/contracts';
 import { orderPages, renderFullHeader, renderFullPage, renderLlmsIndex, truncatedMarker, unavailableMarker } from '../ai-readable/llms.js';
 import { etagMatches as matches, titledMarkdown } from '../ai-readable/render.js';
@@ -9,7 +9,7 @@ import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { PublicSitesService, type LiveSite } from './public-sites.service.js';
+import { PublicSitesService, SNAPSHOT_ROW, type LiveSite, type SnapshotRow } from './public-sites.service.js';
 
 /** Bumped when any file's shape changes, so every cached ETag goes stale. */
 const SITE_FILES_FORMAT_VERSION = 1;
@@ -251,12 +251,16 @@ export class PublicSiteFilesService {
     return version.id === site.defaultVersionId ? null : version.slug;
   }
 
-  private rows(versionId: string): Promise<SiteVersionPage[]> {
-    return this.prisma.siteVersionPage.findMany({ where: { versionId }, orderBy: [{ depth: 'asc' }, { position: 'asc' }] });
+  private rows(versionId: string): Promise<SnapshotRow[]> {
+    return this.prisma.siteVersionPage.findMany({
+      where: { versionId },
+      orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+      select: SNAPSHOT_ROW,
+    });
   }
 
   /** Reading order: depth-first, siblings by position then title — the order of the reader's nav. */
-  private ordered(rows: SiteVersionPage[]): SiteVersionPage[] {
+  private ordered(rows: SnapshotRow[]): SnapshotRow[] {
     const byId = new Map(rows.map((r) => [r.documentId, r]));
     return orderPages(
       rows.map((r) => ({

@@ -3835,6 +3835,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/sites/{siteId}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search one version of a live site: its published pages only, at the revisions it shows */
+        get: operations["PublicSitesController_searchSite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/sites/sitemap.xml": {
         parameters: {
             query?: never;
@@ -17954,7 +17971,60 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The If-None-Match tag still names this answer */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description No live site there, or sites are off for its workspace */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSitesController_searchSite: {
+        parameters: {
+            query?: {
+                /** @description The words to look for; fewer than 2 characters answers no results */
+                q?: string;
+                /** @description A version slug; omitted = the default version */
+                version?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No live site with this id, or no such version */
             404: {
                 headers: {
                     [name: string]: unknown;

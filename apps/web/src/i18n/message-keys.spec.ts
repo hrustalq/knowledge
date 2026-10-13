@@ -19,7 +19,11 @@ import reader from './reader/en.json'
 const SRC = join(import.meta.dirname, '..')
 
 // The public reader's catalog is separate (docs/features/43) but resolves the same way.
-const en = { ...app, ...reader }
+// Merged per namespace: both carry `common` (the reader for the shared Sheet's close label).
+const en: Record<string, unknown> = { ...app }
+for (const [ns, keys] of Object.entries(reader)) {
+  en[ns] = { ...((en[ns] as object | undefined) ?? {}), ...keys }
+}
 
 // `t(`, `$t(`, `te(`, `tm(` — but not `emit(`, `split(`, or `x.t(` on some other object.
 const CALL = /(?<![\w$.])\$?(?:t|te|tm)\(\s*(['"])([^'"`\n]+?)\1/g

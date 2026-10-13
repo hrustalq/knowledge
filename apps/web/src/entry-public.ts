@@ -43,6 +43,12 @@ export interface PublicRenderContext {
   traceId: string | null
   /** Set when the request came in on a site's own host: every path is that site's. */
   siteHost?: string | null
+  /**
+   * The ETag of a render server.js still holds for this host, URL and
+   * language. When the API says the page is unchanged, the render stops there
+   * and answers `notModified`, and server.js replays what it holds.
+   */
+  ifNoneMatch?: string | null
 }
 
 export interface PublicRenderResult {
@@ -53,6 +59,10 @@ export interface PublicRenderResult {
   headers: Record<string, string>
   /** Answer with a redirect instead (a non-canonical page path, or a version switch). */
   redirect?: string
+  /** A site page: the API's tag for what this render was made from. Absent = never cache it. */
+  etag?: string
+  /** `ifNoneMatch` still holds: nothing was rendered; replay the cached render. */
+  notModified?: boolean
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -86,16 +96,27 @@ class ApiAnswer extends Error {
 }
 
 async function apiGet<T>(path: string, ctx: PublicRenderContext): Promise<T> {
+  return (await apiGetTagged<T>(path, ctx)).body!
+}
+
+/** A GET that may be conditional: `body` is null when the API answered 304 to `ifNoneMatch`. */
+async function apiGetTagged<T>(
+  path: string,
+  ctx: PublicRenderContext,
+  ifNoneMatch?: string | null,
+): Promise<{ body: T | null; etag: string | null }> {
   const headers: Record<string, string> = { 'Accept-Language': ctx.locale, Accept: 'application/json' }
   if (ctx.shareCookies) headers.Cookie = ctx.shareCookies
   if (ctx.forwardedFor) headers['X-Forwarded-For'] = ctx.forwardedFor
   if (ctx.traceId) headers['x-request-id'] = ctx.traceId
+  if (ifNoneMatch) headers['If-None-Match'] = ifNoneMatch
   const res = await fetch(`${apiInternal()}${path}`, { headers })
+  if (res.status === 304) return { body: null, etag: ifNoneMatch ?? null }
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null)
     throw new ApiAnswer(isApiErrorPayload(body) ? body.statusCode : res.status)
   }
-  return (await res.json()) as T
+  return { body: (await res.json()) as T, etag: res.headers.get('etag') }
 }
 
 interface ResolvedView {
@@ -179,6 +200,8 @@ interface SiteResolved extends ResolvedView {
   redirect?: string
   head: string[]
   noindex: boolean
+  etag?: string
+  notModified?: boolean
 }
 
 async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<SiteResolved> {
@@ -195,8 +218,12 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   if (from) params.set('from', from)
 
   let res: PublicSiteResolveResponse
+  let etag: string | null
   try {
-    res = await apiGet<PublicSiteResolveResponse>(`/v1/public/sites/resolve?${params}`, ctx)
+    const answer = await apiGetTagged<PublicSiteResolveResponse>(`/v1/public/sites/resolve?${params}`, ctx, ctx.ifNoneMatch)
+    if (!answer.body) return { ...notFound, status: 304, notModified: true }
+    res = answer.body
+    etag = answer.etag
   } catch (err) {
     if (err instanceof ApiAnswer && err.status === 404) return notFound
     throw err
@@ -281,6 +308,7 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
     description: body.description,
     head,
     noindex,
+    ...(etag ? { etag } : {}),
   }
 }
 
@@ -305,6 +333,9 @@ export async function render(url: string, ctx: PublicRenderContext): Promise<Pub
   if ('redirect' in resolved && resolved.redirect) {
     return { html: '', head: '', status: 302, headers: { 'Cache-Control': 'no-store' }, redirect: resolved.redirect }
   }
+  if ('notModified' in resolved && resolved.notModified) {
+    return { html: '', head: '', status: 304, headers: {}, notModified: true }
+  }
   const { view, status, description } = resolved
   const state: PublicReaderState = { locale: ctx.locale, apiBase: apiPublic, view }
   const { app } = createPublicApp(state)
@@ -327,10 +358,13 @@ export async function render(url: string, ctx: PublicRenderContext): Promise<Pub
   const headers: Record<string, string> = isShare
     ? SHARE_HEADERS
     : {
-        // Re-rendered per request: unpublishing must end a site at once.
+        // Revalidated per request: unpublishing must end a site at once.
         'Cache-Control': 'no-cache',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         ...(resolved.noindex ? { 'X-Robots-Tag': 'noindex' } : {}),
       }
-  return { html, head, status, headers }
+  // Only a page served as itself is worth keeping: a 404 inside the site
+  // costs no body read, and a share is never cached at all.
+  const etag = !isShare && status === 200 && 'etag' in resolved ? resolved.etag : undefined
+  return { html, head, status, headers, ...(etag ? { etag } : {}) }
 }

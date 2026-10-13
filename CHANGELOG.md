@@ -15,6 +15,13 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Changed
+
+- Search in production ranks by content. Keyword matches (BM25 over
+  OpenSearch) are now fused with the vector results. The vector leg runs on
+  the stub embedder there, so until now nothing ranked by what a page says.
+  PDF export is offered in production as well. (#169)
+
 ### Fixed
 
 - Downloads from object storage work again in production: export files
@@ -25,6 +32,16 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- `docker-compose.prod.yml` gains an opt-in `opensearch` service (single node,
+  no published port, 512 MB heap in a 1.5 GB container, volume `osdata`).
+  `.env.production.example` now requires `COMPOSE_PROFILES=gotenberg,opensearch`,
+  `GOTENBERG_URL`, `FULLTEXT_PROVIDER=opensearch` and `OPENSEARCH_URL`. All four
+  are already set in the `production` environment, and the deploy refuses an
+  environment without them. While OpenSearch is down, search fails, because
+  its leg is awaited. Pages indexed before it was turned on need
+  `POST /v1/ingestion/reindex`. On a rollback the extra service keeps running
+  and the previous release ignores it. To turn it off, set
+  `FULLTEXT_PROVIDER=none` and drop `opensearch` from `COMPOSE_PROFILES`. (#169)
 - The `caddy` service takes a new optional variable, `S3_PUBLIC_HOST`. It must
   be `S3_PUBLIC_ENDPOINT`'s host; `docker-compose.prod.yml` defaults it to
   `knowledge.hrustalq.dev`, so production needs no change. Set it in the

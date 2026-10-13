@@ -36,6 +36,51 @@
     "backHome": "Go to the home page",
     "outdatedVersion": "You are reading {name}, not the current version.",
     "toCurrent": "Go to the current version",
-    "emptySite": "Nothing is published here yet."
+    "emptySite": "Nothing is published here yet.",
+    "search": "Search",
+    "searchPlaceholder": "Search this site…",
+    "searchHint": "Type at least 2 characters.",
+    "searchEmpty": "No pages match “{query}”.",
+    "searchFailed": "Search is not available right now. Try again in a moment.",
+    "searchRateLimited": "Too many searches from your address. Wait a minute and try again.",
+    "searchResults": "Search results",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signedInMember": "Signed in as a workspace member",
+    "signedInVisitor": "Signed in",
+    "restrictedHint": "Some pages of this site are only for signed-in readers.",
+    "signOutFailed": "Could not sign out. Try again.",
+    "ask": "Ask",
+    "askTitle": "Ask {site}",
+    "askDescription": "Answers come only from the pages of this site, with links to them.",
+    "askPlaceholder": "Ask a question about these docs…",
+    "askSubmit": "Ask",
+    "askThinking": "Looking through the pages…",
+    "askNoAnswer": "Nothing on this site seems to answer that. Try different words, or search.",
+    "askSources": "Sources",
+    "askFailed": "Could not get an answer right now. Try again in a moment.",
+    "askRateLimited": "Too many questions from your address. Wait a minute and try again.",
+    "askBudgetExhausted": "This site has answered all the questions it can today. Try again tomorrow.",
+    "askUnavailable": "This site cannot answer questions right now.",
+    "askTooShort": "Ask a slightly longer question.",
+    "askAgain": "Ask another question",
+    "askDisclaimer": "AI-generated from this site’s pages. Check the sources.",
+    "askClose": "Close",
+    "askWidgetUnavailable": "Questions are not available here."
+  },
+  "common": {
+    "close": "Close"
+  },
+  "exportReader": {
+    "contents": "Contents",
+    "exportedOn": "Exported {date}",
+    "pageCount": {
+      "one": "{n} page",
+      "few": "{n} pages",
+      "many": "{n} pages",
+      "other": "{n} pages"
+    },
+    "subpages": "In this section",
+    "home": "Contents"
   }
 }

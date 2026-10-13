@@ -1,16 +1,31 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   ValidateIf,
 } from 'class-validator';
-import { SITE_FONTS, SITE_THEME_LIMITS, SITE_VERSION_KINDS, type SiteFont, type SiteVersionKind } from '@knowledge/contracts';
+import {
+  SITE_ASK_BUDGET_MAX,
+  SITE_AUDIENCE_RULE_KINDS,
+  SITE_EMBED_ORIGINS_MAX,
+  SITE_FONTS,
+  SITE_THEME_LIMITS,
+  SITE_VERSION_KINDS,
+  type SiteAudienceRuleKind,
+  type SiteFont,
+  type SiteVersionKind,
+} from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 /**
@@ -86,6 +101,36 @@ export class UpdateSiteDto {
   @IsOptional()
   @IsUUID()
   defaultVersionId?: string;
+
+  @ApiPropertyOptional({ description: 'The site answers questions from its pages, in the reader and the embeddable widget' })
+  @IsOptional()
+  @IsBoolean()
+  askEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 0,
+    maximum: SITE_ASK_BUDGET_MAX,
+    description: 'Answers a day. null takes PUBLIC_ASK_DAILY_BUDGET, which also caps it',
+  })
+  @ValidateIf((o: UpdateSiteDto) => o.askDailyBudget !== undefined && o.askDailyBudget !== null)
+  @IsInt()
+  @Min(0)
+  @Max(SITE_ASK_BUDGET_MAX)
+  askDailyBudget?: number | null;
+
+  @ApiPropertyOptional({
+    type: [String],
+    maxItems: SITE_EMBED_ORIGINS_MAX,
+    description: 'Origins allowed to embed the widget, e.g. https://example.com. Replaces the list',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(SITE_EMBED_ORIGINS_MAX)
+  @IsString({ each: true })
+  @MaxLength(300, { each: true, message: vmsg('maxLength') })
+  embedOrigins?: string[];
 }
 
 export class CreateSiteVersionDto {
@@ -135,4 +180,36 @@ export class UpdateSiteVersionDto {
   @IsString()
   @MaxLength(100, { message: vmsg('maxLength') })
   sourceBranch?: string | null;
+}
+
+export class AddSiteDomainDto {
+  @ApiProperty({ maxLength: 253, description: 'A hostname you control, e.g. docs.example.com. A pasted URL is reduced to its host' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(300, { message: vmsg('maxLength') })
+  hostname!: string;
+}
+
+export class SetSiteAudienceRuleDto {
+  @ApiProperty({ enum: SITE_AUDIENCE_RULE_KINDS, description: '`members`: signed-in workspace members only; `visitors`: also people signed in with a JWT from your backend' })
+  @IsIn(SITE_AUDIENCE_RULE_KINDS)
+  audience!: SiteAudienceRuleKind;
+
+  @ApiPropertyOptional({
+    type: 'object',
+    additionalProperties: { type: 'array', items: { type: 'string' } },
+    nullable: true,
+    description: '`visitors` only: claims the JWT must carry, each with one of the listed values, e.g. {"plan":["pro"]}. Omitted or null: any valid token',
+  })
+  @ValidateIf((o: SetSiteAudienceRuleDto) => o.claims !== undefined && o.claims !== null)
+  @IsObject()
+  claims?: Record<string, string[]> | null;
+}
+
+export class SiteSignInDto {
+  @ApiProperty({ maxLength: 2000, description: 'The site page to come back to, as an absolute URL on one of the site’s own addresses' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000, { message: vmsg('maxLength') })
+  returnUrl!: string;
 }

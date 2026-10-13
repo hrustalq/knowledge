@@ -3,6 +3,18 @@ import express from 'express'
 import { configureBacktest, createRootLogger, envLogLevel } from '@knowledge/observability'
 import { traceMiddleware } from '@knowledge/observability/express'
 import { aiReadableMiddleware } from './server/ai-readable.js'
+import { createRenderCache, renderCacheKey } from './server/render-cache.js'
+import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files.js'
+import { siteWidgetRoute } from './server/site-widget.js'
+import { exportRenderRoute } from './server/export-render.js'
+
+// Vue's compile-time flags. The SSR bundles leave `vue-i18n` external, so
+// Node loads its esm build unreplaced, and its plugin install() reads
+// `__VUE_PROD_DEVTOOLS__` whenever NODE_ENV is production. Nothing defines it
+// under plain Node unless some other module happens to first: a member-app
+// render did, so a public page rendered first after boot threw inside the
+// async install(), and the unhandled rejection killed the process.
+globalThis.__VUE_PROD_DEVTOOLS__ ??= false
 
 // Constants
 const isProduction = process.env.NODE_ENV === 'production'
@@ -43,19 +55,28 @@ const readerTemplateHtml = isProduction
 // step with SHARE_PATH and SITE_PATH in src/entry-public.ts, which re-check them.
 const PUBLIC_PATH = /^\/(?:s\/[^/?#]+(?:\/[^/?#]+)?\/?|pub\/[a-z0-9-]+(?:\/[^?#]*)?)(?:[?#].*)?$/
 
-// Sites on their own host: `<slug>.<PUBLISH_BASE_DOMAIN>` (docs/features/44).
-// The same variable the API reads; empty means path mode only.
-const PUBLISH_BASE_DOMAIN = (process.env.PUBLISH_BASE_DOMAIN ?? '').trim().toLowerCase().replace(/^\.+|\.+$/g, '')
+const API_INTERNAL = process.env.API_URL_INTERNAL ?? 'http://localhost:3000'
 
-/** The site host this request came in on, or null for the app's own host. */
-function siteHostOf(req) {
-  if (!PUBLISH_BASE_DOMAIN) return null
-  const host = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '')
-  const suffix = `.${PUBLISH_BASE_DOMAIN}`
-  if (!host.endsWith(suffix)) return null
-  const label = host.slice(0, -suffix.length)
-  return label && !label.includes('.') ? host : null
-}
+// Sites on their own host (docs/features/44): `<slug>.<PUBLISH_BASE_DOMAIN>`,
+// the same variable the API reads (empty = path mode only), or a verified
+// custom domain, asked of the API. The app's own host (WEB_BASE_URL) is never
+// a site's and is never looked up.
+const PUBLISH_BASE_DOMAIN = (process.env.PUBLISH_BASE_DOMAIN ?? '').trim().toLowerCase().replace(/^\.+|\.+$/g, '')
+const APP_HOST = (() => {
+  try {
+    return process.env.WEB_BASE_URL ? new URL(process.env.WEB_BASE_URL).hostname.toLowerCase() : null
+  } catch {
+    return null
+  }
+})()
+const siteHostOf = createSiteHostResolver({ apiBase: API_INTERNAL, baseDomain: PUBLISH_BASE_DOMAIN, appHost: APP_HOST })
+
+// Published site pages, kept by host + language + URL and revalidated with the
+// API on every request (issue #77 phase 2b-2). 0 turns it off.
+const SITE_RENDER_CACHE_MB = Number(process.env.SITE_RENDER_CACHE_MB ?? 32)
+const renderCache = createRenderCache({
+  maxBytes: (Number.isFinite(SITE_RENDER_CACHE_MB) ? Math.max(0, SITE_RENDER_CACHE_MB) : 32) * 1024 * 1024,
+})
 
 // Create http server
 const app = express()
@@ -64,18 +85,47 @@ const app = express()
 // the scope and every response carries x-request-id — static asset 404s included.
 app.use(traceMiddleware)
 
+// The worker's export renderer (docs/features/45), before anything that reads
+// a host or a cookie: it is a call from inside the network, not a page view.
+app.use(
+  exportRenderRoute({
+    express,
+    logger,
+    loadRenderer: async () =>
+      isProduction
+        ? (await import('./dist/server/export-render.js')).renderExport
+        : (await vite.ssrLoadModule('/src/export-render.ts')).renderExport,
+  }),
+)
+
+// Whose host is this? Decided once, before anything reads a cookie: a site's
+// host is the public reader's all the way down.
+app.use(async (req, res, next) => {
+  try {
+    res.locals.siteHost = await siteHostOf(req, forwardedFor(req))
+  } catch {
+    res.locals.siteHost = null
+  }
+  next()
+})
+
+// A site's embeddable Ask widget script (issue #77 phase 3): `/widget.js` on
+// its host or `/pub/<slug>/widget.js`, before the reader takes it for a page.
+app.use(siteWidgetRoute())
+
 // AI-readable URLs (issue #68): /documents/:id.md, Accept: text/markdown on
 // /documents/:id, /llms.txt and the per-workspace/project llms files, proxied
 // to the API. Mounted before Vite and the static handler so neither claims a
 // `.md`/`.txt` path first, and in both branches (dev and production) alike.
-const aiReadable = aiReadableMiddleware({
-  apiBase: process.env.API_URL_INTERNAL ?? 'http://localhost:3000',
-  readCookie,
-  logger,
-})
-// Not on a site's host: there, `/llms.txt` belongs to the site (phase 2b), not
-// to the workspace a member's cookie would name.
-app.use((req, res, next) => (siteHostOf(req) ? next() : aiReadable(req, res, next)))
+const aiReadable = aiReadableMiddleware({ apiBase: API_INTERNAL, readCookie, logger })
+// Not on a site's host: there, `/llms.txt` belongs to the site, not to the
+// workspace a member's cookie would name.
+app.use((req, res, next) => (res.locals.siteHost ? next() : aiReadable(req, res, next)))
+
+// A site's sitemap.xml, robots.txt, llms(-full).txt and `<page>.md`, on its
+// host or under /pub/<slug> (issue #77 phase 2b). Before Vite and sirv, like
+// the AI-readable routes, so neither claims the path first.
+app.use(siteFilesMiddleware({ apiBase: API_INTERNAL, forwardedFor, logger }))
 
 // Add Vite or respective production middlewares
 /** @type {import('vite').ViteDevServer | undefined} */
@@ -125,17 +175,24 @@ function readCookie(header, name) {
 }
 
 /**
- * Only the share-unlock cookies, rebuilt as a Cookie header. A public render
- * must never carry `kn_token` to the API: the reader is anonymous even when
- * the person opening the link happens to be signed in to the app.
+ * Only the share-unlock and site sign-in cookies, rebuilt as a Cookie header.
+ * A public render must never carry `kn_token` to the API: the reader is
+ * anonymous even when the person opening the link happens to be signed in to
+ * the app. A site sign-in (`kn_site_<id>`, issue #77 phase 3) is the site's
+ * own session, opened on the site's origin for that site alone.
  */
 function shareCookies(header) {
   if (!header) return ''
   return header
     .split(';')
     .map((part) => part.trim())
-    .filter((part) => /^kn_share_[0-9a-f-]{36}=/i.test(part))
+    .filter((part) => /^kn_(?:share|site)_[0-9a-f-]{36}=/i.test(part))
     .join('; ')
+}
+
+/** Does the request carry a site sign-in? Its render is that reader's, never the shared one. */
+function hasSiteSession(header) {
+  return !!header && /(?:^|;\s*)kn_site_[0-9a-f-]{36}=/i.test(header)
 }
 
 /** The visitor's address chain plus the peer, as Caddy would forward it to the API. */
@@ -164,6 +221,11 @@ async function renderPublic(req, res, url, siteHost) {
   }
   const locale = resolveLocale(readCookie(req.headers.cookie, 'kn_lang'), req.headers['accept-language'])
   const headerTraceId = res.getHeader('x-request-id')
+  // A signed-in reader may see pages others do not. The API's ETag already
+  // tells the renders apart, but caching them here would only evict the
+  // anonymous render everyone else shares.
+  const cacheKey = renderCache.enabled && !hasSiteSession(req.headers.cookie) ? renderCacheKey({ siteHost, url, locale }) : null
+  const cached = cacheKey ? renderCache.get(cacheKey) : null
   let rendered
   try {
     rendered = await render(url, {
@@ -172,7 +234,13 @@ async function renderPublic(req, res, url, siteHost) {
       forwardedFor: forwardedFor(req),
       traceId: typeof headerTraceId === 'string' ? headerTraceId : null,
       siteHost,
+      ifNoneMatch: cached?.etag ?? null,
     })
+    // The API vouched for the cached render: the site is still live and the
+    // page is what it was. Anything else replaces or drops the entry.
+    if (rendered.notModified && cached) rendered = cached.rendered
+    else if (cacheKey && rendered.etag) renderCache.set(cacheKey, rendered.etag, rendered)
+    else if (cacheKey && cached) renderCache.delete(cacheKey)
   } catch (e) {
     // The API's per-address cap, passed on as itself rather than as a 500.
     if (e?.status === 429) {
@@ -202,7 +270,7 @@ app.use('*all', async (req, res) => {
     const url = req.originalUrl.replace(base, '')
     // Checked first, before any cookie is read: a public render takes nothing
     // from the member app's request context.
-    const siteHost = siteHostOf(req)
+    const siteHost = res.locals.siteHost
     if (siteHost || PUBLIC_PATH.test(req.originalUrl)) {
       await renderPublic(req, res, req.originalUrl, siteHost)
       return

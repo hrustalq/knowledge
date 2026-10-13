@@ -290,6 +290,12 @@ export class AccessService {
     return share.workspaceId;
   }
 
+  async workspaceOfExport(exportId: string): Promise<string> {
+    const job = await this.prisma.exportJob.findUnique({ where: { id: exportId }, select: { workspaceId: true } });
+    if (!job) throw new NotFoundException(t('error.export.notFound'));
+    return job.workspaceId;
+  }
+
   async workspaceOfSite(siteId: string): Promise<string> {
     const site = await this.prisma.publishedSite.findUnique({ where: { id: siteId }, select: { workspaceId: true } });
     if (!site) throw new NotFoundException(t('error.site.notFound'));
@@ -303,6 +309,15 @@ export class AccessService {
     });
     if (!version) throw new NotFoundException(t('error.site.versionNotFound'));
     return version.site.workspaceId;
+  }
+
+  async workspaceOfSiteDomain(domainId: string): Promise<string> {
+    const domain = await this.prisma.siteDomain.findUnique({
+      where: { id: domainId },
+      select: { site: { select: { workspaceId: true } } },
+    });
+    if (!domain) throw new NotFoundException(t('error.site.domainNotFound'));
+    return domain.site.workspaceId;
   }
 
   async workspaceOfJob(jobId: string): Promise<string> {

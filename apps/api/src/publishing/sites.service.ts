@@ -6,9 +6,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, type PublishedSite, type SiteVersion } from '@prisma/client';
+import { Prisma, type PublishedSite, type SiteDomain, type SiteVersion } from '@prisma/client';
 import {
   RESERVED_SITE_SLUGS,
+  effectiveSiteAskBudget,
+  normalizeEmbedOrigin,
   isValidSiteSlug,
   isValidVersionSlug,
   normalizeSiteTheme,
@@ -26,11 +28,13 @@ import {
   type PublishedSiteStatus,
 } from '@knowledge/contracts';
 import { ActivityService } from '../activity/activity.service.js';
+import { AiConfigService } from '../ai/ai-config.service.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from './publishing-settings.service.js';
 import { SiteBuildProducer } from './site-build.producer.js';
+import { siteDomainSummary } from './site-domains.service.js';
 
 /** The dev principal has no users row; same stub the rest of the API records. */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -52,6 +56,9 @@ export interface UpdateSiteInput {
   theme?: Partial<SiteTheme>;
   seoIndexable?: boolean;
   defaultVersionId?: string;
+  askEnabled?: boolean;
+  askDailyBudget?: number | null;
+  embedOrigins?: string[];
 }
 
 export interface CreateVersionInput {
@@ -67,7 +74,10 @@ export interface UpdateVersionInput {
   sourceBranch?: string | null;
 }
 
-type SiteRow = PublishedSite & { versions: SiteVersion[] };
+type SiteRow = PublishedSite & { versions: SiteVersion[]; domains: SiteDomain[] };
+
+/** Everything a site summary shows; one constant so no query forgets the domains. */
+const SITE_INCLUDE = { versions: true, domains: { orderBy: { createdAt: 'asc' } } } as const satisfies Prisma.PublishedSiteInclude;
 
 /**
  * Published sites: the management side (docs/features/44, issue #77 phase 2a).
@@ -89,12 +99,13 @@ export class SitesService {
     private readonly activity: ActivityService,
     private readonly builds: SiteBuildProducer,
     private readonly config: ConfigService<Env, true>,
+    private readonly aiConfig: AiConfigService,
   ) {}
 
   async forProject(projectId: string): Promise<ProjectSiteResponse> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { workspaceId: true, name: true, site: { include: { versions: true } } },
+      select: { workspaceId: true, name: true, site: { include: SITE_INCLUDE } },
     });
     if (!project) throw new NotFoundException(t('error.project.notFound', { id: projectId }));
     const settings = await this.settings.get(project.workspaceId);
@@ -105,7 +116,10 @@ export class SitesService {
         enabled: settings.effective.allowPublicSites,
         ceiling: settings.ceiling.sitesEnabled,
         baseDomain: baseDomain || null,
+        customDomains: this.config.get('SITE_CUSTOM_DOMAINS', { infer: true }),
         suggestedSlug: suggestSiteSlug(project.name),
+        askDailyCeiling: this.config.get('PUBLIC_ASK_DAILY_BUDGET', { infer: true }),
+        askModelConfigured: (await this.aiConfig.resolveFor(project.workspaceId, 'chat')).enabled,
       },
     };
   }
@@ -131,7 +145,7 @@ export class SitesService {
         return tx.publishedSite.update({
           where: { id: row.id },
           data: { defaultVersionId: version.id },
-          include: { versions: true },
+          include: SITE_INCLUDE,
         });
       }),
     );
@@ -166,8 +180,12 @@ export class SitesService {
       data.defaultVersionId = version.id;
     }
 
+    if (input.askEnabled !== undefined) data.askEnabled = input.askEnabled;
+    if (input.askDailyBudget !== undefined) data.askDailyBudget = input.askDailyBudget;
+    if (input.embedOrigins !== undefined) data.embedOrigins = this.checkEmbedOrigins(input.embedOrigins);
+
     const updated = await this.uniqueSlug(String(data.slug ?? site.slug), () =>
-      this.prisma.publishedSite.update({ where: { id: siteId }, data, include: { versions: true } }),
+      this.prisma.publishedSite.update({ where: { id: siteId }, data, include: SITE_INCLUDE }),
     );
     // A new root is a different site: every version that follows its branch
     // re-snapshots. Frozen versions keep what they froze until rebuilt.
@@ -272,10 +290,15 @@ export class SitesService {
 
   // -------------------------------------------------------------------------
 
-  siteUrl(slug: string): string {
+  /** Where a site is served: its first verified domain (while this deployment routes them), else its subdomain or path. */
+  siteUrl(slug: string, domains: SiteDomain[] = []): string {
+    const domain = this.config.get('SITE_CUSTOM_DOMAINS', { infer: true })
+      ? (domains.filter((d) => d.verifiedAt).sort((a, b) => a.verifiedAt!.getTime() - b.verifiedAt!.getTime())[0]?.hostname ?? null)
+      : null;
     return siteRootUrl(slug, {
       baseDomain: this.config.get('PUBLISH_BASE_DOMAIN', { infer: true }),
       webBaseUrl: this.config.get('WEB_BASE_URL', { infer: true }),
+      domain,
     });
   }
 
@@ -287,7 +310,7 @@ export class SitesService {
   }
 
   private async requireSite(siteId: string): Promise<SiteRow> {
-    const site = await this.prisma.publishedSite.findUnique({ where: { id: siteId }, include: { versions: true } });
+    const site = await this.prisma.publishedSite.findUnique({ where: { id: siteId }, include: SITE_INCLUDE });
     if (!site) throw new NotFoundException(t('error.site.notFound'));
     return site;
   }
@@ -323,6 +346,19 @@ export class SitesService {
     return new ConflictException({ statusCode: 409, message: t('error.site.slugTaken', { slug }), reason: 'site.slugTaken' });
   }
 
+  /** Each origin in its stored form, duplicates dropped; 400 naming every one that is not an origin. */
+  private checkEmbedOrigins(raw: string[]): string[] {
+    const invalid = raw.filter((o) => normalizeEmbedOrigin(o) === null);
+    if (invalid.length) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: t('error.site.embedOriginInvalid', { origins: invalid.join(', ') }),
+        invalid,
+      });
+    }
+    return [...new Set(raw.map((o) => normalizeEmbedOrigin(o)!))];
+  }
+
   private async checkRoot(projectId: string, rootDocumentId: string | null): Promise<string | null> {
     if (rootDocumentId === null) return null;
     const doc = await this.prisma.document.findUnique({
@@ -337,7 +373,7 @@ export class SitesService {
 
   private async setStatus(site: SiteRow, status: PublishedSiteStatus, action: string, actorId?: string): Promise<PublishedSiteSummary> {
     if (site.status === status) return this.toSummary(site);
-    const updated = await this.prisma.publishedSite.update({ where: { id: site.id }, data: { status }, include: { versions: true } });
+    const updated = await this.prisma.publishedSite.update({ where: { id: site.id }, data: { status }, include: SITE_INCLUDE });
     this.record(updated, action, actorId, { slug: updated.slug });
     return this.toSummary(updated);
   }
@@ -373,8 +409,20 @@ export class SitesService {
       theme: normalizeSiteTheme(site.theme),
       seoIndexable: site.seoIndexable,
       defaultVersionId: site.defaultVersionId,
-      url: this.siteUrl(site.slug),
+      url: this.siteUrl(site.slug, site.domains),
       versions: versions.map((v) => this.toVersionSummary(v, site.defaultVersionId)),
+      domains: site.domains.map((d) =>
+        siteDomainSummary(d, site, {
+          baseDomain: this.config.get('PUBLISH_BASE_DOMAIN', { infer: true }),
+          webBaseUrl: this.config.get('WEB_BASE_URL', { infer: true }),
+        }),
+      ),
+      ask: {
+        enabled: site.askEnabled,
+        dailyBudget: site.askDailyBudget,
+        effectiveDailyBudget: effectiveSiteAskBudget(site.askDailyBudget, this.config.get('PUBLIC_ASK_DAILY_BUDGET', { infer: true })),
+        embedOrigins: site.embedOrigins,
+      },
       createdAt: site.createdAt.toISOString(),
       updatedAt: site.updatedAt.toISOString(),
     };

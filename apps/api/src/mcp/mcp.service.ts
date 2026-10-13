@@ -12,6 +12,7 @@ import {
   KNOWLEDGE_ISSUE_KINDS,
   KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS,
   VERIFICATION_FLAGS,
+  EXPORT_FORMATS,
   SHARE_PASSWORD_MAX_CHARS,
   SHARE_PASSWORD_MIN_CHARS,
   VERIFICATION_NOTE_MAX_CHARS,
@@ -44,6 +45,7 @@ import { KnowledgeIssuesService } from '../feedback/knowledge-issues.service.js'
 import { VerificationService } from '../verification/verification.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { ShareLinksService } from '../publishing/share-links.service.js';
+import { ExportService } from '../export/export.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
@@ -54,7 +56,7 @@ import { renderSkill, type McpWhoami } from './skill.js';
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.18.0';
+export const MCP_SERVER_VERSION = '0.19.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -130,6 +132,7 @@ export class McpService {
     private readonly verification: VerificationService,
     private readonly templates: TemplatesService,
     private readonly shareLinks: ShareLinksService,
+    private readonly exports: ExportService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -372,6 +375,57 @@ export class McpService {
           expiresAt: res.share.expiresAt,
           hasPassword: res.share.hasPassword,
         });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_export',
+      {
+        description:
+          'Export a page, a page and its subpages, or a whole project as a file a person can download ' +
+          '(docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an ' +
+          'offline site, zipped) or pdf (only where the deployment has Gotenberg). Give documentId, or projectId for ' +
+          'a whole project. Runs in the background: returns the export id — poll knowledge_get_export for the ' +
+          'download URL.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          format: z.enum(EXPORT_FORMATS),
+          documentId: z.string().uuid().optional(),
+          includeSubtree: z.boolean().optional().describe('With documentId: also export every page under it'),
+          projectId: z.string().uuid().optional().describe('Export every page of this project instead of one page'),
+          branch: z.string().max(100).optional().describe('Branch to read each page from; default branches when omitted'),
+        },
+      },
+      async ({ workspaceId, format, documentId, includeSubtree, projectId, branch }) => {
+        // The REST twins are POST /v1/documents/:id/exports and
+        // POST /v1/projects/:id/exports, both viewer.
+        if (!documentId === !projectId) throw new Error('Give exactly one of documentId or projectId');
+        let job;
+        if (documentId) {
+          await guard.doc(documentId, 'viewer');
+          job = await this.exports.createForDocument(documentId, { format, includeSubtree, branch }, principal);
+        } else {
+          await guard.project(projectId!, 'viewer');
+          job = await this.exports.createForProject(projectId!, { format, branch }, principal);
+        }
+        return this.json({ workspaceId, exportId: job.id, status: job.status, format: job.format, scope: job.scope });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_get_export',
+      {
+        description:
+          'One export: its status (queued | running | completed | failed | expired), page count and size, and — once ' +
+          'completed — a download URL valid for a few minutes. Only the person who asked for it, or an admin, sees it.',
+        inputSchema: { workspaceId: z.string().uuid(), exportId: z.string().uuid() },
+      },
+      async ({ exportId }) => {
+        // The REST twins are GET /v1/exports/:id and /download, both viewer.
+        await guard.exportJob(exportId, 'viewer');
+        const job = await this.exports.get(exportId, principal);
+        const download = job.status === 'completed' ? await this.exports.download(exportId, principal) : null;
+        return this.json({ ...job, download });
       },
     );
 
@@ -1241,6 +1295,7 @@ export class McpService {
       connector: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnector(id), role),
       connectorRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnectorRun(id), role),
       workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfWorkflowRun(id), role),
+      exportJob: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfExport(id), role),
     };
   }
 

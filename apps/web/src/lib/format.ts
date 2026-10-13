@@ -104,3 +104,8 @@ export function formatBytes(bytes: number, locale?: Locale): string {
   }).format(value)
   return `${formatted} ${SIZE_UNITS[exp]}`
 }
+
+/** The CLDR plural category of `n` — `one`, `few`, `many`, `other` — for a catalog that lists its forms by name. */
+export function pluralCategory(n: number, locale?: Locale): Intl.LDMLPluralRule {
+  return new Intl.PluralRules(tag(locale)).select(n)
+}

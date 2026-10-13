@@ -1,8 +1,10 @@
-// Public publishing (issue #77): share links today; published sites, versions
-// and export follow in later phases and add their types here.
+// Public publishing (issue #77): share links, published sites with their
+// versions and domains, and export.
 //
 // Buildless package: no enums, no relative cross-file imports (see
 // src/index.ts).
+
+import type { Locale } from '@knowledge/contracts/core';
 
 // ---------------------------------------------------------------------------
 // Share links (docs/features/43)
@@ -405,13 +407,16 @@ export function slugifyPath(text: string): string {
 }
 
 /**
- * The URL of a site's root. With PUBLISH_BASE_DOMAIN set, a subdomain on the
- * scheme WEB_BASE_URL uses; without it, path mode under the app's own origin.
+ * The URL of a site's root. A verified custom domain wins (it is the name the
+ * owner chose, so canonical links use it); then a subdomain of
+ * PUBLISH_BASE_DOMAIN; without either, path mode under the app's own origin.
+ * The scheme follows WEB_BASE_URL, so a plain-http dev stack links plain http.
  */
-export function siteRootUrl(slug: string, opts: { baseDomain: string; webBaseUrl: string }): string {
+export function siteRootUrl(slug: string, opts: { baseDomain: string; webBaseUrl: string; domain?: string | null }): string {
   const web = opts.webBaseUrl.replace(/\/+$/, '');
+  const scheme = web.startsWith('http://') ? 'http' : 'https';
+  if (opts.domain) return `${scheme}://${opts.domain}`;
   if (opts.baseDomain) {
-    const scheme = web.startsWith('http://') ? 'http' : 'https';
     const port = (() => {
       try {
         const u = new URL(web);
@@ -436,6 +441,102 @@ export const SITE_PATH_PREFIX = '/pub/';
 export function sitePagePath(prefix: string, versionSlug: string | null, slugPath: string): string {
   const parts = [versionSlug, ...slugPath.split('/')].filter((p): p is string => !!p).map(encodeURIComponent);
   return `${prefix}/${parts.join('/')}`;
+}
+
+/**
+ * The plain-markdown URL of a page, below the site's root prefix: its slug
+ * path plus `.md` (the home keeps its own slug here, so `/welcome.md` works
+ * beside `/`). A page at slug path `''` — the root of a site published from
+ * one page — is `index.md` under its version.
+ */
+export function siteMarkdownPath(prefix: string, versionSlug: string | null, slugPath: string): string {
+  if (!slugPath) return `${sitePagePath(prefix, versionSlug, '').replace(/\/$/, '')}/index.md`;
+  return `${sitePagePath(prefix, versionSlug, slugPath)}.md`;
+}
+
+/**
+ * A site's home page: the root page of a site published from one page (slug
+ * path `''`), otherwise the first top-level page in reading order. The API's
+ * resolve, its sitemap and llms.txt, and the web reader all ask this, so a
+ * page never has one URL in the nav and another in the sitemap.
+ */
+export function siteHomeDocumentId(
+  tree: ReadonlyArray<{ documentId: string; parentId: string | null; slugPath: string; position: number }>,
+): string | null {
+  return (
+    tree.find((n) => n.slugPath === '')?.documentId ??
+    tree.filter((n) => n.parentId === null).sort((a, b) => a.position - b.position)[0]?.documentId ??
+    null
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Custom domains (issue #77 phase 2b)
+//
+// A site may also answer on hostnames its owner controls. A name is served
+// only once proven: a TXT record at `_knowledge.<hostname>` holding the
+// domain's token. Unique across the deployment.
+// ---------------------------------------------------------------------------
+
+/** Most hostnames one site may claim. */
+export const SITE_MAX_DOMAINS = 5;
+
+/** The TXT record proving control of `<hostname>` lives at `<label>.<hostname>`. */
+export const SITE_DOMAIN_TXT_LABEL = '_knowledge';
+/** …and holds `<prefix><token>`. */
+export const SITE_DOMAIN_TXT_PREFIX = 'knowledge-site-verification=';
+
+/**
+ * Why the last check did not verify a domain:
+ * - `txtMissing`: DNS answered, and no record carries our prefix;
+ * - `txtMismatch`: a record carries our prefix, with another token;
+ * - `dnsError`: DNS did not answer (timeout, SERVFAIL); tried again later.
+ */
+export const SITE_DOMAIN_CHECK_ERRORS = ['txtMissing', 'txtMismatch', 'dnsError'] as const;
+export type SiteDomainCheckError = (typeof SITE_DOMAIN_CHECK_ERRORS)[number];
+
+const HOST_LABEL_RE = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
+
+/**
+ * A hostname as typed or pasted (`Docs.Acme.com.`, `https://docs.acme.com/`,
+ * `документы.рф`), reduced to the one spelling the platform stores and
+ * compares: lower-case ASCII (IDNA), no scheme, path, port or trailing dot.
+ * Null for anything that is not a public DNS name: one label, an IP address,
+ * a port, credentials.
+ */
+export function normalizeHostname(raw: string): string | null {
+  let value = raw.trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '');
+  value = value.replace(/[/?#].*$/, '').replace(/\.$/, '');
+  if (!value || /[:@\s\\]/.test(value)) return null;
+  let host: string;
+  try {
+    host = new URL(`http://${value}`).hostname;
+  } catch {
+    return null;
+  }
+  if (host.length > 253) return null;
+  const labels = host.split('.');
+  if (labels.length < 2 || !labels.every((l) => HOST_LABEL_RE.test(l))) return null;
+  // An all-digit last label is an IPv4 address, never a TLD.
+  if (/^[0-9]+$/.test(labels[labels.length - 1])) return null;
+  return host;
+}
+
+export interface SiteDomainSummary {
+  id: string;
+  hostname: string;
+  /** Served, and given a certificate, only once verified. */
+  verified: boolean;
+  verifiedAt: string | null;
+  lastCheckAt: string | null;
+  lastError: SiteDomainCheckError | null;
+  /** The TXT record to create: its name… */
+  txtName: string;
+  /** …and its value. */
+  txtValue: string;
+  /** Where the hostname's CNAME (or A record) should point: this deployment's site host for the site. */
+  dnsTarget: string;
+  createdAt: string;
 }
 
 export interface SiteVersionSummary {
@@ -467,9 +568,13 @@ export interface PublishedSiteSummary {
   theme: SiteTheme;
   seoIndexable: boolean;
   defaultVersionId: string | null;
-  /** Where the site is (or would be) served. */
+  /** Where the site is (or would be) served: its first verified domain, else its subdomain or path. */
   url: string;
   versions: SiteVersionSummary[];
+  /** Its own hostnames, oldest first (issue #77 phase 2b). */
+  domains: SiteDomainSummary[];
+  /** The Ask widget (issue #77 phase 3). */
+  ask: SiteAskSettings;
   createdAt: string;
   updatedAt: string;
 }
@@ -484,9 +589,204 @@ export interface ProjectSiteResponse {
     ceiling: boolean;
     /** PUBLISH_BASE_DOMAIN, or null in path mode. */
     baseDomain: string | null;
+    /** SITE_CUSTOM_DOMAINS: whether this deployment routes custom hostnames at all. */
+    customDomains: boolean;
     /** A suggestion for a new site, from the project name. */
     suggestedSlug: string;
+    /** PUBLIC_ASK_DAILY_BUDGET: the most answers a day any site may give; 0 turns Ask off everywhere. */
+    askDailyCeiling: number;
+    /** The workspace has a model configured, so Ask can answer at all. */
+    askModelConfigured: boolean;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Audiences (issue #77 phase 3, docs/features/44)
+//
+// A site can keep pages from the public. A rule on a page restricts it and
+// everything below it to `members` (anyone with a role in the workspace,
+// signed in through the app) or `visitors` (a person the customer's own
+// backend vouches for with a signed JWT, optionally only when its claims
+// match). Rules only restrict, and they add up down the tree, so a subpage is
+// never more open than its parent: its URL, which carries the parent's slug,
+// and its place in the nav could not be shown without the parent.
+//
+// Every version's snapshot rows carry the folded result (`audience` +
+// `audienceClaims`), restamped whenever a rule changes, so a reader filters
+// on the row alone and a frozen version follows the rules of today.
+// ---------------------------------------------------------------------------
+
+/** Who a snapshot row is shown to. `public` is the absence of any rule above it. */
+export const SITE_AUDIENCES = ['public', 'visitors', 'members'] as const;
+export type SiteAudience = (typeof SITE_AUDIENCES)[number];
+
+/** What a rule may ask for. `public` is not a rule: removing the rules is. */
+export const SITE_AUDIENCE_RULE_KINDS = ['visitors', 'members'] as const;
+export type SiteAudienceRuleKind = (typeof SITE_AUDIENCE_RULE_KINDS)[number];
+
+/**
+ * Claim requirements of a `visitors` rule: each key must be in the visitor's
+ * JWT with a value (or, for an array claim, any element) among the listed
+ * ones, e.g. `{ "plan": ["pro", "enterprise"] }`. Null or `{}`: any valid
+ * token will do.
+ */
+export type SiteAudienceClaims = Record<string, string[]>;
+
+export const SITE_AUDIENCE_CLAIM_LIMITS = { keys: 10, values: 50, keyChars: 64, valueChars: 200 } as const;
+const CLAIM_KEY = /^[A-Za-z0-9_.:-]+$/;
+
+/**
+ * Who is reading. `member` is a workspace member signed in through the app,
+ * and sees every page; `visitor` carries the claims of the JWT it signed in
+ * with.
+ */
+export type SiteViewer =
+  | { kind: 'anonymous' }
+  | { kind: 'member' }
+  | { kind: 'visitor'; claims: Record<string, unknown> };
+
+export type SiteViewerKind = SiteViewer['kind'];
+
+/** Why a claims object is refused, as field paths; empty when it is fine. */
+export function siteAudienceClaimsErrors(input: unknown): string[] {
+  if (input === null || input === undefined) return [];
+  if (typeof input !== 'object' || Array.isArray(input)) return ['claims'];
+  const entries = Object.entries(input as Record<string, unknown>);
+  const errors: string[] = [];
+  if (entries.length > SITE_AUDIENCE_CLAIM_LIMITS.keys) errors.push('claims');
+  for (const [key, values] of entries) {
+    if (!key || key.length > SITE_AUDIENCE_CLAIM_LIMITS.keyChars || !CLAIM_KEY.test(key)) errors.push(`claims.${key}`);
+    else if (
+      !Array.isArray(values) ||
+      values.length === 0 ||
+      values.length > SITE_AUDIENCE_CLAIM_LIMITS.values ||
+      values.some((v) => typeof v !== 'string' || !v.trim() || v.length > SITE_AUDIENCE_CLAIM_LIMITS.valueChars)
+    ) {
+      errors.push(`claims.${key}`);
+    }
+  }
+  return errors;
+}
+
+/** Trimmed, deduplicated and key-sorted; null when nothing is required. Assumes `siteAudienceClaimsErrors` passed. */
+export function normalizeAudienceClaims(input: unknown): SiteAudienceClaims | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const out: SiteAudienceClaims = {};
+  for (const key of Object.keys(input).sort()) {
+    const values = (input as Record<string, unknown>)[key];
+    if (!Array.isArray(values)) continue;
+    const kept = [...new Set(values.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter(Boolean))];
+    if (kept.length) out[key] = kept;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** Both sets of requirements at once: a key in both keeps only the values both allow (possibly none, which nobody matches). */
+export function mergeAudienceClaims(a: SiteAudienceClaims | null, b: SiteAudienceClaims | null): SiteAudienceClaims | null {
+  if (!a) return b;
+  if (!b) return a;
+  const out: SiteAudienceClaims = { ...a };
+  for (const [key, values] of Object.entries(b)) out[key] = key in out ? out[key].filter((v) => values.includes(v)) : values;
+  return Object.fromEntries(Object.entries(out).sort(([x], [y]) => x.localeCompare(y)));
+}
+
+/** Does a visitor's token satisfy the requirements? Only string, number and boolean claim values compare. */
+export function audienceClaimsMatch(required: SiteAudienceClaims | null | undefined, claims: Record<string, unknown>): boolean {
+  if (!required) return true;
+  for (const [key, allowed] of Object.entries(required)) {
+    const raw = claims[key];
+    const values = Array.isArray(raw) ? raw : [raw];
+    const ok = values.some((v) => (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') && allowed.includes(String(v)));
+    if (!ok) return false;
+  }
+  return true;
+}
+
+export interface SiteAudienceRuleInput {
+  audience: SiteAudienceRuleKind;
+  claims: SiteAudienceClaims | null;
+}
+
+/** A row's stamp: the strictest audience on its way down from the top, with every `visitors` rule's claims combined. */
+export interface SiteAudienceStamp {
+  audience: SiteAudience;
+  claims: SiteAudienceClaims | null;
+}
+
+const AUDIENCE_RANK: Record<SiteAudience, number> = { public: 0, visitors: 1, members: 2 };
+
+/**
+ * Fold the rules met on a page's path (`documents.path` ids, top first,
+ * the page itself last) into its stamp. `members` outranks `visitors`, which
+ * outranks `public`; claims are only kept while the stamp is `visitors`.
+ */
+export function foldSiteAudience(pathIds: readonly string[], rules: ReadonlyMap<string, SiteAudienceRuleInput>): SiteAudienceStamp {
+  let audience: SiteAudience = 'public';
+  let claims: SiteAudienceClaims | null = null;
+  for (const id of pathIds) {
+    const rule = rules.get(id);
+    if (!rule) continue;
+    if (AUDIENCE_RANK[rule.audience] > AUDIENCE_RANK[audience]) audience = rule.audience;
+    if (rule.audience === 'visitors') claims = mergeAudienceClaims(claims, rule.claims);
+  }
+  return { audience, claims: audience === 'visitors' ? claims : null };
+}
+
+/** May this viewer read a row with this stamp? */
+export function siteViewerCanSee(stamp: { audience: string; audienceClaims?: unknown }, viewer: SiteViewer): boolean {
+  if (stamp.audience === 'public') return true;
+  if (viewer.kind === 'member') return true;
+  if (stamp.audience === 'visitors' && viewer.kind === 'visitor') {
+    return audienceClaimsMatch((stamp.audienceClaims ?? null) as SiteAudienceClaims | null, viewer.claims);
+  }
+  return false;
+}
+
+export interface SiteAudienceRule {
+  documentId: string;
+  documentTitle: string;
+  audience: SiteAudienceRuleKind;
+  claims: SiteAudienceClaims | null;
+  updatedAt: string;
+}
+
+// GET /v1/sites/:id/audiences
+export interface SiteAudiencesResponse {
+  rules: SiteAudienceRule[];
+  visitorAuth: {
+    /** A JWT secret is set: visitor sign-in works. */
+    configured: boolean;
+    setAt: string | null;
+    /** SETTINGS_ENCRYPTION_KEY is set, so a secret can be stored at all. */
+    canStore: boolean;
+  };
+  /** How long a sign-in lasts, SITE_VISITOR_TTL_MIN. */
+  sessionTtlMinutes: number;
+}
+
+// POST /v1/sites/:id/visitor-secret — the only time the secret is shown.
+export interface SiteVisitorSecretResponse {
+  secret: string;
+  setAt: string;
+}
+
+// POST /v1/sites/:id/sign-in
+export interface SiteSignInResponse {
+  /** Where to send the browser: the site's own session route, carrying a one-time code. */
+  url: string;
+}
+
+/** The cookie a site's sign-in sets on the site's own origin. */
+export function siteSessionCookieName(siteId: string): string {
+  return `kn_site_${siteId}`;
+}
+
+/** The query parameter a customer's backend appends to any site URL to sign a visitor in. */
+export const SITE_VISITOR_TOKEN_PARAM = 'jwt_token';
+
+/** The site's session route, on whatever origin the reader is on (Caddy and Vite strip `/api`). */
+export function publicSiteSessionPath(siteId: string): string {
+  return `/v1/public/sites/${encodeURIComponent(siteId)}/session`;
 }
 
 // ---------------------------------------------------------------------------
@@ -524,6 +824,12 @@ export interface PublicSitePage {
   markdown: string;
   /** When the published revision was finalized. */
   updatedAt: string | null;
+  /**
+   * The same page in the site's other built versions: each version and the
+   * page's path there below the site root (the home is the version root).
+   * Drives `<link rel="alternate">` and lets the switcher link straight to it.
+   */
+  alternates: { version: PublicSiteVersionRef; path: string }[];
 }
 
 // GET /v1/public/sites/resolve?slug=|host=&path=&from=
@@ -537,7 +843,18 @@ export interface PublicSiteResolveResponse {
     logo: PublicSiteLogo;
     /** Absolute URL of the site root, for canonical links. */
     rootUrl: string;
+    /**
+     * Some pages of this version are not public (issue #77 phase 3): the
+     * reader offers members a way to sign in. Says nothing about which pages.
+     */
+    restricted: boolean;
+    /** The app page that signs a member in to this site; the reader appends `return`. Null when nothing is restricted. */
+    signInUrl: string | null;
+    /** The site answers questions (issue #77 phase 3): the reader offers Ask. */
+    ask: boolean;
   };
+  /** Who the API read this as: decides what `tree` and `page` contain. */
+  viewer: SiteViewerKind;
   version: PublicSiteVersionRef & { id: string; builtAt: string };
   versions: PublicSiteVersionRef[];
   tree: PublicSiteTreeNode[];
@@ -545,7 +862,292 @@ export interface PublicSiteResolveResponse {
   page: PublicSitePage | null;
 }
 
+// GET /v1/public/sites/:siteId/search?q=&version= (issue #77 phase 2b-2)
+
+/** Shorter queries answer nothing: one letter matches most of a site. */
+export const SITE_SEARCH_MIN_CHARS = 2;
+export const SITE_SEARCH_MAX_CHARS = 200;
+export const SITE_SEARCH_MAX_RESULTS = 20;
+
+/** A run of snippet text. `hit` marks words the query matched; the reader highlights them, never as HTML. */
+export interface PublicSiteSearchSnippetPart {
+  text: string;
+  hit: boolean;
+}
+
+export interface PublicSiteSearchResult {
+  documentId: string;
+  title: string;
+  slugPath: string;
+  /** Empty when the page has no body text; the title matched. */
+  snippet: PublicSiteSearchSnippetPart[];
+}
+
+export interface PublicSiteSearchResponse {
+  results: PublicSiteSearchResult[];
+}
+
+/** The search route of a site; `version` is a version slug, omitted for the default. */
+export function publicSiteSearchPath(siteId: string): string {
+  return `/v1/public/sites/${encodeURIComponent(siteId)}/search`;
+}
+
+// ---------------------------------------------------------------------------
+// Ask (issue #77 phase 3, docs/features/44)
+//
+// A site may answer questions from its own published pages: in its reader,
+// and in a widget other sites embed (`<script src="<site>/widget.js">`). The
+// answer is one model call over passages retrieved from the version's
+// snapshot only, the passages the viewer may read, with every citation
+// settled server-side against what was retrieved. Nothing is stored; each
+// answer counts against the site's daily budget.
+// ---------------------------------------------------------------------------
+
+export const SITE_ASK_MIN_CHARS = 3;
+export const SITE_ASK_MAX_CHARS = 500;
+/** The most sites that may frame the widget. */
+export const SITE_EMBED_ORIGINS_MAX = 20;
+/** The highest per-site daily budget an admin may ask for; the env ceiling still applies. */
+export const SITE_ASK_BUDGET_MAX = 100_000;
+
+export interface SiteAskSettings {
+  enabled: boolean;
+  /** Answers a day this site asks for; null takes PUBLIC_ASK_DAILY_BUDGET. */
+  dailyBudget: number | null;
+  /** What applies: the asked budget under the env ceiling. 0 = Ask does not answer. */
+  effectiveDailyBudget: number;
+  /** Origins allowed to frame the widget (`Content-Security-Policy: frame-ancestors`). */
+  embedOrigins: string[];
+}
+
+/** The budget that applies: what the site asks for (null = the ceiling), never above the ceiling. */
+export function effectiveSiteAskBudget(asked: number | null, ceiling: number): number {
+  return Math.max(0, Math.min(asked ?? ceiling, ceiling));
+}
+
+/**
+ * An embed origin as stored: `scheme://host[:port]`, lower-cased, nothing
+ * after it. https only, except plain http on a loopback host for local
+ * testing. Null for anything else, so a path, a wildcard or a pasted page URL
+ * with a query is refused rather than guessed at — except that a pasted page
+ * URL is reduced to its origin, which is what anyone pasting one means.
+ */
+export function normalizeEmbedOrigin(raw: string): string | null {
+  const value = raw.trim();
+  if (!value || value.length > 300 || /[\s*'"]/.test(value)) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password) return null;
+  const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) return null;
+  if (!url.hostname.includes('.') && !loopback) return null;
+  return url.origin.toLowerCase();
+}
+
+// POST /v1/public/sites/:siteId/ask
+export interface PublicSiteAskRequest {
+  question: string;
+  /** A version slug; omitted = the default version. */
+  version?: string;
+}
+
+/** A passage an answer rests on, as a public page of the site. */
+export interface PublicSiteAskSource {
+  /** `S1`, `S2`, …: the label the answer's `[S#]` markers name. */
+  cite: string;
+  documentId: string;
+  title: string;
+  /** Headings above the passage, outermost first; the reader links to the last one's anchor. */
+  headingPath: string[];
+  /** The page's absolute URL on the site, without an anchor. */
+  url: string;
+}
+
+export interface PublicSiteAskResponse {
+  /** Markdown with `[S#]` markers, each naming one of `sources`; empty when nothing on the site matched. */
+  answer: string;
+  /** The sources the answer cites, in label order. */
+  sources: PublicSiteAskSource[];
+}
+
+/** The Ask route of a site. */
+export function publicSiteAskPath(siteId: string): string {
+  return `/v1/public/sites/${encodeURIComponent(siteId)}/ask`;
+}
+
+// GET /v1/public/sites/widget?slug=|host= — what the widget's frame needs.
+export interface PublicSiteWidgetResponse {
+  site: {
+    id: string;
+    title: string;
+    theme: SiteTheme;
+    logo: PublicSiteLogo;
+    rootUrl: string;
+  };
+  /** The origins that may frame it; the site's own are always allowed. */
+  embedOrigins: string[];
+}
+
+/** The path below a site root that serves the widget's frame. A top-level page slugged `_widget` is shadowed by it. */
+export const SITE_WIDGET_PATH = '/_widget';
+
 /** The public attachment route for an attachment of a page in a version's snapshot. */
 export function publicSiteAttachmentPath(siteId: string, versionId: string, attachmentId: string): string {
   return `/v1/public/sites/${encodeURIComponent(siteId)}/versions/${encodeURIComponent(versionId)}/attachments/${encodeURIComponent(attachmentId)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Export (issue #77 phase 2c, docs/features/45)
+//
+// A page, a page and its subpages, or a whole project, written out as a file a
+// member downloads: markdown sources in a ZIP, an offline HTML bundle, or a
+// PDF. The worker collects and packages; the web renders the HTML, so the
+// reader's parser stays the only one (`renderExport`, apps/web).
+// ---------------------------------------------------------------------------
+
+export const EXPORT_SCOPES = ['page', 'subtree', 'project'] as const;
+export type ExportScope = (typeof EXPORT_SCOPES)[number];
+
+/**
+ * What an export can be written as. `pdf` needs a Gotenberg sidecar
+ * (GOTENBERG_URL); the other two need nothing beyond the worker. DOCX is not
+ * here: Gotenberg converts only *to* PDF, and a format the code cannot emit
+ * must not be offered.
+ */
+export const EXPORT_FORMATS = ['zip', 'html', 'pdf'] as const;
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
+/** queued → running → completed | failed; a completed file becomes `expired` after EXPORT_TTL_HOURS. */
+export const EXPORT_STATUSES = ['queued', 'running', 'completed', 'failed', 'expired'] as const;
+export type ExportStatus = (typeof EXPORT_STATUSES)[number];
+
+/** Still in flight: the exports page polls while any row says so. */
+export function isActiveExportStatus(status: string): boolean {
+  return status === 'queued' || status === 'running';
+}
+
+/** What the worker is doing right now, as a message key under `export.stage.*` (web) — never free text. */
+export const EXPORT_STAGES = ['collecting', 'rendering', 'converting', 'packaging'] as const;
+export type ExportStage = (typeof EXPORT_STAGES)[number];
+
+/** Why an export failed, as a key the web translates; `message` carries the detail. */
+export const EXPORT_ERROR_CODES = ['tooLarge', 'renderFailed', 'convertFailed', 'formatUnavailable', 'timedOut', 'failed'] as const;
+export type ExportErrorCode = (typeof EXPORT_ERROR_CODES)[number];
+
+export interface ExportJobSummary {
+  id: string;
+  workspaceId: string;
+  scope: ExportScope;
+  format: ExportFormat;
+  documentId: string | null;
+  projectId: string | null;
+  /** The branch asked for; null = each page's default branch. */
+  branch: string | null;
+  /** The page's or project's name when the export was asked for. */
+  title: string;
+  status: ExportStatus;
+  stage: ExportStage | null;
+  pageCount: number | null;
+  sizeBytes: number | null;
+  error: { code: ExportErrorCode; message: string } | null;
+  requestedBy: string;
+  createdAt: string;
+  completedAt: string | null;
+  /** When the file is deleted; set once it is written. */
+  expiresAt: string | null;
+}
+
+export interface ExportListResponse {
+  exports: ExportJobSummary[];
+}
+
+export interface ExportCapabilitiesResponse {
+  /** Formats this deployment can write; `pdf` is false without GOTENBERG_URL. */
+  formats: Record<ExportFormat, boolean>;
+  maxPages: number;
+  ttlHours: number;
+}
+
+/** `manifest.json` at the root of a ZIP export: enough for an import to rebuild the tree. */
+export const EXPORT_MANIFEST_VERSION = 1;
+
+export interface ExportManifestAttachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  /** Inside the archive. */
+  path: string;
+}
+
+export interface ExportManifestPage {
+  documentId: string;
+  title: string;
+  category: string;
+  /** The nearest exported ancestor; null at the top of the export. */
+  parentId: string | null;
+  position: number;
+  depth: number;
+  revisionId: string;
+  branch: string;
+  /** The markdown source, frontmatter included, inside the archive. */
+  path: string;
+  attachments: ExportManifestAttachment[];
+}
+
+export interface ExportManifest {
+  format: 'knowledge-export';
+  version: typeof EXPORT_MANIFEST_VERSION;
+  exportedAt: string;
+  workspaceId: string;
+  scope: ExportScope;
+  rootDocumentId: string | null;
+  projectId: string | null;
+  branch: string | null;
+  title: string;
+  /** Reading order: parents before children, siblings by position then title. */
+  pages: ExportManifestPage[];
+}
+
+/**
+ * The worker's request to the web renderer (`POST /_internal/export/render`).
+ * Every path is relative to the root of what is being built: the bundle's
+ * root for `html`, Gotenberg's flat upload folder for `pdf`.
+ */
+export interface ExportRenderRequest {
+  format: Exclude<ExportFormat, 'zip'>;
+  locale: Locale;
+  title: string;
+  exportedAt: string;
+  pages: ExportRenderPage[];
+  /** attachmentId → where its bytes will sit. An attachment missing here is dropped from the output. */
+  assets: Record<string, string>;
+}
+
+export interface ExportRenderPage {
+  documentId: string;
+  title: string;
+  depth: number;
+  /** `html`: the page's file (`pages/guides/install.html`). Unused by `pdf`, which is one document. */
+  path: string;
+  /** Frontmatter already stripped. */
+  markdown: string;
+}
+
+export interface ExportRenderResponse {
+  /** Text files to write beside the assets: `index.html`, page files, scripts. */
+  files: { path: string; content: string }[];
+}
+
+/** The window flag the PDF's print script raises once diagrams are drawn; Gotenberg waits for it. */
+export const EXPORT_PRINT_READY_FLAG = '__KN_PRINT_READY__';
+
+export interface ExportDownloadResponse {
+  /** A presigned URL that downloads the file; valid for a few minutes. */
+  url: string;
+  filename: string;
 }

@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleInit } fr
 import type { KnowledgeEvent } from '@knowledge/contracts';
 import { EventsSubscriber } from '../events/events.subscriber.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SiteAudienceStamper } from './site-audience.stamper.js';
 import { SiteBuildProducer } from './site-build.producer.js';
 
 /**
@@ -28,6 +29,11 @@ export const SITE_REBUILD_EVENTS: ReadonlySet<string> = new Set([
  * in), and the live versions that already publish it (a page moved out to
  * another project must leave the old site too). Frozen versions are never
  * touched — that is what frozen means.
+ *
+ * Who may read a page is another matter (issue #77 phase 3): audience rules
+ * fold down `documents.path`, so a page that moved may have moved under a
+ * rule, or out from under one. Every site that publishes it, frozen versions
+ * included, is restamped at once rather than at its next build.
  */
 @Injectable()
 export class SiteRebuildTrigger implements OnModuleInit, OnApplicationBootstrap {
@@ -37,6 +43,7 @@ export class SiteRebuildTrigger implements OnModuleInit, OnApplicationBootstrap 
     private readonly prisma: PrismaService,
     private readonly events: EventsSubscriber,
     private readonly producer: SiteBuildProducer,
+    private readonly audiences: SiteAudienceStamper,
   ) {}
 
   onModuleInit(): void {
@@ -80,5 +87,15 @@ export class SiteRebuildTrigger implements OnModuleInit, OnApplicationBootstrap 
     ]);
     const ids = new Set([...byProject, ...byPage].map((v) => v.id));
     for (const id of ids) await this.producer.enqueue(id);
+    if (event.type === 'document.updated') await this.restamp(event.documentId);
+  }
+
+  /** Restamp the sites that publish this page and have any audience rule; a site without rules has nothing to move under. */
+  private async restamp(documentId: string): Promise<void> {
+    const sites = await this.prisma.publishedSite.findMany({
+      where: { audienceRules: { some: {} }, versions: { some: { pages: { some: { documentId } } } } },
+      select: { id: true },
+    });
+    for (const site of sites) await this.audiences.restamp(site.id);
   }
 }

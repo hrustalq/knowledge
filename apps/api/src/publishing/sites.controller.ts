@@ -1,10 +1,27 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { ProjectSiteResponse, PublishedSiteSummary, SiteVersionSummary } from '@knowledge/contracts';
+import type {
+  ProjectSiteResponse,
+  PublishedSiteSummary,
+  SiteAudienceRule,
+  SiteAudiencesResponse,
+  SiteDomainSummary,
+  SiteVersionSummary,
+  SiteVisitorSecretResponse,
+} from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
-import { CreateSiteDto, CreateSiteVersionDto, UpdateSiteDto, UpdateSiteVersionDto } from './sites.dto.js';
+import { SiteAudiencesService } from './site-audiences.service.js';
+import { SiteDomainsService } from './site-domains.service.js';
+import {
+  AddSiteDomainDto,
+  CreateSiteDto,
+  CreateSiteVersionDto,
+  SetSiteAudienceRuleDto,
+  UpdateSiteDto,
+  UpdateSiteVersionDto,
+} from './sites.dto.js';
 import { SitesService } from './sites.service.js';
 
 /**
@@ -16,7 +33,11 @@ import { SitesService } from './sites.service.js';
 @ApiTags('publishing')
 @Controller('v1')
 export class SitesController {
-  constructor(private readonly sites: SitesService) {}
+  constructor(
+    private readonly sites: SitesService,
+    private readonly domains: SiteDomainsService,
+    private readonly audiences: SiteAudiencesService,
+  ) {}
 
   @Get('projects/:id/site')
   @Access('viewer', 'project')
@@ -106,5 +127,79 @@ export class SitesController {
   @ApiOperation({ summary: 'Delete a version and its snapshot. The default version cannot be deleted' })
   deleteVersion(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<{ deleted: true }> {
     return this.sites.deleteVersion(id, principal?.userId);
+  }
+
+  @Post('sites/:id/domains')
+  @Access('admin', 'site')
+  @ApiOperation({ summary: 'Claim a hostname for the site. It is served once a DNS TXT record proves control of it' })
+  @ApiResponse({ status: 400, description: 'Not a hostname, or one of the platform’s own (details.reason site.domainInvalid | site.domainReserved)' })
+  @ApiResponse({ status: 403, description: 'SITE_CUSTOM_DOMAINS is off (details.reason site.customDomainsOff)' })
+  @ApiResponse({ status: 409, description: 'Verified for another site, already on this one, or the limit is reached' })
+  addDomain(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddSiteDomainDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<SiteDomainSummary> {
+    return this.domains.add(id, dto.hostname, principal?.userId);
+  }
+
+  @Post('site-domains/:id/verify')
+  @Access('admin', 'site-domain')
+  @ApiOperation({ summary: 'Look the TXT record up now. Answers the domain either way; `lastError` says why it is not verified' })
+  verifyDomain(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<SiteDomainSummary> {
+    return this.domains.verify(id, principal?.userId);
+  }
+
+  @Delete('site-domains/:id')
+  @Access('admin', 'site-domain')
+  @ApiOperation({ summary: 'Remove a hostname from the site. It stops resolving at once and is free to claim again' })
+  removeDomain(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<{ deleted: true }> {
+    return this.domains.remove(id, principal?.userId);
+  }
+
+  @Get('sites/:id/audiences')
+  @Access('admin', 'site')
+  @ApiOperation({ summary: 'Who may read which part of the site: the audience rules and whether visitor sign-in is set up' })
+  listAudiences(@Param('id', ParseUUIDPipe) id: string): Promise<SiteAudiencesResponse> {
+    return this.audiences.list(id);
+  }
+
+  @Put('sites/:id/audiences/:documentId')
+  @Access('admin', 'site')
+  @ApiOperation({ summary: 'Keep a page and everything below it from the public. Applies to every version at once' })
+  @ApiResponse({ status: 400, description: 'Not a page of this site, or the claims are malformed (details.reason site.audiencePageNotInSite | site.audienceClaimsInvalid)' })
+  setAudience(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @Body() dto: SetSiteAudienceRuleDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<SiteAudienceRule> {
+    return this.audiences.setRule(id, documentId, dto, principal?.userId);
+  }
+
+  @Delete('sites/:id/audiences/:documentId')
+  @Access('admin', 'site')
+  @ApiOperation({ summary: 'Remove a page’s rule: it is public again unless a rule above it says otherwise' })
+  removeAudience(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<{ deleted: true }> {
+    return this.audiences.removeRule(id, documentId, principal?.userId);
+  }
+
+  @Post('sites/:id/visitor-secret')
+  @Access('admin', 'site')
+  @ApiOperation({ summary: 'Set a new secret for visitor JWTs (HS256), shown once. The old one stops working, and its sessions end' })
+  @ApiResponse({ status: 409, description: 'SETTINGS_ENCRYPTION_KEY is not set (details.reason site.visitorSecretNeedsKey)' })
+  rotateVisitorSecret(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<SiteVisitorSecretResponse> {
+    return this.audiences.rotateVisitorSecret(id, principal?.userId);
+  }
+
+  @Delete('sites/:id/visitor-secret')
+  @Access('admin', 'site')
+  @ApiOperation({ summary: 'Turn visitor sign-in off. Open visitor sessions end at once' })
+  clearVisitorSecret(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<{ deleted: true }> {
+    return this.audiences.clearVisitorSecret(id, principal?.userId);
   }
 }

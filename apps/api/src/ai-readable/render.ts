@@ -45,8 +45,7 @@ const LEADING_H1 = /^#[ \t]+\S/;
  * A body that already opens with an H1 keeps it rather than getting a second.
  */
 export function renderPageMarkdown(page: PageContent, meta: PageMeta, opts: { frontmatter: boolean }): string {
-  const body = page.body.replace(/^\s*\n/, '');
-  const text = LEADING_H1.test(body) ? body : `# ${page.title}\n\n${body}`;
+  const text = titledMarkdown(page.title, page.body);
   if (!opts.frontmatter) return text;
 
   const own = page.frontmatter ?? {};
@@ -63,6 +62,12 @@ export function renderPageMarkdown(page: PageContent, meta: PageMeta, opts: { fr
     },
   };
   return composeFrontmatter(text, data);
+}
+
+/** `# {title}\n\n{body}`, or the body alone when it already opens with an H1. */
+export function titledMarkdown(title: string, rawBody: string): string {
+  const body = rawBody.replace(/^\s*\n/, '');
+  return LEADING_H1.test(body) ? body : `# ${title}\n\n${body}`;
 }
 
 /**

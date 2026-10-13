@@ -19,6 +19,7 @@ import { KnowledgeIssuesModule } from '../feedback/knowledge-issues.module.js';
 import { VerificationCoreModule } from '../verification/verification-core.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { PublishingCoreModule } from '../publishing/publishing-core.module.js';
+import { ExportCoreModule } from '../export/export-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -64,6 +65,9 @@ import { McpService } from './mcp.service.js';
     TemplatesCoreModule,
     // knowledge_share_page (docs/features/43). Controller-free and auth-free.
     PublishingCoreModule,
+    // knowledge_export / knowledge_get_export (docs/features/45). Controller-free;
+    // queues the job, which the worker builds.
+    ExportCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

@@ -8,10 +8,10 @@ _before_ any graph or storage query is issued.
 
 `AUTH_MODE` switches the whole posture:
 
-| Mode                | Behaviour                                                                 |
-| ------------------- | -------------------------------------------------------------------------- |
-| `none` _(default)_  | Every request is a synthetic **dev principal** with full access             |
-| `api-key`           | `Authorization: Bearer` resolved against sessions or API keys               |
+| Mode               | Behaviour                                                       |
+| ------------------ | --------------------------------------------------------------- |
+| `none` _(default)_ | Every request is a synthetic **dev principal** with full access |
+| `api-key`          | `Authorization: Bearer` resolved against sessions or API keys   |
 
 `none` is what keeps the demo and local web flows working with no signup. It is
 also why **ACLs cannot be tested in dev mode** — bootstrap a key instead
@@ -46,6 +46,7 @@ is execution order**: `AuthGuard` → `AclGuard`.
    mints a ticket first with `POST /v1/auth/url-ticket` (header credential
    only; `@ReadKeyOk`) and puts that in `?token=`. `test/url-tickets.spec.ts`
    pins the rules.
+
 2. **`AclGuard`** reads `@Access(role, source)` metadata, resolves the target
    **workspace in PostgreSQL**, and 403s on failure.
 
@@ -91,14 +92,14 @@ cannot be demoted or removed.**
 
 Everything is hashed; nothing reversible is stored.
 
-| Secret          | Prefix | Storage                                       |
-| --------------- | ------ | --------------------------------------------- |
-| Password        | —      | **scrypt** via `node:crypto`, no dependencies |
-| Session token   | `ks_`  | SHA-256 in `sessions`                          |
-| API key         | `kn_`  | SHA-256 in `api_keys` (many per user)          |
-| Reset token     | `kr_`  | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN` (an invite: `AUTH_INVITE_TTL_HOURS`) |
-| Verify token    | `kv_`  | SHA-256 + the address it was sent to, single-use, TTL `AUTH_VERIFY_TTL_HOURS` |
-| URL ticket      | `kt_`  | SHA-256 key in Redis, `GETDEL` on use, TTL `AUTH_URL_TICKET_TTL_SEC` (60 s) |
+| Secret        | Prefix | Storage                                                                            |
+| ------------- | ------ | ---------------------------------------------------------------------------------- |
+| Password      | —      | **scrypt** via `node:crypto`, no dependencies                                      |
+| Session token | `ks_`  | SHA-256 in `sessions`                                                              |
+| API key       | `kn_`  | SHA-256 in `api_keys` (many per user)                                              |
+| Reset token   | `kr_`  | SHA-256, single-use, TTL `AUTH_RESET_TTL_MIN` (an invite: `AUTH_INVITE_TTL_HOURS`) |
+| Verify token  | `kv_`  | SHA-256 + the address it was sent to, single-use, TTL `AUTH_VERIFY_TTL_HOURS`      |
+| URL ticket    | `kt_`  | SHA-256 key in Redis, `GETDEL` on use, TTL `AUTH_URL_TICKET_TTL_SEC` (60 s)        |
 
 API keys are **shown once** — at bootstrap, or on Settings → Connect AI — and
 never retrievable. A key may be **read-only**, **pinned to one workspace**, or
@@ -177,10 +178,50 @@ cached: `PublicSharesService` resolves the `kp_` token and confines every read
 to the scope the link names; `PublicSitesService` resolves a live site (status,
 workspace switch, env ceiling) and reads only its version's snapshot
 (`site_version_pages`), never a branch head. Both answer 404 for anything
-outside. `PublicRateLimitGuard` caps them per IP, counting `X-Forwarded-For`
-only when the peer is internal (Caddy, the web SSR). The `share-link`, `site`
-and `site-version` sources resolve their ids to a workspace for the
-authenticated management routes, like every other source.
+outside. A site's files (`sitemap.xml`, `robots.txt`, `llms*.txt`, a page's
+`.md`) go through the same `PublicSitesService.find` and read the same
+snapshot rows. `GET /v1/public/domains/allow` is Caddy's on-demand TLS check:
+200 only for a hostname the platform routes to a site (an existing site's
+`<slug>.PUBLISH_BASE_DOMAIN`, or a custom domain proven by its TXT record),
+so certificates are never requested for names nobody claimed.
+`PublicRateLimitGuard` caps them per IP, counting `X-Forwarded-For` only when
+the peer is internal (Caddy, the web SSR). The `share-link`, `site`,
+`site-version` and `site-domain` sources resolve their ids to a workspace for
+the authenticated management routes, like every other source.
+
+A site may keep pages from the public (issue #77 phase 3, feature 44
+"Audiences"). That makes the public surface aware of a reader, but never of
+the app's session: a site sign-in is its own httpOnly `kn_site_<siteId>`
+cookie on the site's origin, mapped in Redis to a member (re-checked against
+`workspace_members` and `users.disabled_at` on every request) or a visitor
+(the claims of a customer-signed HS256 JWT, bound to the site's current
+secret). A member gets there through one authenticated route,
+`POST /v1/sites/:id/sign-in` (`viewer` on `site`), which mints a one-time code
+only for a return address that is one of the site's own; the public
+`…/session` route spends it. Every failure reads as anonymous, and a hidden
+page is a 404, never a 403.
+
+A site may also answer questions ([feature 44](../features/44-docs-portal.md#ask-phase-3)
+"Ask"): `POST /v1/public/sites/:siteId/ask` is the one public route that
+spends money, so it is the one whose limits **fail closed**. Reads fail open
+when Redis is down; Ask's per-address rate (`PUBLIC_ASK_RATE_PER_MIN`) and
+the site's daily budget (`askDailyBudget`, never above
+`PUBLIC_ASK_DAILY_BUDGET`) refuse instead. It retrieves only from the rows
+the reader may see (the same `visibleRows` and site cookie as a page read),
+runs with no principal and no tools, and is billed as `public_ask` with
+`userId` = the site's id, under the workspace's own AI budget. Embedding the
+widget elsewhere is not an API decision at all: the `/_widget` frame is a
+page of the site, same-origin with its API (no CORS), and its
+`frame-ancestors` header, built from the site's `embed_origins`, is the whole
+embed check.
+
+Exports ([feature 45](../features/45-export.md)) are member-only. Asking for
+one is `viewer` on the page or project it covers, so the guard resolves the
+workspace from that id. The `export` source covers the job itself, and the
+service narrows it further to the requester or an admin, since the row says who
+exported what. The web's `POST /_internal/export/render` is not an API route
+at all: the web server answers it only for an internal peer with no
+`X-Forwarded-*` header, which no request through Caddy can be.
 
 ## Limits
 

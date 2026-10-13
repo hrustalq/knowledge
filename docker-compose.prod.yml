@@ -152,6 +152,11 @@ services:
     restart: unless-stopped
     init: true
     env_file: [.env]
+    environment:
+      # Exports (docs/features/45): the worker asks the web container to render
+      # an export's HTML over the compose network, never through Caddy — the
+      # route answers only callers that came through no proxy.
+      WEB_INTERNAL_URL: http://web:5173
     volumes:
       - applogs:/app/logs
     depends_on:
@@ -186,6 +191,18 @@ services:
       start_period: 60s
       retries: 3
 
+  # PDF export (docs/features/45), opt-in: not started by `up -d`. To turn PDF
+  # on, `docker compose --profile gotenberg up -d gotenberg` and set
+  # GOTENBERG_URL=http://gotenberg:3000 in .env (~1 GB image: Chromium +
+  # LibreOffice). No ports: only the worker talks to it. Its Chromium is held
+  # to its own upload folder — a page can embed any URL, and whatever it
+  # fetched would be printed into a PDF the requester downloads.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    profiles: ["gotenberg"]
+    restart: unless-stopped
+    command: ["gotenberg", "--chromium-allow-list=^file:///tmp/.*", "--api-timeout=300s"]
+
   web:
     image: knowledge-web:${TAG:-latest}
     restart: unless-stopped
@@ -198,6 +215,14 @@ services:
       # Published sites (docs/features/44): hosts under this domain go to the
       # site reader. Interpolated from .env; empty = path mode (/pub/<slug>).
       PUBLISH_BASE_DOMAIN: ${PUBLISH_BASE_DOMAIN:-}
+      # The app's own host, which is never looked up as a site's custom domain
+      # (issue #77 phase 2b). Any other host is asked of the API once a minute.
+      # Serving sites on other hosts also needs the edge to route them here
+      # with TLS, which this deployment's does not yet (Caddyfile.sites.example).
+      WEB_BASE_URL: ${WEB_BASE_URL:-}
+      # Cached site page renders (issue #77 phase 2b-2), revalidated with the
+      # API on every request; 0 = off.
+      SITE_RENDER_CACHE_MB: ${SITE_RENDER_CACHE_MB:-32}
     ports:
       - "127.0.0.1:5173:5173"
     volumes:

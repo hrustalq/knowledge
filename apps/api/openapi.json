@@ -11503,7 +11503,8 @@
                 "chat-stream",
                 "review",
                 "suggest",
-                "glossary"
+                "glossary",
+                "public_ask"
               ],
               "type": "string"
             }
@@ -18687,6 +18688,500 @@
         ]
       }
     },
+    "/v1/sites/{id}/domains": {
+      "post": {
+        "operationId": "SitesController_addDomain",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSiteDomainDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Not a hostname, or one of the platform’s own (details.reason site.domainInvalid | site.domainReserved)"
+          },
+          "403": {
+            "description": "SITE_CUSTOM_DOMAINS is off (details.reason site.customDomainsOff)"
+          },
+          "409": {
+            "description": "Verified for another site, already on this one, or the limit is reached"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Claim a hostname for the site. It is served once a DNS TXT record proves control of it",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/site-domains/{id}/verify": {
+      "post": {
+        "operationId": "SitesController_verifyDomain",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Look the TXT record up now. Answers the domain either way; `lastError` says why it is not verified",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/site-domains/{id}": {
+      "delete": {
+        "operationId": "SitesController_removeDomain",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a hostname from the site. It stops resolving at once and is free to claim again",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/sites/{id}/audiences": {
+      "get": {
+        "operationId": "SitesController_listAudiences",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Who may read which part of the site: the audience rules and whether visitor sign-in is set up",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/sites/{id}/audiences/{documentId}": {
+      "put": {
+        "operationId": "SitesController_setAudience",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSiteAudienceRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Not a page of this site, or the claims are malformed (details.reason site.audiencePageNotInSite | site.audienceClaimsInvalid)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Keep a page and everything below it from the public. Applies to every version at once",
+        "tags": [
+          "publishing"
+        ]
+      },
+      "delete": {
+        "operationId": "SitesController_removeAudience",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a page’s rule: it is public again unless a rule above it says otherwise",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/sites/{id}/visitor-secret": {
+      "post": {
+        "operationId": "SitesController_rotateVisitorSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "SETTINGS_ENCRYPTION_KEY is not set (details.reason site.visitorSecretNeedsKey)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set a new secret for visitor JWTs (HS256), shown once. The old one stops working, and its sessions end",
+        "tags": [
+          "publishing"
+        ]
+      },
+      "delete": {
+        "operationId": "SitesController_clearVisitorSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Turn visitor sign-in off. Open visitor sessions end at once",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
     "/v1/public/shares/{token}": {
       "get": {
         "operationId": "PublicSharesController_view",
@@ -18934,6 +19429,9 @@
           }
         ],
         "responses": {
+          "304": {
+            "description": "The If-None-Match tag still names this answer"
+          },
           "404": {
             "description": "No live site there, or sites are off for its workspace"
           },
@@ -18961,6 +19459,1256 @@
         "summary": "A site, version and page for a slug or host plus a path: everything one render needs",
         "tags": [
           "public"
+        ]
+      }
+    },
+    "/v1/public/sites/widget": {
+      "get": {
+        "operationId": "PublicSitesController_widget",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: the request host",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "No live site there, or it does not answer questions"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What the Ask widget’s frame needs: the site’s chrome and the origins that may embed it",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/{siteId}/ask": {
+      "post": {
+        "operationId": "PublicSitesController_askSite",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskSiteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "404": {
+            "description": "No live site with this id, or it does not answer questions"
+          },
+          "429": {
+            "description": "`publicAsk.rateLimited` (this address) or `publicAsk.budgetExhausted` (the site, until UTC midnight)"
+          },
+          "503": {
+            "description": "No model is configured for the workspace, or its AI budget is spent"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Answer a question from one version of a live site, citing its pages",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/{siteId}/search": {
+      "get": {
+        "operationId": "PublicSitesController_searchSite",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "The words to look for; fewer than 2 characters answers no results",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "A version slug; omitted = the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "No live site with this id, or no such version"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Search one version of a live site: its published pages only, at the revisions it shows",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/{siteId}/session": {
+      "get": {
+        "operationId": "PublicSitesController_openSession",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": false,
+            "in": "query",
+            "description": "A one-time sign-in code from POST /v1/sites/:id/sign-in",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jwt_token",
+            "required": false,
+            "in": "query",
+            "description": "A visitor JWT (HS256) signed with the site’s visitor secret; `exp` is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "return",
+            "required": false,
+            "in": "query",
+            "description": "Where to go afterwards: a path on this same origin. Anything else goes to `/`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Back to `return` on this origin, with the cookie set when the code or token was good"
+          },
+          "404": {
+            "description": "No live site with this id"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Exchange a sign-in code or visitor JWT for the site’s session cookie, then redirect back",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/{siteId}/session/end": {
+      "post": {
+        "operationId": "PublicSitesController_endSession",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sign out of the site: the session ends at once and the cookie is cleared",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/sitemap.xml": {
+      "get": {
+        "operationId": "PublicSiteFilesController_sitemap",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "304": {
+            "description": "Unchanged since the ETag sent in If-None-Match"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "sitemap.xml of the default version, absolute canonical URLs. 404 when the site is not indexable",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/robots.txt": {
+      "get": {
+        "operationId": "PublicSiteFilesController_robots",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "robots.txt: allow everything with the sitemap, or disallow everything when the site is not indexable",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/llms.txt": {
+      "get": {
+        "operationId": "PublicSiteFilesController_llms",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "llms.txt of a version: its pages as markdown links in reading order, then the other versions",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/llms-full.txt": {
+      "get": {
+        "operationId": "PublicSiteFilesController_llmsFull",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Every page of a version at its published revision, concatenated and streamed (LLMS_FULL_MAX_DOCS / _BYTES)",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/markdown": {
+      "get": {
+        "operationId": "PublicSiteFilesController_markdown",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: `<slug>.PUBLISH_BASE_DOMAIN`, or a verified custom domain",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "llms.txt / llms-full.txt: a version slug. Omitted: the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": false,
+            "in": "query",
+            "description": "The page path below the site root without `.md`, e.g. `v1/guides/install`; `index` is a version’s home",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "No live site there, or no page at that path"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One page as markdown at its published revision (the reader serves it at `<page>.md`)",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/domains/allow": {
+      "get": {
+        "operationId": "PublicDomainsController_allow",
+        "parameters": [
+          {
+            "name": "domain",
+            "required": false,
+            "in": "query",
+            "description": "The hostname Caddy is about to request a certificate for",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The hostname belongs to a site"
+          },
+          "404": {
+            "description": "Not a hostname this platform serves"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "May a TLS certificate be issued for this hostname? 200 for a site’s subdomain or verified custom domain",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/sites/{id}/sign-in": {
+      "post": {
+        "operationId": "SiteSignInController_signIn",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteSignInDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "The return URL is not on one of the site’s addresses (details.reason site.signInReturnInvalid)"
+          },
+          "404": {
+            "description": "No live site with this id"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A one-time sign-in to a live site for the calling member: the URL to send the browser to",
+        "tags": [
+          "publishing"
+        ]
+      }
+    },
+    "/v1/exports/capabilities": {
+      "get": {
+        "operationId": "ExportController_capabilities",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Which formats this deployment can write, and the limits",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/exports": {
+      "get": {
+        "operationId": "ExportController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Your exports in a workspace, newest first; an admin sees everyone’s",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/documents/{id}/exports": {
+      "post": {
+        "operationId": "ExportController_exportDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDocumentExportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Too many pages (details.reason export.tooManyPages) or nothing to export"
+          },
+          "409": {
+            "description": "PDF without Gotenberg (details.reason export.formatUnavailable)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Export a page, or a page and its subpages, as ZIP, HTML or PDF",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/projects/{id}/exports": {
+      "post": {
+        "operationId": "ExportController_exportProject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectExportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Too many pages (details.reason export.tooManyPages) or nothing to export"
+          },
+          "409": {
+            "description": "PDF without Gotenberg (details.reason export.formatUnavailable)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Export every page of a project as ZIP, HTML or PDF",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/exports/{id}": {
+      "get": {
+        "operationId": "ExportController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One export — polled while it runs",
+        "tags": [
+          "exports"
+        ]
+      }
+    },
+    "/v1/exports/{id}/download": {
+      "get": {
+        "operationId": "ExportController_download",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Not finished (details.reason export.notReady)"
+          },
+          "410": {
+            "description": "The file was deleted after EXPORT_TTL_HOURS (details.reason export.expired)"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A short-lived URL to the finished file",
+        "tags": [
+          "exports"
         ]
       }
     },
@@ -19209,7 +20957,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.17.0",
+    "version": "0.18.0",
     "contact": {}
   },
   "tags": [],
@@ -22999,6 +24747,25 @@
             "type": "string",
             "format": "uuid",
             "description": "The version served without a version segment. Must have built once"
+          },
+          "askEnabled": {
+            "type": "boolean",
+            "description": "The site answers questions from its pages, in the reader and the embeddable widget"
+          },
+          "askDailyBudget": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100000,
+            "description": "Answers a day. null takes PUBLIC_ASK_DAILY_BUDGET, which also caps it"
+          },
+          "embedOrigins": {
+            "maxItems": 20,
+            "description": "Origins allowed to embed the widget, e.g. https://example.com. Replaces the list",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -23057,6 +24824,46 @@
           }
         }
       },
+      "AddSiteDomainDto": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string",
+            "maxLength": 253,
+            "description": "A hostname you control, e.g. docs.example.com. A pasted URL is reduced to its host"
+          }
+        },
+        "required": [
+          "hostname"
+        ]
+      },
+      "SetSiteAudienceRuleDto": {
+        "type": "object",
+        "properties": {
+          "audience": {
+            "type": "string",
+            "enum": [
+              "visitors",
+              "members"
+            ],
+            "description": "`members`: signed-in workspace members only; `visitors`: also people signed in with a JWT from your backend"
+          },
+          "claims": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "nullable": true,
+            "description": "`visitors` only: claims the JWT must carry, each with one of the listed values, e.g. {\"plan\":[\"pro\"]}. Omitted or null: any valid token"
+          }
+        },
+        "required": [
+          "audience"
+        ]
+      },
       "UnlockShareDto": {
         "type": "object",
         "properties": {
@@ -23067,6 +24874,86 @@
         },
         "required": [
           "password"
+        ]
+      },
+      "AskSiteDto": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          },
+          "version": {
+            "type": "string",
+            "description": "A version slug; omitted = the default version"
+          }
+        },
+        "required": [
+          "question"
+        ]
+      },
+      "SiteSignInDto": {
+        "type": "object",
+        "properties": {
+          "returnUrl": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "The site page to come back to, as an absolute URL on one of the site’s own addresses"
+          }
+        },
+        "required": [
+          "returnUrl"
+        ]
+      },
+      "CreateDocumentExportDto": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "zip",
+              "html",
+              "pdf"
+            ],
+            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+          },
+          "branch": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "description": "Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches"
+          },
+          "includeSubtree": {
+            "type": "boolean",
+            "description": "Also export every page under this one. Omitted: false"
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
+      "CreateProjectExportDto": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "zip",
+              "html",
+              "pdf"
+            ],
+            "description": "`zip`: markdown + attachments + manifest.json; `html`: an offline site, zipped; `pdf`: needs GOTENBERG_URL"
+          },
+          "branch": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "description": "Branch name to read each page from; a page without it uses its default branch. Omitted or null: default branches"
+          }
+        },
+        "required": [
+          "format"
         ]
       },
       "ApiErrorResponse": {

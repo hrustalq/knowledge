@@ -19,7 +19,7 @@ const props = defineProps<{ canManage: boolean }>()
 
 const workspaceId = getWorkspaceId()
 
-const OPERATIONS = ['ask', 'chat', 'chat-stream', 'review', 'suggest', 'glossary'] as const
+const OPERATIONS = ['ask', 'chat', 'chat-stream', 'review', 'suggest', 'glossary', 'public_ask'] as const
 type Operation = (typeof OPERATIONS)[number]
 const operation = ref<Operation | ''>('')
 const outcome = ref<'' | 'true' | 'false'>('')

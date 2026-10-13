@@ -139,6 +139,12 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         requestedExpiresAt: null,
       })),
     },
+    exports: {
+      createForDocument: vi.fn(async () => ({ id: 'ex-1', status: 'queued', format: 'zip', scope: 'subtree' })),
+      createForProject: vi.fn(async () => ({ id: 'ex-2', status: 'queued', format: 'zip', scope: 'project' })),
+      get: vi.fn(async () => ({ id: 'ex-1', workspaceId: WS_A, status: 'completed', format: 'zip' })),
+      download: vi.fn(async () => ({ url: 'https://minio/signed', filename: 'guide.zip' })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -150,6 +156,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     verification: deps.verification,
     templates: deps.templates,
     shareLinks: deps.shareLinks,
+    exports: deps.exports,
   };
 }
 
@@ -299,6 +306,34 @@ describe('McpService over a principal', () => {
     );
     const body = JSON.parse((res.content as Array<{ text: string }>)[0]!.text) as { url: string };
     expect(body.url).toBe('https://kb.example.com/s/kp_x');
+  });
+
+  it('knowledge_export and knowledge_get_export work with a read-only key, as a viewer (docs/features/45)', async () => {
+    const doc = '44444444-4444-4444-8444-444444444444';
+    const viewer = service(accessWith('viewer'));
+    (viewer.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
+    (viewer.mcp as unknown as { access: AccessService }).access.workspaceOfExport = vi.fn(async () => WS_A);
+    const p = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
+    const client = await connect(viewer.mcp, p);
+    const names = (await client.listTools()).tools.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(['knowledge_export', 'knowledge_get_export']));
+
+    const asked = await client.callTool({
+      name: 'knowledge_export',
+      arguments: { workspaceId: WS_A, format: 'zip', documentId: doc, includeSubtree: true },
+    });
+    expect(asked.isError).toBeFalsy();
+    expect(viewer.exports.createForDocument).toHaveBeenCalledWith(doc, { format: 'zip', includeSubtree: true, branch: undefined }, p);
+
+    const both = await client.callTool({
+      name: 'knowledge_export',
+      arguments: { workspaceId: WS_A, format: 'zip', documentId: doc, projectId: doc },
+    });
+    expect(both.isError).toBe(true);
+
+    const got = await client.callTool({ name: 'knowledge_get_export', arguments: { workspaceId: WS_A, exportId: doc } });
+    const body = JSON.parse((got.content as Array<{ text: string }>)[0]!.text) as { download: { url: string } };
+    expect(body.download.url).toBe('https://minio/signed');
   });
 
   it('knowledge_feedback stores a vote as the caller with surface mcp, and insists on a reason for a down-vote', async () => {

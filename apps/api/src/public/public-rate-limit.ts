@@ -45,8 +45,12 @@ export function clientIp(req: { ip?: string; socket?: { remoteAddress?: string }
 }
 
 export class RateLimitedException extends HttpException {
-  constructor(message: string, readonly retryAfterSec: number) {
-    super({ statusCode: HttpStatus.TOO_MANY_REQUESTS, message, retryAfter: retryAfterSec }, HttpStatus.TOO_MANY_REQUESTS);
+  /** `reason` tells limits apart for a client (flat extras, hoisted into `details`). */
+  constructor(message: string, readonly retryAfterSec: number, reason?: string) {
+    super(
+      { statusCode: HttpStatus.TOO_MANY_REQUESTS, message, retryAfter: retryAfterSec, ...(reason ? { reason } : {}) },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 }
 

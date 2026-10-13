@@ -7,6 +7,7 @@ import en from './i18n/reader/en.json'
 import ruCatalog from './i18n/reader/ru.json'
 import SharePage from './pages/public/SharePage.vue'
 import SitePage from './pages/public/SitePage.vue'
+import SiteWidget from './pages/public/SiteWidget.vue'
 import type { PublicReaderState } from './pages/public/reader-state'
 import './style.css'
 
@@ -32,7 +33,8 @@ export function siteReaderMessages(locale: Locale): (typeof en)['siteReader'] {
 const isSiteView = (state: PublicReaderState) => state.view.kind === 'site' || state.view.kind === 'site-not-found'
 
 export function createPublicApp(state: PublicReaderState) {
-  const app = createSSRApp({ render: () => h(isSiteView(state) ? SitePage : SharePage, { state }) })
+  const root = state.view.kind === 'site-widget' ? SiteWidget : isSiteView(state) ? SitePage : SharePage
+  const app = createSSRApp({ render: () => h(root, { state }) })
   app.use(
     createI18n({
       legacy: false,

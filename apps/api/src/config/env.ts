@@ -189,6 +189,51 @@ export const envSchema = z.object({
   SITE_BUILD_DEBOUNCE_MS: z.coerce.number().int().min(0).default(30_000),
   /** Most pages one site version publishes; the rest is cut and the build says so. */
   SITE_MAX_PAGES: z.coerce.number().int().positive().default(2000),
+  /**
+   * Whether sites may answer on their own hostnames (issue #77 phase 2b). The
+   * front proxy must route those hosts here and terminate TLS for them (Caddy
+   * on-demand TLS, see Caddyfile.sites.example). false: admins are told so,
+   * adding a domain is refused, and no custom hostname resolves.
+   */
+  SITE_CUSTOM_DOMAINS: boolish(true),
+  /**
+   * How long a site sign-in lasts (issue #77 phase 3): a workspace member's
+   * through the app, or a visitor's through a customer-signed JWT, which is
+   * also held to the token's own `exp`.
+   */
+  SITE_VISITOR_TTL_MIN: z.coerce.number().int().positive().default(1440),
+  /**
+   * Ask on published sites (issue #77 phase 3): the most answers one site may
+   * give a day. A ceiling over each site's own budget, not only its default;
+   * 0 turns Ask off everywhere.
+   */
+  PUBLIC_ASK_DAILY_BUDGET: z.coerce.number().int().min(0).default(200),
+  /** Questions per minute from one address, across every site. */
+  PUBLIC_ASK_RATE_PER_MIN: z.coerce.number().int().positive().default(6),
+  /** Tick of PublishingSweeper: pending domain checks and lost site builds. */
+  PUBLISHING_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  /**
+   * Export (issue #77 phase 2c, docs/features/45). PDF goes through a Gotenberg
+   * sidecar's Chromium (`make infra-up-gotenberg`); empty = no PDF, and the
+   * dialog says why. ZIP and HTML need nothing beyond the worker.
+   */
+  GOTENBERG_URL: z.string().default(''),
+  /**
+   * Where the worker reaches the web server, which renders an export's HTML
+   * with the reader's own parser (`POST /_internal/export/render`). In compose
+   * that is the web service by name, not WEB_BASE_URL.
+   */
+  WEB_INTERNAL_URL: z.string().default('http://localhost:5173'),
+  /** Most pages one export may hold; a larger request is refused before it is queued. */
+  EXPORT_MAX_PAGES: z.coerce.number().int().positive().default(500),
+  /** Most bytes one export may hold — sources, attachments and the file written (256 MB). */
+  EXPORT_MAX_BYTES: z.coerce.number().int().positive().default(268_435_456),
+  /** How long a finished export can be downloaded before its file is deleted. */
+  EXPORT_TTL_HOURS: z.coerce.number().int().positive().default(72),
+  /** Exports one worker builds at once. */
+  EXPORT_CONCURRENCY: z.coerce.number().int().positive().default(2),
+  /** Wall-clock ceiling for rendering and converting one export; past twice this the sweeper fails it. */
+  EXPORT_TIMEOUT_MS: z.coerce.number().int().positive().default(600_000),
   /** Cap on pages in one llms-full.txt; past it the dump ends with a truncation marker. */
   LLMS_FULL_MAX_DOCS: z.coerce.number().int().positive().default(2000),
   /** Cap on bytes streamed in one llms-full.txt (20 MB). */

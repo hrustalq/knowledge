@@ -1,0 +1,80 @@
+# Published sites on their own hostnames (docs/features/44, issue #77 phase 2b)
+# — for an install where Caddy itself faces the internet on :80/:443.
+#
+# NOT what production runs: knowledge.hrustalq.dev ends TLS at a Cloudflare
+# Worker in front of Tailscale Funnel, so its Caddy is plain HTTP and can issue
+# no certificates (see Caddyfile). There, sites stay in path mode (/pub/<slug>)
+# and SITE_CUSTOM_DOMAINS=false until the edge routes other hosts.
+#
+# What this gives:
+#   - the app at its own name, as today;
+#   - every other host over HTTPS with a certificate issued on its first
+#     visit (on-demand TLS), but only for a name the API vouches for: a
+#     `<slug>.<PUBLISH_BASE_DOMAIN>` of an existing site, or a custom domain
+#     its owner proved with the `_knowledge.<hostname>` TXT record. Anything
+#     else fails the handshake, so a stranger pointing names at this server
+#     cannot make it request certificates for them.
+#
+# The web container decides what a host shows (server.js): a base-domain or
+# verified custom host gets the site reader, the app's own host the app.
+#
+# DNS: `*.<PUBLISH_BASE_DOMAIN>` (a wildcard A/CNAME record) and each custom
+# domain's CNAME point at this server. caddy_data must persist (it does in
+# docker-compose.prod.yml): it holds every issued certificate, and losing it
+# re-issues them all against the ACME rate limits.
+
+{
+	email ops@example.com
+
+	# The API's allowlist. Caddy calls it with ?domain=<name> before the first
+	# certificate for a name; 200 allows, anything else refuses. It is an
+	# indexed lookup, so a handshake waits milliseconds for it.
+	on_demand_tls {
+		ask http://api:3000/v1/public/domains/allow
+	}
+}
+
+# One routing table for both blocks, mirroring Caddyfile (see the comments
+# there): /api/* to the API without its prefix, presigned object URLs to
+# MinIO, everything else to the SSR app, which tells a site host from the app.
+(app) {
+	encode zstd gzip
+
+	handle_path /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /{$S3_BUCKET:knowledge}/* {
+		reverse_proxy minio:9000
+	}
+
+	handle {
+		reverse_proxy web:5173
+	}
+
+	log {
+		output stderr
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					replace token REDACTED
+					replace X-Amz-Signature REDACTED
+				}
+			}
+		}
+	}
+}
+
+# The app itself: unchanged from Caddyfile, with a certificate issued up front.
+knowledge.example.com {
+	import app
+}
+
+# Everything else: published sites.
+https:// {
+	tls {
+		on_demand
+	}
+	import app
+}

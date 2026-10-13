@@ -418,6 +418,41 @@
     "versionSlugShadowsPage": "A top-level page of the site is already at “{slug}” — pick another version address",
     "versionLimit": "A site has at most {max} versions",
     "versionNotBuilt": "Only a version that has built at least once can be the default",
-    "defaultVersionDelete": "The default version cannot be deleted — make another version the default first"
+    "defaultVersionDelete": "The default version cannot be deleted — make another version the default first",
+    "domainNotFound": "This site domain does not exist",
+    "domainInvalid": "Enter a hostname such as docs.example.com — no scheme, path or port",
+    "domainReserved": "“{hostname}” is one of this platform’s own addresses — use a hostname you control",
+    "domainTaken": "“{hostname}” is already a verified domain of another site",
+    "domainExists": "This site already has “{hostname}”",
+    "domainLimit": "A site has at most {max} domains",
+    "customDomainsOff": "Custom domains are turned off on this deployment",
+    "audienceClaimsInvalid": "These claim requirements cannot be used: {fields}. Each claim needs a name of letters, digits, _ . : - and at least one value",
+    "audienceClaimsMembers": "Claims only apply to a visitors rule; a members rule is for every workspace member",
+    "audienceRuleLimit": "A site can have at most {max} audience rules. A rule covers a page and everything below it",
+    "audienceRuleNotFound": "This page has no audience rule on the site",
+    "audiencePageNotInSite": "That page is not part of this site",
+    "visitorSecretNeedsKey": "A visitor secret can only be stored when SETTINGS_ENCRYPTION_KEY is set on the server",
+    "signInReturnInvalid": "The page to return to is not on this site",
+    "embedOriginInvalid": "Not an origin a widget can be embedded on: {origins}. Use https://host or https://host:port"
+  },
+  "export": {
+    "notFound": "This export does not exist",
+    "notYours": "Only the person who asked for an export, or an admin, can see it",
+    "tooManyPages": "This export would hold {count} pages; at most {max} can be exported at once",
+    "nothingToExport": "There is nothing to export here: no page in scope has a readable revision",
+    "formatUnavailable": "PDF export is not set up on this deployment",
+    "notReady": "This export is not finished yet",
+    "expired": "This export has expired — export again to get a new file",
+    "tooLarge": "This export is larger than {max} — export fewer pages",
+    "renderFailed": "The pages could not be rendered: {detail}",
+    "convertFailed": "The PDF could not be made: {detail}",
+    "timedOut": "The export took too long and was stopped",
+    "failed": "The export failed: {detail}"
+  },
+  "publicAsk": {
+    "budgetExhausted": "This site has answered all the questions it can today. Try again tomorrow.",
+    "rateLimited": "Too many questions — try again in a minute",
+    "unavailable": "This site cannot answer questions right now",
+    "notEnabled": "This site does not answer questions"
   }
 }

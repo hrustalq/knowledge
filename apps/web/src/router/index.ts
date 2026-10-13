@@ -23,6 +23,9 @@ export function createRouter() {
       { path: '/reset-password', component: () => import('@/pages/ResetPasswordPage.vue'), meta: { public: true, authCard: true } },
       { path: '/verify-email', component: () => import('@/pages/VerifyEmailPage.vue'), meta: { public: true, authCard: true } },
       { path: '/403', component: () => import('@/pages/ForbiddenPage.vue'), meta: { public: true } },
+      // A member signing in to a published site (issue #77 phase 3): needs the
+      // app's session, so the guard sends anyone signed out through /login.
+      { path: '/site-sign-in', component: () => import('@/pages/SiteSignInPage.vue') },
       // App (authenticated — guard redirects to /login when AUTH_MODE=api-key)
       // meta.fill: the pages landing leads with a graph canvas, which needs a
       // definite height to resolve; the tree and list views scroll inside it.
@@ -146,6 +149,7 @@ export function createRouter() {
           // and the inventory of every link. Gated in the page on
           // auth.canAdminWorkspace, as AI settings are; the API enforces admin.
           { path: 'publishing', component: () => import('@/pages/PublishingSettingsPage.vue') },
+          { path: 'exports', component: () => import('@/pages/ExportsPage.vue') },
           // Workflows: like AI settings, deliberately not meta.platformAdmin —
           // this is workspace administration, so the page gates on
           // auth.canAdminWorkspace and the API enforces the admin role.

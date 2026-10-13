@@ -8,14 +8,17 @@ export const PUBLIC_STORE = Symbol('PUBLIC_STORE');
 
 /**
  * The Redis surface the anonymous routes need, small enough for a spec to fake:
- * fixed-window counters (`incr` + `pexpire` on the first hit) and short-lived
- * session values (`set … PX`, `get`).
+ * fixed-window counters (`incr` + `pexpire` on the first hit), short-lived
+ * session values (`set … PX`, `get`, `del`) and one-time codes (`getdel`,
+ * which reads and spends a value in one step, so a code works once).
  */
 export interface PublicKeyValueStore {
   incr(key: string): Promise<number>;
   pexpire(key: string, ms: number): Promise<unknown>;
   set(key: string, value: string, mode: 'PX', ms: number): Promise<unknown>;
   get(key: string): Promise<string | null>;
+  getdel(key: string): Promise<string | null>;
+  del(key: string): Promise<number>;
 }
 
 /**

@@ -5,8 +5,16 @@ import {
   type PublicSharePage,
   type PublicShareResponse,
   type PublicSiteResolveResponse,
+  type PublicSiteWidgetResponse,
 } from '@knowledge/contracts'
-import { publicShareAttachmentPath, publicSiteAttachmentPath } from '@knowledge/contracts/publishing'
+import {
+  SITE_VISITOR_TOKEN_PARAM,
+  SITE_WIDGET_PATH,
+  publicShareAttachmentPath,
+  publicSiteAttachmentPath,
+  publicSiteSessionPath,
+  siteMarkdownPath,
+} from '@knowledge/contracts/publishing'
 import { formatBytes } from './lib/format'
 import { escapeHtml } from './lib/markdown/nodes'
 import { renderPublicMarkdown, type PublicRenderOptions } from './lib/markdown/public-render.server'
@@ -25,24 +33,31 @@ import { siteThemeCss } from './pages/public/site-theme'
  * The public SSR entry (docs/features/43, 44):
  * - `/s/:token[/:documentId]` — a share link;
  * - `/pub/:slug/…` — a published site in path mode;
- * - any path on a site's own host (`<slug>.PUBLISH_BASE_DOMAIN`), which
- *   server.js recognises and passes as `siteHost`.
+ * - any path on a site's own host (`<slug>.PUBLISH_BASE_DOMAIN` or a verified
+ *   custom domain), which server.js recognises and passes as `siteHost`.
  *
  * Its own entry and its own app, beside entry-server.ts, so an anonymous
  * reader never loads the app shell, the stores or a member's credentials.
  * server.js calls it with only what a public render may see: the language,
- * the share-unlock cookies, the visitor's address and the trace id — never
- * `kn_token`. The API decides everything; this renders what it answered.
+ * the share-unlock and site sign-in cookies, the visitor's address and the
+ * trace id — never `kn_token`. The API decides everything; this renders what
+ * it answered.
  */
 export interface PublicRenderContext {
   locale: Locale
-  /** `kn_share_<id>=…` pairs only, already filtered by server.js. */
+  /** `kn_share_<id>=…` and `kn_site_<id>=…` pairs only, already filtered by server.js. */
   shareCookies: string
   /** The visitor as server.js saw them, so the API rate-limits the reader, not this process. */
   forwardedFor: string | null
   traceId: string | null
   /** Set when the request came in on a site's own host: every path is that site's. */
   siteHost?: string | null
+  /**
+   * The ETag of a render server.js still holds for this host, URL and
+   * language. When the API says the page is unchanged, the render stops there
+   * and answers `notModified`, and server.js replays what it holds.
+   */
+  ifNoneMatch?: string | null
 }
 
 export interface PublicRenderResult {
@@ -53,6 +68,10 @@ export interface PublicRenderResult {
   headers: Record<string, string>
   /** Answer with a redirect instead (a non-canonical page path, or a version switch). */
   redirect?: string
+  /** A site page: the API's tag for what this render was made from. Absent = never cache it. */
+  etag?: string
+  /** `ifNoneMatch` still holds: nothing was rendered; replay the cached render. */
+  notModified?: boolean
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -86,16 +105,27 @@ class ApiAnswer extends Error {
 }
 
 async function apiGet<T>(path: string, ctx: PublicRenderContext): Promise<T> {
+  return (await apiGetTagged<T>(path, ctx)).body!
+}
+
+/** A GET that may be conditional: `body` is null when the API answered 304 to `ifNoneMatch`. */
+async function apiGetTagged<T>(
+  path: string,
+  ctx: PublicRenderContext,
+  ifNoneMatch?: string | null,
+): Promise<{ body: T | null; etag: string | null }> {
   const headers: Record<string, string> = { 'Accept-Language': ctx.locale, Accept: 'application/json' }
   if (ctx.shareCookies) headers.Cookie = ctx.shareCookies
   if (ctx.forwardedFor) headers['X-Forwarded-For'] = ctx.forwardedFor
   if (ctx.traceId) headers['x-request-id'] = ctx.traceId
+  if (ifNoneMatch) headers['If-None-Match'] = ifNoneMatch
   const res = await fetch(`${apiInternal()}${path}`, { headers })
+  if (res.status === 304) return { body: null, etag: ifNoneMatch ?? null }
   if (!res.ok) {
     const body: unknown = await res.json().catch(() => null)
     throw new ApiAnswer(isApiErrorPayload(body) ? body.statusCode : res.status)
   }
-  return (await res.json()) as T
+  return { body: (await res.json()) as T, etag: res.headers.get('etag') }
 }
 
 interface ResolvedView {
@@ -156,12 +186,16 @@ async function resolveShareView(url: string, ctx: PublicRenderContext): Promise<
   }
 }
 
-/** The path below the site root, and `from` (a version switch), from a request URL. */
-function splitSiteUrl(pathAndQuery: string): { path: string; from: string | null } {
+/**
+ * The path below the site root, `from` (a version switch) and a visitor's
+ * sign-in token (issue #77 phase 3), from a request URL.
+ */
+function splitSiteUrl(pathAndQuery: string): { path: string; from: string | null; visitorToken: string | null } {
   const q = pathAndQuery.indexOf('?')
   const path = (q === -1 ? pathAndQuery : pathAndQuery.slice(0, q)).split('#')[0]
-  const from = q === -1 ? null : new URLSearchParams(pathAndQuery.slice(q + 1)).get('from')
-  return { path: path || '/', from: from && UUID.test(from) ? from : null }
+  const query = q === -1 ? null : new URLSearchParams(pathAndQuery.slice(q + 1))
+  const from = query?.get('from') ?? null
+  return { path: path || '/', from: from && UUID.test(from) ? from : null, visitorToken: query?.get(SITE_VISITOR_TOKEN_PARAM) || null }
 }
 
 /** Two spellings of one path compare equal: percent-encoding and a trailing slash are not a difference. */
@@ -179,13 +213,15 @@ interface SiteResolved extends ResolvedView {
   redirect?: string
   head: string[]
   noindex: boolean
+  etag?: string
+  notModified?: boolean
 }
 
 async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<SiteResolved> {
   const match = ctx.siteHost ? null : SITE_PATH.exec(url)
   const prefix = match ? `/pub/${match[1]}` : ''
   const q = url.indexOf('?')
-  const { path, from } = splitSiteUrl(match ? (match[2] || '/') + (q === -1 ? '' : url.slice(q)) : url)
+  const { path, from, visitorToken } = splitSiteUrl(match ? (match[2] || '/') + (q === -1 ? '' : url.slice(q)) : url)
   const notFound: SiteResolved = { view: { kind: 'site-not-found' }, status: 404, description: '', head: [], noindex: true }
 
   const params = new URLSearchParams({ path })
@@ -195,14 +231,28 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   if (from) params.set('from', from)
 
   let res: PublicSiteResolveResponse
+  let etag: string | null
   try {
-    res = await apiGet<PublicSiteResolveResponse>(`/v1/public/sites/resolve?${params}`, ctx)
+    const answer = await apiGetTagged<PublicSiteResolveResponse>(`/v1/public/sites/resolve?${params}`, ctx, ctx.ifNoneMatch)
+    if (!answer.body) return { ...notFound, status: 304, notModified: true }
+    res = answer.body
+    etag = answer.etag
   } catch (err) {
     if (err instanceof ApiAnswer && err.status === 404) return notFound
     throw err
   }
 
   const { site, version } = res
+  const requested = match ? `${prefix}${path}` : path
+
+  // A customer's backend sends a visitor here with `?jwt_token=`: the API's
+  // session route checks it, sets the site's cookie on this origin and comes
+  // back to the same path without it.
+  if (visitorToken) {
+    const params = new URLSearchParams({ [SITE_VISITOR_TOKEN_PARAM]: visitorToken, return: requested })
+    return { ...notFound, status: 302, redirect: `${apiPublic}${publicSiteSessionPath(site.id)}?${params}` }
+  }
+
   const chrome: PublicSiteChrome = {
     id: site.id,
     title: site.title,
@@ -212,6 +262,13 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
     version: { slug: version.slug, name: version.name, isDefault: version.isDefault },
     versions: res.versions,
     tree: res.tree,
+    viewer: res.viewer,
+    // Sign-in comes back to where the reader is: this page's canonical URL,
+    // or the path they asked for when it is not one they can see yet.
+    signInUrl: res.site.signInUrl
+      ? `${res.site.signInUrl}&return=${encodeURIComponent(`${site.rootUrl}${requested.slice(prefix.length) || '/'}`)}`
+      : null,
+    ask: res.site.ask,
   }
   const themeCss = siteThemeCss(site.theme)
   const baseHead = themeCss ? [`<style>${themeCss}</style>`] : []
@@ -227,7 +284,6 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   const homeId = siteHomeId(res.tree)
   const hrefFor = (documentId: string, slugPath: string) => siteHref(chrome, chrome.version, slugPath, documentId === homeId)
   const canonicalPath = hrefFor(res.page.documentId, res.page.slugPath)
-  const requested = match ? `${prefix}${path}` : path
   if (from || samePath(requested) !== samePath(canonicalPath)) {
     return { view: { kind: 'not-found' }, status: 302, description: '', head: [], noindex: true, redirect: canonicalPath }
   }
@@ -247,6 +303,7 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   // to be indexed: older versions would compete with it for the same query.
   const noindex = !site.seoIndexable || !version.isDefault
   const canonical = `${site.rootUrl}${canonicalPath.slice(prefix.length) || '/'}`
+  const markdownUrl = `${site.rootUrl}${siteMarkdownPath('', version.isDefault ? null : version.slug, res.page.slugPath)}`
   const head = [
     ...baseHead,
     `<link rel="canonical" href="${escapeHtml(canonical)}">`,
@@ -256,6 +313,11 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
     `<meta property="og:url" content="${escapeHtml(canonical)}">`,
     body.description ? `<meta property="og:description" content="${escapeHtml(body.description)}">` : '',
     '<meta name="twitter:card" content="summary">',
+    // The same page in the site's other versions, and as plain markdown.
+    ...res.page.alternates.map(
+      (a) => `<link rel="alternate" href="${escapeHtml(`${site.rootUrl}${a.path}`)}" title="${escapeHtml(a.version.name)}">`,
+    ),
+    `<link rel="alternate" type="text/markdown" href="${escapeHtml(markdownUrl)}">`,
   ]
   return {
     view: {
@@ -268,12 +330,84 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
         html: body.html,
         headings: body.headings,
         updatedAt: res.page.updatedAt,
+        alternates: res.page.alternates.map((a) => ({ versionSlug: a.version.slug, href: `${prefix}${a.path}` })),
       },
     },
     status: 200,
     description: body.description,
     head,
     noindex,
+    ...(etag ? { etag } : {}),
+  }
+}
+
+/**
+ * The Ask widget's frame (issue #77 phase 3): `<site>/_widget`, on the site's
+ * host or under `/pub/<slug>`. The site, if it answers questions, or null.
+ * A top-level page slugged `_widget` is shadowed by it.
+ */
+function widgetSite(url: string, ctx: PublicRenderContext): { slug: string } | { host: string } | null {
+  const match = ctx.siteHost ? null : SITE_PATH.exec(url)
+  const path = (match ? match[2] || '/' : url).split(/[?#]/)[0].replace(/\/+$/, '')
+  if (path !== SITE_WIDGET_PATH) return null
+  if (match) return { slug: match[1] }
+  return ctx.siteHost ? { host: ctx.siteHost } : null
+}
+
+/**
+ * Who may frame the widget: the site's own origins and the ones its admin
+ * listed. Nobody else — the browser refuses the frame, which is the whole of
+ * the embed check. Origins come normalized (scheme://host[:port]) from the API.
+ */
+function frameAncestors(widget: PublicSiteWidgetResponse | null): string {
+  if (!widget) return "frame-ancestors 'none'"
+  const own = (() => {
+    try {
+      return new URL(widget.site.rootUrl).origin
+    } catch {
+      return null
+    }
+  })()
+  const origins = [...new Set([own, ...widget.embedOrigins].filter((o): o is string => !!o && /^https?:\/\/[a-z0-9.:[\]-]+$/i.test(o)))]
+  return `frame-ancestors 'self' ${origins.join(' ')}`.trim()
+}
+
+async function renderWidget(key: { slug: string } | { host: string }, ctx: PublicRenderContext): Promise<PublicRenderResult> {
+  let widget: PublicSiteWidgetResponse | null = null
+  try {
+    widget = await apiGet<PublicSiteWidgetResponse>(`/v1/public/sites/widget?${new URLSearchParams(key)}`, ctx)
+  } catch (err) {
+    if (!(err instanceof ApiAnswer && err.status === 404)) throw err
+  }
+  const site = widget
+    ? {
+        ...widget.site,
+        logo: widget.site.logo?.kind === 'image' ? { kind: 'image' as const, url: `${apiPublic}${widget.site.logo.url}` } : widget.site.logo,
+      }
+    : null
+  const state: PublicReaderState = { locale: ctx.locale, apiBase: apiPublic, view: { kind: 'site-widget', site } }
+  const { app } = createPublicApp(state)
+  const html = await renderToString(app)
+  const messages = siteReaderMessages(ctx.locale)
+  const themeCss = site ? siteThemeCss(site.theme) : ''
+  const head = [
+    `<title>${escapeHtml(site ? messages.askTitle.replace('{site}', site.title) : messages.askWidgetUnavailable)}</title>`,
+    '<meta name="robots" content="noindex, nofollow">',
+    themeCss ? `<style>${themeCss}</style>` : '',
+    stateScript(state),
+  ]
+    .filter(Boolean)
+    .join('\n    ')
+  return {
+    html,
+    head,
+    status: site ? 200 : 404,
+    headers: {
+      'Content-Security-Policy': frameAncestors(widget),
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
   }
 }
 
@@ -293,10 +427,22 @@ function stateScript(state: PublicReaderState): string {
 }
 
 export async function render(url: string, ctx: PublicRenderContext): Promise<PublicRenderResult> {
+  const widget = widgetSite(url, ctx)
+  if (widget) return renderWidget(widget, ctx)
   const isShare = !ctx.siteHost && SHARE_PATH.test(url)
   const resolved = isShare ? { ...(await resolveShareView(url, ctx)), head: [] as string[], noindex: true } : await resolveSiteView(url, ctx)
   if ('redirect' in resolved && resolved.redirect) {
-    return { html: '', head: '', status: 302, headers: { 'Cache-Control': 'no-store' }, redirect: resolved.redirect }
+    // no-referrer: a sign-in redirect's URL carries the visitor's token.
+    return {
+      html: '',
+      head: '',
+      status: 302,
+      headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
+      redirect: resolved.redirect,
+    }
+  }
+  if ('notModified' in resolved && resolved.notModified) {
+    return { html: '', head: '', status: 304, headers: {}, notModified: true }
   }
   const { view, status, description } = resolved
   const state: PublicReaderState = { locale: ctx.locale, apiBase: apiPublic, view }
@@ -320,11 +466,13 @@ export async function render(url: string, ctx: PublicRenderContext): Promise<Pub
   const headers: Record<string, string> = isShare
     ? SHARE_HEADERS
     : {
-        // Re-rendered per request for now: unpublishing must end a site at once
-        // (a render cache keyed on the build arrives with phase 2b).
+        // Revalidated per request: unpublishing must end a site at once.
         'Cache-Control': 'no-cache',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         ...(resolved.noindex ? { 'X-Robots-Tag': 'noindex' } : {}),
       }
-  return { html, head, status, headers }
+  // Only a page served as itself is worth keeping: a 404 inside the site
+  // costs no body read, and a share is never cached at all.
+  const etag = !isShare && status === 200 && 'etag' in resolved ? resolved.etag : undefined
+  return { html, head, status, headers, ...(etag ? { etag } : {}) }
 }

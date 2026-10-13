@@ -1741,6 +1741,66 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/documents/{id}/exports",
+      "tag": "exports",
+      "summary": "Export a page, or a page and its subpages, as ZIP, HTML or PDF",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/exports",
+      "tag": "exports",
+      "summary": "Your exports in a workspace, newest first; an admin sees everyone’s",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/exports/{id}",
+      "tag": "exports",
+      "summary": "One export — polled while it runs",
+      "role": "viewer",
+      "source": "export",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/exports/{id}/download",
+      "tag": "exports",
+      "summary": "A short-lived URL to the finished file",
+      "role": "viewer",
+      "source": "export",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/exports/capabilities",
+      "tag": "exports",
+      "summary": "Which formats this deployment can write, and the limits",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/projects/{id}/exports",
+      "tag": "exports",
+      "summary": "Export every page of a project as ZIP, HTML or PDF",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/glossary",
       "tag": "glossary",
@@ -2402,6 +2462,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/public/domains/allow",
+      "tag": "public",
+      "summary": "May a TLS certificate be issued for this hostname? 200 for a site’s subdomain or verified custom domain",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/public/shares/{token}",
       "tag": "public",
       "summary": "A shared page: its title and the pages the link reaches, or `locked` when a password is needed",
@@ -2431,10 +2501,110 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/public/sites/{siteId}/ask",
+      "tag": "public",
+      "summary": "Answer a question from one version of a live site, citing its pages",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/{siteId}/search",
+      "tag": "public",
+      "summary": "Search one version of a live site: its published pages only, at the revisions it shows",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/{siteId}/session",
+      "tag": "public",
+      "summary": "Exchange a sign-in code or visitor JWT for the site’s session cookie, then redirect back",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/public/sites/{siteId}/session/end",
+      "tag": "public",
+      "summary": "Sign out of the site: the session ends at once and the cookie is cleared",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/llms-full.txt",
+      "tag": "public",
+      "summary": "Every page of a version at its published revision, concatenated and streamed (LLMS_FULL_MAX_DOCS / _BYTES)",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/llms.txt",
+      "tag": "public",
+      "summary": "llms.txt of a version: its pages as markdown links in reading order, then the other versions",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/markdown",
+      "tag": "public",
+      "summary": "One page as markdown at its published revision (the reader serves it at `<page>.md`)",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/public/sites/resolve",
       "tag": "public",
       "summary": "A site, version and page for a slug or host plus a path: everything one render needs",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/robots.txt",
+      "tag": "public",
+      "summary": "robots.txt: allow everything with the sitemap, or disallow everything when the site is not indexable",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/sitemap.xml",
+      "tag": "public",
+      "summary": "sitemap.xml of the default version, absolute canonical URLs. 404 when the site is not indexable",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/widget",
+      "tag": "public",
+      "summary": "What the Ask widget’s frame needs: the site’s chrome and the origins that may embed it",
       "role": null,
       "source": null,
       "public": true,
@@ -2502,6 +2672,26 @@
     },
     {
       "method": "DELETE",
+      "path": "/v1/site-domains/{id}",
+      "tag": "publishing",
+      "summary": "Remove a hostname from the site. It stops resolving at once and is free to claim again",
+      "role": "admin",
+      "source": "site-domain",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/site-domains/{id}/verify",
+      "tag": "publishing",
+      "summary": "Look the TXT record up now. Answers the domain either way; `lastError` says why it is not verified",
+      "role": "admin",
+      "source": "site-domain",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
       "path": "/v1/site-versions/{id}",
       "tag": "publishing",
       "summary": "Delete a version and its snapshot. The default version cannot be deleted",
@@ -2551,11 +2741,61 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/sites/{id}/audiences",
+      "tag": "publishing",
+      "summary": "Who may read which part of the site: the audience rules and whether visitor sign-in is set up",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/sites/{id}/audiences/{documentId}",
+      "tag": "publishing",
+      "summary": "Remove a page’s rule: it is public again unless a rule above it says otherwise",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/sites/{id}/audiences/{documentId}",
+      "tag": "publishing",
+      "summary": "Keep a page and everything below it from the public. Applies to every version at once",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/domains",
+      "tag": "publishing",
+      "summary": "Claim a hostname for the site. It is served once a DNS TXT record proves control of it",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/sites/{id}/publish",
       "tag": "publishing",
       "summary": "Put the site live: anyone with the address can read it",
       "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/sign-in",
+      "tag": "publishing",
+      "summary": "A one-time sign-in to a live site for the calling member: the URL to send the browser to",
+      "role": "viewer",
       "source": "site",
       "public": false,
       "platformAdmin": false
@@ -2575,6 +2815,26 @@
       "path": "/v1/sites/{id}/versions",
       "tag": "publishing",
       "summary": "Add a version: `live` follows a branch, `frozen` is a snapshot taken now",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/sites/{id}/visitor-secret",
+      "tag": "publishing",
+      "summary": "Turn visitor sign-in off. Open visitor sessions end at once",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/visitor-secret",
+      "tag": "publishing",
+      "summary": "Set a new secret for visitor JWTs (HS256), shown once. The old one stops working, and its sessions end",
       "role": "admin",
       "source": "site",
       "public": false,
@@ -3149,6 +3409,36 @@
       ]
     },
     {
+      "name": "knowledge_export",
+      "description": "Export a page, a page and its subpages, or a whole project as a file a person can download (docs/features/45): zip (markdown sources with frontmatter, attachments and manifest.json), html (an offline site, zipped) or pdf (only where the deployment has Gotenberg). Give documentId, or projectId for a whole project. Runs in the background: returns the export id — poll knowledge_get_export for the download URL.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "format",
+          "optional": false
+        },
+        {
+          "name": "documentId",
+          "optional": true
+        },
+        {
+          "name": "includeSubtree",
+          "optional": true
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        },
+        {
+          "name": "branch",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_feedback",
       "description": "Rate an answer you built from knowledge_search: up or down, with a reason on down. Quote the search's traceId so a re-vote updates the same row. Votes and reasons are what turns a bad answer into documentation work; nothing else changes.",
       "inputs": [
@@ -3261,6 +3551,20 @@
         {
           "name": "revisionId",
           "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_get_export",
+      "description": "One export: its status (queued | running | completed | failed | expired), page count and size, and — once completed — a download URL valid for a few minutes. Only the person who asked for it, or an admin, sees it.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "exportId",
+          "optional": false
         }
       ]
     },

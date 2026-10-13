@@ -36,13 +36,15 @@ the render, and every API call that render makes on one trace
 ### The public entry
 
 `/s/*` (a share link), `/pub/<slug>/*` (a published site in path mode) and
-every path on a host under `PUBLISH_BASE_DOMAIN` (a site on its own host) are
-matched before any cookie is read and rendered by a second entry,
+every path on a site's own host are matched before any cookie is read and
+rendered by a second entry,
 `src/entry-public.ts`, into its own shell, `reader.html`, with its own client
 entry and app (`public-main.ts`: no router, Pinia, query client or auth guard;
 `SharePage` or `SitePage` by the view resolved) (docs/features/43, 44). It
-receives only the language, the `kn_share_*` cookies and the visitor's
-`X-Forwarded-For`; `kn_token` never reaches a public render. The render
+receives only the language, the `kn_share_*` and `kn_site_*` cookies (share
+unlocks and site sign-ins, both scoped to one link or site) and the visitor's
+`X-Forwarded-For`; `kn_token` never reaches a public render. A request with a
+`kn_site_*` cookie skips the site render cache: its render is one reader's. The render
 returns its own headers (a share's no-referrer/noindex/no-store, a site's
 robots rule) and may answer with a redirect to a page's one canonical URL. Its
 page body is HTML from `lib/markdown/public-render.server.ts`, which sanitizes
@@ -50,6 +52,57 @@ with `SANITIZE_CONFIG` over a jsdom window. That is the one server-side
 sanitizer, and the reason `MarkdownView` can keep rendering nothing during SSR.
 Vite builds both apps in one pass (`rolldownOptions.input`), and the reader
 carries its own small i18n catalog rather than sharing the app's.
+
+Both SSR bundles leave `vue` and `vue-i18n` external, so in production Node
+loads their published builds with no compile-time `define`. vue-i18n's
+`install()` then reads Vue's `__VUE_PROD_DEVTOOLS__` flag, which nothing
+defines under plain Node. A member render happened to define it first, so a
+public page rendered first after boot threw inside that async `install()`,
+and the unhandled rejection killed the process. `server.js` therefore defines
+the flag itself before anything renders. Dev never shows this: with
+`NODE_ENV` unset the check short-circuits before reading the flag.
+
+A site sign-in crosses both apps (docs/features/44, "Audiences"). The
+reader's Sign in links to the member app's `/site-sign-in`, an ordinary
+route behind the login guard. That page asks the API for a one-time code and
+`location.replace`s to the site's own `/api/v1/public/sites/:id/session`,
+which reaches the API through the front proxy's `/api` route (Vite's proxy in
+dev) on whatever origin the site has: path mode, a base-domain host or a
+custom domain. The cookie is therefore set on the site's origin and never
+on the app's.
+
+The Ask widget ([44](../features/44-docs-portal.md#ask-phase-3)) is two
+routes. `/widget.js` (`server/site-widget.js`, mounted before the reader so
+it is not taken for a page) is a static script, the same bytes for every
+site. `/_widget` is a page of the public entry (`SiteWidget.vue`), and its
+render returns the `Content-Security-Policy: frame-ancestors` header built
+from the site's `embedOrigins`, which is the only thing standing between the
+frame and an origin the admin did not list.
+
+Whether a host is a site's is decided once per request, first thing
+(`server/site-files.js`, `res.locals.siteHost`). The host is `Host`, or
+`X-Forwarded-Host` when the peer is internal (an edge that rewrites `Host`, as
+production's Worker → Funnel does, still names the visitor's host). A host
+under `PUBLISH_BASE_DOMAIN` is a site's by its shape; the app's own host
+(`WEB_BASE_URL`) never is; any other host is asked of the API
+(`/v1/public/domains/allow`, the check Caddy's on-demand TLS also makes) and
+the answer is cached for a minute, a failed lookup not at all. On a site, the
+AI-readable middleware steps aside and `siteFilesMiddleware` proxies the
+site's `sitemap.xml`, `robots.txt`, `llms*.txt` and `<page>.md` to
+`/v1/public/sites/*`, with no cookie or credential, through the same `relay`
+the AI-readable routes use.
+
+### The export renderer
+
+`POST /_internal/export/render` (`server/export-render.js`, mounted before
+the host check) is how the worker gets an export's HTML
+([feature 45](../features/45-export.md)). It calls a third SSR module,
+`src/export-render.ts`, which renders each page with `renderPublicMarkdown`
+and wraps the pages in the app's own stylesheets: `styles/tokens.css` (the
+palette, kept out of `style.css`'s Tailwind entry so it can be inlined) and
+`styles/editor.css`. It answers only an internal peer whose request carries no
+`X-Forwarded-*` header, which is never a request through Caddy. The module is a
+third SSR input in `vite.config.ts`.
 
 ## A fresh app per request
 
@@ -212,5 +265,9 @@ paint for anything the stores do not hold.
 
 `sirv` serves the built client directly out of the web process in production —
 there is no CDN or asset host in front of it — and `server.js` is an Express app
-with no rendering cache, so every request renders. Both are fine at the current
-scale and are the first things to revisit if SSR latency becomes a problem.
+that renders every request of the member app. Only published site pages are
+cached (`server/render-cache.js`: an in-process LRU revalidated against the
+API's `resolve` ETag on every request, see
+[44](../features/44-docs-portal.md#the-render-cache)). Both are fine at the
+current scale and are the first things to revisit if SSR latency becomes a
+problem.

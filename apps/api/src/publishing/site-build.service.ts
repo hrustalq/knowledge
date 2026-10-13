@@ -4,7 +4,9 @@ import type { Prisma } from '@prisma/client';
 import type { Env } from '../config/env.js';
 import { hasRealPath } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SiteAudienceStamper } from './site-audience.stamper.js';
 import { planSiteBuild, resolveRevision, type PlanDocument, type ResolvedRevision } from './site-build.plan.js';
+import { SiteSearchTextService } from './site-search-text.service.js';
 
 /**
  * Builds one site version's snapshot (docs/features/44): reads the tree and
@@ -13,7 +15,13 @@ import { planSiteBuild, resolveRevision, type PlanDocument, type ResolvedRevisio
  *
  * The swap is the whole safety story. Until it commits, readers keep the
  * previous snapshot; a build that fails changes nothing they can see, and the
- * version reports `failed` beside the snapshot it still serves.
+ * version reports `failed` beside the snapshot it still serves. The search
+ * index is part of the swap (phase 2b-2): the rows carry their text and the
+ * same transaction computes their vectors, so search never names a page the
+ * reader does not serve, or misses one it does. So are the audience stamps
+ * (phase 3): every row is written already restricted as the rules say, and a
+ * restamp right after the swap closes the window in which a rule changed
+ * while the build ran.
  *
  * Runs in the worker. It creates no page and attributes no act to anyone, so
  * it completes itself rather than handing anything back to the API.
@@ -26,6 +34,8 @@ export class SiteBuildService {
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService<Env, true>,
+    private readonly searchText: SiteSearchTextService,
+    private readonly audiences: SiteAudienceStamper,
   ) {
     this.maxPages = config.get('SITE_MAX_PAGES', { infer: true });
   }
@@ -53,9 +63,27 @@ export class SiteBuildService {
         maxPages: this.maxPages,
       });
 
+      // Read before the swap, so the transaction stays short and a snapshot
+      // is never served without its search text.
+      const texts = await this.searchText.texts(plan.pages.map((p) => p.revisionId));
+      const rules = await this.audiences.rules(site.id);
+      const pathOf = new Map(documents.map((d) => [d.id, d.path]));
+
       await this.prisma.$transaction([
         this.prisma.siteVersionPage.deleteMany({ where: { versionId } }),
-        this.prisma.siteVersionPage.createMany({ data: plan.pages.map((p) => ({ versionId, ...p })) }),
+        this.prisma.siteVersionPage.createMany({
+          data: plan.pages.map((p) => {
+            const text = texts.get(p.revisionId);
+            return {
+              versionId,
+              ...p,
+              searchHeadings: text?.headings ?? '',
+              searchBody: text?.body ?? '',
+              ...SiteAudienceStamper.columns(this.audiences.stampFor(p.documentId, pathOf.get(p.documentId), rules)),
+            };
+          }),
+        }),
+        this.searchText.indexVersion(versionId),
         this.prisma.siteVersion.update({
           where: { id: versionId },
           data: {
@@ -67,6 +95,7 @@ export class SiteBuildService {
           },
         }),
       ]);
+      await this.audiences.restamp(site.id, versionId);
       this.logger.log(`site version ${versionId} built: ${plan.pages.length} pages, ${plan.warnings.length} warnings`);
     } catch (e) {
       const message = (e as Error).message.slice(0, 500);
@@ -83,7 +112,11 @@ export class SiteBuildService {
    * prefix-matches `/ab/`). A root that is gone, archived or moved to another
    * project publishes nothing rather than falling back to the whole project.
    */
-  private async scope(workspaceId: string, projectId: string, rootDocumentId: string | null): Promise<PlanDocument[]> {
+  private async scope(
+    workspaceId: string,
+    projectId: string,
+    rootDocumentId: string | null,
+  ): Promise<(PlanDocument & { path: string })[]> {
     let pathPrefix: string | undefined;
     if (rootDocumentId) {
       const root = await this.prisma.document.findUnique({
@@ -102,7 +135,7 @@ export class SiteBuildService {
         archivedAt: null,
         ...(pathPrefix ? { path: { startsWith: pathPrefix } } : {}),
       },
-      select: { id: true, parentId: true, title: true, position: true },
+      select: { id: true, parentId: true, title: true, position: true, path: true },
     });
   }
 

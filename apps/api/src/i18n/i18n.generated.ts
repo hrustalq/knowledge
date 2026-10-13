@@ -624,6 +624,41 @@ export type I18nTranslations = {
             "versionLimit": string;
             "versionNotBuilt": string;
             "defaultVersionDelete": string;
+            "domainNotFound": string;
+            "domainInvalid": string;
+            "domainReserved": string;
+            "domainTaken": string;
+            "domainExists": string;
+            "domainLimit": string;
+            "customDomainsOff": string;
+            "audienceClaimsInvalid": string;
+            "audienceClaimsMembers": string;
+            "audienceRuleLimit": string;
+            "audienceRuleNotFound": string;
+            "audiencePageNotInSite": string;
+            "visitorSecretNeedsKey": string;
+            "signInReturnInvalid": string;
+            "embedOriginInvalid": string;
+        };
+        "export": {
+            "notFound": string;
+            "notYours": string;
+            "tooManyPages": string;
+            "nothingToExport": string;
+            "formatUnavailable": string;
+            "notReady": string;
+            "expired": string;
+            "tooLarge": string;
+            "renderFailed": string;
+            "convertFailed": string;
+            "timedOut": string;
+            "failed": string;
+        };
+        "publicAsk": {
+            "budgetExhausted": string;
+            "rateLimited": string;
+            "unavailable": string;
+            "notEnabled": string;
         };
     };
     "import": {
@@ -838,6 +873,8 @@ export type I18nTranslations = {
         "shareLink": string;
         "site": string;
         "siteVersion": string;
+        "siteDomain": string;
+        "export": string;
     };
     "validation": {
         "isDefined": string;

@@ -155,7 +155,8 @@
     "or": "or",
     "startFromTemplate": "start from a template",
     "templates": "Templates",
-    "publishing": "Publishing"
+    "publishing": "Publishing",
+    "exports": "Exports"
   },
   "role": {
     "viewer": "Viewer",
@@ -264,7 +265,8 @@
     "notificationsHint": "Mentions, reviews, what you follow",
     "connectHint": "MCP clients, API keys, skill",
     "templatesHint": "Page shapes to start from",
-    "publishingHint": "Public links to pages"
+    "publishingHint": "Public links to pages",
+    "exportsHint": "Files you exported"
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -1794,7 +1796,8 @@
       "chat-stream": "Chat (stream)",
       "review": "Review",
       "suggest": "Suggest",
-      "glossary": "Glossary"
+      "glossary": "Glossary",
+      "public_ask": "Site Ask"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -2982,6 +2985,8 @@
       "agent.run.failed": "an agent run failed",
       "import.parsed": "an import is ready to review",
       "import.failed": "an import failed",
+      "export.completed": "an export is ready to download",
+      "export.failed": "an export failed",
       "connector.run.failed": "a sync failed",
       "knowledge-issue.reported": "reported a problem with this page",
       "document.verification-requested": "asked for this page to be verified",
@@ -3595,7 +3600,10 @@
     "tab": {
       "general": "General",
       "theme": "Theme",
-      "versions": "Versions"
+      "versions": "Versions",
+      "domains": "Domains",
+      "audience": "Audience",
+      "ask": "Ask"
     },
     "seoIndexable": "Let search engines index the site",
     "seoIndexableHint": "Off: every page says noindex. Older versions are never indexed either way.",
@@ -3667,6 +3675,168 @@
       "none": "Not published",
       "manage": "Manage site",
       "setUp": "Set up a site"
+    },
+    "domains": {
+      "off": "Custom domains are turned off on this server (SITE_CUSTOM_DOMAINS): the hostnames below are kept but do not open the site.",
+      "intro": "Serve the site on a hostname you control. Point it at this server with the CNAME record, then add the TXT record to prove it is yours. The site answers there once the domain is verified, and its links and sitemap use the first verified domain.",
+      "none": "No domains yet.",
+      "verified": "Verified",
+      "pending": "Waiting for DNS",
+      "verify": "Check now",
+      "remove": "Remove {hostname}",
+      "verifiedHint": "Verified {when}. The TXT record is no longer needed; the CNAME is.",
+      "pendingHint": "Checked automatically every few minutes for the first day, then hourly for a week. DNS changes can take a while to show.",
+      "checked": "checked {when}",
+      "error": {
+        "txtMissing": "The TXT record was not found.",
+        "txtMismatch": "A TXT record was found, but with a different value. Copy the value again.",
+        "dnsError": "DNS did not answer. It will be tried again."
+      },
+      "add": "Add a domain",
+      "addButton": "Add",
+      "invalid": "Enter a hostname such as docs.example.com.",
+      "limit": "A site has at most {max} domains.",
+      "added": "Domain added. Create the DNS records below.",
+      "verifiedToast": "{hostname} is verified",
+      "removed": "{hostname} removed",
+      "copyFailed": "Couldn't copy — select the value and copy it by hand."
+    },
+    "audience": {
+      "intro": "Every page of a live site is public unless a rule here says otherwise. A rule keeps a page and everything below it from the public; a page is never more open than its parent. Rules apply to every version at once, frozen ones included.",
+      "membersHint": "Workspace members sign in through this app and see every page of the site.",
+      "none": "No rules: the whole site is public.",
+      "members": "Members",
+      "visitors": "Visitors",
+      "membersDesc": "Signed-in workspace members only",
+      "visitorsDesc": "Also visitors your backend signs in",
+      "anyVisitor": "any signed-in visitor",
+      "claim": "{key}: {values}",
+      "edit": "Edit",
+      "remove": "Remove the rule on {title}",
+      "removed": "Rule removed. The page follows the rules above it again.",
+      "saved": "Rule saved. Every version follows it now.",
+      "add": "Add a rule",
+      "editing": "Change the rule",
+      "page": "Page",
+      "pagePlaceholder": "Pick a page",
+      "audience": "Who may read it",
+      "claims": "Required claims",
+      "claimsHint": "Optional. One claim per line as name=value, value: the visitor's token must carry the claim with one of the values. Empty: any valid token.",
+      "claimsInvalid": "Write each line as name=value, value.",
+      "save": "Save rule",
+      "cancel": "Cancel",
+      "visitorAuth": "Visitor sign-in",
+      "visitorAuthIntro": "Let people who are not workspace members read visitors pages. Your backend signs a JWT (HS256) with this site's secret, with an exp claim, and sends the visitor to any page of the site with ?jwt_token=<token>. The sign-in lasts until the token expires, at most {minutes} minutes.",
+      "visitorAuthOn": "On since {when}",
+      "visitorAuthOff": "Off: visitors pages are for workspace members only.",
+      "visitorNoKey": "The server has no SETTINGS_ENCRYPTION_KEY, so a secret cannot be stored. Set it to turn visitor sign-in on.",
+      "generate": "Generate secret",
+      "rotate": "Replace secret",
+      "rotateConfirm": "Replace the secret? Tokens signed with the current one stop working, and everyone signed in as a visitor is signed out.",
+      "turnOff": "Turn off",
+      "turnOffConfirm": "Turn visitor sign-in off? Everyone signed in as a visitor is signed out.",
+      "turnedOff": "Visitor sign-in is off",
+      "secretOnce": "Copy the secret now: it is not shown again. Store it in your backend's configuration, never in a browser.",
+      "copySecret": "Copy secret",
+      "copied": "Copied",
+      "copyFailed": "Couldn't copy. Select the secret and copy it by hand.",
+      "example": "Example payload",
+      "exampleUrl": "Sign-in link"
+    },
+    "signIn": {
+      "title": "Signing you in to the site…",
+      "failedTitle": "Can't sign you in to this site",
+      "notMember": "Your account has no access to the workspace that publishes this site. Ask an admin of the workspace to invite you.",
+      "badLink": "This sign-in link is incomplete or not for this site. Go back to the site and choose Sign in again.",
+      "failed": "Something went wrong. Go back to the site and try again.",
+      "back": "Back to the site"
+    },
+    "ask": {
+      "enabled": "Answer questions from this site’s pages",
+      "enabledHint": "Readers get an Ask button beside search, and other sites can embed the widget. Answers come only from published pages the reader may see, with links to them.",
+      "budget": "Answers a day",
+      "budgetHint": "Leave empty to use this deployment’s limit ({ceiling}). Counted per site, reset at midnight UTC.",
+      "budgetInvalid": "A whole number from 0 to {max}.",
+      "applies": "{n} a day apply",
+      "capped": "This deployment allows at most {ceiling} a day, so that is what applies.",
+      "origins": "Sites that may embed the widget",
+      "originsHint": "One origin per line, e.g. https://www.example.com — https only, at most {max}. Pages elsewhere cannot show the widget.",
+      "snippet": "Embed the widget",
+      "snippetHint": "Add this to any page on the sites listed above. A button appears in the corner once the widget loads.",
+      "copySnippet": "Copy the snippet",
+      "noOrigins": "No site may embed it yet: add one above. The Ask button in the site itself works without it.",
+      "noModel": "This workspace has no AI model configured, so questions will not be answered. Set one up in AI settings.",
+      "offByCeiling": "Ask is turned off for this deployment (PUBLIC_ASK_DAILY_BUDGET=0)."
+    }
+  },
+  "export": {
+    "action": "Export…",
+    "actionProject": "Export project",
+    "queued": "Export started",
+    "queuedHint": "It runs in the background — you will be notified when the file is ready.",
+    "viewExports": "View exports",
+    "download": "Download",
+    "pdfUnavailable": "Not set up on this server: PDF needs a Gotenberg service (GOTENBERG_URL).",
+    "dialog": {
+      "title": "Export “{title}”",
+      "titleProject": "Export the project “{title}”",
+      "description": "The file is kept for {hours} hours, then deleted. Only you and the workspace admins can download it.",
+      "format": "Format",
+      "includeSubtree": "Include subpages",
+      "branch": "Branch",
+      "branchPlaceholder": "Default branch",
+      "branchHint": "Pages without this branch are exported from their default branch.",
+      "start": "Export",
+      "starting": "Starting…"
+    },
+    "format": {
+      "zip": "Markdown (ZIP)",
+      "html": "HTML site (ZIP)",
+      "pdf": "PDF"
+    },
+    "formatHint": {
+      "zip": "The pages as markdown with their frontmatter, attachments and a manifest — for backup or moving elsewhere.",
+      "html": "A small website that opens offline: a contents page, one page per file, images included.",
+      "pdf": "One document to read or print: a page break per page, diagrams drawn."
+    },
+    "scope": {
+      "page": "page",
+      "subtree": "page and subpages",
+      "project": "project"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Ready",
+      "failed": "Failed",
+      "expired": "Expired"
+    },
+    "stage": {
+      "collecting": "Collecting pages",
+      "rendering": "Rendering",
+      "converting": "Making the PDF",
+      "packaging": "Packaging"
+    },
+    "error": {
+      "tooLarge": "Too large",
+      "renderFailed": "Rendering failed",
+      "convertFailed": "PDF conversion failed",
+      "formatUnavailable": "Format not available",
+      "timedOut": "Timed out",
+      "failed": "Failed"
+    },
+    "page": {
+      "title": "Exports",
+      "subtitle": "Files you exported from pages and projects. Each one is kept for a while, then deleted.",
+      "subtitleAdmin": "Files exported from pages and projects in this workspace, by anyone. Each one is kept for a while, then deleted.",
+      "empty": "Nothing exported yet. Use “Export…” in a page’s menu, the page tree or a project’s page.",
+      "colWhat": "Exported",
+      "colFormat": "Format",
+      "colStatus": "Status",
+      "colBy": "By",
+      "colCreated": "Asked",
+      "summary": "{pages} pages · {size}",
+      "expires": "deleted {when}"
     }
   }
 }

@@ -6,17 +6,30 @@
  * a share: no router, no stores, no auth. Every page is a full server render
  * of the version's snapshot, so navigation is plain links — the nav, the
  * version switcher and prev/next all work with JavaScript off, which is also
- * what a crawler sees. The client only upgrades mermaid and the theme toggle.
+ * what a crawler sees. The client only upgrades mermaid and the theme toggle,
+ * and adds search (SiteSearch), which has no server-rendered form.
  *
  * The nav shows the top level and the open path to the current page, the way
  * docs sites do: a 500-page tree drawn whole is a list nobody reads.
+ *
+ * A site with pages that are not public (issue #77 phase 3) offers sign-in, a
+ * plain link through the app; whoever is signed in can sign out, which needs
+ * JavaScript (it is a POST) and then reloads into the anonymous view.
+ *
+ * A site that answers questions offers Ask (SiteAsk, the same panel the
+ * embeddable widget shows) in a sheet beside search. It asks as this reader,
+ * so a signed-in reader's answers may draw on pages others cannot see.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Menu, Moon, Sun } from 'lucide-vue-next'
+import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, LogIn, LogOut, Menu, MessageCircleQuestion, Moon, Sun } from 'lucide-vue-next'
 import { formatDate } from '@/lib/format'
 import { toggleTheme } from '@/lib/theme'
 import PublicMarkdown from '@/components/public/PublicMarkdown.vue'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import SiteAsk from './SiteAsk.vue'
+import SiteSearch from './SiteSearch.vue'
+import { publicSiteSessionPath } from '@knowledge/contracts/publishing'
 import { siteHomeId, siteHref, treeRows, type PublicReaderState } from './reader-state'
 
 const props = defineProps<{ state: PublicReaderState }>()
@@ -57,14 +70,43 @@ const next = computed(() => (index.value >= 0 && index.value < allRows.value.len
 const toc = computed(() => page.value?.headings.filter((h) => h.level > 1) ?? [])
 const date = (iso: string) => formatDate(iso, props.state.locale)
 
-/** A version switch keeps the reader on the same page when the target version has it (`?from=`). */
+/**
+ * A version switch keeps the reader on the same page: straight to it when the
+ * server knows where it lives there, else through `?from=`, which lands on
+ * the target version's home when it does not have the page.
+ */
 function versionHref(target: { slug: string; name: string; isDefault: boolean }): string {
   if (!site.value) return '#'
+  const alternate = page.value?.alternates.find((a) => a.versionSlug === target.slug)
+  if (alternate) return alternate.href
   const isHome = !page.value || page.value.documentId === homeId.value
   const base = siteHref(site.value, target, page.value?.slugPath ?? '', isHome)
   return page.value && !isHome ? `${base}?from=${page.value.documentId}` : base
 }
 const currentVersion = computed(() => site.value?.versions.find((v) => v.isDefault) ?? null)
+
+const signedIn = computed(() => !!site.value && site.value.viewer !== 'anonymous')
+const askOpen = ref(false)
+const askPanel = ref<InstanceType<typeof SiteAsk> | null>(null)
+const signingOut = ref(false)
+const signOutFailed = ref(false)
+
+async function signOut() {
+  if (!site.value || signingOut.value) return
+  signingOut.value = true
+  signOutFailed.value = false
+  try {
+    const res = await fetch(`${props.state.apiBase}${publicSiteSessionPath(site.value.id)}/end`, {
+      method: 'POST',
+      credentials: 'same-origin',
+    })
+    if (!res.ok) throw new Error(String(res.status))
+    window.location.reload()
+  } catch {
+    signOutFailed.value = true
+    signingOut.value = false
+  }
+}
 </script>
 
 <template>
@@ -115,6 +157,18 @@ const currentVersion = computed(() => site.value?.versions.find((v) => v.isDefau
 
           <span class="flex-1" />
 
+          <SiteSearch v-if="site.tree.length" :site="site" :api-base="state.apiBase" />
+          <button
+            v-if="site.ask && site.tree.length"
+            type="button"
+            class="inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-haspopup="dialog"
+            @click="askOpen = true"
+          >
+            <MessageCircleQuestion class="size-4" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ t('siteReader.ask') }}</span>
+          </button>
+
           <nav v-if="site.theme.headerLinks.length" class="hidden items-center gap-4 text-sm md:flex">
             <a
               v-for="link in site.theme.headerLinks"
@@ -125,6 +179,20 @@ const currentVersion = computed(() => site.value?.versions.find((v) => v.isDefau
               class="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
             >{{ link.label }}<ExternalLink class="size-3" aria-hidden="true" /></a>
           </nav>
+
+          <a
+            v-if="!signedIn && site.signInUrl"
+            :href="site.signInUrl"
+            class="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          ><LogIn class="size-4" aria-hidden="true" />{{ t('siteReader.signIn') }}</a>
+          <button
+            v-else-if="signedIn"
+            type="button"
+            class="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+            :title="site.viewer === 'member' ? t('siteReader.signedInMember') : t('siteReader.signedInVisitor')"
+            :disabled="signingOut"
+            @click="signOut"
+          ><LogOut class="size-4" aria-hidden="true" />{{ t('siteReader.signOut') }}</button>
 
           <button
             type="button"
@@ -139,6 +207,27 @@ const currentVersion = computed(() => site.value?.versions.find((v) => v.isDefau
           </button>
         </div>
       </header>
+
+      <Sheet v-if="site.ask" v-model:open="askOpen">
+        <SheetContent side="right" class="w-full gap-0 p-0 sm:max-w-lg" @open-auto-focus.prevent="askPanel?.focus()">
+          <SheetHeader class="border-b px-4 py-3 pr-12">
+            <SheetTitle class="text-base">{{ t('siteReader.askTitle', { site: site.title }) }}</SheetTitle>
+            <SheetDescription class="sr-only">{{ t('siteReader.askDescription') }}</SheetDescription>
+          </SheetHeader>
+          <SiteAsk
+            ref="askPanel"
+            class="min-h-0 flex-1"
+            :site-id="site.id"
+            :site-title="site.title"
+            :api-base="state.apiBase"
+            :version-slug="site.version.isDefault ? null : site.version.slug"
+          />
+        </SheetContent>
+      </Sheet>
+
+      <p v-if="signOutFailed" role="alert" class="border-b bg-destructive/10 px-4 py-2 text-center text-sm text-destructive">
+        {{ t('siteReader.signOutFailed') }}
+      </p>
 
       <p
         v-if="!site.version.isDefault && currentVersion"
@@ -228,7 +317,12 @@ const currentVersion = computed(() => site.value?.versions.find((v) => v.isDefau
                 <p class="text-sm text-muted-foreground">{{ t('siteReader.pageNotFoundBody') }}</p>
                 <a :href="homeHref" class="inline-block text-sm font-medium text-primary hover:underline">{{ t('siteReader.backHome') }}</a>
               </template>
-              <p v-else class="text-sm text-muted-foreground">{{ t('siteReader.emptySite') }}</p>
+              <p v-else-if="!site.signInUrl || signedIn" class="text-sm text-muted-foreground">{{ t('siteReader.emptySite') }}</p>
+              <!-- Said on any miss of a site with restricted pages: it names no page, so it confirms none. -->
+              <p v-if="site.signInUrl && !signedIn" class="text-sm text-muted-foreground">
+                {{ t('siteReader.restrictedHint') }}
+                <a :href="site.signInUrl" class="font-medium text-primary hover:underline">{{ t('siteReader.signIn') }}</a>
+              </p>
             </div>
           </div>
         </article>

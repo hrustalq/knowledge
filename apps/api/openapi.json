@@ -11503,7 +11503,8 @@
                 "chat-stream",
                 "review",
                 "suggest",
-                "glossary"
+                "glossary",
+                "public_ask"
               ],
               "type": "string"
             }
@@ -19461,6 +19462,146 @@
         ]
       }
     },
+    "/v1/public/sites/widget": {
+      "get": {
+        "operationId": "PublicSitesController_widget",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": false,
+            "in": "query",
+            "description": "Path mode: the site slug from `/pub/<slug>`",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Host mode: the request host",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "No live site there, or it does not answer questions"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What the Ask widget’s frame needs: the site’s chrome and the origins that may embed it",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/{siteId}/ask": {
+      "post": {
+        "operationId": "PublicSitesController_askSite",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskSiteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "404": {
+            "description": "No live site with this id, or it does not answer questions"
+          },
+          "429": {
+            "description": "`publicAsk.rateLimited` (this address) or `publicAsk.budgetExhausted` (the site, until UTC midnight)"
+          },
+          "503": {
+            "description": "No model is configured for the workspace, or its AI budget is spent"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Answer a question from one version of a live site, citing its pages",
+        "tags": [
+          "public"
+        ]
+      }
+    },
     "/v1/public/sites/{siteId}/search": {
       "get": {
         "operationId": "PublicSitesController_searchSite",
@@ -24606,6 +24747,25 @@
             "type": "string",
             "format": "uuid",
             "description": "The version served without a version segment. Must have built once"
+          },
+          "askEnabled": {
+            "type": "boolean",
+            "description": "The site answers questions from its pages, in the reader and the embeddable widget"
+          },
+          "askDailyBudget": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100000,
+            "description": "Answers a day. null takes PUBLIC_ASK_DAILY_BUDGET, which also caps it"
+          },
+          "embedOrigins": {
+            "maxItems": 20,
+            "description": "Origins allowed to embed the widget, e.g. https://example.com. Replaces the list",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -24714,6 +24874,23 @@
         },
         "required": [
           "password"
+        ]
+      },
+      "AskSiteDto": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          },
+          "version": {
+            "type": "string",
+            "description": "A version slug; omitted = the default version"
+          }
+        },
+        "required": [
+          "question"
         ]
       },
       "SiteSignInDto": {

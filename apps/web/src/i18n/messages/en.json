@@ -1796,7 +1796,8 @@
       "chat-stream": "Chat (stream)",
       "review": "Review",
       "suggest": "Suggest",
-      "glossary": "Glossary"
+      "glossary": "Glossary",
+      "public_ask": "Site Ask"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -3601,7 +3602,8 @@
       "theme": "Theme",
       "versions": "Versions",
       "domains": "Domains",
-      "audience": "Audience"
+      "audience": "Audience",
+      "ask": "Ask"
     },
     "seoIndexable": "Let search engines index the site",
     "seoIndexableHint": "Off: every page says noindex. Older versions are never indexed either way.",
@@ -3748,6 +3750,23 @@
       "badLink": "This sign-in link is incomplete or not for this site. Go back to the site and choose Sign in again.",
       "failed": "Something went wrong. Go back to the site and try again.",
       "back": "Back to the site"
+    },
+    "ask": {
+      "enabled": "Answer questions from this site’s pages",
+      "enabledHint": "Readers get an Ask button beside search, and other sites can embed the widget. Answers come only from published pages the reader may see, with links to them.",
+      "budget": "Answers a day",
+      "budgetHint": "Leave empty to use this deployment’s limit ({ceiling}). Counted per site, reset at midnight UTC.",
+      "budgetInvalid": "A whole number from 0 to {max}.",
+      "applies": "{n} a day apply",
+      "capped": "This deployment allows at most {ceiling} a day, so that is what applies.",
+      "origins": "Sites that may embed the widget",
+      "originsHint": "One origin per line, e.g. https://www.example.com — https only, at most {max}. Pages elsewhere cannot show the widget.",
+      "snippet": "Embed the widget",
+      "snippetHint": "Add this to any page on the sites listed above. A button appears in the corner once the widget loads.",
+      "copySnippet": "Copy the snippet",
+      "noOrigins": "No site may embed it yet: add one above. The Ask button in the site itself works without it.",
+      "noModel": "This workspace has no AI model configured, so questions will not be answered. Set one up in AI settings.",
+      "offByCeiling": "Ask is turned off for this deployment (PUBLIC_ASK_DAILY_BUDGET=0)."
     }
   },
   "export": {

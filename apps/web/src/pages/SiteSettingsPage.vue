@@ -48,6 +48,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageState } from '@/components/layout/page'
+import SiteAskPanel from '@/components/projects/SiteAskPanel.vue'
 import SiteAudiencePanel from '@/components/projects/SiteAudiencePanel.vue'
 
 const { t } = useI18n()
@@ -113,7 +114,7 @@ function previewUrl(slug: string): string {
 
 // ---------------------------------------------------------------- tabs
 // Hand-rolled (CLAUDE.md); `?tab=` opens one, it is not two-way state.
-const TABS = ['general', 'theme', 'versions', 'domains', 'audience'] as const
+const TABS = ['general', 'theme', 'versions', 'domains', 'audience', 'ask'] as const
 type Tab = (typeof TABS)[number]
 /** Who may read which pages is an admin's to see as well as to change: the rules name restricted pages. */
 const visibleTabs = computed(() => TABS.filter((id) => id !== 'audience' || canManage.value))
@@ -599,6 +600,15 @@ const backToProject = () => router.push(`/settings/projects/${projectId.value}`)
 
         <!-- Domains -->
         <SiteAudiencePanel v-else-if="tab === 'audience' && canManage" :site="site" :pages="pageOptions" :can-manage="canManage" />
+
+        <SiteAskPanel
+          v-else-if="tab === 'ask' && policy"
+          :site="site"
+          :policy="policy"
+          :can-manage="canManage"
+          :busy="busy"
+          @save="(body) => patchSite(body, 'site.saved')"
+        />
 
         <div v-else-if="tab === 'domains'" class="max-w-3xl space-y-6">
           <p

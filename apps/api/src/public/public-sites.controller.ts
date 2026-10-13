@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Headers,
@@ -16,19 +17,25 @@ import {
   type ExecutionContext,
   type NestInterceptor,
 } from '@nestjs/common';
-import { ApiExcludeEndpoint, ApiOperation, ApiPropertyOptional, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiExcludeEndpoint, ApiOperation, ApiProperty, ApiPropertyOptional, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import type { Request, Response } from 'express';
 import type { Observable } from 'rxjs';
 import {
+  SITE_ASK_MAX_CHARS,
+  SITE_ASK_MIN_CHARS,
   SITE_SEARCH_MAX_CHARS,
   siteSessionCookieName,
+  type PublicSiteAskResponse,
   type PublicSiteResolveResponse,
+  type PublicSiteWidgetResponse,
   type PublicSiteSearchResponse,
 } from '@knowledge/contracts';
 import { Public } from '../auth/access.decorator.js';
-import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
-import { PublicRateLimitGuard } from './public-rate-limit.js';
+import { ParseUuidPipe as ParseUUIDPipe, vmsg } from '../common/validation.js';
+import { currentLocale } from '../i18n/t.js';
+import { PublicAskService } from './public-ask.service.js';
+import { PublicRateLimitGuard, clientIp } from './public-rate-limit.js';
 import { PublicSiteSearchService } from './public-site-search.service.js';
 import { PublicSitesService } from './public-sites.service.js';
 import { SiteSessionService } from './site-session.service.js';
@@ -65,6 +72,34 @@ export class SearchSiteQueryDto {
   @IsString()
   @MaxLength(SITE_SEARCH_MAX_CHARS)
   q?: string;
+
+  @ApiPropertyOptional({ description: 'A version slug; omitted = the default version' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  version?: string;
+}
+
+export class WidgetSiteQueryDto {
+  @ApiPropertyOptional({ description: 'Path mode: the site slug from `/pub/<slug>`' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  slug?: string;
+
+  @ApiPropertyOptional({ description: 'Host mode: the request host' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  host?: string;
+}
+
+export class AskSiteDto {
+  @ApiProperty({ minLength: SITE_ASK_MIN_CHARS, maxLength: SITE_ASK_MAX_CHARS })
+  @IsString()
+  @MinLength(SITE_ASK_MIN_CHARS, { message: vmsg('minLength') })
+  @MaxLength(SITE_ASK_MAX_CHARS, { message: vmsg('maxLength') })
+  question!: string;
 
   @ApiPropertyOptional({ description: 'A version slug; omitted = the default version' })
   @IsOptional()
@@ -134,6 +169,7 @@ export class PublicSitesController {
     private readonly sites: PublicSitesService,
     private readonly search: PublicSiteSearchService,
     private readonly sessions: SiteSessionService,
+    private readonly asks: PublicAskService,
   ) {}
 
   /**
@@ -158,6 +194,33 @@ export class PublicSitesController {
       return undefined;
     }
     return body;
+  }
+
+  @Get('widget')
+  @ApiOperation({ summary: 'What the Ask widget’s frame needs: the site’s chrome and the origins that may embed it' })
+  @ApiResponse({ status: 404, description: 'No live site there, or it does not answer questions' })
+  widget(@Query() query: WidgetSiteQueryDto): Promise<PublicSiteWidgetResponse> {
+    return this.sites.widget(query);
+  }
+
+  /**
+   * Ask a live site a question (issue #77 phase 3): one answer from its
+   * published pages the caller may read, with citations as page URLs.
+   * Rate-limited per address and budgeted per site per day, both before any
+   * model is called.
+   */
+  @Post(':siteId/ask')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Answer a question from one version of a live site, citing its pages' })
+  @ApiResponse({ status: 404, description: 'No live site with this id, or it does not answer questions' })
+  @ApiResponse({ status: 429, description: '`publicAsk.rateLimited` (this address) or `publicAsk.budgetExhausted` (the site, until UTC midnight)' })
+  @ApiResponse({ status: 503, description: 'No model is configured for the workspace, or its AI budget is spent' })
+  askSite(
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Body() body: AskSiteDto,
+    @Req() req: Request,
+  ): Promise<PublicSiteAskResponse> {
+    return this.asks.ask(siteId, body, { ip: clientIp(req), cookieHeader: req.headers.cookie, locale: currentLocale() });
   }
 
   @Get(':siteId/search')

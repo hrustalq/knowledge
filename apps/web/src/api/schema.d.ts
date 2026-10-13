@@ -3888,6 +3888,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/sites/widget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the Ask widget’s frame needs: the site’s chrome and the origins that may embed it */
+        get: operations["PublicSitesController_widget"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/sites/{siteId}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer a question from one version of a live site, citing its pages */
+        post: operations["PublicSitesController_askSite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/sites/{siteId}/search": {
         parameters: {
             query?: never;
@@ -5623,6 +5657,12 @@ export interface components {
              * @description The version served without a version segment. Must have built once
              */
             defaultVersionId?: string;
+            /** @description The site answers questions from its pages, in the reader and the embeddable widget */
+            askEnabled?: boolean;
+            /** @description Answers a day. null takes PUBLIC_ASK_DAILY_BUDGET, which also caps it */
+            askDailyBudget?: number | null;
+            /** @description Origins allowed to embed the widget, e.g. https://example.com. Replaces the list */
+            embedOrigins?: string[];
         };
         CreateSiteVersionDto: {
             /** @description Shown in the version switcher, e.g. "v1.2" */
@@ -5661,6 +5701,11 @@ export interface components {
         };
         UnlockShareDto: {
             password: string;
+        };
+        AskSiteDto: {
+            question: string;
+            /** @description A version slug; omitted = the default version */
+            version?: string;
         };
         SiteSignInDto: {
             /** @description The site page to come back to, as an absolute URL on one of the site’s own addresses */
@@ -13216,7 +13261,7 @@ export interface operations {
                 cursor?: string;
                 limit?: string;
                 userId?: string;
-                operation?: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary";
+                operation?: "ask" | "chat" | "chat-stream" | "review" | "suggest" | "glossary" | "public_ask";
                 /** @description "true" / "false" to filter by outcome */
                 ok?: string;
             };
@@ -18429,6 +18474,109 @@ export interface operations {
             };
             /** @description No live site there, or sites are off for its workspace */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSitesController_widget: {
+        parameters: {
+            query?: {
+                /** @description Path mode: the site slug from `/pub/<slug>` */
+                slug?: string;
+                /** @description Host mode: the request host */
+                host?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No live site there, or it does not answer questions */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSitesController_askSite: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskSiteDto"];
+            };
+        };
+        responses: {
+            /** @description No live site with this id, or it does not answer questions */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `publicAsk.rateLimited` (this address) or `publicAsk.budgetExhausted` (the site, until UTC midnight) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No model is configured for the workspace, or its AI budget is spent */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

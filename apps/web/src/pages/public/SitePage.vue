@@ -15,13 +15,19 @@
  * A site with pages that are not public (issue #77 phase 3) offers sign-in, a
  * plain link through the app; whoever is signed in can sign out, which needs
  * JavaScript (it is a POST) and then reloads into the anonymous view.
+ *
+ * A site that answers questions offers Ask (SiteAsk, the same panel the
+ * embeddable widget shows) in a sheet beside search. It asks as this reader,
+ * so a signed-in reader's answers may draw on pages others cannot see.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, LogIn, LogOut, Menu, Moon, Sun } from 'lucide-vue-next'
+import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, LogIn, LogOut, Menu, MessageCircleQuestion, Moon, Sun } from 'lucide-vue-next'
 import { formatDate } from '@/lib/format'
 import { toggleTheme } from '@/lib/theme'
 import PublicMarkdown from '@/components/public/PublicMarkdown.vue'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import SiteAsk from './SiteAsk.vue'
 import SiteSearch from './SiteSearch.vue'
 import { publicSiteSessionPath } from '@knowledge/contracts/publishing'
 import { siteHomeId, siteHref, treeRows, type PublicReaderState } from './reader-state'
@@ -80,6 +86,8 @@ function versionHref(target: { slug: string; name: string; isDefault: boolean })
 const currentVersion = computed(() => site.value?.versions.find((v) => v.isDefault) ?? null)
 
 const signedIn = computed(() => !!site.value && site.value.viewer !== 'anonymous')
+const askOpen = ref(false)
+const askPanel = ref<InstanceType<typeof SiteAsk> | null>(null)
 const signingOut = ref(false)
 const signOutFailed = ref(false)
 
@@ -150,6 +158,16 @@ async function signOut() {
           <span class="flex-1" />
 
           <SiteSearch v-if="site.tree.length" :site="site" :api-base="state.apiBase" />
+          <button
+            v-if="site.ask && site.tree.length"
+            type="button"
+            class="inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-haspopup="dialog"
+            @click="askOpen = true"
+          >
+            <MessageCircleQuestion class="size-4" aria-hidden="true" />
+            <span class="hidden sm:inline">{{ t('siteReader.ask') }}</span>
+          </button>
 
           <nav v-if="site.theme.headerLinks.length" class="hidden items-center gap-4 text-sm md:flex">
             <a
@@ -189,6 +207,23 @@ async function signOut() {
           </button>
         </div>
       </header>
+
+      <Sheet v-if="site.ask" v-model:open="askOpen">
+        <SheetContent side="right" class="w-full gap-0 p-0 sm:max-w-lg" @open-auto-focus.prevent="askPanel?.focus()">
+          <SheetHeader class="border-b px-4 py-3 pr-12">
+            <SheetTitle class="text-base">{{ t('siteReader.askTitle', { site: site.title }) }}</SheetTitle>
+            <SheetDescription class="sr-only">{{ t('siteReader.askDescription') }}</SheetDescription>
+          </SheetHeader>
+          <SiteAsk
+            ref="askPanel"
+            class="min-h-0 flex-1"
+            :site-id="site.id"
+            :site-title="site.title"
+            :api-base="state.apiBase"
+            :version-slug="site.version.isDefault ? null : site.version.slug"
+          />
+        </SheetContent>
+      </Sheet>
 
       <p v-if="signOutFailed" role="alert" class="border-b bg-destructive/10 px-4 py-2 text-center text-sm text-destructive">
         {{ t('siteReader.signOutFailed') }}

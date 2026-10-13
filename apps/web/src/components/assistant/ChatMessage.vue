@@ -288,55 +288,7 @@ function saveEdit() {
   </article>
 </template>
 
-<style>
-/*
- * Citation markers (docs/features/38). Unscoped: the buttons are created by a
- * DOM pass inside MarkdownView's host, where a scoped attribute cannot reach.
- */
-.kn-cites {
-  display: inline-flex;
-  gap: 1px;
-  margin-left: 1px;
-  vertical-align: super;
-  line-height: 0;
-}
-.kn-cite {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.05rem;
-  height: 1.05rem;
-  padding: 0 0.25rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--background);
-  color: var(--muted-foreground);
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  transition: color 120ms ease-out, border-color 120ms ease-out, background-color 120ms ease-out;
-}
-.kn-cite:hover,
-.kn-cite:focus-visible,
-.kn-cite-active {
-  border-color: var(--primary);
-  background: color-mix(in oklab, var(--primary) 10%, transparent);
-  color: var(--primary);
-  outline: none;
-}
-/* A label the message has no source for yet: the stream is still running, or
-   the API stripped it. Drawn, so the text does not jump, but not a link. */
-.kn-cite-pending {
-  cursor: default;
-  border-style: dashed;
-}
-.kn-cite-pending:hover {
-  border-color: var(--border);
-  background: var(--background);
-  color: var(--muted-foreground);
-}
-</style>
+<style src="@/styles/citations.css"></style>
 
 <style scoped>
 /*

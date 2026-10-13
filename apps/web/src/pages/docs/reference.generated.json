@@ -2501,6 +2501,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/public/sites/{siteId}/ask",
+      "tag": "public",
+      "summary": "Answer a question from one version of a live site, citing its pages",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/public/sites/{siteId}/search",
       "tag": "public",
@@ -2585,6 +2595,16 @@
       "path": "/v1/public/sites/sitemap.xml",
       "tag": "public",
       "summary": "sitemap.xml of the default version, absolute canonical URLs. 404 when the site is not indexable",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/widget",
+      "tag": "public",
+      "summary": "What the Ask widget’s frame needs: the site’s chrome and the origins that may embed it",
       "role": null,
       "source": null,
       "public": true,

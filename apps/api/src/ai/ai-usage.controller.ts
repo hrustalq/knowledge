@@ -54,7 +54,7 @@ export class AiUsageController {
   @ApiQuery({ name: 'cursor', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'userId', required: false })
-  @ApiQuery({ name: 'operation', required: false, enum: ['ask', 'chat', 'chat-stream', 'review', 'suggest', 'glossary'] })
+  @ApiQuery({ name: 'operation', required: false, enum: ['ask', 'chat', 'chat-stream', 'review', 'suggest', 'glossary', 'public_ask'] })
   @ApiQuery({ name: 'ok', required: false, description: '"true" / "false" to filter by outcome' })
   @ApiOperation({ summary: 'One row per upstream LLM call, newest first (cursor-paginated)' })
   listLogs(

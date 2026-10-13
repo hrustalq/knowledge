@@ -866,7 +866,13 @@ export type AiUsageOperation =
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
    */
-  | 'extraction';
+  | 'extraction'
+  /**
+   * A question to a published site's Ask (issue #77 phase 3). No person asked
+   * it as a member: the row's `userId` is the site's id, and usage labels it
+   * by the site's slug.
+   */
+  | 'public_ask';
 
 /** One row of the per-user (or per-model) usage breakdown. */
 export interface AiUsageBucket {

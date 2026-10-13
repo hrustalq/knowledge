@@ -2172,6 +2172,14 @@ model PublishedSite {
   /// phase 3), under the secret box. Null: visitor sign-in is off.
   visitorSecretCipher String?   @map("visitor_secret_cipher")
   visitorSecretSetAt  DateTime? @map("visitor_secret_set_at") @db.Timestamptz
+  /// Ask (issue #77 phase 3): the site answers questions from its own pages,
+  /// in the reader and in the embeddable widget.
+  askEnabled          Boolean   @default(false) @map("ask_enabled")
+  /// Answers a day; null takes PUBLIC_ASK_DAILY_BUDGET, which also caps it.
+  askDailyBudget      Int?      @map("ask_daily_budget")
+  /// Origins allowed to frame the widget (CSP frame-ancestors), normalized by
+  /// contracts `normalizeEmbedOrigin`.
+  embedOrigins        String[]  @default([]) @map("embed_origins")
   createdBy           String    @map("created_by") @db.Uuid
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz

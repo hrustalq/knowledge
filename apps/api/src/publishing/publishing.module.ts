@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ActivityCoreModule } from '../activity/activity-core.module.js';
+import { AiCoreModule } from '../ai/ai-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { PublishingCoreModule } from './publishing-core.module.js';
 import { PublishingQueueModule } from './publishing-queue.module.js';
@@ -17,7 +18,7 @@ import { SitesService } from './sites.service.js';
  * worker's half is PublishingWorkerModule.
  */
 @Module({
-  imports: [PrismaModule, ActivityCoreModule, PublishingCoreModule, PublishingQueueModule],
+  imports: [PrismaModule, ActivityCoreModule, AiCoreModule, PublishingCoreModule, PublishingQueueModule],
   controllers: [ShareLinksController, SitesController],
   providers: [SitesService, SiteDomainsService, SiteAudiencesService, PublishingSweeper],
   exports: [PublishingCoreModule],

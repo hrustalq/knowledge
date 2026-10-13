@@ -9,6 +9,8 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, type PublishedSite, type SiteDomain, type SiteVersion } from '@prisma/client';
 import {
   RESERVED_SITE_SLUGS,
+  effectiveSiteAskBudget,
+  normalizeEmbedOrigin,
   isValidSiteSlug,
   isValidVersionSlug,
   normalizeSiteTheme,
@@ -26,6 +28,7 @@ import {
   type PublishedSiteStatus,
 } from '@knowledge/contracts';
 import { ActivityService } from '../activity/activity.service.js';
+import { AiConfigService } from '../ai/ai-config.service.js';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -53,6 +56,9 @@ export interface UpdateSiteInput {
   theme?: Partial<SiteTheme>;
   seoIndexable?: boolean;
   defaultVersionId?: string;
+  askEnabled?: boolean;
+  askDailyBudget?: number | null;
+  embedOrigins?: string[];
 }
 
 export interface CreateVersionInput {
@@ -93,6 +99,7 @@ export class SitesService {
     private readonly activity: ActivityService,
     private readonly builds: SiteBuildProducer,
     private readonly config: ConfigService<Env, true>,
+    private readonly aiConfig: AiConfigService,
   ) {}
 
   async forProject(projectId: string): Promise<ProjectSiteResponse> {
@@ -111,6 +118,8 @@ export class SitesService {
         baseDomain: baseDomain || null,
         customDomains: this.config.get('SITE_CUSTOM_DOMAINS', { infer: true }),
         suggestedSlug: suggestSiteSlug(project.name),
+        askDailyCeiling: this.config.get('PUBLIC_ASK_DAILY_BUDGET', { infer: true }),
+        askModelConfigured: (await this.aiConfig.resolveFor(project.workspaceId, 'chat')).enabled,
       },
     };
   }
@@ -170,6 +179,10 @@ export class SitesService {
       if (!version.builtAt) throw new ConflictException({ statusCode: 409, message: t('error.site.versionNotBuilt'), reason: 'site.versionNotBuilt' });
       data.defaultVersionId = version.id;
     }
+
+    if (input.askEnabled !== undefined) data.askEnabled = input.askEnabled;
+    if (input.askDailyBudget !== undefined) data.askDailyBudget = input.askDailyBudget;
+    if (input.embedOrigins !== undefined) data.embedOrigins = this.checkEmbedOrigins(input.embedOrigins);
 
     const updated = await this.uniqueSlug(String(data.slug ?? site.slug), () =>
       this.prisma.publishedSite.update({ where: { id: siteId }, data, include: SITE_INCLUDE }),
@@ -333,6 +346,19 @@ export class SitesService {
     return new ConflictException({ statusCode: 409, message: t('error.site.slugTaken', { slug }), reason: 'site.slugTaken' });
   }
 
+  /** Each origin in its stored form, duplicates dropped; 400 naming every one that is not an origin. */
+  private checkEmbedOrigins(raw: string[]): string[] {
+    const invalid = raw.filter((o) => normalizeEmbedOrigin(o) === null);
+    if (invalid.length) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: t('error.site.embedOriginInvalid', { origins: invalid.join(', ') }),
+        invalid,
+      });
+    }
+    return [...new Set(raw.map((o) => normalizeEmbedOrigin(o)!))];
+  }
+
   private async checkRoot(projectId: string, rootDocumentId: string | null): Promise<string | null> {
     if (rootDocumentId === null) return null;
     const doc = await this.prisma.document.findUnique({
@@ -391,6 +417,12 @@ export class SitesService {
           webBaseUrl: this.config.get('WEB_BASE_URL', { infer: true }),
         }),
       ),
+      ask: {
+        enabled: site.askEnabled,
+        dailyBudget: site.askDailyBudget,
+        effectiveDailyBudget: effectiveSiteAskBudget(site.askDailyBudget, this.config.get('PUBLIC_ASK_DAILY_BUDGET', { infer: true })),
+        embedOrigins: site.embedOrigins,
+      },
       createdAt: site.createdAt.toISOString(),
       updatedAt: site.updatedAt.toISOString(),
     };

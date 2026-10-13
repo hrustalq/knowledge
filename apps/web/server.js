@@ -5,6 +5,7 @@ import { traceMiddleware } from '@knowledge/observability/express'
 import { aiReadableMiddleware } from './server/ai-readable.js'
 import { createRenderCache, renderCacheKey } from './server/render-cache.js'
 import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files.js'
+import { siteWidgetRoute } from './server/site-widget.js'
 import { exportRenderRoute } from './server/export-render.js'
 
 // Constants
@@ -99,6 +100,10 @@ app.use(async (req, res, next) => {
   }
   next()
 })
+
+// A site's embeddable Ask widget script (issue #77 phase 3): `/widget.js` on
+// its host or `/pub/<slug>/widget.js`, before the reader takes it for a page.
+app.use(siteWidgetRoute())
 
 // AI-readable URLs (issue #68): /documents/:id.md, Accept: text/markdown on
 // /documents/:id, /llms.txt and the per-workspace/project llms files, proxied

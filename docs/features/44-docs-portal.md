@@ -1,12 +1,13 @@
 # 44 — Published sites
 
-Issue [#77](https://github.com/hrustalq/knowledge/issues/77), phases 2a and
-2b of public publishing. A project, or one page and its subtree, published as
-a read-only docs site: a nav tree, an outline, previous/next, a theme, and
+Issue [#77](https://github.com/hrustalq/knowledge/issues/77), phases 2a, 2b
+and 3 of public publishing. A project, or one page and its subtree, published
+as a read-only docs site: a nav tree, an outline, previous/next, a theme, and
 versions. Anyone with the address can read it without signing in. Phase 2b
 adds custom domains, `sitemap.xml`/`robots.txt`, `llms.txt`, pages as
-markdown, site search and a render cache; audiences and the Ask widget are
-phase 3. Share links
+markdown, site search and a render cache. Phase 3 adds audiences: parts of a
+site kept to workspace members, or to visitors a customer's backend signs in
+with a JWT. The Ask widget is the last part of phase 3 and not built yet. Share links
 ([43](43-share-links.md)) are the other half of the same issue and share its
 switches, rate limiter and reader.
 
@@ -295,8 +296,9 @@ have been a second copy of the snapshot to keep in step).
 
 `server.js` keeps finished site renders in a least-recently-used map bounded
 by bytes (`server/render-cache.js`, `SITE_RENDER_CACHE_MB`, default 32, 0 off),
-keyed by host, language and URL — a site render reads no cookie, so those
-decide its bytes. Each entry holds the ETag `resolve` gave for what it was
+keyed by host, language and URL — an anonymous site render reads no cookie,
+so those decide its bytes (a signed-in reader's render is never kept, see
+Audiences). Each entry holds the ETag `resolve` gave for what it was
 made from: a hash of the whole answer with the markdown replaced by the
 pinned revision id, which names it.
 
@@ -310,6 +312,98 @@ markdown render, the sanitiser or the Vue SSR pass. On the dev stack a
 themselves (200) are kept; shares never are, since their render carries no
 tag. The cache is per process and starts empty on restart, which is also how
 a new web build arrives.
+
+## Audiences (phase 3)
+
+A site is public by default. An admin keeps parts of it from the public with
+**rules** on the site's **Audience** tab: a rule on a page covers that page
+and everything below it, and says who may read them.
+
+| Rule | Who reads it |
+| --- | --- |
+| *(none above the page)* | everyone |
+| `visitors` | workspace members, and visitors signed in with a JWT whose claims match the rule's |
+| `members` | workspace members only |
+
+**Rules only restrict, and they add up down the tree** (`foldSiteAudience` in
+contracts). `members` outranks `visitors`; two nested `visitors` rules must
+both hold (claims merge, a key in both keeps only the values both allow). So a
+subpage is never more open than its parent — it could not be: its URL carries
+the parent's slug and its nav place sits under the parent.
+
+**Per site, stamped onto every version.** Rules live in
+`site_audience_rules (site_id, document_id, audience, claims)`, not on a
+version. Each snapshot row carries the folded result in `audience` and
+`audience_claims`, and the reader filters on the row alone.
+`SiteAudienceStamper` writes those columns:
+
+- **On a rule change**, API-side, before the route answers: every version of
+  the site, frozen ones included. What a frozen version freezes is its
+  content, not who may read it.
+- **In a build**, as the rows are written, with a restamp right after the swap
+  to close the window in which a rule changed while the build ran.
+- **When a page moves** (`document.updated`), worker-side in
+  `SiteRebuildTrigger`, for every site that has rules and publishes the page:
+  it may have moved under a rule or out from under one.
+
+The fold reads `documents.path`, so a page is judged where it is now. The
+reader also requires a row's published parent to be visible
+(`visibleRows`), so a stale stamp can never show a page whose parent is
+hidden.
+
+### Who is reading
+
+A sign-in is a random value in an httpOnly `kn_site_<siteId>` cookie on the
+site's own origin; Redis maps its hash to the session for
+`SITE_VISITOR_TTL_MIN` (default 1440). Nothing in the cookie is trusted but
+its key, and every check is against the world as it is now
+(`SiteSessionService.viewer`):
+
+- **Members.** The reader's **Sign in** link goes to the app's
+  `/site-sign-in?site=&return=` page. The router guard sends a signed-out
+  person through `/login` first. The page posts
+  `POST /v1/sites/:id/sign-in` (`viewer` on the site's workspace), which checks
+  that `return` is one of the site's own addresses — `/pub/<slug>` under
+  `WEB_BASE_URL`, its `<slug>.PUBLISH_BASE_DOMAIN`, or a verified domain —
+  and mints a one-time code (2 minutes, spent with `GETDEL`). The browser goes
+  to `<site origin>/api/v1/public/sites/:id/session?code=&return=<path>`, which
+  sets the cookie on that origin and redirects back. A member session is good
+  only while the person still has a role in the workspace and an enabled
+  account. In `AUTH_MODE=none` the dev principal is a member.
+- **Visitors.** The admin generates a secret (32 random bytes, shown once,
+  stored with the secret box, so `SETTINGS_ENCRYPTION_KEY` is required). The
+  customer's backend signs an HS256 JWT with it, with an `exp` claim, and
+  sends the visitor to any page of the site with `?jwt_token=<token>`. The web
+  render passes that to the session route and comes back to the same path
+  without it, with `Referrer-Policy: no-referrer`. A token that is not HS256,
+  not signed with the site's secret, expired, not yet valid (`nbf`) or has no
+  `exp` signs no one in. The session lasts until the token's `exp`, at most
+  `SITE_VISITOR_TTL_MIN`, and is bound to the secret: replacing or clearing it
+  signs every visitor out at once.
+- **Anyone else** — no cookie, an unknown or expired session, a Redis outage —
+  is anonymous and sees the public pages.
+
+Sign-out is `POST /v1/public/sites/:id/session/end`, which deletes the
+session and clears the cookie.
+
+### What a reader who may not see a page gets
+
+Nothing that confirms it exists. The page is absent from the tree, its path
+renders the site's own 404, its attachments are 404, it is left out of search
+in the SQL statement itself, and no other version names it as an alternate.
+On a site with any non-public page the reader shows **Sign in**, and its 404
+says that some pages need it; that names no page.
+
+`sitemap.xml`, `robots.txt`, `llms.txt`, `llms-full.txt` and `<page>.md` are
+**public pages only, whoever asks**. They are for crawlers and agents and never
+vary by cookie. Since a restamp changes rows without a build, the restricted
+ids are part of each file's ETag.
+
+The resolve ETag covers the viewer, so a cached render never crosses a
+sign-in. `server.js` also keeps any request carrying a `kn_site_` cookie out
+of the render cache: those renders are one reader's, and caching them would
+only evict the anonymous render everyone shares. It forwards `kn_site_*`
+cookies to the API beside `kn_share_*`, and never `kn_token`.
 
 ## Member UI
 
@@ -326,6 +420,15 @@ a new web build arrives.
     with Rebuild, Freeze / Follow branch, Make default and Delete. There is
     also an add form (name, optional address segment, kind, branch). The page
     polls only while a build is running.
+  - **Domains**: see above.
+  - **Audience** (admins only; `SiteAudiencePanel.vue`): the rules in tree
+    order with edit and remove, a form (page, who may read it, claims as one
+    `name=value, value` line each), and visitor sign-in: generate, replace or
+    turn off the secret (both of the last two ask a second time, inline), the
+    secret shown once with a copy button, and an example payload and link.
+- **`/site-sign-in`** (`SiteSignInPage.vue`): the member hand-off above. It
+  says why when it cannot sign someone in (no access to the workspace, a link
+  that is not for this site).
 - **Project overview**: a **Site** rail widget with the status, the live URL
   and a link to the settings.
 - **Settings → Publishing** gains "Public docs sites" beside the share-link
@@ -343,6 +446,11 @@ a new web build arrives.
 | `PATCH /v1/site-versions/:id`, `POST …/rebuild`, `DELETE …` | admin (`site-version`); deleting the default is 409 |
 | `POST /v1/sites/:id/domains` | admin (`site`); 400 `site.domainInvalid` / `site.domainReserved`, 403 `site.customDomainsOff`, 409 `site.domainExists` / `site.domainTaken` / `site.domainLimit` |
 | `POST /v1/site-domains/:id/verify`, `DELETE /v1/site-domains/:id` | admin (`site-domain`); verify answers the domain either way, with `lastError` |
+| `GET /v1/sites/:id/audiences` | admin (`site`): the rules and whether visitor sign-in is configured |
+| `PUT /v1/sites/:id/audiences/:documentId`, `DELETE …` | admin (`site`); 400 `site.audiencePageNotInSite` / `site.audienceClaimsInvalid`, 409 `site.audienceRuleLimit` (200) |
+| `POST /v1/sites/:id/visitor-secret`, `DELETE …` | admin (`site`); 409 `site.visitorSecretNeedsKey` without `SETTINGS_ENCRYPTION_KEY` |
+| `POST /v1/sites/:id/sign-in` | viewer (`site`); 400 `site.signInReturnInvalid` |
+| `GET /v1/public/sites/:id/session?code=\|jwt_token=&return=`, `POST …/session/end` | public: always a 302 back to `return` (a path on the same origin, else `/`), with the cookie set when the code or token was good |
 
 `WorkspaceSource` gains `site`, `site-version` and `site-domain`, each
 resolved to its workspace in PostgreSQL before the handler runs. Site management is not on MCP:
@@ -366,7 +474,15 @@ destination may have its own). Deleting pages removes their snapshot rows
 - A verified domain stays verified; one whose owner changes stays with the
   site that proved it until an admin removes it.
 - Everything a viewer can read can be published by an admin. When page-level
-  permissions land, builds must refuse restricted pages.
+  permissions land, builds must refuse restricted pages, and `members` must
+  mean "may read this page", not "has a role in the workspace".
+- Visitor sign-in is a customer-signed JWT only; there is no OIDC for
+  visitors. A visitor's claims are read once, at sign-in: a plan that changes
+  takes effect at the next sign-in.
+- A site sign-in is per origin. A site served on both its subdomain and a
+  custom domain needs a sign-in on each, and sign-in returns to the address
+  the reader came from.
+- The Ask widget (the rest of phase 3) is not built.
 - `source_branch` falls back per page, so a "v2" version can mix branched and
   default pages. That is deliberate: a docs team branches the few pages that
   change.

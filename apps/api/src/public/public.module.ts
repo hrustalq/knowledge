@@ -14,15 +14,19 @@ import { PublicSitesService } from './public-sites.service.js';
 import { PublicSharesService } from './public-shares.service.js';
 import { PublicStore } from './public-store.js';
 import { ShareUnlockService } from './share-unlock.service.js';
+import { SiteSessionService } from './site-session.service.js';
+import { SiteSignInController } from './site-sign-in.controller.js';
 
 /**
  * Everything anonymous (docs/features/43, 44): /v1/public/*. API-only — it carries
  * a controller and imports AttachmentsModule — and never loaded by the worker
- * or the MCP process.
+ * or the MCP process. Also the one authenticated route of site sign-in
+ * (`SiteSignInController`, issue #77 phase 3), which issues the codes the
+ * public session route spends: both halves share `SiteSessionService`.
  */
 @Module({
   imports: [PrismaModule, PublishingCoreModule, DocumentsCoreModule, AttachmentsModule, AvatarsModule],
-  controllers: [PublicSharesController, PublicSitesController, PublicSiteFilesController, PublicDomainsController],
+  controllers: [PublicSharesController, PublicSitesController, PublicSiteFilesController, PublicDomainsController, SiteSignInController],
   providers: [
     PublicStore,
     PublicRateLimiter,
@@ -32,6 +36,7 @@ import { ShareUnlockService } from './share-unlock.service.js';
     PublicSitesService,
     PublicSiteFilesService,
     PublicSiteSearchService,
+    SiteSessionService,
   ],
 })
 export class PublicModule {}

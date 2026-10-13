@@ -8,11 +8,13 @@ import {
   siteHomeDocumentId,
   sitePagePath,
   siteRootUrl,
+  siteViewerCanSee,
   type PublicSiteLogo,
   type PublicSitePage,
   type PublicSiteResolveResponse,
   type PublicSiteTreeNode,
   type PublicSiteVersionRef,
+  type SiteViewer,
 } from '@knowledge/contracts';
 import { AttachmentsService } from '../attachments/attachments.service.js';
 import { AvatarsService } from '../avatars/avatars.service.js';
@@ -22,6 +24,7 @@ import { etagMatches } from '../ai-readable/render.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from '../publishing/publishing-settings.service.js';
+import { SiteSessionService } from './site-session.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -29,7 +32,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const MAX_PATH_CHARS = 2000;
 
 /** Bumped when the resolve answer changes shape, so every cached render goes stale. */
-const RESOLVE_FORMAT_VERSION = 1;
+const RESOLVE_FORMAT_VERSION = 2;
 
 /**
  * A snapshot row without its search text (up to 100k characters a page),
@@ -43,12 +46,32 @@ export const SNAPSHOT_ROW = {
   depth: true,
   slugPath: true,
   title: true,
+  audience: true,
+  audienceClaims: true,
 } as const satisfies Prisma.SiteVersionPageSelect;
 export type SnapshotRow = Pick<SiteVersionPage, keyof typeof SNAPSHOT_ROW>;
 
 type BuiltVersion = SiteVersion & { builtAt: Date };
 /** A site that may be read: live, allowed, and built. `domains` holds its verified hostnames, oldest first. */
 export type LiveSite = PublishedSite & { versions: BuiltVersion[]; defaultVersion: BuiltVersion; domains: SiteDomain[] };
+
+/**
+ * The rows a viewer may read, in the order given (depth first, as every read
+ * orders them). A row also needs its published parent visible: stamps fold
+ * down the tree so that always holds, and checking it here means a stale
+ * stamp can never show a page whose URL and nav place name a hidden parent.
+ */
+export function visibleRows<T extends Pick<SnapshotRow, 'documentId' | 'parentId' | 'audience' | 'audienceClaims'>>(
+  rows: T[],
+  viewer: SiteViewer,
+): T[] {
+  const kept = new Set<string>();
+  return rows.filter((r) => {
+    const ok = siteViewerCanSee(r, viewer) && (r.parentId === null || kept.has(r.parentId));
+    if (ok) kept.add(r.documentId);
+    return ok;
+  });
+}
 
 /** How a request names a site: its slug (path mode, or a base-domain host), or a custom hostname. */
 export type SiteKey = { slug: string } | { hostname: string };
@@ -77,6 +100,11 @@ export interface ResolveQuery {
  *
  * A site that is unknown, not live, switched off or never built is a 404 like
  * any other, and so is everything under it.
+ *
+ * Who is reading decides which of the snapshot's rows exist (issue #77 phase
+ * 3): a page the viewer may not see is absent from the tree, answers 404 as a
+ * path, and its attachments 404 — never 403, so its existence is not
+ * confirmed. The viewer is looked up afresh from the cookie on every request.
  */
 @Injectable()
 export class PublicSitesService {
@@ -87,10 +115,16 @@ export class PublicSitesService {
     private readonly attachments: AttachmentsService,
     private readonly avatars: AvatarsService,
     private readonly config: ConfigService<Env, true>,
+    private readonly sessions: SiteSessionService,
   ) {}
 
-  async resolve(query: ResolveQuery): Promise<PublicSiteResolveResponse> {
-    return (await this.resolveTagged(query)).body!;
+  async resolve(query: ResolveQuery, cookieHeader?: string): Promise<PublicSiteResolveResponse> {
+    return (await this.resolveTagged(query, undefined, cookieHeader)).body!;
+  }
+
+  /** Who the request's site cookie says is reading. */
+  viewer(site: LiveSite, cookieHeader: string | undefined): Promise<SiteViewer> {
+    return this.sessions.viewer(site, cookieHeader);
   }
 
   /**
@@ -101,18 +135,28 @@ export class PublicSitesService {
    * caller whose tag still matches gets `body: null` without that read.
    *
    * Authorisation is not part of the bargain: the site is looked up afresh
-   * first, so an unpublished site is a 404 whatever tag is sent.
+   * first, so an unpublished site is a 404 whatever tag is sent. The viewer
+   * is part of the answer, so a tag never carries a render across sign-ins.
    */
-  async resolveTagged(query: ResolveQuery, ifNoneMatch?: string): Promise<{ etag: string; body: PublicSiteResolveResponse | null }> {
+  async resolveTagged(
+    query: ResolveQuery,
+    ifNoneMatch?: string,
+    cookieHeader?: string,
+  ): Promise<{ etag: string; body: PublicSiteResolveResponse | null }> {
     const site = await this.find(query);
     const path = (query.path ?? '').slice(0, MAX_PATH_CHARS);
     const { version, slugPath } = this.splitPath(site, path);
 
-    const rows = await this.prisma.siteVersionPage.findMany({
-      where: { versionId: version.id },
-      orderBy: [{ depth: 'asc' }, { position: 'asc' }],
-      select: SNAPSHOT_ROW,
-    });
+    const [all, viewer] = await Promise.all([
+      this.prisma.siteVersionPage.findMany({
+        where: { versionId: version.id },
+        orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+        select: SNAPSHOT_ROW,
+      }),
+      this.sessions.viewer(site, cookieHeader),
+    ]);
+    const rows = visibleRows(all, viewer);
+    const restricted = all.some((r) => r.audience !== 'public');
     const page = this.pickPage(rows, slugPath, query.from);
 
     const project = await this.prisma.project.findUnique({
@@ -130,7 +174,10 @@ export class PublicSitesService {
         seoIndexable: site.seoIndexable,
         logo: theme.showLogo && project ? this.logo(site.id, project) : null,
         rootUrl: this.rootUrl(site),
+        restricted,
+        signInUrl: restricted ? this.signInUrl(site.id) : null,
       },
+      viewer: viewer.kind,
       version: { ...this.versionRef(version, site), id: version.id, builtAt: version.builtAt.toISOString() },
       versions: site.versions.map((v) => this.versionRef(v, site)),
       tree: rows.map(
@@ -142,7 +189,7 @@ export class PublicSitesService {
           position: r.position,
         }),
       ),
-      page: page ? await this.pageMeta(page, site, version) : null,
+      page: page ? await this.pageMeta(page, site, version, viewer) : null,
     };
     const etag = `"${createHash('sha256')
       .update(JSON.stringify([RESOLVE_FORMAT_VERSION, body, page?.revisionId ?? null]))
@@ -211,6 +258,34 @@ export class PublicSitesService {
   }
 
   /**
+   * An absolute URL on one of this site's own addresses, split into its
+   * origin and its path + query — or null for anywhere else. The addresses:
+   * `/pub/<slug>` under WEB_BASE_URL (path mode, which always works), its
+   * `<slug>.PUBLISH_BASE_DOMAIN` host, and its verified custom domains while
+   * those are routed. Sign-in sends the browser back only to these.
+   */
+  siteAddress(site: LiveSite, raw: string): { origin: string; path: string } | null {
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      return null;
+    }
+    if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) return null;
+    const path = `${url.pathname}${url.search}`;
+    const app = new URL(this.config.get('WEB_BASE_URL', { infer: true }));
+    const pathPrefix = `/pub/${site.slug}`;
+    if (url.origin === app.origin) {
+      return url.pathname === pathPrefix || url.pathname.startsWith(`${pathPrefix}/`) ? { origin: url.origin, path } : null;
+    }
+    const key = this.siteKeyFromHost(url.host);
+    if (!key) return null;
+    const ours =
+      'slug' in key ? key.slug === site.slug : site.domains.some((d) => d.hostname === key.hostname);
+    return ours ? { origin: url.origin, path } : null;
+  }
+
+  /**
    * Caddy's on-demand TLS `ask` (`/v1/public/domains/allow`): may a
    * certificate be issued for this name? Yes for a name this platform routes
    * to a site its workspace may publish — a `<slug>.PUBLISH_BASE_DOMAIN` of an
@@ -233,8 +308,14 @@ export class PublicSitesService {
     return (await this.settings.effective(site.workspaceId)).allowPublicSites;
   }
 
-  /** A presigned URL for an attachment of a page in this version's snapshot. */
-  async attachmentUrl(siteId: string, versionId: string, attachmentId: string, download: boolean): Promise<string> {
+  /** A presigned URL for an attachment of a page in this version's snapshot that the viewer may read. */
+  async attachmentUrl(
+    siteId: string,
+    versionId: string,
+    attachmentId: string,
+    download: boolean,
+    cookieHeader?: string,
+  ): Promise<string> {
     const site = await this.liveSite({ id: siteId });
     if (!site.versions.some((v) => v.id === versionId)) throw this.notFound();
     const attachment = await this.prisma.attachment.findUnique({
@@ -244,9 +325,12 @@ export class PublicSitesService {
     if (!attachment || attachment.status !== 'ready') throw this.notFound();
     const published = await this.prisma.siteVersionPage.findUnique({
       where: { versionId_documentId: { versionId, documentId: attachment.documentId } },
-      select: { documentId: true },
+      select: { documentId: true, audience: true, audienceClaims: true },
     });
     if (!published) throw this.notFound();
+    if (published.audience !== 'public' && !siteViewerCanSee(published, await this.sessions.viewer(site, cookieHeader))) {
+      throw this.notFound();
+    }
     return this.attachments.readUrl(attachment.documentId, attachment.id, download);
   }
 
@@ -280,6 +364,12 @@ export class PublicSitesService {
 
   private notFound(): NotFoundException {
     return new NotFoundException(t('error.site.notFound'));
+  }
+
+  /** The app page that signs a member in to this site (`SiteSignInPage`); the reader adds `return`. */
+  private signInUrl(siteId: string): string {
+    const base = this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
+    return `${base}/site-sign-in?site=${encodeURIComponent(siteId)}`;
   }
 
   /** The site, if it is live, its workspace allows sites, and its default version has built. */
@@ -332,7 +422,7 @@ export class PublicSitesService {
   }
 
   /** Everything about a page but its body, which `resolveTagged` reads only when the tag has changed. */
-  private async pageMeta(row: SnapshotRow, site: LiveSite, version: BuiltVersion): Promise<PublicSitePage> {
+  private async pageMeta(row: SnapshotRow, site: LiveSite, version: BuiltVersion, viewer: SiteViewer): Promise<PublicSitePage> {
     const revision = await this.prisma.documentRevision.findUnique({
       where: { id: row.revisionId },
       select: { finalizedAt: true },
@@ -343,7 +433,7 @@ export class PublicSitesService {
       slugPath: row.slugPath,
       markdown: '',
       updatedAt: revision?.finalizedAt?.toISOString() ?? null,
-      alternates: await this.alternates(row.documentId, site, version),
+      alternates: await this.alternates(row.documentId, site, version, viewer),
     };
   }
 
@@ -351,23 +441,32 @@ export class PublicSitesService {
    * Where the same page lives in the site's other built versions. Two reads
    * whatever the version count: the page's rows, and each version's top level
    * (to know whether the page is that version's home, which lives at its root).
+   * A version where the viewer may not see the page names no alternate.
    */
-  private async alternates(documentId: string, site: LiveSite, current: BuiltVersion): Promise<PublicSitePage['alternates']> {
+  private async alternates(
+    documentId: string,
+    site: LiveSite,
+    current: BuiltVersion,
+    viewer: SiteViewer,
+  ): Promise<PublicSitePage['alternates']> {
     const others = site.versions.filter((v) => v.id !== current.id);
     if (!others.length) return [];
     const ids = others.map((v) => v.id);
     const [mine, tops] = await Promise.all([
-      this.prisma.siteVersionPage.findMany({ where: { documentId, versionId: { in: ids } }, select: { versionId: true, slugPath: true } }),
+      this.prisma.siteVersionPage.findMany({
+        where: { documentId, versionId: { in: ids } },
+        select: { versionId: true, slugPath: true, audience: true, audienceClaims: true },
+      }),
       this.prisma.siteVersionPage.findMany({
         where: { versionId: { in: ids }, parentId: null },
-        select: { versionId: true, documentId: true, parentId: true, slugPath: true, position: true },
+        select: { versionId: true, documentId: true, parentId: true, slugPath: true, position: true, audience: true, audienceClaims: true },
       }),
     ]);
     const out: PublicSitePage['alternates'] = [];
     for (const v of others) {
       const row = mine.find((r) => r.versionId === v.id);
-      if (!row) continue;
-      const isHome = siteHomeDocumentId(tops.filter((t) => t.versionId === v.id)) === documentId;
+      if (!row || !siteViewerCanSee(row, viewer)) continue;
+      const isHome = siteHomeDocumentId(tops.filter((t) => t.versionId === v.id && siteViewerCanSee(t, viewer))) === documentId;
       const ref = this.versionRef(v, site);
       out.push({ version: ref, path: sitePagePath('', ref.isDefault ? null : v.slug, isHome ? '' : row.slugPath) });
     }

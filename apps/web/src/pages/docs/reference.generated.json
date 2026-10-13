@@ -2512,6 +2512,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/public/sites/{siteId}/session",
+      "tag": "public",
+      "summary": "Exchange a sign-in code or visitor JWT for the site’s session cookie, then redirect back",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/public/sites/{siteId}/session/end",
+      "tag": "public",
+      "summary": "Sign out of the site: the session ends at once and the cookie is cleared",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/public/sites/llms-full.txt",
       "tag": "public",
       "summary": "Every page of a version at its published revision, concatenated and streamed (LLMS_FULL_MAX_DOCS / _BYTES)",
@@ -2701,6 +2721,36 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/sites/{id}/audiences",
+      "tag": "publishing",
+      "summary": "Who may read which part of the site: the audience rules and whether visitor sign-in is set up",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/sites/{id}/audiences/{documentId}",
+      "tag": "publishing",
+      "summary": "Remove a page’s rule: it is public again unless a rule above it says otherwise",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/sites/{id}/audiences/{documentId}",
+      "tag": "publishing",
+      "summary": "Keep a page and everything below it from the public. Applies to every version at once",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/sites/{id}/domains",
       "tag": "publishing",
@@ -2722,6 +2772,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/sites/{id}/sign-in",
+      "tag": "publishing",
+      "summary": "A one-time sign-in to a live site for the calling member: the URL to send the browser to",
+      "role": "viewer",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/sites/{id}/unpublish",
       "tag": "publishing",
       "summary": "Take the site down. It stops resolving at once; its configuration is kept",
@@ -2735,6 +2795,26 @@
       "path": "/v1/sites/{id}/versions",
       "tag": "publishing",
       "summary": "Add a version: `live` follows a branch, `frozen` is a snapshot taken now",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/sites/{id}/visitor-secret",
+      "tag": "publishing",
+      "summary": "Turn visitor sign-in off. Open visitor sessions end at once",
+      "role": "admin",
+      "source": "site",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/sites/{id}/visitor-secret",
+      "tag": "publishing",
+      "summary": "Set a new secret for visitor JWTs (HS256), shown once. The old one stops working, and its sessions end",
       "role": "admin",
       "source": "site",
       "public": false,

@@ -23,6 +23,9 @@ export function createRouter() {
       { path: '/reset-password', component: () => import('@/pages/ResetPasswordPage.vue'), meta: { public: true, authCard: true } },
       { path: '/verify-email', component: () => import('@/pages/VerifyEmailPage.vue'), meta: { public: true, authCard: true } },
       { path: '/403', component: () => import('@/pages/ForbiddenPage.vue'), meta: { public: true } },
+      // A member signing in to a published site (issue #77 phase 3): needs the
+      // app's session, so the guard sends anyone signed out through /login.
+      { path: '/site-sign-in', component: () => import('@/pages/SiteSignInPage.vue') },
       // App (authenticated — guard redirects to /login when AUTH_MODE=api-key)
       // meta.fill: the pages landing leads with a graph canvas, which needs a
       // definite height to resolve; the tree and list views scroll inside it.

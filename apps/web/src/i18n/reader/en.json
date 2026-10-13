@@ -43,7 +43,13 @@
     "searchEmpty": "No pages match “{query}”.",
     "searchFailed": "Search is not available right now. Try again in a moment.",
     "searchRateLimited": "Too many searches from your address. Wait a minute and try again.",
-    "searchResults": "Search results"
+    "searchResults": "Search results",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signedInMember": "Signed in as a workspace member",
+    "signedInVisitor": "Signed in",
+    "restrictedHint": "Some pages of this site are only for signed-in readers.",
+    "signOutFailed": "Could not sign out. Try again."
   },
   "common": {
     "close": "Close"

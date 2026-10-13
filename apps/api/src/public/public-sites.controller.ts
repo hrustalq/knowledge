@@ -2,10 +2,13 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
   Injectable,
   Param,
+  Post,
   Query,
   Redirect,
+  Req,
   Res,
   UseGuards,
   UseInterceptors,
@@ -15,14 +18,20 @@ import {
 } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiPropertyOptional, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import type { Observable } from 'rxjs';
-import { SITE_SEARCH_MAX_CHARS, type PublicSiteResolveResponse, type PublicSiteSearchResponse } from '@knowledge/contracts';
+import {
+  SITE_SEARCH_MAX_CHARS,
+  siteSessionCookieName,
+  type PublicSiteResolveResponse,
+  type PublicSiteSearchResponse,
+} from '@knowledge/contracts';
 import { Public } from '../auth/access.decorator.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { PublicRateLimitGuard } from './public-rate-limit.js';
 import { PublicSiteSearchService } from './public-site-search.service.js';
 import { PublicSitesService } from './public-sites.service.js';
+import { SiteSessionService } from './site-session.service.js';
 
 export class ResolveSiteQueryDto {
   @ApiPropertyOptional({ description: 'Path mode: the site slug from `/pub/<slug>`' })
@@ -64,6 +73,36 @@ export class SearchSiteQueryDto {
   version?: string;
 }
 
+export class SiteSessionQueryDto {
+  @ApiPropertyOptional({ description: 'A one-time sign-in code from POST /v1/sites/:id/sign-in' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  code?: string;
+
+  @ApiPropertyOptional({ description: 'A visitor JWT (HS256) signed with the site’s visitor secret; `exp` is required' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(8192)
+  jwt_token?: string;
+
+  @ApiPropertyOptional({ description: 'Where to go afterwards: a path on this same origin. Anything else goes to `/`' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  return?: string;
+}
+
+/**
+ * A path on the origin the request came in on, or `/`: a protocol-relative
+ * `//host`, a backslash (which browsers read as a slash) or anything absolute
+ * would make the session route an open redirect.
+ */
+export function safeReturnPath(raw: string | undefined): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || /[\\\s]/.test(raw)) return '/';
+  return raw;
+}
+
 /**
  * What the reader's API answers must not be: cached past an unpublish, or
  * indexed as a page of its own. The site's pages carry their own robots rules,
@@ -94,6 +133,7 @@ export class PublicSitesController {
   constructor(
     private readonly sites: PublicSitesService,
     private readonly search: PublicSiteSearchService,
+    private readonly sessions: SiteSessionService,
   ) {}
 
   /**
@@ -108,9 +148,10 @@ export class PublicSitesController {
   async resolve(
     @Query() query: ResolveSiteQueryDto,
     @Headers('if-none-match') ifNoneMatch: string | undefined,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<PublicSiteResolveResponse | undefined> {
-    const { etag, body } = await this.sites.resolveTagged(query, ifNoneMatch);
+    const { etag, body } = await this.sites.resolveTagged(query, ifNoneMatch, req.headers.cookie);
     res.setHeader('ETag', etag);
     if (!body) {
       res.status(304);
@@ -125,8 +166,57 @@ export class PublicSitesController {
   searchSite(
     @Param('siteId', ParseUUIDPipe) siteId: string,
     @Query() query: SearchSiteQueryDto,
+    @Req() req: Request,
   ): Promise<PublicSiteSearchResponse> {
-    return this.search.search(siteId, query);
+    return this.search.search(siteId, query, req.headers.cookie);
+  }
+
+  /**
+   * Sign in to a site (issue #77 phase 3): spend a member's one-time code or
+   * a visitor's JWT, set the site's session cookie on this origin, and go
+   * back. Anything that does not check out goes back all the same, signed
+   * out: the reader then shows what an anonymous reader sees.
+   */
+  @Get(':siteId/session')
+  @ApiOperation({ summary: 'Exchange a sign-in code or visitor JWT for the site’s session cookie, then redirect back' })
+  @ApiResponse({ status: 302, description: 'Back to `return` on this origin, with the cookie set when the code or token was good' })
+  @ApiResponse({ status: 404, description: 'No live site with this id' })
+  async openSession(
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Query() query: SiteSessionQueryDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const site = await this.sites.findById(siteId);
+    const opened = query.code
+      ? await this.sessions.redeemCode(site, query.code)
+      : query.jwt_token
+        ? await this.sessions.redeemToken(site, query.jwt_token)
+        : null;
+    if (opened) {
+      res.cookie(siteSessionCookieName(site.id), opened.session, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
+        path: '/',
+        maxAge: opened.ttlMs,
+      });
+    }
+    // The URL carried a code or a token: it must not travel on as a Referer.
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.redirect(302, safeReturnPath(query.return));
+  }
+
+  @Post(':siteId/session/end')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Sign out of the site: the session ends at once and the cookie is cleared' })
+  async endSession(
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.sessions.end(siteId, req.headers.cookie);
+    res.clearCookie(siteSessionCookieName(siteId), { path: '/' });
   }
 
   @Get(':siteId/logo')
@@ -143,9 +233,10 @@ export class PublicSitesController {
     @Param('siteId', ParseUUIDPipe) siteId: string,
     @Param('versionId', ParseUUIDPipe) versionId: string,
     @Param('attachmentId', ParseUUIDPipe) attachmentId: string,
+    @Req() req: Request,
     @Query('download') download?: string,
   ): Promise<{ url: string; statusCode: number }> {
-    const url = await this.sites.attachmentUrl(siteId, versionId, attachmentId, download === '1' || download === 'true');
+    const url = await this.sites.attachmentUrl(siteId, versionId, attachmentId, download === '1' || download === 'true', req.headers.cookie);
     return { url, statusCode: 302 };
   }
 }

@@ -196,6 +196,12 @@ export const envSchema = z.object({
    * adding a domain is refused, and no custom hostname resolves.
    */
   SITE_CUSTOM_DOMAINS: boolish(true),
+  /**
+   * How long a site sign-in lasts (issue #77 phase 3): a workspace member's
+   * through the app, or a visitor's through a customer-signed JWT, which is
+   * also held to the token's own `exp`.
+   */
+  SITE_VISITOR_TTL_MIN: z.coerce.number().int().positive().default(1440),
   /** Tick of PublishingSweeper: pending domain checks and lost site builds. */
   PUBLISHING_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   /**

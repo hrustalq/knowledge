@@ -425,7 +425,14 @@
     "domainTaken": "“{hostname}” is already a verified domain of another site",
     "domainExists": "This site already has “{hostname}”",
     "domainLimit": "A site has at most {max} domains",
-    "customDomainsOff": "Custom domains are turned off on this deployment"
+    "customDomainsOff": "Custom domains are turned off on this deployment",
+    "audienceClaimsInvalid": "These claim requirements cannot be used: {fields}. Each claim needs a name of letters, digits, _ . : - and at least one value",
+    "audienceClaimsMembers": "Claims only apply to a visitors rule; a members rule is for every workspace member",
+    "audienceRuleLimit": "A site can have at most {max} audience rules. A rule covers a page and everything below it",
+    "audienceRuleNotFound": "This page has no audience rule on the site",
+    "audiencePageNotInSite": "That page is not part of this site",
+    "visitorSecretNeedsKey": "A visitor secret can only be stored when SETTINGS_ENCRYPTION_KEY is set on the server",
+    "signInReturnInvalid": "The page to return to is not on this site"
   },
   "export": {
     "notFound": "This export does not exist",

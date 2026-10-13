@@ -6,7 +6,13 @@ import {
   type PublicShareResponse,
   type PublicSiteResolveResponse,
 } from '@knowledge/contracts'
-import { publicShareAttachmentPath, publicSiteAttachmentPath, siteMarkdownPath } from '@knowledge/contracts/publishing'
+import {
+  SITE_VISITOR_TOKEN_PARAM,
+  publicShareAttachmentPath,
+  publicSiteAttachmentPath,
+  publicSiteSessionPath,
+  siteMarkdownPath,
+} from '@knowledge/contracts/publishing'
 import { formatBytes } from './lib/format'
 import { escapeHtml } from './lib/markdown/nodes'
 import { renderPublicMarkdown, type PublicRenderOptions } from './lib/markdown/public-render.server'
@@ -31,12 +37,13 @@ import { siteThemeCss } from './pages/public/site-theme'
  * Its own entry and its own app, beside entry-server.ts, so an anonymous
  * reader never loads the app shell, the stores or a member's credentials.
  * server.js calls it with only what a public render may see: the language,
- * the share-unlock cookies, the visitor's address and the trace id — never
- * `kn_token`. The API decides everything; this renders what it answered.
+ * the share-unlock and site sign-in cookies, the visitor's address and the
+ * trace id — never `kn_token`. The API decides everything; this renders what
+ * it answered.
  */
 export interface PublicRenderContext {
   locale: Locale
-  /** `kn_share_<id>=…` pairs only, already filtered by server.js. */
+  /** `kn_share_<id>=…` and `kn_site_<id>=…` pairs only, already filtered by server.js. */
   shareCookies: string
   /** The visitor as server.js saw them, so the API rate-limits the reader, not this process. */
   forwardedFor: string | null
@@ -177,12 +184,16 @@ async function resolveShareView(url: string, ctx: PublicRenderContext): Promise<
   }
 }
 
-/** The path below the site root, and `from` (a version switch), from a request URL. */
-function splitSiteUrl(pathAndQuery: string): { path: string; from: string | null } {
+/**
+ * The path below the site root, `from` (a version switch) and a visitor's
+ * sign-in token (issue #77 phase 3), from a request URL.
+ */
+function splitSiteUrl(pathAndQuery: string): { path: string; from: string | null; visitorToken: string | null } {
   const q = pathAndQuery.indexOf('?')
   const path = (q === -1 ? pathAndQuery : pathAndQuery.slice(0, q)).split('#')[0]
-  const from = q === -1 ? null : new URLSearchParams(pathAndQuery.slice(q + 1)).get('from')
-  return { path: path || '/', from: from && UUID.test(from) ? from : null }
+  const query = q === -1 ? null : new URLSearchParams(pathAndQuery.slice(q + 1))
+  const from = query?.get('from') ?? null
+  return { path: path || '/', from: from && UUID.test(from) ? from : null, visitorToken: query?.get(SITE_VISITOR_TOKEN_PARAM) || null }
 }
 
 /** Two spellings of one path compare equal: percent-encoding and a trailing slash are not a difference. */
@@ -208,7 +219,7 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   const match = ctx.siteHost ? null : SITE_PATH.exec(url)
   const prefix = match ? `/pub/${match[1]}` : ''
   const q = url.indexOf('?')
-  const { path, from } = splitSiteUrl(match ? (match[2] || '/') + (q === -1 ? '' : url.slice(q)) : url)
+  const { path, from, visitorToken } = splitSiteUrl(match ? (match[2] || '/') + (q === -1 ? '' : url.slice(q)) : url)
   const notFound: SiteResolved = { view: { kind: 'site-not-found' }, status: 404, description: '', head: [], noindex: true }
 
   const params = new URLSearchParams({ path })
@@ -230,6 +241,16 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   }
 
   const { site, version } = res
+  const requested = match ? `${prefix}${path}` : path
+
+  // A customer's backend sends a visitor here with `?jwt_token=`: the API's
+  // session route checks it, sets the site's cookie on this origin and comes
+  // back to the same path without it.
+  if (visitorToken) {
+    const params = new URLSearchParams({ [SITE_VISITOR_TOKEN_PARAM]: visitorToken, return: requested })
+    return { ...notFound, status: 302, redirect: `${apiPublic}${publicSiteSessionPath(site.id)}?${params}` }
+  }
+
   const chrome: PublicSiteChrome = {
     id: site.id,
     title: site.title,
@@ -239,6 +260,12 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
     version: { slug: version.slug, name: version.name, isDefault: version.isDefault },
     versions: res.versions,
     tree: res.tree,
+    viewer: res.viewer,
+    // Sign-in comes back to where the reader is: this page's canonical URL,
+    // or the path they asked for when it is not one they can see yet.
+    signInUrl: res.site.signInUrl
+      ? `${res.site.signInUrl}&return=${encodeURIComponent(`${site.rootUrl}${requested.slice(prefix.length) || '/'}`)}`
+      : null,
   }
   const themeCss = siteThemeCss(site.theme)
   const baseHead = themeCss ? [`<style>${themeCss}</style>`] : []
@@ -254,7 +281,6 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
   const homeId = siteHomeId(res.tree)
   const hrefFor = (documentId: string, slugPath: string) => siteHref(chrome, chrome.version, slugPath, documentId === homeId)
   const canonicalPath = hrefFor(res.page.documentId, res.page.slugPath)
-  const requested = match ? `${prefix}${path}` : path
   if (from || samePath(requested) !== samePath(canonicalPath)) {
     return { view: { kind: 'not-found' }, status: 302, description: '', head: [], noindex: true, redirect: canonicalPath }
   }
@@ -331,7 +357,14 @@ export async function render(url: string, ctx: PublicRenderContext): Promise<Pub
   const isShare = !ctx.siteHost && SHARE_PATH.test(url)
   const resolved = isShare ? { ...(await resolveShareView(url, ctx)), head: [] as string[], noindex: true } : await resolveSiteView(url, ctx)
   if ('redirect' in resolved && resolved.redirect) {
-    return { html: '', head: '', status: 302, headers: { 'Cache-Control': 'no-store' }, redirect: resolved.redirect }
+    // no-referrer: a sign-in redirect's URL carries the visitor's token.
+    return {
+      html: '',
+      head: '',
+      status: 302,
+      headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
+      redirect: resolved.redirect,
+    }
   }
   if ('notModified' in resolved && resolved.notModified) {
     return { html: '', head: '', status: 304, headers: {}, notModified: true }

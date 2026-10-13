@@ -631,6 +631,13 @@ export type I18nTranslations = {
             "domainExists": string;
             "domainLimit": string;
             "customDomainsOff": string;
+            "audienceClaimsInvalid": string;
+            "audienceClaimsMembers": string;
+            "audienceRuleLimit": string;
+            "audienceRuleNotFound": string;
+            "audiencePageNotInSite": string;
+            "visitorSecretNeedsKey": string;
+            "signInReturnInvalid": string;
         };
         "export": {
             "notFound": string;

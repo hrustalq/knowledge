@@ -149,6 +149,14 @@ class FakeStore implements PublicKeyValueStore {
     if (this.down) throw new Error('redis down');
     return this.rows.get(key) ?? null;
   }
+  async getdel(key: string) {
+    const value = await this.get(key);
+    this.rows.delete(key);
+    return value;
+  }
+  async del(key: string) {
+    return this.rows.delete(key) ? 1 : 0;
+  }
 }
 
 function env(overrides: Record<string, unknown> = {}) {

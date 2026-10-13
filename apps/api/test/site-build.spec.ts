@@ -201,10 +201,19 @@ function searchText() {
   };
 }
 
+/** The audience stamper with no rules: every row public, which is what every pre-phase-3 build wrote. */
+function stamper() {
+  return {
+    rules: vi.fn(async () => new Map()),
+    stampFor: vi.fn(() => ({ audience: 'public', claims: null })),
+    restamp: vi.fn(async () => undefined),
+  };
+}
+
 describe('SiteBuildService', () => {
   it('reads the named branch where a page has it and its default branch where it does not', async () => {
     const prisma = buildPrisma();
-    await new SiteBuildService(prisma as never, config as never, searchText() as never).build('v1');
+    await new SiteBuildService(prisma as never, config as never, searchText() as never, stamper() as never).build('v1');
     const byDoc = Object.fromEntries(prisma.pages.map((p) => [p.documentId, p.revisionId]));
     // a has `next`; b does not, so b falls back to `main`, whose failed head
     // gives way to the newest indexed revision.
@@ -215,7 +224,7 @@ describe('SiteBuildService', () => {
 
   it('replaces the snapshot in one transaction: delete, insert, search vectors and the ready stamp together', async () => {
     const prisma = buildPrisma();
-    await new SiteBuildService(prisma as never, config as never, searchText() as never).build('v1');
+    await new SiteBuildService(prisma as never, config as never, searchText() as never, stamper() as never).build('v1');
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     const ops = prisma.$transaction.mock.calls[0][0] as Array<{ op?: string; versionId?: string }>;
     expect(ops).toHaveLength(4);
@@ -228,7 +237,7 @@ describe('SiteBuildService', () => {
   it('stores each page’s search text from the revision it publishes', async () => {
     const prisma = buildPrisma();
     const text = searchText();
-    await new SiteBuildService(prisma as never, config as never, text as never).build('v1');
+    await new SiteBuildService(prisma as never, config as never, text as never, stamper() as never).build('v1');
     expect(text.texts).toHaveBeenCalledWith(['a-r2', 'b-r1']);
     expect(prisma.pages.map((p) => [p.documentId, p.searchHeadings, p.searchBody])).toEqual([
       ['a', 'h a-r2', 'body a-r2'],
@@ -239,7 +248,7 @@ describe('SiteBuildService', () => {
   it('a failed swap leaves the old snapshot served and marks the version failed', async () => {
     const prisma = buildPrisma();
     prisma.failSwap = true;
-    await expect(new SiteBuildService(prisma as never, config as never, searchText() as never).build('v1')).rejects.toThrow('deadlock');
+    await expect(new SiteBuildService(prisma as never, config as never, searchText() as never, stamper() as never).build('v1')).rejects.toThrow('deadlock');
     expect(prisma.pages).toEqual([{ versionId: 'v1', documentId: 'stale', slugPath: 'stale' }]);
     expect(prisma.versionRow).toMatchObject({ status: 'failed', error: 'deadlock' });
   });
@@ -247,7 +256,7 @@ describe('SiteBuildService', () => {
   it('publishes nothing from a root page that is gone, rather than the whole project', async () => {
     const prisma = buildPrisma();
     (await prisma.siteVersion.findUnique()).site.rootDocumentId = 'deleted-root';
-    await new SiteBuildService(prisma as never, config as never, searchText() as never).build('v1');
+    await new SiteBuildService(prisma as never, config as never, searchText() as never, stamper() as never).build('v1');
     expect(prisma.pages).toEqual([]);
     expect(prisma.versionRow).toMatchObject({ status: 'ready', pageCount: 0 });
   });

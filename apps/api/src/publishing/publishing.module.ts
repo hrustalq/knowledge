@@ -5,6 +5,7 @@ import { PublishingCoreModule } from './publishing-core.module.js';
 import { PublishingQueueModule } from './publishing-queue.module.js';
 import { PublishingSweeper } from './publishing.sweeper.js';
 import { ShareLinksController } from './share-links.controller.js';
+import { SiteAudiencesService } from './site-audiences.service.js';
 import { SiteDomainsService } from './site-domains.service.js';
 import { SitesController } from './sites.controller.js';
 import { SitesService } from './sites.service.js';
@@ -18,7 +19,7 @@ import { SitesService } from './sites.service.js';
 @Module({
   imports: [PrismaModule, ActivityCoreModule, PublishingCoreModule, PublishingQueueModule],
   controllers: [ShareLinksController, SitesController],
-  providers: [SitesService, SiteDomainsService, PublishingSweeper],
+  providers: [SitesService, SiteDomainsService, SiteAudiencesService, PublishingSweeper],
   exports: [PublishingCoreModule],
 })
 export class PublishingModule {}

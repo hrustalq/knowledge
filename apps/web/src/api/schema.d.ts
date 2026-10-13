@@ -3767,6 +3767,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sites/{id}/audiences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who may read which part of the site: the audience rules and whether visitor sign-in is set up */
+        get: operations["SitesController_listAudiences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sites/{id}/audiences/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Keep a page and everything below it from the public. Applies to every version at once */
+        put: operations["SitesController_setAudience"];
+        post?: never;
+        /** Remove a page’s rule: it is public again unless a rule above it says otherwise */
+        delete: operations["SitesController_removeAudience"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sites/{id}/visitor-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set a new secret for visitor JWTs (HS256), shown once. The old one stops working, and its sessions end */
+        post: operations["SitesController_rotateVisitorSecret"];
+        /** Turn visitor sign-in off. Open visitor sessions end at once */
+        delete: operations["SitesController_clearVisitorSecret"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/shares/{token}": {
         parameters: {
             query?: never;
@@ -3846,6 +3899,40 @@ export interface paths {
         get: operations["PublicSitesController_searchSite"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/sites/{siteId}/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Exchange a sign-in code or visitor JWT for the site’s session cookie, then redirect back */
+        get: operations["PublicSitesController_openSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/sites/{siteId}/session/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out of the site: the session ends at once and the cookie is cleared */
+        post: operations["PublicSitesController_endSession"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3948,6 +4035,23 @@ export interface paths {
         get: operations["PublicDomainsController_allow"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sites/{id}/sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A one-time sign-in to a live site for the calling member: the URL to send the browser to */
+        post: operations["SiteSignInController_signIn"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5544,8 +5648,23 @@ export interface components {
             /** @description A hostname you control, e.g. docs.example.com. A pasted URL is reduced to its host */
             hostname: string;
         };
+        SetSiteAudienceRuleDto: {
+            /**
+             * @description `members`: signed-in workspace members only; `visitors`: also people signed in with a JWT from your backend
+             * @enum {string}
+             */
+            audience: "visitors" | "members";
+            /** @description `visitors` only: claims the JWT must carry, each with one of the listed values, e.g. {"plan":["pro"]}. Omitted or null: any valid token */
+            claims?: {
+                [key: string]: string[];
+            } | null;
+        };
         UnlockShareDto: {
             password: string;
+        };
+        SiteSignInDto: {
+            /** @description The site page to come back to, as an absolute URL on one of the site’s own addresses */
+            returnUrl: string;
         };
         CreateDocumentExportDto: {
             /**
@@ -17937,6 +18056,214 @@ export interface operations {
             };
         };
     };
+    SitesController_listAudiences: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SitesController_setAudience: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSiteAudienceRuleDto"];
+            };
+        };
+        responses: {
+            /** @description Not a page of this site, or the claims are malformed (details.reason site.audiencePageNotInSite | site.audienceClaimsInvalid) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SitesController_removeAudience: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SitesController_rotateVisitorSecret: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SETTINGS_ENCRYPTION_KEY is not set (details.reason site.visitorSecretNeedsKey) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SitesController_clearVisitorSecret: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     PublicSharesController_view: {
         parameters: {
             query?: never;
@@ -18148,6 +18475,101 @@ export interface operations {
         responses: {
             /** @description No live site with this id, or no such version */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSitesController_openSession: {
+        parameters: {
+            query?: {
+                /** @description A one-time sign-in code from POST /v1/sites/:id/sign-in */
+                code?: string;
+                /** @description A visitor JWT (HS256) signed with the site’s visitor secret; `exp` is required */
+                jwt_token?: string;
+                /** @description Where to go afterwards: a path on this same origin. Anything else goes to `/` */
+                return?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Back to `return` on this origin, with the cookie set when the code or token was good */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No live site with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSitesController_endSession: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18425,6 +18847,58 @@ export interface operations {
                 content?: never;
             };
             /** @description Not a hostname this platform serves */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    SiteSignInController_signIn: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteSignInDto"];
+            };
+        };
+        responses: {
+            /** @description The return URL is not on one of the site’s addresses (details.reason site.signInReturnInvalid) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No live site with this id */
             404: {
                 headers: {
                     [name: string]: unknown;

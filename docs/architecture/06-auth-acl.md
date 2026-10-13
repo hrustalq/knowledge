@@ -201,6 +201,20 @@ only for a return address that is one of the site's own; the public
 `…/session` route spends it. Every failure reads as anonymous, and a hidden
 page is a 404, never a 403.
 
+A site may also answer questions ([feature 44](../features/44-docs-portal.md#ask-phase-3)
+"Ask"): `POST /v1/public/sites/:siteId/ask` is the one public route that
+spends money, so it is the one whose limits **fail closed**. Reads fail open
+when Redis is down; Ask's per-address rate (`PUBLIC_ASK_RATE_PER_MIN`) and
+the site's daily budget (`askDailyBudget`, never above
+`PUBLIC_ASK_DAILY_BUDGET`) refuse instead. It retrieves only from the rows
+the reader may see (the same `visibleRows` and site cookie as a page read),
+runs with no principal and no tools, and is billed as `public_ask` with
+`userId` = the site's id, under the workspace's own AI budget. Embedding the
+widget elsewhere is not an API decision at all: the `/_widget` frame is a
+page of the site, same-origin with its API (no CORS), and its
+`frame-ancestors` header, built from the site's `embed_origins`, is the whole
+embed check.
+
 Exports ([feature 45](../features/45-export.md)) are member-only. Asking for
 one is `viewer` on the page or project it covers, so the guard resolves the
 workspace from that id. The `export` source covers the job itself, and the

@@ -164,10 +164,12 @@ function renderPdf(req: ExportRenderRequest, deps: ExportRenderDeps): ExportRend
   const files = [
     { path: 'index.html', content: htmlDocument(req.locale, req.title, `<style>${STYLES}</style>`, body) },
     // Gotenberg prints this at the foot of every sheet; its own document, so
-    // its own (inline) styles.
+    // its own (inline) styles. Chromium lays a footer template out with no
+    // width and collapses its inline whitespace, so the number goes in a
+    // full-width block: on the body alone it printed as `3/4` at the left edge.
     {
       path: 'footer.html',
-      content: `<!doctype html><html><head><style>body{margin:0;width:100%;font:8px ui-sans-serif,system-ui,sans-serif;color:#888;text-align:center}</style></head><body><span class="pageNumber"></span> / <span class="totalPages"></span></body></html>`,
+      content: `<!doctype html><html><head><style>html,body{margin:0;width:100%}div{width:100%;font:8px ui-sans-serif,system-ui,sans-serif;color:#888;text-align:center}</style></head><body><div><span class="pageNumber"></span> / <span class="totalPages"></span></div></body></html>`,
     },
   ]
   if (mermaid) files.push({ path: 'mermaid.min.js', content: deps.mermaidScript() })

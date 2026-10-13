@@ -184,6 +184,18 @@ most `SITE_MAX_DOMAINS` = 5 per site, unique across the deployment).
   the sweeper skips them, and canonical URLs fall back to the subdomain or
   path. Production runs it **off**: TLS there ends at a Cloudflare Worker in
   front of Tailscale Funnel, so Caddy can issue no certificates.
+- **Trying it locally.** `make dev`'s web server refuses a custom host: Vite's
+  dev server answers only hosts it knows (`localhost`, `.PUBLISH_BASE_DOMAIN`).
+  Run the built web instead (`pnpm --filter @knowledge/web build`, then
+  `NODE_ENV=production PORT=5174 node server` in `apps/web`), put
+  `Caddyfile.sites.example` in front of it with `local_certs` in the global
+  block, so Caddy's own CA stands in for ACME, and reach the host with
+  `curl --resolve <host>:443:127.0.0.1 --cacert <Caddy's root.crt>`. This is
+  how #77 was closed out: an unverified host failed the TLS handshake, a
+  verified one got a certificate on its first request, and the member
+  sign-in hand-off set its cookie on that host. Real ACME issuance and a real
+  DNS verify have not been run, since no install of this platform faces the
+  internet yet.
 
 ## Machine-readable files (phase 2b)
 

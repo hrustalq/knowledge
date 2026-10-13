@@ -149,6 +149,15 @@ files start Gotenberg with `--chromium-allow-list=^file:///tmp/.*`. External
 images are therefore missing from a PDF, though they appear in the HTML
 bundle, where the reader's own browser fetches them.
 
+Two print details only a real Gotenberg shows. Chromium lays the footer
+template out with no width and collapses its whitespace, so the page number
+sits in a full-width block (on the body alone it printed as `3/4` at the left
+edge). Backgrounds stay on for code blocks and tables, so the print rules
+drop the page's off-white tint, which would otherwise print as a panel inside
+the margins. Checked against `gotenberg/gotenberg:8`: a 6-page subtree gave
+34 A4 sheets with each page starting a new one, and a flowchart and a
+sequence diagram were drawn as vectors.
+
 Gotenberg is optional and off in production (about 1 GB). With
 `GOTENBERG_URL` empty the dialog shows PDF disabled, with the reason, and the
 API refuses it. `make infra-up-gotenberg` runs it on `:3100` in dev.

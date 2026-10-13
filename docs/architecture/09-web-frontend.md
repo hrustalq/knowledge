@@ -53,6 +53,32 @@ sanitizer, and the reason `MarkdownView` can keep rendering nothing during SSR.
 Vite builds both apps in one pass (`rolldownOptions.input`), and the reader
 carries its own small i18n catalog rather than sharing the app's.
 
+Both SSR bundles leave `vue` and `vue-i18n` external, so in production Node
+loads their published builds with no compile-time `define`. vue-i18n's
+`install()` then reads Vue's `__VUE_PROD_DEVTOOLS__` flag, which nothing
+defines under plain Node. A member render happened to define it first, so a
+public page rendered first after boot threw inside that async `install()`,
+and the unhandled rejection killed the process. `server.js` therefore defines
+the flag itself before anything renders. Dev never shows this: with
+`NODE_ENV` unset the check short-circuits before reading the flag.
+
+A site sign-in crosses both apps (docs/features/44, "Audiences"). The
+reader's Sign in links to the member app's `/site-sign-in`, an ordinary
+route behind the login guard. That page asks the API for a one-time code and
+`location.replace`s to the site's own `/api/v1/public/sites/:id/session`,
+which reaches the API through the front proxy's `/api` route (Vite's proxy in
+dev) on whatever origin the site has: path mode, a base-domain host or a
+custom domain. The cookie is therefore set on the site's origin and never
+on the app's.
+
+The Ask widget ([44](../features/44-docs-portal.md#ask-phase-3)) is two
+routes. `/widget.js` (`server/site-widget.js`, mounted before the reader so
+it is not taken for a page) is a static script, the same bytes for every
+site. `/_widget` is a page of the public entry (`SiteWidget.vue`), and its
+render returns the `Content-Security-Policy: frame-ancestors` header built
+from the site's `embedOrigins`, which is the only thing standing between the
+frame and an origin the admin did not list.
+
 Whether a host is a site's is decided once per request, first thing
 (`server/site-files.js`, `res.locals.siteHost`). The host is `Host`, or
 `X-Forwarded-Host` when the peer is internal (an edge that rewrites `Host`, as

@@ -1,6 +1,7 @@
+import { createHash } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { PublishedSite, SiteDomain, SiteVersion, SiteVersionPage } from '@prisma/client';
+import type { Prisma, PublishedSite, SiteDomain, SiteVersion, SiteVersionPage } from '@prisma/client';
 import {
   normalizeHostname,
   normalizeSiteTheme,
@@ -17,6 +18,7 @@ import { AttachmentsService } from '../attachments/attachments.service.js';
 import { AvatarsService } from '../avatars/avatars.service.js';
 import type { Env } from '../config/env.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { etagMatches } from '../ai-readable/render.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PublishingSettingsService } from '../publishing/publishing-settings.service.js';
@@ -25,6 +27,24 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** Longest path a resolve will look at; anything longer is no page of ours. */
 const MAX_PATH_CHARS = 2000;
+
+/** Bumped when the resolve answer changes shape, so every cached render goes stale. */
+const RESOLVE_FORMAT_VERSION = 1;
+
+/**
+ * A snapshot row without its search text (up to 100k characters a page),
+ * which nothing but search needs. Every other read of the rows selects this.
+ */
+export const SNAPSHOT_ROW = {
+  documentId: true,
+  revisionId: true,
+  parentId: true,
+  position: true,
+  depth: true,
+  slugPath: true,
+  title: true,
+} as const satisfies Prisma.SiteVersionPageSelect;
+export type SnapshotRow = Pick<SiteVersionPage, keyof typeof SNAPSHOT_ROW>;
 
 type BuiltVersion = SiteVersion & { builtAt: Date };
 /** A site that may be read: live, allowed, and built. `domains` holds its verified hostnames, oldest first. */
@@ -70,6 +90,20 @@ export class PublicSitesService {
   ) {}
 
   async resolve(query: ResolveQuery): Promise<PublicSiteResolveResponse> {
+    return (await this.resolveTagged(query)).body!;
+  }
+
+  /**
+   * `resolve` with an ETag, for the reader's render cache (issue #77 phase
+   * 2b-2). The tag covers the whole answer with the page's markdown replaced
+   * by the revision the snapshot pinned, which names it exactly. So it is
+   * known before the one expensive read, the body from object storage, and a
+   * caller whose tag still matches gets `body: null` without that read.
+   *
+   * Authorisation is not part of the bargain: the site is looked up afresh
+   * first, so an unpublished site is a 404 whatever tag is sent.
+   */
+  async resolveTagged(query: ResolveQuery, ifNoneMatch?: string): Promise<{ etag: string; body: PublicSiteResolveResponse | null }> {
     const site = await this.find(query);
     const path = (query.path ?? '').slice(0, MAX_PATH_CHARS);
     const { version, slugPath } = this.splitPath(site, path);
@@ -77,6 +111,7 @@ export class PublicSitesService {
     const rows = await this.prisma.siteVersionPage.findMany({
       where: { versionId: version.id },
       orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+      select: SNAPSHOT_ROW,
     });
     const page = this.pickPage(rows, slugPath, query.from);
 
@@ -86,7 +121,7 @@ export class PublicSitesService {
     });
     const theme = normalizeSiteTheme(site.theme);
 
-    return {
+    const body: PublicSiteResolveResponse = {
       site: {
         id: site.id,
         slug: site.slug,
@@ -107,8 +142,23 @@ export class PublicSitesService {
           position: r.position,
         }),
       ),
-      page: page ? await this.pageBody(page, site, version) : null,
+      page: page ? await this.pageMeta(page, site, version) : null,
     };
+    const etag = `"${createHash('sha256')
+      .update(JSON.stringify([RESOLVE_FORMAT_VERSION, body, page?.revisionId ?? null]))
+      .digest('hex')
+      .slice(0, 32)}"`;
+    if (etagMatches(ifNoneMatch, etag)) return { etag, body: null };
+
+    if (page && body.page) {
+      // The one content path (CLAUDE.md), at the revision the snapshot pinned.
+      // A revision that can no longer be read (its page was deleted) is as
+      // absent as a page that was never published.
+      const content = await this.documents.getContent(page.documentId, page.revisionId).catch(() => null);
+      if (content) body.page.markdown = content.markdown;
+      else body.page = null;
+    }
+    return { etag, body };
   }
 
   /**
@@ -120,6 +170,11 @@ export class PublicSitesService {
     const key = query.slug ? { slug: query.slug } : query.host ? this.siteKeyFromHost(query.host) : null;
     if (!key) throw this.notFound();
     return this.liveSite(key);
+  }
+
+  /** The live site behind an id the reader already holds (search, attachments): the same check as `find`. */
+  findById(siteId: string): Promise<LiveSite> {
+    return this.liveSite({ id: siteId });
   }
 
   /** A version's first segment and the slug path below it. */
@@ -266,7 +321,7 @@ export class PublicSitesService {
    * not have falls back to the same page under its slug there, then to the
    * home — never to a 404 for a page the reader was just looking at.
    */
-  private pickPage(rows: SiteVersionPage[], slugPath: string, from: string | undefined): SiteVersionPage | null {
+  private pickPage(rows: SnapshotRow[], slugPath: string, from: string | undefined): SnapshotRow | null {
     const homeId = siteHomeDocumentId(rows);
     const home = rows.find((r) => r.documentId === homeId) ?? null;
     if (!slugPath) return home;
@@ -276,12 +331,8 @@ export class PublicSitesService {
     return null;
   }
 
-  private async pageBody(row: SiteVersionPage, site: LiveSite, version: BuiltVersion): Promise<PublicSitePage | null> {
-    // The one content path (CLAUDE.md), at the revision the snapshot pinned.
-    // A revision that can no longer be read (its page was deleted) is as
-    // absent as a page that was never published.
-    const content = await this.documents.getContent(row.documentId, row.revisionId).catch(() => null);
-    if (!content) return null;
+  /** Everything about a page but its body, which `resolveTagged` reads only when the tag has changed. */
+  private async pageMeta(row: SnapshotRow, site: LiveSite, version: BuiltVersion): Promise<PublicSitePage> {
     const revision = await this.prisma.documentRevision.findUnique({
       where: { id: row.revisionId },
       select: { finalizedAt: true },
@@ -290,7 +341,7 @@ export class PublicSitesService {
       documentId: row.documentId,
       title: row.title,
       slugPath: row.slugPath,
-      markdown: content.markdown,
+      markdown: '',
       updatedAt: revision?.finalizedAt?.toISOString() ?? null,
       alternates: await this.alternates(row.documentId, site, version),
     };

@@ -3,6 +3,7 @@ import express from 'express'
 import { configureBacktest, createRootLogger, envLogLevel } from '@knowledge/observability'
 import { traceMiddleware } from '@knowledge/observability/express'
 import { aiReadableMiddleware } from './server/ai-readable.js'
+import { createRenderCache, renderCacheKey } from './server/render-cache.js'
 import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files.js'
 
 // Constants
@@ -59,6 +60,13 @@ const APP_HOST = (() => {
   }
 })()
 const siteHostOf = createSiteHostResolver({ apiBase: API_INTERNAL, baseDomain: PUBLISH_BASE_DOMAIN, appHost: APP_HOST })
+
+// Published site pages, kept by host + language + URL and revalidated with the
+// API on every request (issue #77 phase 2b-2). 0 turns it off.
+const SITE_RENDER_CACHE_MB = Number(process.env.SITE_RENDER_CACHE_MB ?? 32)
+const renderCache = createRenderCache({
+  maxBytes: (Number.isFinite(SITE_RENDER_CACHE_MB) ? Math.max(0, SITE_RENDER_CACHE_MB) : 32) * 1024 * 1024,
+})
 
 // Create http server
 const app = express()
@@ -179,6 +187,8 @@ async function renderPublic(req, res, url, siteHost) {
   }
   const locale = resolveLocale(readCookie(req.headers.cookie, 'kn_lang'), req.headers['accept-language'])
   const headerTraceId = res.getHeader('x-request-id')
+  const cacheKey = renderCache.enabled ? renderCacheKey({ siteHost, url, locale }) : null
+  const cached = cacheKey ? renderCache.get(cacheKey) : null
   let rendered
   try {
     rendered = await render(url, {
@@ -187,7 +197,13 @@ async function renderPublic(req, res, url, siteHost) {
       forwardedFor: forwardedFor(req),
       traceId: typeof headerTraceId === 'string' ? headerTraceId : null,
       siteHost,
+      ifNoneMatch: cached?.etag ?? null,
     })
+    // The API vouched for the cached render: the site is still live and the
+    // page is what it was. Anything else replaces or drops the entry.
+    if (rendered.notModified && cached) rendered = cached.rendered
+    else if (cacheKey && rendered.etag) renderCache.set(cacheKey, rendered.etag, rendered)
+    else if (cacheKey && cached) renderCache.delete(cacheKey)
   } catch (e) {
     // The API's per-address cap, passed on as itself rather than as a 500.
     if (e?.status === 429) {

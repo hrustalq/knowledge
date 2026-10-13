@@ -4,6 +4,7 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Moon, PanelLeft, Search, Sun } from 'lucide-vue-next'
 import { useSearchUiStore } from '@/stores/search-ui'
+import { isSearchShortcut } from '@/lib/search-shortcut'
 import { toggleTheme } from '@/lib/theme'
 import { Button } from '@/components/ui/button'
 import LocaleSwitcher from './LocaleSwitcher.vue'
@@ -16,26 +17,9 @@ const { t } = useI18n()
 const searchUi = useSearchUiStore()
 
 function onKeydown(e: KeyboardEvent) {
-  const target = e.target as HTMLElement | null
-  const typing =
-    target !== null &&
-    (target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.tagName === 'SELECT' ||
-      target.isContentEditable)
-  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-    // Inside a rich editor ⌘K means "link this selection" — the convention in
-    // every editor people arrive from. Firing search there too opened both at
-    // once. Plain inputs keep the global shortcut.
-    if (target?.isContentEditable || e.defaultPrevented) return
-    e.preventDefault()
-    searchUi.openSearch()
-    return
-  }
-  if (!typing && e.key === '/') {
-    e.preventDefault()
-    searchUi.openSearch()
-  }
+  if (!isSearchShortcut(e)) return
+  e.preventDefault()
+  searchUi.openSearch()
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))

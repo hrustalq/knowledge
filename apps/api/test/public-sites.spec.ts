@@ -494,3 +494,41 @@ describe('PublicSiteFilesService', () => {
     }
   });
 });
+
+describe('PublicSitesService.resolveTagged (the render cache’s check)', () => {
+  it('a matching tag answers without reading the page body; anything else reads it', async () => {
+    const { service, documents } = reader();
+    const first = await service.resolveTagged({ slug: 'acme', path: '/welcome/install' });
+    expect(first.body!.page!.markdown).toBe('body of install-r5');
+    expect(documents.getContent).toHaveBeenCalledTimes(1);
+
+    const again = await service.resolveTagged({ slug: 'acme', path: '/welcome/install' }, first.etag);
+    expect(again).toEqual({ etag: first.etag, body: null });
+    expect(documents.getContent).toHaveBeenCalledTimes(1);
+
+    const stale = await service.resolveTagged({ slug: 'acme', path: '/welcome/install' }, '"stale"');
+    expect(stale.body!.page!.markdown).toBe('body of install-r5');
+  });
+
+  it('the tag changes with the pinned revision, the tree, a rebuild and the theme', async () => {
+    const { service, prisma } = reader();
+    const tag = async () => (await service.resolveTagged({ slug: 'acme', path: '/welcome/install' })).etag;
+    const tags = [await tag()];
+    prisma.pages[1].revisionId = 'install-r6';
+    tags.push(await tag());
+    prisma.pages[0].title = 'Welcome!';
+    tags.push(await tag());
+    prisma.versions[0].builtAt = new Date('2026-10-14T00:00:00Z');
+    tags.push(await tag());
+    prisma.site.theme = { ...prisma.site.theme, primaryColor: '#654321' };
+    tags.push(await tag());
+    expect(new Set(tags).size).toBe(tags.length);
+  });
+
+  it('is no way around the live check: a cached tag for an unpublished site is still a 404', async () => {
+    const { service, prisma } = reader();
+    const { etag } = await service.resolveTagged({ slug: 'acme', path: '/' });
+    prisma.site.status = 'draft';
+    await expect(service.resolveTagged({ slug: 'acme', path: '/' }, etag)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});

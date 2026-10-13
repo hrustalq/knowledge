@@ -31,6 +31,16 @@ in the pull request that introduces them — see
 - A site build whose job was lost (a Redis flush, a worker that died between
   jobs) is requeued after 15 minutes instead of saying "building" until the
   next restart. (#77)
+- Published sites have search. A search button in the site header (or `/`,
+  ⌘K / Ctrl+K) opens the same side sheet the app uses, and results come only
+  from the pages of the version being read, at the revisions it shows: a
+  draft, an unpublished page or another version's page is never returned.
+  English and Russian words match across word forms (`install` finds
+  "Installing", `установк` finds «Установка»). (#77)
+- Published site pages render once and are then served from a cache in the web
+  process for as long as the API confirms nothing they show has changed.
+  Unpublishing still ends a site on the very next request. A large page went
+  from about 105 ms to about 21 ms on the dev stack. (#77)
 
 ### Operations
 
@@ -52,6 +62,15 @@ in the pull request that introduces them — see
 - The web container now reads `WEB_BASE_URL` (passed by
   `docker-compose.prod.yml`): its own host is never looked up as a site's.
   Any other host is asked of the API once a minute.
+- Migration `20261013210000_site_search` adds `search_headings`,
+  `search_body` (both defaulted) and a nullable `search_vector` to
+  `site_version_pages`. Expand-only: the previous release runs against it,
+  and a rollback needs no down migration. Snapshots built before it are
+  searchable once the worker has filled them from their pinned revisions,
+  which it does by itself at startup (one object read per page, a few seconds
+  for a few hundred pages). No version is rebuilt for it.
+- New web env var `SITE_RENDER_CACHE_MB` (default `32`; `0` turns the render
+  cache off), passed by `docker-compose.prod.yml`. Production needs no change.
 
 ## [0.18.0] — 2026-10-13
 

@@ -8,6 +8,7 @@ import { PublicRateLimiter, PublicRateLimitGuard } from './public-rate-limit.js'
 import { PublicSharesController } from './public-shares.controller.js';
 import { PublicDomainsController, PublicSiteFilesController } from './public-site-files.controller.js';
 import { PublicSiteFilesService } from './public-site-files.service.js';
+import { PublicSiteSearchService } from './public-site-search.service.js';
 import { PublicSitesController } from './public-sites.controller.js';
 import { PublicSitesService } from './public-sites.service.js';
 import { PublicSharesService } from './public-shares.service.js';
@@ -30,6 +31,7 @@ import { ShareUnlockService } from './share-unlock.service.js';
     PublicSharesService,
     PublicSitesService,
     PublicSiteFilesService,
+    PublicSiteSearchService,
   ],
 })
 export class PublicModule {}

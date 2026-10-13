@@ -5,6 +5,7 @@ import type { Env } from '../config/env.js';
 import { hasRealPath } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { planSiteBuild, resolveRevision, type PlanDocument, type ResolvedRevision } from './site-build.plan.js';
+import { SiteSearchTextService } from './site-search-text.service.js';
 
 /**
  * Builds one site version's snapshot (docs/features/44): reads the tree and
@@ -13,7 +14,10 @@ import { planSiteBuild, resolveRevision, type PlanDocument, type ResolvedRevisio
  *
  * The swap is the whole safety story. Until it commits, readers keep the
  * previous snapshot; a build that fails changes nothing they can see, and the
- * version reports `failed` beside the snapshot it still serves.
+ * version reports `failed` beside the snapshot it still serves. The search
+ * index is part of the swap (phase 2b-2): the rows carry their text and the
+ * same transaction computes their vectors, so search never names a page the
+ * reader does not serve, or misses one it does.
  *
  * Runs in the worker. It creates no page and attributes no act to anyone, so
  * it completes itself rather than handing anything back to the API.
@@ -26,6 +30,7 @@ export class SiteBuildService {
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService<Env, true>,
+    private readonly searchText: SiteSearchTextService,
   ) {
     this.maxPages = config.get('SITE_MAX_PAGES', { infer: true });
   }
@@ -53,9 +58,19 @@ export class SiteBuildService {
         maxPages: this.maxPages,
       });
 
+      // Read before the swap, so the transaction stays short and a snapshot
+      // is never served without its search text.
+      const texts = await this.searchText.texts(plan.pages.map((p) => p.revisionId));
+
       await this.prisma.$transaction([
         this.prisma.siteVersionPage.deleteMany({ where: { versionId } }),
-        this.prisma.siteVersionPage.createMany({ data: plan.pages.map((p) => ({ versionId, ...p })) }),
+        this.prisma.siteVersionPage.createMany({
+          data: plan.pages.map((p) => {
+            const text = texts.get(p.revisionId);
+            return { versionId, ...p, searchHeadings: text?.headings ?? '', searchBody: text?.body ?? '' };
+          }),
+        }),
+        this.searchText.indexVersion(versionId),
         this.prisma.siteVersion.update({
           where: { id: versionId },
           data: {

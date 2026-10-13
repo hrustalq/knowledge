@@ -2252,6 +2252,14 @@ model SiteVersionPage {
   /// `guides/install`; '' for the root page of a site published from one page.
   slugPath   String  @map("slug_path")
   title      String
+  /// Site search (issue #77 phase 2b-2): the pinned revision's headings and
+  /// body as plain text, written by the build. Snippets are cut from the body.
+  searchHeadings String @default("") @map("search_headings")
+  searchBody     String @default("") @map("search_body")
+  /// title (A) + headings (B) + body (C) under the `russian` configuration,
+  /// which stems English words too. Set by raw SQL after the rows are written;
+  /// null = not indexed yet (SiteSearchTextService backfills it).
+  searchVector   Unsupported("tsvector")? @map("search_vector")
 
   version SiteVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 

@@ -4,9 +4,9 @@ Issue [#77](https://github.com/hrustalq/knowledge/issues/77), phases 2a and
 2b of public publishing. A project, or one page and its subtree, published as
 a read-only docs site: a nav tree, an outline, previous/next, a theme, and
 versions. Anyone with the address can read it without signing in. Phase 2b
-adds custom domains, `sitemap.xml`/`robots.txt`, `llms.txt` and pages as
-markdown; site search and the render cache follow in a second 2b PR;
-audiences and the Ask widget are phase 3. Share links
+adds custom domains, `sitemap.xml`/`robots.txt`, `llms.txt`, pages as
+markdown, site search and a render cache; audiences and the Ask widget are
+phase 3. Share links
 ([43](43-share-links.md)) are the other half of the same issue and share its
 switches, rate limiter and reader.
 
@@ -121,7 +121,8 @@ per-IP `PublicRateLimitGuard` as shares, `Cache-Control: no-store`):
 
 | Route | Answers |
 | --- | --- |
-| `GET resolve?slug=\|host=&path=&from=` | site chrome (title, normalized theme, logo, root URL), the version, every built version, the snapshot tree, and the page (markdown at its pinned revision, frontmatter stripped), or `page: null` |
+| `GET resolve?slug=\|host=&path=&from=` | site chrome (title, normalized theme, logo, root URL), the version, every built version, the snapshot tree, and the page (markdown at its pinned revision, frontmatter stripped), or `page: null`. Carries an `ETag`; a matching `If-None-Match` answers 304 without reading the body (see the render cache below) |
+| `GET :siteId/search?q=&version=` | up to 20 pages of one version matching `q`, each with a snippet as text runs (see Search) |
 | `GET :siteId/versions/:versionId/attachments/:attachmentId` | 302 to a presigned URL, only for an attachment of a page in that snapshot |
 | `GET :siteId/logo` | 302 to the project's uploaded avatar, when the theme shows a logo |
 
@@ -236,7 +237,7 @@ The share reader's public entry (`entry-public.ts`, `reader.html`,
 - **Chrome.** The nav shows the top level plus the open path to the current
   page. A version switcher, "you are reading an older version" banner,
   outline and previous/next all work with JavaScript off. The client only
-  upgrades mermaid and the theme toggle.
+  upgrades mermaid and the theme toggle, and adds search.
 - **Theme.** `SiteTheme` (contracts) is values, never CSS: `#rrggbb` accent
   colours (light, and optionally dark), a font key into `SITE_FONT_STACKS`
   (system stacks only; a reader's browser fetches no web font), the project
@@ -250,6 +251,65 @@ The share reader's public entry (`entry-public.ts`, `reader.html`,
   site is not indexable, on every non-default version, and on a 404.
   `Cache-Control: no-cache`. Plus `<link rel="alternate">` to the page in the
   other versions and as markdown (phase 2b).
+
+## Search
+
+Postgres full-text search over the snapshot rows, nothing else (phase 2b-2;
+decided over a per-version MiniSearch file in object storage, which would
+have been a second copy of the snapshot to keep in step).
+
+- **What is indexed.** The build stores each page's headings and body as plain
+  text on its `site_version_pages` row (`search_headings`, `search_body`;
+  `site-search.text.ts` walks `marked`'s tokens: markup, mermaid source and
+  control characters out, code kept, the body capped at 100k characters), and
+  the same swap transaction computes `search_vector`: title weight A,
+  headings B, body C. Text is per revision, so a rebuild copies it from any
+  row that already holds that revision and reads only new revisions from
+  object storage. A revision that cannot be read is searched by its title and
+  logged; it does not fail the build.
+- **One configuration for both languages.** `russian` stems Cyrillic words with
+  the Russian stemmer and ASCII words with the English one, so
+  `установк` finds «Установка» and `install` finds "Installing".
+- **The query.** `siteSearchQuery` keeps only letters and digits, ANDs up to
+  eight words and makes the last one a prefix, so results follow the typing;
+  under 2 characters answers nothing without asking Postgres. Ranked by
+  `ts_rank_cd` (length-normalised), then reading order. `ts_headline` marks hits
+  with two control characters the stored text cannot hold, and the API turns
+  them into `{ text, hit }` runs, so no markup reaches the reader as HTML.
+- **Scope.** `liveSite` first (the same check every public route makes), then
+  one statement over `site_version_pages WHERE version_id = …`. A draft, an
+  unpublished page or another version's page has no row there, and there is
+  no semantic path: the workspace-wide vector index is never consulted.
+- **Older snapshots.** Rows written before the migration have no vector. The
+  worker fills them at boot from their pinned revisions
+  (`SiteSearchTextService.backfill`), matched on revision so a build that
+  swapped in meanwhile is not overwritten. It never rebuilds a version, so a
+  frozen version stays frozen.
+- **Reader.** `pages/public/SiteSearch.vue` is the app's search sheet without its stores:
+  the same `Sheet`, the same "/" and ⌘K shortcut and the same focus return
+  on close (`lib/search-shortcut.ts`, which `AppTopbar` and `SearchSheet`
+  now use too). It searches the version being read; a result is a plain link.
+  It needs JavaScript; nothing else in the reader does.
+
+## The render cache
+
+`server.js` keeps finished site renders in a least-recently-used map bounded
+by bytes (`server/render-cache.js`, `SITE_RENDER_CACHE_MB`, default 32, 0 off),
+keyed by host, language and URL — a site render reads no cookie, so those
+decide its bytes. Each entry holds the ETag `resolve` gave for what it was
+made from: a hash of the whole answer with the markdown replaced by the
+pinned revision id, which names it.
+
+Every request still calls `resolve`, with that tag. The site, its status and
+the workspace switch are looked up afresh, so an unpublish is a 404 on the
+next request exactly as before. A 304 means nothing the render used has
+changed (a rebuild changes `builtAt` and the tree, a theme edit the site, a
+rename the title), and the cached HTML is sent without the body read, the
+markdown render, the sanitiser or the Vue SSR pass. On the dev stack a
+640 KB page went from about 105 ms to about 21 ms. Only pages served as
+themselves (200) are kept; shares never are, since their render carries no
+tag. The cache is per process and starts empty on restart, which is also how
+a new web build arrives.
 
 ## Member UI
 
@@ -295,8 +355,9 @@ destination may have its own). Deleting pages removes their snapshot rows
 
 ## Limits
 
-- No site search and no render cache yet (the second phase 2b PR). Site pages
-  send `Cache-Control: no-cache` and render per request.
+- Search is keyword only. There is no semantic search over a site: the vector
+  index is workspace-wide and capped, and cannot be confined to a snapshot.
+- Search needs JavaScript. There is no server-rendered results page.
 - Production serves sites in path mode only: its TLS ends at Cloudflare, so a
   base domain or a custom domain needs the edge to route those hosts first.
   `Caddyfile.sites.example` covers an install where Caddy faces the internet.

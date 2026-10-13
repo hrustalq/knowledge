@@ -225,5 +225,9 @@ paint for anything the stores do not hold.
 
 `sirv` serves the built client directly out of the web process in production —
 there is no CDN or asset host in front of it — and `server.js` is an Express app
-with no rendering cache, so every request renders. Both are fine at the current
-scale and are the first things to revisit if SSR latency becomes a problem.
+that renders every request of the member app. Only published site pages are
+cached (`server/render-cache.js`: an in-process LRU revalidated against the
+API's `resolve` ETag on every request, see
+[44](../features/44-docs-portal.md#the-render-cache)). Both are fine at the
+current scale and are the first things to revisit if SSR latency becomes a
+problem.

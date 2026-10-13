@@ -28,8 +28,10 @@ services:
       # loopback smoke check. Loopback only: Funnel connects from the host.
       - "127.0.0.1:8088:80"
     environment:
-      # The Caddyfile routes /<bucket>/* to MinIO for presigned URLs (#144).
+      # The Caddyfile routes /<bucket>/* to MinIO for presigned URLs (#144),
+      # with Host set to the one they are signed for: S3_PUBLIC_ENDPOINT's host.
       S3_BUCKET: ${S3_BUCKET:-knowledge}
+      S3_PUBLIC_HOST: ${S3_PUBLIC_HOST:-knowledge.hrustalq.dev}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -191,9 +193,10 @@ services:
       start_period: 60s
       retries: 3
 
-  # PDF export (docs/features/45), opt-in: not started by `up -d`. To turn PDF
-  # on, `docker compose --profile gotenberg up -d gotenberg` and set
-  # GOTENBERG_URL=http://gotenberg:3000 in .env (~1 GB image: Chromium +
+  # PDF export (docs/features/45), opt-in: started only when COMPOSE_PROFILES
+  # names it. Production sets COMPOSE_PROFILES and GOTENBERG_URL in the GitHub
+  # `production` environment, which the deploy renders into .env; a hand edit
+  # of the box's .env lasts one release (~2.5 GB image: Chromium +
   # LibreOffice). No ports: only the worker talks to it. Its Chromium is held
   # to its own upload folder — a page can embed any URL, and whatever it
   # fetched would be printed into a PDF the requester downloads.
@@ -202,6 +205,37 @@ services:
     profiles: ["gotenberg"]
     restart: unless-stopped
     command: ["gotenberg", "--chromium-allow-list=^file:///tmp/.*", "--api-timeout=300s"]
+
+  # BM25 keyword search (docs/architecture/04-search-graph.md), opt-in like
+  # gotenberg: COMPOSE_PROFILES=…,opensearch plus FULLTEXT_PROVIDER=opensearch
+  # and OPENSEARCH_URL=http://opensearch:9200 in the production environment.
+  # The provider speaks plain HTTP with no credentials, so the security plugin
+  # is off. That is safe only because nothing publishes a port: the only
+  # callers are api and worker on the compose network. Single node, and
+  # discovery.type=single-node skips the bootstrap checks that would otherwise
+  # demand vm.max_map_count from the Colima VM. The heap is pinned and the
+  # container capped, because it shares a 10 GB VM with ArcadeDB's JVM. Once
+  # it is on, a search fails if it is down (the BM25 leg is awaited), so it
+  # restarts like a datastore. Turning it on later needs a reindex
+  # (POST /v1/ingestion/reindex) to mirror pages indexed before it.
+  opensearch:
+    image: opensearchproject/opensearch:2
+    profiles: ["opensearch"]
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    mem_limit: 1536m
+    volumes:
+      - osdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1"]
+      interval: 15s
+      timeout: 10s
+      start_period: 60s
+      retries: 8
 
   web:
     image: knowledge-web:${TAG:-latest}
@@ -271,6 +305,7 @@ volumes:
   redisdata:
   miniodata:
   arcadedata:
+  osdata:
   caddy_data:
   caddy_config:
   applogs:

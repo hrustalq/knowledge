@@ -13,6 +13,40 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.19.1] — 2026-10-14
+
+### Changed
+
+- Search in production ranks by content. Keyword matches (BM25 over
+  OpenSearch) are now fused with the vector results. The vector leg runs on
+  the stub embedder there, so until now nothing ranked by what a page says.
+  PDF export is offered in production as well. (#169)
+
+### Fixed
+
+- Downloads from object storage work again in production: export files
+  (PDF, ZIP, HTML), page attachments and avatars. Each one failed with
+  `403 SignatureDoesNotMatch`, because Tailscale Funnel replaces the
+  `X-Forwarded-Host` that Caddy used to rebuild the host the URL was signed
+  for. Caddy now sets that host from configuration. (#167)
+
+### Operations
+
+- `docker-compose.prod.yml` gains an opt-in `opensearch` service (single node,
+  no published port, 512 MB heap in a 1.5 GB container, volume `osdata`).
+  `.env.production.example` now requires `COMPOSE_PROFILES=gotenberg,opensearch`,
+  `GOTENBERG_URL`, `FULLTEXT_PROVIDER=opensearch` and `OPENSEARCH_URL`. All four
+  are already set in the `production` environment, and the deploy refuses an
+  environment without them. While OpenSearch is down, search fails, because
+  its leg is awaited. Pages indexed before it was turned on need
+  `POST /v1/ingestion/reindex`. On a rollback the extra service keeps running
+  and the previous release ignores it. To turn it off, set
+  `FULLTEXT_PROVIDER=none` and drop `opensearch` from `COMPOSE_PROFILES`. (#169)
+- The `caddy` service takes a new optional variable, `S3_PUBLIC_HOST`. It must
+  be `S3_PUBLIC_ENDPOINT`'s host; `docker-compose.prod.yml` defaults it to
+  `knowledge.hrustalq.dev`, so production needs no change. Set it in the
+  `production` environment only if `S3_PUBLIC_ENDPOINT` moves. (#167)
+
 ## [0.19.0] — 2026-10-14
 
 ### Added
@@ -1682,7 +1716,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.19.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.19.1...HEAD
+[0.19.1]: https://github.com/hrustalq/knowledge/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/hrustalq/knowledge/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/hrustalq/knowledge/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/hrustalq/knowledge/compare/v0.16.0...v0.17.0

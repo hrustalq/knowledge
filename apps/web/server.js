@@ -8,6 +8,14 @@ import { createSiteHostResolver, siteFilesMiddleware } from './server/site-files
 import { siteWidgetRoute } from './server/site-widget.js'
 import { exportRenderRoute } from './server/export-render.js'
 
+// Vue's compile-time flags. The SSR bundles leave `vue-i18n` external, so
+// Node loads its esm build unreplaced, and its plugin install() reads
+// `__VUE_PROD_DEVTOOLS__` whenever NODE_ENV is production. Nothing defines it
+// under plain Node unless some other module happens to first: a member-app
+// render did, so a public page rendered first after boot threw inside the
+// async install(), and the unhandled rejection killed the process.
+globalThis.__VUE_PROD_DEVTOOLS__ ??= false
+
 // Constants
 const isProduction = process.env.NODE_ENV === 'production'
 const port = process.env.PORT || 5173

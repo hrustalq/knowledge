@@ -21,26 +21,26 @@ in the pull request that introduces them — see
   the site's new **Domains** tab, which shows the CNAME and TXT records to
   create; the domain is served once the TXT record proves control, checked on
   demand and automatically for a week. The first verified domain becomes the
-  site's canonical address in links, the sitemap and llms.txt. (#77)
+  site's canonical address in links, the sitemap and llms.txt. (#77, #156)
 - Published sites serve `sitemap.xml` (the default version, absolute canonical
   URLs), `robots.txt` (everything disallowed when the site is not indexable),
   `llms.txt` and `llms-full.txt` per version, and every page as markdown at
   `<page>.md`, all built from the published snapshot only. Pages link their
   copies in other versions with `<link rel="alternate">`, and the version
-  switcher goes straight to them. (#77)
+  switcher goes straight to them. (#77, #156)
 - A site build whose job was lost (a Redis flush, a worker that died between
   jobs) is requeued after 15 minutes instead of saying "building" until the
-  next restart. (#77)
+  next restart. (#77, #156)
 - Published sites have search. A search button in the site header (or `/`,
   ⌘K / Ctrl+K) opens the same side sheet the app uses, and results come only
   from the pages of the version being read, at the revisions it shows: a
   draft, an unpublished page or another version's page is never returned.
   English and Russian words match across word forms (`install` finds
-  "Installing", `установк` finds «Установка»). (#77)
+  "Installing", `установк` finds «Установка»). (#77, #157)
 - Published site pages render once and are then served from a cache in the web
   process for as long as the API confirms nothing they show has changed.
   Unpublishing still ends a site on the very next request. A large page went
-  from about 105 ms to about 21 ms on the dev stack. (#77)
+  from about 105 ms to about 21 ms on the dev stack. (#77, #157)
 - **Export.** A page, a page with its subpages, or a whole project can be
   exported from the page's ⋯ menu or the project page by anyone who can read
   it, and from the page tree's row menu by editors. Three formats: **Markdown (ZIP)**, the
@@ -53,7 +53,7 @@ in the pull request that introduces them — see
   the file can be downloaded for 72 hours. An export of more than 500 pages is
   refused before it starts. DOCX is not offered: Gotenberg converts only to
   PDF. MCP gains `knowledge_export` and `knowledge_get_export`, both open to
-  read-only keys. (#77)
+  read-only keys. (#77, #158)
 - **Site audiences.** An admin can keep parts of a published site from the
   public on the site's new **Audience** tab. A rule on a page covers it and
   everything below it: **Members** pages are for workspace members, who sign
@@ -64,7 +64,7 @@ in the pull request that introduces them — see
   frozen ones included, with no rebuild. A reader who may not see a page gets
   no sign it exists: it is missing from the nav and search, and its address,
   attachments and `.md` answer 404. `sitemap.xml` and `llms.txt` list public
-  pages only. Replacing the visitor secret signs every visitor out. (#77)
+  pages only. Replacing the visitor secret signs every visitor out. (#77, #159)
 - **Ask on published sites.** An admin can let a site answer questions from
   its own pages on the site's new **Ask** tab. Readers get an Ask button beside
   search, and other sites can embed a widget with
@@ -73,78 +73,90 @@ in the pull request that introduces them — see
   only from the published pages the reader may see, at the revisions the
   version shows; every sentence links to the page it rests on. Each site has
   a daily budget of answers; past it, visitors are told to come back tomorrow.
-  Usage shows in AI usage as **Site Ask**, labelled with the site. (#77)
+  Usage shows in AI usage as **Site Ask**, labelled with the site. (#77, #160)
+
+### Fixed
+
+- The web server no longer exits when the first page it renders after a
+  start is a share link or a published-site page. Until it had rendered a
+  page of the app itself, any reader opening a share or site page brought the
+  whole web container down for the time it took to restart, app included.
+  (#77, #163)
 
 ### Operations
 
 - Migration `20261013180000_site_domains` adds the `site_domains` table and
   `site_versions.updated_at` (with a default). Expand-only: the previous
-  release runs against it, and a rollback needs no down migration.
+  release runs against it, and a rollback needs no down migration. (#156)
 - New env vars, both with defaults: `SITE_CUSTOM_DOMAINS` (default `true`;
   whether custom hostnames are routed at all) and
-  `PUBLISHING_SWEEP_INTERVAL_MS` (default `60000`).
+  `PUBLISHING_SWEEP_INTERVAL_MS` (default `60000`). (#156)
 - **Production: set `SITE_CUSTOM_DOMAINS=false`** in the `production`
   environment. Its TLS ends at the Cloudflare Worker in front of Tailscale
   Funnel, so Caddy cannot issue certificates for other hosts, and a domain
   admins could verify would never open. `.env.production.example` now lists it,
-  so the deploy fails until it is set. The production `Caddyfile` is unchanged.
+  so the deploy fails until it is set. The production `Caddyfile` is unchanged. (#156)
 - An install where Caddy faces the internet can serve base-domain and custom
   hosts over HTTPS with `Caddyfile.sites.example` (on-demand TLS whose `ask` is
   `GET /v1/public/domains/allow`), plus a wildcard DNS record for
-  `*.<PUBLISH_BASE_DOMAIN>`.
+  `*.<PUBLISH_BASE_DOMAIN>`. Each custom domain needs two records on its
+  owner's side, both shown on the Domains tab: a CNAME to this server and a
+  TXT record at `_knowledge.<hostname>`. The API reads the TXT record through
+  its own resolver, so the API container needs outbound DNS. Caddy asks for no
+  certificate until that record has been seen. (#156)
 - The web container now reads `WEB_BASE_URL` (passed by
   `docker-compose.prod.yml`): its own host is never looked up as a site's.
-  Any other host is asked of the API once a minute.
+  Any other host is asked of the API once a minute. (#156)
 - Migration `20261013210000_site_search` adds `search_headings`,
   `search_body` (both defaulted) and a nullable `search_vector` to
   `site_version_pages`. Expand-only: the previous release runs against it,
   and a rollback needs no down migration. Snapshots built before it are
   searchable once the worker has filled them from their pinned revisions,
   which it does by itself at startup (one object read per page, a few seconds
-  for a few hundred pages). No version is rebuilt for it.
+  for a few hundred pages). No version is rebuilt for it. (#157)
 - New web env var `SITE_RENDER_CACHE_MB` (default `32`; `0` turns the render
-  cache off), passed by `docker-compose.prod.yml`. Production needs no change.
+  cache off), passed by `docker-compose.prod.yml`. Production needs no change. (#157)
 - Migration `20261013230000_export_jobs` adds the `export_jobs` table.
   Expand-only: the previous release never reads it, and a rollback needs no
   down migration. Finished files live in MinIO under
   `workspaces/{ws}/exports/{id}/` and are deleted after `EXPORT_TTL_HOURS` by
-  the API.
+  the API. (#158)
 - New env vars, all with defaults: `GOTENBERG_URL` (empty: no PDF),
   `WEB_INTERNAL_URL` (`http://localhost:5173`), `EXPORT_MAX_PAGES` (`500`),
   `EXPORT_MAX_BYTES` (256 MB), `EXPORT_TTL_HOURS` (`72`),
   `EXPORT_CONCURRENCY` (`2`) and `EXPORT_TIMEOUT_MS` (10 minutes).
   `docker-compose.prod.yml` sets `WEB_INTERNAL_URL=http://web:5173` on the
-  worker, so production needs no change for ZIP and HTML.
+  worker, so production needs no change for ZIP and HTML. (#158)
 - The web server has a new route, `POST /_internal/export/render`, that the
   worker calls to render an export. It answers only a peer on the internal
   network whose request carries no `X-Forwarded-*` header — Caddy always adds
-  one — so it is unreachable through the front proxy.
+  one — so it is unreachable through the front proxy. (#158)
 - **PDF is opt-in.** `docker compose --profile gotenberg up -d gotenberg` and
   `GOTENBERG_URL=http://gotenberg:3000` (in dev: `make infra-up-gotenberg` and
   `http://localhost:3100`). The image is about 1 GB. Its Chromium is started
   with `--chromium-allow-list=^file:///tmp/.*`: keep that flag on any
   Gotenberg you point at, or a page that embeds an internal URL gets it
-  fetched from inside your network and printed into the PDF.
+  fetched from inside your network and printed into the PDF. (#158)
 - Migration `20261014090000_site_audiences` adds the `site_audience_rules`
   table, `audience` (default `'public'`) and nullable `audience_claims` to
   `site_version_pages`, and two nullable visitor-secret columns to
   `published_sites`. Expand-only: the previous release runs against it and
   shows every page, as it always did, so a rollback needs no down migration —
   but **a rollback makes restricted pages public again** until the release
-  that reads the rules is back.
+  that reads the rules is back. (#159)
 - New env var `SITE_VISITOR_TTL_MIN` (default `1440`): how long a site
   sign-in lasts. Visitor sign-in also needs `SETTINGS_ENCRYPTION_KEY` (already
   set in production) to store the site's secret; without it the Audience tab
-  says so and members-only rules still work.
+  says so and members-only rules still work. (#159)
 - Migration `20261014120000_site_ask` adds `ask_enabled` (default `false`),
   nullable `ask_daily_budget` and `embed_origins` (default empty) to
   `published_sites`. Expand-only: the previous release ignores them, and a
-  rollback needs no down migration (the widget and Ask button simply go away).
+  rollback needs no down migration (the widget and Ask button simply go away). (#160)
 - New env vars, both with defaults: `PUBLIC_ASK_DAILY_BUDGET` (`200`; the most
   answers one site may give a day, a ceiling over each site's own setting; `0`
   turns Ask off everywhere) and `PUBLIC_ASK_RATE_PER_MIN` (`6`, per address).
   Ask answers with the workspace's chat model and counts against its AI
-  budget; a workspace without a model says "unavailable".
+  budget; a workspace without a model says "unavailable". (#160)
 
 ## [0.18.0] — 2026-10-13
 

@@ -73,6 +73,9 @@ body {
 
 /* Print (PDF): one page per page, no screen padding, nothing that only works on screen. */
 @media print {
+  /* Paper is white. printBackground stays on for code blocks and tables, so
+     the screen's off-white page tint would print as a panel inside the margins. */
+  html { background: none; }
   .kn-export-shell { max-width: none; padding: 0; }
   .kn-export-cover { padding-top: 30vh; break-after: page; }
   .kn-export-contents { break-after: page; }

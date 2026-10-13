@@ -2173,9 +2173,33 @@ model PublishedSite {
 
   project  Project       @relation(fields: [projectId], references: [id])
   versions SiteVersion[]
+  domains  SiteDomain[]
 
   @@index([workspaceId])
   @@map("published_sites")
+}
+
+/// A site's own hostname (docs/features/44, issue #77 phase 2b). Served only
+/// once `verified_at` is set: the owner proves control of the name with a TXT
+/// record at `_knowledge.<hostname>` holding `verify_token`. Unique across the
+/// deployment, so one name routes to one site.
+model SiteDomain {
+  id          String    @id @default(uuid()) @db.Uuid
+  siteId      String    @map("site_id") @db.Uuid
+  /// Lower-case ASCII (IDNA/punycode), no port, no trailing dot.
+  hostname    String    @unique
+  verifyToken String    @map("verify_token")
+  verifiedAt  DateTime? @map("verified_at") @db.Timestamptz
+  lastCheckAt DateTime? @map("last_check_at") @db.Timestamptz
+  /// SITE_DOMAIN_CHECK_ERRORS: why the last check did not verify; null once it did.
+  lastError   String?   @map("last_error")
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  site PublishedSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("site_domains")
 }
 
 /// A named view of a site: `live` follows a branch and rebuilds itself,
@@ -2201,6 +2225,9 @@ model SiteVersion {
   error        String?
   createdBy    String    @map("created_by") @db.Uuid
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  /// Bumped by every status write, so PublishingSweeper can tell a build
+  /// still running from one whose job was lost.
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   site  PublishedSite     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   pages SiteVersionPage[]

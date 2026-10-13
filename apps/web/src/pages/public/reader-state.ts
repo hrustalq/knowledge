@@ -6,7 +6,7 @@ import type {
   PublicSiteVersionRef,
   SiteTheme,
 } from '@knowledge/contracts'
-import { sitePagePath } from '@knowledge/contracts/publishing'
+import { siteHomeDocumentId, sitePagePath } from '@knowledge/contracts/publishing'
 import type { PublicHeading } from '@/lib/markdown/public-render.server'
 
 /** A page body as the server rendered it: sanitized, links and assets already rewritten into scope. */
@@ -45,7 +45,13 @@ export type PublicReaderView =
       kind: 'site'
       site: PublicSiteChrome
       /** Null: the site exists but nothing answers this path — a 404 inside the site's chrome. */
-      page: (PublicRenderedPage & { slugPath: string }) | null
+      page:
+        | (PublicRenderedPage & {
+            slugPath: string
+            /** The same page in other versions, by version slug: the switcher links straight there. */
+            alternates: { versionSlug: string; href: string }[]
+          })
+        | null
     }
   | { kind: 'locked'; token: string }
   | {
@@ -84,17 +90,9 @@ export function siteHref(
   return sitePagePath(site.prefix, version.isDefault ? null : version.slug, isHome ? '' : slugPath)
 }
 
-/**
- * The site's home page: the root page of a site published from one page
- * (slug path `''`), otherwise the first page in reading order — the same rule
- * the API's resolve uses for the root path.
- */
+/** The site's home page, by the one rule the API's resolve, sitemap and llms.txt also use. */
 export function siteHomeId(tree: PublicSiteTreeNode[]): string | null {
-  return (
-    tree.find((n) => n.slugPath === '')?.documentId ??
-    tree.filter((n) => n.parentId === null).sort((a, b) => a.position - b.position)[0]?.documentId ??
-    null
-  )
+  return siteHomeDocumentId(tree)
 }
 
 type TreeNode = Pick<PublicShareTreeNode, 'documentId' | 'parentId' | 'title' | 'position'>

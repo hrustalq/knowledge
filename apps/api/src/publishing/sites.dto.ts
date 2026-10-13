@@ -136,3 +136,11 @@ export class UpdateSiteVersionDto {
   @MaxLength(100, { message: vmsg('maxLength') })
   sourceBranch?: string | null;
 }
+
+export class AddSiteDomainDto {
+  @ApiProperty({ maxLength: 253, description: 'A hostname you control, e.g. docs.example.com. A pasted URL is reduced to its host' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(300, { message: vmsg('maxLength') })
+  hostname!: string;
+}

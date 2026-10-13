@@ -418,6 +418,13 @@
     "versionSlugShadowsPage": "A top-level page of the site is already at “{slug}” — pick another version address",
     "versionLimit": "A site has at most {max} versions",
     "versionNotBuilt": "Only a version that has built at least once can be the default",
-    "defaultVersionDelete": "The default version cannot be deleted — make another version the default first"
+    "defaultVersionDelete": "The default version cannot be deleted — make another version the default first",
+    "domainNotFound": "This site domain does not exist",
+    "domainInvalid": "Enter a hostname such as docs.example.com — no scheme, path or port",
+    "domainReserved": "“{hostname}” is one of this platform’s own addresses — use a hostname you control",
+    "domainTaken": "“{hostname}” is already a verified domain of another site",
+    "domainExists": "This site already has “{hostname}”",
+    "domainLimit": "A site has at most {max} domains",
+    "customDomainsOff": "Custom domains are turned off on this deployment"
   }
 }

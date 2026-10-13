@@ -198,6 +198,11 @@ services:
       # Published sites (docs/features/44): hosts under this domain go to the
       # site reader. Interpolated from .env; empty = path mode (/pub/<slug>).
       PUBLISH_BASE_DOMAIN: ${PUBLISH_BASE_DOMAIN:-}
+      # The app's own host, which is never looked up as a site's custom domain
+      # (issue #77 phase 2b). Any other host is asked of the API once a minute.
+      # Serving sites on other hosts also needs the edge to route them here
+      # with TLS, which this deployment's does not yet (Caddyfile.sites.example).
+      WEB_BASE_URL: ${WEB_BASE_URL:-}
     ports:
       - "127.0.0.1:5173:5173"
     volumes:

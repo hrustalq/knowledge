@@ -13,6 +13,46 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- Published sites can answer on their own hostnames. An admin adds a domain on
+  the site's new **Domains** tab, which shows the CNAME and TXT records to
+  create; the domain is served once the TXT record proves control, checked on
+  demand and automatically for a week. The first verified domain becomes the
+  site's canonical address in links, the sitemap and llms.txt. (#77)
+- Published sites serve `sitemap.xml` (the default version, absolute canonical
+  URLs), `robots.txt` (everything disallowed when the site is not indexable),
+  `llms.txt` and `llms-full.txt` per version, and every page as markdown at
+  `<page>.md`, all built from the published snapshot only. Pages link their
+  copies in other versions with `<link rel="alternate">`, and the version
+  switcher goes straight to them. (#77)
+- A site build whose job was lost (a Redis flush, a worker that died between
+  jobs) is requeued after 15 minutes instead of saying "building" until the
+  next restart. (#77)
+
+### Operations
+
+- Migration `20261013180000_site_domains` adds the `site_domains` table and
+  `site_versions.updated_at` (with a default). Expand-only: the previous
+  release runs against it, and a rollback needs no down migration.
+- New env vars, both with defaults: `SITE_CUSTOM_DOMAINS` (default `true`;
+  whether custom hostnames are routed at all) and
+  `PUBLISHING_SWEEP_INTERVAL_MS` (default `60000`).
+- **Production: set `SITE_CUSTOM_DOMAINS=false`** in the `production`
+  environment. Its TLS ends at the Cloudflare Worker in front of Tailscale
+  Funnel, so Caddy cannot issue certificates for other hosts, and a domain
+  admins could verify would never open. `.env.production.example` now lists it,
+  so the deploy fails until it is set. The production `Caddyfile` is unchanged.
+- An install where Caddy faces the internet can serve base-domain and custom
+  hosts over HTTPS with `Caddyfile.sites.example` (on-demand TLS whose `ask` is
+  `GET /v1/public/domains/allow`), plus a wildcard DNS record for
+  `*.<PUBLISH_BASE_DOMAIN>`.
+- The web container now reads `WEB_BASE_URL` (passed by
+  `docker-compose.prod.yml`): its own host is never looked up as a site's.
+  Any other host is asked of the API once a minute.
+
 ## [0.18.0] — 2026-10-13
 
 ### Added

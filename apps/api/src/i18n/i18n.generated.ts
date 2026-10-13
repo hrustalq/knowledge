@@ -624,6 +624,13 @@ export type I18nTranslations = {
             "versionLimit": string;
             "versionNotBuilt": string;
             "defaultVersionDelete": string;
+            "domainNotFound": string;
+            "domainInvalid": string;
+            "domainReserved": string;
+            "domainTaken": string;
+            "domainExists": string;
+            "domainLimit": string;
+            "customDomainsOff": string;
         };
     };
     "import": {
@@ -838,6 +845,7 @@ export type I18nTranslations = {
         "shareLink": string;
         "site": string;
         "siteVersion": string;
+        "siteDomain": string;
     };
     "validation": {
         "isDefined": string;

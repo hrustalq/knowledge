@@ -100,6 +100,7 @@ RUN node --input-type=module -e "\
 await import('@knowledge/observability'); \
 await import('@knowledge/observability/express'); \
 await import('./server/ai-readable.js'); \
+await import('./server/site-files.js'); \
 console.log('type stripping OK');"
 
 EXPOSE 5173

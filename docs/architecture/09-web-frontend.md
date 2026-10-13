@@ -36,8 +36,8 @@ the render, and every API call that render makes on one trace
 ### The public entry
 
 `/s/*` (a share link), `/pub/<slug>/*` (a published site in path mode) and
-every path on a host under `PUBLISH_BASE_DOMAIN` (a site on its own host) are
-matched before any cookie is read and rendered by a second entry,
+every path on a site's own host are matched before any cookie is read and
+rendered by a second entry,
 `src/entry-public.ts`, into its own shell, `reader.html`, with its own client
 entry and app (`public-main.ts`: no router, Pinia, query client or auth guard;
 `SharePage` or `SitePage` by the view resolved) (docs/features/43, 44). It
@@ -50,6 +50,19 @@ with `SANITIZE_CONFIG` over a jsdom window. That is the one server-side
 sanitizer, and the reason `MarkdownView` can keep rendering nothing during SSR.
 Vite builds both apps in one pass (`rolldownOptions.input`), and the reader
 carries its own small i18n catalog rather than sharing the app's.
+
+Whether a host is a site's is decided once per request, first thing
+(`server/site-files.js`, `res.locals.siteHost`). The host is `Host`, or
+`X-Forwarded-Host` when the peer is internal (an edge that rewrites `Host`, as
+production's Worker → Funnel does, still names the visitor's host). A host
+under `PUBLISH_BASE_DOMAIN` is a site's by its shape; the app's own host
+(`WEB_BASE_URL`) never is; any other host is asked of the API
+(`/v1/public/domains/allow`, the check Caddy's on-demand TLS also makes) and
+the answer is cached for a minute, a failed lookup not at all. On a site, the
+AI-readable middleware steps aside and `siteFilesMiddleware` proxies the
+site's `sitemap.xml`, `robots.txt`, `llms*.txt` and `<page>.md` to
+`/v1/public/sites/*`, with no cookie or credential, through the same `relay`
+the AI-readable routes use.
 
 ## A fresh app per request
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * /settings/projects/:id/site (docs/features/44, issue #77 phase 2a): a
- * project's published site — its address, root page, look and versions.
+ * /settings/projects/:id/site (docs/features/44, issue #77 phases 2a–2b): a
+ * project's published site — its address, root page, look, versions and
+ * custom domains.
  *
  * Reading it is open to anyone who can read the project; every control is an
  * admin's, as the routes behind it are. While the workspace switch (or the
@@ -16,16 +17,19 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { ExternalLink, Plus, RefreshCw, Trash2, X } from 'lucide-vue-next'
+import { Check, Copy, ExternalLink, Plus, RefreshCw, Trash2, X } from 'lucide-vue-next'
 import {
   SITE_FONTS,
+  SITE_MAX_DOMAINS,
   SITE_THEME_LIMITS,
   isHexColor,
   isValidSiteSlug,
+  normalizeHostname,
   type DocumentTreeNode,
   type DocumentTreeResponse,
   type ProjectSiteResponse,
   type PublishedSiteSummary,
+  type SiteDomainSummary,
   type SiteFont,
   type SiteHeaderLink,
   type SiteVersionKind,
@@ -98,6 +102,7 @@ const WHOLE_PROJECT = '__whole__'
 const HEX_EXAMPLE = '#4f46e5'
 const URL_EXAMPLE = 'https://'
 const VERSION_EXAMPLE = 'v1.0'
+const DOMAIN_EXAMPLE = 'docs.example.com'
 
 function previewUrl(slug: string): string {
   const base = policy.value?.baseDomain
@@ -107,7 +112,7 @@ function previewUrl(slug: string): string {
 
 // ---------------------------------------------------------------- tabs
 // Hand-rolled (CLAUDE.md); `?tab=` opens one, it is not two-way state.
-const TABS = ['general', 'theme', 'versions'] as const
+const TABS = ['general', 'theme', 'versions', 'domains'] as const
 type Tab = (typeof TABS)[number]
 const tab = ref<Tab>(TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'general')
 
@@ -304,6 +309,64 @@ async function versionAction(v: SiteVersionSummary, action: 'rebuild' | 'default
   }
 }
 const openWarnings = ref<string | null>(null)
+
+// ---------------------------------------------------------------- domains
+const domainInput = ref('')
+const domainHost = computed(() => normalizeHostname(domainInput.value))
+const addingDomain = ref(false)
+const canAddDomain = computed(
+  () => !!policy.value?.customDomains && !!site.value && site.value.domains.length < SITE_MAX_DOMAINS,
+)
+async function addDomain() {
+  if (!site.value || !domainHost.value || addingDomain.value) return
+  addingDomain.value = true
+  try {
+    await api.post('/v1/sites/{id}/domains', { path: { id: site.value.id }, body: { hostname: domainHost.value } })
+    domainInput.value = ''
+    toast.success(t('site.domains.added'))
+    await refetch()
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    addingDomain.value = false
+  }
+}
+const checkingDomain = ref<string | null>(null)
+async function verifyDomain(d: SiteDomainSummary) {
+  if (checkingDomain.value) return
+  checkingDomain.value = d.id
+  try {
+    const next = (await api.post('/v1/site-domains/{id}/verify', { path: { id: d.id } })) as SiteDomainSummary
+    if (next.verified) toast.success(t('site.domains.verifiedToast', { hostname: next.hostname }))
+    else toast.error(t(`site.domains.error.${next.lastError ?? 'txtMissing'}`))
+    await refetch()
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    checkingDomain.value = null
+  }
+}
+async function removeDomain(d: SiteDomainSummary) {
+  try {
+    await api.delete('/v1/site-domains/{id}', { path: { id: d.id } })
+    toast.success(t('site.domains.removed', { hostname: d.hostname }))
+    await refetch()
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  }
+}
+const copied = ref<string | null>(null)
+async function copy(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    copied.value = text
+    setTimeout(() => {
+      if (copied.value === text) copied.value = null
+    }, 1500)
+  } catch {
+    toast.error(t('site.domains.copyFailed'))
+  }
+}
 
 function statusVariant(status: string): 'default' | 'secondary' | 'outline' {
   return status === 'live' ? 'default' : status === 'draft' ? 'outline' : 'secondary'
@@ -530,6 +593,109 @@ const backToProject = () => router.push(`/settings/projects/${projectId.value}`)
             <p class="px-2"><a class="text-primary underline" href="#" @click.prevent>{{ t('site.theme.previewLink') }}</a></p>
           </div>
         </form>
+
+        <!-- Domains -->
+        <div v-else-if="tab === 'domains'" class="max-w-3xl space-y-6">
+          <p
+            v-if="!policy.customDomains"
+            class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+          >
+            {{ t('site.domains.off') }}
+          </p>
+          <p class="text-sm text-muted-foreground">{{ t('site.domains.intro') }}</p>
+
+          <ul v-if="site.domains.length" class="divide-y rounded-md border">
+            <li v-for="d in site.domains" :key="d.id" class="space-y-3 p-4">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-medium break-all">{{ d.hostname }}</span>
+                <Badge :variant="d.verified ? 'default' : 'outline'">
+                  {{ t(d.verified ? 'site.domains.verified' : 'site.domains.pending') }}
+                </Badge>
+                <span class="flex-1" />
+                <template v-if="canManage">
+                  <Button
+                    v-if="!d.verified"
+                    size="sm"
+                    variant="outline"
+                    class="h-7"
+                    :disabled="checkingDomain === d.id || !policy.customDomains"
+                    @click="verifyDomain(d)"
+                  >
+                    <RefreshCw v-if="checkingDomain === d.id" class="size-3 animate-spin" aria-hidden="true" />
+                    {{ t('site.domains.verify') }}
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    class="size-7 text-destructive hover:text-destructive"
+                    :aria-label="t('site.domains.remove', { hostname: d.hostname })"
+                    @click="removeDomain(d)"
+                  >
+                    <Trash2 class="size-4" />
+                  </Button>
+                </template>
+              </div>
+
+              <p v-if="d.verified" class="text-xs text-muted-foreground">
+                {{ t('site.domains.verifiedHint', { when: d.verifiedAt ? relativeTime(d.verifiedAt) : '—' }) }}
+              </p>
+              <template v-else>
+                <p v-if="d.lastError" class="text-xs text-amber-700 dark:text-amber-300">
+                  {{ t(`site.domains.error.${d.lastError}`) }}
+                  <span v-if="d.lastCheckAt" class="text-muted-foreground">· {{ t('site.domains.checked', { when: relativeTime(d.lastCheckAt) }) }}</span>
+                </p>
+                <p class="text-xs text-muted-foreground">{{ t('site.domains.pendingHint') }}</p>
+                <!-- The two records, each copyable whole: DNS consoles are unforgiving about a stray character. -->
+                <dl class="grid gap-x-3 gap-y-2 rounded-md bg-muted/40 p-3 text-xs sm:grid-cols-[auto_auto_1fr_auto]">
+                  <template v-for="rec in [
+                    { type: 'CNAME', name: d.hostname, value: d.dnsTarget },
+                    { type: 'TXT', name: d.txtName, value: d.txtValue },
+                  ]" :key="rec.type">
+                    <dt class="font-medium text-muted-foreground">{{ rec.type }}</dt>
+                    <dd class="font-mono break-all">{{ rec.name }}</dd>
+                    <dd class="font-mono break-all">{{ rec.value }}</dd>
+                    <dd>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        class="size-6"
+                        :aria-label="t('common.copy')"
+                        :title="t('common.copy')"
+                        @click="copy(rec.value)"
+                      >
+                        <Check v-if="copied === rec.value" class="size-3.5" />
+                        <Copy v-else class="size-3.5" />
+                      </Button>
+                    </dd>
+                  </template>
+                </dl>
+              </template>
+            </li>
+          </ul>
+          <p v-else class="text-sm text-muted-foreground">{{ t('site.domains.none') }}</p>
+
+          <form v-if="canManage" class="space-y-2" @submit.prevent="addDomain">
+            <label class="block space-y-1">
+              <span class="text-xs font-medium text-muted-foreground">{{ t('site.domains.add') }}</span>
+              <div class="flex gap-2">
+                <Input
+                  v-model="domainInput"
+                  :placeholder="DOMAIN_EXAMPLE"
+                  autocomplete="off"
+                  spellcheck="false"
+                  :disabled="!canAddDomain"
+                />
+                <Button type="submit" size="sm" :disabled="!canAddDomain || !domainHost || addingDomain">
+                  {{ t('site.domains.addButton') }}
+                </Button>
+              </div>
+            </label>
+            <p v-if="domainInput && !domainHost" class="text-xs text-destructive">{{ t('site.domains.invalid') }}</p>
+            <p v-else-if="site.domains.length >= SITE_MAX_DOMAINS" class="text-xs text-muted-foreground">
+              {{ t('site.domains.limit', { max: SITE_MAX_DOMAINS }) }}
+            </p>
+          </form>
+        </div>
 
         <!-- Versions -->
         <div v-else class="space-y-6">

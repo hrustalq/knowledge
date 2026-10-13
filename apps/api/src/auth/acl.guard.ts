@@ -141,6 +141,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfSite(uuid(req.params?.id, 'site'));
       case 'site-version':
         return this.access.workspaceOfSiteVersion(uuid(req.params?.id, 'siteVersion'));
+      case 'site-domain':
+        return this.access.workspaceOfSiteDomain(uuid(req.params?.id, 'siteDomain'));
       case 'connector':
         return this.access.workspaceOfConnector(uuid(req.params?.id, 'connector'));
       case 'connector-run':

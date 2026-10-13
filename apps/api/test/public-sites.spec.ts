@@ -12,6 +12,7 @@ import {
 import { PublishingSettingsService } from '../src/publishing/publishing-settings.service.js';
 import { SitesService } from '../src/publishing/sites.service.js';
 import { PublicSitesService } from '../src/public/public-sites.service.js';
+import { PublicSiteFilesService } from '../src/public/public-site-files.service.js';
 
 /**
  * Published sites, read and managed (docs/features/44, issue #77 phase 2a).
@@ -39,6 +40,20 @@ const ATT_INSTALL = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const ATT_SECRET = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const PROJECT = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 
+/** Enough of Prisma's `where` for these fakes: equality, `{ in }`, `{ not: null }` and `null`. */
+function matches(row: Record<string, unknown>, where: Record<string, unknown> = {}): boolean {
+  return Object.entries(where).every(([k, cond]) => {
+    const v = row[k];
+    if (cond === null) return v === null || v === undefined;
+    if (cond && typeof cond === 'object' && !(cond instanceof Date)) {
+      const c = cond as { in?: unknown[]; not?: unknown };
+      if (c.in) return c.in.includes(v);
+      if ('not' in c) return c.not === null ? v !== null && v !== undefined : v !== c.not;
+    }
+    return v === cond;
+  });
+}
+
 function fakePrisma() {
   const built = new Date('2026-10-12T00:00:00Z');
   const site = {
@@ -65,21 +80,37 @@ function fakePrisma() {
     // The frozen version pinned older revisions, and had no install page yet.
     { versionId: V_OLD, documentId: DOC_HOME, revisionId: 'home-r1', parentId: null, position: 0, depth: 0, slugPath: 'welcome', title: 'Welcome' },
   ];
+  const domains = [
+    { id: 'd-1', siteId: SITE, hostname: 'docs.acme.com', verifiedAt: new Date('2026-10-13T00:00:00Z') as Date | null },
+    { id: 'd-2', siteId: SITE, hostname: 'pending.acme.com', verifiedAt: null as Date | null },
+  ];
   let settings: { allowPublicSites: boolean | null } | null = { allowPublicSites: true };
   const prisma = {
     site,
     versions,
+    pages,
+    domains,
     setSettings: (v: typeof settings) => (settings = v),
     publishingSettings: { findUnique: vi.fn(async () => settings) },
     publishedSite: {
       findUnique: vi.fn(async ({ where }: { where: { slug?: string; id?: string } }) => {
         const hit = where.slug ? site.slug === where.slug : site.id === where.id;
         if (!hit) return null;
-        return { ...site, versions: versions.filter((v) => v.builtAt !== null) };
+        return {
+          ...site,
+          versions: versions.filter((v) => v.builtAt !== null),
+          domains: domains.filter((d) => d.verifiedAt !== null),
+        };
+      }),
+    },
+    siteDomain: {
+      findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+        const d = domains.find((row) => matches(row, where));
+        return d ? { ...d, site: { workspaceId: site.workspaceId } } : null;
       }),
     },
     siteVersionPage: {
-      findMany: vi.fn(async ({ where }: { where: { versionId: string } }) => pages.filter((p) => p.versionId === where.versionId)),
+      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => pages.filter((p) => matches(p, where))),
       findUnique: vi.fn(async ({ where }: { where: { versionId_documentId: { versionId: string; documentId: string } } }) =>
         pages.find((p) => p.versionId === where.versionId_documentId.versionId && p.documentId === where.versionId_documentId.documentId) ?? null,
       ),
@@ -87,7 +118,10 @@ function fakePrisma() {
     project: {
       findUnique: vi.fn(async () => ({ name: 'Acme Docs', avatarKey: 'k', avatarEmoji: null, avatarColor: null, avatarUpdatedAt: new Date(5) })),
     },
-    documentRevision: { findUnique: vi.fn(async () => ({ finalizedAt: built })) },
+    documentRevision: {
+      findUnique: vi.fn(async () => ({ finalizedAt: built })),
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id, finalizedAt: built }))),
+    },
     attachment: {
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
         ({ [ATT_INSTALL]: { id: ATT_INSTALL, documentId: DOC_INSTALL, status: 'ready' }, [ATT_SECRET]: { id: ATT_SECRET, documentId: DOC_SECRET, status: 'ready' } })[where.id] ?? null,
@@ -104,6 +138,9 @@ function env(overrides: Record<string, unknown> = {}) {
     SHARE_LINK_MAX_TTL_DAYS: 0,
     PUBLISH_BASE_DOMAIN: 'docs.example.com',
     WEB_BASE_URL: 'https://kb.example.com',
+    SITE_CUSTOM_DOMAINS: true,
+    LLMS_FULL_MAX_DOCS: 2000,
+    LLMS_FULL_MAX_BYTES: 20_000_000,
     ...overrides,
   };
   return { get: (k: string) => values[k] };
@@ -153,7 +190,8 @@ describe('PublicSitesService.resolve', () => {
     const res = await service.resolve({ slug: 'acme', path: '/' });
     expect(res.page).toMatchObject({ documentId: DOC_HOME, slugPath: 'welcome', markdown: 'body of home-r3' });
     expect(res.version).toMatchObject({ slug: 'latest', isDefault: true });
-    expect(res.site).toMatchObject({ title: 'Acme Docs', rootUrl: 'https://acme.docs.example.com' });
+    // The first verified custom domain is the canonical root.
+    expect(res.site).toMatchObject({ title: 'Acme Docs', rootUrl: 'https://docs.acme.com' });
     expect(res.site.theme.headerLinks).toEqual([]);
     expect(res.site.logo).toEqual({ kind: 'image', url: `/v1/public/sites/${SITE}/logo?v=5` });
   });
@@ -186,12 +224,34 @@ describe('PublicSitesService.resolve', () => {
     expect(home.page?.documentId).toBe(DOC_HOME);
   });
 
-  it('resolves a site by its own host under PUBLISH_BASE_DOMAIN, and no other host', async () => {
+  it('resolves a site by its own host under PUBLISH_BASE_DOMAIN, and no deeper or bare base host', async () => {
     const { service } = reader();
     expect((await service.resolve({ host: 'ACME.docs.example.com:443', path: '/' })).site.slug).toBe('acme');
-    expect(service.slugFromHost('acme.evil.com')).toBeNull();
-    expect(service.slugFromHost('a.b.docs.example.com')).toBeNull();
-    expect(reader({ PUBLISH_BASE_DOMAIN: '' }).service.slugFromHost('acme.docs.example.com')).toBeNull();
+    expect(service.siteKeyFromHost('a.b.docs.example.com')).toBeNull();
+    expect(service.siteKeyFromHost('docs.example.com')).toBeNull();
+    expect(reader({ PUBLISH_BASE_DOMAIN: '' }).service.siteKeyFromHost('acme.docs.example.com')).toEqual({ hostname: 'acme.docs.example.com' });
+  });
+
+  it('resolves a verified custom domain, and 404s a pending one or any domain while SITE_CUSTOM_DOMAINS is off', async () => {
+    const { service } = reader();
+    expect((await service.resolve({ host: 'Docs.Acme.com.', path: '/' })).site.slug).toBe('acme');
+    await expect(service.resolve({ host: 'pending.acme.com', path: '/' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.resolve({ host: 'acme.evil.com', path: '/' })).rejects.toBeInstanceOf(NotFoundException);
+
+    const off = reader({ SITE_CUSTOM_DOMAINS: false });
+    await expect(off.service.resolve({ host: 'docs.acme.com', path: '/' })).rejects.toBeInstanceOf(NotFoundException);
+    // …and its canonical root falls back to the subdomain.
+    expect((await off.service.resolve({ slug: 'acme', path: '/' })).site.rootUrl).toBe('https://acme.docs.example.com');
+  });
+
+  it('names the same page in the other built versions, the home at its version root', async () => {
+    const { service } = reader();
+    const latest = await service.resolve({ slug: 'acme', path: '/' });
+    expect(latest.page?.alternates).toEqual([{ version: { slug: 'v1', name: 'v1', isDefault: false }, path: '/v1' }]);
+    const install = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    expect(install.page?.alternates).toEqual([]); // v1 had no install page
+    const old = await service.resolve({ slug: 'acme', path: '/v1/welcome' });
+    expect(old.page?.alternates).toEqual([{ version: { slug: 'latest', name: 'Latest', isDefault: true }, path: '/' }]);
   });
 
   it('404s a site that is not live, switched off by its workspace, or above the ceiling', async () => {
@@ -246,6 +306,7 @@ function manager(opts: { enabled?: boolean } = {}) {
     createdAt: new Date(),
     updatedAt: new Date(),
     versions: [{ id: V_LATEST, siteId: SITE, name: 'Latest', slug: 'latest', kind: 'live', sourceBranch: null, status: 'ready', builtAt: new Date(), pageCount: 1, warnings: [], error: null, createdBy: WS, createdAt: new Date() }],
+    domains: [] as unknown[],
   };
   const prisma = {
     publishingSettings: { findUnique: vi.fn(async () => ({ allowPublicSites: opts.enabled ?? true })) },
@@ -323,5 +384,113 @@ describe('SitesService', () => {
     const { service, builds } = manager();
     await service.rebuild(V_LATEST, WS);
     expect(builds.enqueue).toHaveBeenCalledWith(V_LATEST, { now: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2b: the TLS ask, and the machine-readable files
+
+describe('PublicSitesService.hostAllowed (Caddy on-demand TLS ask)', () => {
+  it('allows a site’s subdomain and its verified domains, and nothing else', async () => {
+    const { service } = reader();
+    expect(await service.hostAllowed('acme.docs.example.com')).toBe(true);
+    expect(await service.hostAllowed('docs.acme.com')).toBe(true);
+    expect(await service.hostAllowed('pending.acme.com')).toBe(false); // unproven: no certificate
+    expect(await service.hostAllowed('nope.docs.example.com')).toBe(false);
+    expect(await service.hostAllowed('docs.example.com')).toBe(false);
+    expect(await service.hostAllowed('random.example.org')).toBe(false);
+    expect(await service.hostAllowed('not a host')).toBe(false);
+  });
+
+  it('allows nothing while the workspace switch or custom domains are off', async () => {
+    const off = reader();
+    off.prisma.setSettings({ allowPublicSites: false });
+    expect(await off.service.hostAllowed('acme.docs.example.com')).toBe(false);
+    expect(await off.service.hostAllowed('docs.acme.com')).toBe(false);
+    expect(await reader({ SITE_CUSTOM_DOMAINS: false }).service.hostAllowed('docs.acme.com')).toBe(false);
+  });
+});
+
+function files(envOverrides: Record<string, unknown> = {}) {
+  const r = reader(envOverrides);
+  const config = env(envOverrides);
+  const service = new PublicSiteFilesService(r.service, r.prisma as never, r.documents as never, config as never);
+  return { ...r, files: service };
+}
+
+describe('PublicSiteFilesService', () => {
+  it('sitemap.xml lists the default version’s pages at their one canonical URL', async () => {
+    const { files: f } = files();
+    const map = await f.sitemap({ slug: 'acme' });
+    expect(map.body).toContain('<loc>https://docs.acme.com/</loc>'); // the home lives at the root
+    expect(map.body).toContain('<loc>https://docs.acme.com/welcome/install</loc>');
+    expect(map.body).not.toContain('/v1');
+    expect(map.body).toContain('<lastmod>2026-10-12T00:00:00.000Z</lastmod>');
+  });
+
+  it('a site that asked not to be indexed has no sitemap, and robots.txt disallows everything', async () => {
+    const { files: f, prisma } = files();
+    expect((await f.robots({ slug: 'acme' })).body).toBe('User-agent: *\nAllow: /\n\nSitemap: https://docs.acme.com/sitemap.xml\n');
+    prisma.site.seoIndexable = false;
+    await expect(f.sitemap({ slug: 'acme' })).rejects.toBeInstanceOf(NotFoundException);
+    expect((await f.robots({ slug: 'acme' })).body).toBe('User-agent: *\nDisallow: /\n');
+  });
+
+  it('answers 304 when the snapshot has not changed, and a new ETag after a build', async () => {
+    const { files: f, prisma } = files();
+    const first = await f.sitemap({ slug: 'acme' });
+    expect((await f.sitemap({ slug: 'acme' }, first.etag)).body).toBeNull();
+    prisma.versions[0].builtAt = new Date('2026-10-14T00:00:00Z');
+    const rebuilt = await f.sitemap({ slug: 'acme' }, first.etag);
+    expect(rebuilt.body).not.toBeNull();
+    expect(rebuilt.etag).not.toBe(first.etag);
+  });
+
+  it('llms.txt links only the version’s published pages, as markdown, then the other versions', async () => {
+    const { files: f } = files();
+    const index = (await f.llmsIndex({ slug: 'acme' })).body!;
+    expect(index).toContain('# Acme Docs');
+    expect(index).toContain('Full text: https://docs.acme.com/llms-full.txt');
+    expect(index).toContain('- [Welcome](https://docs.acme.com/welcome.md)\n  - [Install](https://docs.acme.com/welcome/install.md)');
+    expect(index).toContain('## Other versions\n\n- [v1](https://docs.acme.com/v1/llms.txt)');
+    expect(index).not.toContain(DOC_SECRET);
+
+    const old = (await f.llmsIndex({ slug: 'acme', version: 'v1' })).body!;
+    expect(old).toContain('- [Welcome](https://docs.acme.com/v1/welcome.md)');
+    expect(old).not.toContain('Install');
+    await expect(f.llmsIndex({ slug: 'acme', version: 'next' })).rejects.toBeInstanceOf(NotFoundException); // never built
+  });
+
+  it('llms-full.txt is every page at its pinned revision, and stops at the caps', async () => {
+    const { files: f } = files();
+    const out: string[] = [];
+    await f.streamFull(await f.llmsFullPlan({ slug: 'acme', version: 'v1' }), { write: (c) => out.push(c) });
+    const text = out.join('');
+    expect(text).toContain('Source: https://docs.acme.com/v1');
+    expect(text).toContain('body of home-r1');
+    expect(text).not.toContain('home-r3');
+
+    const capped = files({ LLMS_FULL_MAX_DOCS: 1 });
+    const out2: string[] = [];
+    await capped.files.streamFull(await capped.files.llmsFullPlan({ slug: 'acme' }), { write: (c) => out2.push(c) });
+    expect(out2.join('')).toContain('<!-- truncated: 1 more page -->');
+  });
+
+  it('a page as markdown: by its path, the home as index, and 404 outside the snapshot', async () => {
+    const { files: f, documents } = files();
+    expect((await f.markdown({ slug: 'acme', path: 'welcome/install' })).body).toBe('# Install\n\nbody of install-r5\n');
+    expect((await f.markdown({ slug: 'acme', path: 'index' })).body).toBe('# Welcome\n\nbody of home-r3\n');
+    expect((await f.markdown({ slug: 'acme', path: 'v1/welcome' })).body).toBe('# Welcome\n\nbody of home-r1\n');
+    await expect(f.markdown({ slug: 'acme', path: 'v1/welcome/install' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(f.markdown({ slug: 'acme', path: DOC_SECRET })).rejects.toBeInstanceOf(NotFoundException);
+    expect(documents.getContent).not.toHaveBeenCalledWith(DOC_SECRET, expect.anything());
+  });
+
+  it('every file is a 404 for a site that is not live', async () => {
+    const { files: f, prisma } = files();
+    prisma.site.status = 'unpublished';
+    for (const call of [() => f.sitemap({ slug: 'acme' }), () => f.robots({ slug: 'acme' }), () => f.llmsIndex({ slug: 'acme' }), () => f.llmsFullPlan({ slug: 'acme' }), () => f.markdown({ slug: 'acme', path: 'welcome' })]) {
+      await expect(call()).rejects.toBeInstanceOf(NotFoundException);
+    }
   });
 });

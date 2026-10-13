@@ -81,7 +81,7 @@ in the pull request that introduces them — see
   start is a share link or a published-site page. Until it had rendered a
   page of the app itself, any reader opening a share or site page brought the
   whole web container down for the time it took to restart, app included.
-  (#77, #PR)
+  (#77, #163)
 
 ### Operations
 

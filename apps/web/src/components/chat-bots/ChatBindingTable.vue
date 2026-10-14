@@ -86,7 +86,7 @@ async function add() {
     <p class="text-xs text-muted-foreground">{{ t('chatBots.bindings.hint') }}</p>
 
     <ul v-if="bindings.length" class="divide-y rounded-md border">
-      <li v-for="b in bindings" :key="b.id" class="grid gap-3 px-3 py-3 md:grid-cols-[minmax(0,1fr)_repeat(4,9.5rem)_auto] md:items-center">
+      <li v-for="b in bindings" :key="b.id" class="grid gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_repeat(4,11rem)_auto] lg:items-center">
         <div class="min-w-0">
           <p class="truncate text-sm font-medium">{{ b.title || t('chatBots.bindings.untitled') }}</p>
           <p class="truncate font-mono text-xs text-muted-foreground">{{ b.externalChatId }}</p>

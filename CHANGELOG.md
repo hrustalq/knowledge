@@ -93,6 +93,12 @@ in the pull request that introduces them — see
   to include it, and adds `chat_answers.thread_id`; the previous release
   ignores both columns and the unique behaves the same for Telegram, so a code
   rollback is safe. (#71)
+- On knowledge.hrustalq.dev, chat bots ship switched off (`CHAT_ENABLED=false`
+  in the `production` environment). `api.telegram.org` cannot be reached from
+  that host. Before turning Telegram on there, point `TELEGRAM_API_BASE_URL`
+  at a Bot API server or proxy the host can reach. `.env.production.example`
+  now has a chat section that says so, and `.env.example` sets
+  `API_PUBLIC_URL`, the base of every webhook URL. (#189)
 
 ## [0.20.0] — 2026-10-14
 

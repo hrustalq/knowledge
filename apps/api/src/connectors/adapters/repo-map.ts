@@ -22,7 +22,7 @@ export const OVERVIEW_KEY = 'overview';
  * otherwise impossible, because their source has not changed and every unit
  * would skip.
  */
-export const GENERATOR_VERSION = '1';
+export const GENERATOR_VERSION = '2';
 
 export type ManifestKind = 'npm' | 'go' | 'python' | 'rust' | 'java' | 'php' | 'ruby';
 
@@ -104,12 +104,23 @@ export function moduleKey(path: string): string {
   return `module:${path}`;
 }
 
-export function buildRepoMap(
-  files: Map<string, Uint8Array>,
-  options: { subdir: string; maxModules: number },
-): RepoMap {
-  const { subdir, maxModules } = options;
-  const inScope = (path: string): boolean => !subdir || path === subdir || path.startsWith(`${subdir}/`);
+export interface RepoMapOptions {
+  subdir: string;
+  maxModules: number;
+  /**
+   * The repo wiki's include/exclude (docs/features/46). Applied on top of
+   * `subdir`, so it can only narrow what is read. The manifest at the scope's
+   * root is exempt: it describes the project as a whole, not a file to document.
+   */
+  pathFilter?: ((path: string) => boolean) | null;
+  /** Display names by module path, from `wiki.yml` `modules.titles`. */
+  titles?: Record<string, string>;
+}
+
+export function buildRepoMap(files: Map<string, Uint8Array>, options: RepoMapOptions): RepoMap {
+  const { subdir, maxModules, pathFilter = null, titles = {} } = options;
+  const inSubdir = (path: string): boolean => !subdir || path === subdir || path.startsWith(`${subdir}/`);
+  const inScope = (path: string): boolean => inSubdir(path) && (!pathFilter || pathFilter(path));
 
   // --- what is source, and what is a manifest ---
   const sourceFiles: string[] = [];
@@ -120,7 +131,8 @@ export function buildRepoMap(
   for (const [path, bytes] of files) {
     const base = path.split('/').pop() ?? path;
 
-    if (MANIFESTS[base] && inScope(path)) {
+    const scopeRootManifest = dirOf(path) === subdir;
+    if (MANIFESTS[base] && (scopeRootManifest ? inSubdir(path) : inScope(path))) {
       manifests.push(readManifest(MANIFESTS[base], path, bytes));
     }
     if (!readmePath && /^readme\.mdx?$/i.test(base) && path.split('/').length <= 2) {
@@ -164,7 +176,7 @@ export function buildRepoMap(
     all.push({
       key: moduleKey(root),
       path: root,
-      name: manifest?.name || root.split('/').filter(Boolean).pop() || 'root',
+      name: titles[root] || manifest?.name || root.split('/').filter(Boolean).pop() || 'root',
       manifest,
       files: bucket.files.sort(),
       bytes: bucket.bytes,

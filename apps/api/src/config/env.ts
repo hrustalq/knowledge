@@ -463,6 +463,14 @@ export const envSchema = z.object({
   CODE_SNAPSHOT_MAX_BYTES: z.coerce.number().int().positive().default(268_435_456),
 
   /**
+   * Repo wiki (docs/features/46). Both are ceilings, not defaults: a repository's
+   * `.knowledge/wiki.yml` or a connector override may ask for less, never more,
+   * and the Wiki tab shows what was asked beside what applied.
+   */
+  WIKI_MAX_EFFORT: z.enum(['low', 'medium', 'high']).default('medium'),
+  WIKI_DIAGRAM_MAX_NODES: z.coerce.number().int().min(4).max(200).default(40),
+
+  /**
    * Where this API is reachable from a browser.
    *
    * Distinct from WEB_BASE_URL, which is the SPA. Needed because an OAuth

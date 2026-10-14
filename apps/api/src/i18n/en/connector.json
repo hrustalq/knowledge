@@ -32,10 +32,23 @@
       "unparsed": "{count} file(s) in this module could not be parsed and were skipped.",
       "truncated": "This module has {total} source files; its API surface was read from the first {limit}.",
       "modulesOmitted": "{count} module(s) beyond the configured limit are not documented. Raise the module limit to include them."
+    },
+    "wiki": {
+      "configInvalid": "The repository's .knowledge/wiki.yml was ignored and the defaults applied: {errors}",
+      "effortClamped": "The wiki asked for effort {asked}, but this server allows at most {applied}, so it ran at {applied}.",
+      "flowEntryMissing": "The flow entry file {entry} is not in the repository, so that flow was left out."
     }
   },
   "pushVersionMessage": "Updated from the knowledge base",
   "syncRevisionMessage": "Synced from a connector",
   "stoppedAtMax": "Stopped after {max} items (CONNECTOR_SYNC_MAX_ITEMS).",
-  "revertRevisionMessage": "Reverted a connector import"
+  "revertRevisionMessage": "Reverted a connector import",
+  "wiki": {
+    "section": {
+      "architecture": "Architecture",
+      "dataFlow": "Data flow",
+      "api": "Public API",
+      "modules": "Modules ({count})"
+    }
+  }
 }

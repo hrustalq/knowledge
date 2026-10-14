@@ -3,6 +3,7 @@ import { posix } from 'node:path';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type { AssistantWebSource } from '@knowledge/contracts';
 import { AccessService } from '../../auth/access.service.js';
+import { globToRegExp } from '../../common/glob.js';
 import { wrapUntrusted } from '../../common/untrusted.js';
 import { t } from '../../i18n/t.js';
 import { CODE_TOOLS } from '../../assistant/assistant-tool-types.js';
@@ -10,6 +11,8 @@ import type { AssistantToolContext, AssistantToolResult } from '../../assistant/
 import { extractImports, extractSymbols, type CodeSymbol } from '../adapters/code-symbols.js';
 import { languageForPath, TreeSitterService } from '../adapters/tree-sitter.service.js';
 import { RepoSnapshotService, type RepoSnapshot, type RepoSummary } from './repo-snapshot.service.js';
+
+export { globToRegExp };
 
 /** Entries one code_tree call returns before it says it stopped. */
 const MAX_TREE_ENTRIES = 400;
@@ -523,24 +526,6 @@ export function compileSearch(query: string, opts: { regex: boolean; caseSensiti
     throw new Error(`Invalid regular expression: ${(error as Error).message}`);
   }
   return (line) => re.test(line);
-}
-
-/**
- * `src/**\/*.ts`, `*.go`, `apps/api/**` — the three shapes people write.
- * `**` crosses directories, `*` does not, and a bare filename pattern with no
- * slash matches at any depth, which is what `*.go` means to everyone.
- */
-export function globToRegExp(glob: string): RegExp {
-  const pattern = glob.replace(/^\.?\//, '').replace(/\/+$/, '');
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
-  const body = escaped
-    .replace(/\*\*\//g, ' ')
-    .replace(/\*\*/g, '')
-    .replace(/\*/g, '[^/]*')
-    .replace(/ /g, '(?:.*/)?')
-    .replace(//g, '.*');
-  const anchored = pattern.includes('/') ? `^${body}(?:/.*)?$` : `^(?:.*/)?${body}$`;
-  return new RegExp(anchored);
 }
 
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {

@@ -13,6 +13,30 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- A codebase connector can produce a repo wiki. Set **Repo wiki** to on, and
+  the overview gains Architecture and Data flow pages, plus an optional Public
+  API page, beside the module pages. A `.knowledge/wiki.yml` file in the
+  repository chooses which sections exist, which paths are read
+  (`include`/`exclude`), module titles, the flows to trace and the effort. At
+  effort `low` the wiki makes no AI calls. An invalid file never fails a sync:
+  the defaults apply and the run warns, naming what was wrong. Each page is
+  re-derived only when its own inputs change, so a function body edited in one
+  module re-derives that module's page and nothing else. (#72)
+
+### Operations
+
+- Every `codebase` connector re-derives all of its pages once, on its first sync
+  after this release. The generator version moved to 2, so this happens with
+  the wiki off too. Expect one narration call per page for each such connector.
+  Connectors with no owner, or with no AI configured, make no calls.
+- New env vars, both with defaults: `WIKI_MAX_EFFORT` (`medium`), the most
+  effort any repository or connector may ask for, and `WIKI_DIAGRAM_MAX_NODES`
+  (`40`). Both are ceilings. A repository can ask for less, never more.
+
 ## [0.19.1] — 2026-10-14
 
 ### Changed

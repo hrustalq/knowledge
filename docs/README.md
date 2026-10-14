@@ -70,6 +70,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 43  | Share links (public read-only page/subtree, password, expiry, revoke)                                  | [features/43-share-links.md](features/43-share-links.md)               | ✅ #77 phase 1              |
 | 44  | Published sites (docs site per project, snapshots, versions, theme, custom domains, sitemap, llms.txt) | [features/44-docs-portal.md](features/44-docs-portal.md)               | 🚧 #77 phase 2b             |
 | 45  | Export (page, subtree or project → ZIP of markdown, offline HTML, PDF via Gotenberg)                   | [features/45-export.md](features/45-export.md)                         | ✅ #77 phase 2c             |
+| 46  | Repo wiki (wiki-shaped codebase connector, `.knowledge/wiki.yml` steering, diagrams, release notes)  | [features/46-repo-wiki.md](features/46-repo-wiki.md)                   | ✅ #72                      |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

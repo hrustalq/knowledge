@@ -209,7 +209,12 @@ export const KIND_STEPS: Record<ConnectorKind, KindStep[]> = {
     { name: 'repo', meta: { labelKey: 'connectors.step.repo', fields: ['repoUrl'], credential: true } },
     {
       name: 'location',
-      meta: { labelKey: 'connectors.step.location', fields: ['branch', 'subdir', 'maxModules'] },
+      // The repo wiki's settings (docs/features/46) ride along too: they refine
+      // what is derived from the same branch, the reason `maxModules` is here.
+      meta: {
+        labelKey: 'connectors.step.location',
+        fields: ['branch', 'subdir', 'maxModules', 'wiki', 'wikiEffort', 'wikiAutoRegenerate', 'wikiDelivery', 'changelog'],
+      },
     },
   ],
 }

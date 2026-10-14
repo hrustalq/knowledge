@@ -863,6 +863,15 @@ export type AiUsageOperation =
    */
   | 'codebase'
   /**
+   * The repo wiki's own model calls (docs/features/46): a flow's sequence
+   * diagram, drafted as JSON, and a section read with the code tools at effort
+   * `high`. Separate from `codebase` so the extra spend the wiki adds over the
+   * one narration per page is visible as its own line.
+   */
+  | 'wiki'
+  /** A release page's summary and its "possibly breaking" suspicions (docs/features/46). */
+  | 'changelog'
+  /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
    */

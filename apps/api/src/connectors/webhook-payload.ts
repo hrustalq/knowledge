@@ -47,3 +47,40 @@ export function safeJson(raw: string): Record<string, any> | null {
     return null;
   }
 }
+
+/**
+ * A push or a published release, read from either host's delivery
+ * (docs/features/46). `branch` is null for a release — a tag is always worth a
+ * run, and has no branch to filter on. Null when the delivery is neither.
+ *
+ * GitHub: `X-GitHub-Event: push` / `release` (action `published`).
+ * GitLab: `X-Gitlab-Event: Push Hook` / `Release Hook` (action `create`). A tag
+ * push (`Tag Push Hook`) is not a release and starts nothing; GitLab's release
+ * object is what says a version was published.
+ */
+export function readRepoPushDelivery(
+  headers: Record<string, string>,
+  payload: Record<string, any> | null,
+): { branch: string | null; defaultBranch: string | null } | null {
+  if (!payload) return null;
+  const github = headers['x-github-event'];
+  const gitlab = headers['x-gitlab-event'];
+  const defaultBranch =
+    typeof payload.repository?.default_branch === 'string'
+      ? payload.repository.default_branch
+      : typeof payload.project?.default_branch === 'string'
+        ? payload.project.default_branch
+        : null;
+
+  if (github === 'push' || gitlab === 'Push Hook') {
+    const ref: unknown = payload.ref;
+    if (typeof ref !== 'string' || !ref.startsWith('refs/heads/')) return null;
+    // A branch deletion is a push too, with nothing to read.
+    if (payload.deleted === true || /^0+$/.test(String(payload.after ?? ''))) return null;
+    return { branch: ref.slice('refs/heads/'.length), defaultBranch };
+  }
+  if ((github === 'release' && payload.action === 'published') || (gitlab === 'Release Hook' && payload.action === 'create')) {
+    return { branch: null, defaultBranch };
+  }
+  return null;
+}

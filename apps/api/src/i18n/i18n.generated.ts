@@ -175,6 +175,8 @@ export type I18nTranslations = {
         "mr": {
             "title": string;
             "description": string;
+            "wikiTitle": string;
+            "wikiDescription": string;
         };
         "warning": {
             "passthrough": string;
@@ -195,11 +197,32 @@ export type I18nTranslations = {
                 "truncated": string;
                 "modulesOmitted": string;
             };
+            "wiki": {
+                "configInvalid": string;
+                "effortClamped": string;
+                "flowEntryMissing": string;
+                "diagramInvalid": string;
+            };
+            "changelog": {
+                "truncated": string;
+                "tagNotFound": string;
+                "unavailable": string;
+            };
         };
         "pushVersionMessage": string;
         "syncRevisionMessage": string;
         "stoppedAtMax": string;
         "revertRevisionMessage": string;
+        "wiki": {
+            "section": {
+                "architecture": string;
+                "dataFlow": string;
+                "api": string;
+                "modules": string;
+                "changelog": string;
+                "unreleased": string;
+            };
+        };
     };
     "error": {
         "internal": string;
@@ -659,6 +682,10 @@ export type I18nTranslations = {
             "rateLimited": string;
             "unavailable": string;
             "notEnabled": string;
+        };
+        "wiki": {
+            "notACodebase": string;
+            "disabled": string;
         };
     };
     "import": {

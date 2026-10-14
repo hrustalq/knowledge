@@ -58,6 +58,12 @@ export interface RepoArchive {
    * archive do not have to resolve it a second time.
    */
   branch: string;
+  /**
+   * The commit the archive was cut from, or null when the host did not say.
+   * `git archive` writes it as the zip's comment, so reading it costs nothing —
+   * no second request to ask the host what HEAD was a moment ago (docs/features/46).
+   */
+  headSha: string | null;
 }
 
 export interface RepoHost {
@@ -187,6 +193,27 @@ export function blobUrl(ctx: ConnectorContext, path: string, branch: string): st
  */
 const cache = new WeakMap<object, Promise<RepoArchive>>();
 
+/** Tag archives per run, for release notes' API-surface diff (docs/features/46). */
+const tagCache = new WeakMap<object, Map<string, Promise<RepoArchive>>>();
+
+/**
+ * The repository as it was at a tag. Same download, same filters, same
+ * per-run caching as the branch archive; `branch` in the result is the tag.
+ */
+export function downloadRepoArchiveAtTag(ctx: ConnectorContext, tag: string): Promise<RepoArchive> {
+  let perRun = tagCache.get(ctx.config);
+  if (!perRun) {
+    perRun = new Map();
+    tagCache.set(ctx.config, perRun);
+  }
+  let pending = perRun.get(tag);
+  if (!pending) {
+    pending = download(ctx, tag);
+    perRun.set(tag, pending);
+  }
+  return pending;
+}
+
 export function downloadRepoArchive(ctx: ConnectorContext): Promise<RepoArchive> {
   // The *promise* is cached, not the result: `list()` and `fetch()` can both be
   // in flight before either resolves, and caching the result would download the
@@ -199,14 +226,15 @@ export function downloadRepoArchive(ctx: ConnectorContext): Promise<RepoArchive>
   return pending;
 }
 
-async function download(ctx: ConnectorContext): Promise<RepoArchive> {
+async function download(ctx: ConnectorContext, tag?: string): Promise<RepoArchive> {
   const host = repoHost(ctx);
-  const branch = await resolveBranch(ctx);
+  const branch = tag ?? (await resolveBranch(ctx));
 
+  // GitLab's archive route takes any ref; codeload wants to be told which kind.
   const url =
     host.kind === 'gitlab'
       ? `${host.origin}/${host.owner}/${host.repo}/-/archive/${encodeURIComponent(branch)}/${host.repo}-${branch}.zip`
-      : `https://codeload.github.com/${host.owner}/${host.repo}/zip/refs/heads/${encodeURIComponent(branch)}`;
+      : `https://codeload.github.com/${host.owner}/${host.repo}/zip/refs/${tag ? 'tags' : 'heads'}/${encodeURIComponent(branch)}`;
 
   let res: Response;
   try {
@@ -219,9 +247,12 @@ async function download(ctx: ConnectorContext): Promise<RepoArchive> {
       ctx,
     );
   } catch (err) {
-    throw await explain404(ctx, err, branch);
+    // A missing tag is not a missing branch; the explanation would mislead.
+    throw tag ? err : await explain404(ctx, err, branch);
   }
-  const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
+  const archive = new Uint8Array(await res.arrayBuffer());
+  const headSha = zipCommentSha(archive);
+  const zip = unzipSync(archive);
 
   const files = new Map<string, Uint8Array>();
   const skipped = { oversize: 0, binary: 0 };
@@ -244,8 +275,8 @@ async function download(ctx: ConnectorContext): Promise<RepoArchive> {
     files.set(path, bytes);
   }
 
-  ctx.debug('archive', { files: files.size, branch, ...skipped });
-  return { files, skipped, branch };
+  ctx.debug('archive', { files: files.size, branch, headSha, ...skipped });
+  return { files, skipped, branch, headSha };
 }
 
 /**
@@ -290,6 +321,23 @@ async function explain404(ctx: ConnectorContext, err: unknown, branch: string): 
       ? t('error.connector.branchMissingDefault', { branch, slug, actual }, ctx.locale)
       : t('error.connector.branchMissing', { branch, slug }, ctx.locale),
   );
+}
+
+/**
+ * The commit sha `git archive` leaves in the zip's end-of-central-directory
+ * comment, or null. The record is the last 22 bytes plus the comment, so the
+ * scan is over the tail only; anything that is not exactly a 40-hex sha is
+ * treated as absent rather than trusted.
+ */
+export function zipCommentSha(zip: Uint8Array): string | null {
+  const floor = Math.max(0, zip.length - 22 - 0xffff);
+  for (let i = zip.length - 22; i >= floor; i -= 1) {
+    if (zip[i] !== 0x50 || zip[i + 1] !== 0x4b || zip[i + 2] !== 0x05 || zip[i + 3] !== 0x06) continue;
+    const length = zip[i + 20] | (zip[i + 21] << 8);
+    const comment = Buffer.from(zip.subarray(i + 22, i + 22 + length)).toString('latin1').trim();
+    return /^[0-9a-f]{40}$/.test(comment) ? comment : null;
+  }
+  return null;
 }
 
 /**

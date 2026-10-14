@@ -1,9 +1,11 @@
 import { Controller, Headers, HttpCode, Param, Post, Req, UnauthorizedException } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Public } from '../auth/access.decorator.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
+import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService } from './connectors.service.js';
@@ -15,7 +17,7 @@ import {
   readPullRequestDelivery,
   verifyRepoDelivery,
 } from './drift/pull-request-delivery.js';
-import { safeJson } from './webhook-payload.js';
+import { readRepoPushDelivery, safeJson } from './webhook-payload.js';
 
 /**
  * Inbound webhooks from external systems (docs/features/19).
@@ -38,7 +40,12 @@ export class ConnectorWebhookController {
     private readonly connectors: ConnectorsService,
     private readonly producer: ConnectorProducer,
     private readonly drift: DriftTriggerService,
-  ) {}
+    config: ConfigService<Env, true>,
+  ) {
+    this.debounceMs = config.get('WIKI_PUSH_DEBOUNCE_MS', { infer: true });
+  }
+
+  private readonly debounceMs: number;
 
   @Post(':id/webhook')
   @Public()
@@ -59,7 +66,7 @@ export class ConnectorWebhookController {
     const lower = lowercaseKeys(headers);
 
     // A pull or merge request is not content moving, so it is not the
-    // adapter's to verify (docs/features/35): `codebase` has no webhook at all,
+    // adapter's to verify (docs/features/35): `codebase` names no units from a delivery,
     // and `markdown-git`'s would read the missing `commits` as nothing to sync.
     // Verified here with the same secret, then handed to the drift check —
     // which does its own bounded work and never starts a sync.
@@ -77,6 +84,21 @@ export class ConnectorWebhookController {
         if (merged) await this.drift.merged(row, merged);
         return { accepted: true, runId: null };
       }
+    }
+
+    // A push or a release on a codebase connector regenerates its wiki
+    // (docs/features/46): verified with the same secret, then one unscoped,
+    // debounced run — or nothing, when the connector did not ask for it or the
+    // push was to another branch. The adapter is not asked to name units,
+    // because a push names files and units are not knowable from files.
+    if (row.kind === 'codebase') {
+      if (!ctx.webhookSecret || !verifyRepoDelivery(lower, rawBody, ctx.webhookSecret)) {
+        throw new UnauthorizedException(t('error.connector.webhookInvalidSignature'));
+      }
+      const push = readRepoPushDelivery(lower, safeJson(rawBody));
+      const run = push ? await this.connectors.queueRepoPush(row, push) : null;
+      if (run) await this.producer.enqueue(run.id, { delayMs: this.debounceMs });
+      return { accepted: true, runId: run?.id ?? null };
     }
 
     const adapter = this.connectors.adapterFor(row);

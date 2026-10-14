@@ -13,6 +13,94 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.20.0] — 2026-10-14
+
+### Added
+
+- A codebase connector can produce a repo wiki. Set **Repo wiki** to on, and
+  the overview gains Architecture and Data flow pages, plus an optional Public
+  API page, beside the module pages. A `.knowledge/wiki.yml` file in the
+  repository chooses which sections exist, which paths are read
+  (`include`/`exclude`), module titles, the flows to trace and the effort. At
+  effort `low` the wiki makes no AI calls. An invalid file never fails a sync:
+  the defaults apply and the run warns, naming what was wrong. Each page is
+  re-derived only when its own inputs change, so a function body edited in one
+  module re-derives that module's page and nothing else. (#72)
+- Repo wiki pages carry Mermaid diagrams:
+  - Architecture draws how the modules import each other.
+  - Each module page draws its exported types with inheritance.
+  - Data flow draws each flow as a sequence diagram (effort `medium` and up).
+  At effort `high`, each page is written after the model reads the code with
+  the code tools. Diagrams are built by the server from parsed facts. The model
+  never writes diagram syntax. A diagram that fails the safety check is left
+  out with a warning, and the page still syncs. (#72)
+- A repo wiki can regenerate on push. With **Regenerate on push** on, a push
+  to the connector's branch, or a published release, queues one sync after a
+  short wait. Pushes during that wait fold into the same sync. Only the pages
+  whose inputs changed are re-derived. With **Wiki delivery** set to
+  merge request, a regenerated page arrives as a merge request by the
+  connector's owner instead of changing the page, and a newer regeneration
+  closes the older merge request. (#72)
+- A codebase connector can write release notes. Turn on **Release notes** to
+  get a Releases page, an Unreleased page, and one page per recent version
+  tag, built from commits and merged pull or merge requests. Breaking changes
+  are confirmed by a conventional commit (`feat!:`, `BREAKING CHANGE:`), by a
+  label on the request, or by an exported function or type that was removed
+  or changed shape. Each confirmed change names its source. At effort `medium`
+  and up, a summary opens each page, and changes the model only suspects are
+  listed apart as "Possibly breaking". A published release's page is never
+  regenerated. (#72)
+- The connector page has a **Wiki** tab and a **Releases** tab.
+  - The Wiki tab lists the wiki's pages, marks which are stale or waiting in a
+    merge request, and shows how `.knowledge/wiki.yml` is steering the wiki:
+    validation errors, and the effort asked beside the effort the server
+    allows. Editors can regenerate one section or the whole wiki, and can force
+    a full rewrite.
+  - The Releases tab lists each release with its confirmed and suspected
+    breaking counts.
+  New API routes `GET /v1/connectors/:id/wiki`,
+  `POST /v1/connectors/:id/wiki/regenerate` and `GET /v1/connectors/:id/releases`.
+  New MCP tools `knowledge_repo_wiki` (read) and `knowledge_regenerate_wiki`
+  (write, not offered to read-only keys). (#72)
+- The archaeologist no longer treats a repo wiki's file listings as
+  documentation. It still proposes undocumented logic files below the wiki's
+  module pages. (#72)
+
+### Fixed
+
+- A codebase connector no longer reports every updated page as a conflict.
+  Pages that carry frontmatter, which is every page this connector writes,
+  were always read as edited here, so with the default conflict policy each
+  update opened a merge request instead of updating the page. (#72)
+
+### Operations
+
+- Every `codebase` connector re-derives all of its pages once, on its first sync
+  after this release. The generator version moved to 2, so this happens with
+  the wiki off too. Expect one narration call per page for each such connector.
+  Connectors with no owner, or with no AI configured, make no calls.
+- New env vars, both with defaults: `WIKI_MAX_EFFORT` (`medium`), the most
+  effort any repository or connector may ask for, and `WIKI_DIAGRAM_MAX_NODES`
+  (`40`). Both are ceilings. A repository can ask for less, never more.
+  `WIKI_HIGH_EFFORT_MAX_TOOL_CALLS` (`24`) caps the code-tool calls one wiki
+  page may make at effort `high`. The new usage operation `wiki` shows the
+  wiki's extra spend separately from `codebase`. `WIKI_PUSH_DEBOUNCE_MS`
+  (`120000`) is how long a push-triggered sync waits for more pushes.
+  `CHANGELOG_MAX_RELEASES` (`20`) is how many tags a first sync generates
+  release notes for, and `CHANGELOG_MAX_COMMITS_PER_RELEASE` (`500`) caps the
+  commits read per release. A new usage operation, `changelog`, records
+  release-note spend.
+- Migration `20261014150000_repo_wiki_conflict_reason` adds
+  `connector_conflicts.reason` (`NOT NULL DEFAULT 'conflict'`) and an index.
+  It is additive, and the previous release ignores the column, so it survives
+  a rollback by retag.
+- Push regeneration through the GitHub App needs **Contents: read** and the
+  **push** event on the App. The connector's GitHub access card lists both
+  under "repo wiki on push" while the setting is on. Release notes need
+  **Pull requests: read** and the **release** event, listed under "release
+  notes". Each release also downloads the previous tag's archive once to
+  compare the exported API.
+
 ## [0.19.1] — 2026-10-14
 
 ### Changed
@@ -1716,7 +1804,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.19.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/hrustalq/knowledge/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/hrustalq/knowledge/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/hrustalq/knowledge/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/hrustalq/knowledge/compare/v0.17.0...v0.18.0

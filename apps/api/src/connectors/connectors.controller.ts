@@ -15,6 +15,9 @@ import type {
   ListConnectorRunItemsResponse,
   ListConnectorRunsResponse,
   ListConnectorsResponse,
+  ListReleasesResponse,
+  RegenerateWikiResponse,
+  RepoWikiInfo,
 } from '@knowledge/contracts';
 import { ActivityService } from '../activity/activity.service.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
@@ -27,6 +30,7 @@ import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService, toRunInfo } from './connectors.service.js';
 import { GithubAccessService } from './github/github-access.service.js';
+import { RepoWikiService } from './repo-wiki.service.js';
 import {
   ConnectorItemAiDto,
   ConnectorItemEventDto,
@@ -38,6 +42,7 @@ import {
   CreateConnectorWorkItemDto,
   ConnectorWorkItemsQueryDto,
   LinkConnectorWorkItemDto,
+  RegenerateWikiDto,
   UpdateConnectorRunItemDto,
 } from './connectors.dto.js';
 
@@ -60,6 +65,7 @@ export class ConnectorsController {
     private readonly producer: ConnectorProducer,
     private readonly activity: ActivityService,
     private readonly githubAccess: GithubAccessService,
+    private readonly repoWiki: RepoWikiService,
   ) {}
 
   @Get()
@@ -295,6 +301,35 @@ export class ConnectorsController {
       metadata: { title: connector.name },
     });
     return { ok: true };
+  }
+
+  // --- repo wiki (docs/features/46) ---
+
+  @Get(':id/wiki')
+  @Access('viewer', 'connector')
+  @ApiOperation({ summary: "The repo wiki's sections, steering and asked-vs-applied effort" })
+  wiki(@Param('id', ParseUUIDPipe) id: string): Promise<RepoWikiInfo> {
+    return this.repoWiki.info(id);
+  }
+
+  @Post(':id/wiki/regenerate')
+  @Access('editor', 'connector')
+  @ApiOperation({ summary: 'Queue a run that re-derives the repo wiki, or some of its sections' })
+  async regenerateWiki(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RegenerateWikiDto,
+    @CurrentPrincipal() principal?: Principal,
+  ): Promise<RegenerateWikiResponse> {
+    const run = await this.repoWiki.regenerate(id, { ...dto, actorId: principal?.userId });
+    await this.producer.enqueue(run.id);
+    return { runId: run.id };
+  }
+
+  @Get(':id/releases')
+  @Access('viewer', 'connector')
+  @ApiOperation({ summary: 'Release notes pages: Unreleased and one per tag, with breaking counts' })
+  releases(@Param('id', ParseUUIDPipe) id: string): Promise<ListReleasesResponse> {
+    return this.repoWiki.releases(id);
   }
 
   // --- work items (docs/features/32) ---

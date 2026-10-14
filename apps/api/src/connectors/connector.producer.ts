@@ -29,11 +29,19 @@ export class ConnectorProducer {
    * attempts: 1 — a sync failure is recorded on the row and a blind retry would
    * re-run the same external calls (ImportProducer's reasoning).
    */
-  async enqueue(runId: string): Promise<void> {
+  async enqueue(runId: string, opts: { delayMs?: number } = {}): Promise<void> {
     await this.queue.add(
       'sync',
       { runId },
-      { jobId: runId, attempts: 1, removeOnComplete: true, removeOnFail: false },
+      {
+        jobId: runId,
+        attempts: 1,
+        removeOnComplete: true,
+        removeOnFail: false,
+        // A one-shot delay, not a repeatable: the push debounce (docs/features/46)
+        // holds the run queued so later pushes fold into it before it starts.
+        ...(opts.delayMs ? { delay: opts.delayMs } : {}),
+      },
     );
   }
 

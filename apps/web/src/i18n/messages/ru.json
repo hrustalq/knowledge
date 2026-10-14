@@ -550,7 +550,9 @@
         "work-items": "задачи",
         "drift-check": "проверка расхождений",
         "boards": "доски проектов",
-        "repo-events": "триггеры сценариев"
+        "repo-events": "триггеры сценариев",
+        "wiki": "обновление вики при push",
+        "changelog": "заметки к релизам"
       },
       "permission": {
         "metadata": "Метаданные",
@@ -617,7 +619,60 @@
     "configure": "Настроить",
     "exampleConfluence": "Confluence — https://team.atlassian.net/wiki + ключ пространства",
     "exampleNotion": "Notion — секрет внутренней интеграции",
-    "exampleObsidian": "Хранилище Obsidian — URL его git-репозитория"
+    "exampleObsidian": "Хранилище Obsidian — URL его git-репозитория",
+    "tabWiki": "Вики",
+    "tabReleases": "Релизы",
+    "wiki": {
+      "steering": "Настройка",
+      "sourceRepoFile": "Из файла .knowledge/wiki.yml в репозитории",
+      "sourceDefault": "По умолчанию — в репозитории нет пригодного файла .knowledge/wiki.yml",
+      "regenerate": "Обновить",
+      "regenerateAll": "Обновить вики",
+      "force": "Переписать всё",
+      "forceHint": "Заново построить все страницы, даже если их код не менялся, — для нового промпта или модели.",
+      "regenerated": "Обновление поставлено в очередь. Страницы изменятся по завершении запуска.",
+      "effort": "Уровень усилий",
+      "effortClamped": "запрошено: {asked} · применено: {applied}",
+      "effortLevel": {
+        "low": "низкий",
+        "medium": "средний",
+        "high": "высокий"
+      },
+      "delivery": "Доставка",
+      "deliveryMode": {
+        "direct": "обновляет страницы напрямую",
+        "merge-request": "открывает merge request"
+      },
+      "onPush": "При push",
+      "autoRegenerate": {
+        "off": "выключено",
+        "on-push": "обновляет"
+      },
+      "configInvalid": "Файл .knowledge/wiki.yml в репозитории отклонён, поэтому действуют настройки по умолчанию:",
+      "configUnreadable": "Сейчас не удалось прочитать файл настройки из репозитория.",
+      "empty": "Страниц вики пока нет — они появятся после следующей синхронизации.",
+      "notYet": "ещё не создана",
+      "stale": "устарела",
+      "staleHint": "Последняя синхронизация увидела более новый код, чем тот, по которому написана страница, и не обновила её.",
+      "openMr": "Проверить обновление",
+      "section": {
+        "overview": "Обзор",
+        "architecture": "Архитектура",
+        "data-flow": "Потоки данных",
+        "api": "Публичный API",
+        "modules": "Модули",
+        "changelog": "Релизы"
+      }
+    },
+    "releases": {
+      "unreleased": "Не выпущено",
+      "breaking": "несовместимых: {count}",
+      "possiblyBreaking": "возможно несовместимых: {count}",
+      "possiblyBreakingHint": "Модель заподозрила это по описаниям изменений; не подтверждено коммитом, меткой или кодом.",
+      "notGenerated": "не построено",
+      "empty": "Заметок к релизам пока нет — они появятся после следующей синхронизации.",
+      "error": "Сейчас не удалось прочитать теги репозитория, поэтому в списке могут отсутствовать старые релизы."
+    }
   },
   "workflow": {
     "nodeStatus": {

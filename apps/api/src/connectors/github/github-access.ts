@@ -33,12 +33,16 @@ export const GITHUB_PERMISSION_REQUIREMENTS: readonly PermissionRequirement[] = 
   { name: 'metadata', level: 'read', purpose: 'sync' },
   // The archive download, and the code research tools (features 27, 31).
   { name: 'contents', level: 'read', purpose: 'sync' },
+  // The repo wiki re-reading the archive after a push (feature 46).
+  { name: 'contents', level: 'read', purpose: 'wiki' },
   // markdown-git publishing a page back to the repository (feature 19).
   { name: 'contents', level: 'write', purpose: 'push' },
   // Listing, opening and commenting on issues (feature 32).
   { name: 'issues', level: 'write', purpose: 'work-items' },
   // The diff and the one comment on the pull request (feature 35).
   { name: 'pull_requests', level: 'write', purpose: 'drift-check' },
+  // Which merged pull requests carry a breaking label, for release notes (feature 46).
+  { name: 'pull_requests', level: 'read', purpose: 'changelog' },
   // Board membership on the work items tab — decoration, never required.
   { name: 'organization_projects', level: 'read', purpose: 'boards' },
 ];
@@ -49,6 +53,10 @@ export const GITHUB_EVENT_REQUIREMENTS: readonly EventRequirement[] = [
   { name: 'issues', purpose: 'work-items' },
   { name: 'issue_comment', purpose: 'work-items' },
   { name: 'push', purpose: 'repo-events' },
+  // A push to the connector's branch is what regenerates the repo wiki (feature 46).
+  { name: 'push', purpose: 'wiki' },
+  // A published release is what writes its release notes page (feature 46).
+  { name: 'release', purpose: 'changelog' },
   { name: 'release', purpose: 'repo-events' },
 ];
 
@@ -159,9 +167,15 @@ export function activePurposes(connector: {
   kind: string;
   direction: string;
   driftCheck: string;
+  /** `wikiAutoRegenerate === 'on-push'` with the wiki on — absent reads as off. */
+  wikiOnPush?: boolean;
+  /** Release notes on (feature 46) — absent reads as off. */
+  changelog?: boolean;
 }): Set<GithubAccessPurpose> {
   const active = new Set<GithubAccessPurpose>(['sync', 'work-items']);
   if (connector.kind === 'markdown-git' && connector.direction !== 'pull') active.add('push');
   if (connector.driftCheck !== 'off') active.add('drift-check');
+  if (connector.kind === 'codebase' && connector.wikiOnPush) active.add('wiki');
+  if (connector.kind === 'codebase' && connector.changelog) active.add('changelog');
   return active;
 }

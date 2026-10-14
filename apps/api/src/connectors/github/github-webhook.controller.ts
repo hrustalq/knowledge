@@ -8,7 +8,8 @@ import type { RepoEventType } from '@knowledge/contracts';
 import { Public } from '../../auth/access.decorator.js';
 import type { Env } from '../../config/env.js';
 import { t } from '../../i18n/t.js';
-import { safeJson, verifyHubSignature } from '../webhook-payload.js';
+import { readRepoPushDelivery, safeJson, verifyHubSignature } from '../webhook-payload.js';
+import { ConnectorProducer } from '../connector.producer.js';
 import { ConnectorsService } from '../connectors.service.js';
 import { ConnectorWorkItemsService } from '../connector-work-items.service.js';
 import { toWorkItem } from './github-issues.service.js';
@@ -50,6 +51,7 @@ export class GithubWebhookController {
     private readonly connectors: ConnectorsService,
     private readonly workItems: ConnectorWorkItemsService,
     private readonly drift: DriftTriggerService,
+    private readonly producer: ConnectorProducer,
   ) {
     this.secret = this.config.get('GITHUB_APP_WEBHOOK_SECRET', { infer: true }).trim();
   }
@@ -157,12 +159,14 @@ export class GithubWebhookController {
     if (event === 'push') {
       const ref: string = typeof payload.ref === 'string' ? payload.ref : '';
       await this.workItems.publishBare(row, 'repo.push', ref.replace(/^refs\/heads\//, '') || ref);
+      await this.regenerateWiki(row, event, payload);
       return true;
     }
 
     if (event === 'release' && action === 'published') {
       const name: unknown = payload.release?.name ?? payload.release?.tag_name;
       await this.workItems.publishBare(row, 'repo.release.published', typeof name === 'string' ? name : '');
+      await this.regenerateWiki(row, event, payload);
       return true;
     }
 
@@ -171,6 +175,19 @@ export class GithubWebhookController {
     // demand in one batched GraphQL query rather than reconstructed from an
     // event that names a card node id we would have to resolve back to an issue.
     return false;
+  }
+
+  /**
+   * A push or release regenerating a codebase connector's wiki
+   * (docs/features/46): one unscoped run, held for the debounce so the next
+   * push folds into it. `queueRepoPush` decides whether this connector asked
+   * for it and whether the branch is the one it reads.
+   */
+  private async regenerateWiki(row: Connector, event: string, payload: Record<string, any>): Promise<void> {
+    const push = readRepoPushDelivery({ 'x-github-event': event }, payload);
+    if (!push) return;
+    const run = await this.connectors.queueRepoPush(row, push);
+    if (run) await this.producer.enqueue(run.id, { delayMs: this.config.get('WIKI_PUSH_DEBOUNCE_MS', { infer: true }) });
   }
 }
 

@@ -463,6 +463,25 @@ export const envSchema = z.object({
   CODE_SNAPSHOT_MAX_BYTES: z.coerce.number().int().positive().default(268_435_456),
 
   /**
+   * Repo wiki (docs/features/46). Both are ceilings, not defaults: a repository's
+   * `.knowledge/wiki.yml` or a connector override may ask for less, never more,
+   * and the Wiki tab shows what was asked beside what applied.
+   */
+  WIKI_MAX_EFFORT: z.enum(['low', 'medium', 'high']).default('medium'),
+  WIKI_DIAGRAM_MAX_NODES: z.coerce.number().int().min(4).max(200).default(40),
+  /** Code-tool calls one wiki section may make at effort `high`; lowers, never raises, the agent's own budget. */
+  WIKI_HIGH_EFFORT_MAX_TOOL_CALLS: z.coerce.number().int().min(1).max(64).default(24),
+  /**
+   * How long a push-triggered wiki run waits before it starts. Pushes inside
+   * the window fold into the same queued run, so a burst of commits is one sync.
+   */
+  WIKI_PUSH_DEBOUNCE_MS: z.coerce.number().int().min(0).max(3_600_000).default(120_000),
+  /** Release notes: tags generated on a connector's first sync — older ones are listed, not generated. */
+  CHANGELOG_MAX_RELEASES: z.coerce.number().int().min(1).max(200).default(20),
+  /** Commits read per release; a longer range is cut with a warning saying so. */
+  CHANGELOG_MAX_COMMITS_PER_RELEASE: z.coerce.number().int().min(1).max(5_000).default(500),
+
+  /**
    * Where this API is reachable from a browser.
    *
    * Distinct from WEB_BASE_URL, which is the SPA. Needed because an OAuth

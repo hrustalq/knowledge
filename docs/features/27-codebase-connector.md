@@ -25,10 +25,10 @@ Two kinds of unit, and the `externalId` of each is a permanent identity — it i
 the `connector_links` key, which is what makes a second sync update a page
 rather than duplicate it:
 
-| `externalId`                  | page                                                            |
-| ----------------------------- | --------------------------------------------------------------- |
-| `overview`                    | the hub: modules, languages, entrypoints, top-level dependencies  |
-| `module:<repo-relative-path>` | one per module: what it is, its public API, what it depends on    |
+| `externalId`                  | page                                                             |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `overview`                    | the hub: modules, languages, entrypoints, top-level dependencies |
+| `module:<repo-relative-path>` | one per module: what it is, its public API, what it depends on   |
 
 A **module** is a directory that holds a manifest — `package.json`, `go.mod`,
 `pyproject.toml`, `Cargo.toml`, `pom.xml`, `composer.json`, `Gemfile`. A
@@ -66,13 +66,13 @@ oversight.
 
 The reason is that every other adapter's external system already holds prose.
 This one's holds source code, so there is no "fetch the text" step to keep
-separate from "write the text" — the fetch *is* the derivation. Keeping it in
+separate from "write the text" — the fetch _is_ the derivation. Keeping it in
 the adapter is what avoids the alternative: a kind-specific branch inside
 `ConnectorSyncService`, which would put this feature's shape into the generic
 pipeline every other connector runs through.
 
 The rule that replaces the one being bent is **the adapter derives, the pipeline
-stages, the API applies** — feature 17's *worker generates, API publishes*, one
+stages, the API applies** — feature 17's _worker generates, API publishes_, one
 layer down. Nothing in the adapter writes a page. Staging, review, apply, revert
 and conflict handling are untouched.
 
@@ -95,7 +95,7 @@ is routed through the existing `author` agent rather than a new built-in:
 20 warns that an eleventh built-in differing only in framing is roster drift. An
 operator can therefore already edit the prompt and pick the model for it.
 
-The model is given the *facts*, not the source. The facts are smaller, and they
+The model is given the _facts_, not the source. The facts are smaller, and they
 are also better: a signature list says what a module offers far more precisely
 than twelve thousand characters of implementation would.
 
@@ -130,8 +130,8 @@ binding differs. Three things decided it:
 
 1. `tree-sitter` declares `"install": "node-gyp-build"`, and pnpm 10 blocks
    dependency build scripts unless the package is listed in
-   `pnpm-workspace.yaml`'s `onlyBuiltDependencies`. It would install *silently
-   unbuilt* and fail at the first parse.
+   `pnpm-workspace.yaml`'s `onlyBuiltDependencies`. It would install _silently
+   unbuilt_ and fail at the first parse.
 2. `Dockerfile.api`'s base stage carries `openssl` and `ca-certificates` and
    nothing else, so node-gyp would need a full C++ toolchain added to an image
    built on a 3.8 GB box that already caps the builder at 2560 MB because two
@@ -171,23 +171,25 @@ the model calls are.
 
 Config fields, which drive the settings form and the setup wizard alike:
 
-| field        | required | meaning                                            |
-| ------------ | -------- | -------------------------------------------------- |
+| field        | required | meaning                                                                                                                                                 |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `repoUrl`    | yes      | the repository. Inherits the SSRF guard, because `ConnectorsService.validateConfig` runs `assertSafeExternalUrl` over any field whose key ends in `url` |
-| `branch`     | no       | defaults to `main`                                  |
-| `subdir`     | no       | only code under this path is read                   |
-| `maxModules` | no       | at most this many module pages, largest first (24)  |
+| `branch`     | no       | defaults to `main`                                                                                                                                      |
+| `subdir`     | no       | only code under this path is read                                                                                                                       |
+| `maxModules` | no       | at most this many module pages, largest first (24)                                                                                                      |
 
 The wizard reuses `markdown-git`'s two steps — repository and token, then branch
 and folder — because it is the same archive being downloaded. `maxModules` rides
 along with the branch step for the reason `rootPageId` rides along with the
-space: it refines *how much*, and a step of its own would make everyone press
+space: it refines _how much_, and a step of its own would make everyone press
 Next past a question most repositories never answer.
 
 ## Deliberately deferred
 
-- **Webhooks.** `seedScope` turns whatever `verifyWebhook` returns directly into
-  identity-map keys, but a push event names *files*, and which module a file
+- **Webhooks.** *Since feature 46, a push queues an unscoped, debounced run
+  (the repo wiki's `wikiAutoRegenerate`), and the reasoning below is why it
+  never names units.* `seedScope` turns whatever `verifyWebhook` returns directly into
+  identity-map keys, but a push event names _files_, and which module a file
   belongs to is not knowable until the archive has been read. A webhook could
   only guess, and every wrong guess seeds a `connector_links` key for a page
   that does not exist. Scheduled sync covers the same ground a few minutes
@@ -195,10 +197,11 @@ Next past a question most repositories never answer.
 - **Push.** These pages exist nowhere upstream; there is no counterpart to write
   back to. `capabilities.push: false` is the type-level half of saying so.
 - **Cross-module dependency edges.** Bare import specifiers are aggregated per
-  module, which answers "what does this rest on". Resolving *relative* imports
-  into edges between module pages needs a per-language resolver
-  (`tsconfig` paths, Go module paths, Python packages) and is its own piece of
-  work.
+  module, which answers "what does this rest on". _Since feature 46:_ the repo
+  wiki resolves imports into module → module edges (`import-resolver.ts`):
+  manifest names in every ecosystem, relative paths for TypeScript/JavaScript.
+  `tsconfig` paths, Go module paths beyond the manifest name and Python package
+  roots are still not resolved.
 - **Graph relations between derived pages.** A `PART_OF` edge from each module to
   the hub would want `RELATION_EDGE_TYPES` widened, and nesting already carries
   the same meaning through the connector's destination parent.

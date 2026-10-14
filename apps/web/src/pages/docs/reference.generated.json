@@ -1062,6 +1062,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connectors/{id}/releases",
+      "tag": "connectors",
+      "summary": "Release notes pages: Unreleased and one per tag, with breaking counts",
+      "role": "viewer",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/connectors/{id}/runs",
       "tag": "connectors",
       "summary": "Recent sync runs, newest first",
@@ -1086,6 +1096,26 @@
       "tag": "connectors",
       "summary": "Prove the credential and configuration reach the external system",
       "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/connectors/{id}/wiki",
+      "tag": "connectors",
+      "summary": "The repo wiki's sections, steering and asked-vs-applied effort",
+      "role": "viewer",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/wiki/regenerate",
+      "tag": "connectors",
+      "summary": "Queue a run that re-derives the repo wiki, or some of its sections",
+      "role": "editor",
       "source": "connector",
       "public": false,
       "platformAdmin": false
@@ -3861,6 +3891,34 @@
         {
           "name": "limit",
           "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_regenerate_wiki",
+      "description": "",
+      "inputs": [
+        {
+          "name": "connectorId",
+          "optional": false
+        },
+        {
+          "name": "sections",
+          "optional": true
+        },
+        {
+          "name": "force",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_repo_wiki",
+      "description": "s repo wiki: its sections and the page each one is, which are stale or waiting in a merge request, and how the repository",
+      "inputs": [
+        {
+          "name": "connectorId",
+          "optional": false
         }
       ]
     },

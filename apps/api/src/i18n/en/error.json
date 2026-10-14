@@ -454,5 +454,9 @@
     "rateLimited": "Too many questions — try again in a minute",
     "unavailable": "This site cannot answer questions right now",
     "notEnabled": "This site does not answer questions"
+  },
+  "wiki": {
+    "notACodebase": "Only a codebase connector has a repo wiki; this one is {kind}.",
+    "disabled": "Turn on Repo wiki or Release notes for this connector first."
   }
 }

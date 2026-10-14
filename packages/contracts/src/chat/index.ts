@@ -5,13 +5,25 @@
 import type { Locale } from '@knowledge/contracts/core';
 
 /**
- * The messengers a workspace can connect. Telegram only, for now: Slack and
- * Teams join this list in the release that ships their adapter, never before —
- * a closed vocabulary must not promise a value the code never emits, and the
- * setup form, the DTO guard and the adapter registry all read this one list.
+ * The messengers a workspace can connect: Telegram, and Time (T-Bank's
+ * corporate messenger, Mattermost-shaped). Mattermost and VK Teams join this
+ * list in the release that ships their adapter, never before — a closed
+ * vocabulary must not promise a value the code never emits, and the setup
+ * form, the DTO guard and the adapter registry all read this one list.
  */
-export const CHAT_PLATFORM_KINDS = ['telegram'] as const;
+export const CHAT_PLATFORM_KINDS = ['telegram', 'time'] as const;
 export type ChatPlatformKind = (typeof CHAT_PLATFORM_KINDS)[number];
+
+/**
+ * Platforms each customer hosts, so a bot is saved with its server's URL
+ * beside the token. The setup form asks for it, the DTO requires it, and the
+ * service refuses one for any other kind — one list, read by all three.
+ */
+export const CHAT_SELF_HOSTED_PLATFORMS: readonly ChatPlatformKind[] = ['time'];
+
+export function chatPlatformNeedsServer(kind: ChatPlatformKind): boolean {
+  return CHAT_SELF_HOSTED_PLATFORMS.includes(kind);
+}
 
 /**
  * When the bot answers in a bound group. `mention` is the default because a
@@ -115,14 +127,23 @@ export interface ChatIntegrationSummary {
   name: string;
   enabled: boolean;
   credentialHint: string | null;
+  /** The messenger's server, for a self-hosted platform (`chatPlatformNeedsServer`); null otherwise. */
+  serverUrl: string | null;
   /** Read from the platform when the integration is saved or tested. */
   botUsername: string | null;
   /** null = the researcher. */
   defaultAgentKey: string | null;
   locale: Locale;
-  /** Where the platform delivers updates — set on the platform when the bot is saved. */
+  /**
+   * Where the platform delivers updates — set on the platform when the bot is
+   * saved. On Time it is where button presses go; messages arrive over the
+   * bot's own websocket.
+   */
   webhookUrl: string;
-  /** The platform's last refusal of setWebhook, if any — null once it is accepted. */
+  /**
+   * Why the bot cannot hear: the platform's last refusal of setWebhook, or on
+   * Time the websocket's last failure. null once it is accepted / connected.
+   */
   webhookError: string | null;
   bindingCount: number;
   identityCount: number;

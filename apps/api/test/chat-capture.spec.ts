@@ -133,13 +133,13 @@ function harness(opts: {
     client as never,
     aiUsage as never,
     { get: () => adapter } as never,
-    { context: () => ({ token: 'T', botUsername: 'kn_bot' }) } as never,
+    { context: () => ({ token: 'T', botUsername: 'kn_bot', serverUrl: null, actionUrl: '' }) } as never,
     config as never,
   );
   const request = (over: Partial<CaptureRequest> = {}): CaptureRequest => ({
     integration,
     adapter: adapter as never,
-    ctx: { token: 'T', botUsername: 'kn_bot' },
+    ctx: { token: 'T', botUsername: 'kn_bot', serverUrl: null, actionUrl: '' },
     answerMessage: { chatId: '-100', messageId: 'bot-answer' },
     answer: { id: 'ans-1', conversationId: 'conv-1', createdAt: new Date('2026-10-14T10:00:00Z') },
     projectId: 'p-1',

@@ -183,6 +183,7 @@ function renderUpdates(view: ChatUpdatesView): ChatOutMessage {
 export class TelegramAdapter implements ChatAdapter {
   readonly kind = 'telegram' as const;
   readonly limits = { maxChars: MAX_CHARS, maxActionBytes: MAX_ACTION_BYTES };
+  readonly inbound = 'webhook' as const;
 
   constructor(private readonly apiBase: string) {}
 
@@ -235,6 +236,7 @@ export class TelegramAdapter implements ChatAdapter {
         text,
         mentioned,
         replyToBotMessageId,
+        threadId: null,
         command,
         action: null,
       },
@@ -256,6 +258,7 @@ export class TelegramAdapter implements ChatAdapter {
         text: '',
         mentioned: false,
         replyToBotMessageId: null,
+        threadId: null,
         command: null,
         action: { id: cb.id, data: cb.data },
       },

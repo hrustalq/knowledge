@@ -2376,10 +2376,15 @@ model ExportJob {
 model ChatIntegration {
   id          String  @id @default(uuid()) @db.Uuid
   workspaceId String  @map("workspace_id") @db.Uuid
-  /// CHAT_PLATFORM_KINDS — 'telegram'.
+  /// CHAT_PLATFORM_KINDS — 'telegram' | 'time'.
   kind        String
   name        String
   enabled     Boolean @default(true)
+  /// The messenger's own server, for a platform each customer hosts (Time):
+  /// an admin-typed origin, checked by the SSRF guard. '' where the platform
+  /// has one fixed API (Telegram) — empty rather than null so the bot-account
+  /// unique below still holds for those rows (PG treats nulls as distinct).
+  serverUrl   String  @default("") @map("server_url")
 
   /// AES-256-GCM envelope of the bot token ("gcm$iv$tag$ct"); never leaves the API.
   credential        String?
@@ -2410,7 +2415,8 @@ model ChatIntegration {
   @@unique([workspaceId, name])
   // One bot account serves one workspace: deliveries carry no workspace, so a
   // token connected twice would answer every question in whichever row won.
-  @@unique([kind, botUsername])
+  // A self-hosted platform names bots per server, so the server is part of it.
+  @@unique([kind, serverUrl, botUsername])
   @@map("chat_integrations")
 }
 
@@ -2549,6 +2555,11 @@ model ChatAnswer {
   askedBy            String   @map("asked_by") @db.Uuid
   /// The bot's own message: the placeholder, edited into the answer.
   replyMessageId     String?  @map("reply_message_id")
+  /// The platform thread the question was asked in, where the platform has
+  /// threads (Time's `root_id`, or the question itself when it starts one).
+  /// A later message in the same thread is a follow-up. null on Telegram,
+  /// which has reply chains instead (`replyMessageId`).
+  threadId           String?  @map("thread_id")
   /// Votes key on this (answer_feedback, surface 'chat').
   assistantMessageId String?  @map("assistant_message_id") @db.Uuid
   /// CHAT_ANSWER_STATUSES — 'pending' | 'answered' | 'failed'.
@@ -2567,6 +2578,7 @@ model ChatAnswer {
   @@index([status, createdAt])
   @@index([askedBy, createdAt])
   @@index([integrationId, externalChatId, replyMessageId])
+  @@index([integrationId, externalChatId, threadId])
   @@map("chat_answers")
 }
 

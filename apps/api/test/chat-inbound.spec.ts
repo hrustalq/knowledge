@@ -38,6 +38,7 @@ function inbound(over: Partial<ChatInbound> = {}): ChatInbound {
     text: 'How do we deploy?',
     mentioned: false,
     replyToBotMessageId: null,
+    threadId: null,
     command: null,
     action: null,
     ...over,
@@ -471,5 +472,52 @@ describe('save buttons', () => {
     h.access.requireRole.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new ForbiddenException('viewer'));
     await h.svc.receive(integration, pressed(`c:${ANS}:t`));
     expect(h.captures.start).not.toHaveBeenCalled();
+  });
+});
+
+describe('threads (Time, phase 4)', () => {
+  const time = { ...(integration as object), kind: 'time' } as never;
+  const bound = { answerMode: 'mention', agentKey: null, projectId: null };
+  /** A message in a channel thread, not mentioning the bot. */
+  const inThread = (over: Partial<ChatInbound> = {}) =>
+    inbound({ isDm: false, chatId: 'ch-1', messageId: 'p2', threadId: 'p1', replyToBotMessageId: 'p1', ...over });
+
+  it('a thread the bot answered in is addressed without a mention, and the claim keeps the thread', async () => {
+    const h = harness({ binding: bound, answered: { id: ANS, conversationId: null } });
+    await h.svc.receive(time, inThread());
+    expect(h.assistant.runChatTurn).toHaveBeenCalledOnce();
+    expect(h.claims[0]).toMatchObject({ threadId: 'p1', inboundMessageId: 'p2' });
+    // The check looked for the bot in this chat, by thread or by its own reply.
+    expect(h.prisma.chatAnswer.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          externalChatId: 'ch-1',
+          OR: [{ threadId: 'p1' }, { replyMessageId: 'p1' }],
+        }),
+      }),
+    );
+  });
+
+  it('a thread between people stays theirs', async () => {
+    const h = harness({ binding: bound, answered: null });
+    await h.svc.receive(time, inThread());
+    expect(h.assistant.runChatTurn).not.toHaveBeenCalled();
+    expect(h.posted).toEqual([]);
+  });
+
+  it('a follow-up in the thread continues the asker’s conversation', async () => {
+    const h = harness({ binding: bound, answered: { id: ANS, conversationId: 'conv-7' } });
+    h.prisma.chatConversation.findUnique.mockImplementation((async ({ where }: { where: { id: string } }) =>
+      where.id === 'conv-7' ? { id: 'conv-7', assistantThreadId: 'thread-7' } : null) as never);
+    h.prisma.chatConversation.update.mockImplementation((async () => ({ id: 'conv-7', assistantThreadId: 'thread-7' })) as never);
+    await h.svc.receive(time, inThread({ mentioned: true }));
+    expect(h.assistant.runChatTurn).toHaveBeenCalledWith('thread-7', expect.anything(), expect.anything());
+    expect(h.prisma.chatConversation.create).not.toHaveBeenCalled();
+  });
+
+  it('Time gets the help with plain-word commands', async () => {
+    const h = harness();
+    await h.svc.receive(time, inbound({ command: { name: 'help', args: '' } }));
+    expect(h.posted).toEqual([{ kind: 'notice', text: 'chat.helpTime' }]);
   });
 });

@@ -128,7 +128,7 @@ describe('ChatWebhookController', () => {
   function controller(enabled: boolean, row: Record<string, unknown> | null) {
     const receive = vi.fn(async () => undefined);
     const ctl = new ChatWebhookController(
-      { find: vi.fn(async () => row) } as never,
+      { find: vi.fn(async () => row), context: () => ({ token: 'T', botUsername: 'kn_bot', serverUrl: null, actionUrl: '' }) } as never,
       { get: () => new TelegramAdapter('https://api.telegram.test') } as never,
       { receive } as never,
       { get: () => enabled } as never,

@@ -6019,11 +6019,16 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            kind: "telegram";
+            kind: "telegram" | "time";
             /** @example Team bot */
             name: string;
-            /** @description The bot token (Telegram: from @BotFather). Write-only — never returned. */
+            /** @description The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts). Write-only — never returned. */
             token: string;
+            /**
+             * @description The messenger server, for a self-hosted platform (Time) — required there, refused for Telegram
+             * @example https://time.example.com
+             */
+            serverUrl?: string;
             /** @description Agent that answers; omitted or null means the researcher */
             defaultAgentKey?: string | null;
             /**
@@ -6037,6 +6042,8 @@ export interface components {
             enabled?: boolean;
             /** @description Replaces the stored token; omit to keep it */
             token?: string;
+            /** @description Moves a self-hosted bot to another server; omit to keep it */
+            serverUrl?: string;
             /** @description Omit to keep; null goes back to the researcher */
             defaultAgentKey?: string | null;
             /** @enum {string} */

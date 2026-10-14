@@ -9,19 +9,21 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type ChatChannelBinding, type ChatIntegration } from '@prisma/client';
-import type {
-  ChatBindingEntry,
-  ChatIntegrationSummary,
-  ChatIntegrationTestResponse,
-  ChatIntegrationsResponse,
-  ChatPlatformKind,
-  Locale,
-  ChatAnswerMode,
+import {
+  chatPlatformNeedsServer,
+  type ChatBindingEntry,
+  type ChatIntegrationSummary,
+  type ChatIntegrationTestResponse,
+  type ChatIntegrationsResponse,
+  type ChatPlatformKind,
+  type Locale,
+  type ChatAnswerMode,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { decryptSecret, encryptSecret, maskSecret, parseKey } from '../ai/secret-box.js';
+import { assertSafeExternalUrl } from '../common/safe-url.js';
 import { t } from '../i18n/t.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatPlatformError, type ChatAdapterContext } from './adapters/chat-adapter.types.js';
@@ -33,7 +35,7 @@ import type {
   UpdateChatIntegrationDto,
 } from './chat.dto.js';
 
-const PLATFORM_LABEL: Record<ChatPlatformKind, string> = { telegram: 'Telegram' };
+const PLATFORM_LABEL: Record<ChatPlatformKind, string> = { telegram: 'Telegram', time: 'Time' };
 
 /**
  * Bots and the channels they answer in (issue #71) — the admin half.
@@ -50,6 +52,7 @@ export class ChatIntegrationsService {
   private readonly key: Buffer | null;
   private readonly apiPublicUrl: string;
   private readonly enabled: boolean;
+  private readonly allowPrivateUrls: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -60,6 +63,7 @@ export class ChatIntegrationsService {
     this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
     this.apiPublicUrl = config.get('API_PUBLIC_URL', { infer: true }).replace(/\/$/, '');
     this.enabled = config.get('CHAT_ENABLED', { infer: true });
+    this.allowPrivateUrls = config.get('CHAT_ALLOW_PRIVATE_URLS', { infer: true });
   }
 
   async list(workspaceId: string): Promise<ChatIntegrationsResponse> {
@@ -93,7 +97,9 @@ export class ChatIntegrationsService {
   /** What one call to the platform needs. A token that no longer decrypts is no token. */
   context(row: ChatIntegration): ChatAdapterContext | null {
     const token = decryptSecret(row.credential, this.key);
-    return token ? { token, botUsername: row.botUsername } : null;
+    return token
+      ? { token, botUsername: row.botUsername, serverUrl: row.serverUrl || null, actionUrl: this.webhookUrl(row.id) }
+      : null;
   }
 
   webhookUrl(id: string): string {
@@ -111,7 +117,8 @@ export class ChatIntegrationsService {
     const token = dto.token.trim();
     if (!token) throw new BadRequestException(t('error.chat.tokenRequired'));
     if (dto.defaultAgentKey) await this.assertAgent(dto.workspaceId, dto.defaultAgentKey);
-    const botUsername = await this.identify(dto.kind, token);
+    const serverUrl = await this.serverUrlFor(dto.kind, dto.serverUrl);
+    const botUsername = await this.identify(dto.kind, token, serverUrl);
     let row: ChatIntegration;
     try {
       row = await this.prisma.chatIntegration.create({
@@ -119,6 +126,7 @@ export class ChatIntegrationsService {
           workspaceId: dto.workspaceId,
           kind: dto.kind,
           name: dto.name.trim(),
+          serverUrl,
           credential: encryptSecret(token, this.key),
           credentialHint: maskSecret(token),
           botUsername,
@@ -144,12 +152,20 @@ export class ChatIntegrationsService {
       if (dto.defaultAgentKey) await this.assertAgent(row.workspaceId, dto.defaultAgentKey);
       data.defaultAgentKey = dto.defaultAgentKey;
     }
+    const kind = row.kind as ChatPlatformKind;
     const token = dto.token?.trim();
-    if (token) {
-      if (!this.key) throw new BadRequestException(t('error.chat.noEncryptionKey'));
-      data.botUsername = await this.identify(row.kind as ChatPlatformKind, token);
-      data.credential = encryptSecret(token, this.key);
-      data.credentialHint = maskSecret(token);
+    const serverUrl = dto.serverUrl !== undefined ? await this.serverUrlFor(kind, dto.serverUrl) : row.serverUrl;
+    const moved = serverUrl !== row.serverUrl;
+    if (token || moved) {
+      // A new server is asked again who the bot is, with whichever token applies.
+      const proof = token || decryptSecret(row.credential, this.key);
+      if (!proof || !this.key) throw new BadRequestException(t('error.chat.noEncryptionKey'));
+      data.botUsername = await this.identify(kind, proof, serverUrl);
+      data.serverUrl = serverUrl;
+      if (token) {
+        data.credential = encryptSecret(token, this.key);
+        data.credentialHint = maskSecret(token);
+      }
     }
     let next: ChatIntegration;
     try {
@@ -159,7 +175,7 @@ export class ChatIntegrationsService {
     }
     // A new token is a new bot, which knows nothing of our webhook yet; turning
     // the bot back on re-points it in case it was moved while off.
-    if (token || (dto.enabled === true && !row.enabled)) await this.registerWebhook(next);
+    if (token || moved || (dto.enabled === true && !row.enabled)) await this.registerWebhook(next);
     return this.summary(id);
   }
 
@@ -197,6 +213,12 @@ export class ChatIntegrationsService {
   private async registerWebhook(row: ChatIntegration): Promise<string | null> {
     const ctx = this.context(row);
     if (!ctx) return t('error.chat.noEncryptionKey');
+    // Nothing to register: the socket supervisor owns this bot's status, and
+    // its last failure is the answer (null for a bot saved a moment ago).
+    if (this.registry.get(row.kind).inbound === 'socket') {
+      const current = await this.prisma.chatIntegration.findUnique({ where: { id: row.id }, select: { webhookError: true } });
+      return current?.webhookError ?? null;
+    }
     const secret = randomBytes(32).toString('base64url');
     try {
       await this.registry.get(row.kind).registerWebhook(ctx, this.webhookUrl(row.id), secret);
@@ -213,9 +235,35 @@ export class ChatIntegrationsService {
     }
   }
 
-  private async identify(kind: ChatPlatformKind, token: string): Promise<string> {
+  /**
+   * The server a self-hosted bot lives on, normalised (no trailing slash) and
+   * past the SSRF guard — the address is typed by an admin, and every call
+   * after this dials it. '' for a platform with a fixed API, which must not be
+   * given one.
+   */
+  private async serverUrlFor(kind: ChatPlatformKind, raw: string | undefined): Promise<string> {
+    const value = raw?.trim() ?? '';
+    const platform = PLATFORM_LABEL[kind];
+    if (!chatPlatformNeedsServer(kind)) {
+      if (value) throw new BadRequestException(t('error.chat.serverUrlUnexpected', { platform }));
+      return '';
+    }
+    if (!value) throw new BadRequestException(t('error.chat.serverUrlRequired', { platform }));
+    await assertSafeExternalUrl(value, this.allowPrivateUrls, {
+      invalid: 'error.chat.serverUrlInvalid',
+      notHttps: 'error.chat.serverUrlNotHttps',
+      unresolved: 'error.chat.serverHostUnresolved',
+      private: 'error.chat.serverUrlPrivate',
+    });
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+  }
+
+  private async identify(kind: ChatPlatformKind, token: string, serverUrl: string): Promise<string> {
     try {
-      const { username } = await this.registry.get(kind).identify({ token, botUsername: null });
+      const { username } = await this.registry
+        .get(kind)
+        .identify({ token, botUsername: null, serverUrl: serverUrl || null, actionUrl: '' });
       return username;
     } catch (err) {
       const reason = err instanceof ChatPlatformError ? err.message : String(err);
@@ -247,6 +295,7 @@ export class ChatIntegrationsService {
       name: row.name,
       enabled: row.enabled,
       credentialHint: row.credentialHint,
+      serverUrl: row.serverUrl || null,
       botUsername: row.botUsername,
       defaultAgentKey: row.defaultAgentKey,
       locale: row.locale as Locale,

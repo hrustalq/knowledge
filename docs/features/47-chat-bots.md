@@ -5,8 +5,10 @@ questions in chat, not in the wiki. A workspace connects a messenger bot, and
 the bot answers from the knowledge base with links to the pages it used.
 Telegram ships first (phase 1). Every answer can be rated 👍/👎 and saved as a
 page draft or a glossary term (phase 2). A bound group can be told when pages
-are published or updated and merge requests opened or merged (phase 3). A Time
-adapter (phase 4) is still open on the issue.
+are published or updated and merge requests opened or merged (phase 3). Time,
+T-Bank's self-hosted corporate messenger, is the second platform (phase 4): the
+same answers, linking, feedback, saving and notifications, heard over the bot's
+own websocket instead of a webhook (see **Time specifics**).
 
 ## Who an answer runs as
 
@@ -79,6 +81,9 @@ half that the worker cannot load. So the chat answer uses the feature-21
      nothing else.
    - Hands each parsed message to `ChatAnswersService.receive` **detached**.
    - Returns 200 at once. Telegram redelivers what it thinks timed out.
+   - On Time this route only ever receives **button presses**; messages arrive
+     over the websocket held by `ChatSocketSupervisor`, which hands each one to
+     the same `receive`.
 2. `receive` resolves the binding, the identity and the reply language: the
    person's `users.locale`, then the binding's, then the bot's. Everything after
    that runs inside `withLocale`.
@@ -297,7 +302,12 @@ field is the search sheet's (`lib/tag-options.ts`).
 `chat/adapters/chat-adapter.types.ts` is the whole contract.
 
 - **Inbound:** `verifyInbound`, `parseInbound` → `ChatInbound` (a message,
-  or a button press in `action`).
+  or a button press in `action`). `inbound` says whether messages come to the
+  webhook (Telegram) or over the bot's websocket (Time). `threadId` is set on a
+  platform with real threads.
+- **Press replies:** `acknowledge`, plus the optional `respondToAction` for a
+  platform that answers a press in the HTTP response (Time) rather than with a
+  call of its own (Telegram's `answerCallbackQuery`).
 - **Outbound:** `render(ChatAnswerView | ChatNoticeView | ChatUpdatesView)`, `postMessage`,
   `editMessage`, `acknowledge`. Buttons are rows of link buttons and action
   buttons; an action's data must fit `limits.maxActionBytes`.
@@ -306,20 +316,25 @@ field is the search sheet's (`lib/tag-options.ts`).
 The core decides *what* to say and the adapter decides *how* it looks and
 travels. `ChatAdapterRegistry` is keyed by `ChatPlatformKind`, so a kind added
 to `CHAT_PLATFORM_KINDS` without an adapter is a type error.
-`CHAT_PLATFORM_KINDS` is `['telegram']` until another adapter ships, because a
-closed vocabulary must not promise a value the code never emits.
+`CHAT_PLATFORM_KINDS` is `['telegram', 'time']`: Mattermost and VK Teams join
+it only with their adapter, because a closed vocabulary must not promise a
+value the code never emits. `CHAT_SELF_HOSTED_PLATFORMS` (`['time']`) is the
+one list the form, the DTO check and the service read for "this bot needs a
+server address".
 
-What a later platform must map:
+How each platform maps, and what a later one must:
 
-| Seam               | Telegram                                       | Slack (phase 4)                    | Teams (phase 5)                 | Mattermost / VK Teams       |
-| ------------------ | ---------------------------------------------- | ---------------------------------- | ------------------------------- | --------------------------- |
-| `verifyInbound`    | `secret_token` header, SHA-256 + constant time | `X-Slack-Signature` v0, 5-min skew | Bot Framework JWT               | outgoing-webhook token      |
-| `parseInbound`     | `message`, reply chain, `@bot` mention         | `app_mention`, `message.im`        | `message` activity              | posted event / message      |
-| button presses     | `callback_query` / `answerCallbackQuery`       | `block_actions`, then 200          | `Action.Submit` invoke          | interactive post action     |
-| threads            | reply to the bot's message                     | `thread_ts`                        | `replyToId`                     | `root_id` / reply           |
-| `render`           | HTML subset + inline keyboard                  | mrkdwn / Block Kit                 | Adaptive Card                   | markdown / inline keyboard  |
-| `postMessage` / `editMessage` | `sendMessage` / `editMessageText`   | `chat.postMessage` / `chat.update` | `sendActivity` / `updateActivity` | `POST/PUT /posts`         |
-| `registerWebhook`  | `setWebhook`                                   | manifest (manual)                  | Azure Bot (manual)              | manual                      |
+| Seam               | Telegram                                       | Time (phase 4)                                         | Mattermost / VK Teams       |
+| ------------------ | ---------------------------------------------- | ------------------------------------------------------ | --------------------------- |
+| inbound            | webhook                                        | websocket `GET /api/v4/websocket`, `posted` events     | Mattermost: as Time; VK Teams: long poll `events/get` |
+| `verifyInbound`    | `secret_token` header, SHA-256 + constant time | HMAC over the button's data in `integration.context`   | Mattermost: as Time         |
+| `parseInbound`     | `message`, reply chain, `@bot` mention         | `posted`: `@bot` in the text, `channel_type: 'D'`      | posted event / message      |
+| button presses     | `callback_query` / `answerCallbackQuery`       | POST to `integration.url`; note as `ephemeral_text` in the response (`respondToAction`) | interactive post action     |
+| threads            | reply to the bot's message                     | `root_id` (`threadId`)                                 | `root_id` / reply           |
+| `render`           | HTML subset + inline keyboard                  | markdown + one attachment of `actions` per button row  | markdown / inline keyboard  |
+| `postMessage` / `editMessage` | `sendMessage` / `editMessageText`   | `POST /api/v4/posts` / `PUT /api/v4/posts/:id/patch`   | `POST/PUT /posts`           |
+| `identify`         | `getMe`                                        | `GET /api/v4/users/me`                                 | `users/me` / `self/get`     |
+| `registerWebhook`  | `setWebhook`                                   | no-op (the supervisor opens the socket)                | manual                      |
 
 ## Admin surface
 
@@ -332,8 +347,13 @@ before the handler runs.
   - `POST …/:id/test` re-runs `getMe` and sets the webhook again.
   - **The token.** It is checked with `getMe` before anything is saved, stored
     in the secret box and returned only as `credentialHint`. One bot account
-    serves one workspace (`@@unique([kind, botUsername])` → 409
-    `chat.botTaken`).
+    serves one workspace (`@@unique([kind, serverUrl, botUsername])` → 409
+    `chat.botTaken`; the server is part of it because Time names bots per
+    server, and it is `''` for Telegram so that rows' uniqueness holds).
+  - **The server** (Time). Required for a self-hosted kind and refused for any
+    other; normalised, and checked by `assertSafeExternalUrl` with
+    `CHAT_ALLOW_PRIVATE_URLS` as the private-network switch. Every later call
+    and the websocket dial resolve it again through the SSRF guard.
   - **The webhook secret.** A fresh secret is minted on every registration and
     only its hash is kept.
   - **A refused webhook.** The refusal is stored on `webhook_error` and shown
@@ -373,6 +393,12 @@ The web pages are `/settings/chat` (`ChatSettingsPage.vue` +
 
 `/cmd@OtherBot` in a group is somebody else's command and is dropped.
 
+On Time the commands are the same words **without the slash** — `help`, `new`,
+`unlink`, `bind`, `unbind` — sent as a whole message (in a channel, after
+mentioning the bot): Time's client takes every leading `/` as its own slash
+command and never posts it. `/ask` is not needed there, a mention is the
+question. The help text is per platform (`chat.help` / `chat.helpTime`).
+
 ## Telegram specifics
 
 - **Privacy mode** (the default) shows a bot only the messages that mention
@@ -389,6 +415,56 @@ The web pages are `/settings/chat` (`ChatSettingsPage.vue` +
   a self-hosted Bot API server or a proxy. It is operator configuration, not a
   form field, so it is not run through `safe-url.ts`.
 
+## Time specifics
+
+Time is T-Bank's corporate messenger, hosted by each customer, with
+Mattermost's `/api/v4`. The adapter is `chat/adapters/time.adapter.ts`; the
+payload shapes are Mattermost's, which Time's documentation follows. **They
+were built against that documentation and recorded Mattermost-shaped fixtures,
+not a live Time server** — the first real connection is the check.
+
+- **A bot account and a server.** An admin creates the bot under Integrations
+  → Bot accounts in Time and pastes its token with the server address. The
+  token is checked with `GET /api/v4/users/me` before anything is saved.
+- **Hearing: a websocket, not a webhook.** `ChatSocketSupervisor` (API-side,
+  only while `CHAT_ENABLED`) holds one socket per enabled Time bot,
+  authenticated with the `Authorization` header, and hands each `posted`
+  event to `ChatAnswersService.receive`.
+  - Every `CHAT_SOCKET_SYNC_MS` it compares the sockets with the enabled bots:
+    a bot saved, switched off, given a new token or moved is picked up.
+  - A dropped socket reconnects with backoff (1 s → 60 s), reset by the
+    server's `hello`. We ping every 30 s; 75 s of silence is a dead socket.
+  - Its state is written to `webhook_error` (only on change), which is what
+    the settings card shows; **Test** reports it rather than overwriting it.
+  - **Every replica holds every socket**, and Time sends each of them every
+    message. The post id is claimed in Redis (`SET NX`, 1 h) before anything
+    is done, so a help or link reply goes out once, not once per replica; an
+    answer is single through its `chat_answers` row besides. With Redis down
+    the claim is skipped rather than the bot going silent.
+  - **No catch-up.** Time documents none, so a message sent while no socket
+    is open is not answered.
+- **Threads.** Time has real ones. In a channel the bot answers in the
+  question's thread; a later message in a thread it answered in is addressed to
+  it without a mention, and continues the asker's conversation
+  (`chat_answers.thread_id`). In a direct chat it answers at the top, unless
+  asked inside a thread. Time refuses a `root_id` that is itself a reply, so
+  the adapter reads the message it replies to for its root.
+- **Buttons.** Each row of action buttons is an attachment of `actions`; link
+  buttons become a line of links under the text, because Time's buttons only
+  call back. A press POSTs to the button's `integration.url` — our webhook —
+  with the `context` it was given and nothing that proves who sent it, so the
+  context carries an HMAC over the data keyed by the bot token; a forged,
+  re-targeted or another bot's context is a 401. The press's note is the
+  `ephemeral_text` of the HTTP response: `respondToAction` holds it until the
+  core's `acknowledge` (at most 5 s). Re-rendering is the core's own edit.
+- **Mentions are defused.** `@channel`, `@all` or a colleague's handle quoted
+  in an answer, a page title or a notice gets a zero-width space after the
+  `@`, so it reads the same and pings nobody.
+- **No deep link.** Opening a DM with a bot needs the team name, which a bot
+  does not have; a group asks people to message the bot instead.
+- **Reachability both ways.** The API must reach the Time server (REST and the
+  websocket), and the Time server must reach `API_PUBLIC_URL` for buttons.
+
 ## Configuration
 
 | Variable                              | Default                    | Meaning                                                             |
@@ -401,6 +477,8 @@ The web pages are `/settings/chat` (`ChatSettingsPage.vue` +
 | `CHAT_CAPTURE_TIMEOUT_SECONDS`        | `300`                      | a save with no progress this long is failed                         |
 | `CHAT_DIGEST_TICK_MS`                 | `60000`                    | how often notification rules are checked (min 5000)                 |
 | `TELEGRAM_API_BASE_URL`               | `https://api.telegram.org` | Bot API host (self-hosted server or proxy)                          |
+| `CHAT_ALLOW_PRIVATE_URLS`             | `false`                    | allow a Time server on a private/loopback address                   |
+| `CHAT_SOCKET_SYNC_MS`                 | `15000`                    | how often open Time sockets are compared with the enabled bots      |
 
 ## Data
 
@@ -410,12 +488,12 @@ All eight tables are new. None of them has an FK on `workspace_id`, `user_id` or
 
 | Table                   | Holds                                                                         |
 | ----------------------- | ----------------------------------------------------------------------------- |
-| `chat_integrations`     | bot: kind, name, token envelope + hint, inbound secret hash, username, webhook error, default agent, locale |
+| `chat_integrations`     | bot: kind, name, server (Time; `''` otherwise), token envelope + hint, inbound secret hash, username, webhook / socket error, default agent, locale |
 | `chat_channel_bindings` | group → project / agent / answer mode / locale                                |
 | `chat_identities`       | messenger account → person, unique per bot                                    |
 | `chat_link_codes`       | hashed one-time codes, with the private chat to confirm in                    |
 | `chat_conversations`    | chat + asker → `assistant_threads` row                                        |
-| `chat_answers`          | the claim: status, placeholder message id, assistant message id, frozen locale |
+| `chat_answers`          | the claim: status, placeholder message id, platform thread (Time), assistant message id, frozen locale |
 | `chat_captures`         | a save: answer + kind (unique), status, requester, "Drafting…" message id, the page / merge request / term it produced |
 | `chat_subscriptions`    | a group's notification rule: project, folded tags, kinds, timing, cursor, next digest, last send / refusal (cascades with the binding) |
 
@@ -424,6 +502,30 @@ All eight tables are new. None of them has an FK on `workspace_id`, `user_id` or
 of their own.
 
 ## Tests
+
+- `test/chat-time.spec.ts` (phase 4, Mattermost-shaped fixtures):
+  - `posted`: a channel mention is addressed and its own thread; a thread
+    message belongs to the thread; a DM has none; `@knowledge-team` and an
+    e-mail are not mentions; commands are whole words, addressed in a channel;
+    the bot itself, other bots, system and empty posts are dropped.
+  - Presses: a context signed with the token verifies and normalises; forged,
+    re-targeted, another bot's, unsigned and a `posted` body pushed at the
+    webhook are refused; a signed press is never read as a message too; the
+    note comes back as `ephemeral_text`, `{}` without one.
+  - Render: citations as links, page links resolved, `javascript:` dropped,
+    mentions defused, code fences untouched.
+  - Calls: a reply goes to the thread's root with signed buttons, a DM reply
+    stays at the top, an edit always sends the buttons, errors keep the token
+    out.
+  - Supervisor: one authenticated socket per bot, `hello` clears the status, a
+    `posted` event reaches `receive`, two replicas hand it on once, a dead
+    claim store still answers, reconnect with backoff and the reason recorded,
+    a silent socket is terminated, a bot turned off is closed for good and a
+    new token reopens it.
+- `test/chat-inbound.spec.ts` (threads): an unmentioned message in a thread the
+  bot answered in is answered and its claim keeps the thread; a thread between
+  people is left alone; a follow-up continues the asker's conversation; Time
+  gets the plain-word help.
 
 - `test/chat-subscriptions.spec.ts`:
   - Kinds read a page only on its default branch, first revision there as

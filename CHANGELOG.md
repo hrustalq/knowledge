@@ -49,6 +49,16 @@ in the pull request that introduces them — see
   links are posted, never page content, and the links still ask readers to
   sign in. Edits on review branches are not reported until they merge, and
   each change is posted once, even across restarts. (#71)
+- Chat bots also work in **Time**, T-Bank's corporate messenger. In
+  **Settings → Chat bots → Connect a bot**, pick Time, give your Time server's
+  address and the token of a bot created under Integrations → Bot accounts.
+  Everything the Telegram bot does works there: cited answers as the linked
+  person, account linking, 👍/👎, saving a conversation and channel
+  notifications. In a channel the bot answers in the question's thread, and
+  anything said in that thread afterwards is a follow-up. Commands are plain
+  words (`help`, `new`, `bind`…) because Time keeps `/` for its own commands.
+  Built against Time's documented API, not yet tried on a live Time server.
+  (#71)
 
 ### Operations
 
@@ -70,6 +80,19 @@ in the pull request that introduces them — see
   chat notification rules are checked, so "right away" means within one tick.
   Migration `20261015100000_chat_subscriptions` only creates the
   `chat_subscriptions` table; a code rollback is safe. (#71)
+- Time bots are heard over a websocket the API opens to each Time server, not
+  a webhook: the API must be able to reach the Time server, and the Time server
+  must reach `API_PUBLIC_URL` for the answer buttons to work. A message sent
+  while that connection is down is not answered. Every API replica opens its
+  own connection; Redis keeps them from replying twice. New env vars:
+  `CHAT_ALLOW_PRIVATE_URLS` (default `false` — set it to `true` to allow a
+  Time server on a private network, the usual in-house setup) and
+  `CHAT_SOCKET_SYNC_MS` (15000: how soon a saved or switched-off Time bot is
+  picked up). Migration `20261016100000_chat_time` adds
+  `chat_integrations.server_url` (default `''`), widens the bot-account unique
+  to include it, and adds `chat_answers.thread_id`; the previous release
+  ignores both columns and the unique behaves the same for Telegram, so a code
+  rollback is safe. (#71)
 
 ## [0.20.0] — 2026-10-14
 

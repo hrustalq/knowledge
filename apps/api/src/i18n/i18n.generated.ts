@@ -162,6 +162,7 @@ export type I18nTranslations = {
     };
     "chat": {
         "help": string;
+        "helpTime": string;
         "link": {
             "required": string;
             "button": string;
@@ -793,6 +794,12 @@ export type I18nTranslations = {
             "linkCodeExpired": string;
             "linkCodeUsed": string;
             "linkNotMember": string;
+            "serverUrlRequired": string;
+            "serverUrlUnexpected": string;
+            "serverUrlInvalid": string;
+            "serverUrlNotHttps": string;
+            "serverUrlPrivate": string;
+            "serverHostUnresolved": string;
         };
     };
     "import": {

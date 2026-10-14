@@ -116,6 +116,12 @@ describe('ConnectorsService.queueRepoPush', () => {
     expect(await service.queueRepoPush(connector({ ...WIKI_ON, branch: 'main' }), { branch: null })).not.toBeNull();
   });
 
+  it('runs for a release when release notes are on, even without push regeneration', async () => {
+    const notes = connector({ repoUrl: 'https://github.com/acme/demo', changelog: 'on' });
+    expect(await service.queueRepoPush(notes, { branch: 'main', defaultBranch: 'main' })).toBeNull();
+    expect(await service.queueRepoPush(notes, { branch: null })).not.toBeNull();
+  });
+
   it('does nothing unless the connector asked for it', async () => {
     expect(await service.queueRepoPush(connector({ ...WIKI_ON, wikiAutoRegenerate: 'off' }), { branch: null })).toBeNull();
     expect(await service.queueRepoPush(connector({ ...WIKI_ON, wiki: 'off' }), { branch: null })).toBeNull();

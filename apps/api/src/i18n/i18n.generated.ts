@@ -203,6 +203,11 @@ export type I18nTranslations = {
                 "flowEntryMissing": string;
                 "diagramInvalid": string;
             };
+            "changelog": {
+                "truncated": string;
+                "tagNotFound": string;
+                "unavailable": string;
+            };
         };
         "pushVersionMessage": string;
         "syncRevisionMessage": string;
@@ -214,6 +219,8 @@ export type I18nTranslations = {
                 "dataFlow": string;
                 "api": string;
                 "modules": string;
+                "changelog": string;
+                "unreleased": string;
             };
         };
     };

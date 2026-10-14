@@ -300,6 +300,17 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         ],
       },
       {
+        key: 'changelog',
+        label: 'Release notes',
+        kind: 'select',
+        required: false,
+        help: 'One page per release tag plus Unreleased, from commits and merged pull requests, with breaking changes called out.',
+        options: [
+          { value: 'off', label: 'Off' },
+          { value: 'on', label: 'On' },
+        ],
+      },
+      {
         key: 'wikiAutoRegenerate',
         label: 'Regenerate on push',
         kind: 'select',
@@ -504,6 +515,11 @@ export interface WikiSteeringConfig {
   flows?: Array<{ name: string; entry: string; symbol?: string }>;
   /** Free text from the repository, handed to the model wrapped as untrusted. */
   focus?: string;
+  changelog?: {
+    /** Which tags are releases. A glob: `*` is any run of characters. */
+    tagPattern?: string;
+    breaking?: { conventional?: boolean; labels?: string[]; apiSurface?: boolean };
+  };
 }
 
 /** One flow the Data flow section draws. `seeded` = derived from an entrypoint, not declared. */
@@ -528,6 +544,12 @@ export interface EffectiveWikiConfig {
   /** Declared flows only. Seeding from entrypoints needs the repo map, so it happens in the adapter. */
   flows: Array<{ name: string; entry: string; symbol?: string }>;
   focus: string | null;
+  /** Release notes. On when the connector says so, or the file lists the `changelog` section. */
+  changelog: {
+    enabled: boolean;
+    tagPattern: string;
+    breaking: { conventional: boolean; labels: string[]; apiSurface: boolean };
+  };
 }
 
 export interface WikiCeiling {
@@ -589,7 +611,90 @@ export function effectiveWikiConfig(
     },
     flows: repo?.flows ?? [],
     focus: repo?.focus?.trim() || null,
+    changelog: {
+      enabled:
+        connectorConfig?.[CHANGELOG_CONFIG_KEY] === 'on' ||
+        (wikiEnabled(connectorConfig) && (repo?.sections ?? []).includes('changelog')),
+      tagPattern: repo?.changelog?.tagPattern?.trim() || DEFAULT_TAG_PATTERN,
+      breaking: {
+        conventional: repo?.changelog?.breaking?.conventional ?? true,
+        labels: repo?.changelog?.breaking?.labels ?? [...DEFAULT_BREAKING_LABELS],
+        apiSurface: repo?.changelog?.breaking?.apiSurface ?? true,
+      },
+    },
   };
+}
+
+// --- Release notes (docs/features/46) ---
+
+export const CHANGELOG_CONFIG_KEY = 'changelog';
+export const DEFAULT_TAG_PATTERN = 'v*';
+export const DEFAULT_BREAKING_LABELS = ['breaking', 'breaking-change'] as const;
+
+/** The changelog's unit keys. `changelog:<tag>` is permanent once a tag is published. */
+export const CHANGELOG_HUB_KEY = 'changelog';
+export const CHANGELOG_UNRELEASED_KEY = 'changelog:unreleased';
+export function changelogTagKey(tag: string): string {
+  return `changelog:tag:${tag}`;
+}
+export function changelogTagOf(key: string): string | null {
+  return key.startsWith('changelog:tag:') ? key.slice('changelog:tag:'.length) : null;
+}
+
+/**
+ * How a change was found to be breaking. The first three are facts the code
+ * can show; `model` is a suspicion, rendered apart as "Possibly breaking" and
+ * never promoted to the confirmed list.
+ */
+export const BREAKING_CHANGE_SOURCES = ['conventional-commit', 'label', 'api-surface', 'model'] as const;
+export type BreakingChangeSource = (typeof BREAKING_CHANGE_SOURCES)[number];
+
+/** The groups a release page lists changes under — our own CHANGELOG.md's, plus Other. */
+export const RELEASE_NOTE_GROUPS = ['breaking', 'added', 'changed', 'fixed', 'removed', 'other'] as const;
+export type ReleaseNoteGroup = (typeof RELEASE_NOTE_GROUPS)[number];
+
+export interface ConventionalCommit {
+  type: string;
+  scope: string | null;
+  /** `!` after the type/scope, or a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer. */
+  breaking: boolean;
+  /** The footer's text when there is one — what a reader must do. */
+  breakingNote: string | null;
+  description: string;
+}
+
+/**
+ * A commit message read as a Conventional Commit, or null when it is not one.
+ * Shared by the API (grouping release notes) and the web (labelling them), so
+ * the two cannot disagree about what `feat(api)!:` means.
+ */
+export function parseConventionalCommit(message: string): ConventionalCommit | null {
+  const [subject = '', ...rest] = message.replace(/\r\n/g, '\n').split('\n');
+  const match = /^(?<type>[a-zA-Z]+)(?:\((?<scope>[^()\n]*)\))?(?<bang>!)?: (?<description>.+)$/.exec(subject.trim());
+  if (!match?.groups) return null;
+  const body = rest.join('\n');
+  // A footer runs until the next trailer — `Token: value` or `Token #value` (git's two forms).
+  const footer = /^BREAKING[ -]CHANGE: *(.+(?:\n(?![A-Za-z-]+(?:: | #)).+)*)/m.exec(body);
+  return {
+    type: match.groups.type.toLowerCase(),
+    scope: match.groups.scope?.trim() || null,
+    breaking: Boolean(match.groups.bang) || Boolean(footer),
+    breakingNote: footer ? footer[1].trim() : null,
+    description: match.groups.description.trim(),
+  };
+}
+
+/** One release as the Releases tab lists it. */
+export interface ReleaseNoteInfo {
+  /** The tag, or null for Unreleased. */
+  tag: string | null;
+  /** The tag's commit date, when the page has been generated. */
+  date: string | null;
+  documentId: string | null;
+  breakingCount: number;
+  suspectedCount: number;
+  /** False for a tag older than the backfill cap: listed, never generated. */
+  generated: boolean;
 }
 
 /** Whether a push to the branch starts a run (docs/features/46). Off unless asked for. */
@@ -726,7 +831,9 @@ export type GithubAccessPurpose =
   | 'boards'
   | 'repo-events'
   /** The repo wiki regenerating on push (docs/features/46). */
-  | 'wiki';
+  | 'wiki'
+  /** Release notes from tags, commits and merged pull requests (docs/features/46). */
+  | 'changelog';
 
 /**
  * Where one requirement stands.

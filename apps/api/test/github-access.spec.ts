@@ -38,6 +38,13 @@ describe('activePurposes', () => {
     expect(push.purposes).toContain('wiki');
     expect(row(permissionRows({ contents: 'read' }, {}, active), 'contents').purposes).toContain('wiki');
   });
+
+  it('marks pull requests and the release event as needed by release notes', () => {
+    const active = activePurposes({ kind: 'codebase', direction: 'pull', driftCheck: 'off', changelog: true });
+    expect(active.has('changelog')).toBe(true);
+    expect(row(eventRows([], [], active), 'release')).toMatchObject({ status: 'missing', active: true });
+    expect(row(permissionRows({ pull_requests: 'read' }, {}, active), 'pull_requests')).toMatchObject({ status: 'granted', needed: 'read' });
+  });
 });
 
 describe('permissionRows', () => {

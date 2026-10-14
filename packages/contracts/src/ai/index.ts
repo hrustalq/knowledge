@@ -869,6 +869,8 @@ export type AiUsageOperation =
    * one narration per page is visible as its own line.
    */
   | 'wiki'
+  /** A release page's summary and its "possibly breaking" suspicions (docs/features/46). */
+  | 'changelog'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.

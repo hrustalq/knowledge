@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, type Connector, type ConnectorRun } from '@prisma/client';
 import {
   connectorKindInfo,
+  CHANGELOG_CONFIG_KEY,
   GITHUB_INSTALLATION_CONFIG_KEY,
   wikiAutoRegenerate,
   wikiEnabled,
@@ -441,7 +442,11 @@ export class ConnectorsService {
   ): Promise<ConnectorRun | null> {
     if (!row.enabled || row.kind !== 'codebase') return null;
     const config = (row.config ?? {}) as Record<string, unknown>;
-    if (!wikiEnabled(config) || wikiAutoRegenerate(config) !== 'on-push') return null;
+    const onPush = wikiEnabled(config) && wikiAutoRegenerate(config) === 'on-push';
+    // A published release is also what writes its release notes page, so it
+    // starts a run whenever release notes are on — push regeneration or not.
+    const releaseNotes = delivery.branch === null && config[CHANGELOG_CONFIG_KEY] === 'on';
+    if (!onPush && !releaseNotes) return null;
 
     if (delivery.branch !== null) {
       const configured = typeof config.branch === 'string' && config.branch.trim() ? config.branch.trim() : null;

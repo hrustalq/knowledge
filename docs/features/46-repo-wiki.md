@@ -234,6 +234,8 @@ archive download and some hashing. Model calls happen only for the units whose
 inputs actually changed.
 
 - **Gated** on `wiki: on` and `wikiAutoRegenerate: on-push`. Both default off.
+  A published release also counts whenever release notes are on, since that
+  delivery is what writes its release page.
 - **Branch filter.** Only a push to the branch the connector reads counts: the
   configured Branch, or the repository's default when Branch is empty, as named
   by the delivery (`repository.default_branch` or `project.default_branch`). A
@@ -292,6 +294,83 @@ written, frontmatter included. Every page carrying frontmatter, which means
 every codebase page, therefore looked locally edited. Under the default
 `manual` conflict policy, every update became a conflict merge request. The
 head is now hashed over its stored bytes, the same text the connector wrote.
+
+## Release notes
+
+The connector's **Release notes** setting (`changelog: on`) turns them on. So
+does listing `changelog` in `wiki.yml` `sections` while the wiki is on. They
+add three kinds of unit under the overview:
+
+| `externalId` | page | version hashes |
+| --- | --- | --- |
+| `changelog` | Releases hub: every matching tag, newest first, with those past the cap marked _not generated_ | tag names + shas + the cap + steering |
+| `changelog:unreleased` | the commits since the newest tag | branch head sha + newest tag sha + steering + effort |
+| `changelog:tag:<tag>` | one release: the commits since the previous tag | the tag's sha **only** |
+
+The issue sketched `changelog:<tag>`. The key is `changelog:tag:<tag>` so that
+a tag named `unreleased` cannot collide with Unreleased.
+
+**A published release never regenerates.** Its version is its commit and
+nothing else: not the steering file, not the effort, so editing `wiki.yml`
+leaves every released page alone. Only a `GENERATOR_VERSION` bump re-derives
+them. A first sync generates the `CHANGELOG_MAX_RELEASES` newest tags; older
+ones are listed on the hub and never generated. Otherwise four hundred tags
+would mean four hundred model calls.
+
+### History (`adapters/repo-history.ts`)
+
+GitHub and GitLab REST, through `connectorFetch` with the archive's credential.
+Any other host fails with a reason, which the hub shows as a warning rather
+than a failed discovery.
+
+- **Tags**: matched against `changelog.tagPattern` (default `v*`) and sorted by
+  version (`v1.10.0` after `v1.9.0`; a pre-release below its release).
+- **Range**: `compare` from the previous tag to this one; the first release
+  reads the head's own history. Each range is capped at
+  `CHANGELOG_MAX_COMMITS_PER_RELEASE`, keeping the newest commits, and a
+  truncation warns.
+- **Requests**: a commit is tied to its pull or merge request by the number in
+  its own message (`(#12)`, `Merge pull request #12`, `See merge request …!12`),
+  never by one request per commit. Labels come from **one search per breaking
+  label** (`is:pr is:merged label:"breaking"`, or GitLab's `labels=`).
+- **Links**: every link is built from the host plus a sha or a number. None is
+  ever taken from a message.
+
+### Grouping and breaking changes (`adapters/changelog.ts`)
+
+Entries fold to one per request, so a merge-commit repository's several commits
+make one line. A merge commit is read by the title under its header. Groups
+mirror our CHANGELOG: Breaking, Added (`feat`), Changed (`perf`, `refactor`,
+`revert`), Fixed (`fix`), Removed (`remove`, `deprecate`), and Other for
+everything that is not a conventional commit.
+
+There are four ways a change is found to be breaking (`BREAKING_CHANGE_SOURCES`):
+
+1. **`conventional-commit`**: `type(scope)!:` or a `BREAKING CHANGE:` footer.
+   `parseConventionalCommit` lives in contracts, so the web and the API read
+   `feat(api)!:` the same way. A footer runs until the next git trailer, in
+   either the `Token: value` or `Token #value` form.
+2. **`label`**: the request carries a label from `changelog.breaking.labels`
+   (default `breaking`, `breaking-change`).
+3. **`api-surface`**: exported symbols at the previous tag vs this one
+   (`downloadRepoArchiveAtTag`, cached per run). Only modules holding a file the
+   range changed are compared, each up to the module page's file cap. A removed
+   export or a changed signature is breaking; an added one is listed under
+   Added. Signatures are compared with whitespace normalised. When the host did
+   not list every changed file, the page says the API was not compared, rather
+   than comparing everything.
+4. **`model`**: at effort `medium` and up, one call (operation `changelog`)
+   writes the 3–5 sentence summary and up to five suspicions. A suspicion must
+   cite a change by the label it was handed (`#12` or a short sha) and must not
+   already be breaking. Anything else is dropped. Suspicions render under
+   **Possibly breaking** and never join the confirmed list. Commit text reaches
+   the model only inside the untrusted wrapper.
+
+Repository text placed on the page is made inert: one line, with no HTML, no
+links or images, and no headings.
+
+Release pages carry `tag`, `date`, `breakingCount` and `suspectedCount` in
+frontmatter. The Releases tab (phase 5) reads those counts from there.
 
 ## Frontmatter
 

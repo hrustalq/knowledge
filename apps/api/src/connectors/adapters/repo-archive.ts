@@ -193,6 +193,27 @@ export function blobUrl(ctx: ConnectorContext, path: string, branch: string): st
  */
 const cache = new WeakMap<object, Promise<RepoArchive>>();
 
+/** Tag archives per run, for release notes' API-surface diff (docs/features/46). */
+const tagCache = new WeakMap<object, Map<string, Promise<RepoArchive>>>();
+
+/**
+ * The repository as it was at a tag. Same download, same filters, same
+ * per-run caching as the branch archive; `branch` in the result is the tag.
+ */
+export function downloadRepoArchiveAtTag(ctx: ConnectorContext, tag: string): Promise<RepoArchive> {
+  let perRun = tagCache.get(ctx.config);
+  if (!perRun) {
+    perRun = new Map();
+    tagCache.set(ctx.config, perRun);
+  }
+  let pending = perRun.get(tag);
+  if (!pending) {
+    pending = download(ctx, tag);
+    perRun.set(tag, pending);
+  }
+  return pending;
+}
+
 export function downloadRepoArchive(ctx: ConnectorContext): Promise<RepoArchive> {
   // The *promise* is cached, not the result: `list()` and `fetch()` can both be
   // in flight before either resolves, and caching the result would download the
@@ -205,14 +226,15 @@ export function downloadRepoArchive(ctx: ConnectorContext): Promise<RepoArchive>
   return pending;
 }
 
-async function download(ctx: ConnectorContext): Promise<RepoArchive> {
+async function download(ctx: ConnectorContext, tag?: string): Promise<RepoArchive> {
   const host = repoHost(ctx);
-  const branch = await resolveBranch(ctx);
+  const branch = tag ?? (await resolveBranch(ctx));
 
+  // GitLab's archive route takes any ref; codeload wants to be told which kind.
   const url =
     host.kind === 'gitlab'
       ? `${host.origin}/${host.owner}/${host.repo}/-/archive/${encodeURIComponent(branch)}/${host.repo}-${branch}.zip`
-      : `https://codeload.github.com/${host.owner}/${host.repo}/zip/refs/heads/${encodeURIComponent(branch)}`;
+      : `https://codeload.github.com/${host.owner}/${host.repo}/zip/refs/${tag ? 'tags' : 'heads'}/${encodeURIComponent(branch)}`;
 
   let res: Response;
   try {
@@ -225,7 +247,8 @@ async function download(ctx: ConnectorContext): Promise<RepoArchive> {
       ctx,
     );
   } catch (err) {
-    throw await explain404(ctx, err, branch);
+    // A missing tag is not a missing branch; the explanation would mislead.
+    throw tag ? err : await explain404(ctx, err, branch);
   }
   const archive = new Uint8Array(await res.arrayBuffer());
   const headSha = zipCommentSha(archive);

@@ -104,7 +104,20 @@ export interface ChatNoticeView {
   button?: ChatLinkButton;
 }
 
-export type ChatView = ChatAnswerView | ChatNoticeView;
+/**
+ * What changed, for a subscribed group (phase 3): one line per page or merge
+ * request — a label, a title and a link, never content. One event or a digest
+ * of many; `more` is the line for what did not fit.
+ */
+export interface ChatUpdatesView {
+  kind: 'updates';
+  heading: string | null;
+  items: Array<{ label: string; title: string; url: string }>;
+  more: string | null;
+  button?: ChatLinkButton;
+}
+
+export type ChatView = ChatAnswerView | ChatNoticeView | ChatUpdatesView;
 
 /** What a call to the platform needs; built per call from the integration row. */
 export interface ChatAdapterContext {

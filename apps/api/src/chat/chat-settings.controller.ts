@@ -7,17 +7,22 @@ import type {
   ChatIntegrationSummary,
   ChatIntegrationTestResponse,
   ChatIntegrationsResponse,
+  ChatSubscriptionEntry,
+  ChatSubscriptionsResponse,
 } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
+import { ChatSubscriptionsService } from './chat-subscriptions.service.js';
 import {
   CreateChatBindingDto,
   CreateChatIntegrationDto,
+  CreateChatSubscriptionDto,
   UpdateChatBindingDto,
   UpdateChatIntegrationDto,
+  UpdateChatSubscriptionDto,
 } from './chat.dto.js';
 
 /**
@@ -31,6 +36,7 @@ export class ChatSettingsController {
   constructor(
     private readonly integrations: ChatIntegrationsService,
     private readonly identities: ChatIdentityService,
+    private readonly subscriptions: ChatSubscriptionsService,
   ) {}
 
   @Get('integrations')
@@ -103,6 +109,40 @@ export class ChatSettingsController {
   @ApiOperation({ summary: 'Stop answering in a group' })
   async removeBinding(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.integrations.removeBinding(id);
+  }
+
+  @Get('bindings/:id/subscriptions')
+  @Access('admin', 'chat-binding')
+  @ApiOperation({ summary: 'What a group is told about: pages published or updated, merge requests opened or merged' })
+  async subscriptionsOf(@Param('id', ParseUUIDPipe) id: string): Promise<ChatSubscriptionsResponse> {
+    return { subscriptions: await this.subscriptions.list(id) };
+  }
+
+  @Post('bindings/:id/subscriptions')
+  @Access('admin', 'chat-binding')
+  @ApiOperation({ summary: 'Tell a group about changes, instantly or as a digest. Only titles and links are sent' })
+  @ApiResponse({ status: 400, description: 'A digest without a window, or a project from another workspace' })
+  createSubscription(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateChatSubscriptionDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ChatSubscriptionEntry> {
+    return this.subscriptions.create(id, dto, principal.userId);
+  }
+
+  @Patch('subscriptions/:id')
+  @Access('admin', 'chat-subscription')
+  @ApiOperation({ summary: 'Change what a group is told about, or how often' })
+  updateSubscription(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateChatSubscriptionDto): Promise<ChatSubscriptionEntry> {
+    return this.subscriptions.update(id, dto);
+  }
+
+  @Delete('subscriptions/:id')
+  @Access('admin', 'chat-subscription')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Stop telling a group about changes' })
+  async removeSubscription(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.subscriptions.remove(id);
   }
 
   @Get('integrations/:id/identities')

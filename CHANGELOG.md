@@ -41,6 +41,14 @@ in the pull request that introduces them — see
   on in **Settings → Glossary**. The draft is written as the person who
   pressed Save, links the pages the answers cited, and lands in the group's
   project (the workspace's first project from a private chat). (#71)
+- A bound chat group can be told what changed. Under each group in
+  **Settings → Chat bots → Notifications**, an admin picks what to report —
+  new pages, page updates, merge requests opened or merged — in one project or
+  the whole workspace, optionally only for pages with certain tags, and whether
+  to post right away or as an hourly, 4-hourly or daily digest. Only titles and
+  links are posted, never page content, and the links still ask readers to
+  sign in. Edits on review branches are not reported until they merge, and
+  each change is posted once, even across restarts. (#71)
 
 ### Operations
 
@@ -58,6 +66,10 @@ in the pull request that introduces them — see
   conversation still drafting after this long is failed and its "Drafting…"
   message says so. Migration `20261014190000_chat_captures` only creates the
   `chat_captures` table; a code rollback is safe. (#71)
+- New env var `CHAT_DIGEST_TICK_MS` (default 60000, minimum 5000): how often
+  chat notification rules are checked, so "right away" means within one tick.
+  Migration `20261015100000_chat_subscriptions` only creates the
+  `chat_subscriptions` table; a code rollback is safe. (#71)
 
 ## [0.20.0] — 2026-10-14
 

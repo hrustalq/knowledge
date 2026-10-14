@@ -1002,6 +1002,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/chat/bindings/{id}/subscriptions",
+      "tag": "chat",
+      "summary": "What a group is told about: pages published or updated, merge requests opened or merged",
+      "role": "admin",
+      "source": "chat-binding",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/chat/bindings/{id}/subscriptions",
+      "tag": "chat",
+      "summary": "Tell a group about changes, instantly or as a digest. Only titles and links are sent",
+      "role": "admin",
+      "source": "chat-binding",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/chat/integrations",
       "tag": "chat",
       "summary": "The workspace’s chat bots. Tokens are never returned, only a hint",
@@ -1107,6 +1127,26 @@
       "summary": "Who is asking to be linked, before confirming",
       "role": null,
       "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/chat/subscriptions/{id}",
+      "tag": "chat",
+      "summary": "Stop telling a group about changes",
+      "role": "admin",
+      "source": "chat-subscription",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/chat/subscriptions/{id}",
+      "tag": "chat",
+      "summary": "Change what a group is told about, or how often",
+      "role": "admin",
+      "source": "chat-subscription",
       "public": false,
       "platformAdmin": false
     },

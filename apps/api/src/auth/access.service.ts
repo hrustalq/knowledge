@@ -350,6 +350,12 @@ export class AccessService {
     return row.workspaceId;
   }
 
+  async workspaceOfChatSubscription(id: string): Promise<string> {
+    const row = await this.prisma.chatSubscription.findUnique({ where: { id }, select: { workspaceId: true } });
+    if (!row) throw new NotFoundException(t('error.chat.subscriptionNotFound', { id }));
+    return row.workspaceId;
+  }
+
   async workspaceOfConnectorRun(runId: string): Promise<string> {
     const run = await this.prisma.connectorRun.findUnique({
       where: { id: runId },

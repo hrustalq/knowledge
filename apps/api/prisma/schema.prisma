@@ -2432,10 +2432,50 @@ model ChatChannelBinding {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  integration ChatIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  integration   ChatIntegration    @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  subscriptions ChatSubscription[]
 
   @@unique([integrationId, externalChatId])
   @@map("chat_channel_bindings")
+}
+
+/// A bound group told about pages and merge requests (issue #71, phase 3).
+/// Delivered by reading `activity_log` past a cursor — durable and
+/// replayable, where the Redis bus would drop whatever a restart missed — and
+/// the cursor moves in one guarded update before anything is sent, so two
+/// sweeps never send the same rows. Only titles and links reach the group.
+model ChatSubscription {
+  id              String    @id @default(uuid()) @db.Uuid
+  bindingId       String    @map("binding_id") @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
+  /// null = the whole workspace.
+  projectId       String?   @map("project_id") @db.Uuid
+  /// string[], folded like tag entity keys (without the `tag:` prefix). Empty = any page.
+  tags            Json      @default("[]")
+  /// CHAT_SUBSCRIPTION_EVENT_KINDS[].
+  eventKinds      Json      @default("[]") @map("event_kinds")
+  /// CHAT_SUBSCRIPTION_DELIVERIES — 'instant' | 'digest'.
+  delivery        String    @default("instant")
+  /// CHAT_DIGEST_MINUTES, when delivery is 'digest'.
+  digestMinutes   Int?      @map("digest_minutes")
+  /// The last activity row read: (created_at, id), the tie-break for rows
+  /// written in the same instant. Starts at the rule's creation — a new rule
+  /// is not a replay of the feed.
+  cursorAt        DateTime  @default(now()) @map("cursor_at") @db.Timestamptz
+  cursorId        String    @default("00000000-0000-0000-0000-000000000000") @map("cursor_id") @db.Uuid
+  /// When a digest is next due; null for instant rules, which are due every tick.
+  nextDueAt       DateTime? @map("next_due_at") @db.Timestamptz
+  lastDeliveredAt DateTime? @map("last_delivered_at") @db.Timestamptz
+  /// The platform's last refusal; null once a message goes through.
+  lastError       String?   @map("last_error")
+  createdBy       String?   @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  binding ChatChannelBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+
+  @@index([bindingId])
+  @@map("chat_subscriptions")
 }
 
 /// A messenger account linked to a person: every answer to it runs as them.

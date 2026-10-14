@@ -4334,6 +4334,42 @@ export interface paths {
         patch: operations["ChatSettingsController_updateBinding"];
         trace?: never;
     };
+    "/v1/chat/bindings/{id}/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a group is told about: pages published or updated, merge requests opened or merged */
+        get: operations["ChatSettingsController_subscriptionsOf"];
+        put?: never;
+        /** Tell a group about changes, instantly or as a digest. Only titles and links are sent */
+        post: operations["ChatSettingsController_createSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/chat/subscriptions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop telling a group about changes */
+        delete: operations["ChatSettingsController_removeSubscription"];
+        options?: never;
+        head?: never;
+        /** Change what a group is told about, or how often */
+        patch: operations["ChatSettingsController_updateSubscription"];
+        trace?: never;
+    };
     "/v1/chat/integrations/{id}/identities": {
         parameters: {
             query?: never;
@@ -6037,6 +6073,36 @@ export interface components {
             answerMode?: "mention" | "all" | "off";
             /** @enum {string|null} */
             locale?: "en" | "ru" | null;
+        };
+        CreateChatSubscriptionDto: {
+            /**
+             * Format: uuid
+             * @description Only pages in this project; null = the whole workspace
+             */
+            projectId?: string | null;
+            /** @description Only pages carrying any of these tags. Omitted or empty = any page */
+            tags?: string[];
+            eventKinds: ("page-published" | "page-updated" | "merge-request-opened" | "merge-request-merged")[];
+            /**
+             * @description Omitted reads as instant
+             * @enum {string}
+             */
+            delivery?: "instant" | "digest";
+            /**
+             * @description Required for a digest
+             * @enum {number|null}
+             */
+            digestMinutes?: 60 | 240 | 1440 | null;
+        };
+        UpdateChatSubscriptionDto: {
+            /** Format: uuid */
+            projectId?: string | null;
+            tags?: string[];
+            eventKinds?: ("page-published" | "page-updated" | "merge-request-opened" | "merge-request-merged")[];
+            /** @enum {string} */
+            delivery?: "instant" | "digest";
+            /** @enum {number|null} */
+            digestMinutes?: 60 | 240 | 1440 | null;
         };
         ChatLinkCodeDto: {
             /** @description The code from the link the bot sent */
@@ -20126,6 +20192,175 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateChatBindingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSettingsController_subscriptionsOf: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSettingsController_createSubscription: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChatSubscriptionDto"];
+            };
+        };
+        responses: {
+            /** @description A digest without a window, or a project from another workspace */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSettingsController_removeSubscription: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ChatSettingsController_updateSubscription: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChatSubscriptionDto"];
             };
         };
         responses: {

@@ -195,11 +195,24 @@ export type I18nTranslations = {
                 "truncated": string;
                 "modulesOmitted": string;
             };
+            "wiki": {
+                "configInvalid": string;
+                "effortClamped": string;
+                "flowEntryMissing": string;
+            };
         };
         "pushVersionMessage": string;
         "syncRevisionMessage": string;
         "stoppedAtMax": string;
         "revertRevisionMessage": string;
+        "wiki": {
+            "section": {
+                "architecture": string;
+                "dataFlow": string;
+                "api": string;
+                "modules": string;
+            };
+        };
     };
     "error": {
         "internal": string;

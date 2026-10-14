@@ -275,6 +275,30 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
         help: 'At most this many module pages, largest first. Defaults to 24.',
       },
       {
+        key: 'wiki',
+        label: 'Repo wiki',
+        kind: 'select',
+        required: false,
+        help: 'Add architecture, data-flow and API pages with diagrams. A .knowledge/wiki.yml file in the repository steers which sections exist.',
+        options: [
+          { value: 'off', label: 'Off' },
+          { value: 'on', label: 'On' },
+        ],
+      },
+      {
+        key: 'wikiEffort',
+        label: 'Wiki effort',
+        kind: 'select',
+        required: false,
+        help: 'Overrides the effort in .knowledge/wiki.yml. Low makes no AI calls; the server may cap it.',
+        options: [
+          { value: '', label: 'From the repository' },
+          { value: 'low', label: 'Low — facts and diagrams only' },
+          { value: 'medium', label: 'Medium — plus a written summary' },
+          { value: 'high', label: 'High — plus reading the code' },
+        ],
+      },
+      {
         key: 'driftCheck',
         label: 'Drift check',
         kind: 'select',
@@ -392,6 +416,166 @@ export const DRIFT_FLAG_PAGES_CONFIG_KEY = 'driftFlagPages';
 export function driftFlagPages(config: Record<string, unknown> | null | undefined): boolean {
   const value = config?.[DRIFT_FLAG_PAGES_CONFIG_KEY];
   return value !== false && value !== 'false';
+}
+
+// ---------------------------------------------------------------------------
+// Repo wiki (docs/features/46)
+// ---------------------------------------------------------------------------
+
+/**
+ * The sections a `codebase` connector can derive when its wiki is on.
+ *
+ * `overview` and `modules` are the two unit kinds the connector has always had
+ * (`overview`, `module:<path>`); the rest are new units keyed by `wikiUnitKey`.
+ * A section is a vocabulary word in `.knowledge/wiki.yml`, and this list is what
+ * the parser, the adapter and the settings UI all check against.
+ */
+export const WIKI_SECTIONS = ['overview', 'architecture', 'modules', 'data-flow', 'api', 'changelog'] as const;
+export type WikiSection = (typeof WIKI_SECTIONS)[number];
+
+/** The sections with a unit key of their own — `wiki:<section>`. */
+export const WIKI_PAGE_SECTIONS = ['architecture', 'data-flow', 'api'] as const;
+export type WikiPageSection = (typeof WIKI_PAGE_SECTIONS)[number];
+
+/**
+ * How much a wiki section may spend.
+ *
+ * - `low` — facts, tables and diagrams. No model call at all.
+ * - `medium` — `low` plus one narration per page. What the connector did before
+ *   the wiki existed.
+ * - `high` — `medium` plus a bounded code-reading loop per section.
+ *
+ * Ordered: the clamp in `effectiveWikiConfig` compares indexes.
+ */
+export const WIKI_EFFORT_LEVELS = ['low', 'medium', 'high'] as const;
+export type WikiEffort = (typeof WIKI_EFFORT_LEVELS)[number];
+
+/** Where the steering file lives, from the repository root — independent of `subdir`. */
+export const WIKI_CONFIG_PATH = '.knowledge/wiki.yml';
+
+/** Connector config keys. Absent means inherit, exactly like every other sparse override here. */
+export const WIKI_CONFIG_KEY = 'wiki';
+export const WIKI_EFFORT_CONFIG_KEY = 'wikiEffort';
+
+/** Hard caps on what a steering file may ask for. A glob list is not a place to put a repository. */
+export const WIKI_MAX_GLOBS = 50;
+export const WIKI_MAX_GLOB_LENGTH = 200;
+export const WIKI_MAX_FLOWS = 12;
+/** Flows seeded from entrypoints when the file declares none. */
+export const WIKI_DEFAULT_FLOWS = 6;
+
+/**
+ * `.knowledge/wiki.yml` as written — every field optional.
+ *
+ * The parse lives API-side (zod over `js-yaml` `JSON_SCHEMA`); this is the
+ * shape it produces, so `effectiveWikiConfig` can be read by the web as well.
+ */
+export interface WikiSteeringConfig {
+  version?: 1;
+  effort?: WikiEffort;
+  include?: string[];
+  exclude?: string[];
+  sections?: WikiSection[];
+  modules?: { max?: number; titles?: Record<string, string> };
+  diagrams?: { architecture?: boolean; class?: boolean; sequence?: boolean; maxNodes?: number };
+  flows?: Array<{ name: string; entry: string; symbol?: string }>;
+  /** Free text from the repository, handed to the model wrapped as untrusted. */
+  focus?: string;
+}
+
+/** One flow the Data flow section draws. `seeded` = derived from an entrypoint, not declared. */
+export interface WikiFlow {
+  name: string;
+  entry: string;
+  symbol?: string;
+  seeded: boolean;
+}
+
+/** What actually applies, after code default ← repo file ← connector override ← env ceiling. */
+export interface EffectiveWikiConfig {
+  /** The connector's `wiki` key. Off reproduces the pre-wiki overview + module pages. */
+  enabled: boolean;
+  sections: WikiSection[];
+  /** Asked and applied side by side: a silent clamp lies about the configuration. */
+  effort: { asked: WikiEffort; applied: WikiEffort; clamped: boolean };
+  include: string[];
+  exclude: string[];
+  modules: { max: number | null; titles: Record<string, string> };
+  diagrams: { architecture: boolean; class: boolean; sequence: boolean; maxNodes: number };
+  /** Declared flows only. Seeding from entrypoints needs the repo map, so it happens in the adapter. */
+  flows: Array<{ name: string; entry: string; symbol?: string }>;
+  focus: string | null;
+}
+
+export interface WikiCeiling {
+  maxEffort: WikiEffort;
+  maxDiagramNodes: number;
+}
+
+/** The sections a repository gets when it says nothing. */
+export const WIKI_DEFAULT_SECTIONS: readonly WikiSection[] = ['overview', 'architecture', 'modules', 'data-flow'];
+
+export function wikiEnabled(config: Record<string, unknown> | null | undefined): boolean {
+  const value = config?.[WIKI_CONFIG_KEY];
+  return value === 'on' || value === true || value === 'true';
+}
+
+function isEffort(value: unknown): value is WikiEffort {
+  return (WIKI_EFFORT_LEVELS as readonly unknown[]).includes(value);
+}
+
+/**
+ * The one predicate for "what does this repository's wiki do".
+ *
+ * Read by the adapter when it derives pages, by the API when it reports the
+ * wiki's state and by the UI when it shows asked vs applied — so the three
+ * cannot disagree about which sections exist or how much they may spend.
+ *
+ * Precedence is code default ← repository file ← connector override, then the
+ * env ceiling clamps effort and diagram size. The ceiling never raises
+ * anything: a file asking for `low` under a `high` ceiling stays `low`.
+ */
+export function effectiveWikiConfig(
+  connectorConfig: Record<string, unknown> | null | undefined,
+  repo: WikiSteeringConfig | null,
+  ceiling: WikiCeiling,
+): EffectiveWikiConfig {
+  const connectorEffort = connectorConfig?.[WIKI_EFFORT_CONFIG_KEY];
+  const asked: WikiEffort = isEffort(connectorEffort) ? connectorEffort : (repo?.effort ?? 'medium');
+  const applied: WikiEffort =
+    WIKI_EFFORT_LEVELS.indexOf(asked) > WIKI_EFFORT_LEVELS.indexOf(ceiling.maxEffort) ? ceiling.maxEffort : asked;
+
+  // `overview` is the hub every other page hangs under; a file that leaves it
+  // out still gets one, because without it the tree has no root.
+  const listed = repo?.sections ?? WIKI_DEFAULT_SECTIONS;
+  const sections = WIKI_SECTIONS.filter((s) => s === 'overview' || listed.includes(s));
+
+  const askedNodes = repo?.diagrams?.maxNodes;
+  return {
+    enabled: wikiEnabled(connectorConfig),
+    sections,
+    effort: { asked, applied, clamped: applied !== asked },
+    include: repo?.include ?? [],
+    exclude: repo?.exclude ?? [],
+    modules: { max: repo?.modules?.max ?? null, titles: repo?.modules?.titles ?? {} },
+    diagrams: {
+      architecture: repo?.diagrams?.architecture ?? true,
+      class: repo?.diagrams?.class ?? true,
+      sequence: repo?.diagrams?.sequence ?? true,
+      maxNodes: askedNodes ? Math.min(askedNodes, ceiling.maxDiagramNodes) : ceiling.maxDiagramNodes,
+    },
+    flows: repo?.flows ?? [],
+    focus: repo?.focus?.trim() || null,
+  };
+}
+
+/** `wiki:architecture` — a section's `connector_links` key, and therefore permanent. */
+export function wikiUnitKey(section: WikiPageSection): string {
+  return `wiki:${section}`;
+}
+
+export function isWikiUnitKey(key: string): boolean {
+  return (WIKI_PAGE_SECTIONS as readonly string[]).some((s) => key === `wiki:${s}`);
 }
 
 // ---------------------------------------------------------------------------

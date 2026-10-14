@@ -187,7 +187,7 @@ describe('RepoSnapshotService', () => {
 
   it('downloads once per TTL and reloads when the connector row changes', async () => {
     download.mockReset();
-    download.mockResolvedValue({ files: files({ 'a.ts': 'x' }), skipped: { oversize: 0, binary: 0 }, branch: 'main' });
+    download.mockResolvedValue({ files: files({ 'a.ts': 'x' }), skipped: { oversize: 0, binary: 0 }, branch: 'main', headSha: null });
     const rows = [row('c1')];
     const svc = service({ rows });
 
@@ -206,7 +206,7 @@ describe('RepoSnapshotService', () => {
 
   it('refuses another workspace, a wrong kind and a disabled connector on every open', async () => {
     download.mockReset();
-    download.mockResolvedValue({ files: files({}), skipped: { oversize: 0, binary: 0 }, branch: 'main' });
+    download.mockResolvedValue({ files: files({}), skipped: { oversize: 0, binary: 0 }, branch: 'main', headSha: null });
     const svc = service({
       rows: [row('c1'), row('c2', { kind: 'notion' }), row('c3', { enabled: false })],
     });
@@ -222,7 +222,7 @@ describe('RepoSnapshotService', () => {
     download.mockReset();
     download
       .mockRejectedValueOnce(new Error('404'))
-      .mockResolvedValue({ files: files({ 'a.ts': 'x' }), skipped: { oversize: 0, binary: 0 }, branch: 'main' });
+      .mockResolvedValue({ files: files({ 'a.ts': 'x' }), skipped: { oversize: 0, binary: 0 }, branch: 'main', headSha: null });
     const svc = service({ rows: [row('c1')] });
     await expect(svc.open('c1', 'w1')).rejects.toThrow('404');
     await expect(svc.open('c1', 'w1')).resolves.toMatchObject({ branch: 'main' });
@@ -235,6 +235,7 @@ describe('RepoSnapshotService', () => {
       files: files({ 'big.txt': 'x'.repeat(600) }),
       skipped: { oversize: 0, binary: 0 },
       branch: ctx.connectorId,
+      headSha: null,
     }));
     const svc = service({ rows: [row('c1'), row('c2')], maxBytes: 1_000 });
     await svc.open('c1', 'w1');

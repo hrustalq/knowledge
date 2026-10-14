@@ -32,10 +32,23 @@
       "unparsed": "Не удалось разобрать файлов в этом модуле: {count}. Они пропущены.",
       "truncated": "В модуле {total} файлов исходного кода; состав API прочитан по первым {limit}.",
       "modulesOmitted": "Модулей сверх заданного предела: {count}. Они не документированы — увеличьте предел, чтобы включить их."
+    },
+    "wiki": {
+      "configInvalid": "Файл .knowledge/wiki.yml в репозитории проигнорирован, применены настройки по умолчанию: {errors}",
+      "effortClamped": "Вики запросила уровень усилий {asked}, но этот сервер допускает не выше {applied}, поэтому использован {applied}.",
+      "flowEntryMissing": "Входного файла потока {entry} нет в репозитории, поэтому этот поток пропущен."
     }
   },
   "pushVersionMessage": "Обновлено из базы знаний",
   "syncRevisionMessage": "Синхронизировано из коннектора",
   "stoppedAtMax": "Остановлено после {max} элементов (CONNECTOR_SYNC_MAX_ITEMS).",
-  "revertRevisionMessage": "Импорт из коннектора отменён"
+  "revertRevisionMessage": "Импорт из коннектора отменён",
+  "wiki": {
+    "section": {
+      "architecture": "Архитектура",
+      "dataFlow": "Потоки данных",
+      "api": "Публичный API",
+      "modules": "Модули ({count})"
+    }
+  }
 }

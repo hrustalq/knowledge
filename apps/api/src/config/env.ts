@@ -469,6 +469,8 @@ export const envSchema = z.object({
    */
   WIKI_MAX_EFFORT: z.enum(['low', 'medium', 'high']).default('medium'),
   WIKI_DIAGRAM_MAX_NODES: z.coerce.number().int().min(4).max(200).default(40),
+  /** Code-tool calls one wiki section may make at effort `high`; lowers, never raises, the agent's own budget. */
+  WIKI_HIGH_EFFORT_MAX_TOOL_CALLS: z.coerce.number().int().min(1).max(64).default(24),
 
   /**
    * Where this API is reachable from a browser.

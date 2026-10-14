@@ -12,13 +12,13 @@ and with it off the sync output is exactly what feature 27 produced.
 
 ## Units, and why the old keys stay
 
-| `externalId`        | page                                                           | version hashes                                         |
-| ------------------- | -------------------------------------------------------------- | ------------------------------------------------------ |
-| `overview` (kept)   | the hub: a section index, then modules, languages, entrypoints | manifests + README + module list + sections + steering |
-| `wiki:architecture` | components, how the modules depend on each other               | manifests + module names/entrypoints + steering        |
-| `wiki:data-flow`    | one entry per flow: its entry file, signatures, what it imports | each flow's entry file + the flow list + steering      |
-| `wiki:api`          | exported symbols by module                                     | exported signatures only + steering                    |
-| `module:<path>` (kept) | one per module, unchanged                                   | the module's files + steering                          |
+| `externalId`           | page                                                            | version hashes                                         |
+| ---------------------- | --------------------------------------------------------------- | ------------------------------------------------------ |
+| `overview` (kept)      | the hub: a section index, then modules, languages, entrypoints  | manifests + README + module list + sections + steering |
+| `wiki:architecture`    | components, how the modules depend on each other                | manifests + module names/entrypoints + steering        |
+| `wiki:data-flow`       | one entry per flow: its entry file, signatures, what it imports | each flow's entry file + the flow list + steering      |
+| `wiki:api`             | exported symbols by module                                      | exported signatures only + steering                    |
+| `module:<path>` (kept) | one per module, unchanged                                       | the module's files + steering                          |
 
 `overview` and `module:<path>` are **kept, never renamed**. They are
 `connector_links` keys, and renaming one would orphan every live link and
@@ -60,14 +60,14 @@ is treated like any other untrusted bytes:
 
 ```yaml
 version: 1
-effort: medium            # low | medium | high
+effort: medium # low | medium | high
 include: ["apps/**", "packages/**"]
 exclude: ["**/*.spec.ts", "**/generated/**"]
 sections: [overview, architecture, modules, data-flow, api]
 modules:
-  max: 24                 # wins over the connector's module limit
+  max: 24 # wins over the connector's module limit
   titles: { "apps/api": "API server" }
-flows:                    # what the Data flow page traces
+flows: # what the Data flow page traces
   - name: Document upload
     entry: apps/api/src/documents/documents.controller.ts
     symbol: finalize
@@ -88,7 +88,7 @@ cannot disagree about which sections exist or how much they may spend.
   and the clamp is reported as `{ asked, applied, clamped }` with a run warning
   (`effortClamped`), because a silent clamp lies about the configuration.
 - **Sections** — the file's list, or `overview, architecture, modules,
-  data-flow`. `overview` is always kept: without it the tree has no root.
+data-flow`. `overview` is always kept: without it the tree has no root.
 - **Diagram size** — the file may lower `WIKI_DIAGRAM_MAX_NODES`, never raise it.
 - **`include` / `exclude`** — compiled with the code tools' glob translator
   (`common/glob.ts`, lifted out of feature 31 so the adapters need not import
@@ -98,11 +98,11 @@ cannot disagree about which sections exist or how much they may spend.
 
 ### Effort
 
-| effort   | what it spends                                                       |
-| -------- | -------------------------------------------------------------------- |
-| `low`    | nothing. Facts and tables only; `narrate()` returns before any check |
-| `medium` | one narration per page: feature 27's behaviour                       |
-| `high`   | medium + a bounded code-reading loop per section (phase 2)           |
+| effort   | what it spends                                                                        |
+| -------- | ------------------------------------------------------------------------------------- |
+| `low`    | nothing. Facts and tables only; `narrate()` returns before any check                  |
+| `medium` | one narration per page: feature 27's behaviour                                        |
+| `high`   | medium + a code-reading loop per section, capped by `WIKI_HIGH_EFFORT_MAX_TOOL_CALLS` |
 
 No owner means no spend, exactly as feature 27. Effort `low` is checked first,
 so it holds even when an owner and a model exist.
@@ -122,6 +122,104 @@ config. A declared entry that is not in the archive is skipped with
 and never concatenated into the system prompt. A flow's `symbol` enters the
 facts only once the parser has found a declaration by that name.
 
+## Diagrams
+
+Pages store Mermaid source; the web renders it (`MarkdownView.vue`, `securityLevel:
+'strict'` + DOMPurify). **Only `wiki-diagrams.ts` writes Mermaid**, and nothing
+from the repository or a model is ever spliced in as syntax:
+
+- every label goes through `mermaidText`, which is a **whitelist**: letters,
+  digits and a short punctuation list survive, and everything else becomes a
+  space. `%%`, `click`, `#35;`, quotes, backticks and HTML are each a character
+  a blacklist would have had to know about. Labels are capped at 60 characters;
+- node ids are ours (`m0`, `x1`, `C2`, `P3`);
+- supertypes that are not identifier-shaped are not drawn at all;
+- `lintMermaid` checks the output against the handful of line shapes the
+  builders emit. A failure drops that diagram and warns `diagramInvalid`; the
+  page still stages.
+
+| Diagram           | Where                         | Built from                                                                                                                                                                   |
+| ----------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---- |
+| `flowchart LR`    | Architecture                  | modules as boxes, cross-module imports as arrows, external packages used by more than one module as dashed nodes. Modules first in the node budget, the most connected first |
+| `classDiagram`    | each module page (`## Types`) | exported classes, interfaces, structs and traits with members, `extends` (`<                                                                                                 | --`) and `implements` (`< | ..`) |
+| `sequenceDiagram` | Data flow, one per flow       | the model's **JSON** (`sequenceSchema`: participants and messages), rendered here. At effort `low`, there is no sequence diagram                                             |
+
+`WIKI_DIAGRAM_MAX_NODES` caps every chart; `wiki.yml` `diagrams.maxNodes` may
+lower it, and `diagrams.{architecture,class,sequence}` turn each kind off.
+
+### Edges
+
+`import-resolver.ts` resolves each file's imports against the module map:
+
+- **Bare specifiers** match a manifest name, exactly or as a subpath
+  (`@knowledge/contracts/core` → `packages/contracts`). This works in every
+  ecosystem whose manifests carry a name.
+- **Relative specifiers** are resolved as paths, but only for
+  TypeScript/JavaScript, where the specifier _is_ a path. The resolver tries the
+  NodeNext `./x.js` → `x.ts` spelling, an omitted extension and `/index`.
+- Anything else is external. The architecture page says so when the repository
+  has other languages.
+
+Manifest-declared dependencies between modules are merged in.
+
+The architecture version hashes `edgeDigest`: the edge **set**, without counts.
+One more call between two modules that already depend on each other draws no
+new arrow, so it re-derives nothing.
+
+### Inheritance
+
+`CodeSymbol` gained optional `extends`, `implements` and `members` (capped at
+12), read per grammar:
+
+| Language                | `extends`                                                                  | `implements`                          |
+| ----------------------- | -------------------------------------------------------------------------- | ------------------------------------- |
+| TypeScript / JavaScript | `class_heritage` → `extends_clause`; interfaces from `extends_type_clause` | `implements_clause`                   |
+| Java                    | `superclass`; interfaces from `extends_interfaces`                         | `super_interfaces`                    |
+| Python                  | positional bases (`metaclass=` skipped)                                    | —                                     |
+| Rust                    | trait bounds                                                               | `impl Trait for Type`, same file only |
+| Go                      | embedded fields (a field with no name)                                     | —                                     |
+
+The shapes were read off real trees, and the spec asserts them.
+
+### Flows and sequence diagrams
+
+A flow's horizon is its entry plus the files it reaches within two hops
+(`reachableFiles`, at most 12):
+
+- relative imports resolved to files;
+- a bare import of a sibling module resolved to that module's first
+  entrypoint.
+
+The Data flow version hashes exactly those files. The sequence prompt
+(`SEQUENCE_CONTRACT`, operation `wiki`) is shown their outlines, which are
+facts, not source. Declared flow names reach the model only inside the
+untrusted wrapper.
+
+## Effort `high`
+
+Each page's narration becomes a read: `runCodeReadingLoop`
+(`agents/code-reading-loop.ts`, the archaeologist's loop, lifted) with the four
+code tools from `code-research/code-tools.ts`, run over the archive this sync
+already holds. The `connectorId` parameter is dropped from the tool
+definitions, because the adapter decides which repository is read. The tool
+budget is the agent's, lowered to `WIKI_HIGH_EFFORT_MAX_TOOL_CALLS`. An agent
+without tool capability falls back to one plain call. Billed as `wiki`.
+
+## Archaeologist interplay
+
+The archaeologist (feature 31) reads the pages under the connector destination
+as "declared". Two changes keep it useful once a wiki exists:
+
+- **A generated page's file listing is not a declaration.**
+  `declaredText` drops the `- [\`path\`](url)`lines from pages whose
+frontmatter says`generated: repo-wiki | codebase-connector`. Otherwise every
+  file a module page lists would look documented.
+- **A module's entry file is covered at module granularity.**
+  `wikiModulePaths` reads `modulePaths` from the wiki's pages, except the
+  hub's. `isWikiCovered` skips a module's `index`/`main`/`lib`/`mod`/… file,
+  since the module page describes its public surface. Logic files below it
+  stay candidates.
+
 ## Frontmatter
 
 Wiki pages carry `generated: 'repo-wiki'`, `unit`, `headSha` and
@@ -132,12 +230,18 @@ feature 27's `generated: 'codebase-connector'`.
 
 ## Surface
 
-| Piece                                         | Where                                               |
-| --------------------------------------------- | --------------------------------------------------- |
-| Vocabularies, `effectiveWikiConfig`, unit keys | `packages/contracts/src/connectors/index.ts`        |
-| Steering parse, path filter                   | `apps/api/src/connectors/adapters/wiki-steering.ts` |
-| Units, versions, section pages                | `apps/api/src/connectors/adapters/codebase.adapter.ts` |
-| Include/exclude, module titles                | `repo-map.ts` `buildRepoMap`                        |
-| Head commit                                   | `repo-archive.ts` `zipCommentSha`                   |
-| Env                                           | `WIKI_MAX_EFFORT`, `WIKI_DIAGRAM_MAX_NODES`         |
-| Spec                                          | `apps/api/test/repo-wiki.spec.ts`                   |
+| Piece                                          | Where                                                                              |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Vocabularies, `effectiveWikiConfig`, unit keys | `packages/contracts/src/connectors/index.ts`                                       |
+| Steering parse, path filter                    | `apps/api/src/connectors/adapters/wiki-steering.ts`                                |
+| Units, versions, section pages                 | `apps/api/src/connectors/adapters/codebase.adapter.ts`                             |
+| Include/exclude, module titles                 | `repo-map.ts` `buildRepoMap`                                                       |
+| Head commit                                    | `repo-archive.ts` `zipCommentSha`                                                  |
+| Diagrams, label escaping, lint                 | `adapters/wiki-diagrams.ts`                                                        |
+| Import → module edges, flow horizon            | `adapters/import-resolver.ts`                                                      |
+| Inheritance and members                        | `adapters/code-symbols.ts` `typeFacts`                                             |
+| Code tools over any snapshot                   | `code-research/code-tools.ts`                                                      |
+| The reading loop                               | `agents/code-reading-loop.ts`                                                      |
+| Archaeologist coverage                         | `agents/archaeology.ts` `declaredText`, `isWikiCovered`                            |
+| Env                                            | `WIKI_MAX_EFFORT`, `WIKI_DIAGRAM_MAX_NODES`, `WIKI_HIGH_EFFORT_MAX_TOOL_CALLS`     |
+| Specs                                          | `test/repo-wiki.spec.ts`, `test/wiki-diagrams.spec.ts`, `test/archaeology.spec.ts` |

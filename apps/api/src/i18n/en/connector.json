@@ -36,7 +36,8 @@
     "wiki": {
       "configInvalid": "The repository's .knowledge/wiki.yml was ignored and the defaults applied: {errors}",
       "effortClamped": "The wiki asked for effort {asked}, but this server allows at most {applied}, so it ran at {applied}.",
-      "flowEntryMissing": "The flow entry file {entry} is not in the repository, so that flow was left out."
+      "flowEntryMissing": "The flow entry file {entry} is not in the repository, so that flow was left out.",
+      "diagramInvalid": "A diagram could not be drawn safely and was left out; the rest of the page is unchanged."
     }
   },
   "pushVersionMessage": "Updated from the knowledge base",

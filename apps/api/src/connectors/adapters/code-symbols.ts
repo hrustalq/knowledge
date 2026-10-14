@@ -26,7 +26,20 @@ export interface CodeSymbol {
   signature: string;
   /** Part of the module's public surface, by that language's own rule. */
   exported: boolean;
+  /**
+   * Type-like declarations only (docs/features/46): the supertypes it names, as
+   * written with type arguments stripped — `extends`/superclasses/trait bounds/
+   * Go embedding in `extends`, `implements` clauses and Rust `impl Trait for`
+   * (same file) in `implements`. Absent when the declaration names none.
+   */
+  extends?: string[];
+  implements?: string[];
+  /** Member names — methods and fields — capped; what a class diagram draws in the box. */
+  members?: string[];
 }
+
+/** Members kept per type. A class diagram box with forty rows is a table nobody reads. */
+const MAX_MEMBERS = 12;
 
 /** Declaration node type -> the kind we report it as, per language family. */
 const ECMA_KINDS: Record<string, string> = {
@@ -85,6 +98,7 @@ export function extractSymbols(language: CodeLanguage, tree: Tree): CodeSymbol[]
         collectGeneric(node, out);
     }
   }
+  if (language === 'rust') attachRustImpls(tree, out);
   return out;
 }
 
@@ -195,7 +209,131 @@ function firstString(node: Node): string | null {
 
 function push(out: CodeSymbol[], kind: string, name: string, node: Node, exported: boolean): void {
   if (!name) return;
-  out.push({ kind, name, signature: signatureOf(node), exported });
+  out.push({ kind, name, signature: signatureOf(node), exported, ...typeFacts(node) });
+}
+
+// --- inheritance and members (docs/features/46) ---
+
+/** `Base<T>` -> `Base`, `pkg.Base` stays. What a diagram edge points at is the name. */
+function typeName(node: Node | null | undefined): string | null {
+  const text = node?.text.replace(/^\*/, '').split(/[<[(]/)[0].trim();
+  return text && /^[\p{L}_$][\p{L}\p{N}_$.:]*$/u.test(text) ? text : null;
+}
+
+function names(nodes: Array<Node | null | undefined>): string[] {
+  return [...new Set(nodes.map(typeName).filter((n): n is string => !!n))];
+}
+
+function children(node: Node | null | undefined, type?: string): Node[] {
+  return (node?.namedChildren ?? []).filter((c): c is Node => !!c && (!type || c.type === type));
+}
+
+/**
+ * Supertypes and members, for the declaration types that have them.
+ *
+ * Read off real trees (the shapes are in the spec), per grammar, because they
+ * disagree: TypeScript nests `extends_clause` under `class_heritage`, Java hangs
+ * `superclass` and `super_interfaces` off fields, Python lists bases as call
+ * arguments, Go embeds a type as a field with no name.
+ */
+function typeFacts(node: Node): Pick<CodeSymbol, 'extends' | 'implements' | 'members'> {
+  const facts: Pick<CodeSymbol, 'extends' | 'implements' | 'members'> = {};
+  let ext: string[] = [];
+  let impl: string[] = [];
+  let members: string[] = [];
+
+  switch (node.type) {
+    case 'class_declaration':
+    case 'abstract_class_declaration': {
+      // TypeScript / JavaScript
+      const heritage = children(node, 'class_heritage')[0];
+      if (heritage) {
+        ext = names(children(heritage, 'extends_clause').map((c) => c.childForFieldName('value') ?? c.namedChildren[0]));
+        impl = names(children(heritage, 'implements_clause').flatMap((c) => children(c)));
+      }
+      // Java
+      const superclass = node.childForFieldName('superclass');
+      if (superclass) ext = names(children(superclass));
+      const interfaces = node.childForFieldName('interfaces');
+      if (interfaces) impl = names(children(interfaces).flatMap((c) => (c.type === 'type_list' ? children(c) : [c])));
+      members = memberNames(node.childForFieldName('body'));
+      break;
+    }
+    case 'interface_declaration': {
+      ext = names([
+        ...children(node, 'extends_type_clause').flatMap((c) => children(c)),
+        ...children(node, 'extends_interfaces').flatMap((c) => children(c).flatMap((l) => children(l))),
+      ]);
+      members = memberNames(node.childForFieldName('body'));
+      break;
+    }
+    case 'class_definition': {
+      // Python: bases are positional arguments; `metaclass=` is a keyword and not a base.
+      ext = names(children(node.childForFieldName('superclasses')).filter((c) => c.type !== 'keyword_argument'));
+      members = memberNames(node.childForFieldName('body'));
+      break;
+    }
+    case 'struct_item':
+      members = memberNames(node.childForFieldName('body'));
+      break;
+    case 'trait_item':
+      ext = names(children(node.childForFieldName('bounds')));
+      members = memberNames(node.childForFieldName('body'));
+      break;
+    case 'type_declaration': {
+      // Go: `type S struct { Base; x int }` — a field with no name is an embedding.
+      const type = children(node, 'type_spec')[0]?.childForFieldName('type');
+      if (type?.type === 'struct_type') {
+        const fields = children(children(type, 'field_declaration_list')[0], 'field_declaration');
+        ext = names(fields.filter((f) => !f.childForFieldName('name')).map((f) => f.childForFieldName('type')));
+        members = fields.flatMap((f) => (f.childForFieldName('name') ? [f.childForFieldName('name')!.text] : []));
+      } else if (type?.type === 'interface_type') {
+        ext = names(children(type, 'type_elem').flatMap((e) => children(e)));
+        members = children(type, 'method_elem').flatMap((m) => (m.childForFieldName('name') ? [m.childForFieldName('name')!.text] : []));
+      }
+      break;
+    }
+    default:
+      return facts;
+  }
+
+  if (ext.length > 0) facts.extends = ext;
+  if (impl.length > 0) facts.implements = impl;
+  if (members.length > 0) facts.members = [...new Set(members)].slice(0, MAX_MEMBERS);
+  return facts;
+}
+
+/** The names declared directly inside a type's body, in source order. */
+function memberNames(body: Node | null | undefined): string[] {
+  const out: string[] = [];
+  for (const child of children(body)) {
+    const inner = child.type === 'decorated_definition' ? (child.childForFieldName('definition') ?? child) : child;
+    const name = inner.childForFieldName('name')?.text;
+    if (name) {
+      out.push(name);
+      continue;
+    }
+    // Java fields keep the name on a declarator.
+    const declarator = children(inner, 'variable_declarator')[0]?.childForFieldName('name')?.text;
+    if (declarator) out.push(declarator);
+  }
+  return out;
+}
+
+/**
+ * Rust says what a type implements in a separate `impl Trait for Type` block.
+ * Attached to the type when both are in the same file; a trait implemented in
+ * another file is not knowable from this one, and is simply absent.
+ */
+function attachRustImpls(tree: Tree, out: CodeSymbol[]): void {
+  for (const node of children(tree.rootNode, 'impl_item')) {
+    const trait = typeName(node.childForFieldName('trait'));
+    const target = typeName(node.childForFieldName('type'));
+    if (!trait || !target) continue;
+    const symbol = out.find((s) => s.name === target && (s.kind === 'struct' || s.kind === 'enum'));
+    if (!symbol) continue;
+    symbol.implements = [...new Set([...(symbol.implements ?? []), trait])];
+  }
 }
 
 /**

@@ -196,14 +196,31 @@ describe('zipCommentSha', () => {
 
 // --- the adapter ---
 
-const chat = vi.fn(async () => 'Prose written by the model.');
+const chat = vi.fn(async (_call: unknown, _messages: unknown, opts?: { json?: boolean }) =>
+  opts?.json
+    ? JSON.stringify({
+        participants: [{ name: 'apps/api/src/main.ts' }, { name: 'express' }],
+        messages: [{ from: 'apps/api/src/main.ts', to: 'express', label: 'listen()' }],
+      })
+    : 'Prose written by the model.',
+);
+const runWithTools = vi.fn(async (call: { config: { maxToolCalls: number } }) => ({
+  content: `Read the code with ${call.config.maxToolCalls} calls.`,
+  trace: [],
+}));
 
 function adapter(maxEffort: 'low' | 'medium' | 'high' = 'medium') {
-  const values = { WIKI_MAX_EFFORT: maxEffort, WIKI_DIAGRAM_MAX_NODES: 40 } as Record<string, unknown>;
+  const values = {
+    WIKI_MAX_EFFORT: maxEffort,
+    WIKI_DIAGRAM_MAX_NODES: 40,
+    WIKI_HIGH_EFFORT_MAX_TOOL_CALLS: 5,
+  } as Record<string, unknown>;
   return new CodebaseAdapter(
     new TreeSitterService(),
-    { resolve: async () => ({ enabled: true, config: { enabled: true }, instructions: '' }) } as never,
-    { chat } as never,
+    {
+      resolve: async () => ({ enabled: true, config: { enabled: true, maxToolCalls: 24 }, instructions: '', missing: [] }),
+    } as never,
+    { chat, runWithTools } as never,
     { assertWithinBudget: async () => undefined } as never,
     { get: (key: string) => values[key] } as never,
   );
@@ -251,6 +268,7 @@ const versions = (refs: Array<{ externalId: string; version?: string }>) =>
 describe('CodebaseAdapter with the wiki', () => {
   beforeEach(() => {
     chat.mockClear();
+    runWithTools.mockClear();
     download.mockReset();
   });
 
@@ -385,5 +403,65 @@ describe('CodebaseAdapter with the wiki', () => {
       headSha: 'b'.repeat(40),
       modulePaths: ['packages/core'],
     });
+  });
+
+  it('draws the architecture from import edges, and redraws only when an edge changes', async () => {
+    serve(REPO);
+    const c = ctx({ wiki: 'on', wikiEffort: 'low' });
+    const page = await adapter().fetch(c, { externalId: wikiUnitKey('architecture'), title: 'x' });
+    expect(page.markdown).toMatch(/```mermaid\nflowchart LR[\s\S]*-->[\s\S]*```/);
+    expect(page.warnings).toEqual([]);
+
+    const before = versions(await units(adapter(), ctx({ wiki: 'on' })));
+    // A new import of a sibling module is a new arrow.
+    serve({
+      ...REPO,
+      'packages/core/package.json': JSON.stringify({ name: '@demo/core', dependencies: { express: '4' } }),
+      'packages/core/src/index.ts': `import '@demo/api';\n${REPO['packages/core/src/index.ts']}`,
+      'apps/api/package.json': JSON.stringify({ name: '@demo/api', dependencies: { '@demo/core': '1', express: '4' } }),
+    });
+    const after = versions(await units(adapter(), ctx({ wiki: 'on' })));
+    expect(after['wiki:architecture']).not.toBe(before['wiki:architecture']);
+  });
+
+  it('puts a class diagram on a module page that exports types', async () => {
+    serve({ ...REPO, 'apps/api/src/users.ts': 'export class UsersService extends Base implements Repo {\n  find(): string { return "a"; }\n}\n' });
+    const page = await adapter().fetch(ctx({ wiki: 'on', wikiEffort: 'low' }), { externalId: 'module:apps/api', title: 'x' });
+    expect(page.markdown).toMatch(/## Types\n\n```mermaid\nclassDiagram[\s\S]*UsersService[\s\S]*<\|--[\s\S]*<\|\.\./);
+  });
+
+  it('draws flows as sequence diagrams from model JSON at medium, and not at low', async () => {
+    serve(REPO);
+    const medium = await adapter().fetch(ctx({ wiki: 'on' }), { externalId: wikiUnitKey('data-flow'), title: 'x' });
+    expect(medium.markdown).toMatch(/```mermaid\nsequenceDiagram\n {2}participant P0 as apps\/api\/src\/main\.ts/);
+    const jsonCall = chat.mock.calls.find((call) => (call[2] as { json?: boolean } | undefined)?.json);
+    expect((jsonCall?.[0] as { operation: string }).operation).toBe('wiki');
+
+    chat.mockClear();
+    const low = await adapter().fetch(ctx({ wiki: 'on', wikiEffort: 'low' }), { externalId: wikiUnitKey('data-flow'), title: 'x' });
+    expect(low.markdown).not.toContain('sequenceDiagram');
+    expect(chat).not.toHaveBeenCalled();
+  });
+
+  it('drops a sequence diagram the model answered badly, with a warning', async () => {
+    serve(REPO);
+    chat.mockImplementationOnce(async () => 'Prose.').mockImplementationOnce(async () => 'not json at all');
+    const page = await adapter().fetch(ctx({ wiki: 'on' }), { externalId: wikiUnitKey('data-flow'), title: 'x' });
+    expect(page.markdown).not.toContain('sequenceDiagram');
+    expect(page.warnings.join('\n')).toContain('could not be drawn safely');
+  });
+
+  it('reads the code at effort high, under the wiki tool budget', async () => {
+    serve(REPO);
+    const page = await adapter('high').fetch(ctx({ wiki: 'on', wikiEffort: 'high' }), { externalId: 'overview', title: 'x' });
+    expect(page.markdown.startsWith('Read the code with 5 calls.')).toBe(true);
+    const [call, , tools] = runWithTools.mock.calls[0] as unknown as [
+      { operation: string },
+      unknown,
+      Array<{ function: { name: string; parameters: { properties: Record<string, unknown> } } }>,
+    ];
+    expect(call.operation).toBe('wiki');
+    expect(tools.map((t) => t.function.name).sort()).toEqual(['code_outline', 'code_read', 'code_search', 'code_tree']);
+    expect(tools.every((t) => !('connectorId' in t.function.parameters.properties))).toBe(true);
   });
 });

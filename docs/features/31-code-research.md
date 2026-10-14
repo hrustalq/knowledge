@@ -29,7 +29,7 @@ and are one feature.
 Feature 27 turns a repository into pages — a hub and one page per module,
 derived from tree-sitter facts with one narration each. Feature 30 made
 connecting a repository a picker instead of a URL and a token. What neither
-gave the platform is a way to *look* at a repository on demand. The archive is
+gave the platform is a way to _look_ at a repository on demand. The archive is
 downloaded per sync run, held for the life of that run, and dropped; the
 assistant's every tool pointed inward, at pages, and a question whose answer
 was in the source could only be answered by a page somebody had already written
@@ -145,7 +145,7 @@ something other than pages.
 three of them are queries a program answers with no model:
 
 - `snapshot` opens the repository through the same cache the chat tools use.
-- `docs` gathers what is *already declared*: the repository's own documents
+- `docs` gathers what is _already declared_: the repository's own documents
   (README first, then anything under a docs directory or with a documenting
   name, then the rest — the order matters because the digest is capped, and
   when the cap bites it should bite the file least likely to be an overview),
@@ -156,7 +156,7 @@ three of them are queries a program answers with no model:
   branching constructs per hundred lines, weighted by domain words beside them
   (`validate`, `threshold`, `price`, `permission`, `expire`, `retry`…) and by
   size — after dropping tests, fixtures, config, generated code and hidden
-  trees. The top sixty are outlined, and a file is *covered* when the declared
+  trees. The top sixty are outlined, and a file is _covered_ when the declared
   text mentions its path, its own filename (if specific enough), or two of the
   names it exports. Two, because a single common word appears in prose about
   anything; two exported names together are a page that is about this file.
@@ -202,16 +202,34 @@ scope) finds its repository. Whatever `connectorId` the model writes into a
 tool call, the executor overrides it with the run's — the loop reads one
 repository.
 
+### Shared since feature 46
+
+Two pieces of this feature are now shared with the repo wiki (feature 46),
+which reads its own archive at effort `high`:
+
+- **`code-tools.ts`** holds the four tools over a snapshot (`SnapshotCodeTools`,
+  `codeToolDefinitions`) and the pure helpers. `CodeResearchService` still owns
+  access and snapshot resolution, and delegates the reading. The caps, the
+  untrusted wrapping and the results are the same for both callers.
+- **`agents/code-reading-loop.ts`** is the archaeologist's per-file loop:
+  - the agent's tool budget, which a caller may lower but never raise;
+  - the toolless fallback for an agent that cannot call tools;
+  - the `readPaths` record of what was actually opened.
+
+  It is a leaf. The tools and their executor arrive as arguments, so the
+  connector adapters can use it without importing this module, which imports
+  them.
+
 ## Surface
 
-| tool           | arguments                                                   | returns                                                            |
-| -------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| `code_tree`    | `connectorId`, `path?`, `depth?` (1–4, default 2)            | directories with file counts and sizes, files with size and language; capped at 400 entries |
-| `code_search`  | `connectorId`, `query`, `regex?`, `caseSensitive?`, `glob?`, `limit?` (≤50) | matching lines grouped by file, with line numbers          |
-| `code_outline` | `connectorId`, `path`                                        | the file's declarations with signatures and exports, and its imports |
-| `code_read`    | `connectorId`, `path`, `startLine?`, `endLine?`              | a numbered window of the file; cites the blob URL with a line anchor |
+| tool           | arguments                                                                   | returns                                                                                     |
+| -------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `code_tree`    | `connectorId`, `path?`, `depth?` (1–4, default 2)                           | directories with file counts and sizes, files with size and language; capped at 400 entries |
+| `code_search`  | `connectorId`, `query`, `regex?`, `caseSensitive?`, `glob?`, `limit?` (≤50) | matching lines grouped by file, with line numbers                                           |
+| `code_outline` | `connectorId`, `path`                                                       | the file's declarations with signatures and exports, and its imports                        |
+| `code_read`    | `connectorId`, `path`, `startLine?`, `endLine?`                             | a numbered window of the file; cites the blob URL with a line anchor                        |
 
-The per-turn system prompt gains a *Connected repositories* list — name, URL,
+The per-turn system prompt gains a _Connected repositories_ list — name, URL,
 branch, `connectorId` — when the workspace has any, beside the web clause and
 for the same reason: which repositories exist is a per-workspace fact, and a
 workspace with none sends byte-identical bytes to what it sent before.

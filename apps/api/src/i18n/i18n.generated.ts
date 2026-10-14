@@ -199,6 +199,7 @@ export type I18nTranslations = {
                 "configInvalid": string;
                 "effortClamped": string;
                 "flowEntryMissing": string;
+                "diagramInvalid": string;
             };
         };
         "pushVersionMessage": string;

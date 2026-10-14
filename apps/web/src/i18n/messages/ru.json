@@ -1854,7 +1854,8 @@
       "review": "Проверка",
       "suggest": "Подсказки",
       "glossary": "Глоссарий",
-      "public_ask": "Вопросы на сайте"
+      "public_ask": "Вопросы на сайте",
+      "chat-capture": "Сохранено из чата"
     },
     "anyOutcome": "Любой",
     "failedOnly": "Только ошибки",

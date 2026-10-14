@@ -1854,7 +1854,8 @@
       "review": "Review",
       "suggest": "Suggest",
       "glossary": "Glossary",
-      "public_ask": "Site Ask"
+      "public_ask": "Site Ask",
+      "chat-capture": "Saved from chat"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",

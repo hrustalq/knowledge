@@ -130,6 +130,7 @@ function harness(opts: {
     issueCode: vi.fn(async () => ({ url: 'https://kn.test/chat/link?code=abc', minutes: 15 })),
     unlinkExternal: vi.fn(async () => true),
   };
+  const captures = { start: vi.fn(async () => undefined) };
   const feedback = {
     vote: vi.fn(async () => {
       if (opts.voteFails) throw opts.voteFails;
@@ -154,9 +155,10 @@ function harness(opts: {
     integrations as never,
     identities as never,
     feedback as never,
+    captures as never,
     config as never,
   );
-  return { svc, prisma, access, assistant, identities, integrations, feedback, posted, edited, acks, claims, settled };
+  return { svc, prisma, access, assistant, identities, integrations, feedback, captures, posted, edited, acks, claims, settled };
 }
 
 describe('an unlinked account', () => {
@@ -237,6 +239,7 @@ describe('a linked account', () => {
         [
           { label: '👍', action: `v:${ANS}:u` },
           { label: '👎', action: `v:${ANS}:d` },
+          { label: 'chat.capture.save', action: `s:${ANS}` },
         ],
       ],
     });
@@ -306,6 +309,9 @@ describe('button data', () => {
       { kind: 'vote', answerId: ANS, rating: 'up' },
       { kind: 'vote', answerId: ANS, rating: 'down' },
       { kind: 'reason', answerId: ANS, reason: 'irrelevant-sources' },
+      { kind: 'save-menu', answerId: ANS },
+      { kind: 'capture', answerId: ANS, capture: 'page' },
+      { kind: 'capture', answerId: ANS, capture: 'glossary-term' },
       { kind: 'back', answerId: ANS },
     ] as const) {
       const data = encodeChatAction(action);
@@ -315,7 +321,7 @@ describe('button data', () => {
   });
 
   it('decodes nothing it did not write', () => {
-    for (const data of ['', 'v:not-a-uuid:u', `v:${ANS}:x`, `r:${ANS}:rude`, `b:${ANS}:u`, `v:${ANS}:u:extra`, `z:${ANS}`]) {
+    for (const data of ['', 'v:not-a-uuid:u', `v:${ANS}:x`, `r:${ANS}:rude`, `b:${ANS}:u`, `v:${ANS}:u:extra`, `z:${ANS}`, `c:${ANS}:x`, `s:${ANS}:p`]) {
       expect(decodeChatAction(data)).toBeNull();
     }
   });
@@ -362,6 +368,7 @@ describe('feedback buttons', () => {
       [
         { label: '👍', action: `v:${ANS}:u` },
         { label: '👎', action: `v:${ANS}:d` },
+        { label: 'chat.capture.save', action: `s:${ANS}` },
       ],
     ]);
   });
@@ -408,5 +415,61 @@ describe('feedback buttons', () => {
     await h.svc.receive(integration, pressed(`v:${ANS}:d`));
     expect(h.acks).toEqual(['chat.feedback.disabled']);
     expect(h.edited).toEqual([]);
+  });
+});
+
+describe('save buttons', () => {
+  const answered = {
+    id: ANS,
+    assistantMessageId: 'msg-1',
+    conversationId: 'conv-1',
+    createdAt: new Date('2026-10-14T10:00:00Z'),
+    locale: 'en',
+  };
+  const pressed = (data: string) =>
+    inbound({ isDm: false, chatId: '-100', messageId: 'bot-1', text: '', action: { id: 'cb-1', data } });
+  const binding = { answerMode: 'mention', agentKey: null, projectId: 'p-1' };
+
+  it('Save opens the menu for an editor', async () => {
+    const h = harness({ answered, binding });
+    await h.svc.receive(integration, pressed(`s:${ANS}`));
+    expect(h.access.requireRole).toHaveBeenLastCalledWith(DEV_PRINCIPAL, WS, 'editor');
+    const view = h.edited[0] as Extract<ChatView, { kind: 'answer' }>;
+    expect(view.actions.flat().map((b) => decodeChatAction(b.action))).toEqual([
+      { kind: 'capture', answerId: ANS, capture: 'page' },
+      { kind: 'capture', answerId: ANS, capture: 'glossary-term' },
+      { kind: 'back', answerId: ANS },
+    ]);
+  });
+
+  it('a viewer is refused on the press and the menu never opens', async () => {
+    const h = harness({ answered, binding });
+    h.access.requireRole.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new ForbiddenException('viewer'));
+    await h.svc.receive(integration, pressed(`s:${ANS}`));
+    expect(h.acks).toEqual(['chat.capture.forbidden']);
+    expect(h.edited).toEqual([]);
+  });
+
+  it('a choice puts the vote row back and starts the capture as the presser, in the group’s project', async () => {
+    const h = harness({ answered, binding });
+    await h.svc.receive(integration, pressed(`c:${ANS}:p`));
+    expect(h.acks).toEqual(['chat.capture.draftingPage']);
+    expect((h.edited[0] as Extract<ChatView, { kind: 'answer' }>).actions[0]).toHaveLength(3);
+    expect(h.captures.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        answerMessage: { chatId: '-100', messageId: 'bot-1' },
+        answer: { id: ANS, conversationId: 'conv-1', createdAt: answered.createdAt },
+        projectId: 'p-1',
+        principal: DEV_PRINCIPAL,
+        kind: 'page',
+      }),
+    );
+  });
+
+  it('a viewer choosing directly (an old menu) is refused and nothing starts', async () => {
+    const h = harness({ answered, binding });
+    h.access.requireRole.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new ForbiddenException('viewer'));
+    await h.svc.receive(integration, pressed(`c:${ANS}:t`));
+    expect(h.captures.start).not.toHaveBeenCalled();
   });
 });

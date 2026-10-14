@@ -875,6 +875,8 @@ export type AiUsageOperation =
   | 'wiki'
   /** A release page's summary and its "possibly breaking" suspicions (docs/features/46). */
   | 'changelog'
+  /** Drafting a page from a chat conversation somebody saved (issue #71). */
+  | 'chat-capture'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.

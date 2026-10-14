@@ -26,6 +26,20 @@ export const CHAT_ANSWER_STATUSES = ['pending', 'answered', 'failed'] as const;
 export type ChatAnswerStatus = (typeof CHAT_ANSWER_STATUSES)[number];
 
 /**
+ * What a conversation can be saved as (phase 2): a page draft behind a merge
+ * request, or a glossary term proposed switched off.
+ */
+export const CHAT_CAPTURE_KINDS = ['page', 'glossary-term'] as const;
+export type ChatCaptureKind = (typeof CHAT_CAPTURE_KINDS)[number];
+
+/**
+ * A capture is drafted and published in one continuation, so there is no
+ * "drafted" stage between the two to promise.
+ */
+export const CHAT_CAPTURE_STATUSES = ['pending', 'published', 'failed'] as const;
+export type ChatCaptureStatus = (typeof CHAT_CAPTURE_STATUSES)[number];
+
+/**
  * A bot as /settings/chat lists it. The token is write-only: `credentialHint`
  * is all the API ever returns of it.
  */

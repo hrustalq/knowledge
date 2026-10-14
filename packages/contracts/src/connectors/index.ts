@@ -241,12 +241,13 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
     // ours, so there is nothing on the far side to push back to.
     kind: 'codebase',
     label: 'Codebase',
-    // Pull only, and no webhook in this version. A push event names *files*, and
-    // which module a file belongs to is not knowable until the archive has been
-    // read — so a webhook could only guess, and every wrong guess seeds an
-    // identity-map key for a page that does not exist. Scheduled sync covers the
-    // same ground: a module whose files did not change costs a hash, not a call.
-    capabilities: { pull: true, push: false, webhook: false, tree: false, tasks: true },
+    // Pull only. A push event names *files*, and which module a file belongs to
+    // is not knowable until the archive has been read — so a webhook does not
+    // guess units (every wrong guess would seed an identity-map key for a page
+    // that does not exist). Since the repo wiki (docs/features/46) a push queues
+    // an *unscoped* run instead, debounced, and the input-hash check skips
+    // every unit whose inputs did not move before anything is fetched.
+    capabilities: { pull: true, push: false, webhook: true, tree: false, tasks: true },
     credentialLabel: 'Personal access token',
     fields: [
       {
@@ -296,6 +297,28 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
           { value: 'low', label: 'Low — facts and diagrams only' },
           { value: 'medium', label: 'Medium — plus a written summary' },
           { value: 'high', label: 'High — plus reading the code' },
+        ],
+      },
+      {
+        key: 'wikiAutoRegenerate',
+        label: 'Regenerate on push',
+        kind: 'select',
+        required: false,
+        help: 'Re-derive the wiki when the branch is pushed to. Needs the GitHub App or this connector’s webhook.',
+        options: [
+          { value: 'off', label: 'Off — scheduled and manual syncs only' },
+          { value: 'on-push', label: 'On push to the branch' },
+        ],
+      },
+      {
+        key: 'wikiDelivery',
+        label: 'Wiki delivery',
+        kind: 'select',
+        required: false,
+        help: 'How a regenerated page reaches readers. A merge request lets someone review it first.',
+        options: [
+          { value: 'direct', label: 'Update the page directly' },
+          { value: 'merge-request', label: 'Open a merge request' },
         ],
       },
       {
@@ -569,6 +592,36 @@ export function effectiveWikiConfig(
   };
 }
 
+/** Whether a push to the branch starts a run (docs/features/46). Off unless asked for. */
+export const WIKI_AUTO_REGENERATE_MODES = ['off', 'on-push'] as const;
+export type WikiAutoRegenerate = (typeof WIKI_AUTO_REGENERATE_MODES)[number];
+export const WIKI_AUTO_REGENERATE_CONFIG_KEY = 'wikiAutoRegenerate';
+
+export function wikiAutoRegenerate(config: Record<string, unknown> | null | undefined): WikiAutoRegenerate {
+  return config?.[WIKI_AUTO_REGENERATE_CONFIG_KEY] === 'on-push' ? 'on-push' : 'off';
+}
+
+/**
+ * How a regenerated page reaches readers. `direct` writes it, as every sync
+ * always has; `merge-request` puts it on a branch and opens a merge request,
+ * so a person reviews what the code now says before readers see it.
+ */
+export const WIKI_DELIVERY_MODES = ['direct', 'merge-request'] as const;
+export type WikiDelivery = (typeof WIKI_DELIVERY_MODES)[number];
+export const WIKI_DELIVERY_CONFIG_KEY = 'wikiDelivery';
+
+export function wikiDelivery(config: Record<string, unknown> | null | undefined): WikiDelivery {
+  return config?.[WIKI_DELIVERY_CONFIG_KEY] === 'merge-request' ? 'merge-request' : 'direct';
+}
+
+/**
+ * Why a `connector_conflicts` row exists: both sides changed (`conflict`), or
+ * the repo wiki regenerated a page that is delivered by merge request
+ * (`regenerated`). The sweeper titles the merge request by it.
+ */
+export const CONNECTOR_CONFLICT_REASONS = ['conflict', 'regenerated'] as const;
+export type ConnectorConflictReason = (typeof CONNECTOR_CONFLICT_REASONS)[number];
+
 /** `wiki:architecture` — a section's `connector_links` key, and therefore permanent. */
 export function wikiUnitKey(section: WikiPageSection): string {
   return `wiki:${section}`;
@@ -665,7 +718,15 @@ export type GithubGrantLevel = 'read' | 'write' | 'admin';
  * person can see, so a missing grant reads as "the drift check will not work"
  * rather than as a GitHub permission name nobody recognises.
  */
-export type GithubAccessPurpose = 'sync' | 'push' | 'work-items' | 'drift-check' | 'boards' | 'repo-events';
+export type GithubAccessPurpose =
+  | 'sync'
+  | 'push'
+  | 'work-items'
+  | 'drift-check'
+  | 'boards'
+  | 'repo-events'
+  /** The repo wiki regenerating on push (docs/features/46). */
+  | 'wiki';
 
 /**
  * Where one requirement stands.

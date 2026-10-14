@@ -4,6 +4,8 @@ import { Prisma, type Connector, type ConnectorRun } from '@prisma/client';
 import {
   connectorKindInfo,
   GITHUB_INSTALLATION_CONFIG_KEY,
+  wikiAutoRegenerate,
+  wikiEnabled,
   type ConnectorConflictPolicy,
   type ConnectorDirection,
   type ConnectorKind,
@@ -413,6 +415,64 @@ export class ConnectorsService {
         trigger: 'webhook',
         status: 'queued',
         scope: [...new Set(externalIds)] as Prisma.InputJsonValue,
+        locale: row.locale,
+      },
+    });
+  }
+
+  /**
+   * A push to a repository, as a run (docs/features/46).
+   *
+   * A push names files, and which unit a file feeds is not knowable until the
+   * archive is read — so this never seeds a scope. It queues an **unscoped**
+   * pull run, and `ConnectorStagingService.stage` skips every unit whose input
+   * hash did not move before anything is fetched: one archive download and
+   * some hashing, and model calls only for what actually changed.
+   *
+   * Returns null when the push is not for this connector — the wiki is off,
+   * push regeneration is off, or the branch is not the one it reads — and when
+   * the push folded into a run that is queued and has not started, which is
+   * what turns a burst of pushes inside the debounce window into one run.
+   * `ref` is a branch, or null for a release (a tag), which is always relevant.
+   */
+  async queueRepoPush(
+    row: Connector,
+    delivery: { branch: string | null; defaultBranch?: string | null },
+  ): Promise<ConnectorRun | null> {
+    if (!row.enabled || row.kind !== 'codebase') return null;
+    const config = (row.config ?? {}) as Record<string, unknown>;
+    if (!wikiEnabled(config) || wikiAutoRegenerate(config) !== 'on-push') return null;
+
+    if (delivery.branch !== null) {
+      const configured = typeof config.branch === 'string' && config.branch.trim() ? config.branch.trim() : null;
+      const reads = configured ?? delivery.defaultBranch ?? null;
+      // An empty Branch means "the repository's default". A delivery that does
+      // not say what that is cannot be matched, and a guess would sync on every
+      // feature-branch push.
+      if (!reads || reads !== delivery.branch) return null;
+    }
+
+    const queued = await this.prisma.connectorRun.findFirst({
+      where: { connectorId: row.id, status: 'queued', direction: 'pull', startedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (queued) {
+      // A scoped run would read only its scope; this push needs the whole
+      // repository hashed, so the waiting run is widened to unscoped.
+      if (queued.scope !== null) {
+        await this.prisma.connectorRun.update({ where: { id: queued.id }, data: { scope: Prisma.DbNull } });
+      }
+      return null;
+    }
+
+    return this.prisma.connectorRun.create({
+      data: {
+        connectorId: row.id,
+        workspaceId: row.workspaceId,
+        direction: 'pull',
+        trigger: 'webhook',
+        status: 'queued',
+        mode: row.syncMode,
         locale: row.locale,
       },
     });

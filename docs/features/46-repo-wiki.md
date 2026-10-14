@@ -220,6 +220,79 @@ frontmatter says`generated: repo-wiki | codebase-connector`. Otherwise every
   since the module page describes its public surface. Logic files below it
   stay candidates.
 
+## Regenerating on push
+
+`codebase` now has `capabilities.webhook: true`. That reverses feature 27's
+deferral, without its objection. A push names *files*, and which unit a file
+feeds is not knowable until the archive has been read. So a push never names
+units.
+
+`ConnectorsService.queueRepoPush` queues an **unscoped** pull run
+(`trigger: 'webhook'`). `ConnectorStagingService.stage` then skips every unit
+whose input hash did not move, before anything is fetched. A push costs one
+archive download and some hashing. Model calls happen only for the units whose
+inputs actually changed.
+
+- **Gated** on `wiki: on` and `wikiAutoRegenerate: on-push`. Both default off.
+- **Branch filter.** Only a push to the branch the connector reads counts: the
+  configured Branch, or the repository's default when Branch is empty, as named
+  by the delivery (`repository.default_branch` or `project.default_branch`). A
+  delivery that names neither is refused rather than guessed. A release
+  (`release.published`, GitLab `Release Hook` `create`) always counts. Branch
+  deletions and tag pushes start nothing.
+- **Debounce.** The run is enqueued with a BullMQ one-shot `delay` of
+  `WIKI_PUSH_DEBOUNCE_MS`. This is not a repeatable, so the no-cron rule
+  holds. While the run waits, further pushes find it (`status: queued`,
+  `startedAt: null`) and fold into it, so three pushes in the window make one
+  run. A waiting *scoped* run is widened to unscoped.
+- **Entry points.** The GitHub App hook (`push` and `release` beside the
+  existing `publishBare`) and the per-connector hook. In the per-connector
+  hook, a `codebase` delivery is verified with the same secret as a pull
+  request (`verifyRepoDelivery`) and never reaches the adapter, so
+  `CodebaseAdapter` has no `verifyWebhook`.
+- **GitHub access.** New purpose `wiki`, needing `contents: read` and the `push`
+  event. It shows on the access card while push regeneration is on.
+
+## Delivery as merge requests
+
+`wikiDelivery: 'merge-request'` (default `'direct'`) routes an **update** of
+`overview`, `module:*`, `wiki:*` or `changelog:unreleased` through the conflict
+path: a branch `wiki/<run>-<ts>`, a revision on it, and a `connector_conflicts`
+row with **`reason: 'regenerated'`** (new column, default `'conflict'`). The
+page itself is not touched. This applies only in `auto` mode: a review or step
+run has already put a person in front of the change. A **create** still
+publishes directly, because there is no page to open a merge request against.
+
+`ConnectorConflictSweeper` (API-side, because the worker never opens a merge
+request) handles regenerated rows differently:
+
+- **Title and description** come from `connector.mr.wikiTitle` /
+  `wikiDescription`, naming the commit and unit read from the revision's own
+  frontmatter, so nothing is stored twice.
+- **Author**: the connector owner, whose agent wrote the page. A plain conflict
+  keeps the stub it always had.
+- **Supersede**: a pending regeneration with a newer pending one behind it
+  becomes `superseded` without a merge request. After opening one, the sweeper
+  closes the older still-open regeneration merge requests for the same page,
+  as the owner.
+
+### A merged regeneration is not a local edit
+
+After a merge, the head holds what the connector generated, while
+`connector_links.contentHash` still holds what it last wrote directly.
+`decideAction` would read that as a local edit and turn the next regeneration
+into a conflict. So when the head differs, it also checks whether the head is
+byte-for-byte the latest regenerated revision (`isOurRegeneration`).
+
+### Fixed on the way: frontmatter pages always looked edited
+
+`headContentHash` hashed `getContent().markdown`, the body *without* its
+frontmatter, and compared it with a `contentHash` taken over the markdown as
+written, frontmatter included. Every page carrying frontmatter, which means
+every codebase page, therefore looked locally edited. Under the default
+`manual` conflict policy, every update became a conflict merge request. The
+head is now hashed over its stored bytes, the same text the connector wrote.
+
 ## Frontmatter
 
 Wiki pages carry `generated: 'repo-wiki'`, `unit`, `headSha` and

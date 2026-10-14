@@ -550,7 +550,8 @@
         "work-items": "work items",
         "drift-check": "drift check",
         "boards": "project boards",
-        "repo-events": "workflow triggers"
+        "repo-events": "workflow triggers",
+        "wiki": "repo wiki on push"
       },
       "permission": {
         "metadata": "Metadata",

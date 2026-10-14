@@ -5590,7 +5590,7 @@ export interface components {
              * @description Where the report was made. Omitted reads as "web" (the page itself).
              * @enum {string}
              */
-            surface?: "assistant" | "editor-assistant" | "ask" | "mcp" | "web";
+            surface?: "assistant" | "editor-assistant" | "ask" | "mcp" | "chat" | "web";
         };
         CloseKnowledgeIssueDto: {
             /**
@@ -16771,7 +16771,7 @@ export interface operations {
                 kind?: "vote" | "low-confidence" | "no-answer";
                 rating?: "up" | "down";
                 reason?: string;
-                surface?: "assistant" | "editor-assistant" | "ask" | "mcp";
+                surface?: "assistant" | "editor-assistant" | "ask" | "mcp" | "chat";
                 from?: string;
                 to?: string;
                 cursor?: string;

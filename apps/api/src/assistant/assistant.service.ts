@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
+  AnswerSurface,
   AssistantAskResponse,
   AssistantAskSource,
   AssistantChatMode,
@@ -95,6 +96,23 @@ const DRAFT_CLAUSE =
   'section you change — over rewriting the page, and quote anchors exactly from the draft. The title is shown ' +
   'above the body already: do not repeat it as a heading. Never use propose_update for this page. After ' +
   'editing, say in a sentence or two what you changed; do not repeat the text you wrote into the page.';
+
+/**
+ * Appended to a turn asked from a chat platform (issue #71). Style, not role:
+ * the agent is still whichever the channel chose — this only says the reply is
+ * read in a chat client, where a long markdown document is a wall of text and
+ * tables do not render.
+ */
+const CHAT_BOT_CLAUSE =
+  '\n\nThis question was asked in a team chat (a messenger, not the web app), and your reply is posted there for everyone in the ' +
+  'conversation to read. Answer in a few short paragraphs or a short list — no tables, no headings, no code ' +
+  'blocks longer than a few lines. Keep the [S#] citation markers: the chat shows them as links to the pages. ' +
+  'If the answer needs more than that, give the gist and say which page holds the rest.';
+
+/** Appended when the chat channel is bound to one project. */
+const CHAT_PROJECT_CLAUSE =
+  '\n\nThis conversation is bound to one project of the workspace: search_knowledge only returns its pages. If ' +
+  'they do not cover the question, say so rather than answering from elsewhere.';
 
 /**
  * Everything one chat turn needs, built once and shared by the whole-response
@@ -577,6 +595,58 @@ export class AssistantService {
   }
 
   /**
+   * One turn asked from a chat platform (issue #71) — the {@link postMessage}
+   * turn with three things pinned that a chat message cannot ask for:
+   *
+   * - **Ask mode, always.** A bot reply is posted where people other than the
+   *   asker read it, so it never writes, whatever the workspace's Agent switch.
+   * - **No pane tools.** `ask_user`, `render_component` and the mode switch
+   *   produce something only the web pane can draw; a chat client would show a
+   *   turn that ended on nothing.
+   * - **The binding's project**, as a retrieval filter the model cannot widen.
+   *
+   * It is still a persisted thread turn, so the asker finds the conversation,
+   * its sources and its tool trace under /assistant, and a weak answer leaves
+   * the same implicit feedback signal — under the `chat` surface.
+   */
+  async runChatTurn(
+    threadId: string,
+    input: { content: string; agentKey?: string | null; projectId?: string | null },
+    principal: Principal,
+  ): Promise<{ enabled: boolean; message: AssistantMessageInfo }> {
+    const dto: PostAssistantMessageDto = { content: input.content, mode: 'ask', ...(input.agentKey ? { agentKey: input.agentKey } : {}) };
+    const opened = await this.openTurn(threadId, dto, principal);
+    if (!opened.enabled) return { enabled: false, message: opened.response.assistantMessage };
+    const { thread, turn, call } = opened;
+    const projectId = input.projectId ?? undefined;
+    const system = turn.messages[0];
+    if (system?.role === 'system' && typeof system.content === 'string') {
+      system.content += CHAT_BOT_CLAUSE + (projectId ? CHAT_PROJECT_CLAUSE : '');
+    }
+
+    const { content, trace } = await this.client.runWithTools(
+      { ...call, config: turn.agent.config, operation: 'chat' },
+      turn.messages,
+      this.scopeToAgent(
+        [
+          ...this.tools.definitions('ask', {
+            ui: false,
+            web: turn.agent.config.webAccess.effective !== 'off',
+            code: turn.repos.length > 0,
+            tasks: turn.taskRepos.length > 0,
+          }),
+          ...(await this.plugins.toolsFor(thread.workspaceId)),
+        ],
+        turn.agent,
+      ),
+      (name, args) => this.runTool(name, args, { principal, thread, turn, projectId }),
+    );
+
+    const message = await this.finishTurn(thread, turn, content, trace, principal, 'chat');
+    return { enabled: true, message };
+  }
+
+  /**
    * The same turn as {@link postMessage}, delivered as it happens. Every
    * frame is handed to `emit`; the caller owns the transport (the controller
    * writes them as SSE) and the terminal `done`/`error` framing.
@@ -770,6 +840,8 @@ export class AssistantService {
     content: string,
     trace: AssistantToolCall[],
     principal: Principal,
+    /** Set by a caller that is not the pane; the pane's two surfaces are told apart by the draft. */
+    surface?: AnswerSurface,
   ): Promise<AssistantMessageInfo> {
     const settled = await this.settleAnswer(
       thread.workspaceId,
@@ -791,7 +863,7 @@ export class AssistantService {
     this.feedback.recordSignal({
       workspaceId: thread.workspaceId,
       // The same pane in two places: beside a draft it is the editor assistant.
-      surface: turn.draft !== null ? 'editor-assistant' : 'assistant',
+      surface: surface ?? (turn.draft !== null ? 'editor-assistant' : 'assistant'),
       query: turn.question,
       answer: settled.text,
       sources: settled.sources,
@@ -825,6 +897,8 @@ export class AssistantService {
       /** Streaming path only: the model's id for this call, and the frame channel. */
       callId?: string;
       emit?: (frame: AssistantStreamFrame) => void;
+      /** Chat turns only: the bound project, pinned into the tool context. */
+      projectId?: string;
     },
   ): Promise<{ content: string; ok: boolean }> {
     const { thread, turn } = ctx;
@@ -877,6 +951,7 @@ export class AssistantService {
       principal: ctx.principal,
       workspaceId: thread.workspaceId,
       cite: (source) => turn.labels.label(source),
+      ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
     });
     if (!result.ok) turn.toolErrors++;
     for (const source of result.sources) {

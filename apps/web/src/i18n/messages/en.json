@@ -1944,7 +1944,8 @@
         "assistant": "assistant",
         "editor-assistant": "editor",
         "ask": "Ask AI",
-        "mcp": "MCP"
+        "mcp": "MCP",
+        "chat": "chat bot"
       },
       "recommendation": {
         "create-page": "Nothing covers this — a new page would.",

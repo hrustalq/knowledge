@@ -1,6 +1,7 @@
 import { Controller, Get, Query, Res } from '@nestjs/common';
 import { ApiOperation, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { ANSWER_SURFACES } from '@knowledge/contracts';
 import type { AnswerFeedbackSummary, ListAnswerFeedbackResponse } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
@@ -98,7 +99,7 @@ export class AnswerFeedbackAdminController {
   @ApiQuery({ name: 'kind', required: false, enum: ['vote', 'low-confidence', 'no-answer'] })
   @ApiQuery({ name: 'rating', required: false, enum: ['up', 'down'] })
   @ApiQuery({ name: 'reason', required: false })
-  @ApiQuery({ name: 'surface', required: false, enum: ['assistant', 'editor-assistant', 'ask', 'mcp'] })
+  @ApiQuery({ name: 'surface', required: false, enum: [...ANSWER_SURFACES] })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
   @ApiQuery({ name: 'cursor', required: false })

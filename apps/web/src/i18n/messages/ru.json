@@ -1944,7 +1944,8 @@
         "assistant": "ассистент",
         "editor-assistant": "редактор",
         "ask": "Спросить AI",
-        "mcp": "MCP"
+        "mcp": "MCP",
+        "chat": "чат-бот"
       },
       "recommendation": {
         "create-page": "Ничто это не описывает — нужна новая страница.",

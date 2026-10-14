@@ -175,6 +175,8 @@ export type I18nTranslations = {
         "mr": {
             "title": string;
             "description": string;
+            "wikiTitle": string;
+            "wikiDescription": string;
         };
         "warning": {
             "passthrough": string;

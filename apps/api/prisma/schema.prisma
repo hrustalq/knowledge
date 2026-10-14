@@ -1705,6 +1705,9 @@ model ConnectorConflict {
 
   /// pending -> resolved. Set once the merge request exists.
   status         String    @default("pending")
+  /// 'conflict' (both sides changed) | 'regenerated' (a repo wiki page delivered
+  /// by merge request, docs/features/46). Titles the merge request.
+  reason         String    @default("conflict")
   mergeRequestId String?   @map("merge_request_id") @db.Uuid
   error          String?
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -1714,6 +1717,7 @@ model ConnectorConflict {
 
   @@index([status, createdAt])
   @@index([connectorId, createdAt])
+  @@index([documentId, reason])
   @@map("connector_conflicts")
 }
 

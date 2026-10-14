@@ -471,6 +471,11 @@ export const envSchema = z.object({
   WIKI_DIAGRAM_MAX_NODES: z.coerce.number().int().min(4).max(200).default(40),
   /** Code-tool calls one wiki section may make at effort `high`; lowers, never raises, the agent's own budget. */
   WIKI_HIGH_EFFORT_MAX_TOOL_CALLS: z.coerce.number().int().min(1).max(64).default(24),
+  /**
+   * How long a push-triggered wiki run waits before it starts. Pushes inside
+   * the window fold into the same queued run, so a burst of commits is one sync.
+   */
+  WIKI_PUSH_DEBOUNCE_MS: z.coerce.number().int().min(0).max(3_600_000).default(120_000),
 
   /**
    * Where this API is reachable from a browser.

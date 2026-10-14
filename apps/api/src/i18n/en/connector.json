@@ -12,7 +12,9 @@
   },
   "mr": {
     "title": "{name}: incoming change to \"{title}\"",
-    "description": "This page and its counterpart in {name} both changed since the last sync, so nothing was overwritten. The external version is on this branch; review it against the current page and merge if it should win.\n\nSource: {url}"
+    "description": "This page and its counterpart in {name} both changed since the last sync, so nothing was overwritten. The external version is on this branch; review it against the current page and merge if it should win.\n\nSource: {url}",
+    "wikiTitle": "{name}: regenerated \"{title}\"",
+    "wikiDescription": "The repo wiki regenerated this page from {name} because the code it describes changed. Nothing on the page has changed yet: review the new version on this branch and merge it to publish.\n\nGenerated from commit {commit} (unit {unit}).\nSource: {url}\n\nA newer regeneration of this page closes this merge request and opens its own."
   },
   "warning": {
     "passthrough": "{text}",

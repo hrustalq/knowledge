@@ -34,9 +34,23 @@ in the pull request that introduces them — see
   the code tools. Diagrams are built by the server from parsed facts. The model
   never writes diagram syntax. A diagram that fails the safety check is left
   out with a warning, and the page still syncs. (#72)
+- A repo wiki can regenerate on push. With **Regenerate on push** on, a push
+  to the connector's branch, or a published release, queues one sync after a
+  short wait. Pushes during that wait fold into the same sync. Only the pages
+  whose inputs changed are re-derived. With **Wiki delivery** set to
+  merge request, a regenerated page arrives as a merge request by the
+  connector's owner instead of changing the page, and a newer regeneration
+  closes the older merge request. (#72)
 - The archaeologist no longer treats a repo wiki's file listings as
   documentation. It still proposes undocumented logic files below the wiki's
   module pages. (#72)
+
+### Fixed
+
+- A codebase connector no longer reports every updated page as a conflict.
+  Pages that carry frontmatter, which is every page this connector writes,
+  were always read as edited here, so with the default conflict policy each
+  update opened a merge request instead of updating the page. (#72)
 
 ### Operations
 
@@ -49,7 +63,15 @@ in the pull request that introduces them — see
   (`40`). Both are ceilings. A repository can ask for less, never more.
   `WIKI_HIGH_EFFORT_MAX_TOOL_CALLS` (`24`) caps the code-tool calls one wiki
   page may make at effort `high`. The new usage operation `wiki` shows the
-  wiki's extra spend separately from `codebase`.
+  wiki's extra spend separately from `codebase`. `WIKI_PUSH_DEBOUNCE_MS`
+  (`120000`) is how long a push-triggered sync waits for more pushes.
+- Migration `20261014150000_repo_wiki_conflict_reason` adds
+  `connector_conflicts.reason` (`NOT NULL DEFAULT 'conflict'`) and an index.
+  It is additive, and the previous release ignores the column, so it survives
+  a rollback by retag.
+- Push regeneration through the GitHub App needs **Contents: read** and the
+  **push** event on the App. The connector's GitHub access card lists both
+  under "repo wiki on push" while the setting is on.
 
 ## [0.19.1] — 2026-10-14
 

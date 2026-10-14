@@ -24,6 +24,20 @@ describe('activePurposes', () => {
     expect(activePurposes({ kind: 'markdown-git', direction: 'pull', driftCheck: 'off' }).has('push')).toBe(false);
     expect(withDrift.has('drift-check')).toBe(true);
   });
+
+  it('adds the repo wiki only for a codebase connector regenerating on push (docs/features/46)', () => {
+    expect(activePurposes({ kind: 'codebase', direction: 'pull', driftCheck: 'off', wikiOnPush: true }).has('wiki')).toBe(true);
+    expect(activePurposes({ kind: 'codebase', direction: 'pull', driftCheck: 'off', wikiOnPush: false }).has('wiki')).toBe(false);
+    expect(activePurposes({ kind: 'markdown-git', direction: 'pull', driftCheck: 'off', wikiOnPush: true }).has('wiki')).toBe(false);
+  });
+
+  it('marks the push event as needed by the wiki, and contents:read with it', () => {
+    const active = activePurposes({ kind: 'codebase', direction: 'pull', driftCheck: 'off', wikiOnPush: true });
+    const push = row(eventRows([], [], active), 'push');
+    expect(push).toMatchObject({ status: 'missing', active: true });
+    expect(push.purposes).toContain('wiki');
+    expect(row(permissionRows({ contents: 'read' }, {}, active), 'contents').purposes).toContain('wiki');
+  });
 });
 
 describe('permissionRows', () => {

@@ -1,6 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, type Connector, type ConnectorLink, type ConnectorRun, type ConnectorRunItem } from '@prisma/client';
-import type { ConnectorItemAction, DocumentCategory } from '@knowledge/contracts';
+import {
+  isWikiUnitKey,
+  wikiDelivery,
+  wikiEnabled,
+  type ConnectorConflictReason,
+  type ConnectorItemAction,
+  type DocumentCategory,
+} from '@knowledge/contracts';
 import { DocumentsService } from '../documents/documents.service.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -153,7 +160,11 @@ export class ConnectorStagingService {
     if (!document) return 'create';
 
     const localHash = await this.headContentHash(link.documentId);
-    const localChanged = localHash !== null && link.contentHash !== null && localHash !== link.contentHash;
+    let localChanged = localHash !== null && link.contentHash !== null && localHash !== link.contentHash;
+    // A merged repo wiki merge request (docs/features/46) moved the head to
+    // what this connector generated. That is not a local edit: it is the
+    // connector's own page, arrived by review instead of by a direct write.
+    if (localChanged && localHash && (await this.isOurRegeneration(link.documentId, localHash))) localChanged = false;
 
     if (!localChanged || row.conflict === 'external-wins') return 'update';
     if (row.conflict === 'local-wins') return 'unchanged';
@@ -212,7 +223,16 @@ export class ConnectorStagingService {
     // two-way sync. A *reviewed* conflict has already been decided by a person,
     // so their approval writes straight to the page.
     if (item.action === 'conflict' && run.mode === 'auto') {
-      await this.openConflictBranch(row, link, item, markdown);
+      await this.openConflictBranch(row, run, link, item, markdown, 'conflict');
+      return;
+    }
+
+    // A repo wiki delivered by merge request (docs/features/46): a regenerated
+    // page goes to a branch and a merge request instead of to the page, so a
+    // person reads what the code now says before readers do. Only in `auto` —
+    // a review or step run has already put a person in front of it.
+    if (item.action === 'update' && run.mode === 'auto' && deliversByMergeRequest(row, item.externalId)) {
+      await this.openConflictBranch(row, run, link, item, markdown, 'regenerated');
       return;
     }
 
@@ -385,11 +405,16 @@ export class ConnectorStagingService {
    */
   private async openConflictBranch(
     row: Connector,
+    run: ConnectorRun,
     link: ConnectorLink,
     item: ConnectorRunItem,
     markdown: string,
+    reason: ConnectorConflictReason,
   ): Promise<void> {
-    const branch = `connector/${row.kind}-${Date.now().toString(36)}`;
+    const branch =
+      reason === 'regenerated'
+        ? `wiki/${run.id.slice(0, 8)}-${Date.now().toString(36)}`
+        : `connector/${row.kind}-${Date.now().toString(36)}`;
     await this.documents.createBranch(link.documentId, { name: branch });
     const revisionId = await this.writeRevision(link.documentId, markdown, branch);
 
@@ -414,12 +439,24 @@ export class ConnectorStagingService {
         revisionId,
         externalUrl: item.externalUrl,
         title: item.title,
+        reason,
       },
     });
     await this.prisma.connectorRunItem.update({
       where: { id: item.id },
       data: { status: 'applied', documentId: link.documentId, revisionId, createdDocument: false },
     });
+  }
+
+  /** Whether the head is byte-for-byte the last page the repo wiki sent by merge request. */
+  private async isOurRegeneration(documentId: string, headHash: string): Promise<boolean> {
+    const latest = await this.prisma.connectorConflict.findFirst({
+      where: { documentId, reason: 'regenerated' },
+      orderBy: { createdAt: 'desc' },
+      select: { revisionId: true },
+    });
+    if (!latest) return false;
+    return (await this.revisionHash(latest.revisionId)) === headHash;
   }
 
   /** The default branch head's revision id — what revert needs to restore. */
@@ -436,13 +473,47 @@ export class ConnectorStagingService {
     return branch?.headRevisionId ?? null;
   }
 
-  /** sha256 of the branch head's markdown, or null when it cannot be read. */
+  /**
+   * sha256 of the branch head's stored bytes, or null when it cannot be read.
+   *
+   * The stored object, not the parsed body: `contentHash` is taken over the
+   * markdown this connector wrote, frontmatter included, so the head must be
+   * hashed the same way. Hashing `getContent().markdown` (the body without its
+   * frontmatter) made every page that carries frontmatter — every codebase
+   * page — look locally edited, and every update a conflict.
+   */
   private async headContentHash(documentId: string): Promise<string | null> {
+    const revisionId = await this.headRevisionId(documentId);
+    return revisionId ? this.revisionHash(revisionId) : null;
+  }
+
+  private async revisionHash(revisionId: string): Promise<string | null> {
+    const revision = await this.prisma.documentRevision.findUnique({
+      where: { id: revisionId },
+      select: { s3Key: true, status: true },
+    });
+    if (!revision || revision.status === 'draft') return null;
     try {
-      const content = await this.documents.getContent(documentId);
-      return sha256(content.markdown);
+      return sha256(await this.storage.getObjectText(revision.s3Key));
     } catch {
       return null;
     }
   }
+}
+
+/**
+ * The units a repo wiki delivers by merge request when the connector asks for
+ * it (docs/features/46). Released changelog pages are not among them: a tag
+ * never regenerates, so there is nothing to review twice.
+ */
+function deliversByMergeRequest(row: Connector, externalId: string): boolean {
+  if (row.kind !== 'codebase') return false;
+  const config = (row.config ?? {}) as Record<string, unknown>;
+  if (!wikiEnabled(config) || wikiDelivery(config) !== 'merge-request') return false;
+  return (
+    externalId === 'overview' ||
+    externalId.startsWith('module:') ||
+    isWikiUnitKey(externalId) ||
+    externalId === 'changelog:unreleased'
+  );
 }

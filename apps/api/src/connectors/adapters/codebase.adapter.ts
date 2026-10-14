@@ -128,7 +128,10 @@ const SECTION_TITLE_KEY: Record<WikiPageSection, string> = {
 @Injectable()
 export class CodebaseAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'codebase';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: false, webhook: false, tree: true };
+  // `webhook: true` since the repo wiki (docs/features/46): a push queues an
+  // unscoped run in `ConnectorWebhookController`, and this adapter is never
+  // asked to name units from a delivery — which is why it has no `verifyWebhook`.
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: false, webhook: true, tree: true };
 
   private readonly logger = new Logger(CodebaseAdapter.name);
 

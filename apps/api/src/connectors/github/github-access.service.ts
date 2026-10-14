@@ -1,6 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Connector } from '@prisma/client';
-import { driftCheckMode, GITHUB_INSTALLATION_CONFIG_KEY, type ConnectorGithubAccessResponse } from '@knowledge/contracts';
+import {
+  driftCheckMode,
+  GITHUB_INSTALLATION_CONFIG_KEY,
+  wikiAutoRegenerate,
+  wikiEnabled,
+  type ConnectorGithubAccessResponse,
+} from '@knowledge/contracts';
 import { activePurposes, eventRows, permissionRows } from './github-access.js';
 import { GithubAppService } from './github-app.service.js';
 import { GithubOauthService } from './github-oauth.service.js';
@@ -75,6 +81,7 @@ export class GithubAccessService {
         kind: row.kind,
         direction: row.direction,
         driftCheck: driftCheckMode(config),
+        wikiOnPush: wikiEnabled(config) && wikiAutoRegenerate(config) === 'on-push',
       });
       return {
         ...base,

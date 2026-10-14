@@ -186,7 +186,9 @@ Next past a question most repositories never answer.
 
 ## Deliberately deferred
 
-- **Webhooks.** `seedScope` turns whatever `verifyWebhook` returns directly into
+- **Webhooks.** *Since feature 46, a push queues an unscoped, debounced run
+  (the repo wiki's `wikiAutoRegenerate`), and the reasoning below is why it
+  never names units.* `seedScope` turns whatever `verifyWebhook` returns directly into
   identity-map keys, but a push event names _files_, and which module a file
   belongs to is not knowable until the archive has been read. A webhook could
   only guess, and every wrong guess seeds a `connector_links` key for a page

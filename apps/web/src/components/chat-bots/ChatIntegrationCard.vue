@@ -1,19 +1,22 @@
 <script setup lang="ts">
 /**
- * One bot (issue #71): whether Telegram can reach it, where it answers, and
- * who is linked through it. The webhook refusal is shown verbatim — "An HTTPS
- * URL must be provided" is the whole diagnosis for a development server — and
- * Test sets the webhook again after API_PUBLIC_URL is fixed.
+ * One bot (issue #71): whether the platform can reach it, where it answers,
+ * and who is linked through it. The webhook refusal is shown verbatim — "An
+ * HTTPS URL must be provided" is the whole diagnosis for a development server
+ * — and Test sets the webhook again after API_PUBLIC_URL is fixed. A Time bot
+ * has no webhook to refuse: what it shows is its websocket's last failure,
+ * which reconnects on its own.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { AlertTriangle, CheckCircle2, Trash2 } from 'lucide-vue-next'
-import type {
-  ChatIdentitiesResponse,
-  ChatIntegrationSummary,
-  ChatIntegrationTestResponse,
+import {
+  chatPlatformNeedsServer,
+  type ChatIdentitiesResponse,
+  type ChatIntegrationSummary,
+  type ChatIntegrationTestResponse,
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
@@ -39,6 +42,8 @@ const emit = defineEmits<{ changed: [] }>()
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
+/** A bot that hears over its own websocket (Time) rather than through our webhook. */
+const socket = computed(() => chatPlatformNeedsServer(props.bot.kind))
 const tab = ref<'groups' | 'people'>('groups')
 const identitiesOptions = computed(() =>
   apiQueryOptions('/v1/chat/integrations/{id}/identities', { path: { id: props.bot.id } }),
@@ -63,7 +68,7 @@ async function test() {
   busy.value = true
   try {
     const res = (await api.post('/v1/chat/integrations/{id}/test', { path: { id: props.bot.id } })) as ChatIntegrationTestResponse
-    if (res.ok) toast.success(t('chatBots.card.testOk', { bot: `@${res.botUsername}` }))
+    if (res.ok) toast.success(t(socket.value ? 'chatBots.card.testOkSocket' : 'chatBots.card.testOk', { bot: `@${res.botUsername}` }))
     else toast.error(t('chatBots.card.testFailed', { reason: res.error ?? '' }))
     emit('changed')
   } catch (e) {
@@ -128,15 +133,17 @@ async function unlink(identityId: string) {
       >
         <AlertTriangle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <div class="min-w-0 space-y-1">
-          <p class="font-medium">{{ t('chatBots.card.webhookRefused') }}</p>
+          <p class="font-medium">{{ t(socket ? 'chatBots.card.socketDown' : 'chatBots.card.webhookRefused') }}</p>
           <p class="text-xs">{{ bot.webhookError }}</p>
-          <p class="text-xs">{{ t('chatBots.card.webhookFix') }}</p>
-          <p class="break-all font-mono text-xs opacity-80">{{ bot.webhookUrl }}</p>
+          <p class="text-xs">{{ t(socket ? 'chatBots.card.socketFix' : 'chatBots.card.webhookFix') }}</p>
+          <p v-if="!socket" class="break-all font-mono text-xs opacity-80">{{ bot.webhookUrl }}</p>
         </div>
       </div>
       <p v-else class="flex items-center gap-2 text-xs text-muted-foreground">
         <CheckCircle2 class="size-3.5 shrink-0" aria-hidden="true" />
-        <span class="min-w-0 break-all">{{ t('chatBots.card.webhookOk', { url: bot.webhookUrl }) }}</span>
+        <span class="min-w-0 break-all">
+          {{ socket ? t('chatBots.card.socketOk', { server: bot.serverUrl }) : t('chatBots.card.webhookOk', { url: bot.webhookUrl }) }}
+        </span>
       </p>
 
       <div class="grid max-w-md gap-1.5">

@@ -43,11 +43,23 @@ export class CreateChatIntegrationDto {
   @MaxLength(80, { message: vmsg('maxLength') })
   name!: string;
 
-  @ApiProperty({ description: 'The bot token (Telegram: from @BotFather). Write-only — never returned.' })
+  @ApiProperty({
+    description: 'The bot token (Telegram: from @BotFather; Time: Integrations → Bot accounts). Write-only — never returned.',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(512, { message: vmsg('maxLength') })
   token!: string;
+
+  @ApiPropertyOptional({
+    maxLength: 500,
+    example: 'https://time.example.com',
+    description: 'The messenger server, for a self-hosted platform (Time) — required there, refused for Telegram',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  serverUrl?: string;
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Agent that answers; omitted or null means the researcher' })
   @ValidateIf((o: CreateChatIntegrationDto) => o.defaultAgentKey !== undefined && o.defaultAgentKey !== null)
@@ -79,6 +91,12 @@ export class UpdateChatIntegrationDto {
   @IsString()
   @MaxLength(512, { message: vmsg('maxLength') })
   token?: string;
+
+  @ApiPropertyOptional({ maxLength: 500, description: 'Moves a self-hosted bot to another server; omit to keep it' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: vmsg('maxLength') })
+  serverUrl?: string;
 
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Omit to keep; null goes back to the researcher' })
   @ValidateIf((o: UpdateChatIntegrationDto) => o.defaultAgentKey !== undefined && o.defaultAgentKey !== null)

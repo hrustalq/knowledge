@@ -1,14 +1,23 @@
 <script setup lang="ts">
 /**
- * Connect a bot (issue #71). One step for Telegram: name it, paste the token
- * BotFather gave you. The API checks the token with Telegram before saving
- * and points the bot at this server, so a bad token fails here, in words,
- * rather than as a bot that silently never answers.
+ * Connect a bot (issue #71). One step: pick the messenger, name the bot, paste
+ * its token — BotFather's for Telegram; for Time, the token from Integrations
+ * → Bot accounts plus the address of the customer's own Time server. The API
+ * checks the token with the platform before saving, so a bad token or an
+ * unreachable server fails here, in words, rather than as a bot that silently
+ * never answers.
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { CHAT_PLATFORM_KINDS, SUPPORTED_LOCALES, type ChatIntegrationSummary, type Locale } from '@knowledge/contracts'
+import {
+  CHAT_PLATFORM_KINDS,
+  SUPPORTED_LOCALES,
+  chatPlatformNeedsServer,
+  type ChatIntegrationSummary,
+  type ChatPlatformKind,
+  type Locale,
+} from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { errorMessage } from '@/api/errors'
 import { getWorkspaceId } from '@/lib/api'
@@ -23,12 +32,25 @@ const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ created: [ChatIntegrationSummary] }>()
 const { t } = useI18n()
 
-const form = reactive({ name: '', token: '', agentKey: null as string | null, locale: 'en' as Locale })
+const blank = () => ({
+  kind: CHAT_PLATFORM_KINDS[0] as ChatPlatformKind,
+  name: '',
+  token: '',
+  serverUrl: '',
+  agentKey: null as string | null,
+  locale: 'en' as Locale,
+})
+const form = reactive(blank())
 const saving = ref(false)
-const valid = computed(() => form.name.trim().length > 0 && form.token.trim().length > 0)
+const needsServer = computed(() => chatPlatformNeedsServer(form.kind))
+/** Telegram's strings sit at the top of `connect`; every other platform has its own block. */
+const copy = (key: string) => t(form.kind === 'telegram' ? `chatBots.connect.${key}` : `chatBots.connect.${form.kind}.${key}`)
+const valid = computed(
+  () => form.name.trim().length > 0 && form.token.trim().length > 0 && (!needsServer.value || form.serverUrl.trim().length > 0),
+)
 
 watch(open, (isOpen) => {
-  if (isOpen) Object.assign(form, { name: '', token: '', agentKey: null, locale: 'en' })
+  if (isOpen) Object.assign(form, blank())
 })
 
 async function submit() {
@@ -38,9 +60,10 @@ async function submit() {
     const created = (await api.post('/v1/chat/integrations', {
       body: {
         workspaceId: getWorkspaceId(),
-        kind: CHAT_PLATFORM_KINDS[0],
+        kind: form.kind,
         name: form.name.trim(),
         token: form.token.trim(),
+        ...(needsServer.value ? { serverUrl: form.serverUrl.trim() } : {}),
         defaultAgentKey: form.agentKey,
         locale: form.locale,
       },
@@ -61,14 +84,37 @@ async function submit() {
     <DialogContent class="sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>{{ t('chatBots.connect.title') }}</DialogTitle>
-        <DialogDescription>{{ t('chatBots.connect.description') }}</DialogDescription>
+        <DialogDescription>{{ copy('description') }}</DialogDescription>
       </DialogHeader>
       <form class="space-y-4" @submit.prevent="submit">
+        <div class="space-y-1.5">
+          <Label>{{ t('chatBots.fields.platform') }}</Label>
+          <Select v-model="form.kind">
+            <SelectTrigger class="h-9 w-full sm:w-48" :aria-label="t('chatBots.fields.platform')"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="k in CHAT_PLATFORM_KINDS" :key="k" :value="k">{{ t(`chatBots.kind.${k}`) }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <ol class="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
-          <li>{{ t('chatBots.connect.step1') }}</li>
-          <li>{{ t('chatBots.connect.step2') }}</li>
-          <li>{{ t('chatBots.connect.step3') }}</li>
+          <li>{{ copy('step1') }}</li>
+          <li>{{ copy('step2') }}</li>
+          <li>{{ copy('step3') }}</li>
         </ol>
+        <div v-if="needsServer" class="space-y-1.5">
+          <Label for="chat-bot-server">{{ t('chatBots.fields.serverUrl') }}</Label>
+          <Input
+            id="chat-bot-server"
+            v-model="form.serverUrl"
+            type="url"
+            inputmode="url"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="500"
+            placeholder="https://time.example.com"
+          />
+          <p class="text-xs text-muted-foreground">{{ t('chatBots.fields.serverUrlHint') }}</p>
+        </div>
         <div class="space-y-1.5">
           <Label for="chat-bot-name">{{ t('chatBots.fields.name') }}</Label>
           <Input id="chat-bot-name" v-model="form.name" maxlength="80" :placeholder="t('chatBots.fields.namePlaceholder')" />
@@ -76,7 +122,9 @@ async function submit() {
         <div class="space-y-1.5">
           <Label for="chat-bot-token">{{ t('chatBots.fields.token') }}</Label>
           <Input id="chat-bot-token" v-model="form.token" type="password" autocomplete="off" spellcheck="false" />
-          <p class="text-xs text-muted-foreground">{{ t('chatBots.fields.tokenHint') }}</p>
+          <p class="text-xs text-muted-foreground">
+            {{ t(form.kind === 'time' ? 'chatBots.fields.tokenHintTime' : 'chatBots.fields.tokenHint') }}
+          </p>
         </div>
         <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
           <div class="space-y-1.5">
@@ -96,7 +144,7 @@ async function submit() {
         <DialogFooter>
           <Button type="button" variant="ghost" @click="open = false">{{ t('common.cancel') }}</Button>
           <Button type="submit" :disabled="!valid || saving">
-            {{ saving ? t('chatBots.connect.checking') : t('chatBots.connect.submit') }}
+            {{ saving ? copy('checking') : t('chatBots.connect.submit') }}
           </Button>
         </DialogFooter>
       </form>

@@ -1,5 +1,6 @@
 {
   "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\n/new — start a new conversation\n/unlink — disconnect your account\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
+  "helpTime": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a channel, mention me — I answer in the message's thread, and anything else said in that thread is a follow-up.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\nSend one of these words on its own (in a channel, after mentioning me):\nnew — start a new conversation\nunlink — disconnect your account\nbind — answer in this channel (workspace admins)\nunbind — stop answering in this channel (workspace admins)\nhelp — this message",
   "link": {
     "required": "Link your account first: open the link below while signed in to {workspace}. It works once and expires in {minutes} minutes.",
     "button": "Link my account",

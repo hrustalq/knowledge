@@ -45,6 +45,10 @@ function guardedAgent(): Agent {
 /**
  * `dns.lookup`, refusing any answer that points inside.
  *
+ * Exported for the one long-lived connection that is not a `fetch`: the chat
+ * bot's websocket to a Time server (`ws` hands `lookup` to `net.connect`,
+ * which calls it with `all: false` — the other shape below).
+ *
  * undici calls this with `all: true`, so the callback receives an array — but
  * the `dns.lookup` contract has two shapes depending on that flag, and getting
  * it wrong would fail open (an unrecognised shape that is passed through
@@ -56,7 +60,7 @@ type LookupCallback = (
   family?: number,
 ) => void;
 
-function guardedLookup(hostname: string, options: LookupOptions, callback: LookupCallback): void {
+export function guardedLookup(hostname: string, options: LookupOptions, callback: LookupCallback): void {
   dnsLookup(hostname, options, (err, address, family) => {
     if (err) return callback(err, address, family);
 

@@ -14,16 +14,20 @@ import { ChatIntegrationsService } from './chat-integrations.service.js';
 /**
  * Deliveries from a messenger (issue #71).
  *
- * `@Public()` because the caller is Telegram, not a session; what
- * authenticates it is the shared secret the platform echoes on every delivery,
- * checked against the stored hash before anything else is read. A wrong
- * secret is a 401 that touched nothing.
+ * `@Public()` because the caller is a messenger, not a session. What
+ * authenticates it is the adapter's check, before anything else is read: the
+ * shared secret Telegram echoes on every delivery, or the signature a Time
+ * button carries in its context. A failed check is a 401 that touched nothing.
  *
- * The handler answers at once — Telegram redelivers what it thinks timed out,
- * and Slack allows three seconds — and the work continues detached in
- * {@link ChatAnswersService.receive}, which owns its own failures. A verified
- * delivery the bot has nothing to say to is still a 200: a non-2xx would only
- * make the platform retry it.
+ * The handler answers at once — Telegram redelivers what it thinks timed out —
+ * and the work continues detached in {@link ChatAnswersService.receive}, which
+ * owns its own failures. A verified delivery the bot has nothing to say to is
+ * still a 200: a non-2xx would only make the platform retry it.
+ *
+ * The one wait: a Time button press is answered in this response (the note
+ * shown to the presser), so the adapter holds it until the core acknowledges
+ * the press — `respondToAction`, bounded by the adapter. Time's messages never
+ * come here; they arrive over the bot's websocket (`ChatSocketSupervisor`).
  */
 @Controller('v1/chat')
 export class ChatWebhookController {
@@ -47,7 +51,7 @@ export class ChatWebhookController {
     @Param('id', ParseUUIDPipe) id: string,
     @Headers() headers: Record<string, string>,
     @Req() req: RawBodyRequest<Request>,
-  ): Promise<{ ok: true }> {
+  ): Promise<unknown> {
     if (!this.enabled) throw new NotFoundException(t('error.chat.disabled'));
     const row = await this.integrations.find(id);
     if (!row || !row.enabled) throw new NotFoundException(t('error.chat.integrationNotFound', { id }));
@@ -57,12 +61,18 @@ export class ChatWebhookController {
       headers: Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v])),
       body: req.rawBody?.toString('utf8') ?? '',
     };
-    if (!adapter.verifyInbound(raw, row.inboundSecretHash)) {
+    if (!adapter.verifyInbound(raw, row.inboundSecretHash, this.integrations.context(row))) {
       // The integration id and nothing else: the body is unauthenticated input.
       this.logger.warn({ msg: 'chat delivery refused: bad secret', integrationId: id });
       throw new UnauthorizedException(t('error.chat.invalidSecret'));
     }
-    for (const inbound of adapter.parseInbound(raw, row.botUsername)) void this.answers.receive(row, inbound);
-    return { ok: true };
+    const replies: Array<Promise<unknown>> = [];
+    for (const inbound of adapter.parseInbound(raw, row.botUsername)) {
+      const handled = this.answers.receive(row, inbound);
+      if (inbound.action && adapter.respondToAction) replies.push(adapter.respondToAction(inbound, handled));
+    }
+    // One press per delivery is all a platform sends; the first reply is the response.
+    const [reply] = await Promise.all(replies);
+    return reply ?? { ok: true };
   }
 }

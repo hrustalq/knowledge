@@ -17,6 +17,7 @@ import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
 import { ChatLinkController } from './chat-link.controller.js';
 import { ChatSettingsController } from './chat-settings.controller.js';
+import { ChatSocketSupervisor } from './chat-socket.supervisor.js';
 import { ChatSubscriptionSweeper } from './chat-subscription.sweeper.js';
 import { ChatSubscriptionsService } from './chat-subscriptions.service.js';
 import { ChatWebhookController } from './chat-webhook.controller.js';
@@ -31,7 +32,8 @@ import { ChatWebhookController } from './chat-webhook.controller.js';
  * request service, so nothing here is staged for the worker. Channel
  * notifications (phase 3) are delivered from here too, by
  * ChatSubscriptionSweeper: the token and the adapters are already here, and a
- * post to a group is attributed to nobody.
+ * post to a group is attributed to nobody. Time's websockets (phase 4) are
+ * held here by ChatSocketSupervisor, which feeds the same answer path.
  */
 @Module({
   imports: [
@@ -56,6 +58,7 @@ import { ChatWebhookController } from './chat-webhook.controller.js';
     ChatAnswerSweeper,
     ChatSubscriptionsService,
     ChatSubscriptionSweeper,
+    ChatSocketSupervisor,
   ],
 })
 export class ChatModule {}

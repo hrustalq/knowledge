@@ -607,6 +607,19 @@ export const envSchema = z.object({
    * which a deployment that cannot reach api.telegram.org directly needs.
    */
   TELEGRAM_API_BASE_URL: z.string().url().default('https://api.telegram.org'),
+  /**
+   * Allow a self-hosted messenger (Time) on a private/loopback address. An
+   * in-house Time server is the usual deployment, but a URL typed into a
+   * settings form is also the classic SSRF shape, so the default refuses it.
+   * Mirrors CONNECTOR_ALLOW_PRIVATE_URLS.
+   */
+  CHAT_ALLOW_PRIVATE_URLS: boolish(false),
+  /**
+   * How often the API compares its open Time websockets with the enabled bots
+   * (phase 4): a bot saved, switched off or given a new token is picked up
+   * within one tick. Reconnects after a drop do not wait for it.
+   */
+  CHAT_SOCKET_SYNC_MS: z.coerce.number().int().min(1_000).default(15_000),
 
   /**
    * Interface + API language (docs/features/18). Also the fallback whenever a

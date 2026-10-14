@@ -4,6 +4,7 @@ import type { ChatPlatformKind } from '@knowledge/contracts';
 import type { Env } from '../../config/env.js';
 import type { ChatAdapter } from './chat-adapter.types.js';
 import { TelegramAdapter } from './telegram.adapter.js';
+import { TimeAdapter } from './time.adapter.js';
 
 /**
  * One adapter per platform kind, the connectors registry's shape. Keyed by
@@ -13,10 +14,14 @@ import { TelegramAdapter } from './telegram.adapter.js';
 @Injectable()
 export class ChatAdapterRegistry {
   private readonly adapters: Record<ChatPlatformKind, ChatAdapter>;
+  /** Also reached directly by the websocket supervisor, which is Time's alone. */
+  readonly time: TimeAdapter;
 
   constructor(config: ConfigService<Env, true>) {
+    this.time = new TimeAdapter(config.get('CHAT_ALLOW_PRIVATE_URLS', { infer: true }));
     this.adapters = {
       telegram: new TelegramAdapter(config.get('TELEGRAM_API_BASE_URL', { infer: true })),
+      time: this.time,
     };
   }
 

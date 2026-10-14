@@ -58,6 +58,7 @@ describe('parseInbound — button presses', () => {
       text: '',
       mentioned: false,
       replyToBotMessageId: null,
+      threadId: null,
       command: null,
       action: { id: 'cb-1', data: 'v:abc:u' },
     });
@@ -85,6 +86,7 @@ describe('parseInbound', () => {
       text: 'How do we deploy?',
       mentioned: false,
       replyToBotMessageId: null,
+      threadId: null,
       command: null,
       action: null,
     });
@@ -212,7 +214,7 @@ describe('Bot API calls', () => {
       { status: 200, body: { ok: true, result: { message_id: 99 } } },
     );
     const ref = await adapter.postMessage(
-      { token: 'T0KEN', botUsername: BOT },
+      { token: 'T0KEN', botUsername: BOT, serverUrl: null, actionUrl: '' },
       { chatId: '42' },
       { text: '<b>x', plain: 'x', buttons: [[{ label: 'Open', url: 'http://localhost:5173/a' }]] },
     );
@@ -228,7 +230,7 @@ describe('Bot API calls', () => {
       { status: 400, body: { ok: false, description: 'Bad Request: BUTTON_URL_INVALID' } },
       { status: 200, body: { ok: true, result: { message_id: 5 } } },
     );
-    await adapter.postMessage({ token: 'T', botUsername: BOT }, { chatId: '42' }, {
+    await adapter.postMessage({ token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '' }, { chatId: '42' }, {
       text: 'x',
       plain: 'x',
       buttons: [[{ label: 'Open', url: 'http://localhost:5173/a' }], [{ label: '👍', action: 'v:a:u' }]],
@@ -244,14 +246,14 @@ describe('Bot API calls', () => {
 
   it('acknowledges a press with a short note', async () => {
     const fetchMock = stubFetch({ status: 200, body: { ok: true, result: true } });
-    await adapter.acknowledge({ token: 'T', botUsername: BOT }, 'cb-1', 'Thanks');
+    await adapter.acknowledge({ token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '' }, 'cb-1', 'Thanks');
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/answerCallbackQuery$/);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ callback_query_id: 'cb-1', text: 'Thanks' });
   });
 
   it('registers the webhook for questions and button presses', async () => {
     const fetchMock = stubFetch({ status: 200, body: { ok: true, result: true } });
-    await adapter.registerWebhook({ token: 'T', botUsername: BOT }, 'https://kn.test/hook', 's');
+    await adapter.registerWebhook({ token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '' }, 'https://kn.test/hook', 's');
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
       allowed_updates: ['message', 'callback_query'],
     });
@@ -259,7 +261,7 @@ describe('Bot API calls', () => {
 
   it('never puts the token in an error', async () => {
     stubFetch({ status: 401, body: { ok: false, description: 'Unauthorized' } });
-    const err = await adapter.identify({ token: 'T0KEN', botUsername: null }).catch((e: unknown) => e);
+    const err = await adapter.identify({ token: 'T0KEN', botUsername: null, serverUrl: null, actionUrl: '' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ChatPlatformError);
     expect(String((err as Error).message)).toBe('telegram getMe: Unauthorized');
     expect(String((err as Error).message)).not.toContain('T0KEN');
@@ -268,7 +270,7 @@ describe('Bot API calls', () => {
   it('treats "message is not modified" on an edit as done', async () => {
     stubFetch({ status: 400, body: { ok: false, description: 'Bad Request: message is not modified' } });
     await expect(
-      adapter.editMessage({ token: 'T', botUsername: BOT }, { chatId: '1', messageId: '2' }, { text: 'a', plain: 'a', buttons: [] }),
+      adapter.editMessage({ token: 'T', botUsername: BOT, serverUrl: null, actionUrl: '' }, { chatId: '1', messageId: '2' }, { text: 'a', plain: 'a', buttons: [] }),
     ).resolves.toBeUndefined();
   });
 });

@@ -7,6 +7,7 @@ import {
   isWebSource,
   type AssistantMessageInfo,
   type AssistantSource,
+  type ChatPlatformKind,
   type Locale,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
@@ -38,6 +39,12 @@ const DM_CONTINUATION_MS = 30 * 60_000;
 const REAP_BATCH = 50;
 /** Reasons for a 👎 per row of buttons — seven do not fit one row on a phone. */
 const REASONS_PER_ROW = 2;
+
+/**
+ * The help each platform gets: Telegram's commands are `/slash`; Time's client
+ * takes every leading `/` for itself, so its commands are plain words.
+ */
+const HELP_KEY: Record<ChatPlatformKind, string> = { telegram: 'chat.help', time: 'chat.helpTime' };
 
 /** Which buttons sit under an answer: the vote row, the reasons for a 👎, or what to save it as. */
 type AnswerButtons = 'vote' | 'reasons' | 'save';
@@ -147,7 +154,7 @@ export class ChatAnswersService {
         case 'start':
         case 'help':
           if (inbound.isDm && !userId) return this.askToLink(d);
-          return this.notice(d, t('chat.help', { workspace: d.workspaceName }));
+          return this.notice(d, this.help(d));
         case 'new':
           if (!userId) return inbound.isDm ? this.askToLink(d) : undefined;
           // Ages the asker's conversations here out of the continuation window
@@ -171,10 +178,38 @@ export class ChatAnswersService {
           return this.question(d, userId, locale, command.args, true);
         default:
           // Somebody else's command, or a typo. In a DM the help says what exists.
-          return inbound.isDm ? this.notice(d, t('chat.help', { workspace: d.workspaceName })) : undefined;
+          return inbound.isDm ? this.notice(d, this.help(d)) : undefined;
       }
     }
-    return this.question(d, userId, locale, inbound.text, inbound.mentioned);
+    return this.question(d, userId, locale, inbound.text, inbound.mentioned || (await this.inBotThread(d)));
+  }
+
+  private help(d: Delivery): string {
+    return t(HELP_KEY[d.integration.kind as ChatPlatformKind] ?? 'chat.help', { workspace: d.workspaceName });
+  }
+
+  /**
+   * Is an unmentioned message part of an exchange with the bot? Telegram says
+   * so itself (a reply to the bot's message comes marked `mentioned`). Time
+   * gives only the thread, so the thread is checked against what the bot
+   * answered in this chat: a thread it answered in, or one rooted at its own
+   * reply. Anyone's — in a group, joining a thread with the bot is addressing it.
+   */
+  private async inBotThread(d: Delivery): Promise<boolean> {
+    const { inbound, integration } = d;
+    if (inbound.isDm || (!inbound.threadId && !inbound.replyToBotMessageId)) return false;
+    const found = await this.prisma.chatAnswer.findFirst({
+      where: {
+        integrationId: integration.id,
+        externalChatId: inbound.chatId,
+        OR: [
+          ...(inbound.threadId ? [{ threadId: inbound.threadId }] : []),
+          ...(inbound.replyToBotMessageId ? [{ replyMessageId: inbound.replyToBotMessageId }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+    return !!found;
   }
 
   private async question(d: Delivery, userId: string | null, locale: Locale, text: string, addressed: boolean): Promise<void> {
@@ -260,6 +295,7 @@ export class ChatAnswersService {
           integrationId: d.integration.id,
           externalChatId: d.inbound.chatId,
           inboundMessageId: d.inbound.messageId,
+          threadId: d.inbound.threadId,
           askedBy: userId,
           agentKey,
           locale,
@@ -283,9 +319,10 @@ export class ChatAnswersService {
 
   /**
    * The asker's own assistant thread for this question: the conversation of the
-   * answer they replied to, or — in a DM — the one they were in a moment ago.
-   * Anything else starts fresh. A reply to *somebody else's* answer starts
-   * fresh too: a thread is one person's, and its history would otherwise leak.
+   * answer they replied to, of their last question in this platform thread
+   * (Time), or — in a DM — the one they were in a moment ago. Anything else
+   * starts fresh. A reply to *somebody else's* answer starts fresh too: a
+   * thread is one person's, and its history would otherwise leak.
    */
   private async conversationFor(d: Delivery, userId: string, question: string) {
     const { integration, inbound } = d;
@@ -304,7 +341,24 @@ export class ChatAnswersService {
       if (answered?.conversationId) {
         found = await this.prisma.chatConversation.findUnique({ where: { id: answered.conversationId } });
       }
-    } else if (inbound.isDm) {
+    }
+    if (!found && inbound.threadId) {
+      const asked = await this.prisma.chatAnswer.findFirst({
+        where: {
+          integrationId: integration.id,
+          externalChatId: inbound.chatId,
+          threadId: inbound.threadId,
+          askedBy: userId,
+          conversationId: { not: null },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { conversationId: true },
+      });
+      if (asked?.conversationId) {
+        found = await this.prisma.chatConversation.findUnique({ where: { id: asked.conversationId } });
+      }
+    }
+    if (!found && inbound.isDm) {
       found = await this.prisma.chatConversation.findFirst({
         where: {
           integrationId: integration.id,

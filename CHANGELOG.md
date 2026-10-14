@@ -50,6 +50,18 @@ in the pull request that introduces them — see
   and up, a summary opens each page, and changes the model only suspects are
   listed apart as "Possibly breaking". A published release's page is never
   regenerated. (#72)
+- The connector page has a **Wiki** tab and a **Releases** tab.
+  - The Wiki tab lists the wiki's pages, marks which are stale or waiting in a
+    merge request, and shows how `.knowledge/wiki.yml` is steering the wiki:
+    validation errors, and the effort asked beside the effort the server
+    allows. Editors can regenerate one section or the whole wiki, and can force
+    a full rewrite.
+  - The Releases tab lists each release with its confirmed and suspected
+    breaking counts.
+  New API routes `GET /v1/connectors/:id/wiki`,
+  `POST /v1/connectors/:id/wiki/regenerate` and `GET /v1/connectors/:id/releases`.
+  New MCP tools `knowledge_repo_wiki` (read) and `knowledge_regenerate_wiki`
+  (write, not offered to read-only keys). (#72)
 - The archaeologist no longer treats a repo wiki's file listings as
   documentation. It still proposes undocumented logic files below the wiki's
   module pages. (#72)

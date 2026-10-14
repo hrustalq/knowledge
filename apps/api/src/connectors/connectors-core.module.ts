@@ -11,6 +11,7 @@ import { ConnectorStagingService } from './connector-staging.service.js';
 import { ConnectorSyncService } from './connector-sync.service.js';
 import { ConnectorsService } from './connectors.service.js';
 import { GithubCoreModule } from './github/github-core.module.js';
+import { RepoWikiService } from './repo-wiki.service.js';
 
 /**
  * Connector configuration, credentials, links and the sync engine, with no
@@ -38,6 +39,7 @@ import { GithubCoreModule } from './github/github-core.module.js';
     ConnectorDiscoveryService,
     ConnectorStagingService,
     ConnectorSyncService,
+    RepoWikiService,
   ],
   exports: [
     ConnectorsService,
@@ -45,6 +47,9 @@ import { GithubCoreModule } from './github/github-core.module.js';
     ConnectorDiscoveryService,
     ConnectorStagingService,
     ConnectorSyncService,
+    // The repo wiki's read side and regenerate (docs/features/46): shared by
+    // the REST routes and the MCP tools, so exported like the rest.
+    RepoWikiService,
   ],
 })
 export class ConnectorsCoreModule {}

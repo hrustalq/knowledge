@@ -223,7 +223,7 @@ frontmatter says`generated: repo-wiki | codebase-connector`. Otherwise every
 ## Regenerating on push
 
 `codebase` now has `capabilities.webhook: true`. That reverses feature 27's
-deferral, without its objection. A push names *files*, and which unit a file
+deferral, without its objection. A push names _files_, and which unit a file
 feeds is not knowable until the archive has been read. So a push never names
 units.
 
@@ -246,7 +246,7 @@ inputs actually changed.
   `WIKI_PUSH_DEBOUNCE_MS`. This is not a repeatable, so the no-cron rule
   holds. While the run waits, further pushes find it (`status: queued`,
   `startedAt: null`) and fold into it, so three pushes in the window make one
-  run. A waiting *scoped* run is widened to unscoped.
+  run. A waiting _scoped_ run is widened to unscoped.
 - **Entry points.** The GitHub App hook (`push` and `release` beside the
   existing `publishBare`) and the per-connector hook. In the per-connector
   hook, a `codebase` delivery is verified with the same secret as a pull
@@ -288,7 +288,7 @@ byte-for-byte the latest regenerated revision (`isOurRegeneration`).
 
 ### Fixed on the way: frontmatter pages always looked edited
 
-`headContentHash` hashed `getContent().markdown`, the body *without* its
+`headContentHash` hashed `getContent().markdown`, the body _without_ its
 frontmatter, and compared it with a `contentHash` taken over the markdown as
 written, frontmatter included. Every page carrying frontmatter, which means
 every codebase page, therefore looked locally edited. Under the default
@@ -379,6 +379,68 @@ Wiki pages carry `generated: 'repo-wiki'`, `unit`, `headSha` and
 writes it as the zip comment, and `zipCommentSha` reads it from the tail, so
 knowing the commit costs no request. With the wiki off, the frontmatter stays
 feature 27's `generated: 'codebase-connector'`.
+
+## API, MCP and the web
+
+| Route | `@Access` | Returns |
+| --- | --- | --- |
+| `GET /v1/connectors/:id/wiki` | `viewer`, `connector` | `RepoWikiInfo` |
+| `POST /v1/connectors/:id/wiki/regenerate` | `editor`, `connector` | `{ runId }` |
+| `GET /v1/connectors/:id/releases` | `viewer`, `connector` | `ListReleasesResponse` |
+
+`RepoWikiService` lives in `ConnectorsCoreModule`, controller-free, so the
+routes and the MCP tools share it. Nothing it reports is stored:
+
+- **Sections** are the connector's links, plus the sections the effective
+  config expects that have not been created yet (`documentId: null`).
+- **`stale`** is derived. The last completed pull run saw an input version for
+  the unit different from the one its link records: the item failed, was
+  skipped, or is waiting for review.
+- **`openMergeRequestId`** is a join: regenerated conflict rows whose merge
+  request is still open.
+- **Steering** is read straight from the host (`readRepoFile`, one request
+  using the contents/raw API) and passed through `effectiveWikiConfig`, so the
+  card shows what a sync would do. A host that cannot be read sets
+  `configUnreadable`, and the defaults are shown.
+
+`regenerate` errors and scoping:
+
+- It answers 400 `error.wiki.notACodebase` for any other kind, and 400
+  `error.wiki.disabled` when neither the wiki nor release notes are on.
+- `force` forgets the targeted links' `external_version`, so those pages
+  re-derive without a commit. This is how a new prompt or model reaches live
+  pages.
+- The run is scoped to the targeted keys only when every one of them already
+  has a page. A section never created needs the walk, which files it under the
+  overview.
+
+`releases` reads `breakingCount`/`suspectedCount`/`date` from each release
+page's frontmatter. It adds tags past the backfill cap from the host, with
+`generated: false`, and orders Unreleased first, then tags by version.
+
+MCP:
+
+- `knowledge_repo_wiki` (read, `guard.connector(…, 'viewer')`).
+- `knowledge_regenerate_wiki` (write, `'editor'`, listed in `WRITE_TOOLS`, so
+  a read-only key is never offered it). It queues the run and returns it, like
+  `knowledge_sync_connector`.
+
+The generated SKILL.md gains a "Repositories" paragraph that names the
+regenerate tool only to a key that is offered it.
+
+Web:
+
+- The connector page gets a **Wiki** tab (`ConnectorWiki.vue`) when the wiki
+  is on, and a **Releases** tab (`ConnectorReleases.vue`) when release notes
+  are on. Both check through the contracts predicates.
+- The Wiki tab shows the steering card with asked vs applied effort,
+  validation errors and delivery. It groups pages by section, with stale and
+  open-merge-request markers. Editors get Regenerate per section and for the
+  whole wiki, and a "Rewrite everything" force.
+- The Releases tab lists confirmed and suspected counts apart.
+- The setup dialog renders the catalogue's `select` fields as selects, with
+  the empty "inherit" option carried as a sentinel. The five wiki fields ride
+  on the codebase location step.
 
 ## Surface
 

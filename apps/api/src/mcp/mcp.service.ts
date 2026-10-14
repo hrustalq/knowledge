@@ -16,6 +16,7 @@ import {
   SHARE_PASSWORD_MAX_CHARS,
   SHARE_PASSWORD_MIN_CHARS,
   VERIFICATION_NOTE_MAX_CHARS,
+  WIKI_SECTIONS,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
@@ -35,6 +36,7 @@ import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
 import { ConnectorWorkItemsService } from '../connectors/connector-work-items.service.js';
+import { RepoWikiService } from '../connectors/repo-wiki.service.js';
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { AccessService } from '../auth/access.service.js';
@@ -133,6 +135,7 @@ export class McpService {
     private readonly templates: TemplatesService,
     private readonly shareLinks: ShareLinksService,
     private readonly exports: ExportService,
+    private readonly repoWiki: RepoWikiService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -492,6 +495,46 @@ export class McpService {
       async ({ runId }) => {
         await guard.connectorRun(runId, 'viewer');
         return this.json(await this.connectors.getRun(runId));
+      },
+    );
+
+    // Repo wiki (docs/features/46). The read mirrors `GET :id/wiki`; the write
+    // mirrors `POST :id/wiki/regenerate` and, like `knowledge_sync_connector`,
+    // only queues a run — the pages are written by the worker, reviewed by
+    // the connector's own rules.
+    server.registerTool(
+      'knowledge_repo_wiki',
+      {
+        description:
+          "A codebase connector's repo wiki: its sections and the page each one is, which are stale or waiting in a merge request, and how the repository's .knowledge/wiki.yml steers it — effort asked beside effort applied. Read it before writing about a repository's architecture: the wiki is derived from the code.",
+        inputSchema: { connectorId: z.string().uuid() },
+      },
+      async ({ connectorId }) => {
+        await guard.connector(connectorId, 'viewer');
+        return this.json(await this.repoWiki.info(connectorId));
+      },
+    );
+
+    server.registerTool(
+      'knowledge_regenerate_wiki',
+      {
+        description:
+          "Queue a run that re-derives a codebase connector's repo wiki, or only some sections. Only pages whose code changed are rewritten unless force is set. Returns the run to poll with knowledge_get_connector_run.",
+        inputSchema: {
+          connectorId: z.string().uuid(),
+          sections: z
+            .array(z.enum(WIKI_SECTIONS))
+            .max(WIKI_SECTIONS.length)
+            .optional()
+            .describe('Only these sections; omit for the whole wiki.'),
+          force: z.boolean().optional().describe('Re-derive even pages whose inputs did not change. Defaults to false.'),
+        },
+      },
+      async ({ connectorId, sections, force }) => {
+        await guard.connector(connectorId, 'editor');
+        const run = await this.repoWiki.regenerate(connectorId, { sections, force, actorId: principal.userId });
+        await this.connectorProducer.enqueue(run.id);
+        return this.json(toRunInfo(run));
       },
     );
 

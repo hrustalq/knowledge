@@ -36,6 +36,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import UserAvatar from '@/components/merge-requests/UserAvatar.vue'
 import AvatarPicker from '@/components/people/AvatarPicker.vue'
+import LinkedChatAccounts from '@/components/profile/LinkedChatAccounts.vue'
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
@@ -288,6 +289,10 @@ async function savePassword() {
                 <RouterLink to="/settings/connect">{{ t('profileSettings.apiKey.manage') }}</RouterLink>
               </Button>
             </div>
+          </li>
+
+          <li class="px-5 py-4">
+            <LinkedChatAccounts />
           </li>
         </ul>
       </section>

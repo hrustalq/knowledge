@@ -981,6 +981,196 @@
       "platformAdmin": true
     },
     {
+      "method": "DELETE",
+      "path": "/v1/chat/bindings/{id}",
+      "tag": "chat",
+      "summary": "Stop answering in a group",
+      "role": "admin",
+      "source": "chat-binding",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/chat/bindings/{id}",
+      "tag": "chat",
+      "summary": "Change a group’s project, agent, answer mode or language",
+      "role": "admin",
+      "source": "chat-binding",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/chat/bindings/{id}/subscriptions",
+      "tag": "chat",
+      "summary": "What a group is told about: pages published or updated, merge requests opened or merged",
+      "role": "admin",
+      "source": "chat-binding",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/chat/bindings/{id}/subscriptions",
+      "tag": "chat",
+      "summary": "Tell a group about changes, instantly or as a digest. Only titles and links are sent",
+      "role": "admin",
+      "source": "chat-binding",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/chat/integrations",
+      "tag": "chat",
+      "summary": "The workspace’s chat bots. Tokens are never returned, only a hint",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/chat/integrations",
+      "tag": "chat",
+      "summary": "Connect a bot: the token is checked with the platform, then the webhook is set",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/chat/integrations/{id}",
+      "tag": "chat",
+      "summary": "Disconnect a bot, with its bindings and linked accounts",
+      "role": "admin",
+      "source": "chat-integration",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/chat/integrations/{id}",
+      "tag": "chat",
+      "summary": "Rename, switch off, replace the token or change the default agent or language",
+      "role": "admin",
+      "source": "chat-integration",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/chat/integrations/{id}/bindings",
+      "tag": "chat",
+      "summary": "The groups this bot answers in",
+      "role": "admin",
+      "source": "chat-integration",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/chat/integrations/{id}/bindings",
+      "tag": "chat",
+      "summary": "Let the bot answer in a group, by its chat id",
+      "role": "admin",
+      "source": "chat-integration",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/chat/integrations/{id}/identities",
+      "tag": "chat",
+      "summary": "Messenger accounts linked to people through this bot",
+      "role": "admin",
+      "source": "chat-integration",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/chat/integrations/{id}/identities/{identityId}",
+      "tag": "chat",
+      "summary": "Unlink an account; it gets no answers until it is linked again",
+      "role": "admin",
+      "source": "chat-integration",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/chat/integrations/{id}/test",
+      "tag": "chat",
+      "summary": "Check the token and set the webhook again",
+      "role": "admin",
+      "source": "chat-integration",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/chat/link",
+      "tag": "chat",
+      "summary": "Link the messenger account that asked for this code to the signed-in person",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/chat/link/preview",
+      "tag": "chat",
+      "summary": "Who is asking to be linked, before confirming",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/chat/subscriptions/{id}",
+      "tag": "chat",
+      "summary": "Stop telling a group about changes",
+      "role": "admin",
+      "source": "chat-subscription",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/chat/subscriptions/{id}",
+      "tag": "chat",
+      "summary": "Change what a group is told about, or how often",
+      "role": "admin",
+      "source": "chat-subscription",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/chat-identities",
+      "tag": "chat",
+      "summary": "My linked messenger accounts",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/me/chat-identities/{id}",
+      "tag": "chat",
+      "summary": "Unlink one of my messenger accounts",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/connectors",
       "tag": "connectors",

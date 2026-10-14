@@ -37,6 +37,13 @@ export interface AssistantToolContext {
    * a background agent's tool loop has no answer to cite into and passes none.
    */
   cite?: (source: AssistantSource) => string;
+  /**
+   * Narrows retrieval to one project — a chat channel bound to a project
+   * (issue #71). Pinned like `workspaceId`, never read from tool arguments.
+   * Organizational, not an ACL: `read_document` still reaches any page in the
+   * workspace by id, as the caller could.
+   */
+  projectId?: string;
 }
 
 export interface AssistantToolResult {

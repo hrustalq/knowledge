@@ -17,6 +17,7 @@
     "./templates": "./src/templates/index.ts",
     "./publishing": "./src/publishing/index.ts",
     "./connectors": "./src/connectors/index.ts",
+    "./chat": "./src/chat/index.ts",
     "./observability": "./src/observability/index.ts"
   },
   "scripts": {

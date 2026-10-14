@@ -2364,3 +2364,256 @@ model ExportJob {
   @@index([status, expiresAt])
   @@map("export_jobs")
 }
+
+// ---------------------------------------------------------------------------
+// Chat bots (issue #71): a workspace answering in a messenger. No FK on
+// workspace_id / user_id / created_by (house policy); the per-integration rows
+// cascade with the integration, because a binding or a link to a bot that no
+// longer exists is not a fact about anything.
+// ---------------------------------------------------------------------------
+
+/// One bot, connected to one workspace.
+model ChatIntegration {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// CHAT_PLATFORM_KINDS — 'telegram' | 'time'.
+  kind        String
+  name        String
+  enabled     Boolean @default(true)
+  /// The messenger's own server, for a platform each customer hosts (Time):
+  /// an admin-typed origin, checked by the SSRF guard. '' where the platform
+  /// has one fixed API (Telegram) — empty rather than null so the bot-account
+  /// unique below still holds for those rows (PG treats nulls as distinct).
+  serverUrl   String  @default("") @map("server_url")
+
+  /// AES-256-GCM envelope of the bot token ("gcm$iv$tag$ct"); never leaves the API.
+  credential        String?
+  credentialHint    String? @map("credential_hint")
+  /// SHA-256 of the secret the platform echoes on every delivery (Telegram's
+  /// `secret_token`). Only the hash is kept: the secret is handed to the
+  /// platform once, when the webhook is set, and compared on the way in.
+  inboundSecretHash String? @map("inbound_secret_hash")
+  /// Read from the platform (getMe) whenever the token is saved or tested.
+  botUsername       String? @map("bot_username")
+  /// The platform's last refusal of setWebhook; null once it was accepted.
+  webhookError      String? @map("webhook_error")
+
+  /// null = the researcher.
+  defaultAgentKey String?  @map("default_agent_key")
+  /// Fallback reply language when neither the person nor the binding says.
+  locale          String   @default("en")
+  createdBy       String?  @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  bindings      ChatChannelBinding[]
+  identities    ChatIdentity[]
+  linkCodes     ChatLinkCode[]
+  answers       ChatAnswer[]
+  conversations ChatConversation[]
+
+  @@unique([workspaceId, name])
+  // One bot account serves one workspace: deliveries carry no workspace, so a
+  // token connected twice would answer every question in whichever row won.
+  // A self-hosted platform names bots per server, so the server is part of it.
+  @@unique([kind, serverUrl, botUsername])
+  @@map("chat_integrations")
+}
+
+/// A group or channel the bot may answer in. DMs need none.
+model ChatChannelBinding {
+  id             String   @id @default(uuid()) @db.Uuid
+  integrationId  String   @map("integration_id") @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  externalChatId String   @map("external_chat_id")
+  title          String?
+  /// Retrieval scope for answers here; null = the whole workspace.
+  projectId      String?  @map("project_id") @db.Uuid
+  /// null = the integration's default agent.
+  agentKey       String?  @map("agent_key")
+  /// CHAT_ANSWER_MODES — 'mention' | 'all' | 'off'.
+  answerMode     String   @default("mention") @map("answer_mode")
+  locale         String?
+  createdBy      String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  integration   ChatIntegration    @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  subscriptions ChatSubscription[]
+
+  @@unique([integrationId, externalChatId])
+  @@map("chat_channel_bindings")
+}
+
+/// A bound group told about pages and merge requests (issue #71, phase 3).
+/// Delivered by reading `activity_log` past a cursor — durable and
+/// replayable, where the Redis bus would drop whatever a restart missed — and
+/// the cursor moves in one guarded update before anything is sent, so two
+/// sweeps never send the same rows. Only titles and links reach the group.
+model ChatSubscription {
+  id              String    @id @default(uuid()) @db.Uuid
+  bindingId       String    @map("binding_id") @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
+  /// null = the whole workspace.
+  projectId       String?   @map("project_id") @db.Uuid
+  /// string[], folded like tag entity keys (without the `tag:` prefix). Empty = any page.
+  tags            Json      @default("[]")
+  /// CHAT_SUBSCRIPTION_EVENT_KINDS[].
+  eventKinds      Json      @default("[]") @map("event_kinds")
+  /// CHAT_SUBSCRIPTION_DELIVERIES — 'instant' | 'digest'.
+  delivery        String    @default("instant")
+  /// CHAT_DIGEST_MINUTES, when delivery is 'digest'.
+  digestMinutes   Int?      @map("digest_minutes")
+  /// The last activity row read: (created_at, id), the tie-break for rows
+  /// written in the same instant. Starts at the rule's creation — a new rule
+  /// is not a replay of the feed.
+  cursorAt        DateTime  @default(now()) @map("cursor_at") @db.Timestamptz
+  cursorId        String    @default("00000000-0000-0000-0000-000000000000") @map("cursor_id") @db.Uuid
+  /// When a digest is next due; null for instant rules, which are due every tick.
+  nextDueAt       DateTime? @map("next_due_at") @db.Timestamptz
+  lastDeliveredAt DateTime? @map("last_delivered_at") @db.Timestamptz
+  /// The platform's last refusal; null once a message goes through.
+  lastError       String?   @map("last_error")
+  createdBy       String?   @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  binding ChatChannelBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+
+  @@index([bindingId])
+  @@map("chat_subscriptions")
+}
+
+/// A messenger account linked to a person: every answer to it runs as them.
+model ChatIdentity {
+  id               String   @id @default(uuid()) @db.Uuid
+  integrationId    String   @map("integration_id") @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  externalUserId   String   @map("external_user_id")
+  externalUserName String?  @map("external_user_name")
+  userId           String   @map("user_id") @db.Uuid
+  linkedAt         DateTime @default(now()) @map("linked_at") @db.Timestamptz
+
+  integration ChatIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalUserId])
+  @@index([userId])
+  @@map("chat_identities")
+}
+
+/// A one-time code proving a messenger account asked to be linked. Issued only
+/// in reply to a verified delivery from that account, in a private chat.
+model ChatLinkCode {
+  id               String    @id @default(uuid()) @db.Uuid
+  integrationId    String    @map("integration_id") @db.Uuid
+  externalUserId   String    @map("external_user_id")
+  externalUserName String?   @map("external_user_name")
+  /// Where to say "linked" once it is — the private chat the code was sent to.
+  externalChatId   String    @map("external_chat_id")
+  codeHash         String    @unique @map("code_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
+  usedAt           DateTime? @map("used_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  integration ChatIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId, externalUserId])
+  @@map("chat_link_codes")
+}
+
+/// A chat conversation mapped onto the asker's own assistant thread, so the
+/// history, sources and tool trace live in assistant_messages and the person
+/// finds it under /assistant. One per asker: a group thread several people
+/// ask in is several conversations, because a thread belongs to one person.
+model ChatConversation {
+  id                String   @id @default(uuid()) @db.Uuid
+  integrationId     String   @map("integration_id") @db.Uuid
+  workspaceId       String   @map("workspace_id") @db.Uuid
+  externalChatId    String   @map("external_chat_id")
+  userId            String   @map("user_id") @db.Uuid
+  assistantThreadId String   @map("assistant_thread_id") @db.Uuid
+  lastActivityAt    DateTime @default(now()) @map("last_activity_at") @db.Timestamptz
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  integration ChatIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId, externalChatId, userId, lastActivityAt])
+  @@map("chat_conversations")
+}
+
+/// One question asked in a chat. The pending row is the claim (the feature-21
+/// shape): it is written before the answer exists, so a redelivered update
+/// answers once and a reply that dies has somewhere to say so.
+model ChatAnswer {
+  id                 String   @id @default(uuid()) @db.Uuid
+  workspaceId        String   @map("workspace_id") @db.Uuid
+  integrationId      String   @map("integration_id") @db.Uuid
+  externalChatId     String   @map("external_chat_id")
+  /// The platform's id for the question — with the chat, what makes a redelivery a duplicate.
+  inboundMessageId   String   @map("inbound_message_id")
+  conversationId     String?  @map("conversation_id") @db.Uuid
+  askedBy            String   @map("asked_by") @db.Uuid
+  /// The bot's own message: the placeholder, edited into the answer.
+  replyMessageId     String?  @map("reply_message_id")
+  /// The platform thread the question was asked in, where the platform has
+  /// threads (Time's `root_id`, or the question itself when it starts one).
+  /// A later message in the same thread is a follow-up. null on Telegram,
+  /// which has reply chains instead (`replyMessageId`).
+  threadId           String?  @map("thread_id")
+  /// Votes key on this (answer_feedback, surface 'chat').
+  assistantMessageId String?  @map("assistant_message_id") @db.Uuid
+  /// CHAT_ANSWER_STATUSES — 'pending' | 'answered' | 'failed'.
+  status             String   @default("pending")
+  agentKey           String?  @map("agent_key")
+  /// Reply language, frozen at the claim so the reaper can still use it.
+  locale             String   @default("en")
+  error              String?
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  integration ChatIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  captures    ChatCapture[]
+
+  @@unique([integrationId, externalChatId, inboundMessageId])
+  @@index([status, createdAt])
+  @@index([askedBy, createdAt])
+  @@index([integrationId, externalChatId, replyMessageId])
+  @@index([integrationId, externalChatId, threadId])
+  @@map("chat_answers")
+}
+
+/// A chat conversation saved as a page draft behind a merge request, or as a
+/// proposed glossary term (issue #71, phase 2). Drafted and published in one
+/// API-side continuation, as the person who pressed Save; the pending row is
+/// the claim, and the chat sweeper fails what a restart strands.
+model ChatCapture {
+  id             String   @id @default(uuid()) @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  /// The answer whose Save was pressed: the conversation up to it is what is saved.
+  answerId       String   @map("answer_id") @db.Uuid
+  /// CHAT_CAPTURE_KINDS — 'page' | 'glossary-term'.
+  kind           String
+  /// CHAT_CAPTURE_STATUSES — 'pending' | 'published' | 'failed'.
+  status         String   @default("pending")
+  requestedBy    String   @map("requested_by") @db.Uuid
+  /// The bot's "Drafting…" message, edited into the result.
+  replyMessageId String?  @map("reply_message_id")
+  /// Reply language, frozen at the claim so the sweeper can still use it.
+  locale         String   @default("en")
+  /// The page title or the term, once published.
+  title          String?
+  documentId     String?  @map("document_id") @db.Uuid
+  mergeRequestId String?  @map("merge_request_id") @db.Uuid
+  glossaryTermId String?  @map("glossary_term_id") @db.Uuid
+  error          String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  answer ChatAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  // One page and one term per answer: a double press is one capture. A failed
+  // one is claimed again in place, by a guarded update.
+  @@unique([answerId, kind])
+  @@index([status, createdAt])
+  @@map("chat_captures")
+}

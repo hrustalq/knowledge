@@ -235,6 +235,15 @@ Best-effort delivery, no replay for a reconnecting client (Redis streams were
 noted as future work in feature 04), and only one level of dependent re-index —
 transitive cascades would need a depth budget and cycle detection.
 
+Where a missed event is a correctness problem, the reader does not use the
+bus. Chat-bot channel notifications ([../features/47-chat-bots.md](../features/47-chat-bots.md#channel-notifications))
+read `activity_log` past a per-rule cursor instead: `ActivityService.record`
+writes the row before it publishes, so the table holds everything the bus
+carried that the feed records, and a restart resumes where the cursor stopped.
+That cursor has to step around two things the bus never shows: rows stamped
+earlier that commit later (a few seconds of lag), and a page's tags reaching
+the graph only once it is indexed (the cursor holds before such a row).
+
 `KNOWN_EVENT_TYPES` in contracts is the subscription vocabulary — it backs
 `LIVE_TRACKED_EVENTS`, the WS `subscribe` filter and the workflow trigger
 picker — but **it drifts in both directions and nothing catches it**:

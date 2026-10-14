@@ -575,6 +575,53 @@ export const envSchema = z.object({
   OPS_JSONL_ENABLED: boolish(true),
 
   /**
+   * Chat bots (issue #71). Off: the webhook answers 404, settings are still
+   * editable so a bot can be prepared, and the reaper does not run.
+   */
+  CHAT_ENABLED: boolish(false),
+  /** A question still unanswered after this long is failed, and its placeholder says so. */
+  CHAT_ANSWER_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(120),
+  /** Source links printed under one answer. */
+  CHAT_MAX_SOURCES: z.coerce.number().int().min(0).max(10).default(5),
+  /** How long a link code sent by the bot stays redeemable. */
+  CHAT_LINK_CODE_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+  /**
+   * Questions one person may ask the bots in a minute. A ceiling: the next one
+   * gets a "slow down" reply and no model call.
+   */
+  CHAT_RATE_LIMIT_PER_USER_PER_MINUTE: z.coerce.number().int().positive().default(10),
+  /**
+   * A saved conversation still drafting after this long is failed, and its
+   * "Drafting…" message says so. Longer than an answer: a page is a longer
+   * completion than a reply.
+   */
+  CHAT_CAPTURE_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(300),
+  /**
+   * How often subscribed groups are checked for news (phase 3). Instant
+   * delivery is "within one tick"; a digest is due on the first tick past its
+   * window.
+   */
+  CHAT_DIGEST_TICK_MS: z.coerce.number().int().min(5_000).default(60_000),
+  /**
+   * The Bot API host. Overridable for a self-hosted Bot API server or a proxy,
+   * which a deployment that cannot reach api.telegram.org directly needs.
+   */
+  TELEGRAM_API_BASE_URL: z.string().url().default('https://api.telegram.org'),
+  /**
+   * Allow a self-hosted messenger (Time) on a private/loopback address. An
+   * in-house Time server is the usual deployment, but a URL typed into a
+   * settings form is also the classic SSRF shape, so the default refuses it.
+   * Mirrors CONNECTOR_ALLOW_PRIVATE_URLS.
+   */
+  CHAT_ALLOW_PRIVATE_URLS: boolish(false),
+  /**
+   * How often the API compares its open Time websockets with the enabled bots
+   * (phase 4): a bot saved, switched off or given a new token is picked up
+   * within one tick. Reconnects after a drop do not wait for it.
+   */
+  CHAT_SOCKET_SYNC_MS: z.coerce.number().int().min(1_000).default(15_000),
+
+  /**
    * Interface + API language (docs/features/18). Also the fallback whenever a
    * request carries no ?lang=, no kn_lang cookie and no usable Accept-Language,
    * and the language worker-generated prose defaults to. Must keep a default:

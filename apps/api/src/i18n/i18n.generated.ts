@@ -160,6 +160,93 @@ export type I18nTranslations = {
             "agentOffered": string;
         };
     };
+    "chat": {
+        "help": string;
+        "helpTime": string;
+        "link": {
+            "required": string;
+            "button": string;
+            "inGroup": string;
+            "openPrivate": string;
+            "success": string;
+            "unlinked": string;
+            "notLinked": string;
+        };
+        "answer": {
+            "thinking": string;
+            "failed": string;
+            "timeout": string;
+            "noAccess": string;
+            "disabled": string;
+            "budget": string;
+            "rateLimited": string;
+            "sources": string;
+            "openFull": string;
+            "empty": string;
+        };
+        "conversation": {
+            "new": string;
+        };
+        "bind": {
+            "done": string;
+            "already": string;
+            "removed": string;
+            "notBound": string;
+            "forbidden": string;
+            "dmOnly": string;
+        };
+        "feedback": {
+            "thanks": string;
+            "askReason": string;
+            "linkFirst": string;
+            "gone": string;
+            "disabled": string;
+            "failed": string;
+            "back": string;
+            "reason": {
+                "wrong": string;
+                "outdated": string;
+                "incomplete": string;
+                "irrelevant-sources": string;
+                "no-answer": string;
+                "unclear": string;
+                "other": string;
+            };
+        };
+        "capture": {
+            "save": string;
+            "asPage": string;
+            "asTerm": string;
+            "forbidden": string;
+            "draftingPage": string;
+            "draftingTerm": string;
+            "pageReady": string;
+            "termReady": string;
+            "openMergeRequest": string;
+            "openGlossary": string;
+            "alreadySaved": string;
+            "inProgress": string;
+            "noTerm": string;
+            "nothing": string;
+            "noProject": string;
+            "disabled": string;
+            "failed": string;
+            "timeout": string;
+            "untitled": string;
+            "mrDescription": string;
+        };
+        "updates": {
+            "kind": {
+                "page-published": string;
+                "page-updated": string;
+                "merge-request-opened": string;
+                "merge-request-merged": string;
+            };
+            "heading": string;
+            "digest": string;
+            "more": string;
+        };
+    };
     "connector": {
         "stage": {
             "connecting": string;
@@ -687,6 +774,33 @@ export type I18nTranslations = {
             "notACodebase": string;
             "disabled": string;
         };
+        "chat": {
+            "integrationNotFound": string;
+            "bindingNotFound": string;
+            "subscriptionNotFound": string;
+            "digestWindowRequired": string;
+            "identityNotFound": string;
+            "disabled": string;
+            "invalidSecret": string;
+            "nameTaken": string;
+            "botTaken": string;
+            "tokenRejected": string;
+            "tokenRequired": string;
+            "noEncryptionKey": string;
+            "unknownAgent": string;
+            "projectNotInWorkspace": string;
+            "bindingExists": string;
+            "linkCodeInvalid": string;
+            "linkCodeExpired": string;
+            "linkCodeUsed": string;
+            "linkNotMember": string;
+            "serverUrlRequired": string;
+            "serverUrlUnexpected": string;
+            "serverUrlInvalid": string;
+            "serverUrlNotHttps": string;
+            "serverUrlPrivate": string;
+            "serverHostUnresolved": string;
+        };
     };
     "import": {
         "stage": {
@@ -902,6 +1016,10 @@ export type I18nTranslations = {
         "siteVersion": string;
         "siteDomain": string;
         "export": string;
+        "chatIntegration": string;
+        "chatBinding": string;
+        "chatSubscription": string;
+        "chatIdentity": string;
     };
     "validation": {
         "isDefined": string;

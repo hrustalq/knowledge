@@ -460,5 +460,32 @@
   "wiki": {
     "notACodebase": "Вики репозитория есть только у коннектора кода; этот коннектор — {kind}.",
     "disabled": "Сначала включите для этого коннектора вики репозитория или заметки к релизам."
+  },
+  "chat": {
+    "integrationNotFound": "Чат-бот {id} не найден",
+    "bindingNotFound": "Привязка чата {id} не найдена",
+    "subscriptionNotFound": "Подписка чата {id} не найдена",
+    "digestWindowRequired": "Для сводки нужен период: раз в час, раз в 4 часа или раз в сутки",
+    "identityNotFound": "Привязанный аккаунт {id} не найден",
+    "disabled": "Чат-боты выключены на этом сервере (CHAT_ENABLED)",
+    "invalidSecret": "Секретный токен доставки отсутствует или неверен",
+    "nameTaken": "Чат-бот «{name}» в этом пространстве уже есть",
+    "botTaken": "Этот бот уже подключён к пространству — один бот отвечает за одно пространство",
+    "tokenRejected": "{platform} отклонил токен: {reason}",
+    "tokenRequired": "Нужен токен бота",
+    "noEncryptionKey": "SETTINGS_ENCRYPTION_KEY не задан, поэтому токен бота нельзя сохранить",
+    "unknownAgent": "В этом пространстве нет агента «{agent}»",
+    "projectNotInWorkspace": "Проект {id} не входит в это пространство",
+    "bindingExists": "Этот чат уже привязан к боту",
+    "linkCodeInvalid": "Код привязки недействителен. Запросите у бота новый.",
+    "linkCodeExpired": "Срок действия кода привязки истёк. Запросите у бота новый.",
+    "linkCodeUsed": "Код привязки уже использован. Запросите у бота новый.",
+    "linkNotMember": "Вы не участник пространства, к которому подключён этот бот",
+    "serverUrlRequired": "{platform} размещается у вас: укажите адрес вашего сервера",
+    "serverUrlUnexpected": "У {platform} один общий сервер — оставьте адрес сервера пустым",
+    "serverUrlInvalid": "Это не адрес сервера — ожидается что-то вроде https://time.example.com",
+    "serverUrlNotHttps": "Сервер мессенджера должен использовать https (http допустим только при CHAT_ALLOW_PRIVATE_URLS)",
+    "serverUrlPrivate": "Адрес {address} находится в частной сети; разрешите его через CHAT_ALLOW_PRIVATE_URLS",
+    "serverHostUnresolved": "Не удалось разрешить хост {host}"
   }
 }

@@ -13,6 +13,93 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.21.0] — 2026-10-14
+
+### Added
+
+- A workspace can answer questions in Telegram. An admin connects a bot under
+  **Settings → Chat bots** by pasting its BotFather token; the token is checked
+  with Telegram, stored encrypted and never shown again, and the bot's webhook
+  is set to this server. Anyone who messages the bot privately gets a one-time
+  link that ties their Telegram account to their account here; after that every
+  answer runs as them, with exactly their access, cites the pages it used as
+  links, and is kept as a conversation in their **Assistant** history. A bot
+  answers in a group only once a workspace admin binds it (`/bind` in the group,
+  or by chat id in settings), and there only when mentioned unless the group is
+  set otherwise; each group can be scoped to one project, use its own agent and
+  reply in its own language. Linked accounts are listed under **Settings →
+  Profile** with unlink. (#71)
+- Chat-bot answers can be rated. Every answer in Telegram carries 👍 and 👎;
+  a 👎 then offers the same reasons as the web app (wrong, out of date, wrong
+  pages cited…). Votes are recorded as the person who pressed, so anyone in a
+  group can rate an answer once they have linked their account, and they show
+  up in the admin **Feedback** tab as the *chat bot* surface. (#71)
+- An editor can save a chat-bot conversation. **💾 Save…** under an answer
+  turns the questions and answers posted in that chat into a page draft — an
+  empty page plus a merge request, so nothing is published until it is merged
+  — or into a glossary term that stays switched off until an editor turns it
+  on in **Settings → Glossary**. The draft is written as the person who
+  pressed Save, links the pages the answers cited, and lands in the group's
+  project (the workspace's first project from a private chat). (#71)
+- A bound chat group can be told what changed. Under each group in
+  **Settings → Chat bots → Notifications**, an admin picks what to report —
+  new pages, page updates, merge requests opened or merged — in one project or
+  the whole workspace, optionally only for pages with certain tags, and whether
+  to post right away or as an hourly, 4-hourly or daily digest. Only titles and
+  links are posted, never page content, and the links still ask readers to
+  sign in. Edits on review branches are not reported until they merge, and
+  each change is posted once, even across restarts. (#71)
+- Chat bots also work in **Time**, T-Bank's corporate messenger. In
+  **Settings → Chat bots → Connect a bot**, pick Time, give your Time server's
+  address and the token of a bot created under Integrations → Bot accounts.
+  Everything the Telegram bot does works there: cited answers as the linked
+  person, account linking, 👍/👎, saving a conversation and channel
+  notifications. In a channel the bot answers in the question's thread, and
+  anything said in that thread afterwards is a follow-up. Commands are plain
+  words (`help`, `new`, `bind`…) because Time keeps `/` for its own commands.
+  Built against Time's documented API, not yet tried on a live Time server.
+  (#71)
+
+### Operations
+
+- New env vars, all with defaults: `CHAT_ENABLED` (default `false` — chat bots
+  answer nothing and the webhook returns 404 until it is `true`),
+  `CHAT_ANSWER_TIMEOUT_SECONDS` (120), `CHAT_MAX_SOURCES` (5),
+  `CHAT_LINK_CODE_TTL_MINUTES` (15), `CHAT_RATE_LIMIT_PER_USER_PER_MINUTE` (10)
+  and `TELEGRAM_API_BASE_URL` (`https://api.telegram.org`; point it at a
+  self-hosted Bot API server or proxy when this host cannot reach Telegram).
+  Telegram delivers to `${API_PUBLIC_URL}/v1/chat/<id>/webhook`, which must be
+  public HTTPS; bot tokens need `SETTINGS_ENCRYPTION_KEY`. (#71)
+- Migration `20261014170000_chat_bots_core` only creates the six `chat_*`
+  tables. The previous release ignores them, so a code rollback is safe. (#71)
+- New env var `CHAT_CAPTURE_TIMEOUT_SECONDS` (default 300): a saved chat
+  conversation still drafting after this long is failed and its "Drafting…"
+  message says so. Migration `20261014190000_chat_captures` only creates the
+  `chat_captures` table; a code rollback is safe. (#71)
+- New env var `CHAT_DIGEST_TICK_MS` (default 60000, minimum 5000): how often
+  chat notification rules are checked, so "right away" means within one tick.
+  Migration `20261015100000_chat_subscriptions` only creates the
+  `chat_subscriptions` table; a code rollback is safe. (#71)
+- Time bots are heard over a websocket the API opens to each Time server, not
+  a webhook: the API must be able to reach the Time server, and the Time server
+  must reach `API_PUBLIC_URL` for the answer buttons to work. A message sent
+  while that connection is down is not answered. Every API replica opens its
+  own connection; Redis keeps them from replying twice. New env vars:
+  `CHAT_ALLOW_PRIVATE_URLS` (default `false` — set it to `true` to allow a
+  Time server on a private network, the usual in-house setup) and
+  `CHAT_SOCKET_SYNC_MS` (15000: how soon a saved or switched-off Time bot is
+  picked up). Migration `20261016100000_chat_time` adds
+  `chat_integrations.server_url` (default `''`), widens the bot-account unique
+  to include it, and adds `chat_answers.thread_id`; the previous release
+  ignores both columns and the unique behaves the same for Telegram, so a code
+  rollback is safe. (#71)
+- On knowledge.hrustalq.dev, chat bots ship switched off (`CHAT_ENABLED=false`
+  in the `production` environment). `api.telegram.org` cannot be reached from
+  that host. Before turning Telegram on there, point `TELEGRAM_API_BASE_URL`
+  at a Bot API server or proxy the host can reach. `.env.production.example`
+  now has a chat section that says so, and `.env.example` sets
+  `API_PUBLIC_URL`, the base of every webhook URL. (#189)
+
 ## [0.20.0] — 2026-10-14
 
 ### Added
@@ -1804,7 +1891,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.20.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/hrustalq/knowledge/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/hrustalq/knowledge/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/hrustalq/knowledge/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/hrustalq/knowledge/compare/v0.18.0...v0.19.0

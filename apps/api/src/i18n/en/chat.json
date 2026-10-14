@@ -1,0 +1,87 @@
+{
+  "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\n/new — start a new conversation\n/unlink — disconnect your account\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
+  "helpTime": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a channel, mention me — I answer in the message's thread, and anything else said in that thread is a follow-up.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\nSend one of these words on its own (in a channel, after mentioning me):\nnew — start a new conversation\nunlink — disconnect your account\nbind — answer in this channel (workspace admins)\nunbind — stop answering in this channel (workspace admins)\nhelp — this message",
+  "link": {
+    "required": "Link your account first: open the link below while signed in to {workspace}. It works once and expires in {minutes} minutes.",
+    "button": "Link my account",
+    "inGroup": "You need to link your account before I can answer. Message me privately to do that.",
+    "openPrivate": "Message me",
+    "success": "Linked. Your questions here now run as {user}, with exactly the access you have in {workspace}.",
+    "unlinked": "Disconnected. I will not answer this account until it is linked again.",
+    "notLinked": "This account is not linked to anyone."
+  },
+  "answer": {
+    "thinking": "Searching the knowledge base…",
+    "failed": "I could not answer that — the request to the model failed. Ask again in a moment.",
+    "timeout": "This answer never arrived: it took too long, or the server restarted. Ask again.",
+    "noAccess": "Your account no longer has access to {workspace}, so I cannot answer.",
+    "disabled": "The assistant is switched off for {workspace}.",
+    "budget": "You have used this month's AI budget in {workspace}.",
+    "rateLimited": "Too many questions at once — wait a minute and ask again.",
+    "sources": "Sources",
+    "openFull": "Open the full answer",
+    "empty": "Ask me something after the mention."
+  },
+  "conversation": {
+    "new": "Started a new conversation. Earlier questions will not be taken into account."
+  },
+  "bind": {
+    "done": "I will answer here when mentioned. A workspace admin can change that in Settings → Chat bots.",
+    "already": "This group is already connected.",
+    "removed": "I will no longer answer in this group.",
+    "notBound": "This group is not connected.",
+    "forbidden": "Only a workspace admin with a linked account can do that.",
+    "dmOnly": "That works in groups only."
+  },
+  "feedback": {
+    "thanks": "Thanks — noted.",
+    "askReason": "What was wrong with it? Pick a reason below.",
+    "linkFirst": "Link your account first — message me privately.",
+    "gone": "That answer is no longer available to rate.",
+    "disabled": "Answer feedback is switched off.",
+    "failed": "Your vote did not go through. Try again.",
+    "back": "↩ Back",
+    "reason": {
+      "wrong": "Wrong",
+      "outdated": "Out of date",
+      "incomplete": "Incomplete",
+      "irrelevant-sources": "Wrong pages cited",
+      "no-answer": "No answer",
+      "unclear": "Unclear",
+      "other": "Something else"
+    }
+  },
+  "capture": {
+    "save": "💾 Save…",
+    "asPage": "📄 As a page draft",
+    "asTerm": "📘 As a glossary term",
+    "forbidden": "Only an editor of {workspace} with a linked account can save this.",
+    "draftingPage": "Drafting a page from this conversation…",
+    "draftingTerm": "Looking for the term this conversation defines…",
+    "pageReady": "Drafted “{title}” for review. Nothing is published until the merge request is merged.",
+    "termReady": "Proposed “{term}” for the glossary. It stays switched off until an editor turns it on.",
+    "openMergeRequest": "Open the merge request",
+    "openGlossary": "Open the glossary",
+    "alreadySaved": "Already saved as “{title}”.",
+    "inProgress": "This is already being saved.",
+    "noTerm": "I found no term in this conversation that the glossary does not already have.",
+    "nothing": "There is nothing in this conversation I can save.",
+    "noProject": "{workspace} has no project to save into.",
+    "disabled": "That AI agent is switched off in {workspace}.",
+    "failed": "Saving did not work. Press Save to try again.",
+    "timeout": "This draft never arrived: it took too long, or the server restarted. Press Save to try again.",
+    "untitled": "Saved from chat",
+    "mrDescription": "Drafted from a conversation with the {platform} chat bot. Check it against the pages it links before merging — nothing is published until then."
+  },
+  "updates": {
+    "kind": {
+      "page-published": "New page",
+      "page-updated": "Updated",
+      "merge-request-opened": "Merge request opened",
+      "merge-request-merged": "Merged"
+    },
+    "heading": "{count} updates in {scope}",
+    "digest": "Digest for {scope}: {count} updates",
+    "more": "…and {count} more"
+  }
+}

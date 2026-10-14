@@ -156,7 +156,8 @@
     "startFromTemplate": "start from a template",
     "templates": "Templates",
     "publishing": "Publishing",
-    "exports": "Exports"
+    "exports": "Exports",
+    "chatBots": "Chat bots"
   },
   "role": {
     "viewer": "Viewer",
@@ -266,7 +267,8 @@
     "connectHint": "MCP clients, API keys, skill",
     "templatesHint": "Page shapes to start from",
     "publishingHint": "Public links to pages",
-    "exportsHint": "Files you exported"
+    "exportsHint": "Files you exported",
+    "chatBotsHint": "Answer questions in Telegram, citing your pages."
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -1852,7 +1854,8 @@
       "review": "Review",
       "suggest": "Suggest",
       "glossary": "Glossary",
-      "public_ask": "Site Ask"
+      "public_ask": "Site Ask",
+      "chat-capture": "Saved from chat"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -1944,7 +1947,8 @@
         "assistant": "assistant",
         "editor-assistant": "editor",
         "ask": "Ask AI",
-        "mcp": "MCP"
+        "mcp": "MCP",
+        "chat": "chat bot"
       },
       "recommendation": {
         "create-page": "Nothing covers this — a new page would.",
@@ -3892,6 +3896,148 @@
       "colCreated": "Asked",
       "summary": "{pages} pages · {size}",
       "expires": "deleted {when}"
+    }
+  },
+  "chatBots": {
+    "title": "Chat bots",
+    "subtitle": "Answer questions from this workspace in a messenger, with links to the pages behind every answer.",
+    "adminOnly": "Only workspace admins can manage chat bots.",
+    "ceilingOff": "Chat bots are switched off on this server (CHAT_ENABLED=false). You can prepare a bot here, but nothing will be answered until an operator turns them on.",
+    "empty": {
+      "title": "No bots yet",
+      "body": "Connect a Telegram or Time bot, then message it privately to link your account. To let it answer in a group or channel, add it there and send /bind (in Time: mention it with the word bind)."
+    },
+    "connect": {
+      "open": "Connect a bot",
+      "title": "Connect a bot",
+      "description": "The token is checked with Telegram and stored encrypted. It is never shown again.",
+      "step1": "In Telegram, message BotFather and send /newbot.",
+      "step2": "Copy the token it gives you and paste it below.",
+      "step3": "Message your bot privately: it replies with a link that connects your account.",
+      "submit": "Connect",
+      "checking": "Checking with Telegram…",
+      "done": "Connected {bot}.",
+      "time": {
+        "description": "The token is checked with your Time server and stored encrypted. It is never shown again.",
+        "step1": "In Time, open Integrations → Bot accounts and create a bot (bot creation must be allowed in your space).",
+        "step2": "Copy the token it shows once, and paste it below with your Time server address.",
+        "step3": "Add the bot to a channel and mention it, or message it privately: it replies with a link that connects your account.",
+        "checking": "Checking with Time…"
+      }
+    },
+    "fields": {
+      "name": "Name",
+      "namePlaceholder": "Team bot",
+      "token": "Bot token",
+      "tokenHint": "From BotFather. Write-only: the page only ever shows its last four characters.",
+      "agent": "Answering agent",
+      "agentResearcher": "Researcher (default)",
+      "locale": "Reply language",
+      "project": "Project",
+      "answerMode": "Answers",
+      "chatId": "Chat id",
+      "chatTitle": "Chat name",
+      "agentShort": "Agent",
+      "platform": "Messenger",
+      "serverUrl": "Time server",
+      "serverUrlHint": "The address you open Time at. This server must be able to reach it, and it must reach API_PUBLIC_URL for buttons to work.",
+      "tokenHintTime": "From Integrations → Bot accounts. Write-only: the page only ever shows its last four characters."
+    },
+    "locale": {
+      "en": "English",
+      "ru": "Russian"
+    },
+    "kind": {
+      "telegram": "Telegram",
+      "time": "Time"
+    },
+    "answerMode": {
+      "mention": "When mentioned",
+      "all": "Every message",
+      "off": "Never"
+    },
+    "bindings": {
+      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it (in Time: mentioning the bot with the word bind). Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
+      "untitled": "Untitled chat",
+      "wholeWorkspace": "Whole workspace",
+      "botDefault": "Bot default",
+      "botLocale": "Bot language",
+      "none": "No groups yet. Private chats need no setup.",
+      "chatIdPlaceholder": "-1001234567890",
+      "titlePlaceholder": "Name (optional)",
+      "add": "Add group"
+    },
+    "card": {
+      "off": "Off",
+      "token": "token {hint}",
+      "test": "Test",
+      "disable": "Turn off",
+      "enable": "Turn on",
+      "webhookRefused": "Telegram cannot deliver messages to this server.",
+      "webhookOk": "Telegram delivers to {url}",
+      "groups": "Groups ({n})",
+      "people": "Linked accounts ({n})",
+      "testOk": "{bot} is reachable and the webhook is set.",
+      "testFailed": "Check failed: {reason}",
+      "deleted": "{name} disconnected.",
+      "deleteTitle": "Disconnect {name}?",
+      "deleteBody": "Its groups and linked accounts are removed, and it stops answering. The conversations stay in each person's assistant history.",
+      "webhookFix": "Telegram only delivers to a public HTTPS address. Point API_PUBLIC_URL at one, then press Test.",
+      "socketDown": "This server is not connected to Time, so the bot hears nothing.",
+      "socketFix": "Check that the Time server is reachable from here and that the bot token is still valid; the connection retries on its own.",
+      "socketOk": "Listening to {server}",
+      "testOkSocket": "{bot} is reachable. Messages arrive over the bot’s connection to Time."
+    },
+    "people": {
+      "hint": "Every answer runs as the linked person, with exactly their access. Unlinking stops the bot answering that account.",
+      "unlink": "Unlink",
+      "none": "Nobody has linked an account yet."
+    },
+    "profile": {
+      "title": "Linked chat accounts",
+      "hint": "Messenger accounts a workspace bot answers as you. To link one, message the bot privately.",
+      "entry": "{account} via {bot}",
+      "unlink": "Unlink",
+      "unlinked": "Account unlinked.",
+      "none": "No linked accounts."
+    },
+    "link": {
+      "title": "Link a chat account",
+      "checking": "Checking the link…",
+      "missing": "This page needs the link the bot sent you.",
+      "done": "Linked. Ask the bot your question in {platform}.",
+      "question": "Link the {platform} account {account} to you in {workspace}?",
+      "unnamed": "(no username)",
+      "explain": "{bot} will answer this account as you, with exactly your access. Confirm only if you asked the bot for this link.",
+      "linking": "Linking…",
+      "confirm": "Link my account",
+      "manage": "Manage linked accounts"
+    },
+    "subscriptions": {
+      "toggle": "Notifications ({n})",
+      "hint": "Post to this group when pages change. Only titles and links are posted, and the links still ask readers to sign in.",
+      "add": "Add notification",
+      "remove": "Remove notification",
+      "none": "This group gets no notifications.",
+      "events": "Notify about",
+      "kind": {
+        "page-published": "New pages",
+        "page-updated": "Page updates",
+        "merge-request-opened": "Merge requests opened",
+        "merge-request-merged": "Merge requests merged"
+      },
+      "tags": "Tags",
+      "anyTag": "Any tag",
+      "timing": "When",
+      "instant": "Right away",
+      "digest": {
+        "60": "Hourly digest",
+        "240": "Every 4 hours",
+        "1440": "Daily digest"
+      },
+      "lastSent": "Last sent {when}",
+      "neverSent": "Nothing sent yet",
+      "refused": "The last message was refused: {error}"
     }
   }
 }

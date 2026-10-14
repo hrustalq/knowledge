@@ -18,4 +18,5 @@ export * from '@knowledge/contracts/workflows';
 export * from '@knowledge/contracts/templates';
 export * from '@knowledge/contracts/publishing';
 export * from '@knowledge/contracts/connectors';
+export * from '@knowledge/contracts/chat';
 export * from '@knowledge/contracts/observability';

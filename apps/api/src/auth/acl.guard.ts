@@ -149,6 +149,12 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfConnector(uuid(req.params?.id, 'connector'));
       case 'connector-run':
         return this.access.workspaceOfConnectorRun(uuid(req.params?.runId, 'connectorRun'));
+      case 'chat-integration':
+        return this.access.workspaceOfChatIntegration(uuid(req.params?.id, 'chatIntegration'));
+      case 'chat-binding':
+        return this.access.workspaceOfChatBinding(uuid(req.params?.id, 'chatBinding'));
+      case 'chat-subscription':
+        return this.access.workspaceOfChatSubscription(uuid(req.params?.id, 'chatSubscription'));
       case 'workspace':
         return this.access.workspaceExists(uuid(req.params?.id, 'workspace'));
     }

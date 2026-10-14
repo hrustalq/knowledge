@@ -16770,7 +16770,8 @@
                 "assistant",
                 "editor-assistant",
                 "ask",
-                "mcp"
+                "mcp",
+                "chat"
               ],
               "type": "string"
             }
@@ -21138,7 +21139,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.19.1",
+    "version": "0.20.0",
     "contact": {}
   },
   "tags": [],
@@ -24650,6 +24651,7 @@
               "editor-assistant",
               "ask",
               "mcp",
+              "chat",
               "web"
             ],
             "description": "Where the report was made. Omitted reads as \"web\" (the page itself)."

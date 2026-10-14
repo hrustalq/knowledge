@@ -257,7 +257,10 @@ export class AssistantReadToolsService {
       query,
       mode: 'hybrid',
       limit,
-      expandGraph: { depth: 1 },
+      // A project-scoped turn (issue #71) gets no graph expansion: related
+      // pages are walked across the whole workspace, and offering them would
+      // steer the model straight back out of the project it was bound to.
+      ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : { expandGraph: { depth: 1 } }),
     });
     // Where each hit lives, not just what it is called. Two pages both called
     // "Overview" in different sections were indistinguishable to the model,

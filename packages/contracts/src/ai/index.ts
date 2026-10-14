@@ -119,8 +119,12 @@ export type AssistantPrompt = AssistantFormPrompt | AssistantModeSwitchPrompt;
  * draft (docs/features/34): the API cannot tell the two apart from a message
  * row, so the client says which pane it is voting from and the API only
  * checks the value is one of these.
+ *
+ * `chat` is a chat-platform bot (issue #71): a Telegram DM or channel turn,
+ * persisted as an assistant thread like the pane's, but answered somewhere
+ * the web app cannot vote from.
  */
-export const ANSWER_SURFACES = ['assistant', 'editor-assistant', 'ask', 'mcp'] as const;
+export const ANSWER_SURFACES = ['assistant', 'editor-assistant', 'ask', 'mcp', 'chat'] as const;
 export type AnswerSurface = (typeof ANSWER_SURFACES)[number];
 
 export const ANSWER_RATINGS = ['up', 'down'] as const;

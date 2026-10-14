@@ -97,15 +97,16 @@ async function unlink(identityId: string) {
 
 <template>
   <section class="min-w-0 rounded-xl border bg-card">
-    <header class="flex flex-wrap items-start gap-3 border-b px-5 py-4">
+    <header class="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-start">
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="font-display text-[15px] font-semibold tracking-tight">{{ bot.name }}</h2>
           <Badge variant="outline">{{ t(`chatBots.kind.${bot.kind}`) }}</Badge>
           <Badge v-if="!bot.enabled" variant="secondary">{{ t('chatBots.card.off') }}</Badge>
         </div>
-        <p class="mt-0.5 text-xs text-muted-foreground">
-          <span v-if="bot.botUsername">@{{ bot.botUsername }} · </span>{{ t('chatBots.card.token', { hint: bot.credentialHint ?? '—' }) }}
+        <p class="mt-0.5 flex flex-wrap gap-x-1.5 text-xs text-muted-foreground">
+          <span v-if="bot.botUsername" class="whitespace-nowrap">@{{ bot.botUsername }} ·</span>
+          <span class="whitespace-nowrap">{{ t('chatBots.card.token', { hint: bot.credentialHint ?? '—' }) }}</span>
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -120,18 +121,21 @@ async function unlink(identityId: string) {
     </header>
 
     <div class="space-y-4 px-5 py-4">
-      <p
+      <div
         v-if="bot.webhookError"
-        class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+        role="status"
+        class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300"
       >
         <AlertTriangle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <span class="min-w-0">
-          {{ t('chatBots.card.webhookRefused', { reason: bot.webhookError }) }}
-          <span class="mt-1 block break-all font-mono text-xs">{{ bot.webhookUrl }}</span>
-        </span>
-      </p>
+        <div class="min-w-0 space-y-1">
+          <p class="font-medium">{{ t('chatBots.card.webhookRefused') }}</p>
+          <p class="text-xs">{{ bot.webhookError }}</p>
+          <p class="text-xs">{{ t('chatBots.card.webhookFix') }}</p>
+          <p class="break-all font-mono text-xs opacity-80">{{ bot.webhookUrl }}</p>
+        </div>
+      </div>
       <p v-else class="flex items-center gap-2 text-xs text-muted-foreground">
-        <CheckCircle2 class="size-3.5 text-emerald-600" aria-hidden="true" />
+        <CheckCircle2 class="size-3.5 shrink-0" aria-hidden="true" />
         <span class="min-w-0 break-all">{{ t('chatBots.card.webhookOk', { url: bot.webhookUrl }) }}</span>
       </p>
 
@@ -144,14 +148,14 @@ async function unlink(identityId: string) {
         />
       </div>
 
-      <div class="flex gap-1 border-b" role="tablist">
+      <div class="flex gap-1 overflow-x-auto border-b" role="tablist">
         <button
           v-for="k in (['groups', 'people'] as const)"
           :key="k"
           type="button"
           role="tab"
           :aria-selected="tab === k"
-          class="-mb-px border-b-2 px-3 py-1.5 text-sm transition-colors"
+          class="-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors"
           :class="tab === k ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'"
           @click="tab = k"
         >

@@ -3928,7 +3928,8 @@
       "project": "Project",
       "answerMode": "Answers",
       "chatId": "Chat id",
-      "chatTitle": "Chat name"
+      "chatTitle": "Chat name",
+      "agentShort": "Agent"
     },
     "locale": {
       "en": "English",
@@ -3959,7 +3960,7 @@
       "test": "Test",
       "disable": "Turn off",
       "enable": "Turn on",
-      "webhookRefused": "Telegram cannot deliver to this server: {reason}",
+      "webhookRefused": "Telegram cannot deliver messages to this server.",
       "webhookOk": "Telegram delivers to {url}",
       "groups": "Groups ({n})",
       "people": "Linked accounts ({n})",
@@ -3967,7 +3968,8 @@
       "testFailed": "Check failed: {reason}",
       "deleted": "{name} disconnected.",
       "deleteTitle": "Disconnect {name}?",
-      "deleteBody": "Its groups and linked accounts are removed, and it stops answering. The conversations stay in each person's assistant history."
+      "deleteBody": "Its groups and linked accounts are removed, and it stops answering. The conversations stay in each person's assistant history.",
+      "webhookFix": "Telegram only delivers to a public HTTPS address. Point API_PUBLIC_URL at one, then press Test."
     },
     "people": {
       "hint": "Every answer runs as the linked person, with exactly their access. Unlinking stops the bot answering that account.",
@@ -3992,8 +3994,7 @@
       "explain": "{bot} will answer this account as you, with exactly your access. Confirm only if you asked the bot for this link.",
       "linking": "Linking…",
       "confirm": "Link my account",
-      "manage": "Manage linked accounts",
-      "retry": "Ask the bot for a new link and open it again."
+      "manage": "Manage linked accounts"
     }
   }
 }

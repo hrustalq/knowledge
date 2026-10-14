@@ -37,12 +37,12 @@ function refresh() {
 
 <template>
   <div class="flex w-full min-w-0 flex-col gap-6">
-    <div class="flex flex-wrap items-start gap-3">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
       <div class="min-w-0 flex-1">
         <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('chatBots.title') }}</h1>
         <p class="text-muted-foreground mt-0.5 text-sm">{{ t('chatBots.subtitle') }}</p>
       </div>
-      <Button v-if="canManage" size="sm" @click="connecting = true">
+      <Button v-if="canManage" size="sm" class="self-start" @click="connecting = true">
         <Plus class="size-4" />{{ t('chatBots.connect.open') }}
       </Button>
     </div>

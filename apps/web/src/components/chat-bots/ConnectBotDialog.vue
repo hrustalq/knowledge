@@ -78,7 +78,7 @@ async function submit() {
           <Input id="chat-bot-token" v-model="form.token" type="password" autocomplete="off" spellcheck="false" />
           <p class="text-xs text-muted-foreground">{{ t('chatBots.fields.tokenHint') }}</p>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
           <div class="space-y-1.5">
             <Label>{{ t('chatBots.fields.agent') }}</Label>
             <AgentSelect v-model="form.agentKey" :default-label="t('chatBots.fields.agentResearcher')" />

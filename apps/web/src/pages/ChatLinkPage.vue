@@ -91,7 +91,6 @@ const platform = computed(() => (preview.value ? t(`chatBots.kind.${preview.valu
             <RouterLink to="/settings/profile">{{ t('chatBots.link.manage') }}</RouterLink>
           </Button>
         </template>
-        <p v-else-if="state === 'failed'" class="text-xs text-muted-foreground">{{ t('chatBots.link.retry') }}</p>
       </CardContent>
     </Card>
   </div>

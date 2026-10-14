@@ -6,6 +6,7 @@ import {
   type ChatAdapterContext,
   type ChatAnswerView,
   type ChatButton,
+  type ChatLinkButton,
   type ChatInbound,
   type ChatMessageRef,
   type ChatOutMessage,
@@ -16,6 +17,10 @@ import {
 
 /** Telegram counts this many characters of message text, after entity parsing. */
 const MAX_CHARS = 4096;
+/** `callback_data` is 1–64 bytes. */
+const MAX_ACTION_BYTES = 64;
+/** An `answerCallbackQuery` note longer than this is refused. */
+const MAX_NOTE_CHARS = 200;
 /** Below the limit, for the "…" and whatever the sources block adds. */
 const ANSWER_HEADROOM = 200;
 const CALL_TIMEOUT_MS = 15_000;
@@ -156,7 +161,7 @@ export function cutAnswer(md: string, budget: number): { text: string; cut: bool
  */
 export class TelegramAdapter implements ChatAdapter {
   readonly kind = 'telegram' as const;
-  readonly limits = { maxChars: MAX_CHARS };
+  readonly limits = { maxChars: MAX_CHARS, maxActionBytes: MAX_ACTION_BYTES };
 
   constructor(private readonly apiBase: string) {}
 
@@ -175,6 +180,7 @@ export class TelegramAdapter implements ChatAdapter {
     } catch {
       return [];
     }
+    if (update.callback_query) return this.parseCallback(update.callback_query);
     const msg = update.message;
     if (!msg?.from || msg.from.is_bot || !msg.chat) return [];
     const original = (msg.text ?? msg.caption ?? '').trim();
@@ -197,13 +203,10 @@ export class TelegramAdapter implements ChatAdapter {
     const mentioned = !!replyToBotMessageId || (!!mentionRe && mentionRe.test(original));
     const text = (mentionRe ? original.replace(mentionRe, ' ') : original).replace(/\s+/g, ' ').trim();
 
-    const name = msg.from.username
-      ? `@${msg.from.username}`
-      : [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || null;
     return [
       {
         externalUserId: String(msg.from.id),
-        externalUserName: name,
+        externalUserName: displayName(msg.from),
         chatId: String(msg.chat.id),
         chatTitle: msg.chat.title ?? null,
         isDm,
@@ -212,13 +215,35 @@ export class TelegramAdapter implements ChatAdapter {
         mentioned,
         replyToBotMessageId,
         command,
+        action: null,
+      },
+    ];
+  }
+
+  /** A press of an inline button. Telegram sends one only for a button this bot put on its own message. */
+  private parseCallback(cb: TelegramCallbackQuery): ChatInbound[] {
+    const msg = cb.message;
+    if (!cb.from || cb.from.is_bot || !msg?.chat || !cb.data) return [];
+    return [
+      {
+        externalUserId: String(cb.from.id),
+        externalUserName: displayName(cb.from),
+        chatId: String(msg.chat.id),
+        chatTitle: msg.chat.title ?? null,
+        isDm: msg.chat.type === 'private',
+        messageId: String(msg.message_id),
+        text: '',
+        mentioned: false,
+        replyToBotMessageId: null,
+        command: null,
+        action: { id: cb.id, data: cb.data },
       },
     ];
   }
 
   render(view: ChatView): ChatOutMessage {
     if (view.kind === 'notice') {
-      return { text: escapeHtml(view.text), plain: view.text, buttons: view.button ? [view.button] : [] };
+      return { text: escapeHtml(view.text), plain: view.text, buttons: view.button ? [[view.button]] : [] };
     }
     return this.renderAnswer(view);
   }
@@ -237,7 +262,7 @@ export class TelegramAdapter implements ChatAdapter {
     return {
       text: markdownToTelegramHtml(text, (label) => urls.get(label) ?? null, view.webBaseUrl) + sourcesHtml,
       plain: (markdownToPlain(text) + sourcesPlain).slice(0, MAX_CHARS),
-      buttons: cut && view.full ? [view.full] : [],
+      buttons: [...(cut && view.full ? [[view.full]] : []), ...view.actions],
     };
   }
 
@@ -267,6 +292,13 @@ export class TelegramAdapter implements ChatAdapter {
     }
   }
 
+  async acknowledge(ctx: ChatAdapterContext, actionId: string, note?: string): Promise<void> {
+    await this.call(ctx, 'answerCallbackQuery', {
+      callback_query_id: actionId,
+      ...(note ? { text: note.slice(0, MAX_NOTE_CHARS) } : {}),
+    });
+  }
+
   async identify(ctx: ChatAdapterContext): Promise<{ username: string }> {
     const me = await this.call<{ username?: string }>(ctx, 'getMe', {});
     if (!me.username) throw new ChatPlatformError('getMe returned no username');
@@ -277,9 +309,9 @@ export class TelegramAdapter implements ChatAdapter {
     await this.call(ctx, 'setWebhook', {
       url,
       secret_token: secret,
-      // Only what the bot acts on: a question. Joins, edits and reactions
-      // would be deliveries to verify and drop.
-      allowed_updates: ['message'],
+      // Only what the bot acts on: a question, and a press of its own
+      // buttons. Joins, edits and reactions would be deliveries to verify and drop.
+      allowed_updates: ['message', 'callback_query'],
       drop_pending_updates: true,
     });
   }
@@ -291,19 +323,26 @@ export class TelegramAdapter implements ChatAdapter {
 
   /**
    * HTML first, then — only when Telegram says the formatting or a button was
-   * the problem — the plain text with button targets written out. A localhost
-   * button URL in development is refused the same way a broken tag is.
+   * the problem — the plain text with link targets written out. A localhost
+   * button URL in development is refused the same way a broken tag is. Action
+   * buttons carry no URL to refuse, so they stay on the fallback as buttons.
    */
   private async withPlainFallback<T>(msg: ChatOutMessage, send: (body: Record<string, unknown>) => Promise<T>): Promise<T> {
-    const keyboard = msg.buttons.length
-      ? { reply_markup: { inline_keyboard: msg.buttons.map((b) => [{ text: b.label, url: b.url }]) } }
-      : {};
     try {
-      return await send({ text: msg.text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...keyboard });
+      return await send({ text: msg.text, parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...keyboard(msg.buttons) });
     } catch (err) {
       if (!(err instanceof ChatPlatformError) || !err.formatting) throw err;
-      const links = msg.buttons.map((b: ChatButton) => `${b.label}: ${b.url}`).join('\n');
-      return send({ text: [msg.plain, links].filter(Boolean).join('\n\n').slice(0, MAX_CHARS), link_preview_options: { is_disabled: true } });
+      const links = msg.buttons
+        .flat()
+        .filter((b): b is ChatLinkButton => 'url' in b)
+        .map((b) => `${b.label}: ${b.url}`)
+        .join('\n');
+      const actions = msg.buttons.map((row) => row.filter((b) => !('url' in b))).filter((row) => row.length);
+      return send({
+        text: [msg.plain, links].filter(Boolean).join('\n\n').slice(0, MAX_CHARS),
+        link_preview_options: { is_disabled: true },
+        ...keyboard(actions),
+      });
     }
   }
 
@@ -331,6 +370,23 @@ export class TelegramAdapter implements ChatAdapter {
   }
 }
 
+/** `@handle` where there is one, else the display name. */
+function displayName(user: TelegramUser): string | null {
+  return user.username ? `@${user.username}` : [user.first_name, user.last_name].filter(Boolean).join(' ') || null;
+}
+
+/** Rows of buttons as Telegram's inline keyboard; nothing at all when there are none. */
+function keyboard(rows: ChatButton[][]): Record<string, unknown> {
+  if (!rows.length) return {};
+  return {
+    reply_markup: {
+      inline_keyboard: rows.map((row) =>
+        row.map((b) => ('url' in b ? { text: b.label, url: b.url } : { text: b.label, callback_data: b.action })),
+      ),
+    },
+  };
+}
+
 interface TelegramUser {
   id: number;
   is_bot?: boolean;
@@ -348,7 +404,16 @@ interface TelegramMessage {
   reply_to_message?: { message_id: number; from?: TelegramUser };
 }
 
+interface TelegramCallbackQuery {
+  id: string;
+  from?: TelegramUser;
+  /** Absent when the message is too old for Telegram to send. */
+  message?: { message_id: number; chat?: TelegramMessage['chat'] };
+  data?: string;
+}
+
 interface TelegramUpdate {
   update_id?: number;
   message?: TelegramMessage;
+  callback_query?: TelegramCallbackQuery;
 }

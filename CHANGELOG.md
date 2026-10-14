@@ -29,6 +29,11 @@ in the pull request that introduces them — see
   set otherwise; each group can be scoped to one project, use its own agent and
   reply in its own language. Linked accounts are listed under **Settings →
   Profile** with unlink. (#71)
+- Chat-bot answers can be rated. Every answer in Telegram carries 👍 and 👎;
+  a 👎 then offers the same reasons as the web app (wrong, out of date, wrong
+  pages cited…). Votes are recorded as the person who pressed, so anyone in a
+  group can rate an answer once they have linked their account, and they show
+  up in the admin **Feedback** tab as the *chat bot* surface. (#71)
 
 ### Operations
 

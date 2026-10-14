@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AssistantModule } from '../assistant/assistant.module.js';
+import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import { ChatAnswerSweeper } from './chat-answer.sweeper.js';
 import { ChatAnswersService } from './chat-answers.service.js';
@@ -20,7 +21,7 @@ import { ChatWebhookController } from './chat-webhook.controller.js';
  * (saving a thread as a page), the services move into a ChatCoreModule then.
  */
 @Module({
-  imports: [PrismaModule, AgentCoreModule, AssistantModule],
+  imports: [PrismaModule, AgentCoreModule, AssistantModule, FeedbackCoreModule],
   controllers: [ChatWebhookController, ChatSettingsController, ChatLinkController],
   providers: [ChatAdapterRegistry, ChatIntegrationsService, ChatIdentityService, ChatAnswersService, ChatAnswerSweeper],
 })

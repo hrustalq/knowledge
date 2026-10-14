@@ -194,6 +194,24 @@ export type I18nTranslations = {
             "forbidden": string;
             "dmOnly": string;
         };
+        "feedback": {
+            "thanks": string;
+            "askReason": string;
+            "linkFirst": string;
+            "gone": string;
+            "disabled": string;
+            "failed": string;
+            "back": string;
+            "reason": {
+                "wrong": string;
+                "outdated": string;
+                "incomplete": string;
+                "irrelevant-sources": string;
+                "no-answer": string;
+                "unclear": string;
+                "other": string;
+            };
+        };
     };
     "connector": {
         "stage": {

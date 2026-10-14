@@ -31,5 +31,23 @@
     "notBound": "This group is not connected.",
     "forbidden": "Only a workspace admin with a linked account can do that.",
     "dmOnly": "That works in groups only."
+  },
+  "feedback": {
+    "thanks": "Thanks — noted.",
+    "askReason": "What was wrong with it? Pick a reason below.",
+    "linkFirst": "Link your account first — message me privately.",
+    "gone": "That answer is no longer available to rate.",
+    "disabled": "Answer feedback is switched off.",
+    "failed": "Your vote did not go through. Try again.",
+    "back": "↩ Back",
+    "reason": {
+      "wrong": "Wrong",
+      "outdated": "Out of date",
+      "incomplete": "Incomplete",
+      "irrelevant-sources": "Wrong pages cited",
+      "no-answer": "No answer",
+      "unclear": "Unclear",
+      "other": "Something else"
+    }
   }
 }

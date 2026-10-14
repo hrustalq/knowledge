@@ -75,12 +75,15 @@ export class AnswerFeedbackService {
    * Rate a persisted assistant reply. One vote per person per message: a
    * second vote replaces the first (the unique index is the upsert key).
    * `surface` is the client's word for which pane it voted from — the API
-   * cannot tell the editor's pane from `/assistant` by the message row.
+   * cannot tell the editor's pane from `/assistant` by the message row. The
+   * REST route offers only the two panes; `chat` is set by the chat bot, whose
+   * voter may be any member of the group the answer was posted in, not only
+   * the person who asked (issue #71).
    */
   async vote(
     messageId: string,
     principal: Principal,
-    input: VoteInput & { surface?: Extract<AnswerSurface, 'assistant' | 'editor-assistant'> },
+    input: VoteInput & { surface?: Extract<AnswerSurface, 'assistant' | 'editor-assistant' | 'chat'> },
   ): Promise<AnswerFeedbackInfo> {
     this.assertEnabled();
     const message = await this.prisma.assistantMessage.findUnique({

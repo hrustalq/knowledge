@@ -24,6 +24,10 @@ const from = { id: 42, is_bot: false, username: 'alice', first_name: 'Alice' };
 const dm = { id: 42, type: 'private' };
 const group = { id: -1001, type: 'supergroup', title: 'Platform team' };
 
+function press(callback: Record<string, unknown>): { headers: Record<string, string>; body: string } {
+  return { headers: {}, body: JSON.stringify({ update_id: 2, callback_query: callback }) };
+}
+
 describe('verifyInbound', () => {
   const hash = hashInboundSecret('s3cret');
 
@@ -35,6 +39,36 @@ describe('verifyInbound', () => {
     expect(adapter.verifyInbound({ headers: { 'x-telegram-bot-api-secret-token': 'nope' }, body: '' }, hash)).toBe(false);
     expect(adapter.verifyInbound({ headers: {}, body: '' }, hash)).toBe(false);
     expect(adapter.verifyInbound({ headers: { 'x-telegram-bot-api-secret-token': 's3cret' }, body: '' }, null)).toBe(false);
+  });
+});
+
+describe('parseInbound — button presses', () => {
+  it('normalises a press: the message is the bot’s, the data comes back as sent', () => {
+    const [m] = adapter.parseInbound(
+      press({ id: 'cb-1', from, data: 'v:abc:u', message: { message_id: 99, chat: group } }),
+      BOT,
+    );
+    expect(m).toEqual({
+      externalUserId: '42',
+      externalUserName: '@alice',
+      chatId: '-1001',
+      chatTitle: 'Platform team',
+      isDm: false,
+      messageId: '99',
+      text: '',
+      mentioned: false,
+      replyToBotMessageId: null,
+      command: null,
+      action: { id: 'cb-1', data: 'v:abc:u' },
+    });
+  });
+
+  it('drops a press with no data, no message (too old) or from a bot', () => {
+    expect(adapter.parseInbound(press({ id: 'cb', from, message: { message_id: 1, chat: dm } }), BOT)).toEqual([]);
+    expect(adapter.parseInbound(press({ id: 'cb', from, data: 'x' }), BOT)).toEqual([]);
+    expect(
+      adapter.parseInbound(press({ id: 'cb', from: { ...from, is_bot: true }, data: 'x', message: { message_id: 1, chat: dm } }), BOT),
+    ).toEqual([]);
   });
 });
 
@@ -52,6 +86,7 @@ describe('parseInbound', () => {
       mentioned: false,
       replyToBotMessageId: null,
       command: null,
+      action: null,
     });
   });
 
@@ -121,6 +156,7 @@ describe('render', () => {
     sources: [{ cite: 'S1', title: 'Deploy <guide>', url: 'https://kn.test/documents/d1' }],
     sourcesHeading: 'Sources',
     full: { label: 'Open the full answer', url: 'https://kn.test/assistant?thread=t1' },
+    actions: [] as Array<Array<{ label: string; action: string }>>,
     webBaseUrl: 'https://kn.test',
   };
 
@@ -136,12 +172,19 @@ describe('render', () => {
     const out = adapter.render({ ...view, answer: long });
     expect(out.plain.length).toBeLessThanOrEqual(adapter.limits.maxChars);
     expect(out.text).toContain('…');
-    expect(out.buttons).toEqual([view.full]);
+    expect(out.buttons).toEqual([[view.full]]);
+  });
+
+  it('puts the action rows under the answer, after the full-answer link', () => {
+    const vote = [[{ label: '👍', action: 'v:a:u' }, { label: '👎', action: 'v:a:d' }]];
+    expect(adapter.render({ ...view, actions: vote }).buttons).toEqual(vote);
+    const long = Array.from({ length: 400 }, (_, i) => `Sentence ${i} is here.`).join(' ');
+    expect(adapter.render({ ...view, answer: long, actions: vote }).buttons).toEqual([[view.full], ...vote]);
   });
 
   it('a notice is escaped text with its button', () => {
     const out = adapter.render({ kind: 'notice', text: 'a <b>', button: { label: 'Go', url: 'https://x.test' } });
-    expect(out).toEqual({ text: 'a &lt;b&gt;', plain: 'a <b>', buttons: [{ label: 'Go', url: 'https://x.test' }] });
+    expect(out).toEqual({ text: 'a &lt;b&gt;', plain: 'a <b>', buttons: [[{ label: 'Go', url: 'https://x.test' }]] });
   });
 });
 
@@ -171,13 +214,47 @@ describe('Bot API calls', () => {
     const ref = await adapter.postMessage(
       { token: 'T0KEN', botUsername: BOT },
       { chatId: '42' },
-      { text: '<b>x', plain: 'x', buttons: [{ label: 'Open', url: 'http://localhost:5173/a' }] },
+      { text: '<b>x', plain: 'x', buttons: [[{ label: 'Open', url: 'http://localhost:5173/a' }]] },
     );
     expect(ref).toEqual({ chatId: '42', messageId: '99' });
     const second = JSON.parse(fetchMock.mock.calls[1][1].body as string) as Record<string, unknown>;
     expect(second).not.toHaveProperty('parse_mode');
     expect(second).not.toHaveProperty('reply_markup');
     expect(second.text).toBe('x\n\nOpen: http://localhost:5173/a');
+  });
+
+  it('sends action buttons as callback buttons, and keeps them on the plain fallback', async () => {
+    const fetchMock = stubFetch(
+      { status: 400, body: { ok: false, description: 'Bad Request: BUTTON_URL_INVALID' } },
+      { status: 200, body: { ok: true, result: { message_id: 5 } } },
+    );
+    await adapter.postMessage({ token: 'T', botUsername: BOT }, { chatId: '42' }, {
+      text: 'x',
+      plain: 'x',
+      buttons: [[{ label: 'Open', url: 'http://localhost:5173/a' }], [{ label: '👍', action: 'v:a:u' }]],
+    });
+    const first = JSON.parse(fetchMock.mock.calls[0][1].body as string) as { reply_markup: unknown };
+    expect(first.reply_markup).toEqual({
+      inline_keyboard: [[{ text: 'Open', url: 'http://localhost:5173/a' }], [{ text: '👍', callback_data: 'v:a:u' }]],
+    });
+    const second = JSON.parse(fetchMock.mock.calls[1][1].body as string) as { reply_markup: unknown; text: string };
+    expect(second.reply_markup).toEqual({ inline_keyboard: [[{ text: '👍', callback_data: 'v:a:u' }]] });
+    expect(second.text).toBe('x\n\nOpen: http://localhost:5173/a');
+  });
+
+  it('acknowledges a press with a short note', async () => {
+    const fetchMock = stubFetch({ status: 200, body: { ok: true, result: true } });
+    await adapter.acknowledge({ token: 'T', botUsername: BOT }, 'cb-1', 'Thanks');
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/answerCallbackQuery$/);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ callback_query_id: 'cb-1', text: 'Thanks' });
+  });
+
+  it('registers the webhook for questions and button presses', async () => {
+    const fetchMock = stubFetch({ status: 200, body: { ok: true, result: true } });
+    await adapter.registerWebhook({ token: 'T', botUsername: BOT }, 'https://kn.test/hook', 's');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
+      allowed_updates: ['message', 'callback_query'],
+    });
   });
 
   it('never puts the token in an error', async () => {

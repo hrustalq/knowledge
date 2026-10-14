@@ -8,6 +8,7 @@ import {
 } from 'vue-router'
 import type { Pinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { AI_PANEL_SECTIONS, DEFAULT_AI_SECTION, isAiSection } from '@/lib/ai-sections'
 
 export function createRouter() {
   return createVueRouter({
@@ -126,10 +127,11 @@ export function createRouter() {
           // Also yours rather than the workspace's, though scoped to one
           // workspace: what you want to hear about here.
           { path: 'notifications', component: () => import('@/pages/NotificationSettingsPage.vue') },
-          // Yours too: API keys, client config snippets and the skill
-          // (docs/features/33). Open to every role — it acts on your own keys,
-          // and each tool a connected client calls is checked on its own.
-          { path: 'connect', component: () => import('@/pages/ConnectAiPage.vue') },
+          // Connect AI moved into /settings/ai as a section (issue #182). Kept
+          // as a redirect: this URL is printed into every SKILL.md already
+          // handed to a client. A string redirect keeps the query, so
+          // `?client=` still opens the client it named.
+          { path: 'connect', redirect: '/settings/ai/connect' },
           {
             path: 'projects',
             component: () => import('@/pages/ProjectsPage.vue'),
@@ -184,10 +186,40 @@ export function createRouter() {
           // @PlatformAdmin guard would refuse.
           { path: 'access', component: () => import('@/pages/AccessControlPage.vue') },
           { path: 'activity', component: () => import('@/pages/ActivityPage.vue') },
-          // AI: provider config, skills, MCP plugins, token usage and call log.
-          // Gated in the page on workspace admin rather than meta.platformAdmin —
-          // these are workspace settings, not platform ones.
-          { path: 'ai', component: () => import('@/pages/AiSettingsPage.vue') },
+          // AI (issue #182): Connect AI plus the assistant's provider config,
+          // agents, skills, plugins, quality, usage and logs. Third rail, as
+          // docs: the section rail lives in the shell, the section here.
+          {
+            path: 'ai',
+            component: () => import('@/pages/AiSettingsPage.vue'),
+            children: [
+              // Bare `/settings/ai` opens the default section, and the old
+              // `?tab=<x>` links — agent-run notifications among them — open
+              // the section the tab became. Every other query rides along.
+              {
+                path: '',
+                redirect: (to) => {
+                  const { tab, ...query } = to.query
+                  return { path: `/settings/ai/${isAiSection(tab) ? tab : DEFAULT_AI_SECTION}`, query }
+                },
+              },
+              // Yours: API keys, client config snippets and the skill
+              // (docs/features/33). Open to every role — it acts on your own
+              // keys, and each tool a connected client calls is checked on its own.
+              { path: 'connect', component: () => import('@/pages/ConnectAiPage.vue') },
+              // Workspace administration. Gated in the page on workspace admin
+              // rather than meta.platformAdmin — these are workspace settings,
+              // not platform ones.
+              {
+                path: `:section(${AI_PANEL_SECTIONS.join('|')})`,
+                component: () => import('@/pages/ai/AiSectionPage.vue'),
+              },
+              // A section that no longer exists (or never did) opens the
+              // default rather than an empty pane. The wildcard scores below
+              // the pattern above, so it only catches what that refused.
+              { path: ':unknown(.*)', redirect: `/settings/ai/${DEFAULT_AI_SECTION}` },
+            ],
+          },
           // Connectors (docs/features/19): workspace administration, so like AI
           // settings it gates on auth.canAdminWorkspace rather than meta.platformAdmin.
           { path: 'connectors', component: () => import('@/pages/ConnectorsPage.vue') },

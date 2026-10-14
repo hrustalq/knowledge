@@ -151,7 +151,12 @@ endpoints or credentials). `PATCH /v1/assistant/threads/:id` gained
 workspace cannot edit another's.
 
 **Web** — `/settings/ai` (`AiSettingsPage.vue` + `components/ai/*Panel.vue`),
-gated on workspace admin in the page. The usage chart is inline markup rather
+gated on workspace admin in the page. Since issue #182 the tabs are a grouped
+section rail, each section its own URL — `/settings/ai/<section>`, rendered by
+`pages/ai/AiSectionPage.vue` from the registry in `lib/ai-sections.ts` — and
+Connect AI (feature 33) is the first section. `/settings/ai?tab=<x>` and
+`/settings/connect` redirect, and bare `/settings/ai` opens Connect, the one
+section every role can use. The usage chart is inline markup rather
 than a charting library: the repo ships none and one bar series does not
 justify adding one. The chat composer gained a skill picker (`SkillPicker.vue`)
 that sends `skillIds` with the turn, plus a `ModelPicker.vue` that pins the

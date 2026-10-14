@@ -20,7 +20,7 @@ narrows everything else.
 | `/workspaces/<id>/llms-full.txt`, `/projects/<id>/llms-full.txt` | Every page's text in one response, capped |
 
 Only the default branch is exported — drafts and unmerged branches never appear.
-[**Settings → Connect AI**](/settings/connect) lists the URLs for your current workspace
+[**Settings → AI → Connect AI**](/settings/ai/connect) lists the URLs for your current workspace
 and project.
 
 ## Authenticating

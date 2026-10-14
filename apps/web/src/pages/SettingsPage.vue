@@ -9,7 +9,6 @@ import {
   Bell,
   BookMarked,
   BookOpen,
-  Bot,
   Download,
   FolderKanban,
   Globe,
@@ -35,7 +34,6 @@ const links = computed<SettingsLink[]>(() => [
   // than on the workspace.
   { to: '/settings/profile', label: t('nav.profile'), icon: UserRound, hint: t('settings.profileHint') },
   { to: '/settings/notifications', label: t('nav.notifications'), icon: Bell, hint: t('settings.notificationsHint') },
-  { to: '/settings/connect', label: t('nav.connect'), icon: Bot, hint: t('settings.connectHint') },
   // Open to every role: an export is a reader's act, and this lists your own.
   { to: '/settings/exports', label: t('nav.exports'), icon: Download, hint: t('settings.exportsHint') },
   { to: '/settings/projects', label: t('nav.projects'), icon: FolderKanban, hint: t('settings.projectsHint') },
@@ -49,6 +47,8 @@ const links = computed<SettingsLink[]>(() => [
   // gave a workspace admin a nav row that only ever 403'd.
   { to: '/settings/access', label: t('nav.access'), icon: ShieldCheck, hint: t('settings.accessHint') },
   { to: '/settings/activity', label: t('nav.activity'), icon: Activity, hint: t('settings.activityHint') },
+  // Connect AI is a section in here (issue #182): open to every role, so this
+  // row is too, though the assistant's own sections are admin-gated.
   { to: '/settings/ai', label: t('nav.ai'), icon: Sparkles, hint: t('settings.aiHint') },
   { to: '/settings/workflows', label: t('nav.workflows'), icon: Workflow, hint: t('settings.workflowsHint') },
   { to: '/settings/connectors', label: t('nav.connectors'), icon: Plug, hint: t('settings.connectorsHint') },
@@ -62,7 +62,7 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/docs', label: t('nav.docs'), icon: BookOpen, hint: t('settings.docsHint') },
 ])
 
-// A segment match, not a prefix: /settings/connect is a prefix of
+// A segment match, not a prefix: /settings/connect was a prefix of
 // /settings/connectors, and both rows lit up at once.
 function isActive(to: string): boolean {
   return route.path === to || route.path.startsWith(`${to}/`)

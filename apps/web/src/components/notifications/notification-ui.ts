@@ -74,7 +74,7 @@ export function notificationLink(entry: NotificationEntry): string | null {
   if (entry.type.startsWith('workflow-')) {
     return entry.subjectId ? `/workflows/${entry.subjectId}` : '/workflows'
   }
-  if (entry.type.startsWith('agent.run.')) return '/settings/ai?tab=runs'
+  if (entry.type.startsWith('agent.run.')) return '/settings/ai/runs'
   if (entry.type.startsWith('connector.run.')) return '/settings/connectors?tab=runs'
   if (entry.type.startsWith('import.')) return entry.documentId ? `/documents/${entry.documentId}` : '/upload'
   if (entry.type.startsWith('export.')) return '/settings/exports'

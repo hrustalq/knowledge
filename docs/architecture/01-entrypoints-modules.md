@@ -75,6 +75,15 @@ staged state and an API-side sweeper finishes it — which doubles as recovery w
 a request dies mid-write. `WorkflowMaterializeSweeper`, `ConnectorConflictSweeper`
 and `MentionReplySweeper` are the three instances.
 
+**A model turn that needs the full tool surface runs in the API.** An @mention
+reply (feature 21) and a chat-bot answer (feature 47) both run on a detached
+continuation in the API process, not as a worker job, because the chat turn's
+`AssistantToolsService` injects the API-only half. A `pending` row is the claim
+that makes a redelivery answer once, and an API-side sweeper (`MentionReplySweeper`,
+`ChatAnswerSweeper`) fails what a restart dropped. `ChatModule` is therefore a
+single API-only module rather than the Core/Queue/Worker quartet. It splits
+when a later phase stages work for the worker.
+
 ## MCP is the third entrypoint
 
 `src/mcp.main.ts`, run by `make dev-mcp`. Three things about it are load-bearing:

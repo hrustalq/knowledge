@@ -25,5 +25,8 @@
   "site": "site id",
   "siteVersion": "site version id",
   "siteDomain": "site domain id",
-  "export": "export job id"
+  "export": "export job id",
+  "chatIntegration": "chat bot id",
+  "chatBinding": "chat binding id",
+  "chatIdentity": "linked chat account id"
 }

@@ -13,6 +13,36 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- A workspace can answer questions in Telegram. An admin connects a bot under
+  **Settings → Chat bots** by pasting its BotFather token; the token is checked
+  with Telegram, stored encrypted and never shown again, and the bot's webhook
+  is set to this server. Anyone who messages the bot privately gets a one-time
+  link that ties their Telegram account to their account here; after that every
+  answer runs as them, with exactly their access, cites the pages it used as
+  links, and is kept as a conversation in their **Assistant** history. A bot
+  answers in a group only once a workspace admin binds it (`/bind` in the group,
+  or by chat id in settings), and there only when mentioned unless the group is
+  set otherwise; each group can be scoped to one project, use its own agent and
+  reply in its own language. Linked accounts are listed under **Settings →
+  Profile** with unlink. (#71)
+
+### Operations
+
+- New env vars, all with defaults: `CHAT_ENABLED` (default `false` — chat bots
+  answer nothing and the webhook returns 404 until it is `true`),
+  `CHAT_ANSWER_TIMEOUT_SECONDS` (120), `CHAT_MAX_SOURCES` (5),
+  `CHAT_LINK_CODE_TTL_MINUTES` (15), `CHAT_RATE_LIMIT_PER_USER_PER_MINUTE` (10)
+  and `TELEGRAM_API_BASE_URL` (`https://api.telegram.org`; point it at a
+  self-hosted Bot API server or proxy when this host cannot reach Telegram).
+  Telegram delivers to `${API_PUBLIC_URL}/v1/chat/<id>/webhook`, which must be
+  public HTTPS; bot tokens need `SETTINGS_ENCRYPTION_KEY`. (#71)
+- Migration `20261014170000_chat_bots_core` only creates the six `chat_*`
+  tables. The previous release ignores them, so a code rollback is safe. (#71)
+
 ## [0.20.0] — 2026-10-14
 
 ### Added

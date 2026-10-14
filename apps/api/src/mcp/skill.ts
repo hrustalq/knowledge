@@ -138,7 +138,7 @@ ${toolRef('knowledge_comment_merge_request')} to leave review notes.
 
 This credential is **read-only**: it cannot create pages, branches, revisions or merge requests. When the user asks for a
 change, draft the new markdown in the conversation and tell them to apply it at \`${webUrl}\` — or to connect with a
-read-write key from \`${webUrl}/settings/connect\`.
+read-write key from \`${webUrl}/settings/ai/connect\`.
 `;
 
   // Plain HTTP, no MCP: the web origin serves the same markdown the resources
@@ -188,7 +188,7 @@ relations between them. Containment is **Workspace > Project > Document**; the w
 - Tools are all named \`knowledge_*\`. Some clients prefix them — in Claude Code they appear as
   \`mcp__${serverName}__knowledge_search\`.
 - If none of these tools are available, the server is not connected. Do not improvise with web requests; tell the user
-  to connect it from \`${webUrl}/settings/connect\`.
+  to connect it from \`${webUrl}/settings/ai/connect\`.
 - ${keyLine}
 
 ## Your access

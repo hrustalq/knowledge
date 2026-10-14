@@ -19,7 +19,7 @@ platform's own vocabulary: `knowledge_search` is `knowledge.search`.
 
 ## Connecting a client
 
-Use [**Settings → Connect AI**](/settings/connect). It creates a key and gives you the
+Use [**Settings → AI → Connect AI**](/settings/ai/connect). It creates a key and gives you the
 exact command and config file for Claude Code, Codex, Gemini CLI, Cursor, VS Code, Claude
 Desktop, Windsurf, opencode and Zed — with the key already filled in, the one time it is
 on screen. The shape every one of them boils down to:
@@ -63,12 +63,12 @@ There is no ambient workspace: every content tool takes a `workspaceId`. Start f
 
 `GET /v1/mcp/skill` returns a `SKILL.md` generated for the caller — their workspaces and
 project ids, the tools they are offered, and the playbooks below. The same text is the MCP
-resource `knowledge://skill` and the prompt `guide`. Install it from the Connect AI page.
+resource `knowledge://skill` and the prompt `guide`. Install it from the Connect AI section.
 
 ## What it deliberately cannot do
 
 - **Approve a workflow node.** Publishing is a person's decision, not an agent's.
-- **Run a background agent.** An unattended AI run begins from the Agents tab or a
+- **Run a background agent.** An unattended AI run begins from the Agents section or a
   schedule, both of which name a real user.
 
 Merge-request actions *are* available. An author's own approval never counts toward the

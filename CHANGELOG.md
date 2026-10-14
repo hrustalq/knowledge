@@ -13,6 +13,19 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Changed
+
+- **Connect AI** now lives inside **Settings → AI**, and the AI settings tabs
+  have become a section rail beside the page: Connect AI (yours, open to every
+  role), then the assistant's configuration, quality and activity sections. Each
+  section has its own address, `/settings/ai/<section>`, so a link can open one
+  directly. Bare `/settings/ai` opens Connect AI. Old links keep working:
+  `/settings/connect` (printed in every agent skill already handed out) and
+  `/settings/ai?tab=<x>` redirect to the matching section. On a phone the rail
+  becomes one scrollable row above the section. (#182)
+
 ## [0.21.0] — 2026-10-14
 
 ### Added

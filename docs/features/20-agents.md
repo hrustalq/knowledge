@@ -258,7 +258,8 @@ in the body or the query, and the ACL source is `body`/`query` — no
 
 ## Web
 
-A sixth and seventh tab on `/settings/ai`: **Agents** (roster, per-agent editor,
+A sixth and seventh tab on `/settings/ai` (sections since issue #182, at
+`/settings/ai/agents` and `/settings/ai/runs`): **Agents** (roster, per-agent editor,
 reset, capability warnings) and **Runs** (findings with links to the pages they
 cite). Both follow `AiSkillsPanel`'s shape. The editor sends **only changed
 fields** — sending an untouched one would turn a shipped default into an

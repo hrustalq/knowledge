@@ -237,7 +237,7 @@ async function copyAgentLink() {
             </template>
             <DropdownMenuSeparator />
             <DropdownMenuItem as-child>
-              <RouterLink to="/settings/connect">
+              <RouterLink to="/settings/ai/connect">
                 <KeyRound class="size-3.5" />
                 {{ t('aiActions.manageKeys') }}
               </RouterLink>

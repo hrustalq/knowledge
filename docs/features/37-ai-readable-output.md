@@ -39,7 +39,7 @@ private by default, under the same ACL and API-key narrowing as the app.
   `knowledge://workspaces/{workspaceId}/llms.txt` and
   `knowledge://projects/{projectId}/llms.txt` (`text/plain`), as resource
   templates on the existing server.
-- **Connect AI** (`/settings/connect`) gets an "llms.txt and markdown" card with
+- **Connect AI** (`/settings/ai/connect`, formerly `/settings/connect`) gets an "llms.txt and markdown" card with
   copyable root / workspace / current-project URLs and a curl example; the
   generated SKILL.md gets a "Plain-markdown access" section with each reachable
   workspace's `llms.txt` URL.

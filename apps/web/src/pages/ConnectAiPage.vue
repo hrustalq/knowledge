@@ -2,6 +2,10 @@
 /**
  * Connect an AI client to this knowledge base (docs/features/33).
  *
+ * The `connect` section of /settings/ai (issue #182) — it was its own settings
+ * row until then, and `/settings/connect` still redirects here. Its `<h1>` is
+ * the section's, as every other section's is.
+ *
  * Three numbered steps, because that is the order the work has to happen in
  * and each one needs something from the one before: a key, then a client
  * configured with that key, then the skill that tells the client's model how

@@ -121,7 +121,7 @@ async function savePassword() {
 }
 
 // --- api keys ------------------------------------------------------------
-// Named keys live on /settings/connect (docs/features/33), beside the client
+// Named keys live on /settings/ai/connect (docs/features/33), beside the client
 // configs that use them. This row is the signpost, not a second editor: two
 // places that mint keys would be two places to forget one.
 </script>
@@ -286,7 +286,7 @@ async function savePassword() {
                   : t('profileSettings.apiKey.status') }}</span>
               </span>
               <Button as-child variant="outline" size="sm" class="shrink-0">
-                <RouterLink to="/settings/connect">{{ t('profileSettings.apiKey.manage') }}</RouterLink>
+                <RouterLink to="/settings/ai/connect">{{ t('profileSettings.apiKey.manage') }}</RouterLink>
               </Button>
             </div>
           </li>

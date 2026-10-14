@@ -10,7 +10,7 @@ widget: agent-skill
 > **Two skills, two jobs.** This page hands out the skill for an agent working **on this
 > platform's codebase**. For an agent that should **use a knowledge base** — search it,
 > cite it, propose edits — install the skill from
-> [**Settings → Connect AI**](/settings/connect) instead: it is generated for your
+> [**Settings → AI → Connect AI**](/settings/ai/connect) instead: it is generated for your
 > workspaces and connects through MCP.
 
 An agent working on this codebase — or calling its API, or connected to its MCP server —

@@ -41,6 +41,15 @@ in the pull request that introduces them — see
   merge request, a regenerated page arrives as a merge request by the
   connector's owner instead of changing the page, and a newer regeneration
   closes the older merge request. (#72)
+- A codebase connector can write release notes. Turn on **Release notes** to
+  get a Releases page, an Unreleased page, and one page per recent version
+  tag, built from commits and merged pull or merge requests. Breaking changes
+  are confirmed by a conventional commit (`feat!:`, `BREAKING CHANGE:`), by a
+  label on the request, or by an exported function or type that was removed
+  or changed shape. Each confirmed change names its source. At effort `medium`
+  and up, a summary opens each page, and changes the model only suspects are
+  listed apart as "Possibly breaking". A published release's page is never
+  regenerated. (#72)
 - The archaeologist no longer treats a repo wiki's file listings as
   documentation. It still proposes undocumented logic files below the wiki's
   module pages. (#72)
@@ -65,13 +74,20 @@ in the pull request that introduces them — see
   page may make at effort `high`. The new usage operation `wiki` shows the
   wiki's extra spend separately from `codebase`. `WIKI_PUSH_DEBOUNCE_MS`
   (`120000`) is how long a push-triggered sync waits for more pushes.
+  `CHANGELOG_MAX_RELEASES` (`20`) is how many tags a first sync generates
+  release notes for, and `CHANGELOG_MAX_COMMITS_PER_RELEASE` (`500`) caps the
+  commits read per release. A new usage operation, `changelog`, records
+  release-note spend.
 - Migration `20261014150000_repo_wiki_conflict_reason` adds
   `connector_conflicts.reason` (`NOT NULL DEFAULT 'conflict'`) and an index.
   It is additive, and the previous release ignores the column, so it survives
   a rollback by retag.
 - Push regeneration through the GitHub App needs **Contents: read** and the
   **push** event on the App. The connector's GitHub access card lists both
-  under "repo wiki on push" while the setting is on.
+  under "repo wiki on push" while the setting is on. Release notes need
+  **Pull requests: read** and the **release** event, listed under "release
+  notes". Each release also downloads the previous tag's archive once to
+  compare the exported API.
 
 ## [0.19.1] — 2026-10-14
 

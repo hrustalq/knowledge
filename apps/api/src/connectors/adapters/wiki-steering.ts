@@ -62,6 +62,18 @@ const steeringSchema = z.object({
     .max(WIKI_MAX_FLOWS)
     .optional(),
   focus: z.string().max(2_000).optional(),
+  changelog: z
+    .object({
+      tagPattern: z.string().trim().min(1).max(100).optional(),
+      breaking: z
+        .object({
+          conventional: z.boolean().optional(),
+          labels: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+          apiSurface: z.boolean().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export interface WikiSteering {

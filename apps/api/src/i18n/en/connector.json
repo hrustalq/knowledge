@@ -40,6 +40,11 @@
       "effortClamped": "The wiki asked for effort {asked}, but this server allows at most {applied}, so it ran at {applied}.",
       "flowEntryMissing": "The flow entry file {entry} is not in the repository, so that flow was left out.",
       "diagramInvalid": "A diagram could not be drawn safely and was left out; the rest of the page is unchanged."
+    },
+    "changelog": {
+      "truncated": "This release has {total} commits; the page lists the newest {limit}.",
+      "tagNotFound": "The tag {tag} is no longer in the repository, so its release notes could not be generated.",
+      "unavailable": "Release history could not be read: {error}"
     }
   },
   "pushVersionMessage": "Updated from the knowledge base",
@@ -51,7 +56,9 @@
       "architecture": "Architecture",
       "dataFlow": "Data flow",
       "api": "Public API",
-      "modules": "Modules ({count})"
+      "modules": "Modules ({count})",
+      "changelog": "Releases",
+      "unreleased": "Unreleased"
     }
   }
 }

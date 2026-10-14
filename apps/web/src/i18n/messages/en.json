@@ -551,7 +551,8 @@
         "drift-check": "drift check",
         "boards": "project boards",
         "repo-events": "workflow triggers",
-        "wiki": "repo wiki on push"
+        "wiki": "repo wiki on push",
+        "changelog": "release notes"
       },
       "permission": {
         "metadata": "Metadata",

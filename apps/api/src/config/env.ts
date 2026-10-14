@@ -476,6 +476,10 @@ export const envSchema = z.object({
    * the window fold into the same queued run, so a burst of commits is one sync.
    */
   WIKI_PUSH_DEBOUNCE_MS: z.coerce.number().int().min(0).max(3_600_000).default(120_000),
+  /** Release notes: tags generated on a connector's first sync — older ones are listed, not generated. */
+  CHANGELOG_MAX_RELEASES: z.coerce.number().int().min(1).max(200).default(20),
+  /** Commits read per release; a longer range is cut with a warning saying so. */
+  CHANGELOG_MAX_COMMITS_PER_RELEASE: z.coerce.number().int().min(1).max(5_000).default(500),
 
   /**
    * Where this API is reachable from a browser.

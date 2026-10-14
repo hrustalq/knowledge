@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Connector } from '@prisma/client';
 import {
+  CHANGELOG_CONFIG_KEY,
   driftCheckMode,
   GITHUB_INSTALLATION_CONFIG_KEY,
   wikiAutoRegenerate,
@@ -82,6 +83,7 @@ export class GithubAccessService {
         direction: row.direction,
         driftCheck: driftCheckMode(config),
         wikiOnPush: wikiEnabled(config) && wikiAutoRegenerate(config) === 'on-push',
+        changelog: config[CHANGELOG_CONFIG_KEY] === 'on',
       });
       return {
         ...base,

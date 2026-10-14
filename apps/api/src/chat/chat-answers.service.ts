@@ -1,7 +1,14 @@
 import { ForbiddenException, HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type ChatAnswer, type ChatChannelBinding, type ChatIntegration } from '@prisma/client';
-import { isLocale, isWebSource, type AssistantMessageInfo, type AssistantSource, type Locale } from '@knowledge/contracts';
+import {
+  ANSWER_FEEDBACK_REASONS,
+  isLocale,
+  isWebSource,
+  type AssistantMessageInfo,
+  type AssistantSource,
+  type Locale,
+} from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AccessService } from '../auth/access.service.js';
@@ -9,15 +16,18 @@ import type { Principal } from '../auth/principal.js';
 import { AssistantService } from '../assistant/assistant.service.js';
 import { AssistantThreadsService } from '../assistant/assistant-threads.service.js';
 import { CITE_MARKER_RE } from '../assistant/citations.js';
+import { AnswerFeedbackService } from '../feedback/answer-feedback.service.js';
 import { t, withLocale } from '../i18n/t.js';
 import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import type {
+  ChatActionButton,
   ChatAdapter,
   ChatAdapterContext,
   ChatInbound,
   ChatMessageRef,
   ChatView,
 } from './adapters/chat-adapter.types.js';
+import { decodeChatAction, encodeChatAction } from './chat-actions.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
 
@@ -25,6 +35,11 @@ import { ChatIntegrationsService } from './chat-integrations.service.js';
 const DM_CONTINUATION_MS = 30 * 60_000;
 /** Reaped per tick, at most — a backlog drains over a few minutes rather than in one burst of edits. */
 const REAP_BATCH = 50;
+/** Reasons for a 👎 per row of buttons — seven do not fit one row on a phone. */
+const REASONS_PER_ROW = 2;
+
+/** Which buttons sit under an answer: the vote row, or — after a 👎 — the reasons. */
+type AnswerButtons = 'vote' | 'reasons';
 
 interface Delivery {
   integration: ChatIntegration;
@@ -70,6 +85,7 @@ export class ChatAnswersService {
     private readonly registry: ChatAdapterRegistry,
     private readonly integrations: ChatIntegrationsService,
     private readonly identities: ChatIdentityService,
+    private readonly feedback: AnswerFeedbackService,
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true }).replace(/\/$/, '');
@@ -114,6 +130,10 @@ export class ChatAnswersService {
 
   private async dispatch(d: Delivery, userId: string | null, locale: Locale): Promise<void> {
     const { inbound, integration } = d;
+    // A button only ever comes from a message the bot posted, and the answer
+    // it names is looked up in this chat — so it is handled even where the
+    // group has since been unbound: the press must at least be acknowledged.
+    if (inbound.action) return this.action(d, userId, locale);
     const command = inbound.command;
     // A group nobody bound is a group the bot was added to and nothing more:
     // silence, so a stray bot cannot be made to talk anywhere. `/bind` is the
@@ -206,7 +226,7 @@ export class ChatAnswersService {
         principal,
       );
       const view: ChatView = turn.enabled
-        ? this.answerView(turn.message, conversation.assistantThreadId)
+        ? this.answerView(turn.message, conversation.assistantThreadId, claim.id)
         : { kind: 'notice', text: t('chat.answer.disabled', { workspace: d.workspaceName }) };
       // Claim the result before showing it: if the reaper already gave up on
       // this question, its "never arrived" stays — the answer is in /assistant.
@@ -314,8 +334,18 @@ export class ChatAnswersService {
    * The answer and the sources it rests on. Cited sources first, in the order
    * the answer cites them, then whatever else the turn gathered, up to
    * CHAT_MAX_SOURCES — a chat shows a few links, not the turn's whole reading list.
+   *
+   * Built the same way every time it is shown: a vote that swaps the buttons
+   * re-renders the whole answer from the stored message rather than editing
+   * the keyboard alone, because only the adapter knows whether it had to cut
+   * the answer and add "Open the full answer".
    */
-  answerView(message: AssistantMessageInfo, threadId: string): ChatView {
+  answerView(
+    message: Pick<AssistantMessageInfo, 'content' | 'sources'>,
+    threadId: string,
+    answerId: string,
+    buttons: AnswerButtons = 'vote',
+  ): ChatView {
     const cited = new Set<string>();
     for (const m of message.content.matchAll(new RegExp(CITE_MARKER_RE.source, 'gi'))) {
       for (const label of m[1].split(/\s*[,;]\s*/)) cited.add(label.toUpperCase());
@@ -332,8 +362,91 @@ export class ChatAnswersService {
       })),
       sourcesHeading: t('chat.answer.sources'),
       full: { label: t('chat.answer.openFull'), url: `${this.webBaseUrl}/assistant?thread=${threadId}` },
+      actions: buttons === 'vote' ? voteRow(answerId) : reasonRows(answerId),
       webBaseUrl: this.webBaseUrl,
     };
+  }
+
+  /**
+   * A press of a button under an answer: 👍, 👎, a reason for the 👎, or back
+   * (issue #71, phase 2).
+   *
+   * The vote is the presser's, not the asker's — in a group anyone the answer
+   * was shown to may rate it — so the presser meets the same bar a question
+   * does: linked, and still a member of the workspace, checked on the press.
+   * Votes go to `answer_feedback` under the `chat` surface, one per person per
+   * answer, so a 👎 followed by its reason is one row, not two.
+   *
+   * A 👎 is recorded at once and the reasons are offered after it: a vote
+   * whose reason is never picked is still a vote. Every press is acknowledged,
+   * because the platform shows a spinner on the button until it is.
+   */
+  private async action(d: Delivery, userId: string | null, locale: Locale): Promise<void> {
+    const { inbound, integration } = d;
+    const press = inbound.action!;
+    const ack = (note?: string) =>
+      d.adapter.acknowledge(d.ctx, press.id, note).catch((err: unknown) => {
+        this.logger.warn({ msg: 'chat button press not acknowledged', integrationId: integration.id, error: String(err) });
+      });
+
+    const action = decodeChatAction(press.data);
+    if (!action) return ack();
+    if (!userId) return ack(t('chat.feedback.linkFirst'));
+    let principal: Principal;
+    try {
+      principal = await this.access.principalFor(userId, locale);
+      await this.access.requireRole(principal, integration.workspaceId, 'viewer');
+    } catch {
+      return ack(t('chat.answer.noAccess', { workspace: d.workspaceName }));
+    }
+
+    // Looked up in the chat the press came from: an id from elsewhere is not found.
+    const answer = await this.prisma.chatAnswer.findFirst({
+      where: { id: action.answerId, integrationId: integration.id, externalChatId: inbound.chatId, status: 'answered' },
+      select: { id: true, assistantMessageId: true, locale: true },
+    });
+    const message = answer?.assistantMessageId
+      ? await this.prisma.assistantMessage.findUnique({
+          where: { id: answer.assistantMessageId },
+          select: { id: true, threadId: true, content: true, sources: true },
+        })
+      : null;
+    if (!answer || !message) return ack(t('chat.feedback.gone'));
+
+    if (action.kind !== 'back') {
+      try {
+        await this.feedback.vote(message.id, principal, {
+          rating: action.kind === 'vote' ? action.rating : 'down',
+          ...(action.kind === 'reason' ? { reason: action.reason } : {}),
+          surface: 'chat',
+        });
+      } catch (err) {
+        if (err instanceof ForbiddenException) return ack(t('chat.feedback.disabled'));
+        this.logger.warn({ msg: 'chat vote failed', integrationId: integration.id, answerId: answer.id, error: String(err) });
+        return ack(t('chat.feedback.failed'));
+      }
+    }
+
+    const askReason = action.kind === 'vote' && action.rating === 'down';
+    await ack(askReason ? t('chat.feedback.askReason') : action.kind === 'back' ? undefined : t('chat.feedback.thanks'));
+    // 👍 leaves the buttons as they are; 👎 swaps in the reasons; a reason or
+    // back puts the vote row back. The answer keeps the language it was asked
+    // in, whoever pressed.
+    if (action.kind === 'vote' && !askReason) return;
+    const lang = isLocale(answer.locale) ? answer.locale : 'en';
+    const view = withLocale(lang, () =>
+      this.answerView(
+        { content: message.content, sources: (message.sources ?? []) as unknown as AssistantSource[] },
+        message.threadId,
+        answer.id,
+        askReason ? 'reasons' : 'vote',
+      ),
+    );
+    await d.adapter
+      .editMessage(d.ctx, { chatId: inbound.chatId, messageId: inbound.messageId }, d.adapter.render(view))
+      .catch((err: unknown) => {
+        this.logger.warn({ msg: 'chat answer buttons not updated', answerId: answer.id, error: String(err) });
+      });
   }
 
   /** Link instruction. A code only ever goes into a private chat; a group gets "message me". */
@@ -428,4 +541,26 @@ export class ChatAnswersService {
     }
     return closed;
   }
+}
+
+/** 👍 👎 under an answer. Emoji only: they read the same in every language. */
+function voteRow(answerId: string): ChatActionButton[][] {
+  return [
+    [
+      { label: '👍', action: encodeChatAction({ kind: 'vote', answerId, rating: 'up' }) },
+      { label: '👎', action: encodeChatAction({ kind: 'vote', answerId, rating: 'down' }) },
+    ],
+  ];
+}
+
+/** What was wrong — `ANSWER_FEEDBACK_REASONS`, the reasons every other surface offers — and a way back. */
+function reasonRows(answerId: string): ChatActionButton[][] {
+  const buttons = ANSWER_FEEDBACK_REASONS.map((reason) => ({
+    label: t(`chat.feedback.reason.${reason}`),
+    action: encodeChatAction({ kind: 'reason', answerId, reason }),
+  }));
+  const rows: ChatActionButton[][] = [];
+  for (let i = 0; i < buttons.length; i += REASONS_PER_ROW) rows.push(buttons.slice(i, i + REASONS_PER_ROW));
+  rows.push([{ label: t('chat.feedback.back'), action: encodeChatAction({ kind: 'back', answerId }) }]);
+  return rows;
 }

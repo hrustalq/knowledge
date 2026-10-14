@@ -3,9 +3,9 @@
 Issue [#71](https://github.com/hrustalq/knowledge/issues/71). People ask
 questions in chat, not in the wiki. A workspace connects a messenger bot, and
 the bot answers from the knowledge base with links to the pages it used.
-Telegram ships first (phase 1). Feedback and saving a thread as a page (phase
-2), channel notifications (phase 3), and Slack and Teams (phases 4–5) are still
-open on the issue.
+Telegram ships first (phase 1), with 👍/👎 feedback on every answer (phase 2).
+Saving a thread as a page (the rest of phase 2), channel notifications (phase
+3), and Slack and Teams (phases 4–5) are still open on the issue.
 
 ## Who an answer runs as
 
@@ -153,13 +153,50 @@ written out. "Message is not modified" on an edit counts as success. Errors
 carry the method and Telegram's description, never the URL, which contains the
 token.
 
+## Feedback
+
+Every answer carries a 👍 👎 row. A press comes back as an inbound with an
+`action` (Telegram `callback_query`) and goes through the same `receive` path
+as a question.
+
+- **Who votes.** The presser, not the asker: in a group anyone the answer was
+  shown to may rate it. The presser must be linked and still a member of the
+  workspace (`principalFor` + `requireRole('viewer')` on the press). An
+  unlinked presser is told to link privately; no code is issued from a press.
+- **Where it goes.** `AnswerFeedbackService.vote(assistantMessageId, presser,
+  { surface: 'chat' })` — the same `answer_feedback` table, one vote per
+  person per answer, that the admin **Feedback** tab and the dataset export
+  already read. The REST vote route still offers only the two panes; `chat` is
+  written server-side only.
+- **👎 then a reason.** The 👎 is recorded at once (a vote whose reason is
+  never picked is still a vote), then the answer is re-rendered with the
+  `ANSWER_FEEDBACK_REASONS` as buttons and a back button. A reason upserts the
+  same row and the vote row comes back. In a group everyone sees the reason
+  buttons for that moment, and a reason pressed by someone else is their own
+  👎.
+- **Re-rendered, not re-keyed.** The buttons change by editing the whole
+  answer, rebuilt from the stored assistant message in the language it was
+  asked in — only the adapter knows whether it cut the answer and added "Open
+  the full answer", so the core cannot rebuild the keyboard alone.
+- **Button data** is `chat-actions.ts`: `v:<chatAnswerId>:u|d`,
+  `r:<chatAnswerId>:<reason>`, `b:<chatAnswerId>` — at most 57 bytes against
+  Telegram's 64. It is decoded as untrusted input and the answer it names is
+  looked up in the chat the press came from, so an id from another chat is
+  "no longer available".
+- **Acknowledged always.** The platform shows a spinner until the press is
+  answered, so every press — undecodable, unlinked, forbidden — gets an
+  `acknowledge`, with a short note only the presser sees. A press in a group
+  unbound since the answer is still acknowledged.
+
 ## The adapter seam
 
 `chat/adapters/chat-adapter.types.ts` is the whole contract.
 
-- **Inbound:** `verifyInbound`, `parseInbound` → `ChatInbound`.
+- **Inbound:** `verifyInbound`, `parseInbound` → `ChatInbound` (a message,
+  or a button press in `action`).
 - **Outbound:** `render(ChatAnswerView | ChatNoticeView)`, `postMessage`,
-  `editMessage`.
+  `editMessage`, `acknowledge`. Buttons are rows of link buttons and action
+  buttons; an action's data must fit `limits.maxActionBytes`.
 - **Admin:** `identify` (Telegram `getMe`), `registerWebhook`, `directLink`.
 
 The core decides *what* to say and the adapter decides *how* it looks and
@@ -174,6 +211,7 @@ What a later platform must map:
 | ------------------ | ---------------------------------------------- | ---------------------------------- | ------------------------------- | --------------------------- |
 | `verifyInbound`    | `secret_token` header, SHA-256 + constant time | `X-Slack-Signature` v0, 5-min skew | Bot Framework JWT               | outgoing-webhook token      |
 | `parseInbound`     | `message`, reply chain, `@bot` mention         | `app_mention`, `message.im`        | `message` activity              | posted event / message      |
+| button presses     | `callback_query` / `answerCallbackQuery`       | `block_actions`, then 200          | `Action.Submit` invoke          | interactive post action     |
 | threads            | reply to the bot's message                     | `thread_ts`                        | `replyToId`                     | `root_id` / reply           |
 | `render`           | HTML subset + inline keyboard                  | mrkdwn / Block Kit                 | Adaptive Card                   | markdown / inline keyboard  |
 | `postMessage` / `editMessage` | `sendMessage` / `editMessageText`   | `chat.postMessage` / `chat.update` | `sendActivity` / `updateActivity` | `POST/PUT /posts`         |
@@ -236,7 +274,9 @@ The web pages are `/settings/chat` (`ChatSettingsPage.vue` +
   this.
 - **Threads.** Groups have no threads, only reply chains, hence
   `replyToBotMessageId`.
-- **Webhook only.** `allowed_updates: ['message']`, `drop_pending_updates`.
+- **Webhook only.** `allowed_updates: ['message', 'callback_query']`,
+  `drop_pending_updates`. A bot registered before the feedback buttons
+  existed is re-registered by **Test** or by saving its token again.
   Long polling for installs without a public URL is a follow-up.
 - **Reaching Telegram.** `TELEGRAM_API_BASE_URL` points the outbound calls at
   a self-hosted Bot API server or a proxy. It is operator configuration, not a
@@ -268,9 +308,9 @@ All six tables are new. None of them has an FK on `workspace_id`, `user_id` or
 | `chat_conversations`    | chat + asker → `assistant_threads` row                                        |
 | `chat_answers`          | the claim: status, placeholder message id, assistant message id, frozen locale |
 
-`chat_answers.assistantMessageId` is what phase 2's 👍/👎 key on. Votes go
-into `answer_feedback` under the `chat` surface (decided on #71), not into
-columns of their own.
+`chat_answers.assistantMessageId` is what 👍/👎 key on. Votes go into
+`answer_feedback` under the `chat` surface (decided on #71), not into columns
+of their own.
 
 ## Tests
 
@@ -280,6 +320,9 @@ columns of their own.
   - The secret check, normalisation, mentions, replies and commands.
   - Escaping, citations, links, cutting.
   - The plain fallback, and the token kept out of errors.
+  - Button presses parsed; action buttons sent as callback buttons and kept on
+    the plain fallback; `answerCallbackQuery`; the webhook asks for
+    `callback_query`.
 - `test/chat-identity.spec.ts`:
   - The code is hashed, expires and is single-use.
   - A non-member is refused before the code is spent.
@@ -294,3 +337,9 @@ columns of their own.
   - A removed person and the rate limit are both refused.
   - A failed turn fails the claim; a late answer loses to the reaper; the
     reaper edits once.
+  - Button data round-trips within 64 bytes and decodes nothing it did not
+    write.
+  - 👍 votes as the presser on the `chat` surface; 👎 records at once and
+    swaps in the reasons; a reason updates the same vote and restores the row;
+    an unlinked or removed presser, an answer from another chat and feedback
+    switched off record nothing and are still acknowledged.

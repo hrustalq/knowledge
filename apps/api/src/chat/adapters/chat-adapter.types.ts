@@ -35,6 +35,13 @@ export interface ChatInbound {
   replyToBotMessageId: string | null;
   /** `/name args`, already filtered to commands addressed to this bot. */
   command: { name: string; args: string } | null;
+  /**
+   * A press of one of the bot's own buttons. `messageId` is then the bot's
+   * message the button sits on, `text` is empty, and `data` is exactly what
+   * the core put in the {@link ChatActionButton} — the platform hands it back
+   * untouched, and only for buttons this bot sent.
+   */
+  action: { id: string; data: string } | null;
 }
 
 /** Where a message goes. */
@@ -49,18 +56,31 @@ export interface ChatMessageRef {
   messageId: string;
 }
 
-/** A link button under a message. */
-export interface ChatButton {
+/** A button that opens a link. */
+export interface ChatLinkButton {
   label: string;
   url: string;
 }
+
+/**
+ * A button that comes back as an inbound `action` carrying `action` as its
+ * data. The core owns the encoding (`chat-actions.ts`); the adapter only
+ * carries it, within `limits.maxActionBytes`.
+ */
+export interface ChatActionButton {
+  label: string;
+  action: string;
+}
+
+export type ChatButton = ChatLinkButton | ChatActionButton;
 
 /** The platform's own rendering of a view. */
 export interface ChatOutMessage {
   text: string;
   /** Plain text is the fallback when the formatted text is refused. */
   plain: string;
-  buttons: ChatButton[];
+  /** Rows of buttons, top to bottom. */
+  buttons: ChatButton[][];
 }
 
 /** An answer: markdown with `[S#]` markers, and the sources those labels name. */
@@ -70,7 +90,9 @@ export interface ChatAnswerView {
   sources: Array<{ cite?: string; title: string; url: string }>;
   sourcesHeading: string;
   /** Where the whole answer is — offered by the adapter only when it had to cut. */
-  full: ChatButton | null;
+  full: ChatLinkButton | null;
+  /** Rows of action buttons under the answer — the vote row, or the reasons for a 👎. */
+  actions: ChatActionButton[][];
   /** Relative page links (`/documents/:id`) are resolved against this. */
   webBaseUrl: string;
 }
@@ -79,7 +101,7 @@ export interface ChatAnswerView {
 export interface ChatNoticeView {
   kind: 'notice';
   text: string;
-  button?: ChatButton;
+  button?: ChatLinkButton;
 }
 
 export type ChatView = ChatAnswerView | ChatNoticeView;
@@ -104,7 +126,8 @@ export class ChatPlatformError extends Error {
 
 export interface ChatAdapter {
   readonly kind: ChatPlatformKind;
-  readonly limits: { maxChars: number };
+  /** `maxActionBytes`: the most a {@link ChatActionButton}'s data may carry. */
+  readonly limits: { maxChars: number; maxActionBytes: number };
 
   /** Constant-time check of the delivery's shared secret against the stored hash. */
   verifyInbound(raw: RawInbound, secretHash: string | null): boolean;
@@ -114,6 +137,11 @@ export interface ChatAdapter {
   render(view: ChatView): ChatOutMessage;
   postMessage(ctx: ChatAdapterContext, target: ChatTarget, msg: ChatOutMessage): Promise<ChatMessageRef>;
   editMessage(ctx: ChatAdapterContext, ref: ChatMessageRef, msg: ChatOutMessage): Promise<void>;
+  /**
+   * Close out a button press — the platform shows a spinner until this is
+   * called — with an optional short note shown only to the person who pressed.
+   */
+  acknowledge(ctx: ChatAdapterContext, actionId: string, note?: string): Promise<void>;
 
   /** Who the token belongs to — the health check, and how `botUsername` is learned. */
   identify(ctx: ChatAdapterContext): Promise<{ username: string }>;

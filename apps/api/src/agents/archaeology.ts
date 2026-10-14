@@ -187,6 +187,62 @@ export function isCovered(declared: string, path: string, exportedNames: string[
   return false;
 }
 
+// ---- the repo wiki's pages (docs/features/46) ------------------------------
+
+/** What the codebase connector writes: feature 27's pages, and the repo wiki's. */
+const GENERATED_BY = new Set(['codebase-connector', 'repo-wiki']);
+
+/** A file listing on a generated page — `- [\`path\`](url)` — which names a file without declaring it. */
+const FILE_LISTING_LINE = /^\s*-\s+\[`[^`]+`\]\([^)]*\)\s*$/;
+
+/**
+ * The text a page declares, for coverage.
+ *
+ * A generated module page lists the module's files, and a listing is not a
+ * statement about what a file decides: counting it would make every file the
+ * wiki names look documented and leave the archaeologist nothing to propose
+ * below the wiki's granularity, which is exactly where it is useful. So a
+ * generated page's listing lines are dropped; everything else on it counts.
+ */
+export function declaredText(page: { title: string; markdown: string; frontmatter?: Record<string, unknown> | null }): string {
+  const generated = typeof page.frontmatter?.generated === 'string' && GENERATED_BY.has(page.frontmatter.generated);
+  const markdown = generated
+    ? page.markdown
+        .split('\n')
+        .filter((line) => !FILE_LISTING_LINE.test(line))
+        .join('\n')
+    : page.markdown;
+  return `${page.title}\n${markdown}`;
+}
+
+/** Module paths the repo wiki documents as a whole, from its pages' frontmatter. */
+export function wikiModulePaths(pages: Array<{ frontmatter?: Record<string, unknown> | null }>): string[] {
+  const out = new Set<string>();
+  for (const page of pages) {
+    if (page.frontmatter?.generated !== 'repo-wiki' || page.frontmatter.unit === 'overview') continue;
+    const paths = page.frontmatter.modulePaths;
+    if (!Array.isArray(paths)) continue;
+    for (const path of paths) if (typeof path === 'string') out.add(path);
+  }
+  return [...out];
+}
+
+/** The names a module's front door goes by. */
+const MODULE_ENTRY_BASENAMES = new Set(['index', 'main', 'mod', 'lib', '__init__', '__main__', 'app', 'server']);
+
+/**
+ * A file the wiki covers at module granularity: a module's entry file, whose
+ * public surface is exactly what that module's page describes. Logic files
+ * below it are not covered by this — they are what the archaeologist is for.
+ */
+export function isWikiCovered(path: string, modulePaths: string[]): boolean {
+  const cut = path.lastIndexOf('/');
+  const dir = cut === -1 ? '' : path.slice(0, cut);
+  const base = path.slice(cut + 1).replace(/\.[^.]+$/, '');
+  if (!MODULE_ENTRY_BASENAMES.has(base)) return false;
+  return modulePaths.some((m) => dir === m || dir === (m ? `${m}/src` : 'src'));
+}
+
 // ---- the model's contracts --------------------------------------------------
 
 export const DIGEST_CONTRACT =

@@ -157,3 +157,39 @@ describe('readExcavation', () => {
     expect(finding?.sources?.length).toBe(8);
   });
 });
+
+const { declaredText, isWikiCovered, wikiModulePaths } = await import('../src/agents/archaeology.js');
+
+describe('repo wiki coverage (docs/features/46)', () => {
+  it("drops a generated page's file listing but keeps what it says", () => {
+    const page = {
+      title: 'core',
+      markdown: 'The pricing rules live here.\n\n## Files\n\n- [`packages/core/src/pricing.ts`](https://x/blob/main/packages/core/src/pricing.ts)',
+      frontmatter: { generated: 'repo-wiki', unit: 'module:packages/core' },
+    };
+    const text = declaredText(page);
+    expect(text).toContain('pricing rules');
+    expect(text).not.toContain('packages/core/src/pricing.ts');
+    // A page a person wrote keeps every line: a listing there is a statement.
+    expect(declaredText({ ...page, frontmatter: null })).toContain('packages/core/src/pricing.ts');
+  });
+
+  it("collects the wiki's module paths, never the hub's", () => {
+    expect(
+      wikiModulePaths([
+        { frontmatter: { generated: 'repo-wiki', unit: 'overview', modulePaths: ['apps/api', 'packages/core'] } },
+        { frontmatter: { generated: 'repo-wiki', unit: 'module:packages/core', modulePaths: ['packages/core'] } },
+        { frontmatter: { generated: 'codebase-connector', unit: 'module:apps/api', modulePaths: ['apps/api'] } },
+        { frontmatter: null },
+      ]),
+    ).toEqual(['packages/core']);
+  });
+
+  it("covers a module's entry file, not the logic below it", () => {
+    expect(isWikiCovered('packages/core/src/index.ts', ['packages/core'])).toBe(true);
+    expect(isWikiCovered('packages/core/index.ts', ['packages/core'])).toBe(true);
+    expect(isWikiCovered('packages/core/src/pricing.ts', ['packages/core'])).toBe(false);
+    expect(isWikiCovered('packages/core/src/rules/index.ts', ['packages/core'])).toBe(false);
+    expect(isWikiCovered('apps/api/src/main.ts', ['packages/core'])).toBe(false);
+  });
+});

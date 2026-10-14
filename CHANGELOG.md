@@ -26,6 +26,17 @@ in the pull request that introduces them — see
   the defaults apply and the run warns, naming what was wrong. Each page is
   re-derived only when its own inputs change, so a function body edited in one
   module re-derives that module's page and nothing else. (#72)
+- Repo wiki pages carry Mermaid diagrams:
+  - Architecture draws how the modules import each other.
+  - Each module page draws its exported types with inheritance.
+  - Data flow draws each flow as a sequence diagram (effort `medium` and up).
+  At effort `high`, each page is written after the model reads the code with
+  the code tools. Diagrams are built by the server from parsed facts. The model
+  never writes diagram syntax. A diagram that fails the safety check is left
+  out with a warning, and the page still syncs. (#72)
+- The archaeologist no longer treats a repo wiki's file listings as
+  documentation. It still proposes undocumented logic files below the wiki's
+  module pages. (#72)
 
 ### Operations
 
@@ -36,6 +47,9 @@ in the pull request that introduces them — see
 - New env vars, both with defaults: `WIKI_MAX_EFFORT` (`medium`), the most
   effort any repository or connector may ask for, and `WIKI_DIAGRAM_MAX_NODES`
   (`40`). Both are ceilings. A repository can ask for less, never more.
+  `WIKI_HIGH_EFFORT_MAX_TOOL_CALLS` (`24`) caps the code-tool calls one wiki
+  page may make at effort `high`. The new usage operation `wiki` shows the
+  wiki's extra spend separately from `codebase`.
 
 ## [0.19.1] — 2026-10-14
 

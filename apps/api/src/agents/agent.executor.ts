@@ -29,6 +29,7 @@ import { PullRequestService } from '../connectors/code-research/pull-request.ser
 import { wrapUntrusted } from '../common/untrusted.js';
 import { SearchService } from '../search/search.service.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
+import { runCodeReadingLoop } from './code-reading-loop.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
@@ -43,7 +44,10 @@ import {
   MAX_RANKED_FILES,
   digestInput,
   headingDigest,
+  declaredText,
   isCovered,
+  isWikiCovered,
+  wikiModulePaths,
   rankCandidates,
   readExcavation,
   selectRepoDocs,
@@ -632,9 +636,10 @@ export class AgentExecutor {
     const docs = selectRepoDocs(snapshot.files);
     const pages = connector ? await this.destinationPages(run.workspaceId, connector) : [];
     // Lower-cased once: coverage is a substring test against this, per file.
-    const declared = [...docs.map((d) => d.text), ...pages.map((p) => `${p.title}\n${p.markdown}`)]
-      .join('\n')
-      .toLowerCase();
+    const declared = [...docs.map((d) => d.text), ...pages.map(declaredText)].join('\n').toLowerCase();
+    // Modules the repo wiki documents as a whole (docs/features/46): their
+    // entry files are declared by the module page; the logic below them is not.
+    const wikiModules = wikiModulePaths(pages);
     const counts = { docs: docs.length, pages: pages.length, repository: snapshot.name };
 
     // 'tools' is a preference, not a prerequisite — the curator's rule.
@@ -685,7 +690,7 @@ export class AgentExecutor {
     for (const candidate of rankCandidates(snapshot.files, MAX_RANKED_FILES)) {
       const outline = await this.code.outlineFile(snapshot, candidate.path);
       const names = outline?.symbols.filter((s) => s.exported).map((s) => s.name) ?? [];
-      if (isCovered(declared, candidate.path, names)) continue;
+      if (isWikiCovered(candidate.path, wikiModules) || isCovered(declared, candidate.path, names)) continue;
       candidates.push(candidate);
       if (candidates.length >= MAX_CANDIDATE_FILES) break;
     }
@@ -705,18 +710,12 @@ export class AgentExecutor {
 
     for (const [at, candidate] of candidates.entries()) {
       await report({ stage: 'reading', progress: 0.3 + (0.65 * at) / candidates.length });
-      // Every path the model actually opened. A finding may cite only these:
-      // a path seen in a tree listing is not a path that was read.
-      const readPaths = new Set<string>([candidate.path]);
-      const execute = (name: string, args: Record<string, unknown>) => {
-        if (!CODE_TOOLS.has(name)) return this.readTools.execute(name, args, toolCtx);
-        // The run is scoped to one repository: whatever connectorId the model
-        // wrote, this is the one it reads.
-        if ((name === 'code_read' || name === 'code_outline') && typeof args.path === 'string') {
-          readPaths.add(args.path.trim().replace(/^\.?\//, ''));
-        }
-        return this.code.execute(name, { ...args, connectorId }, toolCtx);
-      };
+      const execute = (name: string, args: Record<string, unknown>) =>
+        CODE_TOOLS.has(name)
+          ? // The run is scoped to one repository: whatever connectorId the
+            // model wrote, this is the one it reads.
+            this.code.execute(name, { ...args, connectorId }, toolCtx)
+          : this.readTools.execute(name, args, toolCtx);
 
       const text = Buffer.from(snapshot.files.get(candidate.path) ?? new Uint8Array()).toString('utf8');
       const outline = await this.code.outlineFile(snapshot, candidate.path);
@@ -742,9 +741,18 @@ export class AgentExecutor {
       ];
 
       try {
-        const raw = agent.missing.includes('tools')
-          ? await this.client.chat(call, messages, { json: true })
-          : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
+        // Every path the model actually opened. A finding may cite only these:
+        // a path seen in a tree listing is not a path that was read.
+        const { content: raw, readPaths } = await runCodeReadingLoop({
+          client: this.client,
+          call,
+          messages,
+          tools,
+          execute,
+          toolless: agent.missing.includes('tools'),
+          json: true,
+          seen: [candidate.path],
+        });
         filesRead += 1;
         const proposals = safeJson(raw)?.findings;
         let kept = 0;
@@ -1150,7 +1158,7 @@ ${page.markdown}`, files);
   private async destinationPages(
     workspaceId: string,
     connector: { id: string; projectId: string; parentId: string | null },
-  ): Promise<Array<{ id: string; title: string; markdown: string }>> {
+  ): Promise<Array<{ id: string; title: string; markdown: string; frontmatter: Record<string, unknown> | null }>> {
     const ids = new Set<string>();
     for (const link of await this.prisma.connectorLink.findMany({
       where: { connectorId: connector.id },
@@ -1186,7 +1194,7 @@ ${page.markdown}`, files);
       where: { id: { in: [...ids].slice(0, MAX_DECLARED_PAGES) }, workspaceId },
       select: { id: true, title: true },
     });
-    const out: Array<{ id: string; title: string; markdown: string }> = [];
+    const out: Array<{ id: string; title: string; markdown: string; frontmatter: Record<string, unknown> | null }> = [];
     for (const row of rows) {
       try {
         const content = await this.documents.getContent(row.id);
@@ -1195,7 +1203,12 @@ ${page.markdown}`, files);
         // keeps the next run from proposing the same file again even when the
         // prose paraphrases the path.
         const frontmatter = content.frontmatter ? JSON.stringify(content.frontmatter) : '';
-        out.push({ id: row.id, title: row.title, markdown: `${content.markdown}\n${frontmatter}` });
+        out.push({
+          id: row.id,
+          title: row.title,
+          markdown: `${content.markdown}\n${frontmatter}`,
+          frontmatter: (content.frontmatter as Record<string, unknown> | null) ?? null,
+        });
       } catch {
         // No indexed content yet, or a draft: nothing declared, nothing to read.
       }

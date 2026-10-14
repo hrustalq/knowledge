@@ -1,109 +1,105 @@
 <script setup lang="ts">
-// AI settings (docs/features/12): the assistant layer made administrable —
-// provider config, skills, MCP plugins, token usage and the call log.
-//
-// Tabs are hand-rolled (there is no shadcn Tabs component here) using the same
-// role="tablist" + border-b-2 strip as MergeRequestsPage, and the active tab
-// lives in the query string so a link can point at one.
+/**
+ * AI settings (docs/features/12, issue #182): connecting your own agents and
+ * running the workspace's assistant, under one settings row.
+ *
+ * Same shell-plus-child shape as /settings/docs and /settings/templates — the
+ * section rail sits flush against the settings nav and the section renders in
+ * pane 3, so moving between sections replaces only the pane and the rail you
+ * picked from stays put.
+ *
+ * It used to be nine tabs in a horizontal strip that already overflowed, and
+ * Connect AI was a separate settings row: "connect an agent" and "configure the
+ * assistant" lived in two places. A vertical rail has room for ten sections and
+ * says, by its grouping, which one is yours and which are the workspace's.
+ *
+ * Below `lg` the rail becomes one scrolled row, as the settings nav above it
+ * does — a stacked list of ten rows would put the section a screen down.
+ */
+import { nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Badge } from '@/components/ui/badge'
-import { useAuthStore } from '@/stores/auth'
-import AiConfigPanel from '@/components/ai/AiConfigPanel.vue'
-import AiAgentsPanel from '@/components/ai/AiAgentsPanel.vue'
-import AgentRunsPanel from '@/components/ai/AgentRunsPanel.vue'
-import AiCoveragePanel from '@/components/ai/AiCoveragePanel.vue'
-import AiFeedbackPanel from '@/components/ai/AiFeedbackPanel.vue'
-import AiSkillsPanel from '@/components/ai/AiSkillsPanel.vue'
-import AiPluginsPanel from '@/components/ai/AiPluginsPanel.vue'
-import AiUsagePanel from '@/components/ai/AiUsagePanel.vue'
-import AiLogsPanel from '@/components/ai/AiLogsPanel.vue'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { AI_SECTION_GROUPS, type AiSectionKey } from '@/lib/ai-sections'
 
 const { t } = useI18n()
-
-// `label` is a message key — resolved with t() where the tab renders.
-const TABS = [
-  { key: 'config', label: 'ai.tabConfig' },
-  { key: 'agents', label: 'ai.tabAgents' },
-  { key: 'runs', label: 'ai.tabRuns' },
-  { key: 'coverage', label: 'ai.tabCoverage' },
-  { key: 'feedback', label: 'ai.tabFeedback' },
-  { key: 'skills', label: 'ai.tabSkills' },
-  { key: 'plugins', label: 'ai.tabPlugins' },
-  { key: 'usage', label: 'ai.tabUsage' },
-  { key: 'logs', label: 'ai.tabLogs' },
-] as const
-type TabKey = (typeof TABS)[number]['key']
-
 const route = useRoute()
-const router = useRouter()
-const auth = useAuthStore()
 
-// Every endpoint behind this page is @Access('admin', …) except the skill
-// roster, so a non-admin is told plainly rather than shown a wall of 403s.
-const canManage = computed(() => auth.canAdminWorkspace)
-
-const tab = computed<TabKey>(() => {
-  const q = route.query.tab
-  return TABS.some((t) => t.key === q) ? (q as TabKey) : 'config'
-})
-
-function setTab(key: TabKey) {
-  void router.replace({ query: { ...route.query, tab: key } })
+function isCurrent(key: AiSectionKey): boolean {
+  return route.path === `/settings/ai/${key}`
 }
+
+// In the phone strip, Logs is two swipes off-screen: centre whichever row is
+// current, so the strip says where you are. A no-op at `lg`, where the column
+// does not scroll sideways.
+const strip = ref<HTMLElement | null>(null)
+async function revealCurrent() {
+  await nextTick()
+  const el = strip.value
+  const link = el?.querySelector<HTMLElement>('[aria-current="page"]')
+  if (!el || !link || el.scrollWidth <= el.clientWidth) return
+  el.scrollLeft = link.offsetLeft - (el.clientWidth - link.offsetWidth) / 2
+}
+onMounted(revealCurrent)
+watch(() => route.path, revealCurrent)
 </script>
 
 <template>
-  <!-- Fills the column, like every other settings section.
-       It used to cap at 64rem so the right-hand edge would not move between a
-       form-shaped tab and a table-shaped one. That bought a still edge at the
-       price of the page: the eight-column call log was forced into a horizontal
-       scroller, the usage chart lost the width a chart is for, and the section
-       sat visibly narrower than Profile or Notifications beside it in the same
-       shell. The shell itself passes `measure: false` for exactly this reason —
-       a panel knows whether it is a form or a table and the page does not. So
-       the measure moved into the one panel that is a form; the rest spend the
-       width they are given. -->
-  <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-5">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 class="font-display text-2xl font-bold tracking-tight">{{ t('common.ai') }}</h1>
-        <p class="text-muted-foreground mt-0.5 text-sm">
-          {{ t('ai.pageSubtitle') }}
-        </p>
+  <!-- Bleed out of the settings column's padding so the rail sits flush against
+       the settings nav, as /settings/docs does. -->
+  <div class="-mx-4 -my-6 flex min-h-0 flex-1 flex-col lg:-mx-8 lg:flex-row">
+    <nav
+      :aria-label="t('common.ai')"
+      class="flex shrink-0 flex-col border-b bg-background lg:sticky lg:top-0 lg:h-[calc(100vh-var(--kn-chrome-h,5.75rem))] lg:w-60 lg:self-start lg:border-r lg:border-b-0"
+    >
+      <!-- Where docs and templates put their search, this names the area. -->
+      <div class="hidden border-b px-3 py-3 lg:block">
+        <p class="font-display text-[15px] font-semibold tracking-tight">{{ t('common.ai') }}</p>
+        <p class="mt-0.5 text-[11px] leading-snug text-muted-foreground">{{ t('ai.pageSubtitle') }}</p>
       </div>
-      <Badge v-if="!canManage" variant="outline">{{ t('ai.readOnlyBadge') }}</Badge>
-    </div>
 
-    <div class="flex gap-0.5 overflow-x-auto border-b" role="tablist">
-      <button
-        v-for="tabDef in TABS"
-        :key="tabDef.key"
-        role="tab"
-        :aria-selected="tab === tabDef.key"
-        class="focus-visible:ring-ring rounded-t-sm border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        :class="
-          tab === tabDef.key
-            ? 'border-primary text-primary font-medium'
-            : 'text-muted-foreground hover:text-foreground hover:border-border border-transparent'
-        "
-        @click="setTab(tabDef.key)"
-      >
-        {{ t(tabDef.label) }}
-      </button>
-    </div>
+      <div ref="strip" class="relative flex min-h-0 flex-1 gap-1 overflow-x-auto px-2 py-2 lg:block lg:overflow-x-visible lg:overflow-y-auto lg:p-0">
+        <div
+          v-for="group in AI_SECTION_GROUPS"
+          :key="group.label"
+          class="kn-ai-group flex shrink-0 gap-1 lg:block lg:py-1"
+        >
+          <p
+            :id="`kn-ai-${group.label}`"
+            class="hidden px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase lg:block"
+          >
+            {{ t(group.label) }}
+          </p>
+          <ul class="flex gap-1 lg:block" :aria-labelledby="`kn-ai-${group.label}`">
+            <li v-for="section in group.sections" :key="section.key">
+              <RouterLink
+                :to="`/settings/ai/${section.key}`"
+                class="block truncate rounded-md px-3 py-1.5 text-sm transition-colors lg:rounded-none"
+                :class="
+                  isCurrent(section.key)
+                    ? 'bg-primary/10 font-medium text-primary'
+                    : 'text-foreground/80 hover:bg-accent hover:text-foreground'
+                "
+              >
+                {{ t(section.label) }}
+              </RouterLink>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
 
-    <div class="min-h-0 flex-1">
-      <AiConfigPanel v-if="tab === 'config'" :can-manage="canManage" />
-      <AiAgentsPanel v-else-if="tab === 'agents'" :can-manage="canManage" />
-      <AgentRunsPanel v-else-if="tab === 'runs'" />
-      <AiCoveragePanel v-else-if="tab === 'coverage'" :can-manage="canManage" />
-      <AiFeedbackPanel v-else-if="tab === 'feedback'" :can-manage="canManage" />
-      <AiSkillsPanel v-else-if="tab === 'skills'" :can-manage="canManage" />
-      <AiPluginsPanel v-else-if="tab === 'plugins'" :can-manage="canManage" />
-      <AiUsagePanel v-else-if="tab === 'usage'" :can-manage="canManage" />
-      <AiLogsPanel v-else :can-manage="canManage" />
+    <div data-kn-pane="3" class="flex min-h-0 min-w-0 flex-1 flex-col px-4 py-6 lg:px-8">
+      <RouterView />
     </div>
   </div>
 </template>
+
+<style scoped>
+/* In the strip, a rule between groups stands in for the headers it hides. */
+@media (width < 64rem) {
+  .kn-ai-group + .kn-ai-group {
+    border-left: 1px solid var(--border);
+    padding-left: 0.25rem;
+  }
+}
+</style>

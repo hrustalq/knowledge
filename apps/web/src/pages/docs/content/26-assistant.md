@@ -47,4 +47,4 @@ Which model answers comes from workspace AI settings, and a member can pin a spe
 provider to their own thread. With `ASSISTANT_PROVIDER=none` the assistant is off and the
 UI says so rather than failing at request time.
 
-Configure everything at [Settings → AI](/settings/ai).
+Configure everything at [Settings → AI → Configuration](/settings/ai/config).

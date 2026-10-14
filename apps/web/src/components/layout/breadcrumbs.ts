@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useWorkflowsStore } from '@/stores/workflows'
+import { aiSectionLabel } from '@/lib/ai-sections'
 
 /**
  * The breadcrumb trail, as a value rather than as markup.
@@ -117,6 +118,19 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
           { label: t('nav.projects'), to: '/settings/projects' },
           { label: name },
         ]
+      }
+      // An AI section (issue #182) is the third pane of the settings shell, so
+      // it names itself under the AI crumb, the way a project does under
+      // Projects. The registry is plain data, so importing it costs the main
+      // chunk a list of labels and nothing of the panels behind them.
+      if (path.startsWith('/settings/ai/')) {
+        const label = aiSectionLabel(path.slice('/settings/ai/'.length))
+        const list: Crumb[] = [
+          { label: t('nav.settings'), to: '/settings' },
+          { label: t('nav.ai'), to: '/settings/ai' },
+        ]
+        if (label) list.push({ label: t(label) })
+        return list
       }
       // The workflow builder is the third pane of the settings shell, so it takes
       // the same three-step trail as a project. `/new` is the wizard, which is

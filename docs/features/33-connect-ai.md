@@ -18,7 +18,9 @@ and work in its knowledge base **as the person who connected it**:
 - **Named API keys** (`api_keys`), many per person, each optionally
   **read-only**, **pinned to one workspace**, or **expiring**; revoked
   individually; `last_used_at` so a stale one can be found.
-- **Settings → Connect AI** (`/settings/connect`): create a key, pick a client,
+- **Settings → AI → Connect AI** (`/settings/ai/connect`; it was its own
+  settings row at `/settings/connect` until issue #182, and that URL — printed
+  in every SKILL.md already handed out — redirects): create a key, pick a client,
   copy its CLI one-liner and config file (with the key already in it, the one
   time it is on screen), then install the skill.
 - **The skill.** A `SKILL.md` generated per caller at `GET /v1/mcp/skill`: the

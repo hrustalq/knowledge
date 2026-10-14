@@ -683,6 +683,10 @@ export type I18nTranslations = {
             "unavailable": string;
             "notEnabled": string;
         };
+        "wiki": {
+            "notACodebase": string;
+            "disabled": string;
+        };
     };
     "import": {
         "stage": {

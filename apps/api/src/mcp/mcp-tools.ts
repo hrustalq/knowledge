@@ -39,6 +39,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_merge_revision',
   'knowledge_start_workflow',
   'knowledge_sync_connector',
+  // Queues a run that rewrites repo wiki pages (docs/features/46).
+  'knowledge_regenerate_wiki',
   'knowledge_ingest',
   // A vote writes a row the surveyor and the backtest read (docs/features/38).
   // Hidden from read-only keys like every other write; the REST vote routes

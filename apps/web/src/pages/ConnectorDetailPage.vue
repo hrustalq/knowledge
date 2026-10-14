@@ -18,8 +18,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
-import { CircleAlert, GitPullRequest, Link2, RefreshCw, ScrollText } from 'lucide-vue-next'
-import { connectorKindInfo } from '@knowledge/contracts'
+import { BookOpenText, CircleAlert, GitPullRequest, Link2, RefreshCw, ScrollText, Tag } from 'lucide-vue-next'
+import { CHANGELOG_CONFIG_KEY, connectorKindInfo, wikiEnabled } from '@knowledge/contracts'
 import type {
   ConnectorResponse,
   ListConnectorLinksResponse,
@@ -40,6 +40,8 @@ import {
   usePageTabs,
 } from '@/components/layout/page'
 import type { PageTab } from '@/components/layout/page'
+import ConnectorReleases from '@/components/connectors/ConnectorReleases.vue'
+import ConnectorWiki from '@/components/connectors/ConnectorWiki.vue'
 import ConnectorWorkItems from '@/components/connectors/ConnectorWorkItems.vue'
 import GithubAccessCard from '@/components/connectors/GithubAccessCard.vue'
 import { RUN_STATUS_CLASS, RUN_STATUS_LABEL } from '@/components/connectors/connector-ui'
@@ -47,7 +49,7 @@ import { useAuthStore } from '@/stores/auth'
 import { relativeTime } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 
-type TabKey = 'work-items' | 'links' | 'runs'
+type TabKey = 'work-items' | 'wiki' | 'releases' | 'links' | 'runs'
 
 const route = useRoute()
 const router = useRouter()
@@ -72,6 +74,15 @@ const tabs = computed<PageTab<TabKey>[]>(() => {
   const list: PageTab<TabKey>[] = []
   if (connector.value?.capabilities.tasks) {
     list.push({ key: 'work-items', label: t('connectors.tabWorkItems'), icon: GitPullRequest })
+  }
+  // The repo wiki and its release notes (docs/features/46): a codebase
+  // connector's, and only once turned on — read through the same predicate the
+  // adapter uses, so the tab exists exactly when the pages do.
+  if (connector.value?.kind === 'codebase') {
+    if (wikiEnabled(connector.value.config)) list.push({ key: 'wiki', label: t('connectors.tabWiki'), icon: BookOpenText })
+    if (connector.value.config[CHANGELOG_CONFIG_KEY] === 'on') {
+      list.push({ key: 'releases', label: t('connectors.tabReleases'), icon: Tag })
+    }
   }
   list.push({ key: 'links', label: t('connectors.tabLinks'), icon: Link2, count: connector.value?.linkCount ?? null })
   list.push({ key: 'runs', label: t('connectors.tabRuns'), icon: ScrollText })
@@ -267,6 +278,8 @@ watch(connectorId, () => {
 
     <div :id="panelId(tab)" role="tabpanel" :aria-labelledby="tabId(tab)" class="min-w-0">
       <ConnectorWorkItems v-if="tab === 'work-items'" :connector-id="connectorId" :can-manage="canManage" />
+      <ConnectorWiki v-else-if="tab === 'wiki'" :connector-id="connectorId" :can-edit="auth.canEdit" />
+      <ConnectorReleases v-else-if="tab === 'releases'" :connector-id="connectorId" />
 
       <div v-else-if="tab === 'links'">
         <PageState v-if="links.isPending.value" state="loading" />

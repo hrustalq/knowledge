@@ -96,7 +96,15 @@ const DEFAULT_STEERING: WikiSteering = { config: null, source: 'default', errors
 export function readWikiSteering(files: Map<string, Uint8Array>): WikiSteering {
   const bytes = files.get(WIKI_CONFIG_PATH);
   if (!bytes) return DEFAULT_STEERING;
+  return steeringFromBytes(bytes);
+}
 
+/** The same reading, from text fetched on its own (the Wiki tab). Null text = no file. */
+export function steeringFromText(text: string | null): WikiSteering {
+  return text === null ? DEFAULT_STEERING : steeringFromBytes(Buffer.from(text, 'utf8'));
+}
+
+function steeringFromBytes(bytes: Uint8Array): WikiSteering {
   const hash = createHash('sha256').update(bytes).digest('hex').slice(0, 16);
   if (bytes.length > WIKI_CONFIG_MAX_BYTES) {
     return { config: null, source: 'default', errors: [`file is larger than ${WIKI_CONFIG_MAX_BYTES} bytes`], hash };

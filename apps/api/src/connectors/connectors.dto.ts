@@ -24,8 +24,10 @@ import {
   CONNECTOR_RUN_EVENTS,
   CONNECTOR_SYNC_MODES,
   DOCUMENT_CATEGORIES,
+  WIKI_SECTIONS,
 } from '@knowledge/contracts';
 import type {
+  WikiSection,
   ConnectorConflictPolicy,
   ConnectorDirection,
   ConnectorItemAiOp,
@@ -256,6 +258,29 @@ export class StartConnectorSyncDto {
   @IsOptional()
   @IsIn(CONNECTOR_SYNC_MODES)
   mode?: ConnectorSyncMode;
+}
+
+// --- repo wiki (docs/features/46) ---
+
+export class RegenerateWikiDto {
+  @ApiPropertyOptional({
+    enum: WIKI_SECTIONS,
+    isArray: true,
+    description: 'Only these sections. Omit to regenerate the whole wiki.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(WIKI_SECTIONS.length, { message: vmsg('arrayMaxSize') })
+  @IsIn(WIKI_SECTIONS, { each: true })
+  sections?: WikiSection[];
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description: 'Re-derive even pages whose inputs did not change (a new prompt or model). Defaults to false.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
 }
 
 // --- staged items (docs/features/26) ---

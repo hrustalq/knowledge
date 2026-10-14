@@ -53,6 +53,7 @@ function accessWith(role: 'viewer' | 'editor' | 'admin' | null) {
       findUnique: vi.fn(async () => (role ? { role, trustedOperator: false } : null)),
     },
     workspace: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({ id: where.id })) },
+    connector: { findUnique: vi.fn(async () => ({ workspaceId: WS_A })) },
   };
   return new AccessService(prisma as never);
 }
@@ -110,7 +111,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     projects: {},
     connectors: {},
     workItems: {},
-    connectorProducer: {},
+    connectorProducer: { enqueue: vi.fn(async () => undefined) },
     agents: {},
     access,
     config,
@@ -145,6 +146,29 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
       get: vi.fn(async () => ({ id: 'ex-1', workspaceId: WS_A, status: 'completed', format: 'zip' })),
       download: vi.fn(async () => ({ url: 'https://minio/signed', filename: 'guide.zip' })),
     },
+    repoWiki: {
+      info: vi.fn(async (connectorId: string) => ({ connectorId, enabled: true, sections: [] })),
+      regenerate: vi.fn(async () => ({
+        id: 'run-1',
+        connectorId: 'c-1',
+        workspaceId: WS_A,
+        status: 'queued',
+        direction: 'pull',
+        trigger: 'manual',
+        mode: 'auto',
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        conflicts: 0,
+        discovered: 0,
+        applied: 0,
+        reverted: 0,
+        createdAt: new Date(),
+        startedAt: null,
+        completedAt: null,
+      })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -157,6 +181,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     templates: deps.templates,
     shareLinks: deps.shareLinks,
     exports: deps.exports,
+    repoWiki: deps.repoWiki,
   };
 }
 
@@ -630,5 +655,39 @@ describe('renderSkill', () => {
     expect(md).toContain('read-only');
     expect(md).not.toContain('Change an existing page');
     expect(md).not.toContain('proposes edits');
+  });
+});
+
+describe('repo wiki tools (docs/features/46)', () => {
+  const CONNECTOR = '33333333-3333-4333-8333-333333333333';
+
+  it('lets a read-only key read the wiki, and hides regenerate from it', async () => {
+    const { mcp, repoWiki } = service(accessWith('viewer'));
+    const reader = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const offered = (await reader.listTools()).tools.map((t) => t.name);
+    expect(offered).toContain('knowledge_repo_wiki');
+    expect(offered).not.toContain('knowledge_regenerate_wiki');
+    const got = await reader.callTool({ name: 'knowledge_repo_wiki', arguments: { connectorId: CONNECTOR } });
+    expect(got.isError).toBeFalsy();
+    expect(repoWiki.info).toHaveBeenCalledWith(CONNECTOR);
+  });
+
+  it('regenerates for an editor and refuses a viewer', async () => {
+    const editor = service(accessWith('editor'));
+    const client = await connect(editor.mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }));
+    const ok = await client.callTool({
+      name: 'knowledge_regenerate_wiki',
+      arguments: { connectorId: CONNECTOR, sections: ['architecture'], force: true },
+    });
+    expect(ok.isError, JSON.stringify(ok.content)).toBeFalsy();
+    expect(editor.repoWiki.regenerate).toHaveBeenCalledWith(CONNECTOR, expect.objectContaining({ sections: ['architecture'], force: true }));
+
+    const viewer = service(accessWith('viewer'));
+    const refused = await (await connect(viewer.mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }))).callTool({
+      name: 'knowledge_regenerate_wiki',
+      arguments: { connectorId: CONNECTOR },
+    });
+    expect(refused.isError).toBe(true);
+    expect(viewer.repoWiki.regenerate).not.toHaveBeenCalled();
   });
 });

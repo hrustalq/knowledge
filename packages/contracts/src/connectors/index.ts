@@ -697,6 +697,53 @@ export interface ReleaseNoteInfo {
   generated: boolean;
 }
 
+export interface ListReleasesResponse {
+  connectorId: string;
+  releases: ReleaseNoteInfo[];
+  /** Why the tag list could not be read from the host, when it could not. */
+  error: string | null;
+}
+
+/** One page of a repo wiki, as the Wiki tab lists it. */
+export interface RepoWikiSection {
+  /** The unit key — `overview`, `wiki:architecture`, `module:<path>`, `changelog`. */
+  key: string;
+  section: WikiSection;
+  title: string;
+  /** Null until the first sync has created the page. */
+  documentId: string | null;
+  /** The version of the inputs the page was last derived from. */
+  version: string | null;
+  lastRegeneratedAt: string | null;
+  /**
+   * Derived, never stored: the last run saw different inputs than the page was
+   * derived from — it failed, was skipped, or is waiting for review.
+   */
+  stale: boolean;
+  /** An open merge request carrying a regenerated version of this page. */
+  openMergeRequestId: string | null;
+}
+
+export interface RepoWikiInfo {
+  connectorId: string;
+  enabled: boolean;
+  changelog: boolean;
+  delivery: WikiDelivery;
+  autoRegenerate: WikiAutoRegenerate;
+  /** Asked beside applied — the Wiki tab shows both when the server clamped. */
+  effort: { asked: WikiEffort; applied: WikiEffort; clamped: boolean };
+  source: 'repo-file' | 'default';
+  /** Why `.knowledge/wiki.yml` was rejected, one line per failure. */
+  configErrors: string[];
+  /** Set when the steering file could not be read from the host at all. */
+  configUnreadable: string | null;
+  sections: RepoWikiSection[];
+}
+
+export interface RegenerateWikiResponse {
+  runId: string;
+}
+
 /** Whether a push to the branch starts a run (docs/features/46). Off unless asked for. */
 export const WIKI_AUTO_REGENERATE_MODES = ['off', 'on-push'] as const;
 export type WikiAutoRegenerate = (typeof WIKI_AUTO_REGENERATE_MODES)[number];

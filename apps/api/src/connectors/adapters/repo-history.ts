@@ -1,5 +1,5 @@
 import { globToRegExp } from '../../common/glob.js';
-import { connectorFetch, type ConnectorContext } from './connector.types.js';
+import { connectorFetch, ConnectorRequestError, type ConnectorContext } from './connector.types.js';
 import { githubHeaders, gitlabHeaders, repoHost, type RepoHost } from './repo-archive.js';
 
 /**
@@ -280,4 +280,34 @@ async function gitlabHistory(ctx: ConnectorContext, host: RepoHost, head: string
   }
   const kept = commits.slice(0, max).reverse();
   return { commits: kept, truncated: more || commits.length > max, total: commits.length, files: null };
+}
+
+/**
+ * One file's text at a ref, or null when the host says it is not there. The
+ * Wiki tab reads `.knowledge/wiki.yml` this way — one small request — rather
+ * than downloading the archive to show a settings card.
+ */
+export async function readRepoFile(ctx: ConnectorContext, path: string, ref: string): Promise<string | null> {
+  const host = supportedHost(ctx);
+  const url =
+    host.kind === 'github'
+      ? `${githubApi(host)}/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`
+      : `${gitlabApi(host)}/repository/files/${encodeURIComponent(path)}/raw?ref=${encodeURIComponent(ref)}`;
+  try {
+    const res = await connectorFetch(
+      url,
+      {
+        headers:
+          host.kind === 'github'
+            ? { ...githubHeaders(ctx), accept: 'application/vnd.github.raw+json' }
+            : gitlabHeaders(ctx),
+        signal: ctx.signal,
+      },
+      ctx,
+    );
+    return await res.text();
+  } catch (err) {
+    if (err instanceof ConnectorRequestError && err.status === 404) return null;
+    throw err;
+  }
 }

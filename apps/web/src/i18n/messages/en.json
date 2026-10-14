@@ -619,7 +619,60 @@
     "configure": "Configure",
     "exampleConfluence": "Confluence — https://team.atlassian.net/wiki + space key",
     "exampleNotion": "Notion — an internal integration secret",
-    "exampleObsidian": "Obsidian vault — its git repository URL"
+    "exampleObsidian": "Obsidian vault — its git repository URL",
+    "tabWiki": "Wiki",
+    "tabReleases": "Releases",
+    "wiki": {
+      "steering": "Steering",
+      "sourceRepoFile": "From the repository's .knowledge/wiki.yml",
+      "sourceDefault": "Defaults — the repository has no usable .knowledge/wiki.yml",
+      "regenerate": "Regenerate",
+      "regenerateAll": "Regenerate wiki",
+      "force": "Rewrite everything",
+      "forceHint": "Re-derive every page, even those whose code did not change — for a new prompt or model.",
+      "regenerated": "Regeneration queued. Pages update as the run finishes.",
+      "effort": "Effort",
+      "effortClamped": "asked {asked} · applied {applied}",
+      "effortLevel": {
+        "low": "low",
+        "medium": "medium",
+        "high": "high"
+      },
+      "delivery": "Delivery",
+      "deliveryMode": {
+        "direct": "updates pages directly",
+        "merge-request": "opens merge requests"
+      },
+      "onPush": "On push",
+      "autoRegenerate": {
+        "off": "off",
+        "on-push": "regenerates"
+      },
+      "configInvalid": "The repository's .knowledge/wiki.yml was rejected, so the defaults apply:",
+      "configUnreadable": "The steering file could not be read from the repository right now.",
+      "empty": "No wiki pages yet — they appear after the next sync.",
+      "notYet": "not created yet",
+      "stale": "stale",
+      "staleHint": "The last sync saw newer code than this page was written from, and did not update it.",
+      "openMr": "Review update",
+      "section": {
+        "overview": "Overview",
+        "architecture": "Architecture",
+        "data-flow": "Data flow",
+        "api": "Public API",
+        "modules": "Modules",
+        "changelog": "Releases"
+      }
+    },
+    "releases": {
+      "unreleased": "Unreleased",
+      "breaking": "{count} breaking",
+      "possiblyBreaking": "{count} possibly breaking",
+      "possiblyBreakingHint": "Suspected by the model from the change descriptions; not confirmed by a commit, a label or the code.",
+      "notGenerated": "not generated",
+      "empty": "No release notes yet — they appear after the next sync.",
+      "error": "The repository's tags could not be read right now, so older releases may be missing from this list."
+    }
   },
   "workflow": {
     "nodeStatus": {

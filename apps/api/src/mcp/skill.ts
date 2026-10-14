@@ -227,6 +227,17 @@ Entities are keyed \`type:name\` — \`service:identity\`, \`db:orders\`.
 - ${toolRef('knowledge_impact_analysis')} — what breaks if it changes (\`direction: "dependents"\`), or what it relies on.
 - ${toolRef('knowledge_trace_relation')} — the shortest path between two entities, with the pages that assert each hop.
 
+### Repositories
+
+A codebase connector documents a repository from its code. ${toolRef('knowledge_list_connectors')} names them;
+${toolRef('knowledge_repo_wiki')} lists a repo wiki's pages — architecture, data flow, modules, releases — and says which
+are stale or waiting in a merge request. Read those pages before describing how a repository is built: they are derived
+from the code, not remembered.${
+    tools.some((tool) => tool.name === 'knowledge_regenerate_wiki')
+      ? ` After a change lands, ${toolRef('knowledge_regenerate_wiki')} re-derives what moved.`
+      : ''
+  }
+
 ${writeFlows}
 ${plainMarkdown}
 ## Rules

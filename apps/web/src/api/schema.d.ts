@@ -2574,6 +2574,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connectors/{id}/wiki": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The repo wiki's sections, steering and asked-vs-applied effort */
+        get: operations["ConnectorsController_wiki"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/wiki/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a run that re-derives the repo wiki, or some of its sections */
+        post: operations["ConnectorsController_regenerateWiki"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connectors/{id}/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Release notes pages: Unreleased and one per tag, with breaking counts */
+        get: operations["ConnectorsController_releases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connectors/{id}/work-items": {
         parameters: {
             query?: never;
@@ -5201,6 +5252,12 @@ export interface components {
              * @enum {string}
              */
             mode?: "auto" | "review" | "step";
+        };
+        RegenerateWikiDto: {
+            /** @description Only these sections. Omit to regenerate the whole wiki. */
+            sections?: ("overview" | "architecture" | "modules" | "data-flow" | "api" | "changelog")[];
+            /** @description Re-derive even pages whose inputs did not change (a new prompt or model). Defaults to false. */
+            force?: boolean;
         };
         CreateConnectorWorkItemDto: {
             /** @description Issue title as it will read on the far side */
@@ -14196,6 +14253,130 @@ export interface operations {
             path: {
                 id: string;
                 linkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_wiki: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_regenerateWiki: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateWikiDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ConnectorsController_releases: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
             };
             cookie?: never;
         };

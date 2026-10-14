@@ -102,6 +102,9 @@ const isGitKind = computed(() => kind.value === 'codebase' || kind.value === 'ma
  */
 const driftField = computed(() => info.value?.fields.find((f) => f.key === DRIFT_CHECK_CONFIG_KEY) ?? null)
 const driftMode = computed(() => driftCheckMode(context.value?.config))
+
+/** The empty option of a select field ("inherit"), which the select primitive cannot carry as ''. */
+const INHERIT = '__inherit'
 /** Whether the check also flags the pages it finds wrong (docs/features/39). On unless turned off. */
 const driftFlags = computed(() => driftFlagPages(context.value?.config))
 
@@ -411,6 +414,30 @@ function startOver() {
               :model-value="context?.config.branch ?? ''"
               @update:model-value="setField('branch', $event)"
             />
+
+            <!-- A select field from the catalogue (the repo wiki's, docs/features/46).
+                 The select primitive refuses an empty value, so "inherit" (the
+                 empty option) travels as a sentinel and is written back as ''. -->
+            <label v-else-if="field.kind === 'select' && field.options?.length" class="block space-y-1.5">
+              <span class="text-sm font-medium">
+                {{ field.label }}
+                <span v-if="!field.required" class="text-muted-foreground font-normal">
+                  — {{ t('connectors.optional') }}
+                </span>
+              </span>
+              <Select
+                :model-value="context?.config[field.key] || (field.options.some((o) => o.value === '') ? INHERIT : field.options[0].value)"
+                @update:model-value="setField(field.key, String($event) === INHERIT ? '' : String($event))"
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="option in field.options" :key="option.value" :value="option.value || INHERIT">
+                    {{ option.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <span v-if="field.help" class="text-muted-foreground block text-xs">{{ field.help }}</span>
+            </label>
 
             <label v-else class="block space-y-1.5">
               <span class="text-sm font-medium">

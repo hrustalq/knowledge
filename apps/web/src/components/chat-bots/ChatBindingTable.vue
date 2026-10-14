@@ -9,7 +9,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { Trash2 } from 'lucide-vue-next'
+import { Bell, ChevronDown, Trash2 } from 'lucide-vue-next'
 import {
   CHAT_ANSWER_MODES,
   SUPPORTED_LOCALES,
@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import AgentSelect from './AgentSelect.vue'
+import ChatSubscriptionEditor from './ChatSubscriptionEditor.vue'
 
 const props = defineProps<{ integrationId: string }>()
 const emit = defineEmits<{ changed: [] }>()
@@ -38,6 +39,12 @@ onMounted(() => {
 const options = computed(() => apiQueryOptions('/v1/chat/integrations/{id}/bindings', { path: { id: props.integrationId } }))
 const query = useQuery(options)
 const bindings = computed(() => (query.data.value as ChatBindingsResponse | undefined)?.bindings ?? [])
+
+/** Which bindings have their notification rules open. */
+const open = reactive<Record<string, boolean>>({})
+function refresh() {
+  void queryClient.invalidateQueries({ queryKey: options.value.queryKey })
+}
 
 const WHOLE = '__whole'
 const INHERIT = '__inherit'
@@ -151,6 +158,23 @@ async function add() {
             </Select>
           </div>
         </div>
+        <button
+          type="button"
+          class="mt-2.5 inline-flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          :aria-expanded="!!open[b.id]"
+          @click="open[b.id] = !open[b.id]"
+        >
+          <Bell class="size-3.5" />
+          {{ t('chatBots.subscriptions.toggle', { n: b.subscriptionCount }) }}
+          <ChevronDown class="size-3.5 transition-transform" :class="open[b.id] ? 'rotate-180' : ''" />
+        </button>
+        <ChatSubscriptionEditor
+          v-if="open[b.id]"
+          class="mt-2"
+          :binding-id="b.id"
+          :default-project-id="b.projectId"
+          @changed="refresh"
+        />
       </li>
     </ul>
     <p v-else-if="query.isSuccess.value" class="text-sm text-muted-foreground">{{ t('chatBots.bindings.none') }}</p>

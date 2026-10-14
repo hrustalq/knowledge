@@ -12,9 +12,9 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { DocumentCategory, ListEntitiesResponse } from '@knowledge/contracts'
+import type { DocumentCategory } from '@knowledge/contracts'
 import { DOCUMENT_CATEGORIES } from '@knowledge/contracts'
-import { apiFetch, getWorkspaceId } from '@/lib/api'
+import { loadTagOptions, tagLabel } from '@/lib/tag-options'
 import { useProjectsStore } from '@/stores/projects'
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/autocomplete'
 
@@ -45,14 +45,6 @@ const projectOptions = computed<AutocompleteOption[]>(() =>
 const categoryOptions = computed<AutocompleteOption[]>(() =>
   DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: t(`category.${c}`) })),
 )
-
-/** The roster is unbounded, so it is never held locally. */
-async function loadTags(query: string): Promise<AutocompleteOption[]> {
-  const params = new URLSearchParams({ workspaceId: getWorkspaceId(), type: 'tag', limit: '200' })
-  if (query.trim()) params.set('q', query.trim())
-  const res = await apiFetch<ListEntitiesResponse>(`/v1/entities?${params}`)
-  return res.entities.map((e) => ({ value: e.key, label: e.name, meta: e.degree }))
-}
 
 const selectedProjects = computed({
   get: () => props.projects,
@@ -89,8 +81,8 @@ const selectedTags = computed({
     v-model="selectedTags"
     :label="t('search.tags')"
     :placeholder="t('search.filterByTag')"
-    :load="loadTags"
-    :fallback-label="(v: string) => v.replace(/^tag:/, '')"
+    :load="loadTagOptions"
+    :fallback-label="tagLabel"
     :empty-hint="t('hints.tagsFromFrontmatter')"
   />
 </template>

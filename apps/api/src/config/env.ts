@@ -597,6 +597,12 @@ export const envSchema = z.object({
    */
   CHAT_CAPTURE_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(300),
   /**
+   * How often subscribed groups are checked for news (phase 3). Instant
+   * delivery is "within one tick"; a digest is due on the first tick past its
+   * window.
+   */
+  CHAT_DIGEST_TICK_MS: z.coerce.number().int().min(5_000).default(60_000),
+  /**
    * The Bot API host. Overridable for a self-hosted Bot API server or a proxy,
    * which a deployment that cannot reach api.telegram.org directly needs.
    */

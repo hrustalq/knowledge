@@ -21431,6 +21431,250 @@
         ]
       }
     },
+    "/v1/chat/bindings/{id}/subscriptions": {
+      "get": {
+        "operationId": "ChatSettingsController_subscriptionsOf",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What a group is told about: pages published or updated, merge requests opened or merged",
+        "tags": [
+          "chat"
+        ]
+      },
+      "post": {
+        "operationId": "ChatSettingsController_createSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "A digest without a window, or a project from another workspace"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Tell a group about changes, instantly or as a digest. Only titles and links are sent",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/v1/chat/subscriptions/{id}": {
+      "patch": {
+        "operationId": "ChatSettingsController_updateSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChatSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Change what a group is told about, or how often",
+        "tags": [
+          "chat"
+        ]
+      },
+      "delete": {
+        "operationId": "ChatSettingsController_removeSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stop telling a group about changes",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
     "/v1/chat/integrations/{id}/identities": {
       "get": {
         "operationId": "ChatSettingsController_identitiesOf",
@@ -26194,6 +26438,101 @@
             "enum": [
               "en",
               "ru"
+            ]
+          }
+        }
+      },
+      "CreateChatSubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "Only pages in this project; null = the whole workspace"
+          },
+          "tags": {
+            "description": "Only pages carrying any of these tags. Omitted or empty = any page",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "eventKinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "page-published",
+                "page-updated",
+                "merge-request-opened",
+                "merge-request-merged"
+              ]
+            }
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "instant",
+              "digest"
+            ],
+            "description": "Omitted reads as instant"
+          },
+          "digestMinutes": {
+            "type": "number",
+            "nullable": true,
+            "enum": [
+              60,
+              240,
+              1440
+            ],
+            "description": "Required for a digest"
+          }
+        },
+        "required": [
+          "eventKinds"
+        ]
+      },
+      "UpdateChatSubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "eventKinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "page-published",
+                "page-updated",
+                "merge-request-opened",
+                "merge-request-merged"
+              ]
+            }
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "instant",
+              "digest"
+            ]
+          },
+          "digestMinutes": {
+            "type": "number",
+            "nullable": true,
+            "enum": [
+              60,
+              240,
+              1440
             ]
           }
         }

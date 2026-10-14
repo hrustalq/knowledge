@@ -462,6 +462,8 @@
   "chat": {
     "integrationNotFound": "Chat bot {id} not found",
     "bindingNotFound": "Chat binding {id} not found",
+    "subscriptionNotFound": "Chat subscription {id} not found",
+    "digestWindowRequired": "A digest needs a window: hourly, every 4 hours or daily",
     "identityNotFound": "Linked chat account {id} not found",
     "disabled": "Chat bots are switched off on this server (CHAT_ENABLED)",
     "invalidSecret": "The delivery's secret token is missing or wrong",

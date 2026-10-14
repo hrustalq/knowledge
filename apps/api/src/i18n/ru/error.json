@@ -464,6 +464,8 @@
   "chat": {
     "integrationNotFound": "Чат-бот {id} не найден",
     "bindingNotFound": "Привязка чата {id} не найдена",
+    "subscriptionNotFound": "Подписка чата {id} не найдена",
+    "digestWindowRequired": "Для сводки нужен период: раз в час, раз в 4 часа или раз в сутки",
     "identityNotFound": "Привязанный аккаунт {id} не найден",
     "disabled": "Чат-боты выключены на этом сервере (CHAT_ENABLED)",
     "invalidSecret": "Секретный токен доставки отсутствует или неверен",

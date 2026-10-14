@@ -4,8 +4,9 @@ Issue [#71](https://github.com/hrustalq/knowledge/issues/71). People ask
 questions in chat, not in the wiki. A workspace connects a messenger bot, and
 the bot answers from the knowledge base with links to the pages it used.
 Telegram ships first (phase 1). Every answer can be rated 👍/👎 and saved as a
-page draft or a glossary term (phase 2). Channel notifications (phase 3), and
-Slack and Teams (phases 4–5) are still open on the issue.
+page draft or a glossary term (phase 2). A bound group can be told when pages
+are published or updated and merge requests opened or merged (phase 3). A Time
+adapter (phase 4) is still open on the issue.
 
 ## Who an answer runs as
 
@@ -234,13 +235,70 @@ else is refused on the press and the menu never opens.
   with the guarded `published` update, a sweeper that got there first rolls
   the page and merge request back.
 
+## Channel notifications
+
+Each bound group can carry notification rules (`chat_subscriptions`): what to
+report (`page-published`, `page-updated`, `merge-request-opened`,
+`merge-request-merged`), where (a project, or the whole workspace; optionally
+pages carrying any of some tags) and when (right away, or an hourly / 4-hourly
+/ daily digest).
+
+- **Only titles and links.** A group's members need not be workspace members,
+  so nothing of a page's content is posted — a label, the page or merge
+  request title, and a link that still asks for sign-in. Creating a rule needs
+  `admin`, like binding the group did.
+- **The feed is `activity_log`, not the event bus.** Pub/sub forgets whatever
+  a restart missed; the table does not, and a digest is a query over rows that
+  already exist. Rows are filtered in SQL by workspace, project and the actions
+  the rule's kinds are read from (`chatActionsFor`, the inverse of
+  `chatEventKindFor` in contracts).
+- **What a row means** is derived, never stored. A `revision.finalized` counts
+  only on the page's default branch — a draft on a review branch is nobody's
+  news until it merges — and is `page-published` when it is the first
+  non-draft revision there (a merge into an empty, chat-saved page reads that
+  way too), `page-updated` otherwise. With a merged rule, the revision a merge
+  request landed is reported once, as the merge. Within one message a page is
+  one line: five edits are one "updated", published-then-edited is one "new
+  page". Archived pages and pages outside the workspace are dropped.
+- **Tags** are matched in the graph (`GraphService.getDocumentIdsByTags`,
+  inside the rule's workspace) and stored folded like tag entity keys. A tag
+  reaches the graph only when a revision is indexed, so a tagged rule **holds
+  its cursor** before a revision that is still indexing and retries next tick;
+  after 10 minutes it judges the row on the tags the graph has.
+- **The cursor** is `(cursor_at, cursor_id)`, the last activity row read, and
+  starts at the rule's creation (a new rule is not a replay). Rows younger than
+  5 s are left for the next tick, because a row stamped earlier can commit
+  after one stamped later. A rule never looks back further than 24 hours, so
+  a bot switched off for a week does not replay the week.
+- **At most once.** `ChatSubscriptionsService.deliver` moves the cursor in one
+  guarded `updateMany` (from where it read it) **before** posting, so two
+  sweeps or two API processes never send the same rows. A post the platform
+  refuses puts the cursor back (guarded again) and records the refusal on
+  `last_error`, shown under the rule. A crash between the claim and the post
+  loses that one message — the trade for never sending one twice.
+- **One message per rule per tick.** One event reads as one line; more get a
+  heading (`N updates in <project>`), a digest gets its own heading, and past
+  20 lines the rest is counted. Messages use the group's language, then the
+  bot's.
+- **Where it runs.** `ChatSubscriptionSweeper`, API-side beside the answer
+  sweeper, every `CHAT_DIGEST_TICK_MS`, never a second sweep while one runs,
+  off while `CHAT_ENABLED` is. The issue's design put it in the worker; the
+  token and the adapters already live in the API, and a post to a group is
+  attributed to nobody, so it stayed in the one `ChatModule`. Due rules are
+  selected in SQL: instant rules always, digests once `next_due_at` has
+  passed, bots switched off never.
+
+The web editor is `components/chat-bots/ChatSubscriptionEditor.vue`, opened
+from **Notifications (n)** under each group in `ChatBindingTable.vue`. Its tag
+field is the search sheet's (`lib/tag-options.ts`).
+
 ## The adapter seam
 
 `chat/adapters/chat-adapter.types.ts` is the whole contract.
 
 - **Inbound:** `verifyInbound`, `parseInbound` → `ChatInbound` (a message,
   or a button press in `action`).
-- **Outbound:** `render(ChatAnswerView | ChatNoticeView)`, `postMessage`,
+- **Outbound:** `render(ChatAnswerView | ChatNoticeView | ChatUpdatesView)`, `postMessage`,
   `editMessage`, `acknowledge`. Buttons are rows of link buttons and action
   buttons; an action's data must fit `limits.maxActionBytes`.
 - **Admin:** `identify` (Telegram `getMe`), `registerWebhook`, `directLink`.
@@ -265,9 +323,9 @@ What a later platform must map:
 
 ## Admin surface
 
-All of this is `admin` on the workspace. Two new `WorkspaceSource`s,
-`chat-integration` and `chat-binding`, resolve ids in PG before the handler
-runs.
+All of this is `admin` on the workspace. Three new `WorkspaceSource`s,
+`chat-integration`, `chat-binding` and `chat-subscription`, resolve ids in PG
+before the handler runs.
 
 - **Bots.**
   - `GET/POST /v1/chat/integrations` and `PATCH/DELETE …/:id`.
@@ -283,6 +341,9 @@ runs.
     usual one in development.
 - **Groups.** `GET/POST /v1/chat/integrations/:id/bindings` and
   `PATCH/DELETE /v1/chat/bindings/:id`. Every change saves as it is made.
+- **Notifications.** `GET/POST /v1/chat/bindings/:id/subscriptions` and
+  `PATCH/DELETE /v1/chat/subscriptions/:id`. A digest without a window is a
+  400; changing the timing starts a new window.
 - **People.** `GET /v1/chat/integrations/:id/identities` and
   `DELETE …/identities/:identityId`.
 - **Me.**
@@ -338,11 +399,12 @@ The web pages are `/settings/chat` (`ChatSettingsPage.vue` +
 | `CHAT_LINK_CODE_TTL_MINUTES`          | `15`                       | link code lifetime                                                  |
 | `CHAT_RATE_LIMIT_PER_USER_PER_MINUTE` | `10`                       | questions per person per minute, across bots                        |
 | `CHAT_CAPTURE_TIMEOUT_SECONDS`        | `300`                      | a save with no progress this long is failed                         |
+| `CHAT_DIGEST_TICK_MS`                 | `60000`                    | how often notification rules are checked (min 5000)                 |
 | `TELEGRAM_API_BASE_URL`               | `https://api.telegram.org` | Bot API host (self-hosted server or proxy)                          |
 
 ## Data
 
-All seven tables are new. None of them has an FK on `workspace_id`, `user_id` or
+All eight tables are new. None of them has an FK on `workspace_id`, `user_id` or
 `created_by`, per house policy. The per-bot rows cascade with
 `chat_integrations`.
 
@@ -355,12 +417,27 @@ All seven tables are new. None of them has an FK on `workspace_id`, `user_id` or
 | `chat_conversations`    | chat + asker → `assistant_threads` row                                        |
 | `chat_answers`          | the claim: status, placeholder message id, assistant message id, frozen locale |
 | `chat_captures`         | a save: answer + kind (unique), status, requester, "Drafting…" message id, the page / merge request / term it produced |
+| `chat_subscriptions`    | a group's notification rule: project, folded tags, kinds, timing, cursor, next digest, last send / refusal (cascades with the binding) |
 
 `chat_answers.assistantMessageId` is what 👍/👎 key on. Votes go into
 `answer_feedback` under the `chat` surface (decided on #71), not into columns
 of their own.
 
 ## Tests
+
+- `test/chat-subscriptions.spec.ts`:
+  - Kinds read a page only on its default branch, first revision there as
+    published; the inverse feeds SQL; tags fold like graph keys.
+  - A second sweep with the same snapshot loses the claim; a restart resumes
+    past the cursor, including a row stamped in the cursor's own instant; rows
+    younger than the commit lag are left.
+  - A tagged rule holds before a revision still indexing and gives up waiting
+    after 10 minutes; a refused post puts the cursor back and records why.
+  - Tags are asked of the graph in the rule's workspace; untagged and foreign
+    pages are dropped; review branches are ignored, repeated edits fold, a
+    merge is reported once.
+  - Only a title and a link are rendered, escaped for Telegram; rows not
+    reported still move the cursor; empty and full digest windows.
 
 - `test/chat-capture.spec.ts`:
   - The transcript keeps only the turns shown in the chat, with citations as

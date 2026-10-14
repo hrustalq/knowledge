@@ -11,6 +11,7 @@ import {
   type ChatMessageRef,
   type ChatOutMessage,
   type ChatTarget,
+  type ChatUpdatesView,
   type ChatView,
   type RawInbound,
 } from './chat-adapter.types.js';
@@ -151,6 +152,26 @@ export function cutAnswer(md: string, budget: number): { text: string; cut: bool
 }
 
 /**
+ * A subscription's message: a bold heading, then `label: title` lines with the
+ * title as the link. Titles are escaped like everything else — a page title is
+ * text somebody typed.
+ */
+function renderUpdates(view: ChatUpdatesView): ChatOutMessage {
+  const html = view.items.map((i) => `${escapeHtml(i.label)}: <a href="${escapeAttr(i.url)}">${escapeHtml(i.title)}</a>`);
+  const plain = view.items.map((i) => `${i.label}: ${i.title} — ${i.url}`);
+  if (view.more) {
+    html.push(escapeHtml(view.more));
+    plain.push(view.more);
+  }
+  const head = (h: string) => (view.heading ? [h] : []);
+  return {
+    text: [...head(`<b>${escapeHtml(view.heading ?? '')}</b>`), ...html].join('\n').slice(0, MAX_CHARS),
+    plain: [...head(view.heading ?? ''), ...plain].join('\n').slice(0, MAX_CHARS),
+    buttons: view.button ? [[view.button]] : [],
+  };
+}
+
+/**
  * Telegram (issue #71, phase 1). Bot API over plain `fetch` — there is no SDK
  * here, for the reason ArcadeDB has none: the surface is five methods.
  *
@@ -245,6 +266,7 @@ export class TelegramAdapter implements ChatAdapter {
     if (view.kind === 'notice') {
       return { text: escapeHtml(view.text), plain: view.text, buttons: view.button ? [[view.button]] : [] };
     }
+    if (view.kind === 'updates') return renderUpdates(view);
     return this.renderAnswer(view);
   }
 

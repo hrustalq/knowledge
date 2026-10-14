@@ -1,11 +1,29 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 import {
   CHAT_ANSWER_MODES,
+  CHAT_DIGEST_MINUTES,
   CHAT_PLATFORM_KINDS,
+  CHAT_SUBSCRIPTION_DELIVERIES,
+  CHAT_SUBSCRIPTION_EVENT_KINDS,
   SUPPORTED_LOCALES,
   type ChatAnswerMode,
+  type ChatDigestMinutes,
   type ChatPlatformKind,
+  type ChatSubscriptionDelivery,
+  type ChatSubscriptionEventKind,
   type Locale,
 } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
@@ -144,4 +162,67 @@ export class ChatLinkCodeDto {
   @IsNotEmpty()
   @MaxLength(128, { message: vmsg('maxLength') })
   code!: string;
+}
+
+export class CreateChatSubscriptionDto {
+  @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid', description: 'Only pages in this project; null = the whole workspace' })
+  @ValidateIf((o: CreateChatSubscriptionDto) => o.projectId !== undefined && o.projectId !== null)
+  @IsUUID()
+  projectId?: string | null;
+
+  @ApiPropertyOptional({ type: [String], description: 'Only pages carrying any of these tags. Omitted or empty = any page' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true, message: vmsg('maxLength') })
+  tags?: string[];
+
+  @ApiProperty({ enum: CHAT_SUBSCRIPTION_EVENT_KINDS, isArray: true })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsIn([...CHAT_SUBSCRIPTION_EVENT_KINDS], { each: true })
+  eventKinds!: ChatSubscriptionEventKind[];
+
+  @ApiPropertyOptional({ enum: CHAT_SUBSCRIPTION_DELIVERIES, description: 'Omitted reads as instant' })
+  @IsOptional()
+  @IsIn([...CHAT_SUBSCRIPTION_DELIVERIES])
+  delivery?: ChatSubscriptionDelivery;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, enum: CHAT_DIGEST_MINUTES, description: 'Required for a digest' })
+  @ValidateIf((o: CreateChatSubscriptionDto) => o.digestMinutes !== undefined && o.digestMinutes !== null)
+  @IsIn([...CHAT_DIGEST_MINUTES])
+  digestMinutes?: ChatDigestMinutes | null;
+}
+
+export class UpdateChatSubscriptionDto {
+  @ApiPropertyOptional({ type: String, nullable: true, format: 'uuid' })
+  @ValidateIf((o: UpdateChatSubscriptionDto) => o.projectId !== undefined && o.projectId !== null)
+  @IsUUID()
+  projectId?: string | null;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true, message: vmsg('maxLength') })
+  tags?: string[];
+
+  @ApiPropertyOptional({ enum: CHAT_SUBSCRIPTION_EVENT_KINDS, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsIn([...CHAT_SUBSCRIPTION_EVENT_KINDS], { each: true })
+  eventKinds?: ChatSubscriptionEventKind[];
+
+  @ApiPropertyOptional({ enum: CHAT_SUBSCRIPTION_DELIVERIES })
+  @IsOptional()
+  @IsIn([...CHAT_SUBSCRIPTION_DELIVERIES])
+  delivery?: ChatSubscriptionDelivery;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, enum: CHAT_DIGEST_MINUTES })
+  @ValidateIf((o: UpdateChatSubscriptionDto) => o.digestMinutes !== undefined && o.digestMinutes !== null)
+  @IsIn([...CHAT_DIGEST_MINUTES])
+  digestMinutes?: ChatDigestMinutes | null;
 }

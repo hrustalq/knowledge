@@ -3996,6 +3996,32 @@
       "linking": "Linking…",
       "confirm": "Link my account",
       "manage": "Manage linked accounts"
+    },
+    "subscriptions": {
+      "toggle": "Notifications ({n})",
+      "hint": "Post to this group when pages change. Only titles and links are posted, and the links still ask readers to sign in.",
+      "add": "Add notification",
+      "remove": "Remove notification",
+      "none": "This group gets no notifications.",
+      "events": "Notify about",
+      "kind": {
+        "page-published": "New pages",
+        "page-updated": "Page updates",
+        "merge-request-opened": "Merge requests opened",
+        "merge-request-merged": "Merge requests merged"
+      },
+      "tags": "Tags",
+      "anyTag": "Any tag",
+      "timing": "When",
+      "instant": "Right away",
+      "digest": {
+        "60": "Hourly digest",
+        "240": "Every 4 hours",
+        "1440": "Daily digest"
+      },
+      "lastSent": "Last sent {when}",
+      "neverSent": "Nothing sent yet",
+      "refused": "The last message was refused: {error}"
     }
   }
 }

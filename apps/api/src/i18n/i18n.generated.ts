@@ -234,6 +234,17 @@ export type I18nTranslations = {
             "untitled": string;
             "mrDescription": string;
         };
+        "updates": {
+            "kind": {
+                "page-published": string;
+                "page-updated": string;
+                "merge-request-opened": string;
+                "merge-request-merged": string;
+            };
+            "heading": string;
+            "digest": string;
+            "more": string;
+        };
     };
     "connector": {
         "stage": {
@@ -765,6 +776,8 @@ export type I18nTranslations = {
         "chat": {
             "integrationNotFound": string;
             "bindingNotFound": string;
+            "subscriptionNotFound": string;
+            "digestWindowRequired": string;
             "identityNotFound": string;
             "disabled": string;
             "invalidSecret": string;
@@ -998,6 +1011,7 @@ export type I18nTranslations = {
         "export": string;
         "chatIntegration": string;
         "chatBinding": string;
+        "chatSubscription": string;
         "chatIdentity": string;
     };
     "validation": {

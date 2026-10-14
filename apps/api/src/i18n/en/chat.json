@@ -71,5 +71,16 @@
     "timeout": "This draft never arrived: it took too long, or the server restarted. Press Save to try again.",
     "untitled": "Saved from chat",
     "mrDescription": "Drafted from a conversation with the {platform} chat bot. Check it against the pages it links before merging — nothing is published until then."
+  },
+  "updates": {
+    "kind": {
+      "page-published": "New page",
+      "page-updated": "Updated",
+      "merge-request-opened": "Merge request opened",
+      "merge-request-merged": "Merged"
+    },
+    "heading": "{count} updates in {scope}",
+    "digest": "Digest for {scope}: {count} updates",
+    "more": "…and {count} more"
   }
 }

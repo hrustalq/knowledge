@@ -267,6 +267,7 @@ export class ChatIntegrationsService {
     const rows = await this.prisma.chatChannelBinding.findMany({
       where: { integrationId },
       orderBy: { createdAt: 'asc' },
+      include: SUBSCRIPTION_COUNT,
     });
     return rows.map(toBindingEntry);
   }
@@ -299,6 +300,7 @@ export class ChatIntegrationsService {
           locale: dto.locale ?? null,
           createdBy,
         },
+        include: SUBSCRIPTION_COUNT,
       });
       return toBindingEntry(row);
     } catch (e) {
@@ -325,6 +327,7 @@ export class ChatIntegrationsService {
         ...(dto.answerMode !== undefined ? { answerMode: dto.answerMode } : {}),
         ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
       },
+      include: SUBSCRIPTION_COUNT,
     });
     return toBindingEntry(next);
   }
@@ -374,7 +377,9 @@ export class ChatIntegrationsService {
   }
 }
 
-function toBindingEntry(row: ChatChannelBinding): ChatBindingEntry {
+const SUBSCRIPTION_COUNT = { _count: { select: { subscriptions: true } } } as const;
+
+function toBindingEntry(row: ChatChannelBinding & { _count: { subscriptions: number } }): ChatBindingEntry {
   return {
     id: row.id,
     integrationId: row.integrationId,
@@ -384,6 +389,7 @@ function toBindingEntry(row: ChatChannelBinding): ChatBindingEntry {
     agentKey: row.agentKey,
     answerMode: row.answerMode as ChatAnswerMode,
     locale: (row.locale as Locale | null) ?? null,
+    subscriptionCount: row._count.subscriptions,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

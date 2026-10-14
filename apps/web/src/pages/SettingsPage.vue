@@ -14,6 +14,7 @@ import {
   FolderKanban,
   Globe,
   LayoutTemplate,
+  MessagesSquare,
   Plug,
   ShieldCheck,
   Sparkles,
@@ -21,10 +22,12 @@ import {
   Workflow,
 } from 'lucide-vue-next'
 import { PageLayout, PageSubRail } from '@/components/layout/page'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 
 const route = useRoute()
+const auth = useAuthStore()
 
 interface SettingsLink { to: string; label: string; icon: Component; hint: string }
 const links = computed<SettingsLink[]>(() => [
@@ -49,6 +52,11 @@ const links = computed<SettingsLink[]>(() => [
   { to: '/settings/ai', label: t('nav.ai'), icon: Sparkles, hint: t('settings.aiHint') },
   { to: '/settings/workflows', label: t('nav.workflows'), icon: Workflow, hint: t('settings.workflowsHint') },
   { to: '/settings/connectors', label: t('nav.connectors'), icon: Plug, hint: t('settings.connectorsHint') },
+  // Admin-only, so hidden from everyone else: unlike the rows above, the page
+  // has nothing to show a member who cannot manage it.
+  ...(auth.canAdminWorkspace
+    ? [{ to: '/settings/chat', label: t('nav.chatBots'), icon: MessagesSquare, hint: t('settings.chatBotsHint') }]
+    : []),
   // Last, and open to every role: it is the section you go to when one of the
   // others did not explain itself.
   { to: '/settings/docs', label: t('nav.docs'), icon: BookOpen, hint: t('settings.docsHint') },

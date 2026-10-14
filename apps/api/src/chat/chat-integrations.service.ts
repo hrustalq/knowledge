@@ -1,0 +1,390 @@
+import { randomBytes } from 'node:crypto';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Prisma, type ChatChannelBinding, type ChatIntegration } from '@prisma/client';
+import type {
+  ChatBindingEntry,
+  ChatIntegrationSummary,
+  ChatIntegrationTestResponse,
+  ChatIntegrationsResponse,
+  ChatPlatformKind,
+  Locale,
+  ChatAnswerMode,
+} from '@knowledge/contracts';
+import type { Env } from '../config/env.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { AgentRegistryService } from '../agents/agent-registry.service.js';
+import { decryptSecret, encryptSecret, maskSecret, parseKey } from '../ai/secret-box.js';
+import { t } from '../i18n/t.js';
+import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
+import { ChatPlatformError, type ChatAdapterContext } from './adapters/chat-adapter.types.js';
+import { hashInboundSecret } from './adapters/telegram.adapter.js';
+import type {
+  CreateChatBindingDto,
+  CreateChatIntegrationDto,
+  UpdateChatBindingDto,
+  UpdateChatIntegrationDto,
+} from './chat.dto.js';
+
+const PLATFORM_LABEL: Record<ChatPlatformKind, string> = { telegram: 'Telegram' };
+
+/**
+ * Bots and the channels they answer in (issue #71) — the admin half.
+ *
+ * The token is write-only, the connector credential's rule: it goes into the
+ * secret box on the way in and comes back out only to call the platform. What
+ * the API returns is `credentialHint`. The inbound secret is not even that —
+ * only its hash is stored, and a fresh one is minted every time the webhook is
+ * set, because the platform is the only party that ever needs to read it.
+ */
+@Injectable()
+export class ChatIntegrationsService {
+  private readonly logger = new Logger(ChatIntegrationsService.name);
+  private readonly key: Buffer | null;
+  private readonly apiPublicUrl: string;
+  private readonly enabled: boolean;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly registry: ChatAdapterRegistry,
+    private readonly agents: AgentRegistryService,
+    config: ConfigService<Env, true>,
+  ) {
+    this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
+    this.apiPublicUrl = config.get('API_PUBLIC_URL', { infer: true }).replace(/\/$/, '');
+    this.enabled = config.get('CHAT_ENABLED', { infer: true });
+  }
+
+  async list(workspaceId: string): Promise<ChatIntegrationsResponse> {
+    const rows = await this.prisma.chatIntegration.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: 'asc' },
+      include: { _count: { select: { bindings: true, identities: true } } },
+    });
+    return { integrations: rows.map((r) => this.toSummary(r, r._count)), enabled: this.enabled };
+  }
+
+  async find(id: string): Promise<ChatIntegration | null> {
+    return this.prisma.chatIntegration.findUnique({ where: { id } });
+  }
+
+  async require(id: string): Promise<ChatIntegration> {
+    const row = await this.prisma.chatIntegration.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException(t('error.chat.integrationNotFound', { id }));
+    return row;
+  }
+
+  async summary(id: string): Promise<ChatIntegrationSummary> {
+    const row = await this.prisma.chatIntegration.findUnique({
+      where: { id },
+      include: { _count: { select: { bindings: true, identities: true } } },
+    });
+    if (!row) throw new NotFoundException(t('error.chat.integrationNotFound', { id }));
+    return this.toSummary(row, row._count);
+  }
+
+  /** What one call to the platform needs. A token that no longer decrypts is no token. */
+  context(row: ChatIntegration): ChatAdapterContext | null {
+    const token = decryptSecret(row.credential, this.key);
+    return token ? { token, botUsername: row.botUsername } : null;
+  }
+
+  webhookUrl(id: string): string {
+    return `${this.apiPublicUrl}/v1/chat/${id}/webhook`;
+  }
+
+  /**
+   * Saved only once the platform has accepted the token: `getMe` is the proof,
+   * and it is also where the bot's username comes from — the thing that makes a
+   * second workspace connecting the same bot a conflict rather than a silent
+   * split of its deliveries.
+   */
+  async create(dto: CreateChatIntegrationDto, createdBy: string): Promise<ChatIntegrationSummary> {
+    if (!this.key) throw new BadRequestException(t('error.chat.noEncryptionKey'));
+    const token = dto.token.trim();
+    if (!token) throw new BadRequestException(t('error.chat.tokenRequired'));
+    if (dto.defaultAgentKey) await this.assertAgent(dto.workspaceId, dto.defaultAgentKey);
+    const botUsername = await this.identify(dto.kind, token);
+    let row: ChatIntegration;
+    try {
+      row = await this.prisma.chatIntegration.create({
+        data: {
+          workspaceId: dto.workspaceId,
+          kind: dto.kind,
+          name: dto.name.trim(),
+          credential: encryptSecret(token, this.key),
+          credentialHint: maskSecret(token),
+          botUsername,
+          defaultAgentKey: dto.defaultAgentKey ?? null,
+          locale: dto.locale ?? 'en',
+          createdBy,
+        },
+      });
+    } catch (e) {
+      throw this.uniqueConflict(e, dto.name);
+    }
+    await this.registerWebhook(row);
+    return this.summary(row.id);
+  }
+
+  async update(id: string, dto: UpdateChatIntegrationDto): Promise<ChatIntegrationSummary> {
+    const row = await this.require(id);
+    const data: Prisma.ChatIntegrationUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.enabled !== undefined) data.enabled = dto.enabled;
+    if (dto.locale !== undefined) data.locale = dto.locale;
+    if (dto.defaultAgentKey !== undefined) {
+      if (dto.defaultAgentKey) await this.assertAgent(row.workspaceId, dto.defaultAgentKey);
+      data.defaultAgentKey = dto.defaultAgentKey;
+    }
+    const token = dto.token?.trim();
+    if (token) {
+      if (!this.key) throw new BadRequestException(t('error.chat.noEncryptionKey'));
+      data.botUsername = await this.identify(row.kind as ChatPlatformKind, token);
+      data.credential = encryptSecret(token, this.key);
+      data.credentialHint = maskSecret(token);
+    }
+    let next: ChatIntegration;
+    try {
+      next = await this.prisma.chatIntegration.update({ where: { id }, data });
+    } catch (e) {
+      throw this.uniqueConflict(e, dto.name ?? row.name);
+    }
+    // A new token is a new bot, which knows nothing of our webhook yet; turning
+    // the bot back on re-points it in case it was moved while off.
+    if (token || (dto.enabled === true && !row.enabled)) await this.registerWebhook(next);
+    return this.summary(id);
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.require(id);
+    // Bindings, identities, link codes, conversations and answers cascade.
+    // The platform keeps delivering until it gives up on the 404s — there is
+    // nothing to unregister with once the token is gone.
+    await this.prisma.chatIntegration.delete({ where: { id } });
+  }
+
+  /** The health check: is the token still accepted, and does the platform take our webhook? */
+  async test(id: string): Promise<ChatIntegrationTestResponse> {
+    const row = await this.require(id);
+    const ctx = this.context(row);
+    if (!ctx) return { ok: false, botUsername: row.botUsername, error: t('error.chat.noEncryptionKey') };
+    try {
+      const { username } = await this.registry.get(row.kind).identify(ctx);
+      if (username !== row.botUsername) {
+        await this.prisma.chatIntegration.update({ where: { id }, data: { botUsername: username } });
+      }
+      const webhookError = await this.registerWebhook({ ...row, botUsername: username });
+      return { ok: webhookError === null, botUsername: username, error: webhookError };
+    } catch (err) {
+      return { ok: false, botUsername: row.botUsername, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /**
+   * Point the platform at us with a fresh secret. A refusal is stored, not
+   * thrown: the bot is still saved, and the settings page says why it is deaf
+   * (a non-HTTPS API_PUBLIC_URL in development is the usual one). Returns the
+   * refusal, or null.
+   */
+  private async registerWebhook(row: ChatIntegration): Promise<string | null> {
+    const ctx = this.context(row);
+    if (!ctx) return t('error.chat.noEncryptionKey');
+    const secret = randomBytes(32).toString('base64url');
+    try {
+      await this.registry.get(row.kind).registerWebhook(ctx, this.webhookUrl(row.id), secret);
+      await this.prisma.chatIntegration.update({
+        where: { id: row.id },
+        data: { inboundSecretHash: hashInboundSecret(secret), webhookError: null },
+      });
+      return null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn({ msg: 'chat webhook registration refused', integrationId: row.id, error: message });
+      await this.prisma.chatIntegration.update({ where: { id: row.id }, data: { webhookError: message.slice(0, 500) } });
+      return message;
+    }
+  }
+
+  private async identify(kind: ChatPlatformKind, token: string): Promise<string> {
+    try {
+      const { username } = await this.registry.get(kind).identify({ token, botUsername: null });
+      return username;
+    } catch (err) {
+      const reason = err instanceof ChatPlatformError ? err.message : String(err);
+      throw new BadRequestException(t('error.chat.tokenRejected', { platform: PLATFORM_LABEL[kind], reason }));
+    }
+  }
+
+  private async assertAgent(workspaceId: string, key: string): Promise<void> {
+    try {
+      await this.agents.resolve(workspaceId, key);
+    } catch {
+      throw new BadRequestException(t('error.chat.unknownAgent', { agent: key }));
+    }
+  }
+
+  private uniqueConflict(e: unknown, name: string): unknown {
+    if (!(e instanceof Prisma.PrismaClientKnownRequestError) || e.code !== 'P2002') return e;
+    const target = String((e.meta as { target?: unknown } | undefined)?.target ?? '');
+    return target.includes('bot_username')
+      ? new ConflictException({ statusCode: HttpStatus.CONFLICT, message: t('error.chat.botTaken'), reason: 'chat.botTaken' })
+      : new ConflictException({ statusCode: HttpStatus.CONFLICT, message: t('error.chat.nameTaken', { name }), reason: 'chat.nameTaken' });
+  }
+
+  private toSummary(row: ChatIntegration, counts: { bindings: number; identities: number }): ChatIntegrationSummary {
+    return {
+      id: row.id,
+      workspaceId: row.workspaceId,
+      kind: row.kind as ChatPlatformKind,
+      name: row.name,
+      enabled: row.enabled,
+      credentialHint: row.credentialHint,
+      botUsername: row.botUsername,
+      defaultAgentKey: row.defaultAgentKey,
+      locale: row.locale as Locale,
+      webhookUrl: this.webhookUrl(row.id),
+      webhookError: row.webhookError,
+      bindingCount: counts.bindings,
+      identityCount: counts.identities,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Bindings: which groups the bot answers in, and how.
+  // -------------------------------------------------------------------------
+
+  async listBindings(integrationId: string): Promise<ChatBindingEntry[]> {
+    const rows = await this.prisma.chatChannelBinding.findMany({
+      where: { integrationId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map(toBindingEntry);
+  }
+
+  async requireBinding(id: string): Promise<ChatChannelBinding> {
+    const row = await this.prisma.chatChannelBinding.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException(t('error.chat.bindingNotFound', { id }));
+    return row;
+  }
+
+  async findBinding(integrationId: string, externalChatId: string): Promise<ChatChannelBinding | null> {
+    return this.prisma.chatChannelBinding.findUnique({
+      where: { integrationId_externalChatId: { integrationId, externalChatId } },
+    });
+  }
+
+  async createBinding(integrationId: string, dto: CreateChatBindingDto, createdBy: string): Promise<ChatBindingEntry> {
+    const integration = await this.require(integrationId);
+    await this.assertBindingRefs(integration.workspaceId, dto);
+    try {
+      const row = await this.prisma.chatChannelBinding.create({
+        data: {
+          integrationId,
+          workspaceId: integration.workspaceId,
+          externalChatId: dto.externalChatId.trim(),
+          title: dto.title?.trim() || null,
+          projectId: dto.projectId ?? null,
+          agentKey: dto.agentKey ?? null,
+          answerMode: dto.answerMode ?? 'mention',
+          locale: dto.locale ?? null,
+          createdBy,
+        },
+      });
+      return toBindingEntry(row);
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException({
+          statusCode: HttpStatus.CONFLICT,
+          message: t('error.chat.bindingExists'),
+          reason: 'chat.bindingExists',
+        });
+      }
+      throw e;
+    }
+  }
+
+  async updateBinding(id: string, dto: UpdateChatBindingDto): Promise<ChatBindingEntry> {
+    const row = await this.requireBinding(id);
+    await this.assertBindingRefs(row.workspaceId, dto);
+    const next = await this.prisma.chatChannelBinding.update({
+      where: { id },
+      data: {
+        ...(dto.title !== undefined ? { title: dto.title?.trim() || null } : {}),
+        ...(dto.projectId !== undefined ? { projectId: dto.projectId } : {}),
+        ...(dto.agentKey !== undefined ? { agentKey: dto.agentKey } : {}),
+        ...(dto.answerMode !== undefined ? { answerMode: dto.answerMode } : {}),
+        ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
+      },
+    });
+    return toBindingEntry(next);
+  }
+
+  async removeBinding(id: string): Promise<void> {
+    await this.requireBinding(id);
+    await this.prisma.chatChannelBinding.delete({ where: { id } });
+  }
+
+  /** `/bind` from inside a group, by a linked admin. Idempotent: an existing binding is left as it is. */
+  async bindFromChat(
+    integration: ChatIntegration,
+    chat: { chatId: string; title: string | null },
+    createdBy: string,
+  ): Promise<'created' | 'exists'> {
+    const created = await this.prisma.chatChannelBinding.createMany({
+      data: [
+        {
+          integrationId: integration.id,
+          workspaceId: integration.workspaceId,
+          externalChatId: chat.chatId,
+          title: chat.title,
+          createdBy,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    return created.count === 1 ? 'created' : 'exists';
+  }
+
+  async unbindFromChat(integrationId: string, chatId: string): Promise<boolean> {
+    const removed = await this.prisma.chatChannelBinding.deleteMany({ where: { integrationId, externalChatId: chatId } });
+    return removed.count > 0;
+  }
+
+  private async assertBindingRefs(
+    workspaceId: string,
+    dto: { projectId?: string | null; agentKey?: string | null },
+  ): Promise<void> {
+    if (dto.projectId) {
+      const project = await this.prisma.project.findUnique({ where: { id: dto.projectId }, select: { workspaceId: true } });
+      if (!project || project.workspaceId !== workspaceId) {
+        throw new BadRequestException(t('error.chat.projectNotInWorkspace', { id: dto.projectId }));
+      }
+    }
+    if (dto.agentKey) await this.assertAgent(workspaceId, dto.agentKey);
+  }
+}
+
+function toBindingEntry(row: ChatChannelBinding): ChatBindingEntry {
+  return {
+    id: row.id,
+    integrationId: row.integrationId,
+    externalChatId: row.externalChatId,
+    title: row.title,
+    projectId: row.projectId,
+    agentKey: row.agentKey,
+    answerMode: row.answerMode as ChatAnswerMode,
+    locale: (row.locale as Locale | null) ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}

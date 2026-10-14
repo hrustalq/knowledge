@@ -34,6 +34,7 @@ import { VerificationModule } from './verification/verification.module.js';
 import { PublishingModule } from './publishing/publishing.module.js';
 import { PublicModule } from './public/public.module.js';
 import { ExportModule } from './export/export.module.js';
+import { ChatModule } from './chat/chat.module.js';
 
 @Module({
   imports: [
@@ -83,6 +84,9 @@ import { ExportModule } from './export/export.module.js';
     // Exports (docs/features/45, issue #77 phase 2c). API-only: the routes and
     // the expiry sweeper; the building is ExportWorkerModule's.
     ExportModule,
+    // Chat bots (issue #71). API-only: the webhook, settings, and the answer
+    // turn, which runs here on a detached continuation with a reaper.
+    ChatModule,
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,

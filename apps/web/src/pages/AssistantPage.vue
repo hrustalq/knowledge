@@ -14,6 +14,7 @@
 // or the panel.
 import { useI18n } from 'vue-i18n'
 import { onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAssistantStore } from '@/stores/assistant'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { PageLayout } from '@/components/layout/page'
@@ -25,14 +26,19 @@ import ThreadDialogs from '@/components/assistant/ThreadDialogs.vue'
 const { t } = useI18n()
 
 const assistant = useAssistantStore()
+const route = useRoute()
 
 /** Small screens only: the rail lives in a sheet rather than beside the chat. */
 const railOpen = ref(false)
 
 const dialogs = ref<InstanceType<typeof ThreadDialogs> | null>(null)
 
+// `?thread=` is an opening instruction (a chat bot's "open the full answer"
+// link, issue #71), not two-way state: the rail drives selection afterwards.
 onMounted(() => {
-  if (!assistant.activeThread) void assistant.openOrCreateThread()
+  const thread = typeof route.query.thread === 'string' ? route.query.thread : null
+  if (thread) void assistant.openThread(thread)
+  else if (!assistant.activeThread) void assistant.openOrCreateThread()
 })
 </script>
 

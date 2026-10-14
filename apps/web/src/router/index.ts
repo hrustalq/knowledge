@@ -26,6 +26,9 @@ export function createRouter() {
       // A member signing in to a published site (issue #77 phase 3): needs the
       // app's session, so the guard sends anyone signed out through /login.
       { path: '/site-sign-in', component: () => import('@/pages/SiteSignInPage.vue') },
+      // Where a chat bot's link-your-account link lands (issue #71). Needs the
+      // app's session for the same reason: linking proves which person you are.
+      { path: '/chat/link', component: () => import('@/pages/ChatLinkPage.vue') },
       // App (authenticated — guard redirects to /login when AUTH_MODE=api-key)
       // meta.fill: the pages landing leads with a graph canvas, which needs a
       // definite height to resolve; the tree and list views scroll inside it.
@@ -188,6 +191,8 @@ export function createRouter() {
           // Connectors (docs/features/19): workspace administration, so like AI
           // settings it gates on auth.canAdminWorkspace rather than meta.platformAdmin.
           { path: 'connectors', component: () => import('@/pages/ConnectorsPage.vue') },
+          // Chat bots (issue #71): workspace administration, gated like connectors.
+          { path: 'chat', component: () => import('@/pages/ChatSettingsPage.vue') },
           // Accounts moved into /settings/access as a tab. Kept as a redirect
           // rather than deleted: it was a nav row and a bookmark for as long as
           // the settings shell has existed. No `platformAdmin` meta — the

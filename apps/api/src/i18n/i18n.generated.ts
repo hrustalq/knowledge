@@ -160,6 +160,41 @@ export type I18nTranslations = {
             "agentOffered": string;
         };
     };
+    "chat": {
+        "help": string;
+        "link": {
+            "required": string;
+            "button": string;
+            "inGroup": string;
+            "openPrivate": string;
+            "success": string;
+            "unlinked": string;
+            "notLinked": string;
+        };
+        "answer": {
+            "thinking": string;
+            "failed": string;
+            "timeout": string;
+            "noAccess": string;
+            "disabled": string;
+            "budget": string;
+            "rateLimited": string;
+            "sources": string;
+            "openFull": string;
+            "empty": string;
+        };
+        "conversation": {
+            "new": string;
+        };
+        "bind": {
+            "done": string;
+            "already": string;
+            "removed": string;
+            "notBound": string;
+            "forbidden": string;
+            "dmOnly": string;
+        };
+    };
     "connector": {
         "stage": {
             "connecting": string;
@@ -687,6 +722,25 @@ export type I18nTranslations = {
             "notACodebase": string;
             "disabled": string;
         };
+        "chat": {
+            "integrationNotFound": string;
+            "bindingNotFound": string;
+            "identityNotFound": string;
+            "disabled": string;
+            "invalidSecret": string;
+            "nameTaken": string;
+            "botTaken": string;
+            "tokenRejected": string;
+            "tokenRequired": string;
+            "noEncryptionKey": string;
+            "unknownAgent": string;
+            "projectNotInWorkspace": string;
+            "bindingExists": string;
+            "linkCodeInvalid": string;
+            "linkCodeExpired": string;
+            "linkCodeUsed": string;
+            "linkNotMember": string;
+        };
     };
     "import": {
         "stage": {
@@ -902,6 +956,9 @@ export type I18nTranslations = {
         "siteVersion": string;
         "siteDomain": string;
         "export": string;
+        "chatIntegration": string;
+        "chatBinding": string;
+        "chatIdentity": string;
     };
     "validation": {
         "isDefined": string;

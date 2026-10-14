@@ -458,5 +458,24 @@
   "wiki": {
     "notACodebase": "Only a codebase connector has a repo wiki; this one is {kind}.",
     "disabled": "Turn on Repo wiki or Release notes for this connector first."
+  },
+  "chat": {
+    "integrationNotFound": "Chat bot {id} not found",
+    "bindingNotFound": "Chat binding {id} not found",
+    "identityNotFound": "Linked chat account {id} not found",
+    "disabled": "Chat bots are switched off on this server (CHAT_ENABLED)",
+    "invalidSecret": "The delivery's secret token is missing or wrong",
+    "nameTaken": "A chat bot named “{name}” already exists in this workspace",
+    "botTaken": "This bot is already connected to a workspace — one bot answers for one workspace",
+    "tokenRejected": "{platform} refused the token: {reason}",
+    "tokenRequired": "A bot token is required",
+    "noEncryptionKey": "SETTINGS_ENCRYPTION_KEY is not set, so a bot token cannot be stored",
+    "unknownAgent": "There is no agent “{agent}” in this workspace",
+    "projectNotInWorkspace": "Project {id} is not part of this workspace",
+    "bindingExists": "This chat is already bound to the bot",
+    "linkCodeInvalid": "This link code is not valid. Ask the bot for a new one.",
+    "linkCodeExpired": "This link code has expired. Ask the bot for a new one.",
+    "linkCodeUsed": "This link code has already been used. Ask the bot for a new one.",
+    "linkNotMember": "You are not a member of the workspace this bot belongs to"
   }
 }

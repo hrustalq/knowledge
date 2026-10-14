@@ -1,0 +1,35 @@
+{
+  "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\n/new — start a new conversation\n/unlink — disconnect your account\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
+  "link": {
+    "required": "Link your account first: open the link below while signed in to {workspace}. It works once and expires in {minutes} minutes.",
+    "button": "Link my account",
+    "inGroup": "You need to link your account before I can answer. Message me privately to do that.",
+    "openPrivate": "Message me",
+    "success": "Linked. Your questions here now run as {user}, with exactly the access you have in {workspace}.",
+    "unlinked": "Disconnected. I will not answer this account until it is linked again.",
+    "notLinked": "This account is not linked to anyone."
+  },
+  "answer": {
+    "thinking": "Searching the knowledge base…",
+    "failed": "I could not answer that — the request to the model failed. Ask again in a moment.",
+    "timeout": "This answer never arrived: it took too long, or the server restarted. Ask again.",
+    "noAccess": "Your account no longer has access to {workspace}, so I cannot answer.",
+    "disabled": "The assistant is switched off for {workspace}.",
+    "budget": "You have used this month's AI budget in {workspace}.",
+    "rateLimited": "Too many questions at once — wait a minute and ask again.",
+    "sources": "Sources",
+    "openFull": "Open the full answer",
+    "empty": "Ask me something after the mention."
+  },
+  "conversation": {
+    "new": "Started a new conversation. Earlier questions will not be taken into account."
+  },
+  "bind": {
+    "done": "I will answer here when mentioned. A workspace admin can change that in Settings → Chat bots.",
+    "already": "This group is already connected.",
+    "removed": "I will no longer answer in this group.",
+    "notBound": "This group is not connected.",
+    "forbidden": "Only a workspace admin with a linked account can do that.",
+    "dmOnly": "That works in groups only."
+  }
+}

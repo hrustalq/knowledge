@@ -60,7 +60,8 @@ import { TemplatesCoreModule } from '../templates/templates-core.module.js';
   controllers: [AssistantController],
   providers: [AssistantToolsService, AssistantService, AssistantThreadsService],
   // Re-exported rather than re-provided, so the API and the worker share one
-  // client with one SDK cache.
-  exports: [AssistantClientModule],
+  // client with one SDK cache. The turn itself is exported for chat bots
+  // (issue #71), which answer through it from the API process.
+  exports: [AssistantClientModule, AssistantService, AssistantThreadsService],
 })
 export class AssistantModule {}

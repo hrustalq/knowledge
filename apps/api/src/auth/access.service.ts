@@ -338,6 +338,18 @@ export class AccessService {
     return connector.workspaceId;
   }
 
+  async workspaceOfChatIntegration(id: string): Promise<string> {
+    const row = await this.prisma.chatIntegration.findUnique({ where: { id }, select: { workspaceId: true } });
+    if (!row) throw new NotFoundException(t('error.chat.integrationNotFound', { id }));
+    return row.workspaceId;
+  }
+
+  async workspaceOfChatBinding(id: string): Promise<string> {
+    const row = await this.prisma.chatChannelBinding.findUnique({ where: { id }, select: { workspaceId: true } });
+    if (!row) throw new NotFoundException(t('error.chat.bindingNotFound', { id }));
+    return row.workspaceId;
+  }
+
   async workspaceOfConnectorRun(runId: string): Promise<string> {
     const run = await this.prisma.connectorRun.findUnique({
       where: { id: runId },

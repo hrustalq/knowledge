@@ -156,7 +156,8 @@
     "startFromTemplate": "start from a template",
     "templates": "Templates",
     "publishing": "Publishing",
-    "exports": "Exports"
+    "exports": "Exports",
+    "chatBots": "Chat bots"
   },
   "role": {
     "viewer": "Viewer",
@@ -266,7 +267,8 @@
     "connectHint": "MCP clients, API keys, skill",
     "templatesHint": "Page shapes to start from",
     "publishingHint": "Public links to pages",
-    "exportsHint": "Files you exported"
+    "exportsHint": "Files you exported",
+    "chatBotsHint": "Answer questions in Telegram, citing your pages."
   },
   "connectors": {
     "pageSubtitle": "Keep pages in step with Confluence, Jira, Notion and markdown in git — in both directions.",
@@ -3893,6 +3895,106 @@
       "colCreated": "Asked",
       "summary": "{pages} pages · {size}",
       "expires": "deleted {when}"
+    }
+  },
+  "chatBots": {
+    "title": "Chat bots",
+    "subtitle": "Answer questions from this workspace in a messenger, with links to the pages behind every answer.",
+    "adminOnly": "Only workspace admins can manage chat bots.",
+    "ceilingOff": "Chat bots are switched off on this server (CHAT_ENABLED=false). You can prepare a bot here, but nothing will be answered until an operator turns them on.",
+    "empty": {
+      "title": "No bots yet",
+      "body": "Connect a Telegram bot, then message it privately to link your account. Add it to a group and send /bind there to let it answer in the group."
+    },
+    "connect": {
+      "open": "Connect a bot",
+      "title": "Connect a Telegram bot",
+      "description": "The token is checked with Telegram and stored encrypted. It is never shown again.",
+      "step1": "In Telegram, message BotFather and send /newbot.",
+      "step2": "Copy the token it gives you and paste it below.",
+      "step3": "Message your bot privately: it replies with a link that connects your account.",
+      "submit": "Connect",
+      "checking": "Checking with Telegram…",
+      "done": "Connected {bot}."
+    },
+    "fields": {
+      "name": "Name",
+      "namePlaceholder": "Team bot",
+      "token": "Bot token",
+      "tokenHint": "From BotFather. Write-only: the page only ever shows its last four characters.",
+      "agent": "Answering agent",
+      "agentResearcher": "Researcher (default)",
+      "locale": "Reply language",
+      "project": "Project",
+      "answerMode": "Answers",
+      "chatId": "Chat id",
+      "chatTitle": "Chat name",
+      "agentShort": "Agent"
+    },
+    "locale": {
+      "en": "English",
+      "ru": "Russian"
+    },
+    "kind": {
+      "telegram": "Telegram"
+    },
+    "answerMode": {
+      "mention": "When mentioned",
+      "all": "Every message",
+      "off": "Never"
+    },
+    "bindings": {
+      "hint": "The bot answers only in the groups listed here. A workspace admin with a linked account can add a group by sending /bind in it. Everyone in a bound group sees the answers, so bind only groups whose members may read this workspace.",
+      "untitled": "Untitled chat",
+      "wholeWorkspace": "Whole workspace",
+      "botDefault": "Bot default",
+      "botLocale": "Bot language",
+      "none": "No groups yet. Private chats need no setup.",
+      "chatIdPlaceholder": "-1001234567890",
+      "titlePlaceholder": "Name (optional)",
+      "add": "Add group"
+    },
+    "card": {
+      "off": "Off",
+      "token": "token {hint}",
+      "test": "Test",
+      "disable": "Turn off",
+      "enable": "Turn on",
+      "webhookRefused": "Telegram cannot deliver messages to this server.",
+      "webhookOk": "Telegram delivers to {url}",
+      "groups": "Groups ({n})",
+      "people": "Linked accounts ({n})",
+      "testOk": "{bot} is reachable and the webhook is set.",
+      "testFailed": "Check failed: {reason}",
+      "deleted": "{name} disconnected.",
+      "deleteTitle": "Disconnect {name}?",
+      "deleteBody": "Its groups and linked accounts are removed, and it stops answering. The conversations stay in each person's assistant history.",
+      "webhookFix": "Telegram only delivers to a public HTTPS address. Point API_PUBLIC_URL at one, then press Test."
+    },
+    "people": {
+      "hint": "Every answer runs as the linked person, with exactly their access. Unlinking stops the bot answering that account.",
+      "unlink": "Unlink",
+      "none": "Nobody has linked an account yet."
+    },
+    "profile": {
+      "title": "Linked chat accounts",
+      "hint": "Messenger accounts a workspace bot answers as you. To link one, message the bot privately.",
+      "entry": "{account} via {bot}",
+      "unlink": "Unlink",
+      "unlinked": "Account unlinked.",
+      "none": "No linked accounts."
+    },
+    "link": {
+      "title": "Link a chat account",
+      "checking": "Checking the link…",
+      "missing": "This page needs the link the bot sent you.",
+      "done": "Linked. Ask the bot your question in {platform}.",
+      "question": "Link the {platform} account {account} to you in {workspace}?",
+      "unnamed": "(no username)",
+      "explain": "{bot} will answer this account as you, with exactly your access. Confirm only if you asked the bot for this link.",
+      "linking": "Linking…",
+      "confirm": "Link my account",
+      "manage": "Manage linked accounts"
     }
   }
 }

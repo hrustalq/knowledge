@@ -28,6 +28,7 @@ import type {
   ChatView,
 } from './adapters/chat-adapter.types.js';
 import { decodeChatAction, encodeChatAction } from './chat-actions.js';
+import { ChatCapturesService } from './chat-captures.service.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
 
@@ -38,8 +39,8 @@ const REAP_BATCH = 50;
 /** Reasons for a 👎 per row of buttons — seven do not fit one row on a phone. */
 const REASONS_PER_ROW = 2;
 
-/** Which buttons sit under an answer: the vote row, or — after a 👎 — the reasons. */
-type AnswerButtons = 'vote' | 'reasons';
+/** Which buttons sit under an answer: the vote row, the reasons for a 👎, or what to save it as. */
+type AnswerButtons = 'vote' | 'reasons' | 'save';
 
 interface Delivery {
   integration: ChatIntegration;
@@ -86,6 +87,7 @@ export class ChatAnswersService {
     private readonly integrations: ChatIntegrationsService,
     private readonly identities: ChatIdentityService,
     private readonly feedback: AnswerFeedbackService,
+    private readonly captures: ChatCapturesService,
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true }).replace(/\/$/, '');
@@ -362,14 +364,14 @@ export class ChatAnswersService {
       })),
       sourcesHeading: t('chat.answer.sources'),
       full: { label: t('chat.answer.openFull'), url: `${this.webBaseUrl}/assistant?thread=${threadId}` },
-      actions: buttons === 'vote' ? voteRow(answerId) : reasonRows(answerId),
+      actions: buttons === 'vote' ? voteRow(answerId) : buttons === 'reasons' ? reasonRows(answerId) : saveRows(answerId),
       webBaseUrl: this.webBaseUrl,
     };
   }
 
   /**
-   * A press of a button under an answer: 👍, 👎, a reason for the 👎, or back
-   * (issue #71, phase 2).
+   * A press of a button under an answer: 👍, 👎, a reason for the 👎, Save and
+   * what to save as, or back (issue #71, phase 2).
    *
    * The vote is the presser's, not the asker's — in a group anyone the answer
    * was shown to may rate it — so the presser meets the same bar a question
@@ -378,7 +380,8 @@ export class ChatAnswersService {
    * answer, so a 👎 followed by its reason is one row, not two.
    *
    * A 👎 is recorded at once and the reasons are offered after it: a vote
-   * whose reason is never picked is still a vote. Every press is acknowledged,
+   * whose reason is never picked is still a vote. Saving needs an editor, so
+   * the menu is not even opened for anyone else. Every press is acknowledged,
    * because the platform shows a spinner on the button until it is.
    */
   private async action(d: Delivery, userId: string | null, locale: Locale): Promise<void> {
@@ -403,7 +406,7 @@ export class ChatAnswersService {
     // Looked up in the chat the press came from: an id from elsewhere is not found.
     const answer = await this.prisma.chatAnswer.findFirst({
       where: { id: action.answerId, integrationId: integration.id, externalChatId: inbound.chatId, status: 'answered' },
-      select: { id: true, assistantMessageId: true, locale: true },
+      select: { id: true, assistantMessageId: true, conversationId: true, createdAt: true, locale: true },
     });
     const message = answer?.assistantMessageId
       ? await this.prisma.assistantMessage.findUnique({
@@ -412,6 +415,38 @@ export class ChatAnswersService {
         })
       : null;
     if (!answer || !message) return ack(t('chat.feedback.gone'));
+    const lang = isLocale(answer.locale) ? answer.locale : 'en';
+    const rerender = (buttons: AnswerButtons) =>
+      this.rerender(d, answer.id, message, lang, buttons).catch((err: unknown) => {
+        this.logger.warn({ msg: 'chat answer buttons not updated', answerId: answer.id, error: String(err) });
+      });
+
+    if (action.kind === 'save-menu' || action.kind === 'capture') {
+      try {
+        await this.access.requireRole(principal, integration.workspaceId, 'editor');
+      } catch {
+        return ack(t('chat.capture.forbidden', { workspace: d.workspaceName }));
+      }
+      if (!answer.conversationId) return ack(t('chat.feedback.gone'));
+      if (action.kind === 'save-menu') {
+        await ack();
+        return rerender('save');
+      }
+      await ack(t(action.capture === 'page' ? 'chat.capture.draftingPage' : 'chat.capture.draftingTerm'));
+      await rerender('vote');
+      return this.captures.start({
+        integration,
+        adapter: d.adapter,
+        ctx: d.ctx,
+        answerMessage: { chatId: inbound.chatId, messageId: inbound.messageId },
+        answer: { id: answer.id, conversationId: answer.conversationId, createdAt: answer.createdAt },
+        projectId: d.binding?.projectId ?? null,
+        principal,
+        kind: action.capture,
+        locale,
+        workspaceName: d.workspaceName,
+      });
+    }
 
     if (action.kind !== 'back') {
       try {
@@ -433,20 +468,26 @@ export class ChatAnswersService {
     // back puts the vote row back. The answer keeps the language it was asked
     // in, whoever pressed.
     if (action.kind === 'vote' && !askReason) return;
-    const lang = isLocale(answer.locale) ? answer.locale : 'en';
+    await rerender(askReason ? 'reasons' : 'vote');
+  }
+
+  /** The answer again, from its stored message, in the language it was asked in, with other buttons. */
+  private async rerender(
+    d: Delivery,
+    answerId: string,
+    message: { threadId: string; content: string; sources: Prisma.JsonValue },
+    lang: Locale,
+    buttons: AnswerButtons,
+  ): Promise<void> {
     const view = withLocale(lang, () =>
       this.answerView(
         { content: message.content, sources: (message.sources ?? []) as unknown as AssistantSource[] },
         message.threadId,
-        answer.id,
-        askReason ? 'reasons' : 'vote',
+        answerId,
+        buttons,
       ),
     );
-    await d.adapter
-      .editMessage(d.ctx, { chatId: inbound.chatId, messageId: inbound.messageId }, d.adapter.render(view))
-      .catch((err: unknown) => {
-        this.logger.warn({ msg: 'chat answer buttons not updated', answerId: answer.id, error: String(err) });
-      });
+    await d.adapter.editMessage(d.ctx, { chatId: d.inbound.chatId, messageId: d.inbound.messageId }, d.adapter.render(view));
   }
 
   /** Link instruction. A code only ever goes into a private chat; a group gets "message me". */
@@ -543,13 +584,23 @@ export class ChatAnswersService {
   }
 }
 
-/** 👍 👎 under an answer. Emoji only: they read the same in every language. */
+/** 👍 👎 and Save under an answer. The votes are emoji only: they read the same in every language. */
 function voteRow(answerId: string): ChatActionButton[][] {
   return [
     [
       { label: '👍', action: encodeChatAction({ kind: 'vote', answerId, rating: 'up' }) },
       { label: '👎', action: encodeChatAction({ kind: 'vote', answerId, rating: 'down' }) },
+      { label: t('chat.capture.save'), action: encodeChatAction({ kind: 'save-menu', answerId }) },
     ],
+  ];
+}
+
+/** What to save the conversation as, one per row so the labels fit, and a way back. */
+function saveRows(answerId: string): ChatActionButton[][] {
+  return [
+    [{ label: t('chat.capture.asPage'), action: encodeChatAction({ kind: 'capture', answerId, capture: 'page' }) }],
+    [{ label: t('chat.capture.asTerm'), action: encodeChatAction({ kind: 'capture', answerId, capture: 'glossary-term' }) }],
+    [{ label: t('chat.feedback.back'), action: encodeChatAction({ kind: 'back', answerId }) }],
   ];
 }
 

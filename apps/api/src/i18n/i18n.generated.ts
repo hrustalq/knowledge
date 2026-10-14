@@ -212,6 +212,28 @@ export type I18nTranslations = {
                 "other": string;
             };
         };
+        "capture": {
+            "save": string;
+            "asPage": string;
+            "asTerm": string;
+            "forbidden": string;
+            "draftingPage": string;
+            "draftingTerm": string;
+            "pageReady": string;
+            "termReady": string;
+            "openMergeRequest": string;
+            "openGlossary": string;
+            "alreadySaved": string;
+            "inProgress": string;
+            "noTerm": string;
+            "nothing": string;
+            "noProject": string;
+            "disabled": string;
+            "failed": string;
+            "timeout": string;
+            "untitled": string;
+            "mrDescription": string;
+        };
     };
     "connector": {
         "stage": {

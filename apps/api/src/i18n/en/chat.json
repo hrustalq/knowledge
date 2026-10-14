@@ -1,5 +1,5 @@
 {
-  "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\n/new — start a new conversation\n/unlink — disconnect your account\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
+  "help": "I answer questions from the {workspace} knowledge base, citing the pages I used.\n\nIn a private chat, just ask. In a group, mention me or reply to one of my answers.\n\nUnder each answer: 👍 or 👎 to rate it, and 💾 Save to turn the conversation into a page draft or a glossary term (editors).\n\n/new — start a new conversation\n/unlink — disconnect your account\n/bind — answer in this group (workspace admins)\n/unbind — stop answering in this group (workspace admins)\n/help — this message",
   "link": {
     "required": "Link your account first: open the link below while signed in to {workspace}. It works once and expires in {minutes} minutes.",
     "button": "Link my account",
@@ -49,5 +49,27 @@
       "unclear": "Unclear",
       "other": "Something else"
     }
+  },
+  "capture": {
+    "save": "💾 Save…",
+    "asPage": "📄 As a page draft",
+    "asTerm": "📘 As a glossary term",
+    "forbidden": "Only an editor of {workspace} with a linked account can save this.",
+    "draftingPage": "Drafting a page from this conversation…",
+    "draftingTerm": "Looking for the term this conversation defines…",
+    "pageReady": "Drafted “{title}” for review. Nothing is published until the merge request is merged.",
+    "termReady": "Proposed “{term}” for the glossary. It stays switched off until an editor turns it on.",
+    "openMergeRequest": "Open the merge request",
+    "openGlossary": "Open the glossary",
+    "alreadySaved": "Already saved as “{title}”.",
+    "inProgress": "This is already being saved.",
+    "noTerm": "I found no term in this conversation that the glossary does not already have.",
+    "nothing": "There is nothing in this conversation I can save.",
+    "noProject": "{workspace} has no project to save into.",
+    "disabled": "That AI agent is switched off in {workspace}.",
+    "failed": "Saving did not work. Press Save to try again.",
+    "timeout": "This draft never arrived: it took too long, or the server restarted. Press Save to try again.",
+    "untitled": "Saved from chat",
+    "mrDescription": "Drafted from a conversation with the {platform} chat bot. Check it against the pages it links before merging — nothing is published until then."
   }
 }

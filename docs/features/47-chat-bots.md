@@ -3,9 +3,9 @@
 Issue [#71](https://github.com/hrustalq/knowledge/issues/71). People ask
 questions in chat, not in the wiki. A workspace connects a messenger bot, and
 the bot answers from the knowledge base with links to the pages it used.
-Telegram ships first (phase 1), with 👍/👎 feedback on every answer (phase 2).
-Saving a thread as a page (the rest of phase 2), channel notifications (phase
-3), and Slack and Teams (phases 4–5) are still open on the issue.
+Telegram ships first (phase 1). Every answer can be rated 👍/👎 and saved as a
+page draft or a glossary term (phase 2). Channel notifications (phase 3), and
+Slack and Teams (phases 4–5) are still open on the issue.
 
 ## Who an answer runs as
 
@@ -188,6 +188,52 @@ as a question.
   `acknowledge`, with a short note only the presser sees. A press in a group
   unbound since the answer is still acknowledged.
 
+## Saving a conversation
+
+The vote row carries a third button, **💾 Save…**. It opens a menu — *As a
+page draft*, *As a glossary term*, back — for a linked **editor** only: anyone
+else is refused on the press and the menu never opens.
+
+- **What is saved.** The conversation the answer belongs to, up to that
+  answer, and **only the turns the bot posted in that chat** — read from
+  `chat_answers`, not from the whole assistant thread, because the asker may
+  have carried the thread on privately in `/assistant`. At most the newest 20
+  turns. Citations become `[title](/documents/:id)` links, which the drafter
+  keeps. The transcript reaches the model inside `wrapUntrusted(…, 'chat')`.
+  Telegram's privacy mode means these are the only messages the bot ever saw,
+  so this is also all it could save.
+- **As whom.** The presser, through `principalFor`, with `editor` checked at
+  the press and again after the draft is in and before anything is written.
+- **Where it runs.** API-side, on the press's continuation — the answer
+  shape, not the worker: the draft is one completion and publishing needs the
+  API-only `MergeRequestsService`. `ChatModule` stays a single module.
+- **Page.** The `drafter` agent (operation `chat-capture`) writes `# Title` +
+  body. Then, in **one transaction**: `createDocument` with no content (main
+  has no head, so nothing is published), `openDraftMergeRequest` onto
+  `chat/<id8>-<ts>` with frontmatter `source: chat:<kind>` and
+  `generatedBy: drafter`, attributed to the presser, and the claim's guarded
+  `pending → published`. A merge request into a `main` with a null head
+  fast-forwards — `merge()` parents the merge revision on the source head only
+  (verified end to end on #71). A page goes into the group's project, or in a
+  DM the workspace's first project.
+- **Term.** `GlossaryService.suggest` over the transcript — the glossary
+  page's own pass, grounding included — and the most-used suggestion the
+  project does not define yet, created `source: 'ai'`, `enabled: false`: a
+  proposal stays switched off (and therefore unlinked) until an editor turns it
+  on in **Settings → Glossary**. Proposed and retired terms look the same
+  there; a separate state would touch feature 14 and was not worth it yet.
+- **The claim** is `chat_captures`, unique per (answer, kind): a second press
+  while drafting is told it is in progress, a press after success links what
+  was saved, and a press after a failure claims the same row again with a
+  guarded `failed → pending` and retries.
+- **The reply.** A "Drafting…" message replying to the answer, edited into
+  the result with a button to the merge request or the glossary.
+- **Crash recovery.** `ChatAnswerSweeper` also fails captures with no progress
+  for `CHAT_CAPTURE_TIMEOUT_SECONDS` (measured from `updatedAt`, since a retry
+  reuses the row) and edits "Drafting…" to say so. Because the publish commits
+  with the guarded `published` update, a sweeper that got there first rolls
+  the page and merge request back.
+
 ## The adapter seam
 
 `chat/adapters/chat-adapter.types.ts` is the whole contract.
@@ -270,8 +316,8 @@ The web pages are `/settings/chat` (`ChatSettingsPage.vue` +
 
 - **Privacy mode** (the default) shows a bot only the messages that mention
   it, reply to it, or are commands. That is exactly what it answers, and none
-  of what it would otherwise read. Phase 2's "save thread" will be limited by
-  this.
+  of what it would otherwise read. It is also why Save works from the bot's
+  own Q&A turns only.
 - **Threads.** Groups have no threads, only reply chains, hence
   `replyToBotMessageId`.
 - **Webhook only.** `allowed_updates: ['message', 'callback_query']`,
@@ -291,11 +337,12 @@ The web pages are `/settings/chat` (`ChatSettingsPage.vue` +
 | `CHAT_MAX_SOURCES`                    | `5`                        | source links per answer (0–10)                                      |
 | `CHAT_LINK_CODE_TTL_MINUTES`          | `15`                       | link code lifetime                                                  |
 | `CHAT_RATE_LIMIT_PER_USER_PER_MINUTE` | `10`                       | questions per person per minute, across bots                        |
+| `CHAT_CAPTURE_TIMEOUT_SECONDS`        | `300`                      | a save with no progress this long is failed                         |
 | `TELEGRAM_API_BASE_URL`               | `https://api.telegram.org` | Bot API host (self-hosted server or proxy)                          |
 
 ## Data
 
-All six tables are new. None of them has an FK on `workspace_id`, `user_id` or
+All seven tables are new. None of them has an FK on `workspace_id`, `user_id` or
 `created_by`, per house policy. The per-bot rows cascade with
 `chat_integrations`.
 
@@ -307,12 +354,26 @@ All six tables are new. None of them has an FK on `workspace_id`, `user_id` or
 | `chat_link_codes`       | hashed one-time codes, with the private chat to confirm in                    |
 | `chat_conversations`    | chat + asker → `assistant_threads` row                                        |
 | `chat_answers`          | the claim: status, placeholder message id, assistant message id, frozen locale |
+| `chat_captures`         | a save: answer + kind (unique), status, requester, "Drafting…" message id, the page / merge request / term it produced |
 
 `chat_answers.assistantMessageId` is what 👍/👎 key on. Votes go into
 `answer_feedback` under the `chat` surface (decided on #71), not into columns
 of their own.
 
 ## Tests
+
+- `test/chat-capture.spec.ts`:
+  - The transcript keeps only the turns shown in the chat, with citations as
+    page links; the draft's title comes from its first heading.
+  - A page is drafted from the wrapped transcript (`chat-capture`), created
+    empty, its body (with `source`/`generatedBy`) on a branch behind a merge
+    request attributed to the requester; a DM uses the first project.
+  - An editor demoted while drafting writes nothing; a sweeper that won
+    rolls the publish back.
+  - A double press saves once, a press after success links it, a press after
+    a failure retries.
+  - A term is the first new suggestion, created `source: 'ai'`,
+    `enabled: false`; none new is said so; the sweeper reaps once.
 
 - `test/chat-turn.spec.ts` (phase 0): Ask mode, tool list, project pin,
   surface.
@@ -343,3 +404,6 @@ of their own.
     swaps in the reasons; a reason updates the same vote and restores the row;
     an unlinked or removed presser, an answer from another chat and feedback
     switched off record nothing and are still acknowledged.
+  - Save opens the menu for an editor only; a choice restores the vote row and
+    starts the capture as the presser in the group's project; a viewer pressing
+    an old menu starts nothing.

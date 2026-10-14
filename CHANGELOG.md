@@ -34,6 +34,13 @@ in the pull request that introduces them — see
   pages cited…). Votes are recorded as the person who pressed, so anyone in a
   group can rate an answer once they have linked their account, and they show
   up in the admin **Feedback** tab as the *chat bot* surface. (#71)
+- An editor can save a chat-bot conversation. **💾 Save…** under an answer
+  turns the questions and answers posted in that chat into a page draft — an
+  empty page plus a merge request, so nothing is published until it is merged
+  — or into a glossary term that stays switched off until an editor turns it
+  on in **Settings → Glossary**. The draft is written as the person who
+  pressed Save, links the pages the answers cited, and lands in the group's
+  project (the workspace's first project from a private chat). (#71)
 
 ### Operations
 
@@ -47,6 +54,10 @@ in the pull request that introduces them — see
   public HTTPS; bot tokens need `SETTINGS_ENCRYPTION_KEY`. (#71)
 - Migration `20261014170000_chat_bots_core` only creates the six `chat_*`
   tables. The previous release ignores them, so a code rollback is safe. (#71)
+- New env var `CHAT_CAPTURE_TIMEOUT_SECONDS` (default 300): a saved chat
+  conversation still drafting after this long is failed and its "Drafting…"
+  message says so. Migration `20261014190000_chat_captures` only creates the
+  `chat_captures` table; a code rollback is safe. (#71)
 
 ## [0.20.0] — 2026-10-14
 

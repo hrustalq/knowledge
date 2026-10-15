@@ -5532,6 +5532,8 @@ export interface components {
              * @description The repository connector a connector-scoped agent (the archaeologist) reads. Required when the workspace has more than one; the only one is used otherwise.
              */
             connectorId?: string;
+            /** @description Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most recent ones. Pages the caller cannot open are skipped. */
+            documentIds?: string[];
         };
         RouteAgentDto: {
             /** Format: uuid */
@@ -5588,6 +5590,32 @@ export interface components {
             scheduleEnabled?: boolean;
             /** @description Minutes between scheduled runs. */
             scheduleMinutes?: number | null;
+            /**
+             * @description interval (every scheduleMinutes), daily or weekly (at scheduleTime). Null reads as interval.
+             * @enum {string|null}
+             */
+            scheduleKind?: "interval" | "daily" | "weekly" | null;
+            /**
+             * @description HH:MM, 24-hour, in scheduleTimezone.
+             * @example 09:00
+             */
+            scheduleTime?: string | null;
+            /**
+             * @description Weekdays a weekly schedule fires on, 0 = Sunday … 6 = Saturday.
+             * @example [
+             *       1,
+             *       2,
+             *       3,
+             *       4,
+             *       5
+             *     ]
+             */
+            scheduleWeekdays?: number[] | null;
+            /**
+             * @description IANA timezone. Null reads as UTC.
+             * @example Europe/Moscow
+             */
+            scheduleTimezone?: string | null;
             /** @description Instruction seeded into every scheduled run. */
             scheduleNote?: string | null;
             /** @description Defaults to true. */

@@ -1052,6 +1052,13 @@ export function isConnectorScopedAgent(key: string): boolean {
 export interface AgentRunInput {
   note?: string;
   connectorId?: string;
+  /**
+   * Restrict a page-reading run (curator, reviewer, glossarist) to these pages
+   * instead of the workspace's most recent ones (#70). Still read under the
+   * run's scope: a page the owner cannot open is dropped, never read. At most
+   * {@link AGENT_RUN_MAX_DOCUMENTS}.
+   */
+  documentIds?: string[];
   pullRequest?: AgentRunPullRequest;
   /**
    * The knowledge issue a sentinel run judges (docs/features/38, phase 3). A
@@ -1079,6 +1086,19 @@ export interface AgentRunInput {
   mergedAt?: string;
   /** The sweeper's claim that it acted on `mergedAt`, once. Never set by anything else. */
   outdatedAt?: string;
+}
+
+/**
+ * The most pages one page-scoped run may name. Each executor still reads no
+ * more than its own per-run cap, so this bounds the input, not the cost.
+ */
+export const AGENT_RUN_MAX_DOCUMENTS = 20;
+
+/** The agents whose executors honour {@link AgentRunInput.documentIds}. */
+export const PAGE_SCOPED_AGENT_KEYS = ['curator', 'reviewer', 'glossarist'] as const;
+
+export function isPageScopedAgent(key: string): boolean {
+  return (PAGE_SCOPED_AGENT_KEYS as readonly string[]).includes(key);
 }
 
 /**
@@ -1274,11 +1294,214 @@ export interface AiAgentSummary {
   overridden: string[];
   /** Background schedule. Off unless an admin turned it on and named an owner. */
   scheduleEnabled: boolean;
+  /** Never null on the wire: a row with no kind stored is an interval schedule. */
+  scheduleKind: AgentScheduleKind;
   scheduleMinutes: number | null;
+  /** `HH:MM`, 24-hour, in `scheduleTimezone`. Daily and weekly schedules only. */
+  scheduleTime: string | null;
+  /** 0 = Sunday … 6 = Saturday. Weekly schedules only. */
+  scheduleWeekdays: number[] | null;
+  /** IANA zone; null reads as UTC. */
+  scheduleTimezone: string | null;
   scheduleNote: string | null;
   scheduleOwner: string | null;
   lastRunAt: string | null;
+  /**
+   * When the sweeper will next start this agent, from {@link nextScheduledRun}.
+   * Null while the schedule is off or incomplete. A time at or before now
+   * means "on the next tick", which is up to five minutes away.
+   */
+  nextRunAt: string | null;
   updatedAt: string | null;
+}
+
+/**
+ * How an agent's background schedule is expressed (#70).
+ *
+ * `interval` is the original shape — every N minutes since the last run.
+ * `daily` and `weekly` fire at a wall-clock time in a timezone; `weekly` on the
+ * named weekdays only, which is also how "weekdays at 09:00" is spelled.
+ *
+ * There are no cron expressions on purpose: the sweeper is a due check inside
+ * a fixed five-minute tick (CLAUDE.md: no cron in this repo), so a schedule
+ * cannot be more precise than that tick, and a syntax that promises minute
+ * precision would lie about it.
+ */
+export const AGENT_SCHEDULE_KINDS = ['interval', 'daily', 'weekly'] as const;
+export type AgentScheduleKind = (typeof AGENT_SCHEDULE_KINDS)[number];
+
+/** `HH:MM`, 00:00–23:59. The DTO, the database CHECK and the predicate agree on it. */
+export const AGENT_SCHEDULE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** The sweeper's tick. A schedule fires on the first tick at or after its slot. */
+export const AGENT_SCHEDULE_TICK_MINUTES = 5;
+
+/** What {@link nextScheduledRun} needs to know about a schedule. */
+export interface AgentScheduleSpec {
+  /** Null reads as `interval`, which is what every row written before #70 is. */
+  kind: AgentScheduleKind | null;
+  minutes: number | null;
+  time: string | null;
+  weekdays: readonly number[] | null;
+  timezone: string | null;
+}
+
+/** What has happened to a schedule: its last run, and its last edit. */
+export interface AgentScheduleState {
+  lastRunAt: Date | null;
+  /**
+   * When the schedule's shape last changed. A daily or weekly schedule counts
+   * slots from the later of this and `lastRunAt`, so moving 09:00 to 08:00 at
+   * ten o'clock does not fire "the missed 08:00 slot" the moment it is saved.
+   * An interval schedule ignores it, which keeps the pre-#70 rows exact.
+   */
+  changedAt: Date | null;
+}
+
+/**
+ * When a schedule next fires — the one predicate the sweeper, the summary's
+ * `nextRunAt` and the editor's preview all read (CLAUDE.md: a guard, a sweeper
+ * and the UI must not disagree about what is runnable).
+ *
+ * A daily or weekly schedule returns the first slot after it last ran (or was
+ * changed). A worker that was down across several slots therefore sees one
+ * slot in the past, fires once, and moves past all of them: a missed slot
+ * fires once, never once per slot missed.
+ *
+ * Null when the schedule cannot fire: an interval with no minutes, a time-of-day
+ * schedule with no time, or a weekly one with no weekdays.
+ */
+export function nextScheduledRun(spec: AgentScheduleSpec, state: AgentScheduleState, now: Date): Date | null {
+  const kind = spec.kind ?? 'interval';
+  if (kind === 'interval') {
+    if (!spec.minutes || spec.minutes <= 0) return null;
+    // Exactly the pre-#70 rule: never run means due now.
+    return state.lastRunAt ? new Date(state.lastRunAt.getTime() + spec.minutes * 60_000) : now;
+  }
+
+  const time = spec.time ? AGENT_SCHEDULE_TIME_PATTERN.exec(spec.time) : null;
+  if (!time) return null;
+  const [hour, minute] = spec.time!.split(':').map(Number);
+  const days = kind === 'weekly' ? new Set(spec.weekdays ?? []) : null;
+  if (days && days.size === 0) return null;
+  const zone = scheduleZone(spec.timezone);
+
+  const anchor = latest(state.lastRunAt, state.changedAt);
+  if (!anchor) {
+    // Never run and never stamped (a row written by hand): the most recent
+    // slot is owed, else the next one.
+    return slotNear(now, zone, hour, minute, days, 'at-or-before') ?? slotNear(now, zone, hour, minute, days, 'after');
+  }
+  return slotNear(anchor, zone, hour, minute, days, 'after');
+}
+
+/** `nextScheduledRun(...) <= now` — the sweeper's question. */
+export function isScheduleDue(spec: AgentScheduleSpec, state: AgentScheduleState, now: Date): boolean {
+  const next = nextScheduledRun(spec, state, now);
+  return next !== null && next.getTime() <= now.getTime();
+}
+
+/** True when `zone` is an IANA name this runtime knows. */
+export function isValidTimezone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * An unknown zone reads as UTC rather than throwing: the DTO refuses one on
+ * write, and a runtime whose zone database lost a name must not stop every
+ * other schedule in the sweep.
+ */
+function scheduleZone(zone: string | null): string {
+  return zone && isValidTimezone(zone) ? zone : 'UTC';
+}
+
+function latest(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a.getTime() >= b.getTime() ? a : b;
+}
+
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** The wall-clock fields of `at` in `zone`. */
+function wallClock(at: Date, zone: string) {
+  let format = zoneFormatters.get(zone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    });
+    zoneFormatters.set(zone, format);
+  }
+  const parts: Record<string, number> = {};
+  for (const part of format.formatToParts(at)) {
+    if (part.type !== 'literal') parts[part.type] = Number(part.value);
+  }
+  return { year: parts.year, month: parts.month, day: parts.day, hour: parts.hour, minute: parts.minute, second: parts.second };
+}
+
+/** `zone`'s offset from UTC at `at`, in milliseconds. */
+function zoneOffset(at: number, zone: string): number {
+  const w = wallClock(new Date(at), zone);
+  return Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second) - Math.floor(at / 1000) * 1000;
+}
+
+/**
+ * The instant that reads `hour:minute` on the calendar day (y, m, d) in `zone`.
+ * Two passes settle a DST boundary. A wall time the spring-forward gap skips
+ * has no instant, and lands on the later candidate (02:30 → 03:30), so that
+ * day's slot still fires once; a repeated fall-back hour takes its first
+ * occurrence.
+ */
+function zonedInstant(y: number, m: number, d: number, hour: number, minute: number, zone: string): Date {
+  const guess = Date.UTC(y, m - 1, d, hour, minute);
+  const first = guess - zoneOffset(guess, zone);
+  const second = guess - zoneOffset(first, zone);
+  const reads = (at: number) => {
+    const w = wallClock(new Date(at), zone);
+    return w.hour === hour && w.minute === minute;
+  };
+  if (reads(second)) return new Date(second);
+  if (reads(first)) return new Date(first);
+  return new Date(Math.max(first, second));
+}
+
+/**
+ * The nearest slot to `ref`: the first one strictly after it, or the last one
+ * at or before it. Scans nine calendar days, which covers a weekly schedule
+ * with a single weekday on either side of a DST change.
+ */
+function slotNear(
+  ref: Date,
+  zone: string,
+  hour: number,
+  minute: number,
+  days: Set<number> | null,
+  direction: 'after' | 'at-or-before',
+): Date | null {
+  const local = wallClock(ref, zone);
+  // Forward from the day before (an offset can put `ref`'s local day one off
+  // the slot's), or backward from the day after.
+  const step = direction === 'after' ? 1 : -1;
+  for (let offset = -step; Math.abs(offset) <= 9; offset += step) {
+    // Day arithmetic on a UTC date carries month and year boundaries for free.
+    const day = new Date(Date.UTC(local.year, local.month - 1, local.day + offset));
+    if (days && !days.has(day.getUTCDay())) continue;
+    const slot = zonedInstant(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), hour, minute, zone);
+    if (direction === 'after' ? slot.getTime() > ref.getTime() : slot.getTime() <= ref.getTime()) return slot;
+  }
+  return null;
 }
 
 // GET /v1/ai/agents?workspaceId=

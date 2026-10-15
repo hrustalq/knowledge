@@ -367,7 +367,11 @@ export class AiController {
     @Body() dto: StartAgentRunDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<AgentRunSummary> {
-    return this.runs.start(dto.workspaceId, key, principal, { note: dto.note, connectorId: dto.connectorId });
+    return this.runs.start(dto.workspaceId, key, principal, {
+      note: dto.note,
+      connectorId: dto.connectorId,
+      documentIds: dto.documentIds,
+    });
   }
 
   /**

@@ -1,14 +1,16 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AGENT_SCHEDULE_TICK_MINUTES, isScheduleDue } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { asLocale } from '../i18n/locale.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentProducer } from './agent.producer.js';
 import { AGENT_MAX_ATTEMPTS } from './agent.constants.js';
 import { RUNNABLE_AGENTS } from './agent.executor.js';
+import { scheduleOf } from './agent-schedule.js';
 
-/** One tick; a schedule's own interval is checked inside it. */
-const SWEEP_INTERVAL_MS = 5 * 60_000;
+/** One tick; a schedule's own interval or slot is checked inside it. */
+const SWEEP_INTERVAL_MS = AGENT_SCHEDULE_TICK_MINUTES * 60_000;
 /** Schedules started per sweep. The next sweep continues — the StaleSweeper rule. */
 const BATCH = 10;
 /** A run still 'running' after this is presumed dead and re-queued. */
@@ -88,12 +90,17 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
     const candidates = await this.prisma.aiAgent.findMany({
       where: {
         scheduleEnabled: true,
-        scheduleMinutes: { not: null },
+        // An interval needs minutes, a daily or weekly schedule a time (#70).
+        // The predicate below has the final word on either.
+        OR: [{ scheduleMinutes: { not: null } }, { scheduleTime: { not: null } }],
         // No owner means nobody to run as. Skipping is the whole point: this
         // feature will not invent an identity to keep a schedule alive.
         scheduleOwner: { not: null },
         enabled: true,
       },
+      // Longest-waiting first, so a workspace with many not-yet-due schedules
+      // cannot keep a due one out of the window.
+      orderBy: { lastRunAt: { sort: 'asc', nulls: 'first' } },
       take: BATCH * 3,
     });
 
@@ -105,9 +112,10 @@ export class AgentScheduleSweeper implements OnModuleInit, OnModuleDestroy {
       // point somebody asks for it; a schedule must be refused for the same
       // reason, rather than turning into a recurring failed job.
       if (!RUNNABLE_AGENTS.has(agent.key)) continue;
-      const due =
-        !agent.lastRunAt || agent.lastRunAt.getTime() + (agent.scheduleMinutes ?? 0) * 60_000 <= Date.now();
-      if (!due) continue;
+      // The same predicate the summary's "next run" reads (#70), so the
+      // editor never promises a run the sweeper would not start.
+      const { spec, state } = scheduleOf(agent);
+      if (!isScheduleDue(spec, state, new Date())) continue;
 
       // Back-pressure: never a second run while one is in flight.
       const inFlight = await this.prisma.agentRun.count({

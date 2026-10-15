@@ -133,6 +133,9 @@ export class SiteBuildService {
         workspaceId,
         projectId,
         archivedAt: null,
+        // A site is public: a restricted page never enters a snapshot, and the
+        // subtree under it inherits the restriction and stays out with it (#76).
+        restrictedBy: { isEmpty: true },
         ...(pathPrefix ? { path: { startsWith: pathPrefix } } : {}),
       },
       select: { id: true, parentId: true, title: true, position: true, path: true },

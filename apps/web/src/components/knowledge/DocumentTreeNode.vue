@@ -10,7 +10,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Archive, ChevronRight, FileText, Loader2 } from 'lucide-vue-next'
+import { Archive, ChevronRight, FileText, Loader2, Lock } from 'lucide-vue-next'
 import { Collapse } from '@/components/ui/collapse'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { Badge } from '@/components/ui/badge'
@@ -129,6 +129,17 @@ const dnd = useTreeDndRow({
       >
         {{ node.title }}
       </RouterLink>
+      <!-- Restricted (#76): this page, an ancestor or the project is not open
+           to the whole workspace. -->
+      <span
+        v-if="node.restricted"
+        class="grid shrink-0 place-items-center text-muted-foreground/70"
+        role="img"
+        :aria-label="t('access.lockedLabel')"
+        :title="t('access.lockedLabel')"
+      >
+        <Lock class="size-3.5" aria-hidden="true" />
+      </span>
       <span
         v-if="archived"
         class="grid shrink-0 place-items-center text-muted-foreground/70"
@@ -160,6 +171,7 @@ const dnd = useTreeDndRow({
         :document-id="node.documentId"
         :title="node.title"
         :disabled="dnd.isLocked.value"
+        :restricted="node.restricted"
         class="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
       />
     </div>

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { IngestionAdminModule } from '../ingestion/ingestion-admin.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
@@ -32,6 +33,8 @@ import { McpService } from './mcp.service.js';
   imports: [
     PrismaModule,
     AuthCoreModule,
+    // Page-level checks behind guard.doc/mr/project and scoped tree/graph tools (#76).
+    PermissionsCoreModule,
     GraphModule,
     IngestionAdminModule,
     StorageModule,

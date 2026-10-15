@@ -30,6 +30,8 @@ import type { AssistantThread } from '@prisma/client';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { canSee } from '../permissions/access-scope.js';
 import { SearchService } from '../search/search.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import type { Principal } from '../auth/principal.js';
@@ -286,6 +288,7 @@ export class AssistantService {
     private readonly feedback: AnswerFeedbackService,
     private readonly templates: TemplatesService,
     private readonly env: ConfigService,
+    private readonly permissions: PermissionService,
   ) {}
 
   /**
@@ -404,12 +407,14 @@ export class AssistantService {
   async ask(dto: AssistantAskDto, principal: Principal): Promise<AssistantAskResponse> {
     // AclGuard checked dto.workspaceId — make sure the page actually belongs to it
     // (before any other branch, so disabled mode behaves identically).
+    // A page the caller may not open is as absent as one in another workspace (#76).
     const document = await this.prisma.document.findUnique({ where: { id: dto.documentId } });
-    if (!document || document.workspaceId !== dto.workspaceId) {
+    const scope = await this.permissions.scopeFor(principal, dto.workspaceId);
+    if (!document || document.workspaceId !== dto.workspaceId || !canSee(scope, document)) {
       throw new NotFoundException(t('error.document.notFoundInWorkspace', { id: dto.documentId }));
     }
     const call = await this.openCall(dto.workspaceId, principal, 'ask');
-    const askTrail = await this.documents.breadcrumbsFor(dto.workspaceId, [document.id]);
+    const askTrail = await this.documents.breadcrumbsFor(scope, [document.id]);
     const groundingTrail = askTrail.get(document.id) ? ` — in ${askTrail.get(document.id)}` : '';
     if (!call) {
       return { enabled: false, answer: t('assistant.disabled'), sources: [] };
@@ -824,7 +829,7 @@ export class AssistantService {
       actor: principal.userId,
     });
 
-    const turn = await this.prepareTurn(thread, dto, userMessage.id, agent, mode);
+    const turn = await this.prepareTurn(thread, dto, userMessage.id, agent, mode, principal);
     return { enabled: true, userMessage, thread, turn, call };
   }
 
@@ -1119,6 +1124,7 @@ export class AssistantService {
     userMessageId: string,
     agent: ResolvedAgent,
     mode: AssistantChatMode,
+    principal: Principal,
   ): Promise<PreparedTurn> {
     const threadId = thread.id;
     const attachmentsBlock = (dto.attachments ?? [])
@@ -1138,9 +1144,11 @@ export class AssistantService {
     let turnTrail = '';
     if (groundingDocumentId) {
       const doc = await this.prisma.document.findUnique({ where: { id: groundingDocumentId } });
-      if (doc && doc.workspaceId === thread.workspaceId) {
+      // Grounding is reading: a page the caller may not open grounds nothing (#76).
+      const scope = await this.permissions.scopeFor(principal, thread.workspaceId);
+      if (doc && doc.workspaceId === thread.workspaceId && canSee(scope, doc)) {
         groundingDoc = doc;
-        const trail = await this.documents.breadcrumbsFor(thread.workspaceId, [doc.id]);
+        const trail = await this.documents.breadcrumbsFor(scope, [doc.id]);
         turnTrail = trail.get(doc.id) ? ` — in ${trail.get(doc.id)}` : '';
         try {
           groundingMarkdown = (await this.documents.getContent(groundingDocumentId)).markdown;

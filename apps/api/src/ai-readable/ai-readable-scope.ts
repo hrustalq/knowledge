@@ -34,9 +34,23 @@ export function isReadableRevisionStatus(status: string): boolean {
   return (READABLE_REVISION_STATUSES as readonly string[]).includes(status);
 }
 
+/**
+ * Restrictions (#76): the workspace and project listings carry only pages that
+ * are open to the whole workspace — `restricted_by` empty, which also rules out
+ * every page of a restricted project. They are one document read by many
+ * agents and cached by ETag, so they cannot be cut per reader. A single page
+ * (`documentId`) is different: AclGuard has already checked that page for
+ * this caller, so a restricted page they may open still reads as markdown.
+ */
 export function readableDocumentsWhere(scope: AiReadableScope): Prisma.DocumentWhereInput {
   const where: Prisma.DocumentWhereInput = { workspaceId: scope.workspaceId };
   if (scope.projectId) where.projectId = scope.projectId;
   if (scope.documentId) where.id = scope.documentId;
+  else where.restrictedBy = { isEmpty: true };
   return where;
+}
+
+/** The projects a listing names: a restricted one is not named at all (#76). */
+export function listedProjectsWhere(workspaceId: string): Prisma.ProjectWhereInput {
+  return { workspaceId, restricted: false };
 }

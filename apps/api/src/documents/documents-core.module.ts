@@ -9,6 +9,7 @@ import { NotificationsCoreModule } from '../notifications/notifications-core.mod
 import { FeedbackCoreModule } from '../feedback/feedback-core.module.js';
 import { VerificationPolicyModule } from '../verification/verification-policy.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { DocumentsService } from './documents.service.js';
 
 /**
@@ -43,6 +44,8 @@ import { DocumentsService } from './documents.service.js';
     VerificationPolicyModule,
     // Creating a page from a template (issue #69). Core, so still worker-loadable.
     TemplatesCoreModule,
+    // `restricted_by` is rewritten in the same transaction as a move (#76). A leaf.
+    PermissionsCoreModule,
   ],
   providers: [DocumentsService],
   exports: [DocumentsService],

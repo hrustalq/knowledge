@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import {
   activityKindFor,
   HEALTH_FILTERS,
@@ -22,6 +22,18 @@ import { healthFilterSql, KnowledgeHealthService } from '../src/verification/kno
  */
 
 const WS = '11111111-1111-4111-8111-111111111111';
+/** A member who sees every page: the visibility predicate itself is pinned in permissions.spec.ts. */
+const SCOPE = {
+  workspaceId: WS,
+  userId: 'u-1',
+  role: 'editor' as const,
+  bypass: false,
+  guest: false,
+  readOnly: false,
+  groupIds: new Set<string>(),
+  denied: new Set<string>(),
+  granted: new Set<string>(),
+};
 const NOW = new Date('2026-10-11T12:00:00Z');
 const day = 86_400_000;
 const settings = { reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking: true };
@@ -294,30 +306,53 @@ describe('KnowledgeHealthService.bulk', () => {
     };
     const documents = { setOwner: vi.fn(async () => ({})), breadcrumbsFor: vi.fn(async () => new Map()) };
     const policy = { effective: vi.fn(async () => settings), override: vi.fn(async () => ({})), defaults: () => settings };
-    const svc = new KnowledgeHealthService(prisma as never, policy as never, verification as never, documents as never);
+    // Page levels are pinned in permissions.spec.ts; here every page is editable except `doc-shut`.
+    const permissions = {
+      requireLevel: vi.fn(async (_scope: unknown, resource: { id: string }) => {
+        if (resource.id === 'doc-shut') throw new ForbiddenException('editRequired');
+        return 'edit';
+      }),
+    };
+    const svc = new KnowledgeHealthService(
+      prisma as never,
+      policy as never,
+      verification as never,
+      documents as never,
+      permissions as never,
+    );
     return { svc, verification, documents };
   }
 
   it('refuses the whole batch when one id is foreign, before any write', async () => {
     const { svc, verification } = health(['doc-a']);
     await expect(
-      svc.bulk(WS, { documentIds: ['doc-a', 'doc-foreign'], action: 'verify' }, 'u-1'),
+      svc.bulk(SCOPE, { documentIds: ['doc-a', 'doc-foreign'], action: 'verify' }, 'u-1'),
     ).rejects.toMatchObject({ response: expect.objectContaining({ statusCode: 403, foreign: ['doc-foreign'] }) });
     expect(verification.verify).not.toHaveBeenCalled();
   });
 
   it('reports per id, filing a refused page by its reason rather than failing the batch', async () => {
     const { svc } = health(['doc-a', 'doc-archived']);
-    const res = await svc.bulk(WS, { documentIds: ['doc-a', 'doc-archived', 'doc-a'], action: 'verify', intervalDays: 30 }, 'u-1');
+    const res = await svc.bulk(SCOPE, { documentIds: ['doc-a', 'doc-archived', 'doc-a'], action: 'verify', intervalDays: 30 }, 'u-1');
     expect(res.results).toEqual([
       { documentId: 'doc-a', ok: true },
       { documentId: 'doc-archived', ok: false, error: 'archived' },
     ]);
   });
 
+  it('files a page the caller may not edit as forbidden, and touches it not (#76)', async () => {
+    const { svc, verification } = health(['doc-a', 'doc-shut']);
+    const res = await svc.bulk(SCOPE, { documentIds: ['doc-a', 'doc-shut'], action: 'verify' }, 'u-1');
+    expect(res.results).toEqual([
+      { documentId: 'doc-a', ok: true },
+      { documentId: 'doc-shut', ok: false, error: 'forbidden' },
+    ]);
+    expect(verification.verify).toHaveBeenCalledTimes(1);
+  });
+
   it('routes reassign through DocumentsService.setOwner so membership is checked in one place', async () => {
     const { svc, documents } = health(['doc-a']);
-    await svc.bulk(WS, { documentIds: ['doc-a'], action: 'reassign', ownerId: 'u-2' }, 'u-1');
+    await svc.bulk(SCOPE, { documentIds: ['doc-a'], action: 'reassign', ownerId: 'u-2' }, 'u-1');
     expect(documents.setOwner).toHaveBeenCalledWith('doc-a', 'u-2', 'u-1');
   });
 });

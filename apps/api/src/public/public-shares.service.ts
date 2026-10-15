@@ -19,7 +19,10 @@ const TOKEN_RE = /^kp_[A-Za-z0-9_-]{43}$/;
 /** Most pages a shared subtree lists; deeper levels are cut first (the tree is read breadth-first). */
 export const SHARE_TREE_MAX = 500;
 
-type ScopeDocument = Pick<Document, 'id' | 'workspaceId' | 'parentId' | 'title' | 'path' | 'position' | 'archivedAt'>;
+type ScopeDocument = Pick<
+  Document,
+  'id' | 'workspaceId' | 'parentId' | 'title' | 'path' | 'position' | 'archivedAt' | 'restrictedBy'
+>;
 
 interface LiveShare {
   share: ShareLink;
@@ -34,6 +37,7 @@ const SCOPE_SELECT = {
   path: true,
   position: true,
   archivedAt: true,
+  restrictedBy: true,
 } as const;
 
 /**
@@ -143,7 +147,9 @@ export class PublicSharesService {
     const settings = await this.settings.effective(share.workspaceId);
     if (!settings.allowShareLinks) throw this.notFound();
     const root = await this.prisma.document.findUnique({ where: { id: share.documentId }, select: SCOPE_SELECT });
-    if (!root || root.archivedAt) throw this.notFound();
+    // Restricted since the link was made: the link stops resolving, on the very
+    // next request (#76). It is a 404 like any dead link — nothing says why.
+    if (!root || root.archivedAt || root.restrictedBy.length > 0) throw this.notFound();
     return { share, root };
   }
 
@@ -166,6 +172,7 @@ export class PublicSharesService {
     if (
       !doc ||
       doc.archivedAt ||
+      doc.restrictedBy.length > 0 ||
       doc.workspaceId !== live.root.workspaceId ||
       // Delimited at both ends (CLAUDE.md), so `/a/` never prefix-matches `/ab/`.
       !doc.path.startsWith(live.root.path)
@@ -183,6 +190,9 @@ export class PublicSharesService {
         workspaceId: live.root.workspaceId,
         path: { startsWith: live.root.path },
         archivedAt: null,
+        // A restricted page leaves the shared tree, and everything under it
+        // with it: its descendants inherit the restriction (#76).
+        restrictedBy: { isEmpty: true },
         id: { not: live.root.id },
       },
       select: { id: true, parentId: true, title: true, position: true },

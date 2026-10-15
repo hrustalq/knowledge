@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ExportQueueModule } from './export-queue.module.js';
@@ -12,7 +13,8 @@ import { ExportService } from './export.service.js';
  * exported for the worker, which resolves the scope again when a job runs.
  */
 @Module({
-  imports: [PrismaModule, AuthCoreModule, StorageModule, ExportQueueModule],
+  // PermissionsCoreModule: an export holds what its requester may open (#76).
+  imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, StorageModule, ExportQueueModule],
   providers: [ExportService, ExportScopeService],
   exports: [ExportService, ExportScopeService],
 })

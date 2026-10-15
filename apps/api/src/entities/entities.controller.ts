@@ -17,6 +17,7 @@ import type { Principal } from '../auth/principal.js';
 import { EntityAliasService } from '../graph/entity-alias.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { EntitiesService } from './entities.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { CreateEntityAliasDto, ImpactAnalysisDto } from './dto/entities.dto.js';
 import { t } from '../i18n/t.js';
 
@@ -27,6 +28,7 @@ export class EntitiesController {
     private readonly entities: EntitiesService,
     private readonly aliases: EntityAliasService,
     private readonly graph: GraphService,
+    private readonly permissions: PermissionService,
   ) {}
 
   @Get()
@@ -35,14 +37,15 @@ export class EntitiesController {
   @ApiQuery({ name: 'type', required: false, description: 'Entity type, e.g. "tag"' })
   @ApiQuery({ name: 'q', required: false, description: 'Case-insensitive substring of the name' })
   @ApiQuery({ name: 'limit', required: false, description: 'Max entities to return (1-200)' })
-  list(
+  async list(
+    @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('type') type?: string,
     @Query('q') q?: string,
     @Query('limit') limit?: string,
   ) {
     const n = limit ? Number(limit) : Number.NaN;
-    return this.entities.listEntities(workspaceId, {
+    return this.entities.listEntities(await this.permissions.scopeFor(principal, workspaceId), {
       type,
       q,
       limit: Number.isFinite(n) ? Math.min(Math.max(n, 1), 200) : undefined,
@@ -103,13 +106,14 @@ export class EntitiesController {
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Shortest relation path between two entities (knowledge.trace_relation)' })
   @ApiQuery({ name: 'maxDepth', required: false })
-  trace(
+  async trace(
+    @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('maxDepth') maxDepth?: string,
   ) {
-    return this.entities.trace(workspaceId, from, to, maxDepth ? Number(maxDepth) : undefined);
+    return this.entities.trace(await this.permissions.scopeFor(principal, workspaceId), from, to, maxDepth ? Number(maxDepth) : undefined);
   }
 
   @Get(':key/neighbors')
@@ -117,14 +121,15 @@ export class EntitiesController {
   @ApiOperation({ summary: 'Entity neighborhood: edges + entities within N hops (knowledge.find_relations)' })
   @ApiQuery({ name: 'depth', required: false })
   @ApiQuery({ name: 'types', required: false, description: 'Comma-separated relation types' })
-  neighbors(
+  async neighbors(
+    @CurrentPrincipal() principal: Principal,
     @Param('key') key: string,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('depth') depth?: string,
     @Query('types') types?: string,
   ) {
     return this.entities.neighbors(
-      workspaceId,
+      await this.permissions.scopeFor(principal, workspaceId),
       key,
       depth ? Number(depth) : undefined,
       types ? types.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
@@ -135,7 +140,7 @@ export class EntitiesController {
   @HttpCode(200)
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Transitive impact of changing an entity (knowledge.impact_analysis)' })
-  impact(@Param('key') key: string, @Body() dto: ImpactAnalysisDto) {
-    return this.entities.impactAnalysis(dto.workspaceId, key, dto.direction, dto.maxDepth);
+  async impact(@Param('key') key: string, @Body() dto: ImpactAnalysisDto, @CurrentPrincipal() principal: Principal) {
+    return this.entities.impactAnalysis(await this.permissions.scopeFor(principal, dto.workspaceId), key, dto.direction, dto.maxDepth);
   }
 }

@@ -52,3 +52,28 @@ function messageOrFallback(error: unknown, t: Translate): string {
   const message = error instanceof Error ? error.message.trim() : ''
   return message.length > 0 ? message : t('common.unknownError')
 }
+
+/** The envelope's `details` from either HTTP stack, or undefined. */
+export function errorDetails(error: unknown): Record<string, unknown> | undefined {
+  if (error instanceof ApiRequestError) return error.details
+  if (error instanceof ApiError) return error.details
+  return undefined
+}
+
+/**
+ * `details.reason` — the stable discriminator a 409 carries when one status
+ * covers several refusals (`access.selfLockout`, `share.restricted`, #76).
+ */
+export function errorReason(error: unknown): string | undefined {
+  const reason = errorDetails(error)?.reason
+  return typeof reason === 'string' ? reason : undefined
+}
+
+/**
+ * A member opened a restricted page they were not granted (#76): the API
+ * answers 403 with `details.canRequestAccess`, and never the page's title.
+ */
+export function isRestrictedRefusal(error: unknown): boolean {
+  const status = error instanceof ApiRequestError || error instanceof ApiError ? error.status : 0
+  return status === 403 && errorDetails(error)?.canRequestAccess === true
+}

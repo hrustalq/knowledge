@@ -6,6 +6,8 @@ import type {
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from './projects.service.js';
+import type { Prisma } from '@prisma/client';
+import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 
 /** Enough people to be a roster, not a directory. The rail links out for the rest. */
 const CONTRIBUTOR_LIMIT = 12;
@@ -35,12 +37,18 @@ export class ProjectOverviewService {
     private readonly projects: ProjectsService,
   ) {}
 
-  async get(projectId: string): Promise<ProjectOverviewResponse> {
-    const project = await this.projects.get(projectId);
+  /**
+   * Every number and name here is over pages `scope` may open (#76): a
+   * contributor known only for a restricted page, or its title in "recent",
+   * would describe what the page restriction hides.
+   */
+  async get(projectId: string, scope: AccessScope): Promise<ProjectOverviewResponse> {
+    const project = await this.projects.get(projectId, scope);
+    const visible = visibilityWhere(scope);
     const [contributors, counts, recentPages] = await Promise.all([
-      this.contributorsFor(projectId),
-      this.countsFor(project),
-      this.recentPagesFor(projectId),
+      this.contributorsFor(projectId, visible),
+      this.countsFor(project, visible),
+      this.recentPagesFor(projectId, visible),
     ]);
     return { project, contributors, counts, recentPages };
   }
@@ -59,9 +67,9 @@ export class ProjectOverviewService {
    * Ids only: the client already has the member roster cached for names and
    * faces, so re-sending them here would be a second copy that can disagree.
    */
-  private async contributorsFor(projectId: string): Promise<ProjectContributor[]> {
+  private async contributorsFor(projectId: string, visible: Prisma.DocumentWhereInput): Promise<ProjectContributor[]> {
     const revisions = await this.prisma.documentRevision.findMany({
-      where: { document: { projectId } },
+      where: { document: { projectId, AND: [visible] } },
       select: { authorId: true, documentId: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
       take: REVISION_SCAN,
@@ -102,13 +110,16 @@ export class ProjectOverviewService {
    * and fetching the contents of six widgets to render six numbers is what a
    * preview query exists to avoid (feature 15).
    */
-  private async countsFor(project: ProjectSummary): Promise<ProjectOverviewResponse['counts']> {
+  private async countsFor(
+    project: ProjectSummary,
+    visible: Prisma.DocumentWhereInput,
+  ): Promise<ProjectOverviewResponse['counts']> {
     const [glossaryTerms, connectors, workflows, openMergeRequests] = await Promise.all([
       this.prisma.glossaryTerm.count({ where: { projectId: project.projectId } }),
       this.prisma.connector.count({ where: { projectId: project.projectId } }),
       this.prisma.workflowDefinition.count({ where: { workspaceId: project.workspaceId } }),
       this.prisma.mergeRequest.count({
-        where: { status: 'open', document: { projectId: project.projectId } },
+        where: { status: 'open', document: { projectId: project.projectId, AND: [visible] } },
       }),
     ]);
     return {
@@ -123,11 +134,12 @@ export class ProjectOverviewService {
 
   private async recentPagesFor(
     projectId: string,
+    visible: Prisma.DocumentWhereInput,
   ): Promise<ProjectOverviewResponse['recentPages']> {
     // "Updated" means the newest revision, not documents.created_at — a page
     // written a year ago and revised yesterday is the recent one.
     const revisions = await this.prisma.documentRevision.findMany({
-      where: { document: { projectId } },
+      where: { document: { projectId, AND: [visible] } },
       select: { documentId: true, createdAt: true, document: { select: { title: true } } },
       orderBy: { createdAt: 'desc' },
       take: REVISION_SCAN,

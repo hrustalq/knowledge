@@ -11,7 +11,7 @@
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Download, FilePlus2, LayoutTemplate, MoreHorizontal, MoveRight } from 'lucide-vue-next'
+import { Download, FilePlus2, LayoutTemplate, Lock, LockOpen, MoreHorizontal, MoveRight } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { RouterLink } from 'vue-router'
 import {
@@ -21,7 +21,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useDocumentsStore } from '@/stores/documents'
 import { useTemplatesStore } from '@/stores/templates'
+import PageAccessDialog from '@/components/access/PageAccessDialog.vue'
 import MoveToDialog from './MoveToDialog.vue'
 import ExportDialog from './ExportDialog.vue'
 
@@ -31,12 +33,20 @@ import ExportDialog from './ExportDialog.vue'
  * belongs on the trigger anyway: that is the thing that appears and disappears.
  */
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{ documentId: string; title: string; disabled?: boolean }>()
+const props = defineProps<{
+  documentId: string
+  title: string
+  disabled?: boolean
+  /** The row draws a lock (#76); the menu's Access item matches it. */
+  restricted?: boolean
+}>()
 
 const { t } = useI18n()
 const dialogOpen = ref(false)
 const exportOpen = ref(false)
+const accessOpen = ref(false)
 const templates = useTemplatesStore()
+const documents = useDocumentsStore()
 </script>
 
 <template>
@@ -77,6 +87,12 @@ const templates = useTemplatesStore()
         <Download class="size-3.5" />
         {{ t('export.action') }}
       </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem @select="accessOpen = true">
+        <Lock v-if="restricted" class="size-3.5" />
+        <LockOpen v-else class="size-3.5" />
+        {{ t('access.manageAccess') }}
+      </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
 
@@ -87,4 +103,12 @@ const templates = useTemplatesStore()
     @failed="(message: string) => toast.error(message)"
   />
   <ExportDialog v-model:open="exportOpen" :target="{ kind: 'document', documentId, title }" subtree />
+  <!-- A saved restriction redraws the locks on this branch and every one below it. -->
+  <PageAccessDialog
+    v-model:open="accessOpen"
+    resource-type="document"
+    :resource-id="documentId"
+    :title="title"
+    @saved="documents.invalidate()"
+  />
 </template>

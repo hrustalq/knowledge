@@ -28,6 +28,8 @@ import {
   UpdateProjectDto,
 } from './projects.dto.js';
 import { ProjectsService } from './projects.service.js';
+import { AccessService } from '../auth/access.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { ProjectOverviewService } from './project-overview.service.js';
 import { ProjectCascadeService } from './project-cascade.service.js';
 
@@ -43,13 +45,20 @@ export class ProjectsController {
     private readonly projects: ProjectsService,
     private readonly overviewService: ProjectOverviewService,
     private readonly cascadeService: ProjectCascadeService,
+    private readonly permissions: PermissionService,
+    private readonly access: AccessService,
   ) {}
 
+  private workspaceOf(projectId: string): Promise<string> {
+    return this.access.workspaceOfProject(projectId);
+  }
+
   @Get()
-  @Access('viewer', 'query')
+  // Guests too: the roster is filtered to projects they reach (#76).
+  @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: 'List projects in a workspace (searchable; cursor-paginated when limit is given)' })
-  list(@Query() query: ListProjectsQueryDto): Promise<ListProjectsResponse> {
-    return this.projects.list(query);
+  async list(@Query() query: ListProjectsQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListProjectsResponse> {
+    return this.projects.list(query, await this.permissions.scopeFor(principal, query.workspaceId));
   }
 
   @Post()
@@ -65,8 +74,8 @@ export class ProjectsController {
   @Get(':id')
   @Access('viewer', 'project')
   @ApiOperation({ summary: 'Project detail' })
-  get(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectSummary> {
-    return this.projects.get(id);
+  async get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectSummary> {
+    return this.projects.get(id, await this.permissions.scopeFor(principal, await this.workspaceOf(id)));
   }
 
   /**
@@ -79,8 +88,8 @@ export class ProjectsController {
   @Get(':id/overview')
   @Access('viewer', 'project')
   @ApiOperation({ summary: 'Project overview: counts, contributors, recent pages' })
-  overview(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectOverviewResponse> {
-    return this.overviewService.get(id);
+  async overview(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal): Promise<ProjectOverviewResponse> {
+    return this.overviewService.get(id, await this.permissions.scopeFor(principal, await this.workspaceOf(id)));
   }
 
   @Patch(':id')

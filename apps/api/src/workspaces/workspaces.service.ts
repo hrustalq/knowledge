@@ -197,12 +197,15 @@ export class WorkspacesService {
   }
 
   /**
-   * Leaving the workspace means leaving its groups (#76). Kept, the rows would
-   * silently hand back every grant those groups hold the day the person is
-   * re-added, which is a grant nobody made.
+   * Leaving the workspace means leaving its groups and losing its page grants
+   * (#76). Kept, the rows would silently hand back everything those groups and
+   * grants held the day the person is re-added — access nobody granted.
    */
   private async dropGroupMemberships(workspaceId: string, userId: string): Promise<void> {
-    await this.prisma.userGroupMember.deleteMany({ where: { userId, group: { workspaceId } } });
+    await this.prisma.$transaction([
+      this.prisma.userGroupMember.deleteMany({ where: { userId, group: { workspaceId } } }),
+      this.prisma.accessGrant.deleteMany({ where: { workspaceId, subjectType: 'user', subjectId: userId } }),
+    ]);
   }
 
   private async requireMember(workspaceId: string, userId: string) {

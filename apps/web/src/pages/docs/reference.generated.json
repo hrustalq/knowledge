@@ -2,6 +2,66 @@
   "endpoints": [
     {
       "method": "GET",
+      "path": "/v1/documents/{id}/access",
+      "tag": "access",
+      "summary": "The page's restriction, the restrictions it inherits and the caller's level; grants only for a manager",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/documents/{id}/access",
+      "tag": "access",
+      "summary": "Set the page's restriction and replace its grants (needs manage; 409 when it would lock the caller out)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/access/effective",
+      "tag": "access",
+      "summary": "Who can open this page and at what level (needs manage on it)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/access",
+      "tag": "access",
+      "summary": "The project's restriction and the caller's level; grants only for a manager",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/projects/{id}/access",
+      "tag": "access",
+      "summary": "Set the project's restriction and replace its grants (needs manage on it)",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/access/effective",
+      "tag": "access",
+      "summary": "Who can open this project and at what level (needs manage on it)",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/activity",
       "tag": "activity",
       "summary": "Workspace activity feed, newest first (docs/features/10)",

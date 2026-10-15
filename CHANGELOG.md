@@ -26,9 +26,9 @@ in the pull request that introduces them — see
   routes are `/v1/groups` and `/v1/groups/:id/members`. (#76)
 - A **guest** workspace role, below viewer. A guest can open only pages and
   projects shared with them or one of their groups, and sees just those in the
-  page tree, the page list and the project list. Every other page answers 404.
-  Other workspace-level routes still refuse a guest, including search, the
-  activity feed, the member roster and settings. A guest gets no notifications
+  page tree, the page list, the project list and search results. Every other
+  page answers 404. Other workspace-level routes still refuse a guest,
+  including the activity feed, the member roster and settings. A guest gets no notifications
   and cannot be made a reviewer, a page owner or a member of a members-only
   site. MCP `knowledge_whoami` reports the role. (#76)
 - **Page and project restrictions.** Anyone who can edit a page can restrict it
@@ -50,9 +50,17 @@ in the pull request that introduces them — see
   who may not open it. MCP's page, merge-request and project tools and its
   tree, graph and project listings apply the same rules. Routes:
   `GET|PUT /v1/documents/:id/access`, `GET /v1/documents/:id/access/effective`,
-  and the same under `/v1/projects/:id`. Search, the assistant's search and
-  read tools, notifications, the activity feed and live events are not
-  filtered by restrictions yet; that follows in the next phases. (#76)
+  and the same under `/v1/projects/:id`. (#76)
+- **Search respects page restrictions.** `POST /v1/search`, the assistant's
+  `search_knowledge` tool, **Related pages** in the editor and MCP
+  `knowledge_search` return only pages the caller can open, in semantic,
+  keyword and hybrid mode. Graph expansion neither walks through a hidden page
+  nor lists an entity that only hidden pages mention, and the same holds for
+  the graph view and entity lists. A change to a restriction applies to the
+  next search. A search still fills its `limit` when enough visible pages
+  match. The assistant's `read_document` and other read tools,
+  notifications, the activity feed and live events are not filtered by
+  restrictions yet; that follows in the next phases. (#76)
 
 ### Changed
 
@@ -61,6 +69,17 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Five new settings, all optional: `ACL_DENY_LIST_MAX` (5000),
+  `SEARCH_ACL_OVERFETCH` (5), `SEARCH_ACL_MAX_FETCH` (500),
+  `ACL_RESTAMP_TICK_MS` (30000) and `ACL_RESTAMP_BATCH` (200). The worker now
+  runs a re-stamp tick that copies each page's restrictions onto its chunks in
+  ArcadeDB and OpenSearch, without re-embedding anything. With
+  `FULLTEXT_PROVIDER=opensearch`, the first search or indexing after the
+  deploy adds two fields (`aclNodes`, `aclRestricted`) to the existing index
+  mapping. That change is additive, needs no reindex, and the previous image
+  ignores the fields. Search always decides visibility from Postgres, so a
+  stamp that lags only costs recall, and only past `ACL_DENY_LIST_MAX` hidden
+  pages.
 - Migration `20261018100000_page_restrictions` adds the `access_grants` table
   and new columns with defaults on `documents` (`restricted`, `restricted_by`,
   `acl_version`, `acl_stamped_version`) and `projects` (`restricted`), plus a

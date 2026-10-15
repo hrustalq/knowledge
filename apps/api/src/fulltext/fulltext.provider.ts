@@ -1,3 +1,5 @@
+import type { DocumentAclFilter } from '../common/document-acl.js';
+
 /**
  * Phase 5 optional BM25 layer (plan.md §11): pluggable full-text provider,
  * mirroring the embeddings/extractor pattern. 'none' keeps search vector-only
@@ -26,8 +28,16 @@ export interface FulltextHit {
 
 export interface FulltextProvider {
   readonly enabled: boolean;
-  /** Idempotent per revision: previous rows for the revision are dropped first. */
-  indexRevisionChunks(workspaceId: string, revisionId: string, chunks: FulltextChunk[], live?: boolean): Promise<void>;
+  /**
+   * Idempotent per revision: previous rows for the revision are dropped first.
+   * `aclNodes` is the page's `restricted_by`, stamped on every row (#76).
+   */
+  indexRevisionChunks(
+    workspaceId: string,
+    revisionId: string,
+    chunks: FulltextChunk[],
+    opts: { live: boolean; aclNodes: string[] },
+  ): Promise<void>;
   deleteRevision(revisionId: string): Promise<void>;
   /**
    * Make one revision the document's live projection (#83) and demote every
@@ -35,8 +45,13 @@ export interface FulltextProvider {
    * `GraphService.setLiveRevision`, and `search` must serve live rows only.
    */
   setLiveRevision(workspaceId: string, documentId: string, revisionId: string | null): Promise<void>;
-  /** Workspace predicate is mandatory (plan.md §6 security note). Live rows only. */
-  search(workspaceId: string, query: string, k: number): Promise<FulltextHit[]>;
+  /** Rewrite the `aclNodes` stamp on every row of a page after its restrictions changed (#76). */
+  restamp(workspaceId: string, documentId: string, aclNodes: string[]): Promise<void>;
+  /**
+   * Workspace predicate is mandatory (plan.md §6 security note). Live rows
+   * only, and only pages `acl` admits (#76).
+   */
+  search(workspaceId: string, query: string, k: number, acl: DocumentAclFilter): Promise<FulltextHit[]>;
 }
 
 export class NoopFulltextProvider implements FulltextProvider {
@@ -44,6 +59,7 @@ export class NoopFulltextProvider implements FulltextProvider {
   async indexRevisionChunks(): Promise<void> {}
   async deleteRevision(): Promise<void> {}
   async setLiveRevision(): Promise<void> {}
+  async restamp(): Promise<void> {}
   async search(): Promise<FulltextHit[]> {
     return [];
   }

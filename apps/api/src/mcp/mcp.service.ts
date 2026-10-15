@@ -199,12 +199,15 @@ export class McpService {
           ...(tags?.length ? { tags } : {}),
           ...(includeArchived ? { includeArchived: true } : {}),
         };
-        const res = await this.search.search({
-          workspaceId,
-          query,
-          limit: limit ?? 20,
-          ...(Object.keys(filters).length ? { filters } : {}),
-        });
+        const res = await this.search.search(
+          {
+            workspaceId,
+            query,
+            limit: limit ?? 20,
+            ...(Object.keys(filters).length ? { filters } : {}),
+          },
+          await guard.scope(workspaceId),
+        );
         // One batched read for the whole hit list (docs/features/38), and the
         // trace id of this call so an agent can quote it back to
         // knowledge_feedback.
@@ -988,7 +991,8 @@ export class McpService {
           workspaceId,
           actor: principal.mode === 'dev' ? 'mcp-operator' : principal.userId,
           action: 'graph.query',
-          params: { query, limit: limit ?? 200 },
+          // Past every page restriction, as the REST twin records (#76).
+          params: { query, limit: limit ?? 200, aclBypass: true },
         };
         try {
           const { rows, truncated } = await this.graph.operatorQuery(workspaceId, query, limit ?? 200);

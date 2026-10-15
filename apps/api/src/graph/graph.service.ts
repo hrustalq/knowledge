@@ -5,6 +5,7 @@ import {
   entityTypeOf,
   normalizeEntityKey,
 } from '@knowledge/contracts';
+import { aclAdmits, type DocumentAclFilter } from '../common/document-acl.js';
 import { ArcadeClient } from './arcade.client.js';
 import { EntityAliasService } from './entity-alias.service.js';
 import { t } from '../i18n/t.js';
@@ -43,6 +44,22 @@ const CHUNK_SCAN_LIMIT = 5000;
  * changes nothing until the data is reconciled.
  */
 const LIVE = '(live IS NULL OR live = true)';
+
+/**
+ * The page-permission predicate for a read keyed by `documentId` (#76): the
+ * clause to append and its parameter, or null when the read must instead be
+ * filtered in memory (`all`, or a list past `ACL_DENY_LIST_MAX`). An empty
+ * guest list is still pushed down, as `['']` — no page has an empty id, so it
+ * matches nothing, which is the answer.
+ */
+function aclClause(acl: DocumentAclFilter): { sql: string; params: { aclDocs: string[] } } | null {
+  if (acl.kind === 'all' || !acl.pushdown) return null;
+  const aclDocs = acl.documentIds.size ? [...acl.documentIds] : [''];
+  return {
+    sql: acl.kind === 'allow' ? ' AND documentId IN :aclDocs' : ' AND NOT (documentId IN :aclDocs)',
+    params: { aclDocs },
+  };
+}
 
 /** Fact classes whose edges belong to one revision and so follow its liveness. */
 const REVISION_SCOPED_EXTRACTORS = ['frontmatter', 'inferred'] as const;
@@ -176,6 +193,11 @@ export class GraphService {
    * for the head of the document's default branch. A non-live revision's
    * chunks are still written — the MR diff and `revisionEmbeddingShift` read
    * them by revision id — but no workspace-wide read returns them.
+   *
+   * `aclNodes` is the page's `restricted_by` as indexing read it (#76), stamped
+   * on the Document vertex and every chunk. A stamp only prefilters: reads are
+   * decided by the `DocumentAclFilter` read from PG, and `AclRestampSweeper`
+   * rewrites the stamps whenever `restricted_by` changes afterwards.
    */
   async upsertRevisionChunks(input: {
     workspaceId: string;
@@ -184,16 +206,18 @@ export class GraphService {
     title: string;
     chunks: ChunkInput[];
     live: boolean;
+    aclNodes: string[];
   }): Promise<void> {
-    const { workspaceId, documentId, revisionId, title, chunks, live } = input;
+    const { workspaceId, documentId, revisionId, title, chunks, live, aclNodes } = input;
+    const aclRestricted = aclNodes.length > 0;
 
     await this.arcade.command('sql', 'DELETE FROM Chunk WHERE revisionId = :revisionId', { revisionId });
     await this.arcade.command('sql', 'DELETE FROM DocumentRevision WHERE revisionId = :revisionId', { revisionId });
 
     await this.arcade.command(
       'sql',
-      'UPDATE Document SET documentId = :documentId, workspaceId = :workspaceId, title = :title UPSERT WHERE documentId = :documentId',
-      { documentId, workspaceId, title },
+      'UPDATE Document SET documentId = :documentId, workspaceId = :workspaceId, title = :title, aclNodes = :aclNodes, aclRestricted = :aclRestricted UPSERT WHERE documentId = :documentId',
+      { documentId, workspaceId, title, aclNodes, aclRestricted },
     );
     await this.arcade.command(
       'sql',
@@ -211,7 +235,7 @@ export class GraphService {
         'sql',
         `CREATE VERTEX Chunk SET chunkId = :chunkId, idx = :idx, workspaceId = :workspaceId,
          documentId = :documentId, revisionId = :revisionId, live = :live, text = :text,
-         headingPath = :headingPath, embedding = :embedding`,
+         headingPath = :headingPath, embedding = :embedding, aclNodes = :aclNodes, aclRestricted = :aclRestricted`,
         {
           chunkId: chunk.chunkId,
           idx: chunk.index,
@@ -222,6 +246,8 @@ export class GraphService {
           text: chunk.text,
           headingPath: chunk.headingPath,
           embedding: chunk.embedding,
+          aclNodes,
+          aclRestricted,
         },
       );
       await this.arcade.command(
@@ -285,6 +311,22 @@ export class GraphService {
       'UPDATE Document SET documentId = :documentId, workspaceId = :workspaceId, title = :title UPSERT WHERE documentId = :documentId',
       { documentId, workspaceId, title },
     );
+  }
+
+  /**
+   * Rewrite a page's `aclNodes` stamps on its Document vertex and every chunk
+   * of every revision (#76), after its `restricted_by` changed. Stamps only —
+   * nothing is re-embedded or re-chunked.
+   */
+  async restampDocument(workspaceId: string, documentId: string, aclNodes: string[]): Promise<void> {
+    const params = { workspaceId, documentId, aclNodes, aclRestricted: aclNodes.length > 0 };
+    for (const type of ['Document', 'Chunk']) {
+      await this.arcade.command(
+        'sql',
+        `UPDATE ${type} SET aclNodes = :aclNodes, aclRestricted = :aclRestricted WHERE workspaceId = :workspaceId AND documentId = :documentId`,
+        params,
+      );
+    }
   }
 
   /**
@@ -703,61 +745,88 @@ export class GraphService {
    * query per edge type, far too much work to answer "which docs have tag X",
    * and the tag filter must also work in semantic/keyword mode where the
    * expansion graph is never loaded.
+   *
+   * `acl` (#76) keeps out pages the reader may not open.
    */
-  async getDocumentIdsByTags(workspaceId: string, tagKeys: string[]): Promise<Set<string>> {
+  async getDocumentIdsByTags(workspaceId: string, tagKeys: string[], acl: DocumentAclFilter): Promise<Set<string>> {
     if (tagKeys.length === 0) return new Set();
+    const pushed = aclClause(acl);
     const rows = await this.arcade
       .query<{ documentId: string }>(
         'sql',
-        `SELECT documentId FROM TAGGED_WITH WHERE workspaceId = :workspaceId AND targetKey IN :keys AND ${LIVE} LIMIT 20000`,
-        { workspaceId, keys: tagKeys },
+        `SELECT documentId FROM TAGGED_WITH WHERE workspaceId = :workspaceId AND targetKey IN :keys AND ${LIVE}${pushed?.sql ?? ''} LIMIT 20000`,
+        { workspaceId, keys: tagKeys, ...pushed?.params },
       )
       // ArcadeDB throws when the edge type holds no rows yet; "no tag edges"
       // must mean "no matches", not a 500.
       .catch(() => []);
-    return new Set(rows.map((r) => r.documentId));
+    return new Set(rows.map((r) => r.documentId).filter((id) => aclAdmits(acl, id)));
   }
 
   /**
    * The workspace's full relation graph (edges + node labels) for Phase 4
    * traversal. Small-scale by design — BFS happens in Node, mirroring the
    * cosine-in-Node search approach; swap for native traversal later.
+   *
+   * `acl` (#76): pages the reader may not open are not nodes, their edges go,
+   * and so does every entity no remaining edge mentions — a restricted page
+   * must not leak the names it introduces through the graph view, entity
+   * lists or search's graph expansion. With nothing hidden (`all`) the graph
+   * is returned as it always was, entities without live edges included.
    */
-  async getWorkspaceRelationGraph(workspaceId: string): Promise<WorkspaceRelationGraph> {
+  async getWorkspaceRelationGraph(workspaceId: string, acl: DocumentAclFilter): Promise<WorkspaceRelationGraph> {
+    const pushed = aclClause(acl);
+    const where = `workspaceId = :workspaceId${pushed?.sql ?? ''}`;
+    const params = { workspaceId, ...pushed?.params };
     const edges: WorkspaceRelationGraph['edges'] = [];
     for (const type of RELATION_EDGE_TYPES) {
       const rows = await this.arcade
         .query<{ documentId: string; targetKey: string; extractor: string; confidence: number }>(
           'sql',
-          `SELECT documentId, targetKey, extractor, confidence FROM ${type} WHERE workspaceId = :workspaceId AND ${LIVE} LIMIT 20000`,
-          { workspaceId },
+          `SELECT documentId, targetKey, extractor, confidence FROM ${type} WHERE ${where} AND ${LIVE} LIMIT 20000`,
+          params,
         )
         .catch(() => []);
-      for (const r of rows) edges.push({ type, documentId: r.documentId, targetKey: r.targetKey, extractor: r.extractor, confidence: r.confidence });
+      for (const r of rows) {
+        if (!aclAdmits(acl, r.documentId)) continue;
+        edges.push({ type, documentId: r.documentId, targetKey: r.targetKey, extractor: r.extractor, confidence: r.confidence });
+      }
     }
 
     const docs = await this.arcade.query<{ documentId: string; title: string }>(
       'sql',
-      'SELECT documentId, title FROM Document WHERE workspaceId = :workspaceId LIMIT 20000',
-      { workspaceId },
+      `SELECT documentId, title FROM Document WHERE ${where} LIMIT 20000`,
+      params,
     );
     const ents = await this.arcade.query<{ entityKey: string; entityType: string; name: string }>(
       'sql',
       'SELECT entityKey, entityType, name FROM Entity WHERE workspaceId = :workspaceId LIMIT 20000',
       { workspaceId },
     );
+    const mentioned = acl.kind === 'all' ? null : new Set(edges.map((e) => e.targetKey));
     return {
       edges,
-      documents: Object.fromEntries(docs.map((d) => [d.documentId, { title: d.title }])),
-      entities: Object.fromEntries(ents.map((e) => [e.entityKey, { type: e.entityType, name: e.name }])),
+      documents: Object.fromEntries(
+        docs.filter((d) => aclAdmits(acl, d.documentId)).map((d) => [d.documentId, { title: d.title }]),
+      ),
+      entities: Object.fromEntries(
+        ents
+          .filter((e) => !mentioned || mentioned.has(e.entityKey))
+          .map((e) => [e.entityKey, { type: e.entityType, name: e.name }]),
+      ),
     };
   }
 
   /**
    * Phase 1 semantic search: fetch workspace-scoped chunks and rank by cosine
    * similarity in Node. Swap the body for ArcadeDB HNSW later — same signature.
+   *
+   * `acl` (#76) keeps out chunks of pages the reader may not open — in the
+   * query when the list is short enough, so the scan cap counts only what
+   * they may see, otherwise before ranking.
    */
-  async searchChunks(workspaceId: string, queryEmbedding: number[], k: number): Promise<ChunkHit[]> {
+  async searchChunks(workspaceId: string, queryEmbedding: number[], k: number, acl: DocumentAclFilter): Promise<ChunkHit[]> {
+    const pushed = aclClause(acl);
     const rows = await this.arcade.query<{
       chunkId: string;
       documentId: string;
@@ -767,8 +836,8 @@ export class GraphService {
       embedding: number[];
     }>(
       'sql',
-      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND ${LIVE} LIMIT ${CHUNK_SCAN_LIMIT}`,
-      { workspaceId },
+      `SELECT chunkId, documentId, revisionId, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND ${LIVE}${pushed?.sql ?? ''} LIMIT ${CHUNK_SCAN_LIMIT}`,
+      { workspaceId, ...pushed?.params },
     );
 
     // Ranking is exhaustive-scan, so hitting the cap does not degrade results
@@ -783,6 +852,7 @@ export class GraphService {
     }
 
     return rows
+      .filter((r) => aclAdmits(acl, r.documentId))
       .filter((r) => Array.isArray(r.embedding) && r.embedding.length === queryEmbedding.length)
       .map((r) => ({
         chunkId: r.chunkId,

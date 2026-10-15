@@ -28,6 +28,8 @@ import { RepoSnapshotService } from '../connectors/code-research/repo-snapshot.s
 import { PullRequestService } from '../connectors/code-research/pull-request.service.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { SearchService } from '../search/search.service.js';
+import { systemScope } from '../permissions/access-scope.js';
+import { UNFILTERED } from '../common/document-acl.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { runCodeReadingLoop } from './code-reading-loop.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
@@ -247,7 +249,8 @@ export class AgentExecutor {
     // opinion, so it becomes a finding without asking a model.
     const degree = new Map<string, number>();
     try {
-      const relations = await this.graph.getWorkspaceRelationGraph(run.workspaceId);
+      // Unfiltered until #76 phase 4: only degrees of `documents` are read.
+      const relations = await this.graph.getWorkspaceRelationGraph(run.workspaceId, UNFILTERED);
       for (const edge of relations.edges) {
         degree.set(edge.documentId, (degree.get(edge.documentId) ?? 0) + 1);
       }
@@ -1110,12 +1113,16 @@ ${page.markdown}`, files);
     // is the one most likely to drift and least likely to be tied above. One
     // search, few hits; a failure costs the weakest tie, never the run.
     try {
-      const res = await this.search.search({
-        workspaceId,
-        query: searchQueryFor(pr, files),
-        mode: 'hybrid',
-        limit: MAX_SEARCHED_PAGES * 3,
-      });
+      const res = await this.search.search(
+        {
+          workspaceId,
+          query: searchQueryFor(pr, files),
+          mode: 'hybrid',
+          limit: MAX_SEARCHED_PAGES * 3,
+        },
+        // Agent runs read unfiltered until #76 phase 4 clamps them to owner ∩ audience.
+        systemScope(workspaceId),
+      );
       let added = 0;
       for (const hit of res.results) {
         if (added >= MAX_SEARCHED_PAGES) break;
@@ -1421,7 +1428,8 @@ ${page.markdown}`, files);
 
     await report({ stage: 'graph', progress: 0.2 });
     try {
-      const graph = await this.graph.getWorkspaceRelationGraph(run.workspaceId);
+      // Unfiltered until #76 phase 4; edges are matched against `documents` below.
+      const graph = await this.graph.getWorkspaceRelationGraph(run.workspaceId, UNFILTERED);
       for (const [key, entity] of Object.entries(graph.entities)) entityNames.set(key, entity.name);
       for (const edge of graph.edges) {
         if (!known.has(edge.documentId)) continue;

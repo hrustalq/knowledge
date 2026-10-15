@@ -60,6 +60,34 @@ export interface GrantRow {
   level: string;
 }
 
+/**
+ * Whether this scope keeps any page from its holder. False exactly when
+ * `visibilityWhere` is `{}`: an admin, or a member nothing is restricted from.
+ */
+export function hidesAnything(scope: AccessScope): boolean {
+  return !scope.bypass && (scope.guest || scope.denied.size > 0);
+}
+
+/**
+ * A scope that sees the whole workspace, for a reader acting for no person:
+ * agent and workflow runs until #76 phase 4 narrows them to their owner and
+ * audience. A named function rather than a hand-built literal, so every such
+ * caller can be found and replaced.
+ */
+export function systemScope(workspaceId: string): AccessScope {
+  return {
+    workspaceId,
+    userId: '00000000-0000-0000-0000-000000000000',
+    role: null,
+    bypass: true,
+    guest: false,
+    readOnly: true,
+    groupIds: new Set(),
+    denied: new Set(),
+    granted: new Set(),
+  };
+}
+
 /** The project, then every id in `path` (ancestors root-first, then self). */
 export function chainIds(row: Pick<VisibilityRow, 'projectId' | 'path'>): string[] {
   return [row.projectId, ...row.path.split('/').filter(Boolean)];

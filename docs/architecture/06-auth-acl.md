@@ -139,8 +139,9 @@ takes a required `AccessScope`**, so a new call site cannot forget it.
 one statement over a subtree (left-anchored `path LIKE`) or a project, run inside
 the transaction that created, moved or re-projected a page, flipped a switch or
 deleted a project into another. Rows whose value is already right keep their
-`acl_version`; changed rows bump it, which phase 3 uses to re-stamp the search
-stores.
+`acl_version`; changed rows bump it, and the worker's `AclRestampSweeper` copies
+the new value onto the search stores' `aclNodes` stamps — see
+[04](04-search-graph.md#page-restrictions).
 
 **The guard checks the resource.** For `'document'`, `'merge-request'` (its
 page) and `'project'` sources, `AclGuard` keeps the resolved id and calls
@@ -208,6 +209,8 @@ the graph an arbitrary question. It is fenced on five sides:
 4. **Rows without a `workspaceId` are dropped** — deny by default, so a query
    that projects away the tenant column returns nothing rather than everything.
 5. **Audited** into `audit_logs`, readable at `GET /v1/audit-logs` (admin).
+   The row carries `aclBypass: true`: the query reads the stores past every page
+   restriction, as only an admin operator may.
 
 ## WebSockets are a separate door
 
@@ -310,10 +313,12 @@ at all: the web server answers it only for an internal peer with no
 ## Limits
 
 - Page restrictions cover the REST routes, MCP's per-page guard and its
-  tree/graph/project tools, the assistant's tree/graph/breadcrumb reads and its
-  grounding page. Search (all three legs), the assistant's search and read
-  tools, agents' audience clamp, notifications, activity and live events follow
-  in the next phases of issue #76; until then they are workspace-filtered only.
+  tree/graph/project tools, search (all three legs, graph expansion, MCP
+  `knowledge_search`), the assistant's search/tree/graph/breadcrumb reads and
+  its grounding page. The assistant's `read_document` and other read tools,
+  agents' and workflows' audience clamp (they search through `systemScope`
+  today), notifications, activity and live events follow in the next phases of
+  issue #76; until then they are workspace-filtered only.
 - Members who cannot open a page get a 403 that confirms it exists (the
   Confluence trade-off, so they can ask for access). There is no "hidden" flag
   that would make it a 404 for them.

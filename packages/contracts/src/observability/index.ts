@@ -146,6 +146,8 @@ export interface SearchExecutedEvent extends BacktestEventBase {
   embeddingModel?: string;
   /** Whether the trust re-rank multiplied the fused scores (docs/features/39), so two runs can be compared. */
   trustApplied?: boolean;
+  /** Fused hits dropped by the page-permission post-filter (#76), so restricted recall can be measured. */
+  aclFiltered?: number;
   results: Array<{ documentId: string; chunkId?: string; score: number }>;
 }
 

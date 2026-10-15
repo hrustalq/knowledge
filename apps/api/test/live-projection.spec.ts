@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GraphService } from '../src/graph/graph.service.js';
+import { UNFILTERED } from '../src/common/document-acl.js';
 import type { ArcadeClient } from '../src/graph/arcade.client.js';
 import type { EntityAliasService } from '../src/graph/entity-alias.service.js';
 import { IngestionProcessor } from '../src/ingestion/ingestion.processor.js';
@@ -58,7 +59,7 @@ describe('GraphService reads serve the live projection only (#83)', () => {
     const { graph } = graphWith({
       Chunk: [chunk('r1', false, 'Alpha unique-token-zebra'), chunk('r2', true, 'Alpha')],
     });
-    const hits = await graph.searchChunks(WS, emb, 10);
+    const hits = await graph.searchChunks(WS, emb, 10, UNFILTERED);
     expect(hits.map((h) => h.revisionId)).toEqual(['r2']);
   });
 
@@ -66,20 +67,20 @@ describe('GraphService reads serve the live projection only (#83)', () => {
     const { graph } = graphWith({
       Chunk: [chunk('main-head', true, 'Alpha'), chunk('feature-x', false, 'beta-draft-token')],
     });
-    const hits = await graph.searchChunks(WS, emb, 10);
+    const hits = await graph.searchChunks(WS, emb, 10, UNFILTERED);
     expect(hits.some((h) => h.text.includes('beta-draft-token'))).toBe(false);
   });
 
   it('rows written before the flag existed stay visible until the backfill', async () => {
     const { graph } = graphWith({ Chunk: [chunk('legacy', undefined, 'old but only copy')] });
-    expect(await graph.searchChunks(WS, emb, 10)).toHaveLength(1);
+    expect(await graph.searchChunks(WS, emb, 10, UNFILTERED)).toHaveLength(1);
   });
 
   it('the tag filter drops a page whose tag was removed', async () => {
     const { graph } = graphWith({
       TAGGED_WITH: [{ documentId: DOC, targetKey: 'tag:legacy', live: false }],
     });
-    expect([...(await graph.getDocumentIdsByTags(WS, ['tag:legacy']))]).toEqual([]);
+    expect([...(await graph.getDocumentIdsByTags(WS, ['tag:legacy'], UNFILTERED))]).toEqual([]);
   });
 
   it('the workspace relation graph drops edges of a retired revision', async () => {
@@ -91,7 +92,7 @@ describe('GraphService reads serve the live projection only (#83)', () => {
       Document: [{ documentId: DOC, title: 'Doc' }],
       Entity: [],
     });
-    const g = await graph.getWorkspaceRelationGraph(WS);
+    const g = await graph.getWorkspaceRelationGraph(WS, UNFILTERED);
     expect(g.edges.map((e) => e.targetKey)).toEqual(['service:new']);
   });
 

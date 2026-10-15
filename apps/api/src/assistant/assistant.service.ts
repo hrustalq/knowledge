@@ -1293,14 +1293,17 @@ export class AssistantService {
   }
 
   /** Relevant-document lookup — plain hybrid search over a draft excerpt; always available. */
-  async related(dto: AssistantRelatedDto): Promise<AssistantRelatedResponse> {
-    const res = await this.search.search({
-      workspaceId: dto.workspaceId,
-      query: dto.text.slice(0, 2_000),
-      mode: 'hybrid',
-      limit: dto.limit ?? 5,
-      expandGraph: { depth: 1 },
-    });
+  async related(dto: AssistantRelatedDto, principal: Principal): Promise<AssistantRelatedResponse> {
+    const res = await this.search.search(
+      {
+        workspaceId: dto.workspaceId,
+        query: dto.text.slice(0, 2_000),
+        mode: 'hybrid',
+        limit: dto.limit ?? 5,
+        expandGraph: { depth: 1 },
+      },
+      await this.permissions.scopeFor(principal, dto.workspaceId),
+    );
     return { results: res.results, related: res.related };
   }
 

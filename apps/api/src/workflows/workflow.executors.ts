@@ -12,6 +12,7 @@ import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-regist
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { SearchService } from '../search/search.service.js';
+import { systemScope } from '../permissions/access-scope.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
@@ -123,15 +124,19 @@ export class WorkflowExecutors {
 
   private async runSearch(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
     const context = await this.gather(node, run);
-    const results = await this.search.search({
-      workspaceId: run.workspaceId,
-      query: context.title || context.markdown.slice(0, 400),
-      limit: step.filters?.limit ?? 8,
-      ...(step.filters?.categories?.length ? { filters: { categories: step.filters.categories } } : {}),
-      ...(step.filters?.projectIds?.length
-        ? { filters: { projectIds: step.filters.projectIds } }
-        : {}),
-    } as Parameters<SearchService['search']>[0]);
+    const results = await this.search.search(
+      {
+        workspaceId: run.workspaceId,
+        query: context.title || context.markdown.slice(0, 400),
+        limit: step.filters?.limit ?? 8,
+        ...(step.filters?.categories?.length ? { filters: { categories: step.filters.categories } } : {}),
+        ...(step.filters?.projectIds?.length
+          ? { filters: { projectIds: step.filters.projectIds } }
+          : {}),
+      } as Parameters<SearchService['search']>[0],
+      // A run acts for no one person yet; #76 phase 4 narrows it to its audience.
+      systemScope(run.workspaceId),
+    );
     return { kind: 'context', context: results };
   }
 

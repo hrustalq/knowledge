@@ -15,6 +15,7 @@ import { extractFrontmatterFacts } from './relations.js';
 import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
+import { UNFILTERED } from '../common/document-acl.js';
 import { bindTrace, currentTrace, emitBacktest, startTrace, withTrace } from '@knowledge/observability';
 
 interface IngestionJobData {
@@ -154,7 +155,14 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
       }
       mark('embed', embeddingsOut.length);
 
-      // 6. Index into graph store (idempotent per revision)
+      // 6. Index into graph store (idempotent per revision). The page's
+      //    restrictions are read now, not with the job: embedding takes long
+      //    enough for one to change, and the stamp should be the latest (#76).
+      //    A change after this read bumps acl_version and the re-stamp sweeper
+      //    catches up; the stamps only prefilter either way.
+      const aclNodes = (
+        await this.prisma.document.findUnique({ where: { id: revision.documentId }, select: { restrictedBy: true } })
+      )?.restrictedBy ?? revision.document.restrictedBy;
       await this.graph.upsertRevisionChunks({
         workspaceId: revision.document.workspaceId,
         documentId: revision.documentId,
@@ -168,6 +176,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           embedding: embeddingsOut[i],
         })),
         live,
+        aclNodes,
       });
       mark('graph', drafts.length);
 
@@ -186,7 +195,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
             text: c.text,
             headingPath: c.headingPath,
           })),
-          live,
+          { live, aclNodes },
         );
       } catch (e) {
         this.logger.warn(`Fulltext indexing failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
@@ -387,7 +396,8 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     const max = this.config.get('DEPENDENT_REINDEX_MAX', { infer: true });
     if (max <= 0) return;
 
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+    // A system read: which pages to re-index is not shown to anyone (#76).
+    const g = await this.graph.getWorkspaceRelationGraph(workspaceId, UNFILTERED);
     const described = new Set(
       g.edges.filter((e) => e.documentId === documentId && e.type === 'DESCRIBES').map((e) => e.targetKey),
     );

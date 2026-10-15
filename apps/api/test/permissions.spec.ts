@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
 import {
   canSee,
   levelOn,
@@ -15,6 +14,7 @@ import { PermissionService } from '../src/permissions/permission.service.js';
 import { ResourceAccessService } from '../src/permissions/resource-access.service.js';
 import { AccessService } from '../src/auth/access.service.js';
 import type { Principal } from '../src/auth/principal.js';
+import { matchesWhere } from './prisma-where.js';
 
 /**
  * Page permissions, phase 2 (issue #76): restrictions, grants and the one
@@ -118,31 +118,6 @@ describe('levelOn', () => {
 
 // ------------------------------------------------------- the two spellings
 
-/** Just the Prisma operators `visibilityWhere` emits, evaluated over one row. */
-function matches(where: Prisma.DocumentWhereInput, row: VisibilityRow & { id: string }): boolean {
-  return Object.entries(where).every(([key, value]) => {
-    const v = value as Record<string, unknown>;
-    switch (key) {
-      case 'AND':
-        return (value as Prisma.DocumentWhereInput[]).every((w) => matches(w, row));
-      case 'OR':
-        return (value as Prisma.DocumentWhereInput[]).some((w) => matches(w, row));
-      case 'NOT':
-        return !matches(value as Prisma.DocumentWhereInput, row);
-      case 'restrictedBy':
-        return (v.hasSome as string[]).some((id) => row.restrictedBy.includes(id));
-      case 'projectId':
-        return (v.in as string[]).includes(row.projectId);
-      case 'path':
-        return row.path.includes(v.contains as string);
-      case 'id':
-        return (v.in as string[]).includes(row.id);
-      default:
-        throw new Error(`visibilityWhere emitted an operator this spec does not model: ${key}`);
-    }
-  });
-}
-
 describe('canSee and visibilityWhere', () => {
   const rows: (VisibilityRow & { id: string })[] = [
     { id: ROOT, projectId: PROJECT, path: `/${ROOT}/`, restrictedBy: [] },
@@ -174,7 +149,7 @@ describe('canSee and visibilityWhere', () => {
     it(`agree for ${name}`, () => {
       const inMemory = rows.filter((r) => canSee(scope, r)).map((r) => r.id);
       const where = visibilityWhere(scope);
-      const inSql = rows.filter((r) => matches(where, r)).map((r) => r.id);
+      const inSql = rows.filter((r) => matchesWhere(where, r)).map((r) => r.id);
       expect(inMemory).toEqual(expected[name]);
       expect(inSql).toEqual(inMemory);
     });
@@ -223,7 +198,7 @@ function permissionsAs(role: string, grants: GrantRow[] = []) {
     },
   };
   const audit = { record: vi.fn(async () => undefined) };
-  const service = new PermissionService(prisma as never, new AccessService(prisma as never), audit as never);
+  const service = new PermissionService(prisma as never, new AccessService(prisma as never), audit as never, { get: () => 5000 } as never);
   return { service, audit, prisma };
 }
 

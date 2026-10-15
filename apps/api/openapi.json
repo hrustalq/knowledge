@@ -25731,6 +25731,13 @@
             "type": "string",
             "format": "uuid",
             "description": "The repository connector a connector-scoped agent (the archaeologist) reads. Required when the workspace has more than one; the only one is used otherwise."
+          },
+          "documentIds": {
+            "description": "Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most recent ones. Pages the caller cannot open are skipped.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -25879,6 +25886,43 @@
             "type": "number",
             "nullable": true,
             "description": "Minutes between scheduled runs."
+          },
+          "scheduleKind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "interval",
+              "daily",
+              "weekly"
+            ],
+            "description": "interval (every scheduleMinutes), daily or weekly (at scheduleTime). Null reads as interval."
+          },
+          "scheduleTime": {
+            "type": "string",
+            "nullable": true,
+            "example": "09:00",
+            "description": "HH:MM, 24-hour, in scheduleTimezone."
+          },
+          "scheduleWeekdays": {
+            "nullable": true,
+            "example": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "description": "Weekdays a weekly schedule fires on, 0 = Sunday … 6 = Saturday.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "scheduleTimezone": {
+            "type": "string",
+            "nullable": true,
+            "example": "Europe/Moscow",
+            "description": "IANA timezone. Null reads as UTC."
           },
           "scheduleNote": {
             "type": "string",

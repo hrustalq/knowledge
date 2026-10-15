@@ -121,6 +121,20 @@ in the pull request that introduces them — see
   recall as one person sees it, through their page restrictions. Pages they
   cannot open are left out of the question set, not counted as misses. Page
   permissions are written up in `docs/features/48-page-permissions.md`. (#76)
+- Agent schedules can now run at a time of day: **Daily** at HH:MM, or
+  **Weekly** on chosen weekdays (Mon–Fri at 09:00, say), in an IANA timezone
+  that defaults to the browser's. The editor in **Settings → AI → Agents**
+  shows the next run, and so does `nextRunAt` on `GET /v1/ai/agents`. A run
+  starts within five minutes of its slot. If the worker was down across
+  several slots, the schedule runs once when it comes back, not once per missed
+  slot. Changing a schedule never fires a slot the change moved into the past.
+  Interval schedules work as before. `PATCH /v1/ai/agents/:key` takes
+  `scheduleKind`, `scheduleTime`, `scheduleWeekdays` and `scheduleTimezone`.
+  (#70)
+- `POST /v1/ai/agents/:key/run` takes `documentIds` (up to 20), which limits
+  a curator, reviewer or glossarist run to those pages instead of the most
+  recent ones. Pages the caller cannot open are skipped. Any other agent
+  answers 400. (#70)
 
 ### Changed
 
@@ -151,6 +165,12 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261021100000_agent_schedule_time_of_day` adds five nullable
+  columns to `ai_agents` (`schedule_kind`, `schedule_time`,
+  `schedule_weekdays`, `schedule_timezone`, `schedule_changed_at`) and two
+  CHECK constraints. Nothing is backfilled: a null kind reads as an interval.
+  The previous image ignores the columns. If the code is rolled back, daily
+  and weekly schedules stop firing, and interval schedules keep running.
 - One more optional setting, `CONNECTOR_ACL_SYNC_DEFAULT_MIN` (60): minutes
   between access syncs for a connector that mirrors permissions and sets no
   interval of its own. Access syncs run from the worker's existing connector

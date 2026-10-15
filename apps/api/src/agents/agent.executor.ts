@@ -14,7 +14,7 @@ import type {
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
-import { AGENT_FINDING_KINDS, isAuthorableRelationType } from '@knowledge/contracts';
+import { AGENT_FINDING_KINDS, AGENT_RUN_MAX_DOCUMENTS, isAuthorableRelationType } from '@knowledge/contracts';
 import { normalizeRelation } from '../common/relations.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -244,7 +244,7 @@ export class AgentExecutor {
     await report({ stage: 'scanning', progress: 0.05 });
     const scope = await this.runScope(run, principal);
     const documents = await this.prisma.document.findMany({
-      where: { workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
+      where: { workspaceId: run.workspaceId, ...pageScope(run), AND: [visibilityWhere(scope)] },
       select: { id: true, title: true, category: true, projectId: true },
       orderBy: { createdAt: 'desc' },
       take: MAX_PAGES,
@@ -390,7 +390,8 @@ export class AgentExecutor {
   // ------------------------------------------------------------------ reviewer
 
   /**
-   * Reviews the pages that changed most recently, one model call each.
+   * Reviews the pages that changed most recently — or the run's named pages
+   * (#70) — one model call each.
    *
    * The same division of labour as the curator: *which* pages changed is a
    * query, so the worker answers it, and the model is spent only on reading
@@ -411,7 +412,10 @@ export class AgentExecutor {
     // fact about revisions, and `documents` carries no updatedAt.
     const scope = await this.runScope(run, principal);
     const recent = await this.prisma.documentRevision.findMany({
-      where: { document: { workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] }, status: 'indexed' },
+      where: {
+        document: { workspaceId: run.workspaceId, ...pageScope(run), AND: [visibilityWhere(scope)] },
+        status: 'indexed',
+      },
       distinct: ['documentId'],
       orderBy: { createdAt: 'desc' },
       select: { documentId: true, createdAt: true },
@@ -541,7 +545,7 @@ export class AgentExecutor {
   ): Promise<AgentRunResult> {
     const scope = await this.runScope(run, principal);
     const documents = await this.prisma.document.findMany({
-      where: { workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
+      where: { workspaceId: run.workspaceId, ...pageScope(run), AND: [visibilityWhere(scope)] },
       select: { id: true, title: true },
       orderBy: { createdAt: 'desc' },
       take: MAX_GLOSSARY_PAGES,
@@ -1756,4 +1760,15 @@ function safeJson(raw: string): Record<string, unknown> | null {
     }
     return null;
   }
+}
+
+/**
+ * The page filter a page-scoped run (#70) adds to its gathering query, or
+ * nothing. Spread beside the run's `visibilityWhere`, never instead of it:
+ * naming a page the owner cannot open narrows the run to nothing, it does not
+ * widen what the run may read.
+ */
+function pageScope(run: AgentRun): { id?: { in: string[] } } {
+  const ids = ((run.input ?? {}) as AgentRunInput).documentIds;
+  return Array.isArray(ids) && ids.length > 0 ? { id: { in: ids.slice(0, AGENT_RUN_MAX_DOCUMENTS) } } : {};
 }

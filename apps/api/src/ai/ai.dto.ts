@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -17,9 +18,13 @@ import {
 } from 'class-validator';
 import {
   AGENT_CAPABILITIES,
+  AGENT_RUN_MAX_DOCUMENTS,
+  AGENT_SCHEDULE_KINDS,
+  AGENT_SCHEDULE_TIME_PATTERN,
   AGENT_SURFACES,
   WEB_ACCESS_MODES,
   type AgentCapability,
+  type AgentScheduleKind,
   type AgentSurface,
   type WebAccessMode,
 } from '@knowledge/contracts';
@@ -698,6 +703,46 @@ export class UpdateAiAgentDto {
   @Max(20_160, { message: vmsg('max') })
   scheduleMinutes?: number | null;
 
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    enum: AGENT_SCHEDULE_KINDS,
+    description: 'interval (every scheduleMinutes), daily or weekly (at scheduleTime). Null reads as interval.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleKind')
+  @IsIn(AGENT_SCHEDULE_KINDS as unknown as string[], { message: vmsg('isIn') })
+  scheduleKind?: AgentScheduleKind | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: '09:00', description: 'HH:MM, 24-hour, in scheduleTimezone.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleTime')
+  @IsString()
+  @Matches(AGENT_SCHEDULE_TIME_PATTERN, { message: vmsg('matches') })
+  scheduleTime?: string | null;
+
+  @ApiPropertyOptional({
+    type: [Number],
+    nullable: true,
+    example: [1, 2, 3, 4, 5],
+    description: 'Weekdays a weekly schedule fires on, 0 = Sunday … 6 = Saturday.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleWeekdays')
+  @IsArray()
+  @ArrayMaxSize(7, { message: vmsg('arrayMaxSize') })
+  @IsInt({ each: true })
+  @Min(0, { each: true, message: vmsg('min') })
+  @Max(6, { each: true, message: vmsg('max') })
+  scheduleWeekdays?: number[] | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Europe/Moscow', description: 'IANA timezone. Null reads as UTC.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleTimezone')
+  @IsString()
+  @MaxLength(64, { message: vmsg('maxLength') })
+  scheduleTimezone?: string | null;
+
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Instruction seeded into every scheduled run.' })
   @IsOptional()
   @NULLABLE<UpdateAiAgentDto>('scheduleNote')
@@ -809,6 +854,18 @@ export class StartAgentRunDto {
   @IsOptional()
   @IsUUID()
   connectorId?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      'Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most ' +
+      'recent ones. Pages the caller cannot open are skipped.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(AGENT_RUN_MAX_DOCUMENTS, { message: vmsg('arrayMaxSize') })
+  @IsUUID('all', { each: true })
+  documentIds?: string[];
 }
 
 // ---- Source policies (docs/features/25) ------------------------------------

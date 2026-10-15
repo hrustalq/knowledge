@@ -1090,15 +1090,28 @@ model AiAgent {
   /// Background schedule (docs/features/20). Off by default — the failure mode
   /// of unattended AI is an avalanche, not a slow queue. A due check inside a
   /// fixed sweep, mirroring Connector.syncIntervalMinutes; not a cron.
-  scheduleEnabled Boolean   @default(false) @map("schedule_enabled")
-  scheduleMinutes Int?      @map("schedule_minutes")
+  scheduleEnabled   Boolean   @default(false) @map("schedule_enabled")
+  scheduleMinutes   Int?      @map("schedule_minutes")
   /// Extra instruction seeded into every scheduled run.
-  scheduleNote    String?   @map("schedule_note")
+  scheduleNote      String?   @map("schedule_note")
   /// Who owns scheduled runs: they execute as this user and are capped by that
   /// user's role. NOT NULL in effect for scheduling — the sweeper skips a row
   /// without one rather than inventing ambient authority.
-  scheduleOwner   String?   @map("schedule_owner") @db.Uuid
-  lastRunAt       DateTime? @map("last_run_at") @db.Timestamptz
+  scheduleOwner     String?   @map("schedule_owner") @db.Uuid
+  lastRunAt         DateTime? @map("last_run_at") @db.Timestamptz
+  /// Time-of-day schedules (#70). Sparse: a null kind is 'interval', so every
+  /// row written before these columns behaves exactly as it did. Read through
+  /// contracts' `nextScheduledRun` by the sweeper and the summary alike.
+  scheduleKind      String?   @map("schedule_kind")
+  /// `HH:MM`, 24-hour, in scheduleTimezone. A CHECK in the migration holds the format.
+  scheduleTime      String?   @map("schedule_time")
+  /// number[] of weekdays, 0 = Sunday. Json, not int[] — no Postgres arrays here.
+  scheduleWeekdays  Json?     @map("schedule_weekdays")
+  /// IANA zone; null reads as UTC.
+  scheduleTimezone  String?   @map("schedule_timezone")
+  /// When the schedule's shape last changed. Slots are counted from the later
+  /// of this and lastRunAt, so an edit never fires a slot it moved into the past.
+  scheduleChangedAt DateTime? @map("schedule_changed_at") @db.Timestamptz
 
   createdBy String?  @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz

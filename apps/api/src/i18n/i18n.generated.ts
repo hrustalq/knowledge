@@ -503,6 +503,10 @@ export type I18nTranslations = {
             "agentNotFound": string;
             "agentScheduleNeedsOwner": string;
             "agentScheduleNeedsInterval": string;
+            "agentScheduleNeedsTime": string;
+            "agentScheduleNeedsWeekdays": string;
+            "agentScheduleBadTimezone": string;
+            "agentNotPageScoped": string;
             "agentNotBuiltIn": string;
             "agentKeyInvalid": string;
             "agentIsBuiltInCreate": string;

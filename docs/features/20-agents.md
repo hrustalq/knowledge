@@ -208,6 +208,27 @@ Schedules are off by default and need an owner and an interval before they can
 be enabled, because the failure mode of unattended AI is an avalanche, not a
 slow queue.
 
+A schedule can also run at a time of day (#70): `daily` at `HH:MM`, or
+`weekly` on a set of weekdays, in an IANA timezone (null means UTC; the
+editor fills in the browser's zone). The tick does not change. A slot is due
+on the first tick at or after it, so precision is five minutes and the editor
+says so. There are no cron expressions, because a syntax that promises
+minute precision would misstate what the tick can do. Whether a schedule is
+due is answered by one function, `nextScheduledRun` in
+`@knowledge/contracts`. The sweeper, the summary's `nextRunAt` and the
+editor's preview all call it. Slots are counted from the later of `lastRunAt`
+and `schedule_changed_at`, which gives two guarantees: a worker that was down
+across five slots runs once, and moving 09:00 to 08:00 at ten o'clock does not
+fire the 08:00 slot the moment it is saved. A null `schedule_kind` is
+`interval`, so rows written before #70 behave exactly as they did.
+
+`AgentRunInput.documentIds` limits a curator, reviewer or glossarist run to
+the named pages (`PAGE_SCOPED_AGENT_KEYS`). The pages are added to the
+executor's query next to `visibilityWhere`, never instead of it, so naming a
+page the owner cannot open gives the run nothing to read. It does not let the
+run read that page. Event triggers (#70, later phases) depend on this: a
+"page merged" run reads that page only.
+
 ## Data model
 
 | Table                       | Notes                                                                                                                                                                                                                                                                          |

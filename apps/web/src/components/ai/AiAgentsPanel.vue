@@ -8,8 +8,12 @@ import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { Play, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
 import {
+  AGENT_SCHEDULE_KINDS,
+  AGENT_SCHEDULE_TICK_MINUTES,
   ASSISTANT_TOOL_NAMES,
   isConnectorScopedAgent,
+  nextScheduledRun,
+  type AgentScheduleKind,
   type AiAgentSummary,
   type AiProviderSummary,
   type ListAiAgentsResponse,
@@ -18,6 +22,7 @@ import {
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
+import { formatCalendarPart, formatDateTime, formatList } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -90,7 +95,11 @@ const blank = {
   tools: [] as string[],
   providerId: ROUTED,
   scheduleEnabled: false,
+  scheduleKind: 'interval' as AgentScheduleKind,
   scheduleMinutes: null as number | null,
+  scheduleTime: '09:00',
+  scheduleWeekdays: [1] as number[],
+  scheduleTimezone: '',
   scheduleNote: '',
 }
 const form = ref({ ...blank })
@@ -119,12 +128,92 @@ function openEdit(agent: AiAgentSummary) {
     tools: [...agent.tools],
     providerId: agent.providerId ?? ROUTED,
     scheduleEnabled: agent.scheduleEnabled,
+    scheduleKind: agent.scheduleKind,
     scheduleMinutes: agent.scheduleMinutes,
+    scheduleTime: agent.scheduleTime ?? blank.scheduleTime,
+    scheduleWeekdays: agent.scheduleWeekdays ?? [...blank.scheduleWeekdays],
+    scheduleTimezone: agent.scheduleTimezone ?? '',
     scheduleNote: agent.scheduleNote ?? '',
   }
-  form.value = { ...loaded, tools: [...loaded.tools] }
-  snapshot.value = { ...loaded, tools: [...loaded.tools] }
+  form.value = { ...loaded, tools: [...loaded.tools], scheduleWeekdays: [...loaded.scheduleWeekdays] }
+  snapshot.value = { ...loaded, tools: [...loaded.tools], scheduleWeekdays: [...loaded.scheduleWeekdays] }
   open.value = true
+}
+
+/**
+ * Time-of-day schedules (#70). The browser's zone is the natural default for
+ * the person setting one, so picking Daily or Weekly fills it in; the dialog
+ * only opens on a click, so this never runs during SSR.
+ */
+function setScheduleKind(kind: AgentScheduleKind) {
+  form.value.scheduleKind = kind
+  if (kind !== 'interval' && !form.value.scheduleTimezone) {
+    form.value.scheduleTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? UTC_ZONE
+  }
+}
+
+function toggleWeekday(day: number) {
+  const set = new Set(form.value.scheduleWeekdays)
+  if (set.has(day)) set.delete(day)
+  else set.add(day)
+  form.value.scheduleWeekdays = [...set].sort((a, b) => a - b)
+}
+
+/** 0 = Sunday. 2026-10-11 is a Sunday, so day `i` of that week names weekday `i`. */
+const weekdays = computed(() =>
+  [0, 1, 2, 3, 4, 5, 6].map((day) => ({ day, label: formatCalendarPart(`2026-10-${11 + day}`, 'weekday') })),
+)
+/** What an empty timezone means — an IANA name, so not a translatable string. */
+const UTC_ZONE = 'UTC'
+const timezones = computed<string[]>(() =>
+  typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [],
+)
+
+const SHAPE = ['scheduleEnabled', 'scheduleKind', 'scheduleMinutes', 'scheduleTime', 'scheduleTimezone'] as const
+const reshaped = computed(
+  () =>
+    SHAPE.some((field) => form.value[field] !== snapshot.value[field]) ||
+    form.value.scheduleWeekdays.join() !== snapshot.value.scheduleWeekdays.join(),
+)
+
+/**
+ * "Next run" in the editor. Untouched, it is the API's own answer; edited, it
+ * is the same contracts predicate the sweeper reads, applied to the form — and
+ * an edit restarts the slot count there exactly as it does here.
+ */
+const nextRun = computed<string | null>(() => {
+  const agent = editing.value
+  if (!agent || !form.value.scheduleEnabled) return null
+  if (!reshaped.value) return agent.nextRunAt
+  const f = form.value
+  const now = new Date()
+  const next = nextScheduledRun(
+    {
+      kind: f.scheduleKind,
+      minutes: f.scheduleMinutes,
+      time: f.scheduleTime || null,
+      weekdays: f.scheduleWeekdays,
+      timezone: f.scheduleTimezone || null,
+    },
+    {
+      lastRunAt: agent.lastRunAt ? new Date(agent.lastRunAt) : null,
+      changedAt: f.scheduleKind === 'interval' ? null : now,
+    },
+    now,
+  )
+  return next ? next.toISOString() : null
+})
+
+/** The table badge: "every 60 min", "daily 09:00", "Mon, Wed 09:00". */
+function scheduleLabel(agent: AiAgentSummary): string | null {
+  if (!agent.scheduleEnabled) return null
+  if (agent.scheduleKind === 'interval') {
+    return agent.scheduleMinutes ? t('ai.agents.everyMinutes', { count: agent.scheduleMinutes }) : null
+  }
+  if (!agent.scheduleTime) return null
+  if (agent.scheduleKind === 'daily') return t('ai.agents.dailyAt', { time: agent.scheduleTime })
+  const days = (agent.scheduleWeekdays ?? []).map((day) => weekdays.value[day]?.label ?? String(day))
+  return t('ai.agents.weeklyAt', { days: formatList(days), time: agent.scheduleTime })
 }
 
 function toggleTool(name: string, on: boolean) {
@@ -162,7 +251,11 @@ async function submit() {
         tools?: string[]
         providerId?: string | null
         scheduleEnabled?: boolean
+        scheduleKind?: AgentScheduleKind | null
         scheduleMinutes?: number | null
+        scheduleTime?: string | null
+        scheduleWeekdays?: number[] | null
+        scheduleTimezone?: string | null
         scheduleNote?: string | null
       } = { workspaceId }
       if (f.name !== s.name) body.name = f.name.trim()
@@ -171,7 +264,15 @@ async function submit() {
       if (JSON.stringify([...f.tools].sort()) !== JSON.stringify([...s.tools].sort())) body.tools = f.tools
       if (f.providerId !== s.providerId) body.providerId = f.providerId === ROUTED ? null : f.providerId
       if (f.scheduleEnabled !== s.scheduleEnabled) body.scheduleEnabled = f.scheduleEnabled
+      if (f.scheduleKind !== s.scheduleKind) body.scheduleKind = f.scheduleKind
       if (f.scheduleMinutes !== s.scheduleMinutes) body.scheduleMinutes = f.scheduleMinutes
+      // A time-of-day schedule sends its whole shape, so the defaults the form
+      // filled in (09:00, Monday) are saved rather than shown and then lost.
+      if (f.scheduleKind !== 'interval' && reshaped.value) {
+        body.scheduleTime = f.scheduleTime
+        body.scheduleTimezone = f.scheduleTimezone || null
+        if (f.scheduleKind === 'weekly') body.scheduleWeekdays = f.scheduleWeekdays
+      }
       if (f.scheduleNote !== s.scheduleNote) body.scheduleNote = f.scheduleNote.trim() || null
       if (Object.keys(body).length === 1) {
         open.value = false
@@ -285,8 +386,8 @@ async function remove(agent: AiAgentSummary) {
                 <Badge v-if="agent.missing.length" variant="destructive" class="font-normal">
                   {{ t('ai.agents.missing', { caps: agent.missing.join(', ') }) }}
                 </Badge>
-                <Badge v-if="agent.scheduleEnabled && agent.scheduleMinutes" variant="outline" class="font-normal">
-                  {{ t('ai.agents.everyMinutes', { count: agent.scheduleMinutes }) }}
+                <Badge v-if="scheduleLabel(agent)" variant="outline" class="font-normal">
+                  {{ scheduleLabel(agent) }}
                 </Badge>
               </span>
               <span class="text-muted-foreground block text-xs">{{ agent.description }}</span>
@@ -443,7 +544,53 @@ async function remove(agent: AiAgentSummary) {
             </label>
 
             <div v-if="form.scheduleEnabled" class="space-y-3 pl-7">
-              <label class="block max-w-48 space-y-1">
+              <div class="flex flex-wrap gap-1" role="radiogroup" :aria-label="t('ai.agents.scheduleKind')">
+                <Button
+                  v-for="kind in AGENT_SCHEDULE_KINDS"
+                  :key="kind"
+                  type="button"
+                  size="sm"
+                  role="radio"
+                  :aria-checked="form.scheduleKind === kind"
+                  :variant="form.scheduleKind === kind ? 'secondary' : 'ghost'"
+                  @click="setScheduleKind(kind)"
+                >
+                  {{ t(`ai.agents.scheduleKinds.${kind}`) }}
+                </Button>
+              </div>
+              <div v-if="form.scheduleKind !== 'interval'" class="flex flex-wrap items-end gap-3">
+                <label class="block w-28 space-y-1">
+                  <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.scheduleTime') }}</span>
+                  <Input v-model="form.scheduleTime" type="time" step="300" required />
+                </label>
+                <label class="block min-w-56 flex-1 space-y-1">
+                  <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.scheduleTimezone') }}</span>
+                  <Input v-model="form.scheduleTimezone" list="agent-timezones" :placeholder="UTC_ZONE" />
+                  <datalist id="agent-timezones">
+                    <option v-for="zone in timezones" :key="zone" :value="zone" />
+                  </datalist>
+                </label>
+              </div>
+              <div
+                v-if="form.scheduleKind === 'weekly'"
+                class="flex flex-wrap gap-1"
+                role="group"
+                :aria-label="t('ai.agents.scheduleWeekdays')"
+              >
+                <Button
+                  v-for="w in weekdays"
+                  :key="w.day"
+                  type="button"
+                  size="sm"
+                  class="w-12"
+                  :aria-pressed="form.scheduleWeekdays.includes(w.day)"
+                  :variant="form.scheduleWeekdays.includes(w.day) ? 'default' : 'outline'"
+                  @click="toggleWeekday(w.day)"
+                >
+                  {{ w.label }}
+                </Button>
+              </div>
+              <label v-if="form.scheduleKind === 'interval'" class="block max-w-48 space-y-1">
                 <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.scheduleMinutes') }}</span>
                 <Input
                   :model-value="form.scheduleMinutes ?? ''"
@@ -465,6 +612,10 @@ async function remove(agent: AiAgentSummary) {
                     : t('ai.agents.neverRun')
                 }}
                 <span v-if="editing.scheduleOwner"> · {{ t('ai.agents.scheduleOwned') }}</span>
+              </p>
+              <p v-if="form.scheduleKind !== 'interval' || nextRun" class="text-muted-foreground text-xs">
+                <template v-if="nextRun">{{ t('ai.agents.nextRunAt', { when: formatDateTime(nextRun) }) }} · </template>
+                {{ t('ai.agents.schedulePrecision', { minutes: AGENT_SCHEDULE_TICK_MINUTES }) }}
               </p>
             </div>
           </div>

@@ -2196,6 +2196,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/agents/triggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every agent trigger in the workspace, grouped by agent */
+        get: operations["AiController_listAgentTriggers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/agents/triggers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a trigger. The runs it started stay. */
+        delete: operations["AiController_deleteAgentTrigger"];
+        options?: never;
+        head?: never;
+        /** Change a trigger. Enabling it makes the caller the owner its runs execute as; null clears a filter. */
+        patch: operations["AiController_updateAgentTrigger"];
+        trace?: never;
+    };
+    "/v1/ai/agents/{key}/triggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a trigger to an agent. Off unless enabled is sent; enabling makes the caller its owner. */
+        post: operations["AiController_createAgentTrigger"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/agents/{key}/run": {
         parameters: {
             query?: never;
@@ -5521,6 +5573,48 @@ export interface components {
             instructions?: string;
             triggers?: string[];
             enabled?: boolean;
+        };
+        UpdateAgentTriggerDto: {
+            /**
+             * Format: uuid
+             * @description Only events in this project. Null hears every project.
+             */
+            projectId?: string | null;
+            /** @description Only pages in these categories (page and merge request events). */
+            categories?: string[] | null;
+            /** @description Only these connectors (connector syncs and pull requests). */
+            connectorIds?: string[] | null;
+            /** @description Only this branch. Absent, a page.indexed trigger hears the default branch only. */
+            branch?: string | null;
+            /** @description Enabling makes the caller the owner the runs execute as. Off unless sent. */
+            enabled?: boolean;
+            /** @description Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES. */
+            cooldownMinutes?: number;
+            /** @description Instruction seeded into every run this trigger starts. */
+            note?: string | null;
+        };
+        CreateAgentTriggerDto: {
+            /**
+             * Format: uuid
+             * @description Only events in this project. Null hears every project.
+             */
+            projectId?: string | null;
+            /** @description Only pages in these categories (page and merge request events). */
+            categories?: string[] | null;
+            /** @description Only these connectors (connector syncs and pull requests). */
+            connectorIds?: string[] | null;
+            /** @description Only this branch. Absent, a page.indexed trigger hears the default branch only. */
+            branch?: string | null;
+            /** @description Enabling makes the caller the owner the runs execute as. Off unless sent. */
+            enabled?: boolean;
+            /** @description Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES. */
+            cooldownMinutes?: number;
+            /** @description Instruction seeded into every run this trigger starts. */
+            note?: string | null;
+            /** Format: uuid */
+            workspaceId: string;
+            /** @enum {string} */
+            event: "page.merged" | "page.indexed" | "merge-request.opened" | "connector.synced";
         };
         StartAgentRunDto: {
             /** Format: uuid */
@@ -13820,6 +13914,174 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_listAgentTriggers: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_deleteAgentTrigger: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_updateAgentTrigger: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentTriggerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_createAgentTrigger: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentTriggerDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

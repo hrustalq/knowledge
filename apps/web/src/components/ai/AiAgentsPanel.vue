@@ -39,6 +39,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import AgentTriggersEditor from './AgentTriggersEditor.vue'
 
 const { t } = useI18n()
 
@@ -619,6 +620,8 @@ async function remove(agent: AiAgentSummary) {
               </p>
             </div>
           </div>
+
+          <AgentTriggersEditor v-if="editing?.runnable" :agent="editing" />
         </form>
 
         <DialogFooter class="gap-2">

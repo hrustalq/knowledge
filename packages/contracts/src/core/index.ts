@@ -361,6 +361,9 @@ export const KNOWN_EVENT_TYPES = [
   'agent.run.started',
   'agent.run.succeeded',
   'agent.run.failed',
+  // A trigger started a run (#70): `subjectId` is the run, `documentId` the
+  // page it is about, when it is about one.
+  'agent.trigger.fired',
   'connector.created',
   'connector.updated',
   'connector.deleted',
@@ -394,6 +397,9 @@ export const KNOWN_EVENT_TYPES = [
   'ai.agent.deleted',
   // An agent override reset back to its built-in default (docs/features/20).
   'ai.agent.reset',
+  'ai.agent.trigger.created',
+  'ai.agent.trigger.updated',
+  'ai.agent.trigger.deleted',
   'ai.sourcePolicy.created',
   'ai.sourcePolicy.updated',
   'ai.sourcePolicy.deleted',

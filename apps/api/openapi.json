@@ -11230,6 +11230,252 @@
         ]
       }
     },
+    "/v1/ai/agents/triggers": {
+      "get": {
+        "operationId": "AiController_listAgentTriggers",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Every agent trigger in the workspace, grouped by agent",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/triggers/{id}": {
+      "patch": {
+        "operationId": "AiController_updateAgentTrigger",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentTriggerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Change a trigger. Enabling it makes the caller the owner its runs execute as; null clears a filter.",
+        "tags": [
+          "ai"
+        ]
+      },
+      "delete": {
+        "operationId": "AiController_deleteAgentTrigger",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a trigger. The runs it started stay.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/{key}/triggers": {
+      "post": {
+        "operationId": "AiController_createAgentTrigger",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentTriggerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Add a trigger to an agent. Off unless enabled is sent; enabling makes the caller its owner.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/agents/{key}/run": {
       "post": {
         "operationId": "AiController_startAgentRun",
@@ -25715,6 +25961,113 @@
             "type": "boolean"
           }
         }
+      },
+      "UpdateAgentTriggerDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Only events in this project. Null hears every project."
+          },
+          "categories": {
+            "nullable": true,
+            "description": "Only pages in these categories (page and merge request events).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "connectorIds": {
+            "nullable": true,
+            "description": "Only these connectors (connector syncs and pull requests).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "branch": {
+            "type": "string",
+            "nullable": true,
+            "description": "Only this branch. Absent, a page.indexed trigger hears the default branch only."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Enabling makes the caller the owner the runs execute as. Off unless sent."
+          },
+          "cooldownMinutes": {
+            "type": "number",
+            "description": "Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES."
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Instruction seeded into every run this trigger starts."
+          }
+        }
+      },
+      "CreateAgentTriggerDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Only events in this project. Null hears every project."
+          },
+          "categories": {
+            "nullable": true,
+            "description": "Only pages in these categories (page and merge request events).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "connectorIds": {
+            "nullable": true,
+            "description": "Only these connectors (connector syncs and pull requests).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "branch": {
+            "type": "string",
+            "nullable": true,
+            "description": "Only this branch. Absent, a page.indexed trigger hears the default branch only."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Enabling makes the caller the owner the runs execute as. Off unless sent."
+          },
+          "cooldownMinutes": {
+            "type": "number",
+            "description": "Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES."
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Instruction seeded into every run this trigger starts."
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "page.merged",
+              "page.indexed",
+              "merge-request.opened",
+              "connector.synced"
+            ]
+          }
+        },
+        "required": [
+          "workspaceId",
+          "event"
+        ]
       },
       "StartAgentRunDto": {
         "type": "object",

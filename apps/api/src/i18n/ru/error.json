@@ -215,6 +215,10 @@
     "agentRunInFlight": "Запуск агента «{key}» уже выполняется.",
     "agentNeedsConnector": "Агент «{key}» читает один репозиторий — выберите коннектор, по которому его запустить.",
     "agentConnectorInvalid": "{id} — не включённый коннектор репозитория в этом рабочем пространстве.",
+    "agentTriggerNotFound": "Неизвестный триггер агента {id}",
+    "agentTriggerNeedsRepository": "Агент «{key}» читает один репозиторий, поэтому его может запустить только синхронизация коннектора или pull request.",
+    "agentTriggerProjectInvalid": "{id} — не проект этого рабочего пространства.",
+    "agentTriggerConnectorInvalid": "Не коннекторы этого рабочего пространства: {ids}",
     "agentNeedsPullRequest": "Агент «{key}» проверяет один pull или merge request, а в этом запуске он не указан.",
     "findingNoDraft": "В этом замечании нет черновика страницы, которую можно создать.",
     "findingAlreadyCreated": "Страница по этому замечанию уже создана."

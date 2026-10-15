@@ -11,6 +11,7 @@ import { AiPluginsService } from './ai-plugins.service.js';
 import { AiSettingsService } from './ai-settings.service.js';
 import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
 import { AgentFindingsService } from './agent-findings.service.js';
+import { AgentTriggersService } from './agent-triggers.service.js';
 import { AgentQueueModule } from '../agents/agent-queue.module.js';
 import { AgentTiebreakService } from './agent-tiebreak.service.js';
 import { McpClientService } from './mcp-client.service.js';
@@ -45,7 +46,7 @@ import { AiUsageController } from './ai-usage.controller.js';
     forwardRef(() => AssistantModule),
   ],
   controllers: [AiController, AiUsageController],
-  providers: [AiAgentsService, AgentRunsService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],
+  providers: [AiAgentsService, AgentRunsService, AgentTriggersService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],
   // AgentFindingsService for the drift check's publisher (docs/features/35),
   // which proposes through the very path the Propose button takes.
   exports: [AiCoreModule, AgentCoreModule, AiPluginsService, AgentTiebreakService, AgentFindingsService],

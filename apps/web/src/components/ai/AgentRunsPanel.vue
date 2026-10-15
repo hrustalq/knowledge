@@ -227,6 +227,10 @@ const severityClass = (f: AgentFinding) =>
             <span class="flex flex-wrap items-center gap-2">
               <span class="font-medium">{{ run.agentName }}</span>
               <Badge variant="secondary" class="font-normal">{{ t(`ai.runs.trigger.${run.trigger}`) }}</Badge>
+              <!-- What an event run was started by (#70). -->
+              <Badge v-if="run.input?.event" variant="outline" class="font-normal">
+                {{ t(`ai.triggers.events.${run.input.event.type}`) }}
+              </Badge>
               <Badge v-if="repositoryName(run)" variant="outline" class="font-normal">{{ repositoryName(run) }}</Badge>
               <!-- The change a sentinel run checked (docs/features/35). Text, not
                    a link: this sits inside the row's toggle button, where a link

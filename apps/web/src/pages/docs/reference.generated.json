@@ -191,6 +191,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/ai/agents/{key}/triggers",
+      "tag": "ai",
+      "summary": "Add a trigger to an agent. Off unless enabled is sent; enabling makes the caller its owner.",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/ai/agents/choices",
       "tag": "ai",
@@ -267,6 +277,36 @@
       "summary": "Open a merge request that addresses one finding",
       "role": "editor",
       "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/agents/triggers",
+      "tag": "ai",
+      "summary": "Every agent trigger in the workspace, grouped by agent",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/agents/triggers/{id}",
+      "tag": "ai",
+      "summary": "Delete a trigger. The runs it started stay.",
+      "role": "admin",
+      "source": "agent-trigger",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/agents/triggers/{id}",
+      "tag": "ai",
+      "summary": "Change a trigger. Enabling it makes the caller the owner its runs execute as; null clears a filter.",
+      "role": "admin",
+      "source": "agent-trigger",
       "public": false,
       "platformAdmin": false
     },

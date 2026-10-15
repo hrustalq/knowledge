@@ -265,6 +265,13 @@ export const envSchema = z.object({
   // Background agent schedules (docs/features/20). Off by default: the failure
   // mode of unattended AI is an avalanche, not a slow queue.
   AGENT_SCHEDULE_ENABLED: boolish(false),
+  // Event-triggered agent runs (#70). The kill switch for the listener, off by
+  // default for the same reason; a trigger is also off until an admin enables it.
+  AGENT_TRIGGERS_ENABLED: boolish(false),
+  /** Triggered runs one workspace may have pending or running at once. */
+  AGENT_TRIGGER_MAX_ACTIVE: z.coerce.number().int().min(0).default(5),
+  /** The cooldown a new trigger starts with, per subject. The trigger's own column decides after that. */
+  AGENT_TRIGGER_COOLDOWN_MINUTES: z.coerce.number().int().min(0).max(10_080).default(60),
   STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
   STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 

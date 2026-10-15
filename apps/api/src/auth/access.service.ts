@@ -197,6 +197,15 @@ export class AccessService {
    * `?workspaceId=` — is what stops an admin of workspace A from editing the
    * instructions or MCP credentials of workspace B.
    */
+  async workspaceOfAgentTrigger(triggerId: string): Promise<string> {
+    const trigger = await this.prisma.agentTrigger.findUnique({
+      where: { id: triggerId },
+      select: { workspaceId: true },
+    });
+    if (!trigger) throw new NotFoundException(t('error.ai.agentTriggerNotFound', { id: triggerId }));
+    return trigger.workspaceId;
+  }
+
   async workspaceOfAiSkill(skillId: string): Promise<string> {
     const skill = await this.prisma.aiSkill.findUnique({
       where: { id: skillId },

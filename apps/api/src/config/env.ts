@@ -272,6 +272,15 @@ export const envSchema = z.object({
   AGENT_TRIGGER_MAX_ACTIVE: z.coerce.number().int().min(0).default(5),
   /** The cooldown a new trigger starts with, per subject. The trigger's own column decides after that. */
   AGENT_TRIGGER_COOLDOWN_MINUTES: z.coerce.number().int().min(0).max(10_080).default(60),
+  /**
+   * Largest body a signed agent-trigger webhook accepts, in bytes (#70). Below
+   * HTTP_BODY_LIMIT on purpose: a run keeps only AGENT_WEBHOOK_PAYLOAD_MAX_CHARS
+   * of it, and an unauthenticated caller should not get to make the API hash
+   * two megabytes. Checked before the signature.
+   */
+  AGENT_WEBHOOK_MAX_BYTES: z.coerce.number().int().positive().default(65_536),
+  /** How far `X-Knowledge-Timestamp` may be from the server's clock — the replay window. */
+  AGENT_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().positive().default(300),
   STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
   STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 

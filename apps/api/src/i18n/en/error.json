@@ -221,7 +221,15 @@
     "agentTriggerConnectorInvalid": "Not connectors in this workspace: {ids}",
     "agentNeedsPullRequest": "Agent \"{key}\" checks one pull or merge request, and this run names none.",
     "findingNoDraft": "This finding carries no page draft to create.",
-    "findingAlreadyCreated": "This finding's page has already been created."
+    "findingAlreadyCreated": "This finding's page has already been created.",
+    "agentTriggerMentionNeedsPage": "Agent \"{key}\" does not go over a single page, so a mention cannot trigger it.",
+    "agentTriggerWebhookOnly": "Only a webhook trigger has a signing secret.",
+    "agentTriggerSecretNeedsKey": "SETTINGS_ENCRYPTION_KEY is not set, so a webhook secret cannot be stored.",
+    "agentWebhookTooLarge": "The delivery is larger than {max} bytes.",
+    "agentWebhookNotConfigured": "This trigger has no signing secret yet. Rotate one in AI settings first.",
+    "agentWebhookBadSignature": "The X-Knowledge-Signature header does not match this delivery.",
+    "agentWebhookStale": "X-Knowledge-Timestamp is more than {seconds} seconds away from the server's clock.",
+    "agentWebhookDeliveryId": "X-Knowledge-Delivery is missing or invalid: 1–200 letters, digits and . _ : -"
   },
   "assistant": {
     "providerDisabled": "Assistant provider is disabled for this workspace",

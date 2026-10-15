@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
+import { Copy, KeyRound, Pencil, Plus, Trash2 } from 'lucide-vue-next'
 import {
   AGENT_TRIGGER_COOLDOWN_MAX_MINUTES,
   AGENT_TRIGGER_FILTER_FIELDS,
@@ -16,6 +16,7 @@ import {
   type AiAgentSummary,
   type ListAgentTriggersResponse,
   type ListConnectorsResponse,
+  type RotateAgentTriggerSecretResponse,
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
@@ -44,6 +45,32 @@ const invalidates = () => [['/v1/ai/agents/triggers']]
 const createTrigger = useApiMutation('post', '/v1/ai/agents/{key}/triggers', { invalidates })
 const updateTrigger = useApiMutation('patch', '/v1/ai/agents/triggers/{id}', { invalidates })
 const deleteTrigger = useApiMutation('delete', '/v1/ai/agents/triggers/{id}', { invalidates })
+const rotateSecret = useApiMutation('post', '/v1/ai/agents/triggers/{id}/rotate-secret', { invalidates })
+
+/**
+ * The secret a rotation just returned, shown under its trigger until the
+ * dialog closes. The API never reads one back, so this is the only time it
+ * exists outside the sender.
+ */
+const revealed = ref<{ id: string; secret: string } | null>(null)
+
+async function rotate(trigger: AgentTriggerSummary) {
+  try {
+    const res = (await rotateSecret.mutateAsync({ path: { id: trigger.id } })) as RotateAgentTriggerSecretResponse
+    revealed.value = { id: trigger.id, secret: res.secret }
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+async function copy(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(t('ai.triggers.webhook.copied'))
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
 
 /** The same predicate the API refuses with, so the picker never offers a 400. */
 const events = computed(() => agentTriggerEventsFor(props.agent.key))
@@ -186,7 +213,7 @@ function scopeLabel(trigger: AgentTriggerSummary): string {
           :aria-label="t('ai.triggers.enabled')"
           @update:model-value="setEnabled(trigger, $event === true)"
         />
-        <span class="min-w-0 flex-1">
+        <div class="min-w-0 flex-1">
           <span class="flex flex-wrap items-center gap-1.5 text-sm">
             {{ t(`ai.triggers.events.${trigger.event}`) }}
             <Badge v-if="scopeLabel(trigger)" variant="outline" class="max-w-64 truncate font-normal">
@@ -203,7 +230,53 @@ function scopeLabel(trigger: AgentTriggerSummary): string {
             }}
             <template v-if="trigger.ownerId"> · {{ t('ai.triggers.owned') }}</template>
           </span>
-        </span>
+          <!-- A webhook is configured on the sender's side: it needs the URL
+               and a secret, and a trigger without a secret refuses everything. -->
+          <div v-if="trigger.webhook" class="mt-2 space-y-1.5 text-xs">
+            <p class="text-muted-foreground font-medium">{{ t('ai.triggers.webhook.url') }}</p>
+            <p class="flex items-center gap-1">
+              <code class="bg-muted min-w-0 break-all rounded px-1 py-0.5 font-mono">{{ trigger.webhook.url }}</code>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                :aria-label="t('ai.triggers.webhook.copy')"
+                @click="copy(trigger.webhook.url)"
+              >
+                <Copy class="size-3.5" />
+              </Button>
+            </p>
+            <p :class="trigger.webhook.secretSet ? 'text-muted-foreground' : 'text-destructive'">
+              {{ trigger.webhook.secretSet ? t('ai.triggers.webhook.secretSet') : t('ai.triggers.webhook.noSecret') }}
+            </p>
+            <div v-if="revealed?.id === trigger.id" class="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+              <p>{{ t('ai.triggers.webhook.rotated') }}</p>
+              <p class="flex items-center gap-1">
+                <code class="bg-background min-w-0 break-all rounded px-1 py-0.5 font-mono">{{ revealed.secret }}</code>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  :aria-label="t('ai.triggers.webhook.copy')"
+                  @click="copy(revealed.secret)"
+                >
+                  <Copy class="size-3.5" />
+                </Button>
+              </p>
+            </div>
+            <p class="text-muted-foreground">{{ t('ai.triggers.webhook.signing') }}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              :disabled="rotateSecret.isPending.value"
+              @click="rotate(trigger)"
+            >
+              <KeyRound class="size-3.5" />
+              {{ trigger.webhook.secretSet ? t('ai.triggers.webhook.rotate') : t('ai.triggers.webhook.create') }}
+            </Button>
+          </div>
+        </div>
         <Button type="button" variant="ghost" size="sm" :aria-label="t('common.edit')" @click="openEdit(trigger)">
           <Pencil class="size-3.5" />
         </Button>

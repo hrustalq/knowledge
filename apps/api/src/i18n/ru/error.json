@@ -221,7 +221,15 @@
     "agentTriggerConnectorInvalid": "Не коннекторы этого рабочего пространства: {ids}",
     "agentNeedsPullRequest": "Агент «{key}» проверяет один pull или merge request, а в этом запуске он не указан.",
     "findingNoDraft": "В этом замечании нет черновика страницы, которую можно создать.",
-    "findingAlreadyCreated": "Страница по этому замечанию уже создана."
+    "findingAlreadyCreated": "Страница по этому замечанию уже создана.",
+    "agentTriggerMentionNeedsPage": "Агент «{key}» не проверяет отдельные страницы, поэтому упоминание не может его запустить.",
+    "agentTriggerWebhookOnly": "Секрет подписи есть только у триггера-вебхука.",
+    "agentTriggerSecretNeedsKey": "SETTINGS_ENCRYPTION_KEY не задан, поэтому секрет вебхука нельзя сохранить.",
+    "agentWebhookTooLarge": "Доставка больше {max} байт.",
+    "agentWebhookNotConfigured": "У этого триггера ещё нет секрета подписи. Сначала создайте его в настройках ИИ.",
+    "agentWebhookBadSignature": "Заголовок X-Knowledge-Signature не соответствует этой доставке.",
+    "agentWebhookStale": "X-Knowledge-Timestamp отличается от часов сервера больше чем на {seconds} с.",
+    "agentWebhookDeliveryId": "X-Knowledge-Delivery отсутствует или некорректен: 1–200 латинских букв, цифр и . _ : -"
   },
   "assistant": {
     "providerDisabled": "ИИ-провайдер отключён для этого рабочего пространства",

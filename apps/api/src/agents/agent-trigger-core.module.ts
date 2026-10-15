@@ -8,9 +8,9 @@ import { AgentTriggerService } from './agent-trigger.service.js';
 
 /**
  * `AgentTriggerService` (#70), controller-free so either process can fire a
- * trigger: the worker's bus listener today, an inline webhook delivery on the
- * API side next. The listener half is `AgentTriggerListener`, in
- * `AgentWorkerModule` only.
+ * trigger: the worker's bus listener, and on the API side a signed webhook
+ * delivery (`AgentWebhookController`) and an @mention (`MentionRepliesService`).
+ * The listener half is `AgentTriggerListener`, in `AgentWorkerModule` only.
  */
 @Module({
   imports: [PrismaModule, AiCoreModule, ActivityCoreModule, AgentCoreModule, AgentQueueModule],

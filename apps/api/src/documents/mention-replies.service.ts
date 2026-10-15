@@ -1,8 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { AgentTrigger } from '@prisma/client';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import type { Locale, ReviewThreadAnchor } from '@knowledge/contracts';
+import type { AgentFinding, AgentRunInput, Locale, ReviewThreadAnchor } from '@knowledge/contracts';
+import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AccessService } from '../auth/access.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
+import {
+  AgentTriggerService,
+  matchesTrigger,
+  type TriggerFacts,
+  type TriggerSkip,
+} from '../agents/agent-trigger.service.js';
+import { asLocale } from '../i18n/locale.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
@@ -30,6 +41,17 @@ const MAX_THREAD_CHARS = 12_000;
  * watches a placeholder through a coffee break.
  */
 const PENDING_TIMEOUT_MS = 10 * 60 * 1000;
+/**
+ * A reply waiting on an agent run (#70) is not timed out at the chat-turn
+ * limit — a run legitimately takes longer, and its own stale-run reaper fails
+ * it. This is only the backstop for a run that is never settled at all.
+ */
+const RUN_REPLY_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+/** Placeholders settled per sweep; the rest wait one tick. */
+const RUN_REPLY_BATCH = 50;
+/** How many of a run's findings a reply lists before pointing at the run. */
+const RUN_REPLY_FINDINGS = 5;
+const TERMINAL_RUN = ['succeeded', 'failed', 'cancelled'];
 
 /**
  * Bringing an agent into a review discussion (docs/features/21).
@@ -59,6 +81,21 @@ const PENDING_TIMEOUT_MS = 10 * 60 * 1000;
  * the three read tools, which is the duplication feature 20 deleted. If a reply
  * ever genuinely needs to search, the honest fix is to extract those tools over
  * `DocumentsCoreModule` — not to bend this.
+ *
+ * ## When the reply is a run (#70)
+ *
+ * An agent with an enabled `comment.mention` trigger answers with a background
+ * run instead of a chat turn: the commenter is asking for the agent's real
+ * pass over the page, not a conversation about it. The placeholder is claimed
+ * exactly as above, the run is started through `AgentTriggerService` — every
+ * guard, owned and billed as the commenter — and the placeholder waits on it
+ * (`agent_run_id`). The worker generates, the API publishes: the run writes
+ * nothing into the thread itself; `sweepRunReplies` fills the placeholder from
+ * the finished run. One mention, one comment, one spend.
+ *
+ * The commenter must be an editor to start a run, the role `POST …/run`
+ * requires. Anyone below that — and every mention while `AGENT_TRIGGERS_ENABLED`
+ * is off — gets the ordinary reply, exactly as before the trigger existed.
  */
 @Injectable()
 export class MentionRepliesService {
@@ -72,7 +109,14 @@ export class MentionRepliesService {
     private readonly client: AssistantClient,
     private readonly documents: DocumentsService,
     private readonly events: EventsPublisher,
-  ) {}
+    private readonly triggers: AgentTriggerService,
+    private readonly access: AccessService,
+    config: ConfigService<Env, true>,
+  ) {
+    this.triggersEnabled = config.get('AGENT_TRIGGERS_ENABLED', { infer: true }) === true;
+  }
+
+  private readonly triggersEnabled: boolean;
 
   /**
    * Claim a reply slot for every agent mentioned in `body`, then answer in the
@@ -98,15 +142,38 @@ export class MentionRepliesService {
 
       const doc = await this.prisma.document.findUnique({
         where: { id: input.documentId },
-        select: { workspaceId: true },
+        select: { workspaceId: true, projectId: true, category: true },
       });
       if (!doc) return;
       const workspaceId = doc.workspaceId;
+      const facts: TriggerFacts = {
+        workspaceId,
+        event: {
+          type: 'comment.mention',
+          source: input.subject.kind === 'merge-request' ? 'merge-request.comment.created' : 'document.comment.created',
+          subjectId: input.subject.kind === 'merge-request' ? input.subject.mergeRequestId : input.documentId,
+          documentId: input.documentId,
+          threadId: input.threadId,
+        },
+        // The page, not the thread: a run already going over this page holds
+        // back a second one, whichever trigger started it.
+        subjectKey: `doc:${input.documentId}`,
+        projectId: doc.projectId,
+        category: doc.category,
+      };
+      const runTriggers = await this.mentionTriggers(keys, facts, input.actorId, input.locale);
 
       for (const agentKey of keys) {
         const commentId = await this.claim(input.subject.kind, input.threadId, agentKey, input.actorId);
         // Somebody else's request already holds this slot.
         if (!commentId) continue;
+        const trigger = runTriggers.get(agentKey);
+        if (trigger) {
+          await withLocale(input.locale, () =>
+            this.startRun({ ...input, workspaceId, agentKey, commentId, trigger, facts }),
+          );
+          continue;
+        }
         // Detached on purpose: the caller is answering an HTTP request that has
         // nothing left to wait for. Failures are written into the comment.
         //
@@ -123,6 +190,86 @@ export class MentionRepliesService {
       }
     } catch (e: unknown) {
       this.logger.warn(`mention handling failed on thread ${input.threadId}: ${String(e)}`);
+    }
+  }
+
+  /**
+   * The mentioned agents that answer with a run: those with an enabled
+   * `comment.mention` trigger whose filter takes this page, when triggers are
+   * on and the commenter may start a run. Empty means every mention gets the
+   * ordinary reply.
+   */
+  private async mentionTriggers(
+    keys: string[],
+    facts: TriggerFacts,
+    actorId: string,
+    locale: Locale,
+  ): Promise<Map<string, AgentTrigger>> {
+    const found = new Map<string, AgentTrigger>();
+    if (!this.triggersEnabled) return found;
+    const rows = await this.prisma.agentTrigger.findMany({
+      where: { workspaceId: facts.workspaceId, event: 'comment.mention', enabled: true, agentKey: { in: keys } },
+      orderBy: { createdAt: 'asc' },
+    });
+    for (const row of rows) {
+      if (!found.has(row.agentKey) && matchesTrigger(row, facts)) found.set(row.agentKey, row);
+    }
+    if (found.size === 0) return found;
+    try {
+      const principal = await this.access.principalFor(actorId, locale);
+      await this.access.requireRole(principal, facts.workspaceId, 'editor');
+    } catch {
+      found.clear();
+    }
+    return found;
+  }
+
+  /**
+   * Start the run a mention asked for and tie the placeholder to it — or, when
+   * a guard holds it back, say which in the placeholder. A person asked, so a
+   * skipped run is never silent the way a skipped bus event is.
+   */
+  private async startRun(input: {
+    subject: MentionSubject;
+    workspaceId: string;
+    actorId: string;
+    locale: Locale;
+    agentKey: string;
+    commentId: string;
+    trigger: AgentTrigger;
+    facts: TriggerFacts;
+  }): Promise<void> {
+    try {
+      const outcome = await this.triggers.fire(input.trigger, input.facts, new Date(), {
+        ownerId: input.actorId,
+        locale: input.locale,
+      });
+      if (outcome.started) {
+        // Guarded on `pending`: nothing else should have settled it, but a
+        // stale sweep must not be overwritten with a link to a run.
+        const where = { id: input.commentId, pending: true };
+        const data = { agentRunId: outcome.runId };
+        if (input.subject.kind === 'merge-request') await this.prisma.mergeRequestComment.updateMany({ where, data });
+        else await this.prisma.documentComment.updateMany({ where, data });
+        return;
+      }
+      const name = (await this.agents.resolve(input.workspaceId, input.agentKey).catch(() => null))?.name ?? input.agentKey;
+      await this.settle(
+        input.subject,
+        input.commentId,
+        skipReply(outcome.reason, name, input.trigger.cooldownMinutes),
+        input.workspaceId,
+        input.agentKey,
+      );
+    } catch (e: unknown) {
+      this.logger.warn(`mention run for ${input.agentKey} could not start: ${String(e)}`);
+      await this.settle(
+        input.subject,
+        input.commentId,
+        t('mention.failed', { agent: input.agentKey }),
+        input.workspaceId,
+        input.agentKey,
+      );
     }
   }
 
@@ -344,13 +491,16 @@ export class MentionRepliesService {
     body: string,
     workspaceId: string,
     agentKey: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
+    // Guarded: the stale sweep, a run-reply sweep on another replica and this
+    // may all reach one placeholder, and only the first may write it.
+    const where = { id: commentId, pending: true };
     const data = { body, pending: false };
-    if (subject.kind === 'merge-request') {
-      await this.prisma.mergeRequestComment.update({ where: { id: commentId }, data });
-    } else {
-      await this.prisma.documentComment.update({ where: { id: commentId }, data });
-    }
+    const { count } =
+      subject.kind === 'merge-request'
+        ? await this.prisma.mergeRequestComment.updateMany({ where, data })
+        : await this.prisma.documentComment.updateMany({ where, data });
+    if (count === 0) return false;
     await this.events.publish({
       type:
         subject.kind === 'merge-request'
@@ -363,6 +513,7 @@ export class MentionRepliesService {
       subjectId: subject.kind === 'merge-request' ? subject.mergeRequestId : subject.documentId,
       actor: agentKey,
     });
+    return true;
   }
 
   /**
@@ -374,19 +525,78 @@ export class MentionRepliesService {
    * than an error, because it reads as still working.
    */
   async sweepStale(): Promise<number> {
-    const cutoff = new Date(Date.now() - PENDING_TIMEOUT_MS);
+    const now = Date.now();
+    // A reply waiting on a run has the run's own clock; see RUN_REPLY_TIMEOUT_MS.
+    const where = {
+      pending: true,
+      OR: [
+        { agentRunId: null, createdAt: { lt: new Date(now - PENDING_TIMEOUT_MS) } },
+        { createdAt: { lt: new Date(now - RUN_REPLY_TIMEOUT_MS) } },
+      ],
+    };
     const body = t('mention.timedOut');
     const [mr, doc] = await Promise.all([
-      this.prisma.mergeRequestComment.updateMany({
-        where: { pending: true, createdAt: { lt: cutoff } },
-        data: { body, pending: false },
-      }),
-      this.prisma.documentComment.updateMany({
-        where: { pending: true, createdAt: { lt: cutoff } },
-        data: { body, pending: false },
-      }),
+      this.prisma.mergeRequestComment.updateMany({ where, data: { body, pending: false } }),
+      this.prisma.documentComment.updateMany({ where, data: { body, pending: false } }),
     ]);
     return mr.count + doc.count;
+  }
+
+  /**
+   * Fill the placeholders whose run has finished (#70) — the API half of a
+   * mention answered by a run. Each is written with a guard on `pending`, so
+   * two sweeps (or two API replicas) settle it once, and in the run's own
+   * language rather than whichever request the sweep happens to run under.
+   */
+  async sweepRunReplies(): Promise<number> {
+    const select = { id: true, agentRunId: true, agentKey: true } as const;
+    const [mrComments, docComments] = await Promise.all([
+      this.prisma.mergeRequestComment.findMany({
+        where: { pending: true, agentRunId: { not: null } },
+        select: { ...select, thread: { select: { mergeRequestId: true } } },
+        orderBy: { createdAt: 'asc' },
+        take: RUN_REPLY_BATCH,
+      }),
+      this.prisma.documentComment.findMany({
+        where: { pending: true, agentRunId: { not: null } },
+        select: { ...select, thread: { select: { documentId: true } } },
+        orderBy: { createdAt: 'asc' },
+        take: RUN_REPLY_BATCH,
+      }),
+    ]);
+    const runIds = [...mrComments, ...docComments].map((c) => c.agentRunId as string);
+    if (runIds.length === 0) return 0;
+    const runs = new Map(
+      (
+        await this.prisma.agentRun.findMany({
+          where: { id: { in: runIds }, status: { in: TERMINAL_RUN } },
+          select: { id: true, workspaceId: true, agentKey: true, status: true, locale: true, input: true, summary: true, error: true, findings: true },
+        })
+      ).map((r) => [r.id, r]),
+    );
+
+    let settled = 0;
+    const waiting = [
+      ...mrComments.map((c) => ({ comment: c, kind: 'merge-request' as const, mergeRequestId: c.thread.mergeRequestId })),
+      ...docComments.map((c) => ({ comment: c, kind: 'document' as const, documentId: c.thread.documentId })),
+    ];
+    for (const entry of waiting) {
+      const run = runs.get(entry.comment.agentRunId as string);
+      if (!run) continue;
+      const documentId =
+        entry.kind === 'document' ? entry.documentId : ((run.input as AgentRunInput | null)?.event?.documentId ?? null);
+      if (!documentId) continue;
+      const subject: MentionSubject =
+        entry.kind === 'document'
+          ? { kind: 'document', documentId }
+          : { kind: 'merge-request', mergeRequestId: entry.mergeRequestId, documentId };
+      const name = (await this.agents.resolve(run.workspaceId, run.agentKey).catch(() => null))?.name ?? run.agentKey;
+      const body = withLocale(asLocale(run.locale), () => runReply(run, name));
+      if (await this.settle(subject, entry.comment.id, body, run.workspaceId, entry.comment.agentKey ?? run.agentKey)) {
+        settled++;
+      }
+    }
+    return settled;
   }
 }
 
@@ -479,4 +689,58 @@ function parseJsonish(text: string): StructuredAnswer | null {
   } catch {
     return null;
   }
+}
+
+/** What the placeholder says when a guard held the run back. */
+function skipReply(reason: TriggerSkip, agent: string, cooldownMinutes: number): string {
+  switch (reason) {
+    case 'in-flight':
+      return t('mention.run.inFlight', { agent });
+    case 'cooldown':
+      return t('mention.run.cooldown', { agent, minutes: cooldownMinutes });
+    case 'cap':
+      return t('mention.run.cap', { agent });
+    case 'budget':
+      return t('mention.run.budget', { agent });
+    case 'agent-unavailable':
+      return t('mention.agentDisabled', { agent });
+    default:
+      return t('mention.run.notStarted', { agent, reason });
+  }
+}
+
+/**
+ * A finished run, as a comment: the summary the agent wrote, the first few
+ * findings, and where the rest are. The findings are the run's real output —
+ * an editor who asked may not be an admin who can open the runs panel, so
+ * the reply carries them rather than only linking.
+ */
+export function runReply(
+  run: { id: string; status: string; summary: string | null; error: string | null; findings: unknown },
+  agent: string,
+): string {
+  if (run.status === 'failed') return t('mention.run.failed', { agent, error: run.error ?? '' });
+  if (run.status === 'cancelled') return t('mention.run.cancelled', { agent });
+  const findings = (Array.isArray(run.findings) ? (run.findings as AgentFinding[]) : []).filter(
+    (f) => f && typeof f.title === 'string',
+  );
+  const lines = [run.summary?.trim() || t('mention.run.noSummary', { agent })];
+  if (findings.length > 0) {
+    lines.push(
+      '',
+      ...findings
+        .slice(0, RUN_REPLY_FINDINGS)
+        .map((f) => `- **${f.severity}** — ${f.title}${f.detail ? `: ${oneLine(f.detail, 240)}` : ''}`),
+    );
+    if (findings.length > RUN_REPLY_FINDINGS) {
+      lines.push('', t('mention.run.more', { count: findings.length - RUN_REPLY_FINDINGS }));
+    }
+  }
+  lines.push('', `[${t('mention.run.open')}](/settings/ai/runs?run=${run.id})`);
+  return lines.join('\n');
+}
+
+function oneLine(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 }

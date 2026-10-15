@@ -5,7 +5,8 @@ import { MentionRepliesService } from './mention-replies.service.js';
 const SWEEP_INTERVAL_MS = 60_000;
 
 /**
- * Closes out agent replies whose turn died with the process (docs/features/21).
+ * Closes out agent replies whose turn died with the process (docs/features/21),
+ * and fills the ones answered by an agent run once that run finishes (#70).
  *
  * An @mention answers on a detached continuation, which is precisely the thing
  * a deploy or a crash drops. What it leaves behind is a comment that says the
@@ -39,6 +40,10 @@ export class MentionReplySweeper implements OnModuleInit, OnModuleDestroy {
     if (this.running) return; // a slow sweep must not stack on itself
     this.running = true;
     try {
+      // Run replies first: a run that finished just inside the backstop is an
+      // answer, not a timeout.
+      const answered = await this.mentions.sweepRunReplies();
+      if (answered > 0) this.logger.log(`posted ${answered} agent run replies`);
       const closed = await this.mentions.sweepStale();
       if (closed > 0) this.logger.warn(`timed out ${closed} unanswered agent replies`);
     } catch (e: unknown) {

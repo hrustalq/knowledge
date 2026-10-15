@@ -12,6 +12,7 @@ import {
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type {
+  RotateAgentTriggerSecretResponse,
   AgentRouteDecision,
   AgentRunSummary,
   AgentTriggerSummary,
@@ -394,6 +395,26 @@ export class AiController {
       metadata: { key: trigger.agentKey, event: trigger.event, enabled: trigger.enabled },
     });
     return trigger;
+  }
+
+  @Post('agents/triggers/:id/rotate-secret')
+  @Access('admin', 'agent-trigger')
+  @ApiOperation({
+    summary: "Give a webhook trigger a new signing secret. Returned once; the previous one stops verifying at once.",
+  })
+  async rotateAgentTriggerSecret(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<RotateAgentTriggerSecretResponse> {
+    const { trigger, response } = await this.triggers.rotateSecret(id);
+    await this.activity.record({
+      workspaceId: trigger.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.trigger.updated',
+      subjectId: trigger.id,
+      metadata: { key: trigger.agentKey, event: trigger.event, secretRotated: true },
+    });
+    return response;
   }
 
   @Delete('agents/triggers/:id')

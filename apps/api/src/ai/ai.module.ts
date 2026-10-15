@@ -13,6 +13,8 @@ import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
 import { AgentFindingsService } from './agent-findings.service.js';
 import { AgentTriggersService } from './agent-triggers.service.js';
 import { AgentQueueModule } from '../agents/agent-queue.module.js';
+import { AgentTriggerCoreModule } from '../agents/agent-trigger-core.module.js';
+import { AgentWebhookController } from './agent-webhook.controller.js';
 import { AgentTiebreakService } from './agent-tiebreak.service.js';
 import { McpClientService } from './mcp-client.service.js';
 import { AiController } from './ai.controller.js';
@@ -35,6 +37,8 @@ import { AiUsageController } from './ai-usage.controller.js';
     AiCoreModule,
     AgentCoreModule,
     AgentQueueModule,
+    // A signed delivery fires its trigger inline (#70); controller-free.
+    AgentTriggerCoreModule,
     ActivityModule,
     // Turning a finding into a merge request writes a branch, a revision and an
     // MR — the API half of feature 17's "the worker generates, the API
@@ -45,7 +49,7 @@ import { AiUsageController } from './ai-usage.controller.js';
     VerificationCoreModule,
     forwardRef(() => AssistantModule),
   ],
-  controllers: [AiController, AiUsageController],
+  controllers: [AiController, AiUsageController, AgentWebhookController],
   providers: [AiAgentsService, AgentRunsService, AgentTriggersService, AgentFindingsService, AgentTiebreakService, AiPluginsService, AiSettingsService, McpClientService],
   // AgentFindingsService for the drift check's publisher (docs/features/35),
   // which proposes through the very path the Propose button takes.

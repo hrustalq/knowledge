@@ -149,7 +149,7 @@ async function remove(skill: AiSkillSummary) {
       <TableHeader>
         <TableRow>
           <TableHead>{{ t('ai.name') }}</TableHead>
-          <TableHead>{{ t('ai.triggers') }}</TableHead>
+          <TableHead>{{ t('ai.triggers.title') }}</TableHead>
           <TableHead class="w-24">{{ t('ai.enabled') }}</TableHead>
           <TableHead class="w-20"></TableHead>
         </TableRow>

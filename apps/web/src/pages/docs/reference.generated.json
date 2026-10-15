@@ -311,6 +311,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/ai/agents/triggers/{id}/rotate-secret",
+      "tag": "ai",
+      "summary": "Give a webhook trigger a new signing secret. Returned once; the previous one stops verifying at once.",
+      "role": "admin",
+      "source": "agent-trigger",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/ai/budgets",
       "tag": "ai",

@@ -1,12 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AgentTrigger, Prisma } from '@prisma/client';
 import {
   AGENT_TRIGGER_FILTER_FIELDS,
   agentTriggerEventsFor,
+  isConnectorScopedAgent,
   type AgentTriggerEvent,
   type AgentTriggerFilter,
   type AgentTriggerSummary,
+  type RotateAgentTriggerSecretResponse,
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { t } from '../i18n/t.js';
@@ -14,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
 import { RUNNABLE_AGENTS } from '../agents/agent.executor.js';
 import { filterOf } from '../agents/agent-trigger.service.js';
+import { decryptSecret, encryptSecret, parseKey } from './secret-box.js';
 import type { CreateAgentTriggerDto, UpdateAgentTriggerDto } from './ai.dto.js';
 
 /**
@@ -27,6 +31,8 @@ import type { CreateAgentTriggerDto, UpdateAgentTriggerDto } from './ai.dto.js';
 @Injectable()
 export class AgentTriggersService {
   private readonly defaultCooldown: number;
+  private readonly apiPublicUrl: string;
+  private readonly key: Buffer | null;
   readonly listening: boolean;
 
   constructor(
@@ -36,6 +42,13 @@ export class AgentTriggersService {
   ) {
     this.defaultCooldown = Number(config.get('AGENT_TRIGGER_COOLDOWN_MINUTES', { infer: true }) ?? 60);
     this.listening = config.get('AGENT_TRIGGERS_ENABLED', { infer: true }) === true;
+    this.apiPublicUrl = String(config.get('API_PUBLIC_URL', { infer: true }) ?? '').replace(/\/+$/, '');
+    this.key = parseKey(config.get('SETTINGS_ENCRYPTION_KEY', { infer: true }));
+  }
+
+  /** Where a `webhook` trigger is delivered — the one route `AgentWebhookController` serves. */
+  webhookUrl(id: string): string {
+    return `${this.apiPublicUrl}/v1/ai/agents/triggers/${id}/webhook`;
   }
 
   async list(workspaceId: string): Promise<AgentTriggerSummary[]> {
@@ -43,7 +56,46 @@ export class AgentTriggersService {
       where: { workspaceId },
       orderBy: [{ agentKey: 'asc' }, { createdAt: 'asc' }],
     });
-    return rows.map(toTriggerSummary);
+    return rows.map((row) => this.summary(row));
+  }
+
+  summary(row: AgentTrigger): AgentTriggerSummary {
+    return toTriggerSummary(row, this.webhookUrl(row.id));
+  }
+
+  /**
+   * The `webhook` trigger a delivery names, and its secret in the clear — or
+   * null for an unknown id or another kind of trigger, which the controller
+   * answers alike. `secret` is null while none is set (or it no longer
+   * decrypts under the current key).
+   */
+  async forWebhook(id: string): Promise<{ trigger: AgentTrigger; secret: string | null } | null> {
+    const trigger = await this.prisma.agentTrigger.findUnique({ where: { id } });
+    if (!trigger || trigger.event !== 'webhook') return null;
+    return { trigger, secret: decryptSecret(trigger.webhookSecret, this.key) };
+  }
+
+  /**
+   * A new secret for a `webhook` trigger, returned this once and stored only
+   * as a secret-box envelope. The old one stops verifying the moment this
+   * commits — there is no overlap window, so the sender is updated first or
+   * deliveries in between are refused (and can be retried: the delivery id is
+   * not consumed by a refusal).
+   */
+  async rotateSecret(id: string): Promise<{ trigger: AgentTrigger; response: RotateAgentTriggerSecretResponse }> {
+    const existing = await this.require(id);
+    if (existing.event !== 'webhook') {
+      throw new BadRequestException(t('error.ai.agentTriggerWebhookOnly'));
+    }
+    if (!this.key) {
+      throw new ConflictException({ statusCode: 409, message: t('error.ai.agentTriggerSecretNeedsKey'), reason: 'agentTrigger.secretNeedsKey' });
+    }
+    const secret = randomBytes(32).toString('base64url');
+    const trigger = await this.prisma.agentTrigger.update({
+      where: { id },
+      data: { webhookSecret: encryptSecret(secret, this.key) },
+    });
+    return { trigger, response: { secret, url: this.webhookUrl(id) } };
   }
 
   async create(agentKey: string, dto: CreateAgentTriggerDto, userId: string): Promise<AgentTriggerSummary> {
@@ -54,14 +106,16 @@ export class AgentTriggersService {
         workspaceId: dto.workspaceId,
         agentKey,
         event: dto.event,
-        cooldownMinutes: this.defaultCooldown,
+        // A mention is a person addressing the agent — their typing is the rate
+        // limit, and the in-flight guard still holds a second run on one page.
+        cooldownMinutes: dto.event === 'comment.mention' ? 0 : this.defaultCooldown,
         ...fields,
         enabled: dto.enabled === true,
         ownerId: dto.enabled === true ? userId : null,
         createdBy: userId,
       },
     });
-    return toTriggerSummary(row);
+    return this.summary(row);
   }
 
   async update(id: string, dto: UpdateAgentTriggerDto, userId: string): Promise<AgentTriggerSummary> {
@@ -76,7 +130,7 @@ export class AgentTriggersService {
         ...(dto.enabled === true ? { ownerId: userId } : {}),
       },
     });
-    return toTriggerSummary(row);
+    return this.summary(row);
   }
 
   async remove(id: string): Promise<AgentTrigger> {
@@ -103,7 +157,11 @@ export class AgentTriggersService {
       throw new BadRequestException(t('error.ai.agentNotBackground', { key: agentKey }));
     }
     if (!agentTriggerEventsFor(agentKey).includes(event)) {
-      throw new BadRequestException(t('error.ai.agentTriggerNeedsRepository', { key: agentKey }));
+      throw new BadRequestException(
+        isConnectorScopedAgent(agentKey)
+          ? t('error.ai.agentTriggerNeedsRepository', { key: agentKey })
+          : t('error.ai.agentTriggerMentionNeedsPage', { key: agentKey }),
+      );
     }
   }
 
@@ -163,7 +221,7 @@ export function mergeFilter(
   ) as AgentTriggerFilter;
 }
 
-export function toTriggerSummary(row: AgentTrigger): AgentTriggerSummary {
+export function toTriggerSummary(row: AgentTrigger, webhookUrl: string): AgentTriggerSummary {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -175,6 +233,7 @@ export function toTriggerSummary(row: AgentTrigger): AgentTriggerSummary {
     ownerId: row.ownerId,
     cooldownMinutes: row.cooldownMinutes,
     note: row.note,
+    webhook: row.event === 'webhook' ? { url: webhookUrl, secretSet: row.webhookSecret !== null } : null,
     lastFiredAt: row.lastFiredAt?.toISOString() ?? null,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),

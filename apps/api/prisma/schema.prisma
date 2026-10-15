@@ -328,34 +328,39 @@ model MergeRequestThread {
 }
 
 model MergeRequestComment {
-  id        String    @id @default(uuid()) @db.Uuid
-  threadId  String    @map("thread_id") @db.Uuid
-  authorId  String    @map("author_id") @db.Uuid
-  body      String
+  id         String    @id @default(uuid()) @db.Uuid
+  threadId   String    @map("thread_id") @db.Uuid
+  authorId   String    @map("author_id") @db.Uuid
+  body       String
   // The comment in this thread that this one answers. Attribution, not
   // nesting: the list stays flat and createdAt-ordered, and SetNull means
   // deleting a comment leaves the replies that pointed at it in place.
-  replyToId String?   @map("reply_to_id") @db.Uuid
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  replyToId  String?   @map("reply_to_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   // Null until the author rewrites the comment — an edit is surfaced as one
   // rather than quietly replacing what someone read.
-  updatedAt DateTime? @map("updated_at") @db.Timestamptz
+  updatedAt  DateTime? @map("updated_at") @db.Timestamptz
   // Which agent wrote this, or null when a person did. MergeRequestThread.source
   // answers the same question for a *thread*, but only about its opening
   // comment — an agent answering an @mention posts into a human's thread, and a
   // reader must still be told a machine is speaking. `authorId` stays the person
   // who mentioned it: they are who authorized the call, and who it is billed to.
-  agentKey  String?   @map("agent_key")
+  agentKey   String?   @map("agent_key")
   // A model turn outlives the request that triggers it, so the comment is
   // written first and filled in after. While set, the body is not yet an answer.
   // The row doubles as the claim that stops one mention firing twice.
-  pending   Boolean   @default(false)
+  pending    Boolean   @default(false)
+  // The agent run this pending reply is waiting on (#70): an agent with an
+  // enabled comment.mention trigger answers with its run's result rather than
+  // a chat turn, filled in by MentionRepliesService.sweepRunReplies. No FK.
+  agentRunId String?   @map("agent_run_id") @db.Uuid
 
   thread  MergeRequestThread    @relation(fields: [threadId], references: [id])
   replyTo MergeRequestComment?  @relation("MergeRequestCommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies MergeRequestComment[] @relation("MergeRequestCommentReplies")
 
   @@index([threadId, createdAt])
+  @@index([agentRunId])
   @@map("merge_request_comments")
 }
 
@@ -391,25 +396,27 @@ model DocumentThread {
 }
 
 model DocumentComment {
-  id        String    @id @default(uuid()) @db.Uuid
-  threadId  String    @map("thread_id") @db.Uuid
-  authorId  String    @map("author_id") @db.Uuid
-  body      String
+  id         String    @id @default(uuid()) @db.Uuid
+  threadId   String    @map("thread_id") @db.Uuid
+  authorId   String    @map("author_id") @db.Uuid
+  body       String
   // See MergeRequestComment.replyToId.
-  replyToId String?   @map("reply_to_id") @db.Uuid
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  replyToId  String?   @map("reply_to_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   // Null until the author rewrites the comment — an edit is surfaced as one
   // rather than quietly replacing what someone read.
-  updatedAt DateTime? @map("updated_at") @db.Timestamptz
-  // See MergeRequestComment.agentKey / .pending.
-  agentKey  String?   @map("agent_key")
-  pending   Boolean   @default(false)
+  updatedAt  DateTime? @map("updated_at") @db.Timestamptz
+  // See MergeRequestComment.agentKey / .pending / .agentRunId.
+  agentKey   String?   @map("agent_key")
+  pending    Boolean   @default(false)
+  agentRunId String?   @map("agent_run_id") @db.Uuid
 
   thread  DocumentThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
   replyTo DocumentComment?  @relation("DocumentCommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies DocumentComment[] @relation("DocumentCommentReplies")
 
   @@index([threadId, createdAt])
+  @@index([agentRunId])
   @@map("document_comments")
 }
 
@@ -1217,6 +1224,9 @@ model AgentTrigger {
   cooldownMinutes Int       @default(60) @map("cooldown_minutes")
   /// Seeded into each run's input.note.
   note            String?
+  /// A 'webhook' trigger's HMAC secret, as an ai/secret-box.ts envelope.
+  /// Write-only over the API: rotate-secret shows a new one once.
+  webhookSecret   String?   @map("webhook_secret")
   lastFiredAt     DateTime? @map("last_fired_at") @db.Timestamptz
 
   createdBy String   @map("created_by") @db.Uuid

@@ -5,5 +5,17 @@
   "agentDisabled": "{agent} is switched off for this workspace. A workspace admin can enable it in AI settings.",
   "providerDisabled": "{agent} has no AI provider configured. A workspace admin can set one up in AI settings.",
   "notConversational": "{agent} does not answer discussions — it only runs as a background pass.",
-  "modelMissing": "{agent} needs a model that supports {capabilities}, and the one configured for it does not."
+  "modelMissing": "{agent} needs a model that supports {capabilities}, and the one configured for it does not.",
+  "run": {
+    "inFlight": "{agent} is already going over this page. Its findings will show up under AI settings → Runs; mention it again once that run has finished.",
+    "cooldown": "{agent} went over this page less than {minutes} minutes ago. Mention it again later, or ask an admin to shorten the trigger's cooldown.",
+    "cap": "Too many triggered agent runs are in flight in this workspace right now. Mention {agent} again in a few minutes.",
+    "budget": "{agent} did not start: this workspace or your account is over its AI budget for the month.",
+    "notStarted": "{agent} did not start ({reason}).",
+    "failed": "{agent} could not finish going over this page: {error}",
+    "cancelled": "The {agent} run was cancelled before it finished.",
+    "noSummary": "{agent} finished without a summary.",
+    "more": "…and {count} more.",
+    "open": "Open the run"
+  }
 }

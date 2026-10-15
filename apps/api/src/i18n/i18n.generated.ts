@@ -542,6 +542,14 @@ export type I18nTranslations = {
             "agentNeedsPullRequest": string;
             "findingNoDraft": string;
             "findingAlreadyCreated": string;
+            "agentTriggerMentionNeedsPage": string;
+            "agentTriggerWebhookOnly": string;
+            "agentTriggerSecretNeedsKey": string;
+            "agentWebhookTooLarge": string;
+            "agentWebhookNotConfigured": string;
+            "agentWebhookBadSignature": string;
+            "agentWebhookStale": string;
+            "agentWebhookDeliveryId": string;
         };
         "assistant": {
             "providerDisabled": string;
@@ -973,6 +981,18 @@ export type I18nTranslations = {
         "providerDisabled": string;
         "notConversational": string;
         "modelMissing": string;
+        "run": {
+            "inFlight": string;
+            "cooldown": string;
+            "cap": string;
+            "budget": string;
+            "notStarted": string;
+            "failed": string;
+            "cancelled": string;
+            "noSummary": string;
+            "more": string;
+            "open": string;
+        };
     };
     "prompt": {
         "localeDirective": string;

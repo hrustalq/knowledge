@@ -308,6 +308,60 @@ main::-webkit-scrollbar-thumb:hover,
 }
 
 /*
+ * A published site's nav (issue #204): the app rail's shape, pinned to the
+ * left edge from `lg` up, and below it the same element as a drawer.
+ *
+ * The drawer cannot be a <Transition>: the reader is a server render that has
+ * to navigate with JavaScript off, so the nav is always in the DOM and opens
+ * from `:target` — the header's menu control is a plain `#site-nav` link, the
+ * scrim and the close control plain `#` links. With JavaScript the reader sets
+ * `data-open` instead and keeps the URL clean; the CSS reads either.
+ *
+ * `visibility` waits out the slide on the way closed, so a closed drawer
+ * leaves the tab order without vanishing mid-travel.
+ */
+@media (width < 64rem) {
+  .kn-site-rail {
+    position: fixed;
+    inset-block: 0;
+    left: 0;
+    z-index: 40;
+    width: min(16rem, 88vw);
+    transform: translateX(-100%);
+    visibility: hidden;
+    box-shadow: 0 16px 48px -12px rgb(0 0 0 / 0.45);
+    transition:
+      transform var(--rail-duration) var(--pane-ease),
+      visibility 0s linear var(--rail-duration);
+  }
+  .kn-site-rail:target,
+  .kn-site-rail[data-open='true'] {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--rail-duration) var(--pane-ease);
+  }
+  .kn-site-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgb(0 0 0 / 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--rail-duration) var(--pane-ease);
+  }
+  .kn-site-rail:target + .kn-site-scrim,
+  .kn-site-rail[data-open='true'] + .kn-site-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+@media (width >= 64rem) {
+  .kn-site-scrim {
+    display: none;
+  }
+}
+
+/*
  * The page tree's horizontal window.
  *
  * Deep pages are reached by sliding the list, not by surrendering the indent:
@@ -394,7 +448,10 @@ body.kn-tree-dragging a {
   .kn-rail,
   .kn-tree-window > ul,
   .drawer-enter-active .kn-drawer-panel,
-  .drawer-leave-active .kn-drawer-panel {
+  .drawer-leave-active .kn-drawer-panel,
+  .kn-site-rail,
+  .kn-site-rail:target,
+  .kn-site-rail[data-open='true'] {
     transition: none;
   }
   .drawer-enter-from .kn-drawer-panel,

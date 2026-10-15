@@ -15,8 +15,25 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Changed
+
+- A published site's page list now looks and behaves like the app's sidebar
+  tree. Pages expand and collapse with a chevron, and opening a branch loads
+  only that level, with a spinner on the row while it loads. Before, a site
+  sent every page title on every page load, which slowed down large sites.
+  Without JavaScript, the top level and the path to the current page still
+  render as plain links. (#204)
+- The site reader now uses the full window width. The page list is pinned to
+  the left edge and scrolls to the current page; the content fills the rest,
+  and prose keeps a readable line length. On narrow screens the page list is
+  a drawer behind the header's menu button. It also opens without
+  JavaScript. (#204)
+
 ### Fixed
 
+- The **⋯** menu on a page in the sidebar tree opened in the top-left corner
+  of the window instead of beside the row. It now opens next to the row and
+  stays there when the pointer leaves it. (#203)
 - Search no longer fails when OpenSearch is down, restarting or slow.
   `/v1/search`, the search widget, MCP `knowledge_search` and the assistant's
   search tools now answer from vector results alone and report
@@ -53,14 +70,6 @@ in the pull request that introduces them — see
   not matter; until both hold the same value, requests are counted against
   Cloudflare's address as before. To rotate: new value → Worker → environment
   → redeploy (`gh workflow run deploy.yml --ref vX.Y.Z`).
-
-## [Unreleased]
-
-### Fixed
-
-- The **⋯** menu on a page in the sidebar tree opened in the top-left corner
-  of the window instead of beside the row. It now opens next to the row and
-  stays there when the pointer leaves it. (#203)
 
 ## [0.22.0] — 2026-10-15
 

@@ -22,7 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useTemplatesStore } from '@/stores/templates'
-import { TREE_INDENT, useSidebarStore } from '@/stores/sidebar'
+import { useSidebarStore } from '@/stores/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
@@ -34,7 +34,7 @@ import SidebarTreeNode from './SidebarTreeNode.vue'
 import TreeDragLayer from '@/components/knowledge/TreeDragLayer.vue'
 import { provideTreeDnd } from '@/components/knowledge/tree-dnd'
 import { toast } from 'vue-sonner'
-import { TreeWindowKey } from './tree-window'
+import { TreeWindowKey, treeShift } from '@/lib/tree-window'
 
 const { t } = useI18n()
 
@@ -111,7 +111,7 @@ provide(TreeWindowKey, {
 
 // Whatever depth exceeds the rail's budget is what the window has to travel.
 // The budget already reserves a readable title, so this needs no second cap.
-const shift = computed(() => Math.max(0, focusDepth.value - sidebar.treeDepthBudget) * TREE_INDENT)
+const shift = computed(() => treeShift(focusDepth.value, sidebar.treeDepthBudget))
 </script>
 
 <template>

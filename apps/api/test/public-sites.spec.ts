@@ -706,3 +706,95 @@ describe('audiences: a page the reader may not see does not exist for them', () 
     expect(after.etag).not.toBe(before.etag);
   });
 });
+
+describe('the reader’s nav, a level at a time (issue #204)', () => {
+  const DOC_DEEP = '99999999-9999-4999-8999-999999999999';
+  const DOC_GUIDES = '88888888-8888-4888-8888-888888888888';
+  const DOC_LAST = '77777777-7777-4777-8777-777777777777';
+
+  /** Welcome › Install › Deep, then Guides at the top level; Deep kept to members. */
+  function deeper() {
+    const r = reader();
+    r.prisma.pages.push(
+      { versionId: V_LATEST, documentId: DOC_DEEP, revisionId: 'deep-r1', parentId: DOC_INSTALL, position: 0, depth: 2, slugPath: 'welcome/install/deep', title: 'Deep', audience: 'members', audienceClaims: null },
+      { versionId: V_LATEST, documentId: DOC_GUIDES, revisionId: 'guides-r1', parentId: null, position: 1, depth: 0, slugPath: 'guides', title: 'Guides', audience: 'public', audienceClaims: null },
+    );
+    return r;
+  }
+
+  it('resolve sends the top level and the open path’s children, each with the children the viewer may see', async () => {
+    const { service, sessions } = deeper();
+    const home = await service.resolve({ slug: 'acme', path: '/' });
+    expect(home.tree.map((n) => [n.documentId, n.childCount])).toEqual([
+      [DOC_HOME, 1],
+      [DOC_INSTALL, 0], // Deep is members-only
+      [DOC_GUIDES, 0],
+    ]);
+
+    sessions.viewer.mockResolvedValue({ kind: 'member' });
+    const member = await service.resolve({ slug: 'acme', path: '/guides' });
+    // Welcome is not on the path to Guides: its child is not sent, only counted.
+    expect(member.tree.map((n) => [n.documentId, n.childCount])).toEqual([
+      [DOC_HOME, 1],
+      [DOC_GUIDES, 0],
+    ]);
+  });
+
+  it('the tree route lists one level, never a page the viewer may not see, and 404s a hidden parent', async () => {
+    const { service, sessions } = deeper();
+    expect((await service.children(SITE, {})).nodes.map((n) => n.documentId)).toEqual([DOC_HOME, DOC_GUIDES]);
+    expect((await service.children(SITE, { parent: DOC_INSTALL })).nodes).toEqual([]);
+    await expect(service.children(SITE, { parent: DOC_DEEP })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.children(SITE, { parent: 'not-a-uuid' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.children(SITE, { version: 'next' })).rejects.toBeInstanceOf(NotFoundException);
+    // Another version's tree is its own snapshot.
+    expect((await service.children(SITE, { version: 'v1', parent: DOC_HOME })).nodes).toEqual([]);
+
+    sessions.viewer.mockResolvedValue({ kind: 'member' });
+    expect((await service.children(SITE, { parent: DOC_INSTALL }, 'kn_site_x=1')).nodes).toEqual([
+      { documentId: DOC_DEEP, parentId: DOC_INSTALL, title: 'Deep', slugPath: 'welcome/install/deep', position: 0, childCount: 0 },
+    ]);
+  });
+
+  it('prev and next walk the whole reading order, skipping what the viewer may not see', async () => {
+    const { service, sessions } = deeper();
+    const install = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    expect(install.page?.prev?.documentId).toBe(DOC_HOME);
+    expect(install.page?.next?.documentId).toBe(DOC_GUIDES);
+
+    sessions.viewer.mockResolvedValue({ kind: 'member' });
+    const member = await service.resolve({ slug: 'acme', path: '/welcome/install' });
+    expect(member.page?.next).toEqual({ documentId: DOC_DEEP, title: 'Deep', slugPath: 'welcome/install/deep' });
+    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.next).toBeNull();
+  });
+
+  it('a body’s page links resolve against every visible page, not just the trimmed tree', async () => {
+    const { service, documents, sessions } = deeper();
+    documents.getContent.mockImplementation(async (documentId: string, revisionId: string) => ({
+      documentId,
+      revisionId,
+      markdown: `[g](/documents/${DOC_GUIDES}) [d](/documents/${DOC_DEEP}#x) [g again](/documents/${DOC_GUIDES})`,
+    }));
+    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.links).toEqual([{ documentId: DOC_GUIDES, slugPath: 'guides' }]);
+
+    sessions.viewer.mockResolvedValue({ kind: 'member' });
+    expect((await service.resolve({ slug: 'acme', path: '/guides' })).page?.links).toEqual([
+      { documentId: DOC_GUIDES, slugPath: 'guides' },
+      { documentId: DOC_DEEP, slugPath: 'welcome/install/deep' },
+    ]);
+  });
+
+  it('two viewers whose trimmed answers match still get different tags when they see different pages', async () => {
+    const { service, prisma, sessions } = deeper();
+    Object.assign(prisma.pages.find((p) => p.documentId === DOC_DEEP)!, { audience: 'visitors', audienceClaims: { plan: ['pro'] } });
+    prisma.pages.push({ versionId: V_LATEST, documentId: DOC_LAST, revisionId: 'last-r1', parentId: null, position: 2, depth: 0, slugPath: 'last', title: 'Last', audience: 'public', audienceClaims: null });
+    sessions.viewer.mockResolvedValue({ kind: 'visitor', claims: { plan: 'free' } });
+    const free = await service.resolveTagged({ slug: 'acme', path: '/last' });
+    sessions.viewer.mockResolvedValue({ kind: 'visitor', claims: { plan: 'pro' } });
+    const pro = await service.resolveTagged({ slug: 'acme', path: '/last' });
+    // Deep sits under a branch this page's tree does not open: both answers read the same…
+    expect(pro.body).toEqual(free.body);
+    // …but a link from this body to Deep would resolve for one of them only.
+    expect(pro.etag).not.toBe(free.etag);
+  });
+});

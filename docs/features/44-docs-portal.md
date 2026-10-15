@@ -122,7 +122,8 @@ per-IP `PublicRateLimitGuard` as shares, `Cache-Control: no-store`):
 
 | Route | Answers |
 | --- | --- |
-| `GET resolve?slug=\|host=&path=&from=` | site chrome (title, normalized theme, logo, root URL), the version, every built version, the snapshot tree, and the page (markdown at its pinned revision, frontmatter stripped), or `page: null`. Carries an `ETag`; a matching `If-None-Match` answers 304 without reading the body (see the render cache below) |
+| `GET resolve?slug=\|host=&path=&from=` | site chrome (title, normalized theme, logo, root URL), the version, every built version, the nav's first render of the tree (below), and the page (markdown at its pinned revision, frontmatter stripped; its prev/next in reading order; where each page it links to lives), or `page: null`. Carries an `ETag`; a matching `If-None-Match` answers 304 without reading the body (see the render cache below) |
+| `GET :siteId/tree?parent=&version=` | one level of the version's tree as the viewer sees it: the children of `parent` (the top level without it), each with its own `childCount`. A parent the viewer may not see, or that is not in the version, is a 404 (issue #204) |
 | `GET :siteId/search?q=&version=` | up to 20 pages of one version matching `q`, each with a snippet as text runs (see Search) |
 | `GET :siteId/versions/:versionId/attachments/:attachmentId` | 302 to a presigned URL, only for an attachment of a page in that snapshot |
 | `GET :siteId/logo` | 302 to the project's uploaded avatar, when the theme shows a logo |
@@ -138,6 +139,17 @@ per-IP `PublicRateLimitGuard` as shares, `Cache-Control: no-store`):
   (a version switch), a path the target lacks falls back to the same document
   there, then to its home. Without `from`, a path that is not in the snapshot
   gets `page: null`.
+- **Which tree (issue #204).** `resolve` sends the top level and the children
+  of every page on the path to the current one — never the whole tree, which
+  for a large site shipped every title on every page load. Each node carries
+  `childCount`, so an unexpanded branch still draws as a branch. What the
+  trimmed tree can no longer answer is settled server-side over every visible
+  row: `page.prev` / `page.next` walk the whole reading order, and
+  `page.links` says where each page the body links to lives (the reader's
+  only source for rewriting `/documents/<id>` links). The ETag also covers
+  the ids of every row the viewer may see, because `links` is resolved after
+  it: two viewers whose trimmed answers match but who see different pages
+  must not share a cached render.
 - **Never public.** Frontmatter, authors, revision ids, history, comments,
   relations. The response types are their own (`PublicSiteResolveResponse`),
   not member DTOs.
@@ -247,10 +259,25 @@ The share reader's public entry (`entry-public.ts`, `reader.html`,
   callbacks: page references resolve to the page's site URL **only** when the
   page is in the snapshot (anything else loses its link), and attachments go
   through the site attachment route.
-- **Chrome.** The nav shows the top level plus the open path to the current
-  page. A version switcher, "you are reading an older version" banner,
-  outline and previous/next all work with JavaScript off. The client only
-  upgrades mermaid and the theme toggle, and adds search.
+- **Chrome.** The nav is drawn by the app rail's own row and branch
+  (`components/tree/TreeRow.vue`, `TreeBranch.vue`; `SidebarTreeNode` is the
+  app's wrapper around them, `SiteTreeNode` the reader's), with the same
+  indent rails and horizontal tree window (`lib/tree-window.ts`). It first
+  renders what `resolve` sent — the top level and the open path, as plain
+  links — and expanding any other branch asks the tree route for that one
+  level, with a spinner on the row meanwhile (`site-tree.ts`); a collapsed
+  branch is never fetched. A version switcher, "you are reading an older
+  version" banner, outline and previous/next all work with JavaScript off.
+  The client upgrades mermaid and the theme toggle, adds search, and loads
+  deeper nav levels.
+- **Layout.** The app shell's: a full-width header, the rail pinned to the
+  window's left edge from `lg` (sticky under the header, scrolled to the
+  current page on load), and the content column filling the rest. The prose
+  keeps a 46rem measure inside that column; the outline sits at its right from
+  `xl`. Below `lg` the rail is a drawer. It is always in the DOM and opens
+  from `:target`, so the header's `#site-nav` link opens it with JavaScript
+  off; with JavaScript the same links toggle `data-open` instead, Escape
+  closes it and focus moves to its close control.
 - **Theme.** `SiteTheme` (contracts) is values, never CSS: `#rrggbb` accent
   colours (light, and optionally dark), a font key into `SITE_FONT_STACKS`
   (system stacks only; a reader's browser fetches no web font), the project

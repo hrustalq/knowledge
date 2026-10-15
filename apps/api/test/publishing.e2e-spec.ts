@@ -10,7 +10,8 @@ import { createE2eApp } from './e2e-app.js';
 /**
  * #77 acceptance, end to end against live infra: a share link is read with no
  * credential and stops answering the moment it is revoked, and a ZIP export is
- * built, downloaded and carries the tree it describes.
+ * built, downloaded and carries the tree it describes. #204: a site's nav,
+ * listed a level at a time, never names a page an anonymous reader may not see.
  *
  * Runs as the `AUTH_MODE=none` dev principal in the demo workspace, so it needs
  * `make infra-up` and nothing else: neither path waits for indexing, and the
@@ -58,9 +59,10 @@ describe('publishing (e2e)', () => {
     const settings = await http().get(`/v1/workspaces/${WORKSPACE}/publishing-settings`).expect(200);
     savedSettings = settings.body.override as PublishingSettingsOverride;
     if (!settings.body.ceiling.sharingEnabled) throw new Error('e2e prerequisite missing: PUBLIC_SHARING_ENABLED=false in apps/api/.env');
+    if (!settings.body.ceiling.sitesEnabled) throw new Error('e2e prerequisite missing: PUBLIC_SITES_ENABLED=false in apps/api/.env');
     await http()
       .patch(`/v1/workspaces/${WORKSPACE}/publishing-settings`)
-      .send({ allowShareLinks: true, allowPasswordlessShares: true })
+      .send({ allowShareLinks: true, allowPasswordlessShares: true, allowPublicSites: true })
       .expect(200);
 
     const project = await prisma.project.findFirstOrThrow({ where: { workspaceId: WORKSPACE }, select: { id: true } });
@@ -94,6 +96,58 @@ describe('publishing (e2e)', () => {
     await http().delete(`/v1/shares/${created.body.share.id}`).expect(200);
     await http().get(`/v1/public/shares/${token}`).expect(404);
     await http().get(`/v1/public/shares/${token}/pages/${childId}`).expect(404);
+  });
+
+  it('site nav a level at a time: a members-only page is never in an anonymous child listing', async () => {
+    // The reader reads a version's snapshot rows and nothing else, so the
+    // snapshot is written directly: no build, no indexing, no worker. The
+    // site needs a project of its own (one site per project).
+    const project = await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `Sundew ${nonce} site` } });
+    const site = await prisma.publishedSite.create({
+      data: { workspaceId: WORKSPACE, projectId: project.id, slug: `sundew-${nonce}`, status: 'live', createdBy: randomUUID() },
+    });
+    try {
+      const version = await prisma.siteVersion.create({
+        data: { siteId: site.id, name: 'Latest', slug: 'latest', kind: 'live', status: 'built', builtAt: new Date(), createdBy: site.createdBy },
+      });
+      await prisma.publishedSite.update({ where: { id: site.id }, data: { defaultVersionId: version.id } });
+      const [home, open, secret, under] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+      const row = (documentId: string, parentId: string | null, position: number, depth: number, slugPath: string, audience = 'public') => ({
+        versionId: version.id,
+        documentId,
+        revisionId: randomUUID(),
+        parentId,
+        position,
+        depth,
+        slugPath,
+        title: slugPath,
+        audience,
+      });
+      await prisma.siteVersionPage.createMany({
+        data: [
+          row(home, null, 0, 0, 'home'),
+          row(open, home, 0, 1, 'home/open'),
+          row(secret, home, 1, 1, 'home/secret', 'members'),
+          // Stamped public, but under a members-only page: hidden all the same.
+          row(under, secret, 0, 2, 'home/secret/under'),
+        ],
+      });
+
+      const top = await http().get(`/v1/public/sites/${site.id}/tree`).expect(200);
+      expect(top.headers['cache-control']).toContain('no-store');
+      expect(top.body.nodes).toEqual([
+        { documentId: home, parentId: null, title: 'home', slugPath: 'home', position: 0, childCount: 1 },
+      ]);
+      const children = await http().get(`/v1/public/sites/${site.id}/tree?parent=${home}`).expect(200);
+      expect(children.body.nodes.map((n: { documentId: string }) => n.documentId)).toEqual([open]);
+      await http().get(`/v1/public/sites/${site.id}/tree?parent=${secret}`).expect(404);
+
+      const resolved = await http().get(`/v1/public/sites/resolve?slug=sundew-${nonce}&path=/home/open`).expect(200);
+      expect(resolved.body.tree.map((n: { documentId: string }) => n.documentId)).toEqual([home, open]);
+    } finally {
+      await prisma.publishedSite.delete({ where: { id: site.id } });
+      await prisma.project.delete({ where: { id: project.id } });
+    }
   });
 
   it(

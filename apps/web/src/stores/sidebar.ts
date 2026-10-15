@@ -9,6 +9,7 @@ import {
   setRailOpen,
   setRailWidth,
 } from '@/lib/api'
+import { treeDepthBudget } from '@/lib/tree-window'
 
 /**
  * The rail's geometry: how wide it is, whether it is open, and — derived from
@@ -46,12 +47,6 @@ const COLLAPSE_AT = RAIL_MIN - 44
  */
 const DEFAULT_OPEN_DEPTH = 1
 
-/** One tree level: `ml-[13px]` plus the list's `pl-2`. */
-export const TREE_INDENT = 21
-/** Rail chrome before a title starts: 8px list padding either side, the 20px disclosure slot, the 8px trailing gutter. */
-const TREE_CHROME = 44
-/** Roughly eighteen characters — below this a title stops being a title and becomes an ellipsis. */
-const TREE_MIN_TITLE = 128
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
 
@@ -99,8 +94,7 @@ export const useSidebarStore = defineStore('sidebar', {
      * How many levels of indent this width can spend and still leave a readable
      * title. Everything deeper is what the tree window slides to reach.
      */
-    treeDepthBudget: (s) =>
-      clamp(Math.floor((s.width - TREE_CHROME - TREE_MIN_TITLE) / TREE_INDENT), 1, 12),
+    treeDepthBudget: (s) => treeDepthBudget(s.width),
   },
   actions: {
     /**

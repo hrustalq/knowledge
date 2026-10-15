@@ -288,7 +288,9 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
     return { view: { kind: 'not-found' }, status: 302, description: '', head: [], noindex: true, redirect: canonicalPath }
   }
 
-  const slugOf = new Map(res.tree.map((n) => [n.documentId, n.slugPath]))
+  // The tree no longer names every page (issue #204): the API says where each
+  // page this body links to lives, among those this reader may see.
+  const slugOf = new Map([...res.tree, ...res.page.links].map((n) => [n.documentId, n.slugPath]))
   const body = renderPublicMarkdown(res.page.markdown, {
     pageHref: (id) => {
       const slugPath = slugOf.get(id)
@@ -331,6 +333,8 @@ async function resolveSiteView(url: string, ctx: PublicRenderContext): Promise<S
         headings: body.headings,
         updatedAt: res.page.updatedAt,
         alternates: res.page.alternates.map((a) => ({ versionSlug: a.version.slug, href: `${prefix}${a.path}` })),
+        prev: res.page.prev,
+        next: res.page.next,
       },
     },
     status: 200,

@@ -31,6 +31,12 @@ import ExportDialog from './ExportDialog.vue'
  * Two roots (the menu and its dialog), so an inherited `class` has nowhere to
  * land and Vue drops it — which silently disabled the hover reveal. The class
  * belongs on the trigger anyway: that is the thing that appears and disappears.
+ *
+ * Whatever hides it, the trigger stays shown while its menu is open
+ * (`data-state="open"`, set by reka-ui). The content is portaled, so opening it
+ * moves focus out of the row; a reveal keyed on hover/focus-within would then
+ * drop the trigger to `display:none`, and the menu, anchored to a box with no
+ * position, would open in the window's top-left corner (#203).
  */
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{
@@ -60,7 +66,7 @@ const documents = useDocumentsStore()
       <button
         v-bind="$attrs"
         type="button"
-        class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-5 shrink-0 place-items-center rounded disabled:opacity-40"
+        class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground grid size-5 shrink-0 place-items-center rounded disabled:opacity-40 data-[state=open]:grid data-[state=open]:opacity-100"
         :aria-label="t('tree.dnd.rowMenu', { title })"
       >
         <MoreHorizontal class="size-3.5" />

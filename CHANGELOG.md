@@ -25,15 +25,51 @@ in the pull request that introduces them — see
   Removing someone from the workspace also removes them from its groups. The
   routes are `/v1/groups` and `/v1/groups/:id/members`. (#76)
 - A **guest** workspace role, below viewer. A guest can open only pages and
-  projects shared with them or one of their groups. Page sharing is not built
-  yet, so for now a guest can open nothing. Every workspace-level route refuses
-  a guest, including search, the activity feed, the member roster and settings.
-  A guest gets no notifications and cannot be made a reviewer, a page owner or a
-  member of a members-only site. MCP `knowledge_whoami` reports the role, with no
-  project names. (#76)
+  projects shared with them or one of their groups, and sees just those in the
+  page tree, the page list and the project list. Every other page answers 404.
+  Other workspace-level routes still refuse a guest, including search, the
+  activity feed, the member roster and settings. A guest gets no notifications
+  and cannot be made a reviewer, a page owner or a member of a members-only
+  site. MCP `knowledge_whoami` reports the role. (#76)
+- **Page and project restrictions.** Anyone who can edit a page can restrict it
+  from **Access** in the page header or the tree menu, granting view, edit or
+  manage to people or groups; workspace admins can restrict a whole project.
+  A restricted page is hidden, with everything under it, from everyone it does
+  not name: it leaves the tree, page lists, project counts and overviews,
+  merge-request lists, the knowledge-health dashboard, profiles, the graph
+  views and entity lookups, and its ancestors' breadcrumbs for a guest. A child
+  can narrow its parent's restriction but never reopen it, and a page moved
+  under a restricted parent is restricted at once. The workspace role stays
+  the ceiling (a viewer with an edit grant still only reads), and workspace
+  admins still see everything; each time they open a restricted page they were
+  not granted, it is recorded in the audit log. Opening a restricted page
+  without access answers 403 with `details.canRequestAccess` and no title, and
+  **Access → Who can see this** lists everyone who can, with their level. A
+  restricted page cannot be shared by public link, an existing link to it stops
+  working, and published sites, `llms.txt` and exports leave it out for anyone
+  who may not open it. MCP's page, merge-request and project tools and its
+  tree, graph and project listings apply the same rules. Routes:
+  `GET|PUT /v1/documents/:id/access`, `GET /v1/documents/:id/access/effective`,
+  and the same under `/v1/projects/:id`. Search, the assistant's search and
+  read tools, notifications, the activity feed and live events are not
+  filtered by restrictions yet; that follows in the next phases. (#76)
+
+### Changed
+
+- Assigning a merge-request reviewer who cannot open the page now answers 409
+  with `details.reason = access.usersWithoutView` and the user ids. (#76)
 
 ### Operations
 
+- Migration `20261018100000_page_restrictions` adds the `access_grants` table
+  and new columns with defaults on `documents` (`restricted`, `restricted_by`,
+  `acl_version`, `acl_stamped_version`) and `projects` (`restricted`), plus a
+  GIN index on `documents.restricted_by`. Nothing is restricted when it runs,
+  so no backfill is needed and the previous image runs against it unchanged.
+  **Rolling the code back does not roll restrictions back with it:** the
+  previous image ignores these columns, so every restricted page becomes
+  readable by every member (and guests are refused everywhere) until the
+  release is restored.
 - Migration `20261017100000_user_groups` only adds two tables
   (`user_groups`, `user_group_members`), so the previous image runs against it
   unchanged. `workspace_members.role` now also accepts `guest`. That column has

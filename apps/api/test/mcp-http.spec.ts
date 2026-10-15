@@ -105,6 +105,20 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     entities: {},
     graph: {},
     audit: {},
+    // Page permissions (#76) are pinned in test/permissions.spec.ts; here the
+    // page check is the workspace check and every page is visible.
+    permissions: {
+      requireResource: vi.fn(async (p: Principal, ws: string, _r: unknown, role: 'viewer' | 'editor' | 'admin') =>
+        access.requireRole(p, ws, role),
+      ),
+      scopeFor: vi.fn(async (_p: Principal, workspaceId: string) => ({
+        workspaceId,
+        bypass: true,
+        guest: false,
+        denied: new Set(),
+        granted: new Set(),
+      })),
+    },
     history: {},
     ingestionAdmin: {},
     workflows: {},

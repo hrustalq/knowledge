@@ -71,7 +71,8 @@ describe('the guest role', () => {
       getAllAndOverride: () => false,
       get: () => ({ role: 'viewer', source: 'group', operator: false }),
     };
-    const guard = new AclGuard(reflector as never, accessAs('admin', WS));
+    // No page source on a group route, so the permission service is never asked.
+    const guard = new AclGuard(reflector as never, accessAs('admin', WS), {} as never);
     const request = { principal: caller, method: 'GET', params: { id: GROUP }, query: { workspaceId: WS }, body: {} };
     const ctx = {
       getHandler: () => undefined,
@@ -134,6 +135,7 @@ function fakePrisma(opts: { source?: string; roster?: string[] } = {}) {
           })),
       ),
     },
+    accessGrant: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   };
   return prisma;
@@ -172,6 +174,13 @@ describe('GroupsService', () => {
     expect(res.members.map((m) => [m.userId, m.role])).toEqual([[BOB, 'guest']]);
   });
 
+  it('takes its grants with it, so a later group cannot inherit them', async () => {
+    const prisma = fakePrisma();
+    await new GroupsService(prisma as never).remove(GROUP);
+    expect(prisma.accessGrant.deleteMany).toHaveBeenCalledWith({ where: { subjectType: 'group', subjectId: GROUP } });
+    expect(prisma.userGroup.delete).toHaveBeenCalled();
+  });
+
   it('does not list a member who has since left the workspace', async () => {
     const prisma = fakePrisma({ roster: [ALICE] });
     prisma.members.push({ groupId: GROUP, userId: BOB, source: 'manual', createdAt: new Date() });
@@ -207,8 +216,9 @@ describe('GroupsService', () => {
 // ------------------------------------------------------- leaving a workspace
 
 describe('removing a workspace member', () => {
-  it.each(['viewer', 'admin'])('drops their memberships in that workspace’s groups (a %s)', async (role) => {
+  it.each(['viewer', 'admin'])('drops their group memberships and page grants in that workspace (a %s)', async (role) => {
     const deleteMany = vi.fn(async () => ({ count: 2 }));
+    const grantsDeleteMany = vi.fn(async () => ({ count: 1 }));
     const prisma = {
       workspaceMember: {
         findUnique: vi.fn(async () => ({ workspaceId: WS, userId: BOB, role })),
@@ -216,10 +226,13 @@ describe('removing a workspace member', () => {
         findMany: vi.fn(async () => []),
       },
       $executeRaw: vi.fn(async () => 1),
+      $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
       userGroupMember: { deleteMany },
+      accessGrant: { deleteMany: grantsDeleteMany },
     };
     await new WorkspacesService(prisma as never).removeMember(WS, BOB);
     expect(deleteMany).toHaveBeenCalledWith({ where: { userId: BOB, group: { workspaceId: WS } } });
+    expect(grantsDeleteMany).toHaveBeenCalledWith({ where: { workspaceId: WS, subjectType: 'user', subjectId: BOB } });
   });
 
   it('keeps them when the removal is refused (the last admin)', async () => {

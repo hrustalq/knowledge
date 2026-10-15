@@ -129,7 +129,7 @@ export class ExportService {
     }
     // Checked before anything is queued, so a person learns now rather than
     // from a failed row; the worker checks again against what it finds.
-    const count = req.archived ? 0 : (await this.scope.documents(req)).length;
+    const count = req.archived ? 0 : (await this.scope.documents({ ...req, requester: principal })).length;
     if (count === 0) {
       throw new BadRequestException({ statusCode: 400, message: t('error.export.nothingToExport'), reason: 'export.nothingToExport' });
     }

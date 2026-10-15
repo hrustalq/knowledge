@@ -25,6 +25,8 @@ import { DOCUMENT_ARCHIVED, DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
 import type { CreateMergeRequestDto, UpdateMergeRequestDto } from './dto/merge-requests.dto.js';
 import { t } from '../i18n/t.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 export const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -67,6 +69,7 @@ export class MergeRequestsService {
     // See DocumentThreadsService: NotificationsService cannot publish, so the
     // frames for `assigned` and `review-requested` are announced from here.
     private readonly events: EventsPublisher,
+    private readonly permissions: PermissionService,
   ) {}
 
   async create(
@@ -147,7 +150,10 @@ export class MergeRequestsService {
     return { documentId, mergeRequests: rows.map((mr) => this.toInfo(mr, null, stats.get(mr.id))) };
   }
 
-  async listWorkspace(query: ListWorkspaceMergeRequestsRequest): Promise<ListWorkspaceMergeRequestsResponse> {
+  async listWorkspace(
+    query: ListWorkspaceMergeRequestsRequest,
+    scope: AccessScope,
+  ): Promise<ListWorkspaceMergeRequestsResponse> {
     const limit = Math.min(Math.max(query.limit ?? 50, 1), 100);
     // Everything except the status filter — the per-status counts (tab badges)
     // apply the same search/people/branch/document scope.
@@ -155,8 +161,11 @@ export class MergeRequestsService {
     // Branches are a relation, not a column: the name lives on DocumentBranch,
     // and it is matched as a case-insensitive substring so "auth" finds
     // "feature/auth" (typing a branch name in full, exactly, is not a filter).
+    //
+    // A merge request is its page: one on a page the caller may not open is
+    // not in the list, nor in the tab counts (#76).
     const baseWhere = {
-      document: { workspaceId: query.workspaceId },
+      document: { workspaceId: query.workspaceId, AND: [visibilityWhere(scope)] },
       ...(query.authorId ? { authorId: query.authorId } : {}),
       ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
       ...(query.documentId ? { documentId: query.documentId } : {}),
@@ -619,6 +628,18 @@ export class MergeRequestsService {
     const unknown = userIds.filter((id) => !memberIds.has(id));
     if (unknown.length > 0) {
       throw new BadRequestException(t('error.mergeRequest.notMembers', { users: unknown.join(', ') }));
+    }
+    // Reviewing a page is reading it: someone the page's restrictions keep out
+    // cannot be handed it (#76). A 409, because a grant on the page fixes it.
+    const admitted = await this.permissions.whoCanOpen({ type: 'document', id: documentId }, userIds);
+    const shut = userIds.filter((id) => !admitted.has(id));
+    if (shut.length > 0) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.access.usersWithoutView', { users: shut.join(', ') }),
+        reason: 'access.usersWithoutView',
+        users: shut,
+      });
     }
   }
 

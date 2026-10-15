@@ -99,6 +99,17 @@ export interface DocumentSummary {
    */
   templateRef?: string | null;
   templateVersion?: number | null;
+  /**
+   * The page is not open to the whole workspace: it, its project or an
+   * ancestor is restricted (#76). Drawn as a lock.
+   */
+  restricted?: boolean;
+  /**
+   * The caller may not open this page, so only its id is real and `title` is
+   * blank. Only ever an ancestor in a guest's breadcrumb trail (#76): a member
+   * who can read a page can read everything above it.
+   */
+  hidden?: boolean;
 }
 
 export interface RevisionInfo {

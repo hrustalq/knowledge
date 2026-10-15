@@ -63,10 +63,16 @@ export class GroupsService {
     return toSummary(group);
   }
 
-  /** Members go with it (FK cascade); grants to it go with Phase 2's grant rows. */
+  /**
+   * Members go with it (FK cascade), and so do its grants (no FK, house
+   * policy): a later group that reused the id must not inherit them.
+   */
   async remove(groupId: string): Promise<{ deleted: true }> {
     await this.requireManual(groupId);
-    await this.prisma.userGroup.delete({ where: { id: groupId } });
+    await this.prisma.$transaction([
+      this.prisma.accessGrant.deleteMany({ where: { subjectType: 'group', subjectId: groupId } }),
+      this.prisma.userGroup.delete({ where: { id: groupId } }),
+    ]);
     return { deleted: true };
   }
 

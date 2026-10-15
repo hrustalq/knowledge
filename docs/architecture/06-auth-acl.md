@@ -80,20 +80,80 @@ because that resource is keyed by an autoincrementing integer
 that is not a role — it gates the raw graph query and nothing else.
 
 **`guest`** (issue #76) sits below the ladder at `ROLE_ORDER.guest = -1`, so
-every `@Access('viewer', …)` route refuses one with no special case. A guest is
-meant to read only what is granted to them or their groups; until page grants
-land, that is nothing. Code that asks "is this person a member" directly rather
-than through `requireRole` — mention recipients, merge-request reviewers, page
-owners, members-only site audiences, the llms.txt hub, MCP `whoami` — filters
-with `WORKSPACE_READER` (`auth/principal.ts`), and `NotificationsService.deliver`
-drops guest recipients, because a notification carries a page title.
+every `@Access('viewer', …)` route refuses one with no special case. A guest
+reads only what is granted to them or their groups (see _Page restrictions_
+below): they pass a `'document'`, `'merge-request'` or `'project'` route when the
+page level covers it, and a workspace-level route only when it is marked
+`@Access(…, { guests: true })`, which promises the handler filters its answer
+by the caller's scope (the document list and tree, the project list). Code that
+asks "is this person a member" directly rather than through `requireRole` —
+mention recipients, page owners, members-only site audiences, the llms.txt hub,
+MCP `whoami` — filters with `WORKSPACE_READER` (`auth/principal.ts`), and
+`NotificationsService.deliver` still drops guest recipients until notifications
+learn page visibility (#76, phase 5).
 
 **User groups** (`user_groups`, `user_group_members`) are workspace-scoped sets
-of members that restrictions will grant to. `source` is `manual`, `connector`
+of members that restrictions grant to. `source` is `manual`, `connector`
 (mirrored by ACL sync) or `scim`; the API answers 409 to any edit of a
 non-manual group, since the next sync would undo it. Members must already belong
-to the workspace, and `WorkspacesService.removeMember` deletes a person's group
-rows with their membership, so re-adding them restores no old grant.
+to the workspace. `WorkspacesService.removeMember` deletes a person's group rows
+and their page grants with their membership, and deleting a group deletes the
+grants to it, so a re-added person or a reused id inherits nothing.
+
+## Page restrictions
+
+Issue #76, phase 2. The workspace is still the tenant boundary; below it a
+**project or a page can be restricted**, with `view | edit | manage` grants to
+people or groups (`access_grants`, no FK on subject or resource).
+
+- **View is intersective down the chain** project → root → … → page. A reader
+  must hold a grant on _every_ restricted node, so restricting a page hides its
+  subtree and a child can narrow but never re-open. An empty table reproduces
+  the old behaviour exactly: nothing restricted, nobody filtered.
+- **The workspace role is the ceiling.** A viewer with an `edit` grant reads.
+  Edit is decided by the nearest restricted node carrying any edit/manage grant;
+  without one, `editor` edits as before. Manage (change restrictions) belongs to
+  whoever edits until the chain names a manager, then only to holders of a
+  manage grant — an editor may restrict an open page, and keeps it once they do.
+- **Guests** reach only nodes with a grant on their chain, at no more than edit.
+- **Workspace and platform admins bypass**, as they control membership anyway.
+  A bypass read of something no grant admits them to writes `acl.bypass` into
+  `audit_logs` (at most once a minute per admin and page).
+- A read-only key caps every level at view.
+
+The rule is one pure function, `levelOn` (`permissions/access-scope.ts`), used
+by the guard, the access routes and `whoCanOpen` (reviewers).
+
+**The visibility predicate is denormalized.** `documents.restricted_by` holds
+the ids of every restricted node on the page's chain, outermost first.
+`PermissionService.scopeFor(principal, workspaceId)` computes an `AccessScope`
+once per request — `denied` (restricted nodes the caller holds no grant on) and
+`granted` (nodes they hold any grant on) — and a page is visible iff
+`restricted_by && denied` is empty (GIN index), plus, for a guest, a granted id
+on its chain. It has three spellings — `canSee` (memory), `visibilityWhere`
+(Prisma) and `visibilitySql` (raw) — kept adjacent and pinned against each
+other in `test/permissions.spec.ts`. **Every service method that returns pages
+takes a required `AccessScope`**, so a new call site cannot forget it.
+
+`restricted_by` is rewritten only by `PermissionService.recomputeRestrictedBy`:
+one statement over a subtree (left-anchored `path LIKE`) or a project, run inside
+the transaction that created, moved or re-projected a page, flipped a switch or
+deleted a project into another. Rows whose value is already right keep their
+`acl_version`; changed rows bump it, which phase 3 uses to re-stamp the search
+stores.
+
+**The guard checks the resource.** For `'document'`, `'merge-request'` (its
+page) and `'project'` sources, `AclGuard` keeps the resolved id and calls
+`PermissionService.requireResource`, mapping viewer→view, editor→edit,
+admin→manage. A page the caller may not open is a **404 for a guest** and a
+**403 `{ canRequestAccess, resourceType, resourceId }` for a member — never its
+title**. MCP's `guard.doc/mr/project` call the same method.
+
+Restricted pages never leave the workspace's own access model: a share link to
+one is refused (409 `share.restricted`) and an existing one 404s; published
+sites, llms.txt and the workspace/project listings carry only pages with an
+empty `restricted_by`; exports hold what the requester may open, resolved again
+in the worker from `requested_by`.
 
 `users.is_admin` is a **platform** admin: it bypasses workspace ACLs entirely and
 gates `@PlatformAdmin()` routes (`GET/POST/PATCH /v1/users`). **Self-disable and
@@ -165,8 +225,10 @@ exists to make possible in the worker.
 ## Modules
 
 `AuthModule` is `@Global()` and registers both guards. `AuthCoreModule` carries
-`AccessService` alone for worker-side use, and `PermissionsCoreModule` carries
-`GroupsService` (and, next, the visibility predicate) for every process.
+`AccessService` and `AuditService` for worker-side use, and
+`PermissionsCoreModule` carries `GroupsService`, `PermissionService` and
+`ResourceAccessService` for every process; `AuthModule` imports it because
+`AclGuard` asks it about the page behind a `:id`.
 `UsersModule`, `WorkspacesModule` and `PermissionsModule` are **API-only**, for the same reason as `GraphQueryModule`: they carry
 controllers, and controllers must not load in the worker
 ([01](01-entrypoints-modules.md)).
@@ -185,6 +247,8 @@ GET/POST /v1/workspaces                                           creator → ad
 GET  /v1/groups?workspaceId=   POST /v1/groups                    @Access(viewer, 'query') | (admin, 'body')
 PATCH|DELETE /v1/groups/:id   PUT /v1/groups/:id/members          @Access(admin, 'group')
 GET  /v1/groups/:id/members                                       @Access(viewer, 'group')
+GET|PUT /v1/documents/:id/access   GET …/access/effective         @Access(viewer, 'document') + manage for PUT/effective
+GET|PUT /v1/projects/:id/access    GET …/access/effective         @Access(viewer, 'project') + manage for PUT/effective
 POST /v1/graph/query                                              trusted_operator
 GET  /v1/audit-logs                                               admin
 ```
@@ -245,10 +309,14 @@ at all: the web server answers it only for an internal peer with no
 
 ## Limits
 
-- ACLs still stop at the workspace. Groups and the guest role exist, but page
-  and project restrictions are the next phase of issue #76; until then a group
-  grants nothing and a guest reads nothing. The `'document'` and `'project'`
-  guard sources are where the per-resource check will go.
+- Page restrictions cover the REST routes, MCP's per-page guard and its
+  tree/graph/project tools, the assistant's tree/graph/breadcrumb reads and its
+  grounding page. Search (all three legs), the assistant's search and read
+  tools, agents' audience clamp, notifications, activity and live events follow
+  in the next phases of issue #76; until then they are workspace-filtered only.
+- Members who cannot open a page get a 403 that confirms it exists (the
+  Confluence trade-off, so they can ask for access). There is no "hidden" flag
+  that would make it a 404 for them.
 - Mail is outbound only: no bounce handling, so a dead address stays unverified
   rather than being flagged.
 - The trusted-operator query is read-only by construction but still trusts the

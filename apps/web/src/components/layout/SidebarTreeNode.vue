@@ -4,7 +4,7 @@
 import { computed, inject, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { ChevronRight, Loader2 } from 'lucide-vue-next'
+import { ChevronRight, Loader2, Lock } from 'lucide-vue-next'
 import { Collapse } from '@/components/ui/collapse'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { statusDot } from '@/lib/api'
@@ -164,6 +164,17 @@ const dnd = useTreeDndRow({
       >
         {{ node.title }}
       </RouterLink>
+      <!-- Restricted (#76): this page, an ancestor or the project is not open
+           to the whole workspace. A glyph rather than a word, for the width. -->
+      <span
+        v-if="node.restricted"
+        class="grid shrink-0 place-items-center text-muted-foreground/70"
+        role="img"
+        :aria-label="t('access.lockedLabel')"
+        :title="t('access.lockedLabel')"
+      >
+        <Lock class="size-3" aria-hidden="true" />
+      </span>
       <!-- At 256px there is no room for a word; the dot carries the state and
            the title on the link carries the reason. -->
       <span
@@ -182,6 +193,7 @@ const dnd = useTreeDndRow({
         :document-id="node.documentId"
         :title="node.title"
         :disabled="dnd.isLocked.value"
+        :restricted="node.restricted"
         class="hidden group-focus-within:grid group-hover:grid"
       />
       <span

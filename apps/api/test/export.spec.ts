@@ -234,26 +234,55 @@ describe('ExportService: who sees an export', () => {
 // ------------------------------------------------------------------ scope
 
 describe('ExportScopeService', () => {
+  const REQUESTER = { userId: 'u-1', locale: 'en' as const };
+  /** A requester who sees all but page `hidden` (#76): the predicate itself is pinned in permissions.spec.ts. */
+  function scopeService(prisma: unknown) {
+    const access = { principalFor: vi.fn(async (userId: string) => ({ userId, mode: 'api-key', isAdmin: false })) };
+    const permissions = {
+      scopeFor: vi.fn(async () => ({
+        workspaceId: WS,
+        bypass: false,
+        guest: false,
+        denied: new Set(['hidden']),
+        granted: new Set(),
+      })),
+    };
+    return { scope: new ExportScopeService(prisma as never, access as never, permissions as never), access, permissions };
+  }
+
   it('reads a subtree by its delimited path, live pages only, in the caller’s workspace', async () => {
     const findMany = vi.fn(async () => []);
     const prisma = {
       document: {
-        findUnique: vi.fn(async () => ({ id: DOC, workspaceId: WS, path: `/${DOC}/`, archivedAt: null, parentId: null, title: 'Root', position: 0, category: 'guide' })),
+        findFirst: vi.fn(async () => ({ id: DOC, workspaceId: WS, path: `/${DOC}/`, archivedAt: null, parentId: null, title: 'Root', position: 0, category: 'guide' })),
         findMany,
       },
     };
-    await new ExportScopeService(prisma as never).documents({ workspaceId: WS, scope: 'subtree', documentId: DOC, projectId: null });
+    await scopeService(prisma).scope.documents({ workspaceId: WS, scope: 'subtree', documentId: DOC, projectId: null, requester: REQUESTER });
     expect(findMany.mock.calls[0][0]).toMatchObject({ where: { workspaceId: WS, archivedAt: null, path: { startsWith: `/${DOC}/` } } });
+  });
+
+  it('holds only what the requester may open, resolving them afresh when the worker runs the job (#76)', async () => {
+    const findMany = vi.fn(async () => []);
+    const prisma = { document: { findFirst: vi.fn(), findMany } };
+    const { scope, access } = scopeService(prisma);
+    await scope.documents({ workspaceId: WS, scope: 'project', documentId: null, projectId: 'p-1', requester: REQUESTER });
+    expect(access.principalFor).toHaveBeenCalledWith('u-1', 'en');
+    expect(findMany.mock.calls[0][0]).toMatchObject({
+      where: { projectId: 'p-1', AND: [{ AND: [{ NOT: { restrictedBy: { hasSome: ['hidden'] } } }] }] },
+    });
   });
 
   it('exports one page as itself, and nothing for a root in another workspace', async () => {
     const root = { id: DOC, workspaceId: WS, path: `/${DOC}/`, archivedAt: null, parentId: 'p', title: 'Root', position: 2, category: 'guide' };
-    const prisma = { document: { findUnique: vi.fn(async () => root), findMany: vi.fn() } };
-    const scope = new ExportScopeService(prisma as never);
-    await expect(scope.documents({ workspaceId: WS, scope: 'page', documentId: DOC, projectId: null })).resolves.toEqual([
-      { id: DOC, parentId: 'p', title: 'Root', position: 2, category: 'guide' },
-    ]);
-    await expect(scope.documents({ workspaceId: OTHER_WS, scope: 'subtree', documentId: DOC, projectId: null })).resolves.toEqual([]);
+    const prisma = { document: { findFirst: vi.fn(async () => root), findMany: vi.fn() } };
+    const { scope } = scopeService(prisma);
+    await expect(
+      scope.documents({ workspaceId: WS, scope: 'page', documentId: DOC, projectId: null, requester: REQUESTER }),
+    ).resolves.toEqual([{ id: DOC, parentId: 'p', title: 'Root', position: 2, category: 'guide' }]);
+    await expect(
+      scope.documents({ workspaceId: OTHER_WS, scope: 'subtree', documentId: DOC, projectId: null, requester: REQUESTER }),
+    ).resolves.toEqual([]);
     expect(prisma.document.findMany).not.toHaveBeenCalled();
   });
 
@@ -277,7 +306,7 @@ describe('ExportScopeService', () => {
         ),
       },
     };
-    const out = await new ExportScopeService(prisma as never).revisions(['a', 'b', 'c'], 'next');
+    const out = await new ExportScopeService(prisma as never, {} as never, {} as never).revisions(['a', 'b', 'c'], 'next');
     expect(Object.fromEntries(out)).toEqual({
       a: { revisionId: 'ra2', branch: 'next' },
       b: { revisionId: 'rb-old', branch: 'main' },

@@ -30,6 +30,7 @@ import { SearchService } from '../search/search.service.js';
 import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { AuditService } from '../auth/audit.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { HistoryService } from '../documents/history.service.js';
 import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
@@ -117,6 +118,7 @@ export class McpService {
     private readonly entities: EntitiesService,
     private readonly graph: GraphService,
     private readonly audit: AuditService,
+    private readonly permissions: PermissionService,
     private readonly history: HistoryService,
     private readonly ingestionAdmin: IngestionAdminService,
     private readonly workflows: WorkflowsService,
@@ -441,7 +443,7 @@ export class McpService {
       },
       async ({ workspaceId }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.projects.list({ workspaceId }));
+        return this.json(await this.projects.list({ workspaceId }, await guard.scope(workspaceId)));
       },
     );
 
@@ -579,7 +581,7 @@ export class McpService {
       },
       async ({ workspaceId, projectId }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.documents.getWorkspaceGraph(workspaceId, projectId));
+        return this.json(await this.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId));
       },
     );
 
@@ -687,7 +689,7 @@ export class McpService {
       async ({ workspaceId, entity, relationship, depth }) => {
         await guard.ws(workspaceId, 'viewer');
         return this.json(
-            await this.entities.neighbors(workspaceId, entity, depth ?? 1, relationship ? [relationship] : undefined),
+            await this.entities.neighbors(await guard.scope(workspaceId), entity, depth ?? 1, relationship ? [relationship] : undefined),
           );
       },
     );
@@ -706,7 +708,7 @@ export class McpService {
       },
       async ({ workspaceId, entityId, direction, maxDepth }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.entities.impactAnalysis(workspaceId, entityId, direction ?? 'dependents', maxDepth ?? 3));
+        return this.json(await this.entities.impactAnalysis(await guard.scope(workspaceId), entityId, direction ?? 'dependents', maxDepth ?? 3));
       },
     );
 
@@ -723,7 +725,7 @@ export class McpService {
       },
       async ({ workspaceId, fromEntityId, toEntityId, maxDepth }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.entities.trace(workspaceId, fromEntityId, toEntityId, maxDepth ?? 4));
+        return this.json(await this.entities.trace(await guard.scope(workspaceId), fromEntityId, toEntityId, maxDepth ?? 4));
       },
     );
 
@@ -875,7 +877,7 @@ export class McpService {
       },
       async (query) => {
         await guard.ws(query.workspaceId, 'viewer');
-        return this.json(await this.mergeRequests.listWorkspace(query));
+        return this.json(await this.mergeRequests.listWorkspace(query, await guard.scope(query.workspaceId)));
       },
     );
 
@@ -1025,8 +1027,11 @@ export class McpService {
         if (!revision || revision.document.workspaceId !== workspaceId) {
           throw new Error(`Revision ${atRevisionId} not found in workspace ${workspaceId}`);
         }
+        await guard.doc(revision.documentId, 'viewer');
         const at = await this.history.factsAt(revision.documentId, atRevisionId);
-        const currentNeighborhood = await this.entities.neighbors(workspaceId, entityId, 1).catch(() => null);
+        const currentNeighborhood = await this.entities
+          .neighbors(await guard.scope(workspaceId), entityId, 1)
+          .catch(() => null);
         return this.json({
           entityId,
           atRevisionId,
@@ -1087,7 +1092,7 @@ export class McpService {
       async ({ workspaceId, projectId, parentId, depth, includeArchived }) => {
         await guard.ws(workspaceId, 'viewer');
         return this.json(
-          await this.documents.getTree(workspaceId, projectId, {
+          await this.documents.getTree(await guard.scope(workspaceId), projectId, {
             parentId: parentId ?? null,
             ...(depth ? { depth } : {}),
             ...(includeArchived ? { includeArchived: true } : {}),
@@ -1295,7 +1300,13 @@ export class McpService {
       where: ids ? { id: { in: ids } } : {},
       orderBy: { createdAt: 'asc' },
     });
-    const projects = await Promise.all(reachable.map((w) => this.projects.list({ workspaceId: w.id })));
+    const projects = await Promise.all(
+      reachable.map(async (w) => {
+        // A key pinned to a workspace its person has left reaches no project in it.
+        const scope = await this.permissions.scopeFor(principal, w.id).catch(() => null);
+        return scope ? this.projects.list({ workspaceId: w.id }, scope) : { projects: [], nextCursor: null };
+      }),
+    );
     const readOnly = principal.apiKey?.scope === 'read';
     return {
       userId: principal.userId,
@@ -1341,9 +1352,18 @@ export class McpService {
     return {
       ws: (workspaceId: string, role: WorkspaceRole, operator = false) =>
         check(() => this.access.workspaceExists(workspaceId), role, operator),
-      doc: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfDocument(id), role),
-      project: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfProject(id), role),
-      mr: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfMergeRequest(id), role),
+      // A page, its merge request or a project: the same page-level check the
+      // REST guard makes (#76), so an MCP client opens exactly what its person can.
+      doc: async (id: string, role: WorkspaceRole) =>
+        this.permissions.requireResource(principal, await this.access.workspaceOfDocument(id), { type: 'document', id }, role, false),
+      project: async (id: string, role: WorkspaceRole) =>
+        this.permissions.requireResource(principal, await this.access.workspaceOfProject(id), { type: 'project', id }, role, false),
+      mr: async (id: string, role: WorkspaceRole) => {
+        const { workspaceId, documentId } = await this.access.documentOfMergeRequest(id);
+        await this.permissions.requireResource(principal, workspaceId, { type: 'document', id: documentId }, role, false);
+      },
+      /** The caller's page visibility over a workspace, for tools that list pages. */
+      scope: (workspaceId: string) => this.permissions.scopeFor(principal, workspaceId),
       connector: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnector(id), role),
       connectorRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnectorRun(id), role),
       workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfWorkflowRun(id), role),

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { ActivityCoreModule } from '../activity/activity-core.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
@@ -17,7 +18,14 @@ import { VerificationService } from './verification.service.js';
  * `VerificationModule` (API) adds the controllers and the expiry sweeper.
  */
 @Module({
-  imports: [PrismaModule, ActivityCoreModule, NotificationsCoreModule, VerificationPolicyModule, DocumentsCoreModule],
+  imports: [
+    PrismaModule,
+    ActivityCoreModule,
+    NotificationsCoreModule,
+    VerificationPolicyModule,
+    DocumentsCoreModule,
+    PermissionsCoreModule,
+  ],
   providers: [VerificationService, KnowledgeHealthService],
   exports: [VerificationService, KnowledgeHealthService, VerificationPolicyModule],
 })

@@ -1,14 +1,24 @@
 import { Injectable } from '@nestjs/common';
-import type { ExportScope } from '@knowledge/contracts';
+import type { ExportScope, Locale } from '@knowledge/contracts';
 import { hasRealPath } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { PlanDocument } from '../publishing/site-build.plan.js';
+import { AccessService } from '../auth/access.service.js';
+import type { Principal } from '../auth/principal.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { visibilityWhere } from '../permissions/access-scope.js';
 
 export interface ExportScopeInput {
   workspaceId: string;
   scope: ExportScope;
   documentId: string | null;
   projectId: string | null;
+  /**
+   * Whose export it is: the principal on the API side, the stored
+   * `requested_by` (with the job's locale) in the worker. The pages are the
+   * ones that person may open, asked again when the job runs (#76).
+   */
+  requester: Principal | { userId: string; locale: Locale };
 }
 
 export interface ScopeDocument extends PlanDocument {
@@ -29,25 +39,34 @@ export interface ExportRevision {
  */
 @Injectable()
 export class ExportScopeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: AccessService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   /**
-   * The live (unarchived) pages in scope: one page, a page and its subtree by
+   * The live (unarchived) pages in scope that the requester may open: one page, a page and its subtree by
    * `documents.path` (delimited at both ends, so `/a/` never prefix-matches
    * `/ab/`), or every page of a project.
    */
   async documents(input: ExportScopeInput): Promise<ScopeDocument[]> {
     const select = { id: true, parentId: true, title: true, position: true, category: true } as const;
+    const principal =
+      'mode' in input.requester
+        ? input.requester
+        : await this.access.principalFor(input.requester.userId, input.requester.locale);
+    const visible = visibilityWhere(await this.permissions.scopeFor(principal, input.workspaceId));
     if (input.scope === 'project') {
       if (!input.projectId) return [];
       return this.prisma.document.findMany({
-        where: { workspaceId: input.workspaceId, projectId: input.projectId, archivedAt: null },
+        where: { workspaceId: input.workspaceId, projectId: input.projectId, archivedAt: null, AND: [visible] },
         select,
       });
     }
     if (!input.documentId) return [];
-    const root = await this.prisma.document.findUnique({
-      where: { id: input.documentId },
+    const root = await this.prisma.document.findFirst({
+      where: { id: input.documentId, AND: [visible] },
       select: { ...select, workspaceId: true, path: true, archivedAt: true },
     });
     if (!root || root.workspaceId !== input.workspaceId || root.archivedAt) return [];
@@ -55,7 +74,7 @@ export class ExportScopeService {
       return [{ id: root.id, parentId: root.parentId, title: root.title, position: root.position, category: root.category }];
     }
     return this.prisma.document.findMany({
-      where: { workspaceId: input.workspaceId, archivedAt: null, path: { startsWith: root.path } },
+      where: { workspaceId: input.workspaceId, archivedAt: null, path: { startsWith: root.path }, AND: [visible] },
       select,
     });
   }

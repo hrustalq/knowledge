@@ -9,6 +9,7 @@ import type {
 import { HEALTH_ADMIN_BULK_ACTIONS } from '@knowledge/contracts';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import { AccessService } from '../auth/access.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import type { Principal } from '../auth/principal.js';
 import { KnowledgeHealthService } from './knowledge-health.service.js';
 import {
@@ -34,20 +35,27 @@ export class KnowledgeHealthController {
   constructor(
     private readonly health: KnowledgeHealthService,
     private readonly access: AccessService,
+    private readonly permissions: PermissionService,
   ) {}
 
   @Get()
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Pages with their derived verification status, filtered and paged; most neglected first' })
-  list(@Query() query: KnowledgeHealthQueryDto): Promise<KnowledgeHealthListResponse> {
-    return this.health.list(query.workspaceId, query);
+  async list(
+    @Query() query: KnowledgeHealthQueryDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<KnowledgeHealthListResponse> {
+    return this.health.list(await this.permissions.scopeFor(principal, query.workspaceId), query);
   }
 
   @Get('summary')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Live counts per filter — no stored aggregate; equals the list totals' })
-  summary(@Query() query: KnowledgeHealthSummaryQueryDto): Promise<KnowledgeHealthSummaryResponse> {
-    return this.health.summary(query.workspaceId, query.projectId);
+  async summary(
+    @Query() query: KnowledgeHealthSummaryQueryDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<KnowledgeHealthSummaryResponse> {
+    return this.health.summary(await this.permissions.scopeFor(principal, query.workspaceId), query.projectId);
   }
 
   @Post('bulk')
@@ -60,7 +68,7 @@ export class KnowledgeHealthController {
   @ApiResponse({ status: 403, description: 'Some ids belong to another workspace, or archive/unarchive without admin' })
   async bulk(@Body() dto: KnowledgeHealthBulkDto, @CurrentPrincipal() principal: Principal): Promise<KnowledgeHealthBulkResponse> {
     if (HEALTH_ADMIN_BULK_ACTIONS.includes(dto.action)) await this.access.requireRole(principal, dto.workspaceId, 'admin');
-    return this.health.bulk(dto.workspaceId, dto, principal.userId);
+    return this.health.bulk(await this.permissions.scopeFor(principal, dto.workspaceId), dto, principal.userId);
   }
 
   @Get('settings')

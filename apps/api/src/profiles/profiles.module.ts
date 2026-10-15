@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ProfilesController } from './profiles.controller.js';
 import { ProfilesService } from './profiles.service.js';
@@ -9,7 +10,7 @@ import { ProfilesService } from './profiles.service.js';
  * contexts do not load.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, PermissionsCoreModule],
   controllers: [ProfilesController],
   providers: [ProfilesService],
 })

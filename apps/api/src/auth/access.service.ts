@@ -20,6 +20,7 @@ export class AccessService {
     workspaceId: string,
     role: WorkspaceRole,
     operator = false,
+    opts: { allowGuest?: boolean } = {},
   ): Promise<void> {
     // A key narrows its owner before anything widens them: checked ahead of the
     // platform-admin shortcut, or an admin's read-only key would write anyway.
@@ -30,7 +31,10 @@ export class AccessService {
       where: { workspaceId_userId: { workspaceId, userId: principal.userId } },
     });
     if (!member) throw new ForbiddenException(t('error.auth.notMember', { workspaceId }));
-    if ((ROLE_ORDER[member.role as WorkspaceRole] ?? -1) < ROLE_ORDER[role]) {
+    // `allowGuest`: a route that filters its answer by page grants reads a
+    // guest as a viewer of what they were granted (#76, `@Access({ guests })`).
+    const held = member.role === 'guest' && opts.allowGuest ? ROLE_ORDER.viewer : (ROLE_ORDER[member.role as WorkspaceRole] ?? -1);
+    if (held < ROLE_ORDER[role]) {
       throw new ForbiddenException(
         t('error.auth.roleRequired', {
           role: t(`role.${role}`),
@@ -112,6 +116,16 @@ export class AccessService {
     });
     if (!mr) throw new NotFoundException(t('error.mergeRequest.notFound', { id: mergeRequestId }));
     return mr.document.workspaceId;
+  }
+
+  /** The page a merge request changes — what page permissions are checked against (#76). */
+  async documentOfMergeRequest(mergeRequestId: string): Promise<{ workspaceId: string; documentId: string }> {
+    const mr = await this.prisma.mergeRequest.findUnique({
+      where: { id: mergeRequestId },
+      select: { documentId: true, document: { select: { workspaceId: true } } },
+    });
+    if (!mr) throw new NotFoundException(t('error.mergeRequest.notFound', { id: mergeRequestId }));
+    return { workspaceId: mr.document.workspaceId, documentId: mr.documentId };
   }
 
   /**

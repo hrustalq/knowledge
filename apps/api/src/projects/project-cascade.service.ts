@@ -192,6 +192,7 @@ export class ProjectCascadeService {
     await tx.connectorLink.deleteMany({ where: docs });
     await tx.connectorConflict.deleteMany({ where: docs });
     await tx.notification.deleteMany({ where: docs });
+    await tx.accessGrant.deleteMany({ where: { resourceType: 'document', resourceId: { in: documentIds } } });
     await tx.notificationSubscription.deleteMany({
       where: { subjectType: 'document', subjectId: { in: documentIds } },
     });

@@ -5,16 +5,19 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
+import { Lock, LockOpen } from 'lucide-vue-next'
 import type { DeleteProjectResponse } from '@knowledge/contracts'
 import { apiFetch, relativeTime } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectsStore } from '@/stores/projects'
+import { useDocumentsStore } from '@/stores/documents'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import AvatarPicker from '@/components/people/AvatarPicker.vue'
 import DeleteProjectDialog from '@/components/projects/DeleteProjectDialog.vue'
 import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
+import PageAccessDialog from '@/components/access/PageAccessDialog.vue'
 
 const { t } = useI18n()
 
@@ -90,6 +93,18 @@ async function setEmoji(emoji: string | null) {
 
 const confirmDelete = ref(false)
 
+/**
+ * "Access" (#76): who may open the project and every page in it. Any reader
+ * can look; a manager edits. A saved change moves the lock on the project and
+ * on every row of the page tree, so both are re-read.
+ */
+const accessOpen = ref(false)
+const documents = useDocumentsStore()
+function onAccessSaved() {
+  emit('changed')
+  void documents.invalidate()
+}
+
 /** Candidate destinations: every project in the workspace except this one. */
 const siblings = computed(() =>
   store.items.filter((p) => p.projectId !== project.value?.projectId),
@@ -149,6 +164,15 @@ async function onDeleted(result: DeleteProjectResponse) {
       <div class="min-w-0 flex-1 space-y-2">
         <div class="flex flex-wrap items-center gap-2">
           <h1 class="font-display truncate text-2xl font-bold tracking-tight">{{ project.name }}</h1>
+          <span
+            v-if="project.restricted"
+            class="text-muted-foreground grid place-items-center"
+            role="img"
+            :aria-label="t('access.restrictedProject')"
+            :title="t('access.restrictedProject')"
+          >
+            <Lock class="size-4" aria-hidden="true" />
+          </span>
           <!-- The read side of the same project. This page is the form; the
                overview is where you go to find out what is in it. -->
           <RouterLink
@@ -229,6 +253,11 @@ async function onDeleted(result: DeleteProjectResponse) {
         >
           {{ t('project.setAsActive') }}
         </Button>
+        <Button variant="outline" @click="accessOpen = true">
+          <Lock v-if="project.restricted" class="size-3.5" aria-hidden="true" />
+          <LockOpen v-else class="size-3.5" aria-hidden="true" />
+          {{ t('access.action') }}
+        </Button>
         <Button
           v-if="auth.canAdminWorkspace"
           variant="ghost"
@@ -240,6 +269,13 @@ async function onDeleted(result: DeleteProjectResponse) {
       </div>
     </div>
 
+    <PageAccessDialog
+      v-model:open="accessOpen"
+      resource-type="project"
+      :resource-id="project.projectId"
+      :title="project.name"
+      @saved="onAccessSaved"
+    />
     <DeleteProjectDialog
       v-if="auth.canAdminWorkspace"
       v-model:open="confirmDelete"

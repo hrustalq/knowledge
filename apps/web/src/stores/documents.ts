@@ -31,6 +31,16 @@ export interface DocumentFilters {
 export const EMPTY_FILTERS: DocumentFilters = { categories: [], projectIds: [], tags: [] }
 
 /**
+ * One ancestor above where the caller's tree begins (#76). `hidden` is a page
+ * the caller may not open — a guest's ungranted parent — known only by its id.
+ */
+export interface AncestorCrumb {
+  documentId: string
+  title: string
+  hidden: boolean
+}
+
+/**
  * Rows per request. The list scrolls forever, so this is a fetch size, not a
  * page size — big enough that scrolling rarely outruns it, small enough that
  * the first screen arrives immediately.
@@ -132,6 +142,8 @@ function mergeNodes(prev: DocumentTreeNode[], next: DocumentTreeNode[]): Documen
     existing.headRevisionId = incoming.headRevisionId
     existing.headRevisionStatus = incoming.headRevisionStatus
     existing.childCount = incoming.childCount
+    // The lock (#76): a restriction saved on a page, an ancestor or the project.
+    existing.restricted = incoming.restricted
     if (incoming.children.length) {
       const children = mergeNodes(existing.children, incoming.children)
       if (children !== existing.children) existing.children = children
@@ -239,6 +251,15 @@ export const useDocumentsStore = defineStore('documents', {
     expanding: [] as string[],
     /** Node ids whose children have been fetched — empty branches included. */
     expanded: [] as string[],
+    /**
+     * Per page, the ancestors above the first one the tree can draw, down to
+     * the last one the caller may not open (#76). Empty when nothing above is
+     * hidden. Only a guest's trail ever has any: a member who can read a page
+     * can read everything above it. The tree surfaces the first visible page
+     * below a hidden one as a root, so without this the breadcrumbs would
+     * quietly start halfway down.
+     */
+    hiddenAbove: {} as Record<string, AncestorCrumb[]>,
 
     /**
      * Feature 32. Ids whose move is in flight: the row and everything under it
@@ -423,16 +444,46 @@ export const useDocumentsStore = defineStore('documents', {
 
       const job = (async () => {
         if (!this.treeLoaded) await this.fetchTree()
-        if (walk(this.tree, documentId)) return this.pathTo(documentId)
+        if (walk(this.tree, documentId)) {
+          // A trail whose top row still has a parent starts below something the
+          // tree does not hold — for a guest, a page they may not open. Ask once
+          // what is up there, so the breadcrumbs can say so.
+          const top = this.pathTo(documentId)[0]
+          if (top?.parentId && !(documentId in this.hiddenAbove)) {
+            const res = await apiFetch<DocumentAncestorsResponse>(`/v1/documents/${documentId}/ancestors`)
+            this.recordHiddenAbove(documentId, res.ancestors)
+          }
+          return this.pathTo(documentId)
+        }
 
         const res = await apiFetch<DocumentAncestorsResponse>(`/v1/documents/${documentId}/ancestors`)
+        this.recordHiddenAbove(documentId, res.ancestors)
         // Top-down: each level has to exist before the next can be found in it.
-        for (const ancestor of res.ancestors) await this.fetchChildren(ancestor.documentId)
+        // A hidden ancestor is never expanded: it is not in the tree, and what
+        // is under it that the caller may open already surfaces as a root.
+        for (const ancestor of res.ancestors) {
+          if (ancestor.hidden) continue
+          await this.fetchChildren(ancestor.documentId)
+        }
         return this.pathTo(documentId)
       })().finally(() => pending.delete(documentId))
 
       pending.set(documentId, job)
       return job
+    },
+
+    /** Keep the part of an ancestor chain that ends at its last hidden page. */
+    recordHiddenAbove(documentId: string, ancestors: DocumentSummary[]) {
+      let last = -1
+      ancestors.forEach((a, i) => {
+        if (a.hidden) last = i
+      })
+      this.hiddenAbove = {
+        ...this.hiddenAbove,
+        [documentId]: ancestors
+          .slice(0, last + 1)
+          .map((a) => ({ documentId: a.documentId, title: a.title, hidden: !!a.hidden })),
+      }
     },
 
     /** Breadcrumb chain (root → … → document) from the loaded tree, or []. */
@@ -565,6 +616,7 @@ export const useDocumentsStore = defineStore('documents', {
       this.treeLoaded = false
       this.expanded = []
       this.expanding = []
+      this.hiddenAbove = {}
       this.graph = null
       this.graphLoaded = false
       const jobs: Promise<void>[] = []

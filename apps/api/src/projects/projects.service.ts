@@ -8,8 +8,10 @@ import type {
   ProjectDeletionPreview,
   ProjectSummary,
 } from '@knowledge/contracts';
-import type { Project } from '@prisma/client';
+import type { Prisma, Project } from '@prisma/client';
+import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { projectAvatarUrl } from '../common/avatar-url.js';
 import type { CreateProjectDto, ListProjectsQueryDto, UpdateProjectDto } from './projects.dto.js';
@@ -71,17 +73,19 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly permissions: PermissionService,
   ) {}
 
   /**
    * Cursor-paginated only when a `limit` is given: the workspace/project
    * switchers want the whole roster in one call, the projects rail pages it.
    */
-  async list(query: ListProjectsQueryDto): Promise<ListProjectsResponse> {
+  async list(query: ListProjectsQueryDto, scope: AccessScope): Promise<ListProjectsResponse> {
     const search = query.search?.trim();
     const rows = await this.prisma.project.findMany({
       where: {
         workspaceId: query.workspaceId,
+        ...projectVisibilityWhere(scope),
         ...(search
           ? {
               OR: [
@@ -92,7 +96,7 @@ export class ProjectsService {
           : {}),
       },
       orderBy: { createdAt: 'asc' },
-      include: { _count: { select: { documents: true } } },
+      include: { _count: { select: { documents: { where: visibilityWhere(scope) } } } },
       ...(query.limit ? { take: query.limit + 1 } : {}),
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     });
@@ -104,10 +108,11 @@ export class ProjectsService {
     };
   }
 
-  async get(projectId: string): Promise<ProjectSummary> {
+  /** The guard has already checked the project itself; the count is of pages `scope` may open (#76). */
+  async get(projectId: string, scope: AccessScope): Promise<ProjectSummary> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { _count: { select: { documents: true } } },
+      include: { _count: { select: { documents: { where: visibilityWhere(scope) } } } },
     });
     if (!project) throw new NotFoundException(t('error.project.notFound', { id: projectId }));
     return toSummary(project, project._count.documents);
@@ -258,6 +263,8 @@ export class ProjectsService {
         // A site is the project's face, not content of its own: it goes with
         // the project in every mode (docs/features/44). Its versions cascade.
         this.prisma.publishedSite.deleteMany({ where: { projectId } }),
+        // Grants on the project go with it (no FK, house policy).
+        this.prisma.accessGrant.deleteMany({ where: { resourceType: 'project', resourceId: projectId } }),
         this.prisma.project.delete({ where: { id: projectId } }),
       ]);
       await this.recordDeletion(project, actorId, null, counts, []);
@@ -298,6 +305,7 @@ export class ProjectsService {
           where: { subjectType: 'project', subjectId: projectId },
         });
         await tx.publishedSite.deleteMany({ where: { projectId } });
+        await tx.accessGrant.deleteMany({ where: { resourceType: 'project', resourceId: projectId } });
         await tx.project.delete({ where: { id: projectId } });
       });
       await this.recordDeletion(project, actorId, null, counts, [], destroyed);
@@ -337,6 +345,10 @@ export class ProjectsService {
       // move: the whole forest travels at once, so every parent_id still points
       // at a document inside the same project.
       await tx.document.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
+      // The pages leave this project's restriction and enter the destination's
+      // (#76); the project's own grants go with it.
+      await tx.accessGrant.deleteMany({ where: { resourceType: 'project', resourceId: projectId } });
+      await this.permissions.recomputeRestrictedBy({ projectId: moveContentsTo }, tx);
 
       await tx.connector.updateMany({ where: { projectId }, data: { projectId: moveContentsTo } });
       await tx.workflowDefinition.updateMany({
@@ -480,7 +492,26 @@ function toSummary(project: Project, documentCount: number): ProjectSummary {
     avatarColor: project.avatarColor,
     documentCount,
     createdAt: project.createdAt.toISOString(),
+    restricted: project.restricted,
   };
+}
+
+/**
+ * The projects `scope` may see (#76): all of them but the restricted ones it
+ * holds no grant on, and for a guest only those granted to them or holding a
+ * page that is.
+ */
+function projectVisibilityWhere(scope: AccessScope): Prisma.ProjectWhereInput {
+  if (scope.bypass) return {};
+  if (scope.guest) {
+    return {
+      AND: [
+        { id: { notIn: [...scope.denied] } },
+        { OR: [{ id: { in: [...scope.granted] } }, { documents: { some: visibilityWhere(scope) } }] },
+      ],
+    };
+  }
+  return scope.denied.size > 0 ? { id: { notIn: [...scope.denied] } } : {};
 }
 
 /**

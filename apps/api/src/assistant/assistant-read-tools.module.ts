@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { SearchCoreModule } from '../search/search-core.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { AssistantReadToolsService } from './assistant-read-tools.service.js';
 
@@ -18,7 +19,7 @@ import { AssistantReadToolsService } from './assistant-read-tools.service.js';
  * proposes and the API publishes (docs/features/17).
  */
 @Module({
-  imports: [PrismaModule, SearchCoreModule, DocumentsCoreModule, AuthCoreModule, TemplatesCoreModule],
+  imports: [PrismaModule, SearchCoreModule, DocumentsCoreModule, AuthCoreModule, TemplatesCoreModule, PermissionsCoreModule],
   providers: [AssistantReadToolsService],
   exports: [AssistantReadToolsService],
 })

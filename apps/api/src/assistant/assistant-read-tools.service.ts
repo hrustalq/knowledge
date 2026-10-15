@@ -4,6 +4,8 @@ import type { AssistantAskSource, DocumentTreeNode } from '@knowledge/contracts'
 import { AccessService } from '../auth/access.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import type { AccessScope } from '../permissions/access-scope.js';
 import { SearchService } from '../search/search.service.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { wrapUntrusted } from '../common/untrusted.js';
@@ -53,7 +55,16 @@ export class AssistantReadToolsService {
     private readonly search: SearchService,
     private readonly documents: DocumentsService,
     private readonly templates: TemplatesService,
+    private readonly permissions: PermissionService,
   ) {}
+
+  /**
+   * The caller's page visibility, asked afresh on every tool call rather than
+   * once per turn: a grant revoked mid-turn holds from the next call (#76).
+   */
+  private scopeOf(ctx: AssistantToolContext): Promise<AccessScope> {
+    return this.permissions.scopeFor(ctx.principal, ctx.workspaceId);
+  }
 
   definitions(): ChatCompletionFunctionTool[] {
     return [
@@ -267,7 +278,7 @@ export class AssistantReadToolsService {
     // which is how it ended up citing the wrong one and nesting new pages
     // beside it.
     const trails = await this.documents.breadcrumbsFor(
-      ctx.workspaceId,
+      await this.scopeOf(ctx),
       res.results.map((r) => r.documentId),
     );
     // One source per page, carrying the best chunk: the label is per page
@@ -380,7 +391,7 @@ export class AssistantReadToolsService {
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
     try {
       const content = await this.documents.getContent(documentId);
-      const trails = await this.documents.breadcrumbsFor(ctx.workspaceId, [documentId]);
+      const trails = await this.documents.breadcrumbsFor(await this.scopeOf(ctx), [documentId]);
       const source: AssistantAskSource = { documentId, title: doc.title, revisionId: content.revisionId, factClass: 'explicit' };
       return {
         content: JSON.stringify({
@@ -418,7 +429,7 @@ export class AssistantReadToolsService {
     const parentId = typeof args.parentId === 'string' && args.parentId ? args.parentId : undefined;
     const projectId = typeof args.projectId === 'string' && args.projectId ? args.projectId : undefined;
 
-    const tree = await this.documents.getTree(ctx.workspaceId, projectId, {
+    const tree = await this.documents.getTree(await this.scopeOf(ctx), projectId, {
       ...(parentId ? { parentId } : {}),
       depth,
     });
@@ -480,7 +491,7 @@ export class AssistantReadToolsService {
     const doc = await this.requireWorkspaceDocument(documentId, ctx);
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
 
-    const graph = await this.documents.getDocumentGraph(documentId, depth);
+    const graph = await this.documents.getDocumentGraph(documentId, depth, await this.scopeOf(ctx));
     // A page reached through the graph is evidence of the kind the edge is:
     // an `inferred` edge is a model's guess, `frontmatter` the author's word.
     // The weakest edge that led to a node is what the citation inherits.

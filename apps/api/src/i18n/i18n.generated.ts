@@ -717,6 +717,7 @@ export type I18nTranslations = {
             "rateLimited": string;
             "unlockRateLimited": string;
             "locked": string;
+            "restricted": string;
         };
         "site": {
             "notFound": string;
@@ -808,6 +809,13 @@ export type I18nTranslations = {
         };
         "access": {
             "groupReadOnly": string;
+            "pageRestricted": string;
+            "projectRestricted": string;
+            "editRequired": string;
+            "manageRequired": string;
+            "selfLockout": string;
+            "unknownSubjects": string;
+            "usersWithoutView": string;
         };
     };
     "import": {

@@ -76,6 +76,20 @@ model Document {
   /// the pages made from it. Null = the page did not start from a template.
   templateRef           String?   @map("template_ref")
   templateVersion       Int?      @map("template_version")
+  /// Page restriction switch (#76). On: only grantees (and admins) pass this
+  /// node, and so its whole subtree.
+  restricted            Boolean   @default(false)
+  /// Every restricted node on the chain, outermost first: the project if it is
+  /// restricted, then restricted ancestors, then self. Denormalized so the
+  /// visibility predicate is one array test (`restricted_by && denied`) and
+  /// never a walk. Maintained only by PermissionService.recomputeRestrictedBy,
+  /// inside the transaction that changed a path, a project or a switch.
+  /// GIN-indexed in the migration (not expressible here).
+  restrictedBy          String[]  @default([]) @map("restricted_by") @db.Uuid
+  /// Bumped whenever `restricted_by` changes; the search stores are re-stamped
+  /// until `acl_stamped_version` catches up (#76, phase 3).
+  aclVersion            Int       @default(0) @map("acl_version")
+  aclStampedVersion     Int       @default(0) @map("acl_stamped_version")
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   project           Project            @relation(fields: [projectId], references: [id])
@@ -434,6 +448,8 @@ model Project {
   avatarEmoji     String?   @map("avatar_emoji")
   avatarColor     String?   @map("avatar_color")
   avatarUpdatedAt DateTime? @map("avatar_updated_at") @db.Timestamptz
+  /// Project restriction switch (#76): every page in it inherits the restriction.
+  restricted      Boolean   @default(false)
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]
@@ -615,6 +631,32 @@ model UserGroupMember {
   @@id([groupId, userId])
   @@index([userId])
   @@map("user_group_members")
+}
+
+/// One grant on a project or page (#76). No FK on workspace, resource or
+/// subject (house policy); the services delete grants with their subject.
+model AccessGrant {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  /// ACCESS_RESOURCE_TYPES: project | document
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id") @db.Uuid
+  /// ACCESS_SUBJECT_TYPES: user | group
+  subjectType  String   @map("subject_type")
+  subjectId    String   @map("subject_id") @db.Uuid
+  /// ACCESS_LEVELS: view | edit | manage
+  level        String
+  /// manual today; connector-origin rows arrive with ACL mirroring and are
+  /// rewritten by it, manual ones never.
+  origin       String   @default("manual")
+  connectorId  String?  @map("connector_id") @db.Uuid
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([resourceType, resourceId, subjectType, subjectId, origin])
+  @@index([workspaceId, subjectType, subjectId])
+  @@index([resourceId])
+  @@map("access_grants")
 }
 
 // Phase 5 audit trail: every trusted-operator graph query is recorded here.

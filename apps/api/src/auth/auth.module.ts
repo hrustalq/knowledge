@@ -3,9 +3,9 @@ import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AuthCoreModule } from './auth-core.module.js';
 import { MailQueueModule } from '../mail/mail-queue.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AclGuard } from './acl.guard.js';
 import { ApiKeysService } from './api-keys.service.js';
-import { AuditService } from './audit.service.js';
 import { AuthController } from './auth.controller.js';
 import { AuthFlowController } from './auth-flow.controller.js';
 import { AuthFlowService } from './auth-flow.service.js';
@@ -23,10 +23,10 @@ import { UrlTicketsService } from './url-tickets.service.js';
  */
 @Global()
 @Module({
-  imports: [PrismaModule, AuthCoreModule, MailQueueModule],
+  // PermissionsCoreModule: AclGuard asks it about the page behind a `:id` (#76).
+  imports: [PrismaModule, AuthCoreModule, PermissionsCoreModule, MailQueueModule],
   controllers: [AuthController, AuthFlowController, MeController],
   providers: [
-    AuditService,
     ApiKeysService,
     SessionsService,
     TokenAuthService,
@@ -36,6 +36,6 @@ import { UrlTicketsService } from './url-tickets.service.js';
     { provide: APP_GUARD, useClass: AclGuard },
   ],
   // AuthCoreModule is re-exported so existing importers keep getting AccessService.
-  exports: [AuthCoreModule, AuditService, SessionsService, TokenAuthService],
+  exports: [AuthCoreModule, SessionsService, TokenAuthService],
 })
 export class AuthModule {}

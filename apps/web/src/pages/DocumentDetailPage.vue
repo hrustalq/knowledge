@@ -14,7 +14,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/lib/format'
-import { errorMessage } from '@/api/errors'
+import { errorMessage, isRestrictedRefusal } from '@/api/errors'
 import { labelFor } from '@/lib/labels'
 import { hasWorkingCopy } from '@/lib/working-copy'
 import { readFrontmatter } from '@/lib/page-source'
@@ -31,6 +31,8 @@ import {
   GitMerge,
   History,
   LayoutTemplate,
+  Lock,
+  LockOpen,
   MoreHorizontal,
   Plug,
   Info,
@@ -86,6 +88,7 @@ import AskAssistant from '@/components/knowledge/AskAssistant.vue'
 import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
 import SharePopover from '@/components/knowledge/SharePopover.vue'
+import PageAccessDialog from '@/components/access/PageAccessDialog.vue'
 import VerificationBar from '@/components/verification/VerificationBar.vue'
 
 const { t } = useI18n()
@@ -154,6 +157,15 @@ const content = ref<DocumentContentResponse | null>(null)
 const contentError = ref<string | null>(null)
 const relations = ref<ListDocumentRelationsResponse['relations'] | null>(null)
 const error = ref<string | null>(null)
+/**
+ * The API refused this page because it is restricted and the caller was not
+ * granted (#76). Not an error — nothing broke — so it gets its own calm state
+ * rather than the generic one. A guest is answered 404 instead, and lands in
+ * the generic state like any missing page.
+ */
+const restrictedRefusal = ref(false)
+/** "Access…" (#76): who may open this page. Every reader can look; managers edit. */
+const accessOpen = ref(false)
 
 /**
  * The template this page was created from (issue #69), named once the roster
@@ -232,9 +244,16 @@ async function load() {
       timer = undefined
     }
   } catch (e) {
-    error.value = (e as Error).message
+    if (isRestrictedRefusal(e)) restrictedRefusal.value = true
+    else error.value = (e as Error).message
     if (timer) clearInterval(timer)
   }
+}
+
+/** A saved restriction changes the lock here and on every row of the tree. */
+function onAccessSaved() {
+  void load()
+  void store.invalidate()
 }
 
 async function loadContent() {
@@ -482,6 +501,7 @@ watch(documentId, () => {
   content.value = null
   relations.value = null
   error.value = null
+  restrictedRefusal.value = false
   headings.value = []
   outdatedThreads.value = []
   if (timer) clearInterval(timer)
@@ -520,7 +540,14 @@ watch(
 </script>
 
 <template>
-  <PageState v-if="error" state="error" :description="error" />
+  <PageState
+    v-if="restrictedRefusal"
+    state="forbidden"
+    :icon="Lock"
+    :title="t('access.restrictedTitle')"
+    :description="t('access.restrictedBody')"
+  />
+  <PageState v-else-if="error" state="error" :description="error" />
 
   <!-- Shaped like the page it stands in for — a title, a column, a rail —
        rather than a stack of generic bars, so the layout does not visibly
@@ -571,7 +598,24 @@ watch(
         <WatchButton subject-type="document" :subject-id="detail.document.documentId" />
         <!-- Handing the page to people outside the workspace is an editor's act
              (docs/features/43); the server checks the role and the workspace switch. -->
-        <SharePopover v-if="auth.canEdit && !archived" :document-id="detail.document.documentId" />
+        <SharePopover
+          v-if="auth.canEdit && !archived"
+          :document-id="detail.document.documentId"
+          :restricted="!!detail.document.restricted"
+        />
+        <!-- Who may open the page (#76). Offered to every reader: a manager
+             edits it, anyone else is told where they stand. The icon is the
+             page's state, so a restricted page reads as one from its header. -->
+        <Button
+          variant="outline"
+          size="sm"
+          :title="detail.document.restricted ? t('access.lockedLabel') : undefined"
+          @click="accessOpen = true"
+        >
+          <Lock v-if="detail.document.restricted" class="size-3.5" aria-hidden="true" />
+          <LockOpen v-else class="size-3.5" aria-hidden="true" />
+          {{ t('access.action') }}
+        </Button>
         <Button v-if="auth.canEdit && !archived" variant="outline" size="sm" as-child>
           <RouterLink
             :to="`/documents/${detail.document.documentId}/edit`"
@@ -797,6 +841,13 @@ watch(
     <ExportDialog
       v-model:open="exportOpen"
       :target="{ kind: 'document', documentId: detail.document.documentId, title: detail.document.title }"
+    />
+    <PageAccessDialog
+      v-model:open="accessOpen"
+      resource-type="document"
+      :resource-id="detail.document.documentId"
+      :title="detail.document.title"
+      @saved="onAccessSaved"
     />
   </template>
 </template>

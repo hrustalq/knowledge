@@ -1,5 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+import { ACCESS_LEVELS, ACCESS_SUBJECT_TYPES, type AccessLevel, type AccessSubjectType } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 /** Mirrors UUID_RE in acl.guard.ts (any version digit, nil allowed). */
@@ -67,4 +80,35 @@ export class UpdateUserGroupMembersDto {
   @ArrayMaxSize(MAX_MEMBER_CHANGES, { message: vmsg('arrayMaxSize') })
   @Matches(UUID_RE, { each: true })
   remove?: string[];
+}
+
+/** One save of the access dialog; a page with more grantees than this wants a group. */
+const MAX_GRANTS = 200;
+
+export class AccessGrantInputDto {
+  @ApiProperty({ enum: ACCESS_SUBJECT_TYPES })
+  @IsIn(ACCESS_SUBJECT_TYPES)
+  subjectType!: AccessSubjectType;
+
+  @ApiProperty()
+  @IsString()
+  @Matches(UUID_RE)
+  subjectId!: string;
+
+  @ApiProperty({ enum: ACCESS_LEVELS })
+  @IsIn(ACCESS_LEVELS)
+  level!: AccessLevel;
+}
+
+export class UpdateResourceAccessDto {
+  @ApiProperty({ description: 'On: only grantees (and workspace admins) open this node and everything under it' })
+  @IsBoolean()
+  restricted!: boolean;
+
+  @ApiProperty({ type: [AccessGrantInputDto], description: "Replaces the node's manual grants as a whole" })
+  @IsArray()
+  @ArrayMaxSize(MAX_GRANTS, { message: vmsg('arrayMaxSize') })
+  @ValidateNested({ each: true })
+  @Type(() => AccessGrantInputDto)
+  grants!: AccessGrantInputDto[];
 }

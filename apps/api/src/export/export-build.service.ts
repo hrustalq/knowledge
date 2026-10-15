@@ -168,6 +168,7 @@ export class ExportBuildService {
       scope: row.scope as ExportScope,
       documentId: row.documentId,
       projectId: row.projectId,
+      requester: { userId: row.requestedBy, locale: row.locale as Locale },
     });
     const revisions = await this.scope.revisions(
       documents.map((d) => d.id),

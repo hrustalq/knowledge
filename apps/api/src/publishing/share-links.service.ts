@@ -106,10 +106,14 @@ export class ShareLinksService {
   async create(documentId: string, input: ShareLinkInput, actorId?: string): Promise<CreateShareLinkResponse> {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
-      select: { id: true, workspaceId: true, archivedAt: true },
+      select: { id: true, workspaceId: true, archivedAt: true, restrictedBy: true },
     });
     if (!document) throw new NotFoundException(t('error.document.notFound', { id: documentId }));
     if (document.archivedAt) throw new ConflictException(t('error.document.archived', { id: documentId }));
+    // A restricted page is shared by granting access, never by a public link (#76).
+    if (document.restrictedBy.length > 0) {
+      throw new ConflictException({ statusCode: 409, message: t('error.share.restricted'), reason: 'share.restricted' });
+    }
     const settings = await this.requireEnabled(document.workspaceId);
 
     const { expiresAt, requestedExpiresAt } = this.clampExpiry(input.expiresAt ?? null);

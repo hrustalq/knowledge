@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { ActivityCoreModule } from '../activity/activity-core.module.js';
 import { NotificationsCoreModule } from '../notifications/notifications-core.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
@@ -14,7 +15,7 @@ import { VerificationSweeper } from './verification.sweeper.js';
  * reminder is a user-facing act ("the worker generates, the API publishes").
  */
 @Module({
-  imports: [VerificationCoreModule, PrismaModule, ActivityCoreModule, NotificationsCoreModule, StorageModule],
+  imports: [VerificationCoreModule, PrismaModule, ActivityCoreModule, NotificationsCoreModule, StorageModule, PermissionsCoreModule],
   controllers: [VerificationController, KnowledgeHealthController],
   providers: [VerificationSweeper],
   exports: [VerificationCoreModule],

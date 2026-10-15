@@ -47,11 +47,27 @@ export interface AccessSpec {
   source: WorkspaceSource;
   /** Additionally require workspace_members.trusted_operator (plan.md §9). */
   operator: boolean;
+  /**
+   * A guest passes this workspace-level `viewer` route (#76). Only for a
+   * handler that filters everything it returns through the caller's
+   * `AccessScope` — a guest otherwise reads the whole workspace through it.
+   * Absent unless set, so every other route's metadata reads as it always did.
+   */
+  guests?: true;
 }
 
 /** Declare a route's ACL: minimum workspace role + where the workspace id comes from. */
-export const Access = (role: WorkspaceRole, source: WorkspaceSource, opts?: { operator?: boolean }) =>
-  SetMetadata(ACCESS_META, { role, source, operator: opts?.operator ?? false } satisfies AccessSpec);
+export const Access = (
+  role: WorkspaceRole,
+  source: WorkspaceSource,
+  opts?: { operator?: boolean; guests?: boolean },
+) =>
+  SetMetadata(ACCESS_META, {
+    role,
+    source,
+    operator: opts?.operator ?? false,
+    ...(opts?.guests ? { guests: true as const } : {}),
+  } satisfies AccessSpec);
 
 /** Route reachable without authentication (health checks, login/signup/reset). */
 export const Public = () => SetMetadata(PUBLIC_META, true);

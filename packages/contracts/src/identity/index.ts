@@ -420,8 +420,11 @@ export interface ProjectSummary {
   avatarEmoji: string | null;
   /** Backs the emoji only; an image brings its own colours. Hex, e.g. `#3b82f6`. */
   avatarColor: string | null;
+  /** Pages in it the caller may open. */
   documentCount: number;
   createdAt: string;
+  /** Only grantees (and admins) open it or anything in it (#76). */
+  restricted?: boolean;
 }
 
 export interface ListProjectsResponse {
@@ -706,6 +709,102 @@ export interface UserGroupMemberEntry {
 export interface ListUserGroupMembersResponse {
   groupId: string;
   members: UserGroupMemberEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// Page and project restrictions (#76, phase 2).
+//
+// A project or page is *restricted* when its own switch is on. A reader must be
+// admitted by every restricted node on the chain project → root → … → page, so
+// restricting a parent hides its whole subtree and a child can only narrow.
+// Grants on an unrestricted node admit nobody new to the workspace's members;
+// they are how a guest reaches a page and how edit/manage are handed out.
+// The workspace role stays the ceiling: a viewer with an `edit` grant still
+// reads only. Workspace admins see and manage everything.
+
+export const ACCESS_LEVELS = ['view', 'edit', 'manage'] as const;
+export type AccessLevel = (typeof ACCESS_LEVELS)[number];
+/** What a caller may do with one page or project; `none` = they may not open it. */
+export type EffectiveAccessLevel = AccessLevel | 'none';
+
+/** none < view < edit < manage, for comparing two levels without a lookup table at each site. */
+export function accessRank(level: EffectiveAccessLevel): number {
+  return level === 'none' ? -1 : ACCESS_LEVELS.indexOf(level);
+}
+
+export const ACCESS_RESOURCE_TYPES = ['project', 'document'] as const;
+export type AccessResourceType = (typeof ACCESS_RESOURCE_TYPES)[number];
+
+export const ACCESS_SUBJECT_TYPES = ['user', 'group'] as const;
+export type AccessSubjectType = (typeof ACCESS_SUBJECT_TYPES)[number];
+
+export interface AccessGrantInput {
+  subjectType: AccessSubjectType;
+  subjectId: string;
+  level: AccessLevel;
+}
+
+export interface AccessGrantEntry extends AccessGrantInput {
+  /** The group's name or the person's display name; null when the subject is gone. */
+  name: string | null;
+  /** People only. */
+  email: string | null;
+  avatarUrl: AvatarUrl;
+  /** Groups only. */
+  memberCount: number | null;
+}
+
+/** A restricted node above the one being looked at, which every reader must also pass. */
+export interface InheritedRestriction {
+  resourceType: AccessResourceType;
+  resourceId: string;
+  /** Null when the caller may not open that node — a guest's ungranted ancestor. */
+  title: string | null;
+  grantCount: number;
+}
+
+// GET /v1/documents/:id/access · GET /v1/projects/:id/access
+export interface ResourceAccessResponse {
+  resourceType: AccessResourceType;
+  resourceId: string;
+  restricted: boolean;
+  /** Outermost first: the project, then ancestors root-first. Empty when nothing above is restricted. */
+  inherited: InheritedRestriction[];
+  /** What the caller may do here. */
+  level: EffectiveAccessLevel;
+  canManage: boolean;
+  /** Grants on this node itself. Empty unless `canManage`: who holds what is a manager's business. */
+  grants: AccessGrantEntry[];
+}
+
+// PUT /v1/documents/:id/access · PUT /v1/projects/:id/access
+export interface UpdateResourceAccessRequest {
+  restricted: boolean;
+  /** Replaces the node's grants as a whole. */
+  grants: AccessGrantInput[];
+}
+
+/** Why someone holds the level they do. */
+export const EFFECTIVE_ACCESS_SOURCES = ['admin', 'role', 'grant'] as const;
+export type EffectiveAccessSource = (typeof EFFECTIVE_ACCESS_SOURCES)[number];
+
+export interface EffectiveAccessEntry {
+  userId: string;
+  displayName: string;
+  email: string;
+  avatarUrl: AvatarUrl;
+  role: WorkspaceRole;
+  level: AccessLevel;
+  /** `admin`: workspace admin; `role`: the workspace role decides; `grant`: a user or group grant does. */
+  source: EffectiveAccessSource;
+}
+
+// GET /v1/documents/:id/access/effective · GET /v1/projects/:id/access/effective
+export interface EffectiveAccessResponse {
+  resourceType: AccessResourceType;
+  resourceId: string;
+  /** Everyone who may open it, highest level first. */
+  entries: EffectiveAccessEntry[];
 }
 
 

@@ -4,6 +4,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
+import { PermissionsModule } from './permissions/permissions.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { GraphQueryModule } from './graph/graph-query.module.js';
@@ -43,6 +44,7 @@ import { ChatModule } from './chat/chat.module.js';
     AuthModule,
     UsersModule,
     WorkspacesModule,
+    PermissionsModule,
     ProfilesModule,
     ProjectsModule,
     DocumentsModule,

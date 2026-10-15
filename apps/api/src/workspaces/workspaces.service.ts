@@ -169,6 +169,7 @@ export class WorkspacesService {
     const member = await this.requireMember(workspaceId, userId);
     if (member.role !== 'admin') {
       await this.prisma.workspaceMember.delete({ where: { workspaceId_userId: { workspaceId, userId } } });
+      await this.dropGroupMemberships(workspaceId, userId);
       return this.listMembers(workspaceId);
     }
     // Last-admin protection has to be ONE statement. `count(other admins)` then
@@ -191,7 +192,17 @@ export class WorkspacesService {
              )
     `;
     if (affected === 0) throw new BadRequestException(t('error.workspace.lastAdminRemove'));
+    await this.dropGroupMemberships(workspaceId, userId);
     return this.listMembers(workspaceId);
+  }
+
+  /**
+   * Leaving the workspace means leaving its groups (#76). Kept, the rows would
+   * silently hand back every grant those groups hold the day the person is
+   * re-added, which is a grant nobody made.
+   */
+  private async dropGroupMemberships(workspaceId: string, userId: string): Promise<void> {
+    await this.prisma.userGroupMember.deleteMany({ where: { userId, group: { workspaceId } } });
   }
 
   private async requireMember(workspaceId: string, userId: string) {

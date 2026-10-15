@@ -56,6 +56,7 @@ import { ProvenanceService } from '../feedback/provenance.service.js';
 import { expiryFor, VerificationPolicyService } from '../verification/verification-policy.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { t } from '../i18n/t.js';
+import { WORKSPACE_READER } from '../auth/principal.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -618,7 +619,9 @@ export class DocumentsService {
 
   private async assertMember(workspaceId: string, userId: string): Promise<void> {
     if (userId === AUTHOR_ID_STUB) return;
-    const member = await this.prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } });
+    // A guest cannot own a page: ownership is review duty over something they
+    // may not even be able to read (#76).
+    const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId, userId, ...WORKSPACE_READER } });
     if (!member) throw new BadRequestException(t('error.document.ownerNotMember'));
   }
 

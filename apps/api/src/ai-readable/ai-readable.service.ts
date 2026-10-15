@@ -18,6 +18,7 @@ import {
   truncatedMarker,
   unavailableMarker,
 } from './llms.js';
+import { WORKSPACE_READER } from '../auth/principal.js';
 
 export type TextResult = { status: 304; etag: string } | { status: 200; etag: string; body: string };
 
@@ -314,7 +315,8 @@ export class AiReadableService {
       ? [pinned]
       : seesAll
         ? undefined
-        : (await this.prisma.workspaceMember.findMany({ where: { userId: principal.userId } })).map(
+        : // A guest cannot read a workspace's llms.txt (#76), so it is no candidate.
+          (await this.prisma.workspaceMember.findMany({ where: { userId: principal.userId, ...WORKSPACE_READER } })).map(
             (m) => m.workspaceId,
           );
     const workspaces = await this.prisma.workspace.findMany({

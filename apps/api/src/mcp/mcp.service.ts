@@ -1308,14 +1308,23 @@ export class McpService {
       workspaces: reachable
         // A key pinned to a workspace its owner has since left reaches nothing.
         .filter((w) => seesAll || roleOf.has(w.id))
-        .map((w) => ({
-          workspaceId: w.id,
-          name: w.name,
-          // What this connection may actually do, not merely the membership
-          // row: a read-only key caps it, and dev/platform admin has no row.
-          role: readOnly ? 'viewer' : (roleOf.get(w.id) ?? 'admin'),
-          projects: projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),
-        })),
+        .map((w) => {
+          const role = roleOf.get(w.id) ?? 'admin';
+          // A guest reads only what is granted to them (#76), so the workspace's
+          // project names are not theirs to list, and a read-only key cannot
+          // lift them to viewer.
+          const guest = role === 'guest';
+          return {
+            workspaceId: w.id,
+            name: w.name,
+            // What this connection may actually do, not merely the membership
+            // row: a read-only key caps it, and dev/platform admin has no row.
+            role: readOnly && !guest ? 'viewer' : role,
+            projects: guest
+              ? []
+              : projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),
+          };
+        }),
     };
   }
 

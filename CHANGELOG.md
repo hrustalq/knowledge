@@ -13,6 +13,33 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- **User groups** in **Settings → Access → Groups**: named sets of workspace
+  members that page and project restrictions will be granted to. Workspace
+  admins create, rename and delete groups and add or remove members. Everyone
+  else in the workspace can see them. Groups mirrored from a connector or
+  provisioned by SCIM are shown read-only, and the API answers 409 to an edit.
+  Removing someone from the workspace also removes them from its groups. The
+  routes are `/v1/groups` and `/v1/groups/:id/members`. (#76)
+- A **guest** workspace role, below viewer. A guest can open only pages and
+  projects shared with them or one of their groups. Page sharing is not built
+  yet, so for now a guest can open nothing. Every workspace-level route refuses
+  a guest, including search, the activity feed, the member roster and settings.
+  A guest gets no notifications and cannot be made a reviewer, a page owner or a
+  member of a members-only site. MCP `knowledge_whoami` reports the role, with no
+  project names. (#76)
+
+### Operations
+
+- Migration `20261017100000_user_groups` only adds two tables
+  (`user_groups`, `user_group_members`), so the previous image runs against it
+  unchanged. `workspace_members.role` now also accepts `guest`. That column has
+  no constraint, so no DDL is needed for it. Rolling the code back leaves any
+  guest members refused everywhere, which is the same as what they can open now.
+
 ## [0.21.1] — 2026-10-14
 
 ### Changed

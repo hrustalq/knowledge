@@ -170,14 +170,20 @@ export class SiteSessionService {
     return decryptSecret(site.visitorSecretCipher, parseKey(this.config.get('SETTINGS_ENCRYPTION_KEY', { infer: true })));
   }
 
-  /** A role in the workspace and an account that is not disabled. AUTH_MODE=none has one person, the dev principal, who is everyone. */
+  /**
+   * A role in the workspace — guests excluded, since a members-only site is
+   * the workspace's pages and a guest reads only what was granted (#76) — and
+   * an account that is not disabled. AUTH_MODE=none has one person, the dev
+   * principal, who is everyone.
+   */
   private async isMember(workspaceId: string, userId: string): Promise<boolean> {
     if (this.config.get('AUTH_MODE', { infer: true }) === 'none') return true;
     if (userId === AUTHOR_ID_STUB) return false;
     const member = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId } },
-      select: { user: { select: { disabledAt: true } } },
+      select: { role: true, user: { select: { disabledAt: true } } },
     });
+    if (member?.role === 'guest') return false;
     if (member) return !member.user.disabledAt;
     // A platform admin is implicitly an admin of every workspace.
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true, disabledAt: true } });

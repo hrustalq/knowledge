@@ -801,6 +801,14 @@ export type I18nTranslations = {
             "serverUrlPrivate": string;
             "serverHostUnresolved": string;
         };
+        "group": {
+            "notFound": string;
+            "nameTaken": string;
+            "notMembers": string;
+        };
+        "access": {
+            "groupReadOnly": string;
+        };
     };
     "import": {
         "stage": {
@@ -942,6 +950,7 @@ export type I18nTranslations = {
         "proposeNote": string;
     };
     "role": {
+        "guest": string;
         "viewer": string;
         "editor": string;
         "admin": string;
@@ -1020,6 +1029,7 @@ export type I18nTranslations = {
         "chatBinding": string;
         "chatSubscription": string;
         "chatIdentity": string;
+        "group": string;
     };
     "validation": {
         "isDefined": string;

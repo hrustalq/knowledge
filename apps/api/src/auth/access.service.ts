@@ -356,6 +356,12 @@ export class AccessService {
     return row.workspaceId;
   }
 
+  async workspaceOfGroup(groupId: string): Promise<string> {
+    const group = await this.prisma.userGroup.findUnique({ where: { id: groupId }, select: { workspaceId: true } });
+    if (!group) throw new NotFoundException(t('error.group.notFound', { id: groupId }));
+    return group.workspaceId;
+  }
+
   async workspaceOfConnectorRun(runId: string): Promise<string> {
     const run = await this.prisma.connectorRun.findUnique({
       where: { id: runId },

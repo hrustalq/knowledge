@@ -75,9 +75,25 @@ because that resource is keyed by an autoincrementing integer
 
 ## Roles
 
-`viewer < editor < admin`, held in `workspace_members`, plus a separate
-**`trusted_operator`** flag that is not a role — it gates the raw graph query and
-nothing else.
+`guest < viewer < editor < admin`, held in `workspace_members`
+(`WORKSPACE_ROLES` in contracts), plus a separate **`trusted_operator`** flag
+that is not a role — it gates the raw graph query and nothing else.
+
+**`guest`** (issue #76) sits below the ladder at `ROLE_ORDER.guest = -1`, so
+every `@Access('viewer', …)` route refuses one with no special case. A guest is
+meant to read only what is granted to them or their groups; until page grants
+land, that is nothing. Code that asks "is this person a member" directly rather
+than through `requireRole` — mention recipients, merge-request reviewers, page
+owners, members-only site audiences, the llms.txt hub, MCP `whoami` — filters
+with `WORKSPACE_READER` (`auth/principal.ts`), and `NotificationsService.deliver`
+drops guest recipients, because a notification carries a page title.
+
+**User groups** (`user_groups`, `user_group_members`) are workspace-scoped sets
+of members that restrictions will grant to. `source` is `manual`, `connector`
+(mirrored by ACL sync) or `scim`; the API answers 409 to any edit of a
+non-manual group, since the next sync would undo it. Members must already belong
+to the workspace, and `WorkspacesService.removeMember` deletes a person's group
+rows with their membership, so re-adding them restores no old grant.
 
 `users.is_admin` is a **platform** admin: it bypasses workspace ACLs entirely and
 gates `@PlatformAdmin()` routes (`GET/POST/PATCH /v1/users`). **Self-disable and
@@ -149,8 +165,9 @@ exists to make possible in the worker.
 ## Modules
 
 `AuthModule` is `@Global()` and registers both guards. `AuthCoreModule` carries
-`AccessService` alone for worker-side use. `UsersModule` and `WorkspacesModule`
-are **API-only**, for the same reason as `GraphQueryModule`: they carry
+`AccessService` alone for worker-side use, and `PermissionsCoreModule` carries
+`GroupsService` (and, next, the visibility predicate) for every process.
+`UsersModule`, `WorkspacesModule` and `PermissionsModule` are **API-only**, for the same reason as `GraphQueryModule`: they carry
 controllers, and controllers must not load in the worker
 ([01](01-entrypoints-modules.md)).
 
@@ -165,6 +182,9 @@ GET  /v1/me   PATCH /v1/me                                        self
 GET/POST/PATCH /v1/users                                          @PlatformAdmin()
 GET/POST /v1/workspaces                                           creator → admin+operator
 *    /v1/workspaces/:id/members                                   @Access(viewer|admin, 'workspace')
+GET  /v1/groups?workspaceId=   POST /v1/groups                    @Access(viewer, 'query') | (admin, 'body')
+PATCH|DELETE /v1/groups/:id   PUT /v1/groups/:id/members          @Access(admin, 'group')
+GET  /v1/groups/:id/members                                       @Access(viewer, 'group')
 POST /v1/graph/query                                              trusted_operator
 GET  /v1/audit-logs                                               admin
 ```
@@ -225,9 +245,10 @@ at all: the web server answers it only for an internal peer with no
 
 ## Limits
 
-- ACLs stop at the workspace. There are no project-level roles; projects are
-  organizational only ([feature 11](../features/11-projects.md)). The `'project'`
-  guard source is the hook if that ever changes.
+- ACLs still stop at the workspace. Groups and the guest role exist, but page
+  and project restrictions are the next phase of issue #76; until then a group
+  grants nothing and a guest reads nothing. The `'document'` and `'project'`
+  guard sources are where the per-resource check will go.
 - Mail is outbound only: no bounce handling, so a dead address stays unverified
   rather than being flagged.
 - The trusted-operator query is read-only by construction but still trusts the

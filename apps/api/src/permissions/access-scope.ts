@@ -58,6 +58,8 @@ export interface GrantRow {
   subjectType: string;
   subjectId: string;
   level: string;
+  /** manual | connector. Absent on rows built in memory, which are manual. */
+  origin?: string;
 }
 
 /**

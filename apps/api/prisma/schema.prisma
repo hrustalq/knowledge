@@ -646,8 +646,8 @@ model AccessGrant {
   subjectId    String   @map("subject_id") @db.Uuid
   /// ACCESS_LEVELS: view | edit | manage
   level        String
-  /// manual today; connector-origin rows arrive with ACL mirroring and are
-  /// rewritten by it, manual ones never.
+  /// ACCESS_GRANT_ORIGINS — manual | connector. Connector rows are rewritten
+  /// by that connector's ACL sync (#76, phase 6), manual ones never.
   origin       String   @default("manual")
   connectorId  String?  @map("connector_id") @db.Uuid
   createdBy    String?  @map("created_by") @db.Uuid
@@ -656,6 +656,7 @@ model AccessGrant {
   @@unique([resourceType, resourceId, subjectType, subjectId, origin])
   @@index([workspaceId, subjectType, subjectId])
   @@index([resourceId])
+  @@index([connectorId])
   @@map("access_grants")
 }
 
@@ -1614,6 +1615,17 @@ model Connector {
   lastRunId    String?   @map("last_run_id") @db.Uuid
   lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz
 
+  /// Access mirroring (#76). Columns rather than `config` keys: like sync_mode
+  /// they apply to every kind, and the schedule sweeper filters on them.
+  /// CONNECTOR_ACL_MODES — 'off' | 'mirror' | 'mirror_strict'.
+  aclMode                String    @default("off") @map("acl_mode")
+  /// Minutes between ACL-only refreshes; null = CONNECTOR_ACL_SYNC_DEFAULT_MIN.
+  aclSyncIntervalMinutes Int?      @map("acl_sync_interval_minutes")
+  /// One workspace group every page is restricted to, for a kind that cannot
+  /// read per-item ACLs (Notion). No FK, as for every subject id.
+  aclAudienceGroupId     String?   @map("acl_audience_group_id") @db.Uuid
+  aclSyncedAt            DateTime? @map("acl_synced_at") @db.Timestamptz
+
   /// Frozen at creation: worker-produced stages and warnings have no request to
   /// read Accept-Language from (same reasoning as import_jobs.locale).
   locale String @default("en")
@@ -1622,11 +1634,12 @@ model Connector {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  project   Project             @relation(fields: [projectId], references: [id])
-  links     ConnectorLink[]
-  runs      ConnectorRun[]
-  conflicts ConnectorConflict[]
-  workItems ConnectorWorkItem[]
+  project    Project             @relation(fields: [projectId], references: [id])
+  links      ConnectorLink[]
+  runs       ConnectorRun[]
+  conflicts  ConnectorConflict[]
+  workItems  ConnectorWorkItem[]
+  identities ExternalIdentity[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId, kind])
@@ -1651,9 +1664,16 @@ model ConnectorLink {
   externalVersion String? @map("external_version")
 
   /// sha256 of the markdown both sides last agreed on.
-  contentHash String? @map("content_hash")
+  contentHash   String? @map("content_hash")
   /// The revision that hash came from.
-  revisionId  String? @map("revision_id") @db.Uuid
+  revisionId    String? @map("revision_id") @db.Uuid
+  /// sha256 of the restriction last written for this page (#76): the switch
+  /// plus its connector grants, after identity mapping. Null = never mirrored.
+  aclHash       String? @map("acl_hash")
+  /// Whether this connector switched the page's restriction on. Only then may
+  /// an upstream that opened up switch it off again: a page a person
+  /// restricted by hand stays restricted.
+  aclRestricted Boolean @default(false) @map("acl_restricted")
 
   lastPulledAt DateTime? @map("last_pulled_at") @db.Timestamptz
   lastPushedAt DateTime? @map("last_pushed_at") @db.Timestamptz
@@ -1664,6 +1684,33 @@ model ConnectorLink {
   @@unique([connectorId, externalId])
   @@index([documentId])
   @@map("connector_links")
+}
+
+/// An upstream person a connector's ACLs name (#76, phase 6), and who they are
+/// here. Kept while unmapped, so the connector page can list them and a later
+/// signup or a manual mapping re-resolves them on the next ACL sync.
+model ExternalIdentity {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  connectorId String   @map("connector_id") @db.Uuid
+  /// Confluence accountId / userKey, GitHub numeric user id.
+  externalId  String   @map("external_id")
+  /// Upstream's name for them. Source text: length-limited, rendered as text.
+  displayName String?  @map("display_name")
+  email       String?
+  /// No FK (house policy).
+  userId      String?  @map("user_id") @db.Uuid
+  /// EXTERNAL_IDENTITY_MAPPINGS — manual | provider | email; null while unmapped.
+  /// A manual mapping is never overwritten by resolution.
+  mappedBy    String?  @map("mapped_by")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@unique([connectorId, externalId])
+  @@index([workspaceId, userId])
+  @@map("external_identities")
 }
 
 /// One sync execution. The row is the truth and the queue is only the
@@ -1762,6 +1809,9 @@ model ConnectorRunItem {
   draft Json?
 
   contentHash String? @map("content_hash")
+  /// The upstream ACL read while staging (#76), normalized — `ExternalAcl`, or
+  /// `{ error }` when it could not be read. Applied with the page.
+  acl         Json?
   /// workspaces/{ws}/connector-runs/{runId}/items/{itemId}/staged.md
   stagedKey   String? @map("staged_key")
   /// .../incoming.md — the unedited conversion. Never rewritten, so "what did

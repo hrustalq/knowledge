@@ -3,8 +3,10 @@ import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ProjectsCoreModule } from '../projects/projects-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ConnectorAdaptersModule } from './adapters/adapters.module.js';
+import { ConnectorAclService } from './connector-acl.service.js';
 import { ConnectorDiscoveryService } from './connector-discovery.service.js';
 import { ConnectorLinksService } from './connector-links.service.js';
 import { ConnectorStagingService } from './connector-staging.service.js';
@@ -32,9 +34,12 @@ import { RepoWikiService } from './repo-wiki.service.js';
     // ConnectorsService resolves a picker-configured connector's credential to
     // a freshly minted installation token, so the worker needs this too.
     GithubCoreModule,
+    // Access mirroring (#76): restricting a page it writes, and announcing it.
+    PermissionsCoreModule,
   ],
   providers: [
     ConnectorsService,
+    ConnectorAclService,
     ConnectorLinksService,
     ConnectorDiscoveryService,
     ConnectorStagingService,
@@ -43,6 +48,7 @@ import { RepoWikiService } from './repo-wiki.service.js';
   ],
   exports: [
     ConnectorsService,
+    ConnectorAclService,
     ConnectorLinksService,
     ConnectorDiscoveryService,
     ConnectorStagingService,

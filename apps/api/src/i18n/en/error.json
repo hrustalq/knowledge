@@ -312,7 +312,12 @@
     "repoNotFound": "{slug} was not found, or the credential cannot read it — check that the repository exists and that the token or GitHub App installation has read access to it",
     "repoNotFoundNoCredential": "{slug} was not found, and no credential is configured — a private repository needs a token or a GitHub App installation with read access",
     "branchMissingDefault": "Branch \"{branch}\" does not exist in {slug} — its default branch is \"{actual}\". Leave the Branch field empty to follow the default.",
-    "branchMissing": "Branch \"{branch}\" does not exist in {slug}"
+    "branchMissing": "Branch \"{branch}\" does not exist in {slug}",
+    "aclUnsupportedHost": "Access mirroring reads GitHub repositories only; this connector points at {host}.",
+    "aclAudienceRequired": "{kind} cannot say who may open each page upstream. Choose a workspace group to restrict its pages to.",
+    "aclAudienceGroup": "The audience must be a group in this workspace.",
+    "identityNotFound": "No upstream identity {id} on this connector.",
+    "identityNotMember": "Only a member of this workspace can be mapped to an upstream identity."
   },
   "routeNotFound": "Cannot {method} {path}",
   "validationFailed": "Validation failed",

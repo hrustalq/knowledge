@@ -84,6 +84,7 @@ export class GithubAccessService {
         driftCheck: driftCheckMode(config),
         wikiOnPush: wikiEnabled(config) && wikiAutoRegenerate(config) === 'on-push',
         changelog: config[CHANGELOG_CONFIG_KEY] === 'on',
+        acl: row.aclMode !== 'off',
       });
       return {
         ...base,

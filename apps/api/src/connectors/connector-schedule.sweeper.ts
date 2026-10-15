@@ -3,12 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ConnectorProducer } from './connector.producer.js';
+import { aclSyncDue } from './connector-acl.js';
 import { ConnectorsService } from './connectors.service.js';
 
 const SWEEP_INTERVAL_MS = 5 * 60_000;
 
 /**
- * Enqueues scheduled syncs (docs/features/19), mirroring StaleSweeper.
+ * Enqueues scheduled syncs (docs/features/19), mirroring StaleSweeper, and
+ * the ACL-only refreshes of connectors that mirror access (#76).
  *
  * The due check is `lastSyncedAt + interval <= now`, and `createRun` refuses a
  * second run while one is in flight — so a connector whose sync takes longer
@@ -46,11 +48,20 @@ export class ConnectorScheduleSweeper implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       const due = await this.prisma.connector.findMany({
-        where: { enabled: true, syncIntervalMinutes: { not: null } },
+        where: { enabled: true, OR: [{ syncIntervalMinutes: { not: null } }, { aclMode: { not: 'off' } }] },
       });
       const now = Date.now();
+      const aclDefault = this.config.get('CONNECTOR_ACL_SYNC_DEFAULT_MIN', { infer: true });
 
       for (const connector of due) {
+        // The ACL-only refresh (#76) is its own due check on its own interval:
+        // permission calls are cheap enough to run far more often than a pull.
+        if (connector.aclMode !== 'off' && aclSyncDue(connector.aclSyncedAt, connector.aclSyncIntervalMinutes ?? aclDefault, now)) {
+          await this.producer.enqueueAcl(connector.id).catch((err: unknown) =>
+            this.logger.warn({ msg: 'Connector ACL refresh could not be queued', connectorId: connector.id, err }),
+          );
+        }
+
         const interval = (connector.syncIntervalMinutes ?? 0) * 60_000;
         if (interval <= 0) continue;
         const last = connector.lastSyncedAt?.getTime() ?? 0;

@@ -311,6 +311,12 @@ export type I18nTranslations = {
                 "unreleased": string;
             };
         };
+        "acl": {
+            "unmappedPrincipal": string;
+            "readFailed": string;
+            "readFailedKept": string;
+            "groupDescription": string;
+        };
     };
     "error": {
         "internal": string;
@@ -629,6 +635,11 @@ export type I18nTranslations = {
             "repoNotFoundNoCredential": string;
             "branchMissingDefault": string;
             "branchMissing": string;
+            "aclUnsupportedHost": string;
+            "aclAudienceRequired": string;
+            "aclAudienceGroup": string;
+            "identityNotFound": string;
+            "identityNotMember": string;
         };
         "routeNotFound": string;
         "validationFailed": string;

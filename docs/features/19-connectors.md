@@ -127,6 +127,85 @@ a last-4 hint. The SSRF guard that was inside `mcp-client.service.ts` moved to
 `common/safe-url.ts` and is now called by both plugins and connectors — one
 implementation of an SSRF filter is the only safe number.
 
+## Access mirroring (#76, phase 6)
+
+A connector can carry who may open each page at the source onto the page here.
+Off by default (`connectors.acl_mode = 'off'`), which is the behaviour before
+the milestone, byte for byte.
+
+**One ACL engine.** A mirrored ACL is an ordinary page restriction:
+`documents.restricted = true` plus `access_grants` rows with
+`origin = 'connector'` and the connector's id. From there `restricted_by`, the
+re-stamp sweeper, search, the graph, the assistant, notifications and MCP all
+apply it unchanged; nothing connector-specific touches ArcadeDB or OpenSearch.
+
+**Modes** (`CONNECTOR_ACL_MODES`):
+
+- `mirror` restricts a page whose source is restricted to the mapped people and
+  mirrored groups it names. Principals with no person here are left out, listed
+  on the connector's **Access** tab and in the staged item's warnings.
+- `mirror_strict` does the same and also admits the connector's owner on any
+  page that names someone unmapped, so a page is never readable only by admins
+  when the mapping is incomplete.
+- In both, a page whose ACL could not be read is restricted to the owner when
+  it is created. A page already mirrored keeps its last ACL through a failed
+  re-read: one upstream error neither opens nor locks a page.
+
+**Adapter contract.** `permissions?(ctx, ref): Promise<ExternalAcl>` and
+`groupMembers?(ctx, group)`, present exactly when `capabilities.acl` is true.
+`ExternalAcl` is `{ audience: 'source-wide' | 'restricted', principals }`. The
+adapter folds the source's inheritance into that one list
+(`adapters/acl-layers.ts#combineLayers`): one restricted layer is kept as is,
+groups included; several are intersected person by person, groups expanded to
+their members, the weaker level winning. A flat import (no
+`preserveHierarchy`) therefore reads correctly without its ancestors here.
+Groups are read lazily, per group an ACL names, rather than enumerated: a
+Confluence site holds thousands that no page in scope mentions. *(The plan had
+`groups?(ctx): AsyncIterable<ExternalGroup>`.)*
+
+| Source | ACL |
+| --- | --- |
+| Confluence Cloud / Server | Read restrictions on the page and every ancestor, intersected. Space permissions are **not** read: restrict the destination project to narrow a space's readers. Cloud identifies people by `accountId` (email only where the profile shows it); Server by `userKey`, with no email, so Server people are mapped by hand. |
+| GitHub (`markdown-git`, `codebase`) | Public repository → `source-wide`. Private → collaborators (`affiliation=all`; push/maintain/admin → edit, pull/triage → view) plus teams, mirrored as groups. Team members need the App's `members: read`, which the GitHub access card lists under *access mirroring*. One read per run, shared by every page. GitLab and other hosts are refused when mirroring is switched on. |
+| Notion, Jira | No per-item ACL. Mirroring restricts every page to one workspace group, `connectors.acl_audience_group_id`, required while it is on. |
+
+**Identities.** `external_identities` holds every upstream person an ACL or a
+group named, mapped or not. Resolution, strongest first: a mapping by hand
+(never overwritten), a linked GitHub account (`github_user_tokens`), a
+**verified** email (`users.email_verified_at`). Only workspace members resolve.
+Mirrored groups are `user_groups` rows with `source = 'connector'`, named
+`<connector> · <group>`, read-only in the UI, membership replaced on each sync.
+
+**Where it runs.** Where the content does, in the worker: staging reads the ACL
+before either skip (an unchanged page still mirrors a permission change),
+stores it on `connector_run_items.acl`, shows unmapped principals as item
+warnings, and `apply` writes it — for a new page, in the transaction that
+creates the page, so a private page is never open for a tick. The ACL-only
+refresh is a due check in `ConnectorScheduleSweeper`
+(`acl_synced_at + interval`, default `CONNECTOR_ACL_SYNC_DEFAULT_MIN`) that
+queues one `acl` job per connector (jobId `acl-<id>`, so a manual "sync access
+now" and the tick collapse). It re-resolves people, refreshes group members,
+then re-reads every linked page's ACL — permission calls only.
+
+**What is never overwritten.** `connector_links.acl_hash` is the hash of the
+restriction as written, after mapping, so a new mapping is a change even when
+nothing moved upstream. A sync rewrites only its own connector's grants. It
+lifts only a restriction it placed (`connector_links.acl_restricted`) and only
+while no manual grant is left on the page; a switch a person turned on stays
+on. A mirrored restriction lifted by hand is put back on the next sync. The
+page Access dialog shows mirrored grants read-only and never sends them back.
+
+**Turning it off, or deleting the connector,** hands what it mirrored to
+people (`releaseMirroredAccess`): its grants become manual grants and its
+groups manual groups, exactly as they stand. Nothing opens up, and nothing is
+left that the API refuses to edit.
+
+**Limits.** No space-level Confluence permissions; no Slack (lands with the
+conversation sources) or Jira issue security. A mapping by email is only as
+good as email verification until IdP-verified identities arrive with the
+*Enterprise auth* milestone. Mirrored grants do not send `access.granted`
+notifications: a sync is not a person's decision.
+
 ## Surface
 
 ```
@@ -142,6 +221,10 @@ GET    /v1/connectors/:id/runs            viewer
 GET    /v1/connectors/:id/links           viewer
 DELETE /v1/connectors/:id/links/:linkId   editor
 POST   /v1/connectors/:id/webhook         public, HMAC-verified
+GET    /v1/connectors/:id/acl             admin    (mode, interval, audience, identities)
+PUT    /v1/connectors/:id/acl             admin    (off hands mirrored access to people)
+PUT    /v1/connectors/:id/acl/identities/:identityId  admin  (map by hand; null re-resolves)
+POST   /v1/connectors/:id/acl/sync        admin    (queue an ACL-only refresh)
 GET    /v1/documents/:id/connectors       viewer
 POST   /v1/documents/:id/push             editor
 ```

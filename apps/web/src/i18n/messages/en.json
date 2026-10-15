@@ -554,7 +554,8 @@
         "boards": "project boards",
         "repo-events": "workflow triggers",
         "wiki": "repo wiki on push",
-        "changelog": "release notes"
+        "changelog": "release notes",
+        "acl": "access mirroring"
       },
       "permission": {
         "metadata": "Metadata",
@@ -566,7 +567,8 @@
         "checks": "Checks",
         "actions": "Actions",
         "workflows": "Workflows",
-        "statuses": "Commit statuses"
+        "statuses": "Commit statuses",
+        "members": "Members (organisation)"
       },
       "pendingHint": "The App asks for more than this installation has accepted. The account's owner approves the new permissions on GitHub.",
       "missingHint": "Something here needs a permission or event the App does not request. Whoever owns the App registration adds it; every installation then accepts it.",
@@ -674,7 +676,52 @@
       "notGenerated": "not generated",
       "empty": "No release notes yet — they appear after the next sync.",
       "error": "The repository's tags could not be read right now, so older releases may be missing from this list."
-    }
+    },
+    "acl": {
+      "title": "Access mirroring",
+      "introPerItem": "Carry who may open each page at the source onto the page here. A restricted source page is restricted here to the people and groups it names, matched by a linked account or a verified email.",
+      "introAudience": "This source does not say who may open each page, so mirroring restricts every page from it to one workspace group.",
+      "mode": {
+        "off": "Off",
+        "mirror": "Mirror",
+        "mirror_strict": "Mirror, fail closed"
+      },
+      "modeHint": {
+        "off": "Pages from this connector are open to the workspace, as before. Turning it off keeps what was mirrored as ordinary access you can edit.",
+        "mirror": "Restricted source pages are restricted here. People with no account here are left out and listed below.",
+        "mirror_strict": "As Mirror, and a page naming anyone unmapped also admits the connector's owner, so somebody can always fix it."
+      },
+      "interval": "Access sync every (minutes)",
+      "intervalHint": "Permission calls only, no content. Empty uses the server default of {n} minutes.",
+      "intervalInvalid": "The interval is a whole number of minutes between 5 and 10080.",
+      "audience": "Restrict every page to",
+      "audiencePlaceholder": "Choose a group",
+      "audienceNone": "No group",
+      "audienceHint": "Required while mirroring is on. Members of this group, the connector's owner and admins can open its pages.",
+      "offWarning": "Switching off keeps every page restricted as it is now; the mirrored grants and groups become manual ones you can edit.",
+      "syncNow": "Sync access now",
+      "syncQueued": "Access sync queued.",
+      "saved": "Access mirroring saved. The first sync is queued.",
+      "savedOff": "Access mirroring is off. Mirrored access is now manual.",
+      "lastSync": "Last access sync",
+      "restrictedPages": "Pages restricted",
+      "groups": "Mirrored groups",
+      "identitiesTitle": "People at the source",
+      "unmappedCount": "No one is unmapped | {n} person has no account here and is left out of the pages that name them | {n} people have no account here and are left out of the pages that name them",
+      "allMapped": "Everyone the source named has an account here.",
+      "unmapped": "Unmapped",
+      "mappedBy": {
+        "manual": "Mapped by hand",
+        "provider": "Linked account",
+        "email": "Verified email"
+      },
+      "mapLabel": "Map {name} to a member",
+      "mapPlaceholder": "Choose a member",
+      "mapNone": "Nobody (match automatically)",
+      "mapped": "Mapping saved. Access is re-synced now.",
+      "mapHint": "A match by email is only as trustworthy as the email: only verified addresses match. A mapping by hand is never overwritten."
+    },
+    "tabAccess": "Access"
   },
   "workflow": {
     "nodeStatus": {
@@ -2379,7 +2426,11 @@
         "admin": "A workspace admin always has access",
         "role": "Their workspace role ({role}) decides",
         "grant": "A grant to them or one of their groups decides"
-      }
+      },
+      "mirroredTitle": "Mirrored from the source",
+      "mirroredBadge": "Mirrored",
+      "mirroredHint": "A connector copies these from who may open the page upstream and rewrites them on every access sync. Change them at the source; grants you add below are kept alongside.",
+      "noManualGrants": "No grants added here."
     },
     "tabRequests": "Requests",
     "requests": {

@@ -176,7 +176,13 @@ describe('ConnectorStagingService.apply, delivered by merge request', () => {
       createRevision: vi.fn(async () => ({ revisionId: 'r2' })),
       finalizeRevision: vi.fn(async () => undefined),
     };
-    const staging = new ConnectorStagingService(prisma as never, documents as never, storage as never);
+    // Access mirroring is off on these connectors (#76): the mirror is a no-op.
+    const acl = {
+      capture: vi.fn(async () => null),
+      preview: vi.fn(async () => []),
+      applyToPage: vi.fn(async () => ({ changed: false, warnings: [] })),
+    };
+    const staging = new ConnectorStagingService(prisma as never, documents as never, storage as never, acl as never);
     const row = connector(config, { conflict: 'manual' });
     return { staging, row, prisma, documents, conflicts, objects };
   }

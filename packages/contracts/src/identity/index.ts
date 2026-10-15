@@ -744,7 +744,19 @@ export interface AccessGrantInput {
   level: AccessLevel;
 }
 
+/**
+ * Who wrote a grant. `manual` rows are a manager's, replaced by `PUT …/access`;
+ * `connector` rows mirror an upstream ACL (#76, phase 6) and are rewritten
+ * only by that connector's sync, so the dialog shows them read-only and never
+ * sends them back.
+ */
+export const ACCESS_GRANT_ORIGINS = ['manual', 'connector'] as const;
+export type AccessGrantOrigin = (typeof ACCESS_GRANT_ORIGINS)[number];
+
 export interface AccessGrantEntry extends AccessGrantInput {
+  origin: AccessGrantOrigin;
+  /** The connector a `connector` grant came from; null for manual ones. */
+  connectorId: string | null;
   /** The group's name or the person's display name; null when the subject is gone. */
   name: string | null;
   /** People only. */

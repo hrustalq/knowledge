@@ -7,6 +7,7 @@ import {
   GITHUB_INSTALLATION_CONFIG_KEY,
   wikiAutoRegenerate,
   wikiEnabled,
+  type ConnectorAclMode,
   type ConnectorConflictPolicy,
   type ConnectorDirection,
   type ConnectorKind,
@@ -28,6 +29,7 @@ import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
 import { ConnectorRegistry } from './adapters/connector.registry.js';
+import { releaseMirroredAccess } from './connector-acl-release.js';
 import { GithubAppService } from './github/github-app.service.js';
 import type { ConnectorContext } from './adapters/connector.types.js';
 
@@ -228,7 +230,9 @@ export class ConnectorsService {
   async remove(connectorId: string): Promise<void> {
     await this.require(connectorId);
     // Links and runs cascade; the pages they produced are deliberately kept —
-    // deleting a connector should not delete a workspace's knowledge.
+    // deleting a connector should not delete a workspace's knowledge. Nor
+    // should it open them: what it mirrored becomes ordinary manual access.
+    await releaseMirroredAccess(this.prisma, connectorId);
     await this.prisma.connector.delete({ where: { id: connectorId } });
   }
 
@@ -579,6 +583,8 @@ export class ConnectorsService {
       syncMode: row.syncMode as ConnectorSyncMode,
       preserveHierarchy: row.preserveHierarchy,
       syncIntervalMinutes: row.syncIntervalMinutes,
+      aclMode: row.aclMode as ConnectorAclMode,
+      aclSyncedAt: row.aclSyncedAt?.toISOString() ?? null,
       hasWebhookSecret: row.webhookSecret !== null,
       webhookPath: row.webhookSecret ? `/v1/connectors/${row.id}/webhook` : null,
       capabilities: info?.capabilities ?? { pull: false, push: false, webhook: false, tree: false },

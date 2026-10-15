@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable } from '@nestjs/comm
 import type {
   AccessGrantEntry,
   AccessGrantInput,
+  AccessGrantOrigin,
   AccessLevel,
   AccessSubjectType,
   EffectiveAccessEntry,
@@ -42,7 +43,13 @@ export class ResourceAccessService {
     const level = levelOn(scope, chain, grants);
     const self = chain[chain.length - 1];
     const canManage = level === 'manage';
-    const own = grants.filter((g) => g.resourceId === self.id);
+    // Read again for who wrote each row: a mirrored grant is shown, never sent back.
+    const own = canManage
+      ? await this.prisma.accessGrant.findMany({
+          where: { resourceType: resource.type, resourceId: self.id },
+          select: { subjectType: true, subjectId: true, level: true, origin: true, connectorId: true },
+        })
+      : [];
     return {
       resourceType: resource.type,
       resourceId: resource.id,
@@ -70,6 +77,8 @@ export class ResourceAccessService {
               subjectType: g.subjectType as AccessSubjectType,
               subjectId: g.subjectId,
               level: g.level as AccessLevel,
+              origin: g.origin as AccessGrantOrigin,
+              connectorId: g.connectorId,
             })),
           )
         : [],
@@ -101,7 +110,8 @@ export class ResourceAccessService {
     const self = chain[chain.length - 1];
     const nextChain = [...chain.slice(0, -1), { ...self, restricted: dto.restricted }];
     const nextGrants = [
-      ...grants.filter((g) => g.resourceId !== self.id),
+      // A connector's rows on this node stay: the PUT replaces manual grants only.
+      ...grants.filter((g) => g.resourceId !== self.id || (g.origin ?? 'manual') !== 'manual'),
       ...wanted.map((g) => ({ resourceId: self.id, ...g })),
     ];
     if (levelOn(scope, nextChain, nextGrants) !== 'manage') {
@@ -144,7 +154,9 @@ export class ResourceAccessService {
     await this.aclEvents.changed(workspaceId, principal.userId);
     // People named here for the first time hear about it. Groups do not: a
     // group grant is a decision about a team, not a message to each member.
-    const before = new Set(grants.filter((g) => g.resourceId === self.id && g.subjectType === 'user').map((g) => g.subjectId));
+    const before = new Set(
+      grants.filter((g) => g.resourceId === self.id && g.subjectType === 'user').map((g) => g.subjectId),
+    );
     for (const level of ['view', 'edit', 'manage'] as const) {
       await this.aclEvents.granted({
         workspaceId,
@@ -234,7 +246,10 @@ export class ResourceAccessService {
   }
 
   /** Names and faces for a grant list. A subject that no longer resolves keeps its row with a null name. */
-  private async describe(workspaceId: string, grants: AccessGrantInput[]): Promise<AccessGrantEntry[]> {
+  private async describe(
+    workspaceId: string,
+    grants: Array<AccessGrantInput & Pick<AccessGrantEntry, 'origin' | 'connectorId'>>,
+  ): Promise<AccessGrantEntry[]> {
     const userIds = grants.filter((g) => g.subjectType === 'user').map((g) => g.subjectId);
     const groupIds = grants.filter((g) => g.subjectType === 'group').map((g) => g.subjectId);
     const [users, groups] = await Promise.all([

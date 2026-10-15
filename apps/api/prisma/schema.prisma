@@ -1051,8 +1051,22 @@ model AiSkill {
   createdBy    String?  @map("created_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  /// 'manual' | 'repo' (AI_SKILL_SOURCES, #70). A `repo` skill was read from a
+  /// guidance file of a repository connector and imported disabled.
+  source              String    @default("manual")
+  /// No FK: deleting the connector must not delete what an admin enabled.
+  sourceConnectorId   String?   @map("source_connector_id") @db.Uuid
+  sourcePath          String?   @map("source_path")
+  /// SHA-256 of the file's content as last seen upstream.
+  sourceSha           String?   @map("source_sha")
+  /// New upstream text awaiting an admin's Accept — a sync never rewrites the
+  /// live `instructions` of an enabled skill.
+  pendingInstructions String?   @map("pending_instructions")
+  sourceRemovedAt     DateTime? @map("source_removed_at") @db.Timestamptz
 
   @@unique([workspaceId, name])
+  /// One skill per guidance file. NULLs are distinct in PG, so manual rows never collide.
+  @@unique([workspaceId, sourceConnectorId, sourcePath])
   @@index([workspaceId, createdAt])
   @@map("ai_skills")
 }

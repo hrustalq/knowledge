@@ -335,6 +335,10 @@ export type I18nTranslations = {
             "readFailedKept": string;
             "groupDescription": string;
         };
+        "guidance": {
+            "skillDescription": string;
+            "skillDescriptionTruncated": string;
+        };
     };
     "error": {
         "internal": string;
@@ -572,6 +576,7 @@ export type I18nTranslations = {
             "agentWebhookBadSignature": string;
             "agentWebhookStale": string;
             "agentWebhookDeliveryId": string;
+            "skillNoUpstream": string;
         };
         "assistant": {
             "providerDisabled": string;
@@ -678,6 +683,7 @@ export type I18nTranslations = {
             "aclAudienceGroup": string;
             "identityNotFound": string;
             "identityNotMember": string;
+            "guidanceNotARepository": string;
         };
         "routeNotFound": string;
         "validationFailed": string;

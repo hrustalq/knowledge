@@ -233,7 +233,8 @@
     "agentWebhookNotConfigured": "This trigger has no signing secret yet. Rotate one in AI settings first.",
     "agentWebhookBadSignature": "The X-Knowledge-Signature header does not match this delivery.",
     "agentWebhookStale": "X-Knowledge-Timestamp is more than {seconds} seconds away from the server's clock.",
-    "agentWebhookDeliveryId": "X-Knowledge-Delivery is missing or invalid: 1–200 letters, digits and . _ : -"
+    "agentWebhookDeliveryId": "X-Knowledge-Delivery is missing or invalid: 1–200 letters, digits and . _ : -",
+    "skillNoUpstream": "Skill {id} has no upstream change to accept"
   },
   "assistant": {
     "providerDisabled": "Assistant provider is disabled for this workspace",
@@ -337,7 +338,8 @@
     "aclAudienceRequired": "{kind} cannot say who may open each page upstream. Choose a workspace group to restrict its pages to.",
     "aclAudienceGroup": "The audience must be a group in this workspace.",
     "identityNotFound": "No upstream identity {id} on this connector.",
-    "identityNotMember": "Only a member of this workspace can be mapped to an upstream identity."
+    "identityNotMember": "Only a member of this workspace can be mapped to an upstream identity.",
+    "guidanceNotARepository": "Connector {name} is not a repository — guidance files are read from codebase and markdown/git connectors only"
   },
   "routeNotFound": "Cannot {method} {path}",
   "validationFailed": "Validation failed",

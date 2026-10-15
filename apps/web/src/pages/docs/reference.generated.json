@@ -621,6 +621,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/ai/skills/{id}/accept-upstream",
+      "tag": "ai",
+      "summary": "Make an imported skill's pending upstream text its instructions (#70)",
+      "role": "admin",
+      "source": "ai-skill",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/ai/source-policies",
       "tag": "ai",
@@ -1475,6 +1485,16 @@
       "path": "/v1/connectors/{id}/github",
       "tag": "connectors",
       "summary": "The connector's GitHub App grants and the viewer's GitHub identity",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/guidance/import",
+      "tag": "connectors",
+      "summary": "Read the repository's AGENTS.md / CLAUDE.md / .cursorrules… into disabled skills now",
       "role": "admin",
       "source": "connector",
       "public": false,

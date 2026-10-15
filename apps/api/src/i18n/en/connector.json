@@ -66,5 +66,9 @@
     "readFailed": "Could not read who may open this page upstream, so it is restricted to the connector's owner until the next access sync: {error}",
     "readFailedKept": "Could not re-read who may open this page upstream; its access stays as last mirrored: {error}",
     "groupDescription": "Mirrored from the connector \"{connector}\". Membership is replaced on every access sync."
+  },
+  "guidance": {
+    "skillDescription": "Imported from {connector}: {path}",
+    "skillDescriptionTruncated": "Imported from {connector}: {path} — the first {kept} of {total} characters"
   }
 }

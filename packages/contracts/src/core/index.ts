@@ -389,6 +389,8 @@ export const KNOWN_EVENT_TYPES = [
   'ai.skill.created',
   'ai.skill.updated',
   'ai.skill.deleted',
+  // Guidance files read from a repository connector into disabled skills (#70).
+  'ai.skill.imported',
   'ai.plugin.created',
   'ai.plugin.updated',
   'ai.plugin.deleted',

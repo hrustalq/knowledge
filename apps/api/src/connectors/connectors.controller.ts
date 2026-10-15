@@ -18,6 +18,7 @@ import type {
   ListConnectorsResponse,
   ListReleasesResponse,
   RegenerateWikiResponse,
+  RepoGuidanceImportResponse,
   RepoWikiInfo,
 } from '@knowledge/contracts';
 import { ActivityService } from '../activity/activity.service.js';
@@ -32,6 +33,7 @@ import { ConnectorItemsService } from './connector-items.service.js';
 import { ConnectorProducer } from './connector.producer.js';
 import { ConnectorsService, toRunInfo } from './connectors.service.js';
 import { GithubAccessService } from './github/github-access.service.js';
+import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
 import { RepoWikiService } from './repo-wiki.service.js';
 import {
   ConnectorItemAiDto,
@@ -71,6 +73,7 @@ export class ConnectorsController {
     private readonly githubAccess: GithubAccessService,
     private readonly repoWiki: RepoWikiService,
     private readonly acl: ConnectorAclService,
+    private readonly guidance: RepoGuidanceService,
   ) {}
 
   @Get()
@@ -393,6 +396,20 @@ export class ConnectorsController {
   @ApiOperation({ summary: 'Release notes pages: Unreleased and one per tag, with breaking counts' })
   releases(@Param('id', ParseUUIDPipe) id: string): Promise<ListReleasesResponse> {
     return this.repoWiki.releases(id);
+  }
+
+  // --- repo guidance (#70) ---
+
+  @Post(':id/guidance/import')
+  @Access('admin', 'connector')
+  @ApiOperation({
+    summary: "Read the repository's AGENTS.md / CLAUDE.md / .cursorrules… into disabled skills now",
+  })
+  importGuidance(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal?: Principal,
+  ): Promise<RepoGuidanceImportResponse> {
+    return this.guidance.importFrom(id, principal?.userId);
   }
 
   // --- work items (docs/features/32) ---

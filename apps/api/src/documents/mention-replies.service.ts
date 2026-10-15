@@ -15,6 +15,7 @@ import {
 } from '../agents/agent-trigger.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
+import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { EventsPublisher } from '../events/events.publisher.js';
@@ -112,6 +113,7 @@ export class MentionRepliesService {
     private readonly triggers: AgentTriggerService,
     private readonly access: AccessService,
     config: ConfigService<Env, true>,
+    private readonly learnings: AgentLearningsService,
   ) {
     this.triggersEnabled = config.get('AGENT_TRIGGERS_ENABLED', { infer: true }) === true;
   }
@@ -364,8 +366,20 @@ export class MentionRepliesService {
       await this.skills.forTurn(input.workspaceId, grounding.question, agent.skillIds),
     );
 
+    // Team guidance (#70): what people taught this agent, approved by an admin.
+    // The page under discussion decides which project-scoped learnings apply.
+    const page = await this.prisma.document.findUnique({
+      where: { id: input.subject.documentId },
+      select: { projectId: true },
+    });
+    const learnings = await this.learnings.promptFor({
+      workspaceId: input.workspaceId,
+      agentKey: agent.key,
+      projectIds: page ? [page.projectId] : [],
+    });
+
     const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: `${agent.instructions}\n\n${REPLY_RULES}${skills ? `\n\n${skills}` : ''}` },
+      { role: 'system', content: `${agent.instructions}\n\n${REPLY_RULES}${skills ? `\n\n${skills}` : ''}${learnings}` },
       { role: 'user', content: grounding.prompt },
     ];
 

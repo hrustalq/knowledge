@@ -57,6 +57,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_share_page',
   // Files an access request its managers are notified of (#76, phase 5).
   'knowledge_request_access',
+  // Writes a proposed learning (#70); an admin approves it in the app.
+  'knowledge_propose_agent_learning',
 ]);
 
 /**

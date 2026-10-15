@@ -206,6 +206,15 @@ export class AccessService {
     return trigger.workspaceId;
   }
 
+  async workspaceOfAgentLearning(learningId: string): Promise<string> {
+    const learning = await this.prisma.agentLearning.findUnique({
+      where: { id: learningId },
+      select: { workspaceId: true },
+    });
+    if (!learning) throw new NotFoundException(t('error.ai.agentLearningNotFound', { id: learningId }));
+    return learning.workspaceId;
+  }
+
   async workspaceOfAiSkill(skillId: string): Promise<string> {
     const skill = await this.prisma.aiSkill.findUnique({
       where: { id: skillId },

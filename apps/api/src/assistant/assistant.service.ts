@@ -39,6 +39,7 @@ import { AssistantClient, type AiCallContext } from './assistant.client.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
+import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { AiPluginsService } from '../ai/ai-plugins.service.js';
 import { AssistantToolsService } from './assistant.tools.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
@@ -289,6 +290,7 @@ export class AssistantService {
     private readonly templates: TemplatesService,
     private readonly env: ConfigService,
     private readonly permissions: PermissionService,
+    private readonly learnings: AgentLearningsService,
   ) {}
 
   /**
@@ -1149,7 +1151,7 @@ export class AssistantService {
     const draft = dto.draft ?? null;
     const draftTemplate = draft?.template ? await this.draftTemplateClause(thread.workspaceId, draft.template) : '';
     const labels = new CiteLabels();
-    let groundingDoc: { id: string; title: string } | null = null;
+    let groundingDoc: { id: string; title: string; projectId: string } | null = null;
     let groundingMarkdown = '';
     // Same reasoning as in `ask`: the chat pane's grounding page carried its
     // title and nothing about where it lives, so "what section is this in"
@@ -1252,7 +1254,14 @@ export class AssistantService {
           ...(dto.skillIds ?? []),
           ...agent.skillIds,
         ]),
-      );
+      ) +
+      // Team guidance (#70): learnings an admin approved for this agent, after
+      // the skills they sit beside. Project-scoped ones apply on that project's pages.
+      (await this.learnings.promptFor({
+        workspaceId: thread.workspaceId,
+        agentKey: agent.key,
+        projectIds: groundingDoc ? [groundingDoc.projectId] : [],
+      }));
 
     const priorTurns = (await this.threads.recentHistory(threadId, 16)).filter((m) => m.id !== userMessageId);
     const history: ChatCompletionMessageParam[] = priorTurns.map((m) => ({

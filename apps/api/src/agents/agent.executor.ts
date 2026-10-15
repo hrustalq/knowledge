@@ -33,6 +33,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { runCodeReadingLoop } from './code-reading-loop.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
+import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
 import type { Principal } from '../auth/principal.js';
@@ -198,7 +199,50 @@ export class AgentExecutor {
     @Inject(EMBEDDING_PROVIDER) private readonly embedding: EmbeddingProvider,
     private readonly config: ConfigService<Env, true>,
     private readonly permissions: PermissionService,
+    private readonly learnings: AgentLearningsService,
   ) {}
+
+  /**
+   * What a background agent is told beyond its instructions: the skills it
+   * names, the learnings an admin approved for it, and the findings people
+   * dismissed on its earlier runs (#70). One helper, so every executor renders
+   * the same blocks in the same order and none can forget one.
+   *
+   * There is no trigger message in a background run, so only the skills the
+   * agent explicitly names apply. Project-scoped learnings apply when the run
+   * is about pages, or a connector, in that project.
+   */
+  private async guidance(run: AgentRun, agent: ResolvedAgent): Promise<string> {
+    const [skills, projectIds] = await Promise.all([
+      this.skills.forTurn(run.workspaceId, '', agent.skillIds),
+      this.runProjects(run),
+    ]);
+    const [learnings, dismissed] = await Promise.all([
+      this.learnings.promptFor({ workspaceId: run.workspaceId, agentKey: agent.key, projectIds }),
+      this.learnings.dismissedPrompt(run.workspaceId, agent.key),
+    ]);
+    return this.skills.renderPrompt(skills) + learnings + dismissed;
+  }
+
+  /** The projects a run is about: its pages', else its connector's. Empty for a workspace-wide run. */
+  private async runProjects(run: AgentRun): Promise<string[]> {
+    const input = (run.input ?? {}) as AgentRunInput;
+    if (input.documentIds?.length) {
+      const pages = await this.prisma.document.findMany({
+        where: { id: { in: input.documentIds }, workspaceId: run.workspaceId },
+        select: { projectId: true },
+      });
+      return [...new Set(pages.map((p) => p.projectId))];
+    }
+    if (input.connectorId) {
+      const connector = await this.prisma.connector.findFirst({
+        where: { id: input.connectorId, workspaceId: run.workspaceId },
+        select: { projectId: true },
+      });
+      return connector?.projectId ? [connector.projectId] : [];
+    }
+    return [];
+  }
 
   /**
    * What a run may read (#76): its owner's pages, clamped to the workspace
@@ -361,7 +405,7 @@ export class AgentExecutor {
             // only what the agent explicitly names applies.
             content:
               `${agent.instructions}\n\n${OUTPUT_CONTRACT}` +
-              this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
+              await this.guidance(run, agent),
           },
           {
             role: 'user',
@@ -451,9 +495,7 @@ export class AgentExecutor {
       select: { id: true, title: true },
     });
     const byId = new Map(documents.map((d) => [d.id, d]));
-    const skillText = this.skills.renderPrompt(
-      await this.skills.forTurn(run.workspaceId, '', agent.skillIds),
-    );
+    const skillText = await this.guidance(run, agent);
 
     const findings: AgentFinding[] = [];
     let reviewed = 0;
@@ -754,7 +796,7 @@ export class AgentExecutor {
     if (candidates.length === 0) return { summary: t('agent.archaeology.noCandidates', counts), findings: [] };
 
     // --- the judgement: one tool loop per file
-    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const skills = await this.guidance(run, agent);
     const tools = [...this.readTools.definitions(), ...this.code.definitions()];
     const toolCtx = this.toolCtx(run, principal);
     const findings: AgentFinding[] = [];
@@ -910,7 +952,7 @@ export class AgentExecutor {
     }
 
     // --- the judgement: one call per page
-    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const skills = await this.guidance(run, agent);
     const call = {
       config: agent.config,
       userId: run.createdBy,
@@ -1069,7 +1111,7 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
     }
 
     await report({ stage: 'judging', progress: 0.4 });
-    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const skills = await this.guidance(run, agent);
     const call = { config: agent.config, userId: run.createdBy, operation: 'agent' as const, locale: run.locale as Locale };
     const tools = this.readTools.definitions();
     const toolCtx = this.toolCtx(run, principal);
@@ -1383,7 +1425,7 @@ ${page.markdown}`, files);
       };
     }
 
-    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const skills = await this.guidance(run, agent);
     const call = { config: agent.config, userId: run.createdBy, operation: 'agent' as const, locale: run.locale as Locale };
     const tools = this.readTools.definitions();
     const toolCtx = this.toolCtx(run, principal);
@@ -1485,7 +1527,7 @@ ${page.markdown}`, files);
             role: 'system',
             content:
               `${agent.instructions}\n\n${DIGEST_OUTPUT_CONTRACT}` +
-              this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
+              await this.guidance(run, agent),
           },
           { role: 'user', content: runBrief(run.input) + digestListing(facts) },
         ];
@@ -1754,7 +1796,7 @@ ${page.markdown}`, files);
             role: 'system',
             content:
               `${agent.instructions}\n\n${RELATION_OUTPUT_CONTRACT}` +
-              this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
+              await this.guidance(run, agent),
           },
           {
             role: 'user',

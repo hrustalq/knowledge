@@ -190,6 +190,25 @@ in the pull request that introduces them — see
   changes nothing: an agent that already has a schedule, or a trigger for the
   same event, keeps it. Route: `POST /v1/ai/agents/recipes/:recipe/apply`
   (admin). (#70)
+- **Learnings**: teach an agent a correction and it is told it on later
+  turns. **Teach agent** on an agent's reply in a page comment or review
+  thread, **Dismiss → Remember why** on a finding, or **Settings → AI →
+  Learnings** writes one, for one agent or every agent and optionally only in
+  one project. What an editor writes is *proposed* and reaches no prompt; a
+  workspace admin approves, rewords or archives it under **Learnings**. Active
+  learnings are added to the agent's chat turns, its @mention replies and its
+  background runs, newest first, up to `AGENT_LEARNINGS_MAX` per prompt.
+  Routes: `GET /v1/ai/agents/learnings` (viewer), `POST /v1/ai/agents/learnings`
+  (editor; `status: "active"` needs an admin), `PATCH
+  /v1/ai/agents/learnings/:id` (admin). MCP gains
+  `knowledge_list_agent_learnings` (active by default, open to read-only keys)
+  and `knowledge_propose_agent_learning` (editor, proposes only). (#70)
+- **Dismiss** a finding in **Settings → AI → Runs** when it is wrong or not
+  worth acting on. It is hidden from the run (a switch shows dismissed ones),
+  and the agent's next runs are given the titles of findings dismissed on its
+  last ten runs and told not to report them again. Dismissing twice changes
+  nothing and proposes at most one learning. Route:
+  `POST /v1/ai/agents/runs/:id/findings/:index/dismiss` (editor). (#70)
 
 ### Changed
 
@@ -220,6 +239,13 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261024100000_agent_learnings` only adds the `agent_learnings`
+  table, so the previous image runs against it unchanged. A dismissal is
+  written into the existing `agent_runs.findings` JSON. If the code is rolled
+  back, learnings stop reaching prompts and dismissed findings show again, and
+  both return when the release is restored. One more optional setting,
+  `AGENT_LEARNINGS_MAX` (20): active learnings one prompt takes; `0` turns them
+  off.
 - Agent triggers are off server-wide until `AGENT_TRIGGERS_ENABLED=true` is set
   **for both the API and the worker**: the worker hears bus events, the API
   serves the webhook route (404 while off) and starts mention runs (mentions

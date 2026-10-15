@@ -1238,6 +1238,44 @@ model AgentTrigger {
   @@map("agent_triggers")
 }
 
+/// A correction a person taught an agent (#70): "team guidance" appended to
+/// that agent's later prompts. Only `active` rows reach a prompt, and only an
+/// admin makes a row active — the text is trusted because a person approved
+/// it, the same footing as an ai_skills row.
+model AgentLearning {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// Null applies in every project.
+  projectId   String? @map("project_id") @db.Uuid
+  /// Null applies to every agent.
+  agentKey    String? @map("agent_key")
+  text        String
+  /// AGENT_LEARNING_STATUSES — proposed | active | archived.
+  status      String  @default("proposed")
+
+  /// AGENT_LEARNING_SOURCES — document-thread | mr-thread | finding | manual.
+  /// Provenance only, none of it a FK: the learning outlives its thread.
+  sourceKind     String  @default("manual") @map("source_kind")
+  /// The thread a thread source came from.
+  sourceId       String? @map("source_id") @db.Uuid
+  /// The page the source sits on (a page thread) or cites (a finding).
+  documentId     String? @map("document_id") @db.Uuid
+  /// The merge request an mr-thread source sits on.
+  mergeRequestId String? @map("merge_request_id") @db.Uuid
+  runId          String? @map("run_id") @db.Uuid
+  findingIndex   Int?    @map("finding_index")
+
+  createdBy  String    @map("created_by") @db.Uuid
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, agentKey, status])
+  @@index([runId, findingIndex])
+  @@map("agent_learnings")
+}
+
 /// A plugin is an external MCP server whose tools join the assistant's bounded
 /// tool harness. HTTP transports only — stdio would mean spawning processes on
 /// the API host. Its output is UNTRUSTED, handled like document content.

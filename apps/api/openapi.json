@@ -11466,6 +11466,209 @@
         ]
       }
     },
+    "/v1/ai/agents/learnings": {
+      "get": {
+        "operationId": "AiController_listAgentLearnings",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentKey",
+            "required": false,
+            "in": "query",
+            "description": "This agent's learnings and those for every agent",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "proposed",
+                "active",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Learnings — corrections taught to agents — newest first",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "operationId": "AiController_createAgentLearning",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentLearningDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Teach an agent something. Proposed unless an admin creates it active; only active learnings reach a prompt.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/learnings/{id}": {
+      "patch": {
+        "operationId": "AiController_updateAgentLearning",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentLearningDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Approve, edit or archive a learning. Approving or rewording an active one records the caller.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/agents/recipes/{recipe}/apply": {
       "post": {
         "operationId": "AiController_applyAgentRecipe",
@@ -11889,6 +12092,90 @@
           }
         },
         "summary": "Declare the page a stale finding cites outdated, as the caller",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/v1/ai/agents/runs/{id}/findings/{index}/dismiss": {
+      "post": {
+        "operationId": "AiController_dismissFinding",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "required": true,
+            "in": "path",
+            "description": "Position in the run's findings array",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissAgentFindingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Dismiss a finding; optionally propose a learning saying why",
         "tags": [
           "ai"
         ]
@@ -26136,6 +26423,95 @@
           }
         }
       },
+      "CreateAgentLearningDto": {
+        "type": "object",
+        "properties": {
+          "agentKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "The agent it teaches. Null teaches every agent."
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Applies only to work in this project. Null applies everywhere."
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "The correction, in plain words."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "active"
+            ],
+            "description": "Absent is proposed. Active needs an admin."
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "document-thread",
+              "mr-thread",
+              "finding",
+              "manual"
+            ],
+            "description": "Where it came from. Absent is manual."
+          },
+          "sourceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The thread, for a document-thread or mr-thread source."
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The run, for a finding source."
+          },
+          "findingIndex": {
+            "type": "number",
+            "description": "The finding's position in its run, for a finding source."
+          }
+        },
+        "required": [
+          "workspaceId",
+          "text"
+        ]
+      },
+      "UpdateAgentLearningDto": {
+        "type": "object",
+        "properties": {
+          "agentKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "The agent it teaches. Null teaches every agent."
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Applies only to work in this project. Null applies everywhere."
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "active",
+              "archived"
+            ]
+          }
+        }
+      },
       "ApplyAgentRecipeDto": {
         "type": "object",
         "properties": {
@@ -26244,6 +26620,20 @@
         "required": [
           "workspaceId"
         ]
+      },
+      "DismissAgentFindingDto": {
+        "type": "object",
+        "properties": {
+          "learning": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Why it was wrong, as a rule for next time. Becomes a proposed learning for this agent."
+          },
+          "allAgents": {
+            "type": "boolean",
+            "description": "The learning teaches every agent, not only the one that ran."
+          }
+        }
       },
       "RouteAgentDto": {
         "type": "object",

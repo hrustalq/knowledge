@@ -23,6 +23,7 @@ export type WorkspaceSource =
   | 'ai-plugin' // :id path param is an AI plugin (MCP server) id
   | 'ai-provider' // :id path param is an AI provider profile id
   | 'agent-trigger' // :id path param is an agent trigger id (#70)
+  | 'agent-learning' // :id path param is an agent learning id (#70)
   | 'glossary-term' // :id path param is a glossary term id
   | 'source-policy' // :id path param is a web source policy id (docs/features/25)
   | 'saved-filter' // :filterId path param is a saved merge-request filter id (integer)

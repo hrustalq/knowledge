@@ -2,12 +2,20 @@
 // Background agent runs (docs/features/20). A run proposes; it never writes.
 // The one action here is Propose, which opens a merge request against the page
 // a finding cites — still not a change to the live page, just one a person can
-// review and merge.
+// review and merge. Or Dismiss (#70): the finding is wrong, hide it and tell
+// the agent's next runs, optionally with a learning saying why.
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { CircleAlert, CircleCheck, Clock, FilePlus2, GitPullRequest, Link2, Loader2, OctagonAlert, TriangleAlert } from 'lucide-vue-next'
-import type { AgentFinding, AgentRunSummary, ListAgentRunsResponse, ListConnectorsResponse } from '@knowledge/contracts'
+import { CircleAlert, CircleCheck, Clock, FilePlus2, GitPullRequest, GraduationCap, Link2, Loader2, OctagonAlert, TriangleAlert, X } from 'lucide-vue-next'
+import { AGENT_LEARNING_MAX_CHARS } from '@knowledge/contracts'
+import type {
+  AgentFinding,
+  AgentRunSummary,
+  DismissAgentFindingResponse,
+  ListAgentRunsResponse,
+  ListConnectorsResponse,
+} from '@knowledge/contracts'
 import { toast } from 'vue-sonner'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { Button } from '@/components/ui/button'
@@ -15,6 +23,17 @@ import { getWorkspaceId } from '@/lib/api'
 import { relativeTime } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { useAuthStore } from '@/stores/auth'
 import { labelFor } from '@/lib/labels'
 // The same chip the assistant cites with (docs/features/25). A finding's web
 // sources are citations of exactly that kind, and rendering them a second way
@@ -171,6 +190,51 @@ async function apply(run: AgentRunSummary, index: number) {
   }
 }
 
+/**
+ * Dismiss (#70). Set once on the server; a dismissed finding is hidden unless
+ * the reader asks to see them, and the agent's next runs are told about it.
+ * "Remember why" turns the reason into a proposed learning an admin reviews.
+ */
+const auth = useAuthStore()
+const dismissFinding = useApiMutation('post', '/v1/ai/agents/runs/{id}/findings/{index}/dismiss', {
+  invalidates: () => [['/v1/ai/agents/runs'], ['/v1/ai/agents/learnings']],
+})
+const dismissing = ref<{ run: AgentRunSummary; index: number } | null>(null)
+const dismissForm = ref({ learning: '', allAgents: false })
+const dismissOpen = computed({
+  get: () => dismissing.value !== null,
+  set: (open: boolean) => {
+    if (!open) dismissing.value = null
+  },
+})
+function askDismiss(run: AgentRunSummary, index: number) {
+  dismissForm.value = { learning: '', allAgents: false }
+  dismissing.value = { run, index }
+}
+async function confirmDismiss() {
+  const target = dismissing.value
+  if (!target) return
+  const learning = dismissForm.value.learning.trim()
+  try {
+    const res = (await dismissFinding.mutateAsync({
+      path: { id: target.run.id, index: target.index },
+      query: { workspaceId },
+      body: { ...(learning ? { learning, allAgents: dismissForm.value.allAgents } : {}) },
+    })) as DismissAgentFindingResponse
+    toast.success(res.learningId ? t('ai.runs.dismissedWithLearning') : t('ai.runs.dismissedToast'))
+    dismissing.value = null
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+const showDismissed = ref(false)
+/** The findings to list, each with its index in the run — every verb addresses a finding by it. */
+function findingRows(run: AgentRunSummary): Array<{ f: AgentFinding; i: number }> {
+  return run.findings.map((f, i) => ({ f, i })).filter(({ f }) => showDismissed.value || !f.dismissedAt)
+}
+const dismissedCount = (run: AgentRunSummary) => run.findings.filter((f) => f.dismissedAt).length
+
 const expanded = ref<string | null>(null)
 function toggle(id: string) {
   expanded.value = expanded.value === id ? null : id
@@ -274,11 +338,25 @@ const severityClass = (f: AgentFinding) =>
           </li>
         </ul>
 
-        <ul v-if="expanded === run.id && run.findings.length" class="space-y-2 border-t px-3 py-3">
-          <li v-for="(f, i) in run.findings" :key="i" class="flex gap-2.5">
+        <!-- Dismissed findings are hidden by default (#70); one switch shows them. -->
+        <div
+          v-if="expanded === run.id && dismissedCount(run) > 0"
+          class="text-muted-foreground flex items-center gap-2 border-t px-3 py-2 text-xs"
+        >
+          <Checkbox :model-value="showDismissed" @update:model-value="showDismissed = $event === true" />
+          {{ t('ai.runs.showDismissed', { count: dismissedCount(run) }) }}
+        </div>
+
+        <ul v-if="expanded === run.id && findingRows(run).length" class="space-y-2 border-t px-3 py-3">
+          <li v-for="{ f, i } in findingRows(run)" :key="i" class="flex gap-2.5" :class="f.dismissedAt && 'opacity-60'">
             <component :is="SEVERITY_ICON[f.severity]" class="mt-0.5 size-3.5 shrink-0" :class="severityClass(f)" />
             <div class="min-w-0">
-              <p class="text-sm font-medium">{{ f.title }}</p>
+              <p class="text-sm font-medium">
+                {{ f.title }}
+                <Badge v-if="f.dismissedAt" variant="outline" class="ml-1 align-middle font-normal">
+                  {{ t('ai.runs.dismissed') }}
+                </Badge>
+              </p>
               <p class="text-muted-foreground text-xs leading-relaxed">{{ f.detail }}</p>
               <!-- The page this finding would become (docs/features/31), named
                    so a reader knows what Create page creates before pressing it.
@@ -363,10 +441,67 @@ const severityClass = (f: AgentFinding) =>
               <span v-else-if="f.flaggedAt" class="text-muted-foreground text-[11px]">
                 {{ t('ai.runs.outdatedMarked') }}
               </span>
+              <Button
+                v-if="auth.canEdit && !f.dismissedAt && !f.mergeRequestId"
+                variant="ghost"
+                size="sm"
+                class="text-muted-foreground"
+                :disabled="proposing !== null"
+                @click="askDismiss(run, i)"
+              >
+                <X class="size-3.5" /> {{ t('ai.runs.dismiss') }}
+              </Button>
+              <RouterLink
+                v-else-if="f.learningId"
+                to="/settings/ai/learnings"
+                class="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
+              >
+                <GraduationCap class="size-3" /> {{ t('ai.runs.learningProposed') }}
+              </RouterLink>
             </div>
           </li>
         </ul>
       </li>
     </ul>
+
+    <Dialog v-model:open="dismissOpen">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{{ t('ai.runs.dismissTitle') }}</DialogTitle>
+          <DialogDescription>
+            {{ t('ai.runs.dismissDesc', { agent: dismissing?.run.agentName ?? '' }) }}
+          </DialogDescription>
+        </DialogHeader>
+        <form id="kn-dismiss-finding" class="space-y-3" @submit.prevent="confirmDismiss">
+          <p v-if="dismissing" class="bg-muted/50 rounded-md px-3 py-2 text-sm font-medium">
+            {{ dismissing.run.findings[dismissing.index]?.title }}
+          </p>
+          <label class="block space-y-1">
+            <span class="text-muted-foreground text-xs font-medium">{{ t('ai.runs.rememberWhy') }}</span>
+            <Textarea
+              v-model="dismissForm.learning"
+              rows="3"
+              :maxlength="AGENT_LEARNING_MAX_CHARS"
+              :placeholder="t('ai.runs.rememberWhyPlaceholder')"
+            />
+            <span class="text-muted-foreground block text-[11px]">{{ t('ai.runs.rememberWhyHint') }}</span>
+          </label>
+          <label v-if="dismissForm.learning.trim()" class="flex items-center gap-2 text-sm">
+            <Checkbox
+              :model-value="dismissForm.allAgents"
+              @update:model-value="dismissForm.allAgents = $event === true"
+            />
+            {{ t('ai.runs.teachEveryAgent', { agent: dismissing?.run.agentName ?? '' }) }}
+          </label>
+        </form>
+        <DialogFooter>
+          <Button variant="outline" @click="dismissing = null">{{ t('common.cancel') }}</Button>
+          <Button type="submit" form="kn-dismiss-finding" :disabled="dismissFinding.isPending.value">
+            <Loader2 v-if="dismissFinding.isPending.value" class="size-3.5 animate-spin" />
+            {{ t('ai.runs.dismiss') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

@@ -11,6 +11,7 @@
   "skill": "skill id",
   "plugin": "plugin id",
   "provider": "provider id",
+  "agentTrigger": "agent trigger id",
   "glossaryTerm": "glossary term id",
   "import": "import id",
   "workflow": "workflow id",

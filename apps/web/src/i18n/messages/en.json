@@ -1772,6 +1772,60 @@
       "lastRunAt": "Last run {when}",
       "neverRun": "Has not run yet"
     },
+    "triggers": {
+      "title": "Triggers",
+      "hint": "Start a run when something happens. Off until enabled; a run executes as whoever enabled its trigger and counts against the workspace budget.",
+      "notListening": "Triggers are switched off on this server (AGENT_TRIGGERS_ENABLED), so none of these will fire.",
+      "add": "Add trigger",
+      "empty": "No triggers — this agent runs by hand or on its schedule.",
+      "event": "When",
+      "events": {
+        "page": {
+          "merged": "A page is merged",
+          "indexed": "A page is updated"
+        },
+        "merge-request": {
+          "opened": "A merge request is opened"
+        },
+        "connector": {
+          "synced": "A connector finishes syncing"
+        }
+      },
+      "eventHints": {
+        "page": {
+          "merged": "A merge request landed on the page. The run reads that page.",
+          "indexed": "A new revision of the page was indexed — on its default branch unless a branch is named. The run reads that page."
+        },
+        "merge-request": {
+          "opened": "A merge request on a page, or a pull request on a connected repository."
+        },
+        "connector": {
+          "synced": "A sync run finished without failures."
+        }
+      },
+      "project": "Project",
+      "allProjects": "All projects",
+      "categories": "Page categories",
+      "categoriesPlaceholder": "guide, runbook — empty means any",
+      "connectors": "Connectors",
+      "anyConnector": "None ticked means any connector.",
+      "branch": "Branch",
+      "defaultBranch": "Default branch",
+      "anyBranch": "Any branch",
+      "cooldown": "Cooldown (minutes)",
+      "cooldownDefault": "Server default",
+      "cooldownHint": "The same page, merge request or connector starts at most one run per cooldown. 0 turns it off.",
+      "cooldownShort": "no cooldown | cooldown {count} min | cooldown {count} min",
+      "note": "Instruction for every run",
+      "enabled": "Enabled",
+      "owned": "runs as whoever enabled it",
+      "lastFired": "Last fired {when}",
+      "neverFired": "Has not fired yet",
+      "created": "Trigger added",
+      "saved": "Trigger saved",
+      "deleted": "Trigger deleted",
+      "delete": "Delete trigger"
+    },
     "tabRuns": "Runs",
     "tabCoverage": "Coverage",
     "tabFeedback": "Feedback",
@@ -1789,6 +1843,7 @@
         "cancelled": "Cancelled"
       },
       "trigger": {
+        "event": "on event",
         "manual": "manual",
         "schedule": "scheduled",
         "webhook": "pull request",

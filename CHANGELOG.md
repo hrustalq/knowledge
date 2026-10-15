@@ -135,6 +135,20 @@ in the pull request that introduces them — see
   a curator, reviewer or glossarist run to those pages instead of the most
   recent ones. Pages the caller cannot open are skipped. Any other agent
   answers 400. (#70)
+- **Agent triggers** start a background run when something happens in the
+  workspace: a page is merged, a page is updated (a new revision indexed on its
+  default branch, or a named branch), a merge request or a connected
+  repository's pull request is opened, or a connector finishes a sync. Add
+  them in **Settings → AI → Agents**, in an agent's dialog, optionally narrowed
+  to a project, page categories, connectors or a branch. A trigger is off until
+  an admin enables it, and its runs execute and bill as whoever enabled it. A
+  page-reading agent's run reads just the page the event is about. The same
+  page, merge request or connector starts at most one run per cooldown (60
+  minutes unless set), never while a run of that agent for it is still going,
+  and a re-index of a revision that already fired starts nothing. Runs show
+  what started them in **Runs**. Routes: `GET /v1/ai/agents/triggers`,
+  `POST /v1/ai/agents/:key/triggers`, `PATCH|DELETE /v1/ai/agents/triggers/:id`
+  (admin). (#70)
 
 ### Changed
 
@@ -165,6 +179,18 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Agent triggers are off server-wide until `AGENT_TRIGGERS_ENABLED=true` is set
+  for the worker; the trigger editor says when it is not. Two more optional
+  settings: `AGENT_TRIGGER_MAX_ACTIVE` (5), the triggered runs one workspace
+  may have in flight before further events are skipped, and
+  `AGENT_TRIGGER_COOLDOWN_MINUTES` (60), the cooldown a new trigger starts
+  with. Triggers hear the Redis event bus, which does not redeliver: an event
+  published while the worker is down starts no run.
+- Migration `20261022100000_agent_triggers` adds the `agent_triggers` table,
+  two nullable columns on `agent_runs` (`trigger_id`, `subject_key`) and two
+  indexes. Nothing is backfilled and the previous image ignores all of it. If
+  the code is rolled back, triggers stop firing; runs they started stay
+  listed, with a trigger label the old web shows as a raw key.
 - Migration `20261021100000_agent_schedule_time_of_day` adds five nullable
   columns to `ai_agents` (`schedule_kind`, `schedule_time`,
   `schedule_weekdays`, `schedule_timezone`, `schedule_changed_at`) and two

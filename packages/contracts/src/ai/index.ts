@@ -1086,6 +1086,20 @@ export interface AgentRunInput {
   mergedAt?: string;
   /** The sweeper's claim that it acted on `mergedAt`, once. Never set by anything else. */
   outdatedAt?: string;
+  /**
+   * What started an `'event'` run (#70): the trigger event, the bus type it was
+   * heard on, and that event's subject. `revisionId` is set for `page.indexed`
+   * and is what keeps a re-index of one revision from firing twice.
+   */
+  event?: AgentRunEvent;
+}
+
+export interface AgentRunEvent {
+  type: AgentTriggerEvent;
+  source: string;
+  subjectId?: string;
+  documentId?: string;
+  revisionId?: string;
 }
 
 /**
@@ -1514,11 +1528,13 @@ export const AGENT_RUN_STATUSES = ['pending', 'running', 'succeeded', 'failed', 
 export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
 
 /**
- * How a run was started. Deliberately only what the code emits: an event
- * trigger is a plausible third value, but a closed vocabulary that promises one
- * nothing produces is the defect this feature was written against
- * (`WorkflowStep.tools`, declared and ignored). Add `'event'` back together
- * with the service that emits it, and with WorkflowTriggerService's guards.
+ * How a run was started. Deliberately only what the code emits — a closed
+ * vocabulary that promises a value nothing produces is the defect this feature
+ * was written against (`WorkflowStep.tools`, declared and ignored).
+ *
+ * `'event'` is emitted by exactly one service, `AgentTriggerService` (#70),
+ * which carries WorkflowTriggerService's guards: it came back together with
+ * them, as docs/features/20-agents-todo.md said it must.
  *
  * `'webhook'` is not that `'event'`: it is emitted by exactly one service,
  * `DriftTriggerService`, for exactly one agent, and never from the event bus —
@@ -1527,6 +1543,8 @@ export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
 export const AGENT_RUN_TRIGGERS = [
   'manual',
   'schedule',
+  /** A bus event matched one of the agent's triggers (#70). */
+  'event',
   /** A pull or merge request webhook started a sentinel run (docs/features/35). */
   'webhook',
   /**
@@ -1537,6 +1555,115 @@ export const AGENT_RUN_TRIGGERS = [
   'report',
 ] as const;
 export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
+
+/**
+ * What an agent trigger listens for (#70) — the product's names, not the bus's.
+ *
+ * Only what the listener actually handles: the signed inbound webhook and the
+ * comment mention ship with the code that emits them (#70 phase 3), not ahead
+ * of it.
+ */
+export const AGENT_TRIGGER_EVENTS = ['page.merged', 'page.indexed', 'merge-request.opened', 'connector.synced'] as const;
+export type AgentTriggerEvent = (typeof AGENT_TRIGGER_EVENTS)[number];
+
+/**
+ * The bus types each trigger event is heard on. One constant read by the DTO,
+ * the listener and the editor's picker, so the three cannot disagree about
+ * what "a merge request was opened" means.
+ *
+ * `page.indexed` rather than `document.updated`: the latter fires on every
+ * autosave of a draft, the former once per revision that reached the index.
+ */
+export const AGENT_TRIGGER_EVENT_SOURCES: Record<AgentTriggerEvent, readonly string[]> = {
+  'page.merged': ['merge-request.merged'],
+  'page.indexed': ['revision.indexed'],
+  'merge-request.opened': ['merge-request.created', 'repo.pull-request.opened'],
+  'connector.synced': ['connector.run.succeeded'],
+};
+
+/** The trigger event a bus type is heard as, or null for one no trigger listens to. */
+export function agentTriggerEventFor(busType: string): AgentTriggerEvent | null {
+  for (const event of AGENT_TRIGGER_EVENTS) {
+    if (AGENT_TRIGGER_EVENT_SOURCES[event].includes(busType)) return event;
+  }
+  return null;
+}
+
+/**
+ * Narrows which events of a kind start a run. Every field is optional and an
+ * absent one matches everything — the sparse-override rule.
+ *
+ * `branch` applies to page events: the merge request's target branch for
+ * `page.merged` and `merge-request.opened`, the indexed revision's branch for
+ * `page.indexed`. Absent, `page.indexed` hears only a page's default branch —
+ * a draft branch being edited is not "the page changed".
+ */
+export interface AgentTriggerFilter {
+  categories?: string[];
+  connectorIds?: string[];
+  branch?: string;
+}
+
+/**
+ * Which filter fields mean something for which event — read by the editor
+ * (which fields to show) and the API (which to keep). A field the event has no
+ * dimension for would never match, so it is dropped rather than stored as a
+ * trigger that silently never fires.
+ */
+export const AGENT_TRIGGER_FILTER_FIELDS: Record<AgentTriggerEvent, readonly (keyof AgentTriggerFilter)[]> = {
+  'page.merged': ['categories', 'branch'],
+  'page.indexed': ['categories', 'branch'],
+  'merge-request.opened': ['categories', 'connectorIds', 'branch'],
+  'connector.synced': ['connectorIds'],
+};
+
+/**
+ * The events an agent can be triggered by. A connector-scoped agent reads one
+ * repository, so only an event that can name one — a pull request, a sync — is
+ * offered to it; any other would skip on every delivery.
+ */
+export function agentTriggerEventsFor(agentKey: string): readonly AgentTriggerEvent[] {
+  return isConnectorScopedAgent(agentKey) ? ['merge-request.opened', 'connector.synced'] : AGENT_TRIGGER_EVENTS;
+}
+
+/** Bounds of `agent_triggers.cooldown_minutes`; 0 turns the cooldown off. */
+export const AGENT_TRIGGER_COOLDOWN_MAX_MINUTES = 10_080;
+
+export interface AgentTriggerSummary {
+  id: string;
+  workspaceId: string;
+  /** Null hears every project in the workspace. */
+  projectId: string | null;
+  agentKey: string;
+  event: AgentTriggerEvent;
+  filter: AgentTriggerFilter;
+  /** Off on creation: nothing fires until an admin turns it on. */
+  enabled: boolean;
+  /**
+   * Who the runs execute and bill as — the admin who last enabled it. A
+   * trigger without one starts nothing.
+   */
+  ownerId: string | null;
+  /** Minutes before the same subject may start this trigger again. */
+  cooldownMinutes: number;
+  /** Seeded into each run's `input.note`. */
+  note: string | null;
+  lastFiredAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /v1/ai/agents/triggers?workspaceId=
+export interface ListAgentTriggersResponse {
+  triggers: AgentTriggerSummary[];
+  /**
+   * Whether this server listens at all (`AGENT_TRIGGERS_ENABLED`). An enabled
+   * trigger on a server that does not listen fires nothing, and the editor
+   * says so rather than letting the toggle claim otherwise.
+   */
+  listening: boolean;
+}
 
 export const AGENT_FINDING_KINDS = [
   'stale',
@@ -1684,6 +1811,10 @@ export interface AgentRunSummary {
   agentKey: string;
   agentName: string;
   trigger: AgentRunTrigger;
+  /** The agent trigger behind an `'event'` run, null for any other. It may since have been deleted. */
+  triggerId: string | null;
+  /** What the run is about — `doc:<id>`, `mr:<id>`, `connector:<id>`; null for an unscoped run. */
+  subjectKey: string | null;
   status: AgentRunStatus;
   createdBy: string;
   /** What the run was asked to do; null for a run that took no parameters. */

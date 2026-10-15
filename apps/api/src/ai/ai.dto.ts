@@ -22,9 +22,12 @@ import {
   AGENT_SCHEDULE_KINDS,
   AGENT_SCHEDULE_TIME_PATTERN,
   AGENT_SURFACES,
+  AGENT_TRIGGER_COOLDOWN_MAX_MINUTES,
+  AGENT_TRIGGER_EVENTS,
   WEB_ACCESS_MODES,
   type AgentCapability,
   type AgentScheduleKind,
+  type AgentTriggerEvent,
   type AgentSurface,
   type WebAccessMode,
 } from '@knowledge/contracts';
@@ -867,6 +870,84 @@ export class StartAgentRunDto {
   @IsUUID('all', { each: true })
   documentIds?: string[];
 }
+
+// ---- Agent triggers (#70) ---------------------------------------------------
+
+/**
+ * The filter fields, flat rather than nested: a `filter` object would need
+ * nested validation for three optional fields. The service folds them into
+ * `agent_triggers.filter` and drops the ones the event has no dimension for.
+ */
+class AgentTriggerFieldsDto {
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Only events in this project. Null hears every project.' })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('projectId')
+  @IsUUID()
+  projectId?: string | null;
+
+  @ApiPropertyOptional({ type: [String], nullable: true, description: 'Only pages in these categories (page and merge request events).' })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('categories')
+  @IsArray()
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  @MaxLength(64, { each: true, message: vmsg('maxLength') })
+  categories?: string[] | null;
+
+  @ApiPropertyOptional({ type: [String], nullable: true, description: 'Only these connectors (connector syncs and pull requests).' })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('connectorIds')
+  @IsArray()
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
+  @IsUUID('all', { each: true })
+  connectorIds?: string[] | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Only this branch. Absent, a page.indexed trigger hears the default branch only.',
+  })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('branch')
+  @IsString()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  branch?: string | null;
+
+  @ApiPropertyOptional({ description: 'Enabling makes the caller the owner the runs execute as. Off unless sent.' })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: `Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES.`,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0, { message: vmsg('min') })
+  @Max(AGENT_TRIGGER_COOLDOWN_MAX_MINUTES, { message: vmsg('max') })
+  cooldownMinutes?: number;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Instruction seeded into every run this trigger starts.' })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('note')
+  @IsString()
+  @MaxLength(2_000, { message: vmsg('maxLength') })
+  note?: string | null;
+}
+
+export class CreateAgentTriggerDto extends AgentTriggerFieldsDto {
+  // Field name must stay `workspaceId`: @Access('admin', 'body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ enum: AGENT_TRIGGER_EVENTS })
+  @IsIn(AGENT_TRIGGER_EVENTS as unknown as string[], { message: vmsg('isIn') })
+  event!: AgentTriggerEvent;
+}
+
+/** The event is fixed once created: a different event is a different trigger. */
+export class UpdateAgentTriggerDto extends AgentTriggerFieldsDto {}
 
 // ---- Source policies (docs/features/25) ------------------------------------
 

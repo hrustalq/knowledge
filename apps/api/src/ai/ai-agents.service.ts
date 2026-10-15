@@ -481,6 +481,8 @@ function toRunSummary(run: AgentRun, agentName: string): AgentRunSummary {
     agentKey: run.agentKey,
     agentName,
     trigger: run.trigger as AgentRunTrigger,
+    triggerId: run.triggerId,
+    subjectKey: run.subjectKey,
     status: run.status as AgentRunStatus,
     createdBy: run.createdBy,
     input: run.input && typeof run.input === 'object' ? (run.input as AgentRunInput) : null,

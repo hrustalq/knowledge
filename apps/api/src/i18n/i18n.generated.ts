@@ -535,6 +535,10 @@ export type I18nTranslations = {
             "agentRunInFlight": string;
             "agentNeedsConnector": string;
             "agentConnectorInvalid": string;
+            "agentTriggerNotFound": string;
+            "agentTriggerNeedsRepository": string;
+            "agentTriggerProjectInvalid": string;
+            "agentTriggerConnectorInvalid": string;
             "agentNeedsPullRequest": string;
             "findingNoDraft": string;
             "findingAlreadyCreated": string;
@@ -1041,6 +1045,7 @@ export type I18nTranslations = {
         "skill": string;
         "plugin": string;
         "provider": string;
+        "agentTrigger": string;
         "glossaryTerm": string;
         "import": string;
         "workflow": string;

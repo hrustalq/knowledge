@@ -37,7 +37,7 @@ same modules, different composition. A fourth exists only to emit the OpenAPI do
 | `DEPENDENT_REINDEX_MAX` | cap on the one-level reindex cascade |
 | `LIVE_WS_ENABLED`, `LIVE_TRACKED_EVENTS` | the live-update WebSocket and what it fans out |
 | `WORKFLOW_AUTOSTART_MAX_ACTIVE` | how many auto-started runs may be in flight |
-| `CONNECTOR_*`, `AGENT_SCHEDULE_ENABLED` | sync limits and background agent scheduling |
+| `CONNECTOR_*`, `AGENT_SCHEDULE_ENABLED`, `AGENT_TRIGGER*` | sync limits, background agent schedules and event triggers |
 
 `make env-check` compares your `.env` files against `.env.example` — run it after pulling.
 

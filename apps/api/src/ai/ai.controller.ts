@@ -14,6 +14,8 @@ import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type {
   AgentRouteDecision,
   AgentRunSummary,
+  AgentTriggerSummary,
+  ListAgentTriggersResponse,
   AiAgentSummary,
   ListAgentRunsResponse,
   ListAiAgentChoicesResponse,
@@ -47,6 +49,7 @@ import { AiSettingsService } from './ai-settings.service.js';
 import { AiSkillsService } from './ai-skills.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
+import { AgentTriggersService } from './agent-triggers.service.js';
 import { AgentFindingsService } from './agent-findings.service.js';
 import { AgentRouterService } from '../agents/agent-router.service.js';
 import { AgentTiebreakService } from './agent-tiebreak.service.js';
@@ -64,6 +67,8 @@ import {
   UpdateAiSettingsDto,
   RouteAgentDto,
   StartAgentRunDto,
+  CreateAgentTriggerDto,
+  UpdateAgentTriggerDto,
   UpdateAiAgentDto,
   UpdateAiSkillDto,
 } from './ai.dto.js';
@@ -81,6 +86,7 @@ export class AiController {
     private readonly skills: AiSkillsService,
     private readonly agents: AiAgentsService,
     private readonly runs: AgentRunsService,
+    private readonly triggers: AgentTriggersService,
     private readonly findings: AgentFindingsService,
     private readonly router: AgentRouterService,
     private readonly tiebreak: AgentTiebreakService,
@@ -355,6 +361,77 @@ export class AiController {
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
   ): Promise<AgentRunSummary> {
     return this.runs.get(workspaceId, id);
+  }
+
+  // Triggers (#70). Declared before ':key' so "triggers" is not read as an
+  // agent key by PATCH and DELETE.
+  @Get('agents/triggers')
+  @Access('admin', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: "Every agent trigger in the workspace, grouped by agent" })
+  async listAgentTriggers(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<ListAgentTriggersResponse> {
+    return { triggers: await this.triggers.list(workspaceId), listening: this.triggers.listening };
+  }
+
+  @Patch('agents/triggers/:id')
+  @Access('admin', 'agent-trigger')
+  @ApiOperation({
+    summary: 'Change a trigger. Enabling it makes the caller the owner its runs execute as; null clears a filter.',
+  })
+  async updateAgentTrigger(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAgentTriggerDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AgentTriggerSummary> {
+    const trigger = await this.triggers.update(id, dto, principal.userId);
+    await this.activity.record({
+      workspaceId: trigger.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.trigger.updated',
+      subjectId: trigger.id,
+      metadata: { key: trigger.agentKey, event: trigger.event, enabled: trigger.enabled },
+    });
+    return trigger;
+  }
+
+  @Delete('agents/triggers/:id')
+  @Access('admin', 'agent-trigger')
+  @ApiOperation({ summary: 'Delete a trigger. The runs it started stay.' })
+  async deleteAgentTrigger(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<void> {
+    const trigger = await this.triggers.remove(id);
+    await this.activity.record({
+      workspaceId: trigger.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.trigger.deleted',
+      subjectId: trigger.id,
+      metadata: { key: trigger.agentKey, event: trigger.event },
+    });
+  }
+
+  @Post('agents/:key/triggers')
+  @Access('admin', 'body')
+  @ApiOperation({
+    summary: 'Add a trigger to an agent. Off unless enabled is sent; enabling makes the caller its owner.',
+  })
+  async createAgentTrigger(
+    @Param('key') key: string,
+    @Body() dto: CreateAgentTriggerDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AgentTriggerSummary> {
+    const trigger = await this.triggers.create(key, dto, principal.userId);
+    await this.activity.record({
+      workspaceId: trigger.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.trigger.created',
+      subjectId: trigger.id,
+      metadata: { key: trigger.agentKey, event: trigger.event, enabled: trigger.enabled },
+    });
+    return trigger;
   }
 
   @Post('agents/:key/run')

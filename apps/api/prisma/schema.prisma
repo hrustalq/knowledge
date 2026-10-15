@@ -1139,11 +1139,17 @@ model AgentRun {
   /// The override row, when one exists. Null for an untouched built-in.
   agentId     String? @map("agent_id") @db.Uuid
 
-  /// 'manual' | 'schedule' — see AGENT_RUN_TRIGGERS. There is no 'event'
-  /// trigger until something emits one (docs/features/20-agents-todo.md).
-  trigger String @default("manual")
+  /// 'manual' | 'schedule' | 'event' | 'webhook' | 'report' — see
+  /// AGENT_RUN_TRIGGERS. 'event' is written only by AgentTriggerService (#70).
+  trigger    String  @default("manual")
+  /// The agent_triggers row behind an 'event' run. No FK: deleting a trigger
+  /// must not take its history with it.
+  triggerId  String? @map("trigger_id") @db.Uuid
+  /// What the run is about — `doc:<id>`, `mr:<id>`, `connector:<id>`. The key
+  /// the in-flight and cooldown guards read; null for an unscoped run.
+  subjectKey String? @map("subject_key")
   /// pending → running → succeeded | failed | cancelled
-  status  String @default("pending")
+  status     String  @default("pending")
 
   /// The user this run acts as. Its role caps what the run's tools may do, and
   /// a disabled or demoted owner fails the run rather than escalating it.
@@ -1183,7 +1189,43 @@ model AgentRun {
 
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, agentKey, createdAt])
+  @@index([workspaceId, agentKey, subjectKey, createdAt])
+  @@index([triggerId, subjectKey, createdAt])
   @@map("agent_runs")
+}
+
+/// Starts an agent run when something happens in the workspace (#70).
+///
+/// Several per agent, hence a table rather than more ai_agents columns. Every
+/// guard AgentTriggerService applies is configured here and none is optional:
+/// off on creation, an owner to run as, a cooldown per subject.
+model AgentTrigger {
+  id              String    @id @default(uuid()) @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
+  /// Null hears every project in the workspace.
+  projectId       String?   @map("project_id") @db.Uuid
+  /// ai_agents.key — resolved through the registry when the trigger fires.
+  agentKey        String    @map("agent_key")
+  /// AgentTriggerEvent (contracts). A CHECK in the migration holds the vocabulary.
+  event           String
+  /// AgentTriggerFilter — sparse; an absent field matches everything.
+  filter          Json      @default("{}")
+  enabled         Boolean   @default(false)
+  /// Who runs execute and bill as: the admin who last enabled the trigger.
+  /// Null starts nothing (the AiAgent.scheduleOwner rule).
+  ownerId         String?   @map("owner_id") @db.Uuid
+  cooldownMinutes Int       @default(60) @map("cooldown_minutes")
+  /// Seeded into each run's input.note.
+  note            String?
+  lastFiredAt     DateTime? @map("last_fired_at") @db.Timestamptz
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, event, enabled])
+  @@index([workspaceId, agentKey])
+  @@map("agent_triggers")
 }
 
 /// A plugin is an external MCP server whose tools join the assistant's bounded

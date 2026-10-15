@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { EventsModule } from '../events/events.module.js';
+import { EventsSubscriberModule } from '../events/events-subscriber.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
@@ -18,6 +19,8 @@ import { AgentQueueModule } from './agent-queue.module.js';
 import { AgentExecutor } from './agent.executor.js';
 import { AgentProcessor } from './agent.processor.js';
 import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
+import { AgentTriggerCoreModule } from './agent-trigger-core.module.js';
+import { AgentTriggerListener } from './agent-trigger.listener.js';
 
 /**
  * Worker-only half of the agents layer (docs/features/20) — imported by
@@ -78,7 +81,11 @@ import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
     EmbeddingModule,
     DocumentsCoreModule,
     GlossaryCoreModule,
+    // Event triggers (#70): the bus listener is here, the service it fires
+    // through is in the core module so the API can fire it too.
+    EventsSubscriberModule,
+    AgentTriggerCoreModule,
   ],
-  providers: [AgentExecutor, AgentProcessor, AgentScheduleSweeper],
+  providers: [AgentExecutor, AgentProcessor, AgentScheduleSweeper, AgentTriggerListener],
 })
 export class AgentWorkerModule {}

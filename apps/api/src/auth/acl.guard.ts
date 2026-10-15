@@ -150,6 +150,8 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfAiPlugin(uuid(req.params?.id, 'plugin'));
       case 'ai-provider':
         return this.access.workspaceOfAiProvider(uuid(req.params?.id, 'provider'));
+      case 'agent-trigger':
+        return this.access.workspaceOfAgentTrigger(uuid(req.params?.id, 'agentTrigger'));
       case 'saved-filter':
         return this.access.workspaceOfSavedFilter(intId(req.params?.filterId, 'savedFilter'));
       case 'glossary-term':

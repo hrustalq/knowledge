@@ -208,6 +208,21 @@ describe('SearchService with an AccessScope', () => {
     expect(graph.getWorkspaceRelationGraph.mock.calls[0]![1]).toMatchObject({ kind: 'deny' });
   });
 
+  it('drops a page PG no longer has for every reader, an admin included', async () => {
+    // Chunks and edges can outlive a page deleted from PG. For a reader who
+    // hides nothing they used to come back as "(unknown)" and outrank real
+    // answers, so known-item recall depended on whether the caller had any
+    // restriction in their way.
+    const GONE = 'f0f0f0f0-ffff-4fff-8fff-ffffffffffff';
+    const edge = (documentId: string) => ({ type: 'DEPENDS_ON', documentId, targetKey: 'service:billing', extractor: 'explicit', confidence: 1 });
+    for (const scope of [ADMIN, GRANTEE, MEMBER]) {
+      const { svc } = build({ hits: [hit(GONE, 0.99), hit(OPEN, 0.9)], relations: { edges: [edge(OPEN), edge(GONE), edge(OPEN2)] } });
+      const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'hybrid', expandGraph: { depth: 1 } }, scope);
+      expect(res.results.map((r) => r.documentId)).toEqual([OPEN]);
+      expect(res.related?.map((r) => r.documentId)).toEqual([OPEN2]);
+    }
+  });
+
   it('fails rather than answering unfiltered when the scope cannot be read', async () => {
     const { svc, prisma } = build({ hits: ranked });
     prisma.document.findMany.mockRejectedValueOnce(new Error('pg down'));

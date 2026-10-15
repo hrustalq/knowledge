@@ -134,6 +134,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 45 | Export               | Page/subtree/project → zip, html or pdf (Gotenberg) via `export_jobs`; the worker asks the web `/_internal/export/render` for HTML; `ExportSweeper` purges expired                     |
 | 46 | Repo wiki            | `codebase` connector wiki + Releases steered by `.knowledge/wiki.yml`; `effectiveWikiConfig` (code ← file ← connector, `WIKI_MAX_EFFORT` ceiling); Mermaid only via `wiki-diagrams.ts` |
 | 47 | Chat bots            | Telegram + Time bots answer as the **linked** person, never a bot principal; groups silent until bound; turns run API-side via `AssistantService.runChatTurn`                          |
+| 48 | Page permissions     | Page/project restrictions, groups, guests, access requests; view is intersective down the tree; every retrieval path takes an `AccessScope`, PG has the final say; connectors mirror source ACLs |
 
 ## Conventions
 
@@ -182,6 +183,14 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - One SSRF filter (`common/safe-url.ts`) and one credential store (`ai/secret-box.ts`, AES-256-GCM, write-only over the API) — one implementation is the only safe number.
 - There is **no cron** in this repo: no `@nestjs/schedule`, no BullMQ repeatables. Scheduled work is a due check inside a fixed tick, with back-pressure (never a second run while one is in flight).
 
+**Page permissions** (feature 48)
+
+- **Every method that returns pages takes a required `AccessScope`**, and every store read (`GraphService`, the fulltext provider) a required `DocumentAclFilter`. A system job passes `systemScope(workspaceId)`, which is greppable on purpose. The PG post-filter (`visibilityWhere`) is authoritative; the `aclNodes` stamps on the stores are only a prefilter.
+- The visibility rule has three spellings in `permissions/access-scope.ts` (`canSee`, `visibilityWhere`, `visibilitySql`) pinned against each other in `permissions.spec.ts`. Change all three or none.
+- A workspace-level route a guest may call opts in with `@Access(…, { guests: true })`, which promises the handler filters by scope.
+- Output posted where others read it (a thread, an agent run, a group chat) is retrieved under `PermissionService.audienceScope`, never the author's scope alone.
+- A refused page is a 403 `{ canRequestAccess, resourceType, resourceId }` for a member and a 404 for a guest. **Never put a title in either.**
+
 **Entity keys & hierarchy**
 
 - An entity key is **canonical or it is a fork**. `normalizeEntityKey` (contracts) folds NFC, case and inner whitespace; `GraphService` folds again at the recorder and `assertCanonicalKey` throws at the edge writer. Fold **at the top of a write method**, never inside `createRelationEdge` — the guarded DELETEs read `targetKey` first, so folding later duplicates an edge per re-post.
@@ -224,4 +233,4 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - `corepack` does not exist on this Node install; pnpm is pinned only via the `packageManager` field.
 - Reindexing is idempotent by design: `GraphService.upsertRevisionChunks` deletes the revision's chunks and vertex before recreating them, and the processor skips jobs already `completed`.
 - Relation edge type names are **SQL-interpolated**, so every type is validated against `RELATION_EDGE_TYPES` in `GraphService`. **Never widen that list without keeping the allowlist check.**
-- With the default `AUTH_MODE=none` every request passes as the dev principal, whose userId **is** the zeros `AUTHOR_ID_STUB`. Test ACLs and merge gates with a bootstrapped key, not in dev mode.
+- With the default `AUTH_MODE=none` every request passes as the dev principal, whose userId **is** the zeros `AUTHOR_ID_STUB`. Test ACLs and merge gates with a bootstrapped key, not in dev mode — and `make auth-bootstrap` makes a **platform admin**, who bypasses every page restriction. `test/page-permissions.e2e-spec.ts` creates its own non-admin people.

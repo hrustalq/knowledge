@@ -152,7 +152,7 @@ A 30-second ping/pong heartbeat terminates sockets that stop answering.
 
 ## Access control, then tracking
 
-The two filters are separate and neither substitutes for the other.
+The filters are separate and none substitutes for another.
 
 **Access control.** Every `subscribe { workspaceId, tracking }` runs
 `AccessService.requireRole(principal, workspaceId, 'viewer')` against Postgres
@@ -179,6 +179,26 @@ _addressed_, and both fan-out sites — `EventsSubscriber.stream` and
 `LiveGateway.fanOut` — drop it for everyone else. Without that, a
 `notification.created` published onto a workspace-wide bus would tell every peer
 who is being notified about what.
+
+**Page visibility** (#76) sits after the workspace check and before tracking.
+A frame about a page reaches only the connections whose holder can open it.
+`LiveVisibility` (`events/live-visibility.ts`) makes that call for both fan-out
+sites, so SSE and WS cannot disagree:
+
+- Each connection's `AccessScope` is cached for `ACL_CACHE_TTL_MS`. A frame is
+  not a request, and three PG reads per frame per socket would turn the bus into
+  a load test.
+- `acl.changed` drops every cached scope for its workspace before the next frame
+  is judged, then goes out to clients as an ordinary frame. It names no page,
+  and the web refetches the tree and search on it. `AclEventsService` publishes
+  it after a change to the access dialog, group membership or a group, an
+  approval, or a connector's mirrored grants (at most once a second per
+  workspace).
+- A page's chain is read once per frame, and only when some listener's scope
+  hides anything. In a workspace with no restrictions the filter costs nothing.
+- It denies by default. A scope that cannot be computed delivers nothing about
+  pages, and a page that cannot be read (deleted) reaches only those who see
+  everything. Workspace-level frames and addressed frames pass unchanged.
 
 ## The client: LiveClient and the live cache
 
@@ -230,6 +250,10 @@ server truth for the same keys, and the settle-time invalidation is the
 backstop either way.
 
 ## Limits
+
+A connection that misses `acl.changed` (a Redis blip) may keep receiving frames
+about a page it just lost for up to `ACL_CACHE_TTL_MS`. Those frames carry ids
+and event types, not content, and every request it makes still reads PG.
 
 Best-effort delivery, no replay for a reconnecting client (Redis streams were
 noted as future work in feature 04), and only one level of dependent re-index —

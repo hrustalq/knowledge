@@ -7,7 +7,7 @@ import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { DocumentAclFilter } from '../common/document-acl.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { hidesAnything, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { GraphService, type ChunkHit } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
@@ -153,11 +153,12 @@ export class SearchService {
     // the owner, the freshness clock and the archive mark — and for the
     // page-permission predicate itself (#76). The stores' filter came from a
     // list read a moment earlier; this is the read that decides.
-    const hides = hidesAnything(scope);
+    // A hit is kept only if this read returns its page, for every reader: a
+    // page gone from PG can leave chunks behind in a store, and those must not
+    // outrank real answers as "(unknown)" for whoever happens to hide nothing.
     const visibleHits = async (candidates: ChunkHit[]) => {
       const docIds = [...new Set(candidates.map((h) => h.documentId))];
       const docs = await this.loadDocs(docIds, scope);
-      if (!hides) return { docs, kept: candidates };
       const seen = new Set(docs.map((d) => d.id));
       return { docs, kept: candidates.filter((h) => seen.has(h.documentId)) };
     };
@@ -355,9 +356,9 @@ export class SearchService {
     }
     // The graph does not know about archive (docs/features/39): a put-away page
     // keeps its edges, so the walk reaches it and PG says whether to show it.
-    // PG also has the last word on visibility (#76), as for the hits.
-    const hides = hidesAnything(scope);
-    if ((hides || !includeArchived) && related.size > 0) {
+    // PG also has the last word on visibility (#76) and on existence, as for
+    // the hits: a page it does not return is dropped, whoever is asking.
+    if (related.size > 0) {
       const rows = await this.prisma.document.findMany({
         where: { id: { in: [...related.keys()] }, AND: [visibilityWhere(scope)] },
         select: { id: true, archivedAt: true },
@@ -365,7 +366,7 @@ export class SearchService {
       const shown = new Map(rows.map((r) => [r.id, r]));
       for (const id of related.keys()) {
         const row = shown.get(id);
-        if ((hides && !row) || (!includeArchived && row?.archivedAt)) related.delete(id);
+        if (!row || (!includeArchived && row.archivedAt)) related.delete(id);
       }
     }
     return [...related.values()].sort((a, b) => a.distance - b.distance || b.via.length - a.via.length);

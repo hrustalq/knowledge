@@ -382,9 +382,13 @@ at all: the web server answers it only for an internal peer with no
   project and search tools; guests may use the search, tree and project
   tools), search (all three legs and graph expansion), every assistant tool,
   agent and workflow runs and chat bots (through the audience clamp above),
-  notifications, the activity feed and live events. Connector ACL mirroring is
-  the next phase of issue #76; until it lands, imported pages are open to the
-  whole workspace unless restricted by hand.
+  notifications, the activity feed and live events, and connectors with
+  mirroring on carry a source's restrictions onto the pages they write
+  ([19](../features/19-connectors.md#access-mirroring-76-phase-6)). With
+  mirroring off, the default, imported pages are open to the whole workspace
+  unless restricted by hand. The product view is
+  [48 — Page permissions](../features/48-page-permissions.md), and
+  `test/page-permissions.e2e-spec.ts` exercises it as real users.
 - A live connection may receive frames for up to `ACL_CACHE_TTL_MS` after a
   restriction tightens if it misses `acl.changed` (e.g. a Redis blip). Every
   request still reads PG, so this costs at most a few frames of titles, never

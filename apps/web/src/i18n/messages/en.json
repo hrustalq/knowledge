@@ -2380,6 +2380,55 @@
         "role": "Their workspace role ({role}) decides",
         "grant": "A grant to them or one of their groups decides"
       }
+    },
+    "tabRequests": "Requests",
+    "requests": {
+      "toDecide": "To decide",
+      "mine": "My requests",
+      "statusFilter": "Filter by status",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "denied": "Declined",
+        "expired": "Expired",
+        "cancelled": "Withdrawn",
+        "all": "All"
+      },
+      "emptyDecide": "No requests waiting on you",
+      "emptyMine": "You have not asked for access to anything",
+      "emptyHint": "When someone is refused a page, they can ask its managers for access. Requests land here.",
+      "asksFor": "asks for “{level}” on",
+      "reason": "Reason: {reason}",
+      "expires": "expires {when}",
+      "decided": "decided {when}",
+      "approve": "Approve",
+      "deny": "Decline",
+      "withdraw": "Withdraw",
+      "approveTitle": "Approve access request",
+      "approveHint": "The level is granted on every restricted page or project that kept them out, so they also see what else sits under those.",
+      "level": "Level to grant",
+      "denyTitle": "Decline access request",
+      "denyHint": "They are told it was declined, with your reason if you give one.",
+      "reasonLabel": "Reason (optional)",
+      "approved": "Access granted",
+      "denied": "Request declined",
+      "cancelled": "Request withdrawn"
+    },
+    "request": {
+      "levelLabel": "Access you need",
+      "messageLabel": "Message to the managers (optional)",
+      "messagePlaceholder": "Why you need it — it helps them decide.",
+      "send": "Send request",
+      "sent": "Request sent — its managers have been told.",
+      "pendingTitle": "Your request is waiting",
+      "pendingBody": "Asked {when}. You will be notified when a manager decides.",
+      "withdraw": "Withdraw request",
+      "deniedNote": "Your last request was declined."
+    },
+    "mention": {
+      "title": "Not notified: {names} cannot open this page | Not notified: {names} cannot open this page",
+      "hint": "If you manage this page, grant them view from Access…; otherwise ask one of its managers.",
+      "grant": "Open Access…"
     }
   },
   "users": {
@@ -3096,7 +3145,8 @@
       "comment": "Comments",
       "document": "Page changes",
       "verification": "Verification",
-      "job": "Runs"
+      "job": "Runs",
+      "access": "Access"
     },
     "categoryHint": {
       "mention": "Somebody named you in a comment.",
@@ -3104,7 +3154,8 @@
       "comment": "New discussion on something you follow.",
       "document": "A page you follow was edited, renamed or moved.",
       "verification": "A page you own needs a check, was marked outdated, is about to expire, or was handed to you.",
-      "job": "A workflow, agent, import or sync you started finished."
+      "job": "A workflow, agent, import or sync you started finished.",
+      "access": "Requests to open a page you manage, and answers to your own."
     },
     "reason": {
       "assigned": "Assigned to you"
@@ -3154,7 +3205,12 @@
       "document.outdated": "marked this page outdated",
       "document.verification-expiring": "the verification of this page is about to expire",
       "document.verification-expired": "the verification of this page has expired",
-      "document.owner-changed": "made you the owner of this page"
+      "document.owner-changed": "made you the owner of this page",
+      "access.requested": "asked for access",
+      "access.approved": "approved your access request",
+      "access.denied": "declined your access request",
+      "access.expired": "Your access request expired",
+      "access.granted": "gave you access"
     }
   },
   "connect": {

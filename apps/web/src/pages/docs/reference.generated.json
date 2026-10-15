@@ -2,6 +2,56 @@
   "endpoints": [
     {
       "method": "GET",
+      "path": "/v1/access-requests",
+      "tag": "access",
+      "summary": "The caller's own requests (mine=1), or the ones they may decide",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/access-requests",
+      "tag": "access",
+      "summary": "Ask for a level on a page or project (409 when already granted, or already asked)",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/access-requests/{id}/approve",
+      "tag": "access",
+      "summary": "Approve with a level: grants it on every restricted node that kept the requester out (needs manage on each)",
+      "role": "viewer",
+      "source": "access-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/access-requests/{id}/cancel",
+      "tag": "access",
+      "summary": "Withdraw your own pending request",
+      "role": "viewer",
+      "source": "access-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/access-requests/{id}/deny",
+      "tag": "access",
+      "summary": "Deny, optionally saying why (needs manage)",
+      "role": "viewer",
+      "source": "access-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/documents/{id}/access",
       "tag": "access",
       "summary": "The page's restriction, the restrictions it inherits and the caller's level; grants only for a manager",
@@ -4272,6 +4322,24 @@
         },
         {
           "name": "suggestedMarkdown",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_request_access",
+      "description": "Ask for view or edit access to a page you were refused. Its managers and the workspace admins are notified, and you are told when they decide. Only when a person asked for it: the request is sent in their name. Refused with 409 when you already have that level or already asked.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "level",
+          "optional": false
+        },
+        {
+          "name": "message",
           "optional": true
         }
       ]

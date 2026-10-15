@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type {
   KnowledgeEvent,
   ListNotificationSubscriptionsResponse,
@@ -24,6 +24,7 @@ import { isDevActor } from '../activity/actor.js';
 import { parseUserMentions } from '../documents/mentions.js';
 import { t } from '../i18n/t.js';
 import { WORKSPACE_READER } from '../auth/principal.js';
+import { whoCanOpen, type AccessResource } from '../permissions/acl-read.js';
 
 /** A row the fan-out wrote, so the caller can push it to exactly one person. */
 export interface NotificationDelivery {
@@ -45,6 +46,19 @@ export interface DirectNotifyInput {
   metadata?: Record<string, unknown>;
   /** Also start watching the subject — being pulled in means wanting the replies. */
   subscribe?: boolean;
+  /**
+   * False only for a row about a page its recipient cannot open, carrying no
+   * title: the answer to their own access request (#76). Every other row is
+   * dropped for anyone the page keeps out.
+   */
+  requireAccess?: boolean;
+}
+
+/** What a posted comment's notifications did, for the comment API to answer with. */
+export interface CommentNotifyResult {
+  deliveries: NotificationDelivery[];
+  /** People the comment named who cannot open the page (#76); none of them was told. */
+  mentionedWithoutAccess: string[];
 }
 
 /**
@@ -72,7 +86,8 @@ export interface DirectNotifyInput {
  * A notification is a courtesy; losing one must never cost somebody their edit.
  *
  * The service takes only `PrismaService`, which is what lets `EventsModule`
- * import this without a `forwardRef`.
+ * import this without a `forwardRef`. Page permissions come in through the
+ * plain functions in `permissions/acl-read.ts` for the same reason.
  */
 @Injectable()
 export class NotificationsService {
@@ -163,6 +178,7 @@ export class NotificationsService {
           subjectId: input.subjectId ?? null,
         },
         input.metadata,
+        input.requireAccess ?? true,
       );
     } catch (e) {
       this.logger.warn(`Direct notify failed (non-fatal): ${(e as Error).message}`);
@@ -176,6 +192,11 @@ export class NotificationsService {
    * Mentioned ids are resolved against `workspace_members` before anything is
    * written: the attribute is machine-written but the body is user-supplied, so
    * a hand-typed uuid from another tenant must notify nobody.
+   *
+   * A member who cannot open the page (#76) is not told — the row would carry
+   * its title — and comes back in `mentionedWithoutAccess`, so the author can
+   * grant them view or ask a manager to. Only members are named there: a
+   * stranger's id earns no answer at all.
    */
   async notifyMentions(input: {
     workspaceId: string;
@@ -188,21 +209,22 @@ export class NotificationsService {
     subjectId: string;
     title?: string | null;
     metadata?: Record<string, unknown>;
-  }): Promise<NotificationDelivery[]> {
-    if (input.userIds.length === 0) return [];
+  }): Promise<CommentNotifyResult> {
+    if (input.userIds.length === 0) return { deliveries: [], mentionedWithoutAccess: [] };
     try {
-      // Readers only: a mention subscribes the person it names, and a guest's
-      // subscription would only ever be filtered out again in `deliver` (#76).
       const members = await this.prisma.workspaceMember.findMany({
-        where: { workspaceId: input.workspaceId, userId: { in: input.userIds }, ...WORKSPACE_READER },
+        where: { workspaceId: input.workspaceId, userId: { in: input.userIds } },
         select: { userId: true },
       });
       const real = members.map((m) => m.userId);
-      if (real.length === 0) return [];
+      if (real.length === 0) return { deliveries: [], mentionedWithoutAccess: [] };
+      const readers = await whoCanOpen(this.prisma, { type: 'document', id: input.documentId }, real);
+      const mentionedWithoutAccess = real.filter((id) => !readers.has(id));
+      if (readers.size === 0) return { deliveries: [], mentionedWithoutAccess };
 
-      return await this.notify({
+      const deliveries = await this.notify({
         workspaceId: input.workspaceId,
-        userIds: real,
+        userIds: [...readers],
         type: input.type,
         reason: 'mention',
         actor: input.actor,
@@ -214,9 +236,10 @@ export class NotificationsService {
         // Being called into a discussion is a reason to hear the rest of it.
         subscribe: true,
       });
+      return { deliveries, mentionedWithoutAccess };
     } catch (e) {
       this.logger.warn(`Mention notify failed (non-fatal): ${(e as Error).message}`);
-      return [];
+      return { deliveries: [], mentionedWithoutAccess: [] };
     }
   }
 
@@ -248,7 +271,7 @@ export class NotificationsService {
     // cannot announce its own rows. Callers hand these to
     // `EventsPublisher.announce`; before they did, a mention wrote an inbox row
     // and no frame, and the badge stayed stale until the next navigation.
-  }): Promise<NotificationDelivery[]> {
+  }): Promise<CommentNotifyResult> {
     try {
       await this.ensureSubscriptionOnComment(
         input.workspaceId,
@@ -257,7 +280,7 @@ export class NotificationsService {
         input.subjectId,
       );
       const mentioned = parseUserMentions(input.body).filter((id) => id !== input.actorId);
-      if (mentioned.length === 0) return [];
+      if (mentioned.length === 0) return { deliveries: [], mentionedWithoutAccess: [] };
       return await this.notifyMentions({
         workspaceId: input.workspaceId,
         body: input.body,
@@ -272,7 +295,7 @@ export class NotificationsService {
       });
     } catch (e) {
       this.logger.warn(`onCommentPosted failed (non-fatal): ${(e as Error).message}`);
-      return [];
+      return { deliveries: [], mentionedWithoutAccess: [] };
     }
   }
 
@@ -291,6 +314,7 @@ export class NotificationsService {
     recipients: Map<string, NotificationReason>,
     subject: { workspaceId: string; subjectType: NotificationSubjectType | null; subjectId: string | null },
     extraMetadata?: Record<string, unknown>,
+    requireAccess = true,
   ): Promise<NotificationDelivery[]> {
     const actor = event.actor ?? null;
     // Nobody is told about their own action — except the AUTH_MODE=none actor.
@@ -301,13 +325,17 @@ export class NotificationsService {
     if (actor && !isDevActor(actor)) recipients.delete(actor);
     if (recipients.size === 0) return [];
 
-    // A guest reads nothing in the workspace it was not granted (#76), and a
-    // notification carries the page title — so none reaches one, whether they
-    // were mentioned or still hold a subscription from before a demotion.
-    for (const userId of await this.guestsOf(subject.workspaceId, [...recipients.keys()])) {
-      recipients.delete(userId);
+    // A row carries the page's title, so it reaches only people who can open
+    // the page (#76) — however they came to watch it: before a restriction,
+    // before a demotion, or by being named in a comment. One batched read per
+    // event, against the chain as it stands now.
+    if (requireAccess) {
+      const readers = await this.readersOf(event, subject, [...recipients.keys()]);
+      for (const userId of recipients.keys()) {
+        if (!readers.has(userId)) recipients.delete(userId);
+      }
+      if (recipients.size === 0) return [];
     }
-    if (recipients.size === 0) return [];
 
     for (const userId of await this.mutedBy(subject.workspaceId, [...recipients.keys()], category)) {
       recipients.delete(userId);
@@ -489,15 +517,45 @@ export class NotificationsService {
     return null;
   }
 
-  /** Which of these people have switched this category off. */
-  private async guestsOf(workspaceId: string, userIds: string[]): Promise<string[]> {
-    const rows = await this.prisma.workspaceMember.findMany({
-      where: { workspaceId, userId: { in: userIds }, role: 'guest' },
+  /**
+   * Which of these people may read a row about this event (#76).
+   *
+   * An event about a page (a merge request's events carry its page) asks the
+   * page; one about a project asks the project. One about neither — a run, an
+   * import — has no page to vouch for it, so it reaches members and not
+   * guests, who read nothing in the workspace they were not granted. A page
+   * that is gone tells nobody: there is no chain left to check against.
+   */
+  private async readersOf(
+    event: Pick<KnowledgeEvent, 'documentId'>,
+    subject: { workspaceId: string; subjectType: NotificationSubjectType | null; subjectId: string | null },
+    userIds: string[],
+  ): Promise<Set<string>> {
+    // The AUTH_MODE=none principal has no membership row and sees everything;
+    // dropping it here would empty the dev inbox (see the actor rule above).
+    const dev = userIds.filter((id) => isDevActor(id));
+    const resource: AccessResource | null = event.documentId
+      ? { type: 'document', id: event.documentId }
+      : subject.subjectType === 'project' && subject.subjectId
+        ? { type: 'project', id: subject.subjectId }
+        : null;
+    if (resource) {
+      try {
+        return new Set([...(await whoCanOpen(this.prisma, resource, userIds)), ...dev]);
+      } catch (e) {
+        if (e instanceof NotFoundException) return new Set(dev);
+        throw e;
+      }
+    }
+    const guests = await this.prisma.workspaceMember.findMany({
+      where: { workspaceId: subject.workspaceId, userId: { in: userIds }, role: 'guest' },
       select: { userId: true },
     });
-    return rows.map((r) => r.userId);
+    const excluded = new Set(guests.map((r) => r.userId));
+    return new Set(userIds.filter((id) => !excluded.has(id)));
   }
 
+  /** Which of these people have switched this category off. */
   private async mutedBy(
     workspaceId: string,
     userIds: string[],

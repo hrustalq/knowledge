@@ -1,8 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
-import { Subject, filter, interval, map, merge, type Observable } from 'rxjs';
+import { Subject, concatMap, filter, interval, map, merge, type Observable } from 'rxjs';
 import type { KnowledgeEvent } from '@knowledge/contracts';
+import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.js';
 import { EVENTS_CHANNEL } from './events.constants.js';
 
@@ -95,12 +96,20 @@ export class EventsSubscriber implements OnModuleInit, OnModuleDestroy {
    * `userId` is what makes per-person events safe on a shared bus: a frame
    * carrying `event.userId` is addressed, and delivering it to the rest of the
    * workspace would broadcast who is being notified about what
-   * (docs/features/22). A frame without one stays a workspace broadcast.
+   * (docs/features/22). A frame without one stays a workspace broadcast — unless
+   * it is about a page `allows` says this client may not open (#76). Frames
+   * are judged in order (`concatMap`), so a slow check never reorders them.
    */
-  stream(workspaceId: string, userId?: string): Observable<SseMessage> {
+  stream(
+    workspaceId: string,
+    principal: Principal | undefined,
+    allows: (event: KnowledgeEvent) => Promise<boolean>,
+  ): Observable<SseMessage> {
     const events = this.subject.pipe(
       filter((e) => e.workspaceId === workspaceId),
-      filter((e) => !e.userId || e.userId === userId),
+      filter((e) => !e.userId || e.userId === principal?.userId),
+      concatMap(async (e) => ((await allows(e).catch(() => false)) ? e : null)),
+      filter((e): e is KnowledgeEvent => e !== null),
       map((e) => ({ data: e })),
     );
     // Heartbeat keeps proxies from closing idle SSE connections.

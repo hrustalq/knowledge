@@ -17,6 +17,7 @@ import {
   SHARE_PASSWORD_MIN_CHARS,
   VERIFICATION_NOTE_MAX_CHARS,
   WIKI_SECTIONS,
+  REQUESTABLE_ACCESS_LEVELS,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
@@ -32,6 +33,7 @@ import { GraphService } from '../graph/graph.service.js';
 import { AuditService } from '../auth/audit.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ResourceAccessService } from '../permissions/resource-access.service.js';
+import { AccessRequestsService } from '../permissions/access-requests.service.js';
 import { HistoryService } from '../documents/history.service.js';
 import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
@@ -140,6 +142,7 @@ export class McpService {
     private readonly exports: ExportService,
     private readonly repoWiki: RepoWikiService,
     private readonly resourceAccess: ResourceAccessService,
+    private readonly accessRequests: AccessRequestsService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -762,6 +765,38 @@ export class McpService {
       async ({ documentId }) => {
         await guard.doc(documentId, 'viewer');
         return this.json(await this.resourceAccess.get(principal, { type: 'document', id: documentId }));
+      },
+    );
+
+    // A write (#76, phase 5): files a request the page's managers are told
+    // about. Guests pass the workspace gate (`guard.pages`) and are refused
+    // by the service exactly as REST refuses them — a 404 for a page they
+    // cannot open, so asking is not a way to learn that one exists.
+    server.registerTool(
+      'knowledge_request_access',
+      {
+        description:
+          'Ask for view or edit access to a page you were refused. Its managers and the workspace admins are notified, ' +
+          'and you are told when they decide. Only when a person asked for it: the request is sent in their name. ' +
+          'Refused with 409 when you already have that level or already asked.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          level: z.enum(REQUESTABLE_ACCESS_LEVELS),
+          message: z.string().max(1000).optional().describe('Why the access is needed, shown to the managers'),
+        },
+      },
+      async ({ documentId, level, message }) => {
+        const workspaceId = await this.access.workspaceOfDocument(documentId);
+        await guard.pages(workspaceId);
+        return this.json(
+          await this.accessRequests.create(principal, {
+            workspaceId,
+            resourceType: 'document',
+            resourceId: documentId,
+            level,
+            message: message ?? null,
+          }),
+        );
       },
     );
 

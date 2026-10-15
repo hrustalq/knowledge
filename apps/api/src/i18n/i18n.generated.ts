@@ -817,6 +817,13 @@ export type I18nTranslations = {
             "selfLockout": string;
             "unknownSubjects": string;
             "usersWithoutView": string;
+            "requestDuplicate": string;
+            "requestNotPending": string;
+            "requestNotFound": string;
+            "requestOwnOnly": string;
+            "alreadyGranted": string;
+            "levelAboveRole": string;
+            "requestSelf": string;
         };
     };
     "import": {
@@ -1039,6 +1046,7 @@ export type I18nTranslations = {
         "chatSubscription": string;
         "chatIdentity": string;
         "group": string;
+        "accessRequest": string;
     };
     "validation": {
         "isDefined": string;

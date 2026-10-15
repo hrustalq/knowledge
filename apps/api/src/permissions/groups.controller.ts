@@ -2,8 +2,11 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { ListUserGroupMembersResponse, ListUserGroupsResponse, UserGroupSummary } from '@knowledge/contracts';
-import { Access } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import type { Principal } from '../auth/principal.js';
+import { AccessService } from '../auth/access.service.js';
 import { GroupsService } from './groups.service.js';
+import { AclEventsService } from './acl-events.service.js';
 import {
   CreateUserGroupDto,
   ListUserGroupsQueryDto,
@@ -20,7 +23,11 @@ import {
 @ApiTags('groups')
 @Controller('v1/groups')
 export class GroupsController {
-  constructor(private readonly groups: GroupsService) {}
+  constructor(
+    private readonly groups: GroupsService,
+    private readonly access: AccessService,
+    private readonly aclEvents: AclEventsService,
+  ) {}
 
   @Get()
   @Access('viewer', 'query')
@@ -46,8 +53,15 @@ export class GroupsController {
   @Delete(':id')
   @Access('admin', 'group')
   @ApiOperation({ summary: 'Delete a group and its memberships (409 for a connector or SCIM group)' })
-  remove(@Param('id', ParseUUIDPipe) id: string): Promise<{ deleted: true }> {
-    return this.groups.remove(id);
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<{ deleted: true }> {
+    const workspaceId = await this.access.workspaceOfGroup(id);
+    const result = await this.groups.remove(id);
+    // Its grants went with it: whoever held them through it may see less now.
+    await this.aclEvents.changed(workspaceId, principal?.userId);
+    return result;
   }
 
   @Get(':id/members')
@@ -62,10 +76,13 @@ export class GroupsController {
   @ApiOperation({
     summary: 'Add and remove members in one transaction (workspace admin; 400 for a non-member, 409 for a connector or SCIM group)',
   })
-  updateMembers(
+  async updateMembers(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserGroupMembersDto,
+    @CurrentPrincipal() principal: Principal,
   ): Promise<ListUserGroupMembersResponse> {
-    return this.groups.updateMembers(id, dto);
+    const result = await this.groups.updateMembers(id, dto);
+    await this.aclEvents.changed(await this.access.workspaceOfGroup(id), principal?.userId);
+    return result;
   }
 }

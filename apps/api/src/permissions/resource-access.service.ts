@@ -17,6 +17,7 @@ import { userAvatarUrl } from '../common/avatar-url.js';
 import { t } from '../i18n/t.js';
 import { levelOn } from './access-scope.js';
 import { PermissionService, type AccessResource } from './permission.service.js';
+import { AclEventsService } from './acl-events.service.js';
 
 /**
  * Reading and changing one node's restriction (#76): the switch, its grants,
@@ -32,6 +33,7 @@ export class ResourceAccessService {
     private readonly prisma: PrismaService,
     private readonly permissions: PermissionService,
     private readonly audit: AuditService,
+    private readonly aclEvents: AclEventsService,
   ) {}
 
   async get(principal: Principal, resource: AccessResource): Promise<ResourceAccessResponse> {
@@ -138,6 +140,23 @@ export class ResourceAccessService {
         );
       }
     });
+
+    await this.aclEvents.changed(workspaceId, principal.userId);
+    // People named here for the first time hear about it. Groups do not: a
+    // group grant is a decision about a team, not a message to each member.
+    const before = new Set(grants.filter((g) => g.resourceId === self.id && g.subjectType === 'user').map((g) => g.subjectId));
+    for (const level of ['view', 'edit', 'manage'] as const) {
+      await this.aclEvents.granted({
+        workspaceId,
+        resource,
+        title: self.title,
+        userIds: wanted
+          .filter((g) => g.subjectType === 'user' && g.level === level && !before.has(g.subjectId) && g.subjectId !== principal.userId)
+          .map((g) => g.subjectId),
+        actor: principal.userId,
+        level,
+      });
+    }
 
     void this.audit.record({
       workspaceId,

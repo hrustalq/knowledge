@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Access — who is in this workspace, what a role grants, which groups they
- * form, and who has an account at all. One surface, four tabs.
+ * form, who is asking for what, and who has an account at all. One surface,
+ * five tabs.
  *
  * These were two routes. `/settings/access` held the workspace roster and
  * `/settings/users` held the platform accounts, which meant the two halves of a
@@ -70,6 +71,7 @@ import { usePageTabs, type PageTab } from '@/components/layout/page/page-chrome'
 import AccessRoles from '@/components/access/AccessRoles.vue'
 import AccessAccounts from '@/components/access/AccessAccounts.vue'
 import AccessGroups from '@/components/access/AccessGroups.vue'
+import AccessRequests from '@/components/access/AccessRequests.vue'
 
 const { t } = useI18n()
 
@@ -312,6 +314,8 @@ const tabs = computed<PageTab[]>(() => [
   { key: 'members', label: t('access.tabMembers'), count: members.value.length },
   { key: 'roles', label: t('access.tabRoles') },
   { key: 'groups', label: t('access.tabGroups') },
+  // Every member: managers decide here, and anyone reads their own (#76).
+  { key: 'requests', label: t('access.tabRequests') },
   ...(canSeeAccounts.value ? [{ key: 'accounts', label: t('access.tabAccounts') }] : []),
 ])
 
@@ -439,6 +443,9 @@ const tab = usePageTabs(tabs, 'members')
       :members="members"
       :can-manage="canManage"
     />
+
+    <!-- Requests: access asked for, decided by whoever manages the page. -->
+    <AccessRequests v-else-if="tab === 'requests'" :workspace-id="selected" />
 
     <!-- Accounts: the platform layer. Only rendered where it can be used. -->
     <AccessAccounts v-else-if="tab === 'accounts' && canSeeAccounts" />

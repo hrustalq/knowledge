@@ -7,7 +7,6 @@ import { AclGuard } from '../src/auth/acl.guard.js';
 import { ROLE_ORDER, type Principal } from '../src/auth/principal.js';
 import { GroupsService } from '../src/permissions/groups.service.js';
 import { WorkspacesService } from '../src/workspaces/workspaces.service.js';
-import { NotificationsService } from '../src/notifications/notifications.service.js';
 
 /**
  * Page permissions, phase 1 (issue #76): groups and the guest role.
@@ -23,8 +22,9 @@ import { NotificationsService } from '../src/notifications/notifications.service
  *    read-only — the next sync would undo a manual edit.
  * 4. **Leaving the workspace means leaving its groups**, or re-adding a person
  *    would silently restore what their old groups were granted.
- * 5. **No notification reaches a guest**: it would carry a page title the guest
- *    may not read.
+ *
+ * Notifications to guests moved to test/notifications-acl.spec.ts in phase 5,
+ * when the guest drop became a per-page visibility check.
  */
 
 const WS = '11111111-1111-4111-8111-111111111111';
@@ -244,70 +244,5 @@ describe('removing a workspace member', () => {
     };
     await expect(new WorkspacesService(prisma as never).removeMember(WS, BOB)).rejects.toThrow(/lastAdminRemove/);
     expect(deleteMany).not.toHaveBeenCalled();
-  });
-});
-
-// ------------------------------------------------------------ notifications
-
-describe('notifications to a guest', () => {
-  it('are dropped, whether the guest was mentioned or merely watching', async () => {
-    const prisma = {
-      workspaceMember: {
-        // BOB is the guest: `role: 'guest'` finds him, `role: { not: 'guest' }` does not.
-        findMany: vi.fn(async ({ where }: { where: { userId: { in: string[] }; role?: unknown } }) =>
-          where.userId.in
-            .filter((id) => (where.role === 'guest' ? id === BOB : where.role ? id !== BOB : true))
-            .map((userId) => ({ userId })),
-        ),
-      },
-      notificationPreference: { findMany: vi.fn(async () => []) },
-      notificationSubscription: { findUnique: vi.fn(async () => null), create: vi.fn(async () => ({})) },
-    };
-    const service = new NotificationsService(prisma as never);
-    const write = vi
-      .spyOn(service as unknown as { write: (i: { userId: string }) => Promise<unknown> }, 'write')
-      .mockImplementation(async (input) => ({ id: input.userId }));
-
-    const deliveries = await service.notifyMentions({
-      workspaceId: WS,
-      body: 'hi',
-      userIds: [ALICE, BOB],
-      type: 'document.comment.created',
-      actor: STRANGER,
-      documentId: GROUP,
-      subjectType: 'document',
-      subjectId: GROUP,
-      title: 'Incident review',
-    });
-    expect(deliveries.map((d) => d.userId)).toEqual([ALICE]);
-    expect(write).toHaveBeenCalledTimes(1);
-  });
-
-  it('are dropped for a watcher who has since been made a guest', async () => {
-    const prisma = {
-      workspaceMember: {
-        findMany: vi.fn(async ({ where }: { where: { userId: { in: string[] } } }) =>
-          where.userId.in.filter((id) => id === BOB).map((userId) => ({ userId })),
-        ),
-      },
-      notificationPreference: { findMany: vi.fn(async () => []) },
-    };
-    const service = new NotificationsService(prisma as never);
-    const deliver = (service as unknown as {
-      deliver: (...a: unknown[]) => Promise<{ userId: string }[]>;
-    }).deliver.bind(service);
-    vi.spyOn(service as unknown as { write: (i: { userId: string }) => Promise<unknown> }, 'write').mockImplementation(
-      async (input) => ({ id: input.userId }),
-    );
-    const deliveries = await deliver(
-      { type: 'document.revision.indexed', workspaceId: WS, documentId: GROUP, title: 'Incident review', actor: STRANGER },
-      'page',
-      new Map([
-        [ALICE, 'watching'],
-        [BOB, 'watching'],
-      ]),
-      { workspaceId: WS, subjectType: 'document', subjectId: GROUP },
-    );
-    expect(deliveries.map((d) => d.userId)).toEqual([ALICE]);
   });
 });

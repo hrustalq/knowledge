@@ -149,6 +149,14 @@ export const envSchema = z.object({
   /** Pages re-stamped per tick. */
   ACL_RESTAMP_BATCH: z.coerce.number().int().positive().default(200),
   /**
+   * How long a live connection (SSE/WS) trusts the visibility it computed for
+   * its holder (#76) before asking PG again. An `acl.changed` event clears it
+   * at once; this bounds what a missed one costs.
+   */
+  ACL_CACHE_TTL_MS: z.coerce.number().int().min(0).default(5000),
+  /** Days a pending access request waits on a manager before it expires (#76). */
+  ACCESS_REQUEST_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  /**
    * Page verification and knowledge health (docs/features/39 + 40, issue #66).
    * Defaults, not ceilings: a `knowledge_health_settings` row overrides each
    * per workspace, and an absent row reproduces exactly these values.

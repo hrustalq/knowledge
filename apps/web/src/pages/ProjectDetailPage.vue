@@ -18,6 +18,8 @@ import AvatarPicker from '@/components/people/AvatarPicker.vue'
 import DeleteProjectDialog from '@/components/projects/DeleteProjectDialog.vue'
 import ProjectAvatar from '@/components/projects/ProjectAvatar.vue'
 import PageAccessDialog from '@/components/access/PageAccessDialog.vue'
+import RequestAccessCard from '@/components/access/RequestAccessCard.vue'
+import { isRestrictedRefusal } from '@/api/errors'
 
 const { t } = useI18n()
 
@@ -32,6 +34,26 @@ const project = computed(() => store.items.find((p) => p.projectId === route.par
 const name = ref('')
 const description = ref('')
 const saving = ref(false)
+
+/**
+ * A project missing from the roster is either gone or restricted (#76): the
+ * roster lists only what the caller may open. Asked once, so a member who was
+ * refused gets the request card instead of "not found".
+ */
+const restrictedRefusal = ref(false)
+watch(
+  () => [route.params.id, store.loaded, project.value] as const,
+  async ([id, loaded, found]) => {
+    restrictedRefusal.value = false
+    if (typeof id !== 'string' || !loaded || found) return
+    try {
+      await apiFetch(`/v1/projects/${id}`)
+    } catch (e) {
+      if (route.params.id === id) restrictedRefusal.value = isRestrictedRefusal(e)
+    }
+  },
+  { immediate: true },
+)
 
 // Re-seed the form whenever the selection (or a reload) changes it.
 watch(
@@ -146,6 +168,12 @@ async function onDeleted(result: DeleteProjectResponse) {
       {{ t('project.rosterHint') }}
     </p>
   </div>
+
+  <RequestAccessCard
+    v-else-if="!project && restrictedRefusal"
+    resource-type="project"
+    :resource-id="route.params.id as string"
+  />
 
   <p v-else-if="!project" class="text-sm text-muted-foreground">
     {{ store.loaded ? t('project.notFound') : t('common.loading') }}

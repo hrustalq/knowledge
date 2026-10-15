@@ -659,6 +659,35 @@ model AccessGrant {
   @@map("access_grants")
 }
 
+/// Somebody refused a page or project asking for a level on it (#76, phase 5).
+/// No FK on workspace, resource, requester or decider (house policy). At most
+/// one pending row per requester and resource: a partial unique index in the
+/// migration (`access_requests_one_pending`), which Prisma cannot express.
+model AccessRequest {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  /// ACCESS_RESOURCE_TYPES: project | document
+  resourceType String    @map("resource_type")
+  resourceId   String    @map("resource_id") @db.Uuid
+  requesterId  String    @map("requester_id") @db.Uuid
+  /// REQUESTABLE_ACCESS_LEVELS: view | edit
+  level        String
+  message      String?
+  /// ACCESS_REQUEST_STATUSES: pending | approved | denied | cancelled | expired
+  status       String    @default("pending")
+  decidedBy    String?   @map("decided_by") @db.Uuid
+  decidedLevel String?   @map("decided_level")
+  decidedAt    DateTime? @map("decided_at") @db.Timestamptz
+  /// Why it was denied, when the manager said.
+  reason       String?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, status, createdAt])
+  @@index([resourceType, resourceId, status])
+  @@index([requesterId, status])
+  @@map("access_requests")
+}
+
 // Phase 5 audit trail: every trusted-operator graph query is recorded here.
 model AuditLog {
   id          String   @id @default(uuid()) @db.Uuid

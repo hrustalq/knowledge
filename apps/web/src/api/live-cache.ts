@@ -179,6 +179,19 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
     on: 'notification.created',
     invalidate: () => [['/v1/notifications'], ['/v1/notifications/unread-count']],
   },
+  // Who sees what changed (#76): the tree, lists and search answer differently
+  // now, and an access request may have been decided. The event names no page
+  // — everything the reader holds about pages is re-asked.
+  {
+    on: 'acl.changed',
+    invalidate: () => [
+      ['/v1/documents'],
+      ['/v1/documents/tree'],
+      ['/v1/projects'],
+      ['/v1/search'],
+      ['/v1/access-requests'],
+    ],
+  },
   { on: '*', invalidate: () => [['/v1/activity']] },
 ]
 

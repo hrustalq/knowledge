@@ -8,6 +8,7 @@ import type {
   DeleteDocumentCommentResponse,
   DocumentThread,
   ListDocumentThreadsResponse,
+  MentionAccessNote,
   ReviewComment,
   ReviewThreadAnchor,
 } from '@knowledge/contracts';
@@ -71,7 +72,7 @@ export class DocumentThreadsService {
     documentId: string,
     dto: CreateThreadDto,
     authorId: string = AUTHOR_ID_STUB,
-  ): Promise<{ thread: DocumentThread }> {
+  ): Promise<{ thread: DocumentThread } & MentionAccessNote> {
     const doc = await this.getDocumentOrThrow(documentId);
     const anchor = dto.anchor ? validateThreadAnchor(dto.anchor) : null;
 
@@ -105,7 +106,7 @@ export class DocumentThreadsService {
       actorId: authorId,
       locale: currentLocale(),
     });
-    const delivered = await this.notifications.onCommentPosted({
+    const { deliveries, mentionedWithoutAccess } = await this.notifications.onCommentPosted({
       workspaceId: doc.workspaceId,
       subjectType: 'document',
       subjectId: documentId,
@@ -116,8 +117,8 @@ export class DocumentThreadsService {
       type: 'document.comment.created',
       metadata: { threadId: thread.id },
     });
-    await this.events.announce(doc.workspaceId, delivered);
-    return { thread: await this.reload(thread.id) };
+    await this.events.announce(doc.workspaceId, deliveries);
+    return { thread: await this.reload(thread.id), mentionedWithoutAccess };
   }
 
   async reply(
@@ -126,7 +127,7 @@ export class DocumentThreadsService {
     body: string,
     authorId: string = AUTHOR_ID_STUB,
     replyToId?: string,
-  ): Promise<{ thread: DocumentThread }> {
+  ): Promise<{ thread: DocumentThread } & MentionAccessNote> {
     const doc = await this.getDocumentOrThrow(documentId);
     const thread = await this.getThreadOrThrow(documentId, threadId);
     const replyTo = replyToId ? await this.requireCommentInThread(thread.id, replyToId) : null;
@@ -145,7 +146,7 @@ export class DocumentThreadsService {
       actorId: authorId,
       locale: currentLocale(),
     });
-    const delivered = await this.notifications.onCommentPosted({
+    const { deliveries, mentionedWithoutAccess } = await this.notifications.onCommentPosted({
       workspaceId: doc.workspaceId,
       subjectType: 'document',
       subjectId: documentId,
@@ -156,8 +157,8 @@ export class DocumentThreadsService {
       type: 'document.comment.created',
       metadata: { threadId: thread.id },
     });
-    await this.events.announce(doc.workspaceId, delivered);
-    return { thread: await this.reload(thread.id) };
+    await this.events.announce(doc.workspaceId, deliveries);
+    return { thread: await this.reload(thread.id), mentionedWithoutAccess };
   }
 
   /** Rewrite a comment — its own author only (see the merge-request twin). */

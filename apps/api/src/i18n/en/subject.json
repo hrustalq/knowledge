@@ -30,5 +30,6 @@
   "chatBinding": "chat binding id",
   "chatSubscription": "chat subscription id",
   "chatIdentity": "linked chat account id",
-  "group": "group id"
+  "group": "group id",
+  "accessRequest": "access request id"
 }

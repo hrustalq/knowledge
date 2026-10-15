@@ -412,6 +412,19 @@ export const KNOWN_EVENT_TYPES = [
   'glossary.term.created',
   'glossary.term.updated',
   'glossary.term.deleted',
+  // Access requests (#76, phase 5). `requested` reaches the node's managers and
+  // workspace admins; the rest reach the requester. `granted` is a grant made
+  // to a person directly from the access dialog.
+  'access.requested',
+  'access.approved',
+  'access.denied',
+  'access.cancelled',
+  'access.expired',
+  'access.granted',
+  // A restriction, a grant or a group's membership changed (#76). Carries no
+  // page and no names: it tells live clients to drop what they cached about
+  // who sees what and refetch the tree and search.
+  'acl.changed',
   'attachment.created',
   'attachment.deleted',
   // A turn in progress, for a client rendering the assistant's own work

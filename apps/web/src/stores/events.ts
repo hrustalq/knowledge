@@ -92,6 +92,10 @@ export const useEventsStore = defineStore('events', {
           if (event.reason === 'mention') {
             toast.info(t('notifications.toastMention', { name: event.title ?? t('notifications.untitled') }))
           }
+        } else if (event.type === 'acl.changed') {
+          // A restriction or grant moved (#76): the tree and lists may now
+          // show more or less. Pages watching `lastEvent` re-read themselves.
+          void documents.invalidate()
         } else if (event.type === 'assistant.turn.finished' && event.subjectId) {
           // Reconciles a chat this tab stopped watching (Stop, or a dropped
           // connection) and mirrors turns taken in another tab.

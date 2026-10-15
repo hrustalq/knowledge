@@ -23,22 +23,10 @@ import {
   type AccessScope,
   type Audience,
   type ChainNode,
-  type GrantRow,
 } from './access-scope.js';
+import { resolveChain, whoCanOpen, type AccessResource, type ResolvedChain } from './acl-read.js';
 
-export interface AccessResource {
-  type: AccessResourceType;
-  id: string;
-}
-
-/** A resource's chain with what the access routes show about each node. */
-export interface ResolvedChain {
-  workspaceId: string;
-  /** Outermost first: the project, then ancestors root-first, then the resource itself. */
-  chain: (ChainNode & { title: string })[];
-  /** Every grant on every node of the chain, whoever holds it. */
-  grants: GrantRow[];
-}
+export type { AccessResource, ResolvedChain } from './acl-read.js';
 
 /** One `acl.bypass` audit row per admin, resource and window — a page view is a dozen requests. */
 const BYPASS_AUDIT_WINDOW_MS = 60_000;
@@ -276,27 +264,7 @@ export class PermissionService {
    * anyone the chain keeps out drop out; workspace and platform admins stay.
    */
   async whoCanOpen(resource: AccessResource, userIds: string[]): Promise<Set<string>> {
-    const unique = [...new Set(userIds)];
-    if (unique.length === 0) return new Set();
-    const { workspaceId, chain, grants } = await this.resolveChain(resource);
-    const [members, memberships] = await Promise.all([
-      this.prisma.workspaceMember.findMany({
-        where: { workspaceId, userId: { in: unique } },
-        select: { userId: true, role: true, user: { select: { isAdmin: true } } },
-      }),
-      this.prisma.userGroupMember.findMany({
-        where: { userId: { in: unique }, group: { workspaceId } },
-        select: { userId: true, groupId: true },
-      }),
-    ]);
-    const out = new Set<string>();
-    for (const m of members) {
-      const role = m.role as WorkspaceRole;
-      const groupIds = new Set(memberships.filter((g) => g.userId === m.userId).map((g) => g.groupId));
-      const who = { userId: m.userId, role, bypass: role === 'admin' || m.user.isAdmin, guest: role === 'guest', readOnly: false, groupIds };
-      if (levelOn(who, chain, grants) !== 'none') out.add(m.userId);
-    }
-    return out;
+    return whoCanOpen(this.prisma, resource, userIds);
   }
 
   /**
@@ -304,46 +272,7 @@ export class PermissionService {
    * no longer exist (no FK on parent_id) simply drop out of the chain.
    */
   async resolveChain(resource: AccessResource): Promise<ResolvedChain> {
-    let workspaceId: string;
-    let chain: ResolvedChain['chain'];
-    if (resource.type === 'project') {
-      const project = await this.prisma.project.findUnique({
-        where: { id: resource.id },
-        select: { workspaceId: true, name: true, restricted: true },
-      });
-      if (!project) throw new NotFoundException(t('error.project.notFound', { id: resource.id }));
-      workspaceId = project.workspaceId;
-      chain = [{ type: 'project', id: resource.id, restricted: project.restricted, title: project.name }];
-    } else {
-      const doc = await this.prisma.document.findUnique({
-        where: { id: resource.id },
-        select: { workspaceId: true, projectId: true, path: true },
-      });
-      if (!doc) throw new NotFoundException(t('error.document.notFound', { id: resource.id }));
-      workspaceId = doc.workspaceId;
-      const pathIds = doc.path.split('/').filter(Boolean);
-      if (!pathIds.includes(resource.id)) pathIds.push(resource.id); // a `/pending/` row: itself alone
-      const [project, nodes] = await Promise.all([
-        this.prisma.project.findUnique({ where: { id: doc.projectId }, select: { name: true, restricted: true } }),
-        this.prisma.document.findMany({
-          where: { workspaceId, id: { in: pathIds.filter((id) => UUID_RE.test(id)) } },
-          select: { id: true, title: true, restricted: true },
-        }),
-      ]);
-      const byId = new Map(nodes.map((n) => [n.id, n]));
-      chain = [
-        { type: 'project', id: doc.projectId, restricted: project?.restricted ?? false, title: project?.name ?? '' },
-        ...pathIds.flatMap((id) => {
-          const n = byId.get(id);
-          return n ? [{ type: 'document' as const, id, restricted: n.restricted, title: n.title }] : [];
-        }),
-      ];
-    }
-    const grants = await this.prisma.accessGrant.findMany({
-      where: { resourceId: { in: chain.map((n) => n.id) } },
-      select: { resourceId: true, subjectType: true, subjectId: true, level: true },
-    });
-    return { workspaceId, chain, grants };
+    return resolveChain(this.prisma, resource);
   }
 
   /**
@@ -450,5 +379,3 @@ export class PermissionService {
     });
   }
 }
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

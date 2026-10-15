@@ -7,7 +7,9 @@ import type {
   ListActivityResponse,
 } from '@knowledge/contracts';
 import { ACTIVITY_KINDS, activityKindFor, FRESHNESS_ACTIONS } from '@knowledge/contracts';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { hidesAnything, visibilitySql, type AccessScope } from '../permissions/access-scope.js';
 import { actorIdentities, DEV_ACTOR } from './actor.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 
@@ -110,19 +112,41 @@ export class ActivityService {
     return null;
   }
 
+  /**
+   * One page of the feed, newest first, as `scope`'s holder may read it.
+   *
+   * The page is chosen in SQL, visibility included (#76): a row about a page
+   * the caller cannot open is filtered by the same predicate every list uses,
+   * so the cursor (the last row's id, as before) stays stable and a page of
+   * results is never short because rows were dropped in Node.
+   */
   async list(
     workspaceId: string,
-    opts: ActivityFilter & { limit?: number; cursor?: string } = {},
+    opts: ActivityFilter & { limit?: number; cursor?: string },
+    scope: AccessScope,
   ): Promise<ListActivityResponse> {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
-    const rows = await this.prisma.activityLog.findMany({
-      where: this.whereFor(workspaceId, opts),
-      orderBy: { createdAt: 'desc' },
-      take: limit + 1,
-      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    const conditions = this.conditionsFor(workspaceId, opts, scope);
+    if (opts.cursor) {
+      // `(created_at, id)` rather than `created_at` alone: two rows in the same
+      // millisecond would otherwise straddle a page boundary twice or never.
+      conditions.push(Prisma.sql`(a."created_at", a."id") < (
+        SELECT c."created_at", c."id" FROM "activity_log" c WHERE c."id" = ${opts.cursor}::uuid)`);
+    }
+    const picked = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT a."id" FROM "activity_log" a
+       WHERE ${Prisma.join(conditions, ' AND ')}
+       ORDER BY a."created_at" DESC, a."id" DESC
+       LIMIT ${limit + 1}`;
+    const hasMore = picked.length > limit;
+    const ids = (hasMore ? picked.slice(0, limit) : picked).map((r) => r.id);
+    const byId = new Map(
+      (ids.length ? await this.prisma.activityLog.findMany({ where: { id: { in: ids } } }) : []).map((r) => [r.id, r]),
+    );
+    const page = ids.flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [row] : [];
     });
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
 
     const docIds = [...new Set(page.map((r) => r.documentId).filter((id): id is string => !!id))];
     const docs = docIds.length
@@ -142,7 +166,7 @@ export class ActivityService {
       metadata: (r.metadata ?? {}) as Record<string, unknown>,
       createdAt: r.createdAt.toISOString(),
     }));
-    return { workspaceId, entries, nextCursor: hasMore ? page[page.length - 1].id : null };
+    return { workspaceId, entries, nextCursor: hasMore ? ids[ids.length - 1] : null };
   }
 
   /**
@@ -157,15 +181,11 @@ export class ActivityService {
   async calendar(
     workspaceId: string,
     opts: { actor: string; from: Date; to: Date },
+    scope: AccessScope,
   ): Promise<ActivityCalendarResponse> {
-    const rows = await this.prisma.activityLog.findMany({
-      where: {
-        workspaceId,
-        actor: { in: actorIdentities(opts.actor) },
-        createdAt: { gte: opts.from, lte: opts.to },
-      },
-      select: { action: true, createdAt: true },
-    });
+    const rows = await this.prisma.$queryRaw<{ action: string; createdAt: Date }[]>`
+      SELECT a."action", a."created_at" AS "createdAt" FROM "activity_log" a
+       WHERE ${Prisma.join(this.conditionsFor(workspaceId, opts, scope), ' AND ')}`;
 
     const byDate = new Map<string, ActivityCalendarDay>();
     const byKind = emptyKindTally();
@@ -199,21 +219,31 @@ export class ActivityService {
   }
 
   /**
-   * Shared WHERE. Actors match exactly, never by prefix: a profile that showed
-   * a stranger's rows because two ids share eight characters would be worse
-   * than showing none.
+   * Shared WHERE over `activity_log a`. Actors match exactly, never by
+   * prefix: a profile that showed a stranger's rows because two ids share
+   * eight characters would be worse than showing none.
+   *
+   * Visibility (#76): a row about a page the caller cannot open is left out,
+   * metadata and all. A row about a page that is gone stays, as it did. A
+   * guest, who reads nothing they were not granted, sees only rows about a page
+   * they can open — never the workspace-level ones (settings, connectors).
    */
-  private whereFor(workspaceId: string, opts: ActivityFilter) {
-    return {
-      workspaceId,
-      ...(opts.documentId ? { documentId: opts.documentId } : {}),
-      ...(opts.projectId ? { projectId: opts.projectId } : {}),
-      ...(opts.subjectId ? { subjectId: opts.subjectId } : {}),
-      ...(opts.actor ? { actor: { in: actorIdentities(opts.actor) } } : {}),
-      ...(opts.from || opts.to
-        ? { createdAt: { ...(opts.from ? { gte: opts.from } : {}), ...(opts.to ? { lte: opts.to } : {}) } }
-        : {}),
-    };
+  private conditionsFor(workspaceId: string, opts: ActivityFilter, scope: AccessScope): Prisma.Sql[] {
+    const where: Prisma.Sql[] = [Prisma.sql`a."workspace_id" = ${workspaceId}::uuid`];
+    if (opts.documentId) where.push(Prisma.sql`a."document_id" = ${opts.documentId}::uuid`);
+    if (opts.projectId) where.push(Prisma.sql`a."project_id" = ${opts.projectId}::uuid`);
+    if (opts.subjectId) where.push(Prisma.sql`a."subject_id" = ${opts.subjectId}::uuid`);
+    if (opts.actor) where.push(Prisma.sql`a."actor" = ANY(${actorIdentities(opts.actor)}::text[])`);
+    if (opts.from) where.push(Prisma.sql`a."created_at" >= ${opts.from}`);
+    if (opts.to) where.push(Prisma.sql`a."created_at" <= ${opts.to}`);
+    if (scope.guest && !scope.bypass) {
+      where.push(Prisma.sql`EXISTS (SELECT 1 FROM "documents" d
+        WHERE d."id" = a."document_id" AND ${visibilitySql(scope, 'd')})`);
+    } else if (hidesAnything(scope)) {
+      where.push(Prisma.sql`NOT EXISTS (SELECT 1 FROM "documents" d
+        WHERE d."id" = a."document_id" AND NOT (${visibilitySql(scope, 'd')}))`);
+    }
+    return where;
   }
 }
 

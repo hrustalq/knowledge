@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { EventsController } from './events.controller.js';
 import { EventsSubscriberModule } from './events-subscriber.module.js';
 import { LiveGateway } from './live.gateway.js';
+import { LiveVisibility } from './live-visibility.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 
 /**
  * API-only live surface (SSE controller + WS gateway) — kept out of
@@ -10,8 +12,9 @@ import { LiveGateway } from './live.gateway.js';
  * AccessService resolve without imports.
  */
 @Module({
-  imports: [EventsSubscriberModule],
+  // PermissionsCoreModule: frames about a page reach only those who can open it (#76).
+  imports: [EventsSubscriberModule, PermissionsCoreModule],
   controllers: [EventsController],
-  providers: [LiveGateway],
+  providers: [LiveGateway, LiveVisibility],
 })
 export class EventsApiModule {}

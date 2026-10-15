@@ -12,7 +12,18 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { ACCESS_LEVELS, ACCESS_SUBJECT_TYPES, type AccessLevel, type AccessSubjectType } from '@knowledge/contracts';
+import {
+  ACCESS_LEVELS,
+  ACCESS_REQUEST_STATUSES,
+  ACCESS_RESOURCE_TYPES,
+  ACCESS_SUBJECT_TYPES,
+  REQUESTABLE_ACCESS_LEVELS,
+  type AccessLevel,
+  type AccessRequestStatus,
+  type AccessResourceType,
+  type AccessSubjectType,
+  type RequestableAccessLevel,
+} from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
 /** Mirrors UUID_RE in acl.guard.ts (any version digit, nil allowed). */
@@ -111,4 +122,77 @@ export class UpdateResourceAccessDto {
   @ValidateNested({ each: true })
   @Type(() => AccessGrantInputDto)
   grants!: AccessGrantInputDto[];
+}
+
+/** A note to a manager, not a document. */
+const MAX_REQUEST_MESSAGE_CHARS = 1000;
+
+export class CreateAccessRequestDto {
+  @ApiProperty()
+  @IsString()
+  @Matches(UUID_RE)
+  workspaceId!: string;
+
+  @ApiProperty({ enum: ACCESS_RESOURCE_TYPES })
+  @IsIn(ACCESS_RESOURCE_TYPES)
+  resourceType!: AccessResourceType;
+
+  @ApiProperty()
+  @IsString()
+  @Matches(UUID_RE)
+  resourceId!: string;
+
+  @ApiProperty({ enum: REQUESTABLE_ACCESS_LEVELS })
+  @IsIn(REQUESTABLE_ACCESS_LEVELS)
+  level!: RequestableAccessLevel;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Why — shown to the managers' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_REQUEST_MESSAGE_CHARS, { message: vmsg('maxLength') })
+  message?: string | null;
+}
+
+export class ListAccessRequestsQueryDto {
+  // Field name must stay `workspaceId`: @Access('viewer','query') resolves it.
+  @ApiProperty()
+  @IsString()
+  @Matches(UUID_RE)
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ enum: ACCESS_REQUEST_STATUSES, description: 'Omit for every status' })
+  @IsOptional()
+  @IsIn(ACCESS_REQUEST_STATUSES)
+  status?: AccessRequestStatus;
+
+  @ApiPropertyOptional({ description: "'1' for the caller's own requests; otherwise the ones they may decide" })
+  @IsOptional()
+  @IsIn(['1', 'true', '0', 'false'])
+  mine?: string;
+
+  @ApiPropertyOptional({ enum: ACCESS_RESOURCE_TYPES })
+  @IsOptional()
+  @IsIn(ACCESS_RESOURCE_TYPES)
+  resourceType?: AccessResourceType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Matches(UUID_RE)
+  resourceId?: string;
+}
+
+export class ApproveAccessRequestDto {
+  @ApiPropertyOptional({ enum: ACCESS_LEVELS, description: 'Defaults to the level asked for' })
+  @IsOptional()
+  @IsIn(ACCESS_LEVELS)
+  level?: AccessLevel;
+}
+
+export class DenyAccessRequestDto {
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Shown to the requester' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_REQUEST_MESSAGE_CHARS, { message: vmsg('maxLength') })
+  reason?: string | null;
 }

@@ -89,6 +89,9 @@ import WatchButton from '@/components/notifications/WatchButton.vue'
 import PageAiActions from '@/components/knowledge/PageAiActions.vue'
 import SharePopover from '@/components/knowledge/SharePopover.vue'
 import PageAccessDialog from '@/components/access/PageAccessDialog.vue'
+import RequestAccessCard from '@/components/access/RequestAccessCard.vue'
+import { warnMentionedWithoutAccess } from '@/components/access/mention-access'
+import { useMembers } from '@/components/merge-requests/use-members'
 import VerificationBar from '@/components/verification/VerificationBar.vue'
 
 const { t } = useI18n()
@@ -166,6 +169,15 @@ const error = ref<string | null>(null)
 const restrictedRefusal = ref(false)
 /** "Access…" (#76): who may open this page. Every reader can look; managers edit. */
 const accessOpen = ref(false)
+// `?access=1` opens the dialog — an opening instruction (a comment on the
+// merge request named someone who cannot open this page), not two-way state.
+watch(
+  () => route.query.access,
+  (v) => {
+    if (v === '1') accessOpen.value = true
+  },
+  { immediate: true },
+)
 
 /**
  * The template this page was created from (issue #69), named once the roster
@@ -325,7 +337,7 @@ const threadsBusy = computed(
 function onCreateThread(body: string, anchor?: ReviewThreadAnchor, resolvable = false) {
   createThread.mutate(
     { path: { id: documentId.value }, body: { body, resolvable, ...(anchor ? { anchor } : {}) } },
-    { onError: (e) => toast.error(errorMessage(e, t)) },
+    { onSuccess: warnMentions, onError: (e) => toast.error(errorMessage(e, t)) },
   )
 }
 function onReply(threadId: string, body: string, replyToId: string | null = null) {
@@ -334,8 +346,14 @@ function onReply(threadId: string, body: string, replyToId: string | null = null
       path: { id: documentId.value, threadId },
       body: { body, ...(replyToId ? { replyToId } : {}) },
     },
-    { onError: (e) => toast.error(errorMessage(e, t)) },
+    { onSuccess: warnMentions, onError: (e) => toast.error(errorMessage(e, t)) },
   )
+}
+
+/** Named people who cannot open this page were not told (#76): say so, and offer Access…. */
+const { nameOf } = useMembers()
+function warnMentions(data: unknown) {
+  warnMentionedWithoutAccess(data, { t, nameOf, openAccess: () => (accessOpen.value = true) })
 }
 function onResolve(threadId: string, resolved: boolean) {
   resolveThread.mutate(
@@ -540,13 +558,7 @@ watch(
 </script>
 
 <template>
-  <PageState
-    v-if="restrictedRefusal"
-    state="forbidden"
-    :icon="Lock"
-    :title="t('access.restrictedTitle')"
-    :description="t('access.restrictedBody')"
-  />
+  <RequestAccessCard v-if="restrictedRefusal" resource-type="document" :resource-id="documentId" />
   <PageState v-else-if="error" state="error" :description="error" />
 
   <!-- Shaped like the page it stands in for — a title, a column, a rail —

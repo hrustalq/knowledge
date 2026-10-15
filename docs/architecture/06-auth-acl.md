@@ -88,9 +88,9 @@ page level covers it, and a workspace-level route only when it is marked
 by the caller's scope (the document list and tree, the project list). Code that
 asks "is this person a member" directly rather than through `requireRole` —
 mention recipients, page owners, members-only site audiences, the llms.txt hub,
-MCP `whoami` — filters with `WORKSPACE_READER` (`auth/principal.ts`), and
-`NotificationsService.deliver` still drops guest recipients until notifications
-learn page visibility (#76, phase 5).
+MCP `whoami` — filters with `WORKSPACE_READER` (`auth/principal.ts`).
+Notifications follow page visibility instead (below), so a guest is told about
+the pages granted to them and nothing else.
 
 **User groups** (`user_groups`, `user_group_members`) are workspace-scoped sets
 of members that restrictions grant to. `source` is `manual`, `connector`
@@ -164,6 +164,39 @@ default.
 
 `WorkspacesService` holds the matching invariant for workspaces: **the last admin
 cannot be demoted or removed.**
+
+### Who hears about what (#76, phase 5)
+
+The same predicate reaches the per-person surfaces:
+
+- **Notifications.** `NotificationsService.deliver` keeps a recipient only if
+  `whoCanOpen` admits them to the event's page, or project. An event about
+  neither (a run, an import) still skips guests. `whoCanOpen` and
+  `resolveChain` live as plain functions in `permissions/acl-read.ts`, because
+  `NotificationsService` may not inject `PermissionService`: the permission
+  module publishes through `EventsModule`, which imports notifications. A
+  mention of someone who cannot open the page notifies nobody, and the thread
+  routes return them in `mentionedWithoutAccess`. The answer to someone's own
+  access request is the one row sent with `requireAccess: false`, and it carries
+  no title.
+- **Activity.** `ActivityService.list` and `calendar` take the caller's
+  `AccessScope` and pick rows in SQL: `NOT EXISTS` a hidden page for a member,
+  `EXISTS` a visible page for a guest. They page by `(created_at, id)` with the
+  same cursor as before. A row about a deleted page stays visible, as it did.
+- **Live events.** `LiveVisibility` (`events/live-visibility.ts`) is shared by
+  the SSE stream and the WS gateway. It caches each connection's scope for
+  `ACL_CACHE_TTL_MS`, reads a page's chain once per frame and only when some
+  listener's scope hides anything, and judges frames in order. `acl.changed`,
+  published by `AclEventsService` from the access dialog, group membership
+  edits and approvals, names no page. It clears the cache and tells clients to
+  refetch.
+- **Access requests** (`access_requests`, `AccessRequestsService`). Approving
+  grants the decided level on every restricted node on the chain that the
+  requester lacked a grant on (`grantTargets`), because view is intersective.
+  The approver must manage each of those nodes. Managers to notify are the
+  holders of manage grants on the chain plus the workspace admins. A partial
+  unique index allows one pending request per person and node. Expiry is a
+  due check in the API's `AccessRequestSweeper` tick.
 
 ## Credentials
 
@@ -282,6 +315,9 @@ PATCH|DELETE /v1/groups/:id   PUT /v1/groups/:id/members          @Access(admin,
 GET  /v1/groups/:id/members                                       @Access(viewer, 'group')
 GET|PUT /v1/documents/:id/access   GET …/access/effective         @Access(viewer, 'document') + manage for PUT/effective
 GET|PUT /v1/projects/:id/access    GET …/access/effective         @Access(viewer, 'project') + manage for PUT/effective
+POST /v1/access-requests   GET /v1/access-requests?workspaceId=   @Access(viewer, 'body'|'query', { guests: true })
+POST /v1/access-requests/:id/approve | deny                     @Access(viewer, 'access-request') + manage on every grant target
+POST /v1/access-requests/:id/cancel                             @Access(viewer, 'access-request', { guests: true }), requester only
 POST /v1/graph/query                                              trusted_operator
 GET  /v1/audit-logs                                               admin
 ```
@@ -345,10 +381,14 @@ at all: the web server answers it only for an internal peer with no
 - Page restrictions cover the REST routes, MCP (per-page guard, tree, graph,
   project and search tools; guests may use the search, tree and project
   tools), search (all three legs and graph expansion), every assistant tool,
-  agent and workflow runs and chat bots (through the audience clamp above).
-  Notifications, activity and live events follow in the next phases of issue
-  #76; until then they are workspace-filtered only. Access requests (and MCP
-  `knowledge_request_access`) arrive with them.
+  agent and workflow runs and chat bots (through the audience clamp above),
+  notifications, the activity feed and live events. Connector ACL mirroring is
+  the next phase of issue #76; until it lands, imported pages are open to the
+  whole workspace unless restricted by hand.
+- A live connection may receive frames for up to `ACL_CACHE_TTL_MS` after a
+  restriction tightens if it misses `acl.changed` (e.g. a Redis blip). Every
+  request still reads PG, so this costs at most a few frames of titles, never
+  content.
 - The audience clamp is conservative: two pages restricted to the same people
   through different nodes still exclude each other. In a workspace whose pages
   are mostly restricted, agent runs and group chat answers see little.

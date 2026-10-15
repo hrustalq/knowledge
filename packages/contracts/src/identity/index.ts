@@ -807,6 +807,87 @@ export interface EffectiveAccessResponse {
   entries: EffectiveAccessEntry[];
 }
 
+// ---------------------------------------------------------------------------
+// Access requests (#76, phase 5): somebody refused a page or project asks for a
+// level on it; whoever manages it approves (choosing the level) or denies.
+// A pending request expires after ACCESS_REQUEST_TTL_DAYS.
+
+export const ACCESS_REQUEST_STATUSES = ['pending', 'approved', 'denied', 'cancelled', 'expired'] as const;
+export type AccessRequestStatus = (typeof ACCESS_REQUEST_STATUSES)[number];
+
+/** A level a person may ask for: manage is handed out, never requested. */
+export const REQUESTABLE_ACCESS_LEVELS = ['view', 'edit'] as const;
+export type RequestableAccessLevel = (typeof REQUESTABLE_ACCESS_LEVELS)[number];
+
+export interface AccessRequestPerson {
+  userId: string;
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: AvatarUrl;
+}
+
+export interface AccessRequestEntry {
+  requestId: string;
+  workspaceId: string;
+  resourceType: AccessResourceType;
+  resourceId: string;
+  /**
+   * The page or project name — for its managers, who can open it, and for the
+   * requester once approved. Null for a requester who still cannot open it:
+   * asking for a page is not a way to learn what it is called.
+   */
+  resourceTitle: string | null;
+  requester: AccessRequestPerson;
+  level: RequestableAccessLevel;
+  message: string | null;
+  status: AccessRequestStatus;
+  decidedBy: AccessRequestPerson | null;
+  decidedLevel: AccessLevel | null;
+  decidedAt: string | null;
+  /** Why a request was denied, when the manager said. */
+  reason: string | null;
+  /** When a pending request lapses. */
+  expiresAt: string;
+  createdAt: string;
+  /** Whether the caller may approve or deny it. */
+  canDecide: boolean;
+}
+
+// POST /v1/access-requests
+export interface CreateAccessRequestRequest {
+  workspaceId: string;
+  resourceType: AccessResourceType;
+  resourceId: string;
+  level: RequestableAccessLevel;
+  message?: string | null;
+}
+
+// GET /v1/access-requests?workspaceId=&status=&mine=&resourceType=&resourceId=
+export interface ListAccessRequestsResponse {
+  workspaceId: string;
+  requests: AccessRequestEntry[];
+}
+
+// POST /v1/access-requests/:id/approve
+export interface ApproveAccessRequestRequest {
+  /** Defaults to the level asked for; a manager may hand out less, or more up to the requester's ceiling. */
+  level?: AccessLevel;
+}
+
+// POST /v1/access-requests/:id/deny
+export interface DenyAccessRequestRequest {
+  reason?: string | null;
+}
+
+/**
+ * What a posted comment adds to its thread response (#76, phase 5): the people
+ * it named who cannot open the page. They were not notified; the editor offers
+ * a manager "Grant view" and everyone else "Ask a manager".
+ */
+export interface MentionAccessNote {
+  mentionedWithoutAccess: string[];
+}
+
 
 
 // ---------------------------------------------------------------------------

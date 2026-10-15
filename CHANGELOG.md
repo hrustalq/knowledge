@@ -27,9 +27,10 @@ in the pull request that introduces them — see
 - A **guest** workspace role, below viewer. A guest can open only pages and
   projects shared with them or one of their groups, and sees just those in the
   page tree, the page list, the project list and search results. Every other
-  page answers 404. Other workspace-level routes still refuse a guest,
-  including the activity feed, the member roster and settings. A guest gets no notifications
-  and cannot be made a reviewer, a page owner or a member of a members-only
+  page answers 404. A guest's activity feed shows only rows about those pages,
+  and they are notified only about those pages. Other workspace-level routes,
+  such as the member roster and settings, still refuse a guest. A guest
+  cannot be made a reviewer, a page owner or a member of a members-only
   site. MCP `knowledge_whoami` reports the role. (#76)
 - **Page and project restrictions.** Anyone who can edit a page can restrict it
   from **Access** in the page header or the tree menu, granting view, edit or
@@ -75,6 +76,31 @@ in the pull request that introduces them — see
   grants, and the new read tool `knowledge_get_page_access` tells an agent why
   a page is or is not open to it. (#76)
 
+- **Access requests.** Someone refused a page or project can ask for view or
+  edit right on the refusal screen, with a note. The people who manage it and
+  the workspace admins are notified. They approve (choosing the level) or
+  decline (optionally saying why) under **Settings → Access → Requests**, and
+  the requester is notified of the answer. A pending request expires after 30
+  days. Approving grants the level on every restricted page or project that
+  kept the requester out, since a grant under a closed parent would admit no
+  one. Asking twice answers 409, and a guest asking about a page they cannot
+  open gets a 404, so a request is never a way to learn that a page exists.
+  New notification category **Access**. MCP gains `knowledge_request_access`,
+  a write tool hidden from read-only keys. Routes: `POST|GET
+  /v1/access-requests` and `POST /v1/access-requests/:id/approve|deny|cancel`.
+  (#76)
+- **Notifications, the activity feed and live updates respect page
+  restrictions.** A notification about a page reaches only people who can open
+  it, however they came to watch it. Naming someone in a comment who cannot
+  open the page does not notify them; the comment response lists them in
+  `mentionedWithoutAccess`, and the page warns the author and offers
+  **Access…**. The activity feed and the profile calendar leave out rows about
+  pages the reader cannot open, and its cursors still page correctly. SSE and
+  WebSocket clients receive no events about pages they cannot open, and every
+  client gets an `acl.changed` event (naming no page) when a restriction, a
+  grant or a group's membership changes, so open trees and lists refresh. A
+  person granted access directly from the Access dialog is notified. (#76)
+
 ### Changed
 
 - Assigning a merge-request reviewer who cannot open the page now answers 409
@@ -91,6 +117,16 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Two more optional settings: `ACL_CACHE_TTL_MS` (5000), how long a live
+  connection trusts the page visibility it computed before reading it again
+  (an `acl.changed` event clears it at once), and `ACCESS_REQUEST_TTL_DAYS`
+  (30). The API runs a five-minute tick that expires pending requests and
+  tells each requester.
+- Migration `20261019100000_access_requests` only adds the `access_requests`
+  table, with a partial unique index allowing one pending request per person
+  and page. The previous image never reads it and runs against it unchanged.
+  Rolling the code back leaves pending requests unanswered until the release
+  is restored.
 - Five new settings, all optional: `ACL_DENY_LIST_MAX` (5000),
   `SEARCH_ACL_OVERFETCH` (5), `SEARCH_ACL_MAX_FETCH` (500),
   `ACL_RESTAMP_TICK_MS` (30000) and `ACL_RESTAMP_BATCH` (200). The worker now

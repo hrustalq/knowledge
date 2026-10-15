@@ -7,6 +7,7 @@ import {
 import type {
   DeleteMergeRequestCommentResponse,
   ListMergeRequestThreadsResponse,
+  MentionAccessNote,
   MergeRequestComment,
   MergeRequestThread,
   MergeRequestThreadAnchor,
@@ -63,7 +64,7 @@ export class MergeRequestThreadsService {
     mergeRequestId: string,
     dto: CreateThreadDto,
     authorId: string = AUTHOR_ID_STUB,
-  ): Promise<{ thread: MergeRequestThread }> {
+  ): Promise<{ thread: MergeRequestThread } & MentionAccessNote> {
     const mr = await this.getOpenMrOrThrow(mergeRequestId);
     const anchor = dto.anchor ? validateThreadAnchor(dto.anchor) : null;
 
@@ -101,8 +102,9 @@ export class MergeRequestThreadsService {
       actorId: authorId,
       locale: currentLocale(),
     });
+    let mentionedWithoutAccess: string[] = [];
     if (page) {
-      const delivered = await this.notifications.onCommentPosted({
+      const posted = await this.notifications.onCommentPosted({
         workspaceId: page.workspaceId,
         subjectType: 'merge-request',
         subjectId: mr.id,
@@ -113,9 +115,10 @@ export class MergeRequestThreadsService {
         type: 'merge-request.comment.created',
         metadata: { threadId: thread.id },
       });
-      await this.events.announce(page.workspaceId, delivered);
+      await this.events.announce(page.workspaceId, posted.deliveries);
+      mentionedWithoutAccess = posted.mentionedWithoutAccess;
     }
-    return { thread: await this.reload(thread.id) };
+    return { thread: await this.reload(thread.id), mentionedWithoutAccess };
   }
 
   async reply(
@@ -124,7 +127,7 @@ export class MergeRequestThreadsService {
     body: string,
     authorId: string = AUTHOR_ID_STUB,
     replyToId?: string,
-  ): Promise<{ thread: MergeRequestThread }> {
+  ): Promise<{ thread: MergeRequestThread } & MentionAccessNote> {
     const mr = await this.getOpenMrOrThrow(mergeRequestId);
     const thread = await this.getThreadOrThrow(mergeRequestId, threadId);
     const replyTo = replyToId ? await this.requireCommentInThread(thread.id, replyToId) : null;
@@ -147,8 +150,9 @@ export class MergeRequestThreadsService {
       actorId: authorId,
       locale: currentLocale(),
     });
+    let mentionedWithoutAccess: string[] = [];
     if (page) {
-      const delivered = await this.notifications.onCommentPosted({
+      const posted = await this.notifications.onCommentPosted({
         workspaceId: page.workspaceId,
         subjectType: 'merge-request',
         subjectId: mr.id,
@@ -159,9 +163,10 @@ export class MergeRequestThreadsService {
         type: 'merge-request.comment.created',
         metadata: { threadId: thread.id },
       });
-      await this.events.announce(page.workspaceId, delivered);
+      await this.events.announce(page.workspaceId, posted.deliveries);
+      mentionedWithoutAccess = posted.mentionedWithoutAccess;
     }
-    return { thread: await this.reload(thread.id) };
+    return { thread: await this.reload(thread.id), mentionedWithoutAccess };
   }
 
   /**

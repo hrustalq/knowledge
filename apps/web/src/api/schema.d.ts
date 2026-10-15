@@ -493,6 +493,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/access-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own requests (mine=1), or the ones they may decide */
+        get: operations["AccessRequestsController_list"];
+        put?: never;
+        /** Ask for a level on a page or project (409 when already granted, or already asked) */
+        post: operations["AccessRequestsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve with a level: grants it on every restricted node that kept the requester out (needs manage on each) */
+        post: operations["AccessRequestsController_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests/{id}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deny, optionally saying why (needs manage) */
+        post: operations["AccessRequestsController_deny"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw your own pending request */
+        post: operations["AccessRequestsController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/profiles/{userId}": {
         parameters: {
             query?: never;
@@ -4778,6 +4847,27 @@ export interface components {
             /** @description Replaces the node's manual grants as a whole */
             grants: components["schemas"]["AccessGrantInputDto"][];
         };
+        CreateAccessRequestDto: {
+            workspaceId: string;
+            /** @enum {string} */
+            resourceType: "project" | "document";
+            resourceId: string;
+            /** @enum {string} */
+            level: "view" | "edit";
+            /** @description Why — shown to the managers */
+            message?: string | null;
+        };
+        ApproveAccessRequestDto: {
+            /**
+             * @description Defaults to the level asked for
+             * @enum {string}
+             */
+            level?: "view" | "edit" | "manage";
+        };
+        DenyAccessRequestDto: {
+            /** @description Shown to the requester */
+            reason?: string | null;
+        };
         CreateProjectDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -5135,7 +5225,7 @@ export interface components {
         UpdateNotificationPreferencesDto: {
             workspaceId: string;
             /** @description Categories to switch off; omit to leave unchanged. An empty array clears every mute. */
-            mutedCategories?: ("mention" | "review" | "comment" | "document" | "verification" | "job")[];
+            mutedCategories?: ("mention" | "review" | "comment" | "document" | "verification" | "access" | "job")[];
             /** @description Commenting on something starts watching it. Defaults to true; omit to leave unchanged. */
             autoWatchOnComment?: boolean;
             /** @description Email mentions, review requests and assignments (docs/features/41). Defaults to true; omit to leave unchanged. */
@@ -5151,7 +5241,7 @@ export interface components {
              * @description Narrows `all` to one category, so clearing comments leaves reviews unread.
              * @enum {string}
              */
-            category?: "mention" | "review" | "comment" | "document" | "verification" | "job";
+            category?: "mention" | "review" | "comment" | "document" | "verification" | "access" | "job";
         };
         AssistantReviewDto: {
             /** Format: uuid */
@@ -7877,6 +7967,222 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AccessRequestsController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Omit for every status */
+                status?: "pending" | "approved" | "denied" | "cancelled" | "expired";
+                /** @description '1' for the caller's own requests; otherwise the ones they may decide */
+                mine?: string;
+                resourceType?: "project" | "document";
+                resourceId?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AccessRequestsController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAccessRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AccessRequestsController_approve: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveAccessRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AccessRequestsController_deny: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DenyAccessRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AccessRequestsController_cancel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12070,7 +12376,7 @@ export interface operations {
                 workspaceId: string;
                 /** @description Only unread rows. Defaults to false. */
                 unread?: boolean;
-                category?: "mention" | "review" | "comment" | "document" | "verification" | "job";
+                category?: "mention" | "review" | "comment" | "document" | "verification" | "access" | "job";
                 /** @description Page size, 1-100. Defaults to 30. */
                 limit?: number;
                 cursor?: string;

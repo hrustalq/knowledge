@@ -2248,6 +2248,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/agents/recipes/{recipe}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply a recipe: the schedule and triggers it names, all disabled. What the agent already has is kept, not overwritten. */
+        post: operations["AiController_applyAgentRecipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/agents/{key}/triggers": {
         parameters: {
             query?: never;
@@ -5609,6 +5626,15 @@ export interface components {
             cooldownMinutes?: number;
             /** @description Instruction seeded into every run this trigger starts. */
             note?: string | null;
+        };
+        ApplyAgentRecipeDto: {
+            /** Format: uuid */
+            workspaceId: string;
+            /**
+             * @description IANA timezone for the recipe's schedule. Absent reads as UTC.
+             * @example Europe/Moscow
+             */
+            timezone?: string;
         };
         CreateAgentTriggerDto: {
             /**
@@ -14093,6 +14119,50 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_applyAgentRecipe: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                recipe: "weekly-digest" | "freshness-sweep" | "glossary-suggester";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyAgentRecipeDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {

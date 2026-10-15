@@ -11466,6 +11466,78 @@
         ]
       }
     },
+    "/v1/ai/agents/recipes/{recipe}/apply": {
+      "post": {
+        "operationId": "AiController_applyAgentRecipe",
+        "parameters": [
+          {
+            "name": "recipe",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "weekly-digest",
+                "freshness-sweep",
+                "glossary-suggester"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyAgentRecipeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Apply a recipe: the schedule and triggers it names, all disabled. What the agent already has is kept, not overwritten.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/agents/{key}/triggers": {
       "post": {
         "operationId": "AiController_createAgentTrigger",
@@ -26063,6 +26135,23 @@
             "description": "Instruction seeded into every run this trigger starts."
           }
         }
+      },
+      "ApplyAgentRecipeDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Moscow",
+            "description": "IANA timezone for the recipe's schedule. Absent reads as UTC."
+          }
+        },
+        "required": [
+          "workspaceId"
+        ]
       },
       "CreateAgentTriggerDto": {
         "type": "object",

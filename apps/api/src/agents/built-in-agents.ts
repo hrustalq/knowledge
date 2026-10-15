@@ -519,6 +519,35 @@ Return only the markdown. If the image contains no legible text, return an empty
     requires: ['json', 'tools'],
   },
 
+  /**
+   * The digest (#70, phase 4).
+   *
+   * The curator's shape again: what changed since the last digest — new pages,
+   * pages whose default branch moved, merged changes, agent findings — is a
+   * query, and the worker answers it. The model is spent once, on saying what
+   * mattered. The page the run proposes is composed from the queried lists, so
+   * every link in it points at a page that exists; a person publishes it.
+   */
+  digest: {
+    key: 'digest',
+    name: 'agent.digest',
+    description: 'agent.digestDesc',
+    instructions:
+      'You write the digest of a team knowledge base: a short account of what changed since the last one, ' +
+      'for people who were not watching. You are given the pages created and changed in the period, the ' +
+      'changes merged, and how many findings other agents reported. Lead with what a reader would most ' +
+      'regret missing — a new page others depend on, a decision recorded, a large rewrite — and group ' +
+      'small edits rather than listing them. Say what changed, not that something changed. Read a page ' +
+      'before you characterise what it says. Never claim a change you were not given. You never edit ' +
+      'anything; a person decides whether to publish the digest.',
+    tools: [...READ_TOOLS],
+    skillIds: [],
+    purpose: 'review',
+    surfaces: ['background'],
+    // 'tools' is a preference, not a prerequisite — the curator's rule.
+    requires: ['json', 'tools'],
+  },
+
   architect: {
     key: 'architect',
     name: 'agent.architect',

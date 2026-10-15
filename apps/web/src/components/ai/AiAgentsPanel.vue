@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { Play, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { BookOpen, Play, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
 import {
   AGENT_SCHEDULE_KINDS,
   AGENT_SCHEDULE_TICK_MINUTES,
@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import AgentTriggersEditor from './AgentTriggersEditor.vue'
+import AgentRecipesDialog from './AgentRecipesDialog.vue'
 
 const { t } = useI18n()
 
@@ -338,6 +339,14 @@ async function reset(agent: AiAgentSummary) {
   }
 }
 
+/** Recipes (#70): applied disabled, so the agent's editor opens next to turn them on. */
+const recipesOpen = ref(false)
+async function afterRecipe(key: string) {
+  await query.refetch()
+  const agent = agents.value.find((a) => a.key === key)
+  if (agent) openEdit(agent)
+}
+
 async function remove(agent: AiAgentSummary) {
   try {
     await deleteAgent.mutateAsync({ path: { key: agent.key }, query: { workspaceId } })
@@ -352,10 +361,17 @@ async function remove(agent: AiAgentSummary) {
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <p class="text-muted-foreground text-sm">{{ t('ai.agents.subtitle') }}</p>
-      <Button v-if="canManage" size="sm" @click="openNew">
-        <Plus class="size-3.5" /> {{ t('ai.agents.new') }}
-      </Button>
+      <div v-if="canManage" class="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" @click="recipesOpen = true">
+          <BookOpen class="size-3.5" /> {{ t('ai.recipes.open') }}
+        </Button>
+        <Button size="sm" @click="openNew">
+          <Plus class="size-3.5" /> {{ t('ai.agents.new') }}
+        </Button>
+      </div>
     </div>
+
+    <AgentRecipesDialog v-if="canManage" v-model:open="recipesOpen" :agents="agents" @applied="afterRecipe" />
 
     <div v-if="query.isPending.value" class="space-y-2">
       <Skeleton v-for="i in 6" :key="i" class="h-10 w-full" />

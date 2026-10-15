@@ -154,7 +154,7 @@ export class AiAgentsService {
       update: written,
     });
     this.registry.invalidate(workspaceId);
-    return this.one(workspaceId, key);
+    return this.get(workspaceId, key);
   }
 
   /**
@@ -168,7 +168,7 @@ export class AiAgentsService {
     }
     await this.prisma.aiAgent.deleteMany({ where: { workspaceId, key } });
     this.registry.invalidate(workspaceId);
-    return this.one(workspaceId, key);
+    return this.get(workspaceId, key);
   }
 
   async create(workspaceId: string, dto: CreateAiAgentDto, userId?: string): Promise<AiAgentSummary> {
@@ -200,7 +200,7 @@ export class AiAgentsService {
       },
     });
     this.registry.invalidate(workspaceId);
-    return this.one(workspaceId, key);
+    return this.get(workspaceId, key);
   }
 
   async remove(workspaceId: string, key: string): Promise<void> {
@@ -212,7 +212,7 @@ export class AiAgentsService {
     this.registry.invalidate(workspaceId);
   }
 
-  private async one(workspaceId: string, key: string): Promise<AiAgentSummary> {
+  async get(workspaceId: string, key: string): Promise<AiAgentSummary> {
     const [agent, row] = await Promise.all([
       this.registry.resolve(workspaceId, key),
       this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key } } }),

@@ -400,6 +400,8 @@ export const KNOWN_EVENT_TYPES = [
   'ai.agent.trigger.created',
   'ai.agent.trigger.updated',
   'ai.agent.trigger.deleted',
+  // A recipe's schedule and triggers written, disabled (#70).
+  'ai.agent.recipe.applied',
   'ai.sourcePolicy.created',
   'ai.sourcePolicy.updated',
   'ai.sourcePolicy.deleted',

@@ -1844,6 +1844,28 @@
       "deleted": "Trigger deleted",
       "delete": "Delete trigger"
     },
+    "recipes": {
+      "open": "Recipes",
+      "title": "Recipes",
+      "hint": "Ready-made schedules and triggers for agents you already have. Everything a recipe adds starts off: turn it on in the agent's settings, and its runs execute as you. Applying one again keeps whatever is already set up.",
+      "agent": "Agent: {name}",
+      "apply": "Apply",
+      "applying": "Applying…",
+      "applied": "Added to {name}, switched off — turn it on to start.",
+      "alreadyThere": "{name} already has this set up; nothing was changed.",
+      "weeklyDigest": {
+        "title": "Weekly digest",
+        "desc": "Every Monday, a summary of what changed in the workspace — new and changed pages, merged changes — as a page you can publish."
+      },
+      "freshnessSweep": {
+        "title": "Freshness sweep",
+        "desc": "The curator looks for stale pages every Monday and after each connector sync, and reports them for review."
+      },
+      "glossarySuggester": {
+        "title": "Glossary suggester",
+        "desc": "Each time a page is merged, the glossarist proposes the terms it defines."
+      }
+    },
     "tabRuns": "Runs",
     "tabCoverage": "Coverage",
     "tabFeedback": "Feedback",

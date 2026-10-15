@@ -81,8 +81,11 @@ frame and an origin the admin did not list.
 
 Whether a host is a site's is decided once per request, first thing
 (`server/site-files.js`, `res.locals.siteHost`). The host is `Host`, or
-`X-Forwarded-Host` when the peer is internal (an edge that rewrites `Host`, as
-production's Worker → Funnel does, still names the visitor's host). A host
+`X-Forwarded-Host` when the peer is internal. In production that header is
+Caddy's to write: Funnel overwrites the Worker's copy with the `*.ts.net` name,
+so the Worker sends the visitor's host as `X-Knowledge-Host` beside a shared
+secret, and the Caddyfile promotes it to `X-Forwarded-Host` only when the secret
+matches (#174). A host
 under `PUBLISH_BASE_DOMAIN` is a site's by its shape; the app's own host
 (`WEB_BASE_URL`) never is; any other host is asked of the API
 (`/v1/public/domains/allow`, the check Caddy's on-demand TLS also makes) and

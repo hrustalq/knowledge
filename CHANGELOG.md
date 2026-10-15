@@ -27,6 +27,13 @@ in the pull request that introduces them — see
   keyword search, and superseded text no longer stays ranked there. The
   worker's stale sweeper repairs them from the graph within a few sweeps of
   OpenSearch coming back, with no reindex and no re-embedding. (#173)
+- Per-IP limits on public routes count each visitor again. In production
+  every request reached the API with Cloudflare's address, so all visitors
+  behind one Cloudflare location shared a single allowance: one person's
+  share-link password guesses or published-site questions used up everyone
+  else's. The web server's site-host check also saw the Funnel name instead of
+  the visitor's host, which would have served a published site's domain as the
+  member app once base or custom domains are turned on. (#174)
 
 ### Operations
 
@@ -38,6 +45,14 @@ in the pull request that introduces them — see
   rollback: the previous release neither reads nor writes it. Revisions that
   drifted before this release are not stamped; run `POST /v1/ingestion/reindex`
   once if keyword search has been missing pages.
+- New **required** secret `EDGE_SECRET` (#174), for Caddy, and the same value
+  as the edge Worker's binding. Set it in the GitHub `production` environment
+  as a **secret** (`openssl rand -hex 32`, hex only) before tagging: without it
+  the deploy stops at "Render .env". Then deploy the Worker, which now lives in
+  `deploy/edge/`: `EDGE_SECRET=<value> deploy/edge/deploy.sh`. The order does
+  not matter; until both hold the same value, requests are counted against
+  Cloudflare's address as before. To rotate: new value → Worker → environment
+  → redeploy (`gh workflow run deploy.yml --ref vX.Y.Z`).
 
 ## [Unreleased]
 

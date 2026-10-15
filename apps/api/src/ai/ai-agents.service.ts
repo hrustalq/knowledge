@@ -1,9 +1,11 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { AgentRun, AiAgent } from '@prisma/client';
+import { Prisma, type AgentRun, type AiAgent } from '@prisma/client';
 import {
   ASSISTANT_TOOL_NAMES,
   BUILT_IN_AGENT_KEYS,
   isConnectorScopedAgent,
+  isPageScopedAgent,
+  isValidTimezone,
   type AgentFinding,
   type AgentRunInput,
   type AgentRunStatus,
@@ -20,8 +22,19 @@ import { AiPluginsService } from './ai-plugins.service.js';
 import { AiUsageService } from './ai-usage.service.js';
 import { AgentProducer } from '../agents/agent.producer.js';
 import { RUNNABLE_AGENTS } from '../agents/agent.executor.js';
+import { nextRunOf, scheduleKindOf, weekdaysOf } from '../agents/agent-schedule.js';
 import type { Principal } from '../auth/principal.js';
 import type { CreateAiAgentDto, UpdateAiAgentDto } from './ai.dto.js';
+
+/** The fields whose change restarts a time-of-day schedule's slot count. */
+const SCHEDULE_SHAPE = [
+  'scheduleEnabled',
+  'scheduleKind',
+  'scheduleMinutes',
+  'scheduleTime',
+  'scheduleWeekdays',
+  'scheduleTimezone',
+] as const;
 
 /** Columns an admin can override. Order drives the "overridden" badges in the UI. */
 const OVERRIDABLE = [
@@ -62,17 +75,25 @@ export class AiAgentsService {
     return resolved.map((agent) => toSummary(agent, byKey.get(agent.key) ?? null));
   }
 
-  /** Viewer-safe: names only. No prompts, no tool lists, no provider endpoints. */
-  async choices(workspaceId: string): Promise<AiAgentChoice[]> {
+  /**
+   * Viewer-safe: names only. No prompts, no tool lists, no provider endpoints.
+   *
+   * `all` names every agent rather than the ones offered in the composer. A
+   * thread, a learning or a run can carry any agent's key — a background agent
+   * answering a mention (#70), a learning taught to the curator — and a key
+   * nobody can name renders as itself.
+   */
+  async choices(workspaceId: string, scope: 'offered' | 'all' = 'offered'): Promise<AiAgentChoice[]> {
     const resolved = await this.registry.list(workspaceId);
     return resolved
       .filter(
         (agent) =>
-          agent.enabled &&
+          scope === 'all' ||
+          (agent.enabled &&
           agent.surfaces.includes('interactive') &&
           // The router picks an agent; offering it as one to pick is a category
           // error, and choosing it would just make the choice twice.
-          agent.key !== 'router',
+          agent.key !== 'router'),
       )
       .map((agent) => ({ key: agent.key, name: agent.name, description: agent.description }));
   }
@@ -101,6 +122,17 @@ export class AiAgentsService {
       ...(dto.timeoutMs === undefined ? {} : { timeoutMs: dto.timeoutMs }),
       ...(dto.enabled === undefined ? {} : { enabled: dto.enabled }),
       ...(dto.scheduleMinutes === undefined ? {} : { scheduleMinutes: dto.scheduleMinutes }),
+      ...(dto.scheduleKind === undefined ? {} : { scheduleKind: dto.scheduleKind }),
+      ...(dto.scheduleTime === undefined ? {} : { scheduleTime: dto.scheduleTime }),
+      ...(dto.scheduleWeekdays === undefined
+        ? {}
+        : {
+            scheduleWeekdays:
+              dto.scheduleWeekdays === null
+                ? Prisma.DbNull
+                : [...new Set(dto.scheduleWeekdays)].sort((a, b) => a - b),
+          }),
+      ...(dto.scheduleTimezone === undefined ? {} : { scheduleTimezone: dto.scheduleTimezone }),
       ...(dto.scheduleNote === undefined ? {} : { scheduleNote: dto.scheduleNote }),
       ...(dto.scheduleEnabled === undefined
         ? {}
@@ -117,17 +149,20 @@ export class AiAgentsService {
     if (data.scheduleEnabled && !data.scheduleOwner && !existing?.scheduleOwner) {
       throw new BadRequestException(t('error.ai.agentScheduleNeedsOwner'));
     }
-    if (data.scheduleEnabled && !(dto.scheduleMinutes ?? existing?.scheduleMinutes)) {
-      throw new BadRequestException(t('error.ai.agentScheduleNeedsInterval'));
-    }
+    this.validateSchedule(dto, existing);
 
+    // A changed shape restarts the slot count (#70): moving 09:00 to 08:00 at
+    // ten o'clock must not fire "the missed 08:00" the moment it is saved.
+    const reshaped = SCHEDULE_SHAPE.some((field) => dto[field] !== undefined);
+
+    const written = { ...data, ...(reshaped ? { scheduleChangedAt: new Date() } : {}) };
     await this.prisma.aiAgent.upsert({
       where: { workspaceId_key: { workspaceId, key } },
-      create: { workspaceId, key, builtIn: isBuiltIn, createdBy: userId ?? null, ...data },
-      update: data,
+      create: { workspaceId, key, builtIn: isBuiltIn, createdBy: userId ?? null, ...written },
+      update: written,
     });
     this.registry.invalidate(workspaceId);
-    return this.one(workspaceId, key);
+    return this.get(workspaceId, key);
   }
 
   /**
@@ -141,7 +176,7 @@ export class AiAgentsService {
     }
     await this.prisma.aiAgent.deleteMany({ where: { workspaceId, key } });
     this.registry.invalidate(workspaceId);
-    return this.one(workspaceId, key);
+    return this.get(workspaceId, key);
   }
 
   async create(workspaceId: string, dto: CreateAiAgentDto, userId?: string): Promise<AiAgentSummary> {
@@ -173,7 +208,7 @@ export class AiAgentsService {
       },
     });
     this.registry.invalidate(workspaceId);
-    return this.one(workspaceId, key);
+    return this.get(workspaceId, key);
   }
 
   async remove(workspaceId: string, key: string): Promise<void> {
@@ -185,12 +220,39 @@ export class AiAgentsService {
     this.registry.invalidate(workspaceId);
   }
 
-  private async one(workspaceId: string, key: string): Promise<AiAgentSummary> {
+  async get(workspaceId: string, key: string): Promise<AiAgentSummary> {
     const [agent, row] = await Promise.all([
       this.registry.resolve(workspaceId, key),
       this.prisma.aiAgent.findUnique({ where: { workspaceId_key: { workspaceId, key } } }),
     ]);
     return toSummary(agent, row);
+  }
+
+  /**
+   * An enabled schedule must be able to fire, judged on the row as it will be
+   * after this write: the field from the request where it names one (null
+   * included), the stored one otherwise. Checked whenever the result is
+   * enabled, not only on the request that enables it — switching an enabled
+   * schedule to weekly without weekdays would otherwise save a schedule that
+   * silently never runs.
+   */
+  private validateSchedule(dto: UpdateAiAgentDto, existing: AiAgent | null): void {
+    if (dto.scheduleTimezone && !isValidTimezone(dto.scheduleTimezone)) {
+      throw new BadRequestException(t('error.ai.agentScheduleBadTimezone', { zone: dto.scheduleTimezone }));
+    }
+    const enabled = dto.scheduleEnabled ?? existing?.scheduleEnabled ?? false;
+    if (!enabled) return;
+    const pick = <K extends (typeof SCHEDULE_SHAPE)[number]>(field: K) =>
+      dto[field] !== undefined ? dto[field] : existing?.[field];
+    const kind = scheduleKindOf(pick('scheduleKind') ?? null);
+    if (kind === 'interval') {
+      if (!pick('scheduleMinutes')) throw new BadRequestException(t('error.ai.agentScheduleNeedsInterval'));
+      return;
+    }
+    if (!pick('scheduleTime')) throw new BadRequestException(t('error.ai.agentScheduleNeedsTime'));
+    if (kind === 'weekly' && !weekdaysOf(pick('scheduleWeekdays'))?.length) {
+      throw new BadRequestException(t('error.ai.agentScheduleNeedsWeekdays'));
+    }
   }
 
   /**
@@ -250,10 +312,20 @@ function toSummary(agent: ResolvedAgent, row: AiAgent | null): AiAgentSummary {
     enabled: agent.enabled,
     overridden: row ? OVERRIDABLE.filter((field) => row[field] !== null) : [],
     scheduleEnabled: row?.scheduleEnabled ?? false,
+    scheduleKind: scheduleKindOf(row?.scheduleKind ?? null),
     scheduleMinutes: row?.scheduleMinutes ?? null,
+    scheduleTime: row?.scheduleTime ?? null,
+    scheduleWeekdays: weekdaysOf(row?.scheduleWeekdays),
+    scheduleTimezone: row?.scheduleTimezone ?? null,
     scheduleNote: row?.scheduleNote ?? null,
     scheduleOwner: row?.scheduleOwner ?? null,
     lastRunAt: row?.lastRunAt?.toISOString() ?? null,
+    // Only a schedule that can actually start has a next run: an owner is
+    // what the sweeper requires, and the agent must have an executor.
+    nextRunAt:
+      row?.scheduleOwner && agent.enabled && RUNNABLE_AGENTS.has(agent.key)
+        ? (nextRunOf(row)?.toISOString() ?? null)
+        : null,
     updatedAt: row?.updatedAt.toISOString() ?? null,
   };
 }
@@ -295,6 +367,12 @@ export class AgentRunsService {
     // a named connector must be an enabled repository in this workspace, and
     // an unnamed one is fine only when there is exactly one to choose.
     const connectorId = await this.resolveScope(workspaceId, agentKey, input.connectorId);
+    // Pages only mean something to an executor that reads pages; anything else
+    // would ignore them and run workspace-wide, which is not what was asked.
+    const documentIds = input.documentIds?.length ? [...new Set(input.documentIds)] : null;
+    if (documentIds && !isPageScopedAgent(agentKey)) {
+      throw new BadRequestException(t('error.ai.agentNotPageScoped', { key: agentKey }));
+    }
     // Checked at enqueue and again in the processor: a queued run can wait long
     // enough for the month's quota to be spent by something else.
     await this.usage.assertWithinBudget(workspaceId, principal.userId);
@@ -322,8 +400,12 @@ export class AgentRunsService {
         createdBy: principal.userId,
         locale: principal.locale,
         input:
-          input.note || connectorId
-            ? { ...(input.note ? { note: input.note } : {}), ...(connectorId ? { connectorId } : {}) }
+          input.note || connectorId || documentIds
+            ? {
+                ...(input.note ? { note: input.note } : {}),
+                ...(connectorId ? { connectorId } : {}),
+                ...(documentIds ? { documentIds } : {}),
+              }
             : undefined,
       },
     });
@@ -407,6 +489,8 @@ function toRunSummary(run: AgentRun, agentName: string): AgentRunSummary {
     agentKey: run.agentKey,
     agentName,
     trigger: run.trigger as AgentRunTrigger,
+    triggerId: run.triggerId,
+    subjectKey: run.subjectKey,
     status: run.status as AgentRunStatus,
     createdBy: run.createdBy,
     input: run.input && typeof run.input === 'object' ? (run.input as AgentRunInput) : null,

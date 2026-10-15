@@ -76,6 +76,20 @@ model Document {
   /// the pages made from it. Null = the page did not start from a template.
   templateRef           String?   @map("template_ref")
   templateVersion       Int?      @map("template_version")
+  /// Page restriction switch (#76). On: only grantees (and admins) pass this
+  /// node, and so its whole subtree.
+  restricted            Boolean   @default(false)
+  /// Every restricted node on the chain, outermost first: the project if it is
+  /// restricted, then restricted ancestors, then self. Denormalized so the
+  /// visibility predicate is one array test (`restricted_by && denied`) and
+  /// never a walk. Maintained only by PermissionService.recomputeRestrictedBy,
+  /// inside the transaction that changed a path, a project or a switch.
+  /// GIN-indexed in the migration (not expressible here).
+  restrictedBy          String[]  @default([]) @map("restricted_by") @db.Uuid
+  /// Bumped whenever `restricted_by` changes; the search stores are re-stamped
+  /// until `acl_stamped_version` catches up (#76, phase 3).
+  aclVersion            Int       @default(0) @map("acl_version")
+  aclStampedVersion     Int       @default(0) @map("acl_stamped_version")
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   project           Project            @relation(fields: [projectId], references: [id])
@@ -314,34 +328,39 @@ model MergeRequestThread {
 }
 
 model MergeRequestComment {
-  id        String    @id @default(uuid()) @db.Uuid
-  threadId  String    @map("thread_id") @db.Uuid
-  authorId  String    @map("author_id") @db.Uuid
-  body      String
+  id         String    @id @default(uuid()) @db.Uuid
+  threadId   String    @map("thread_id") @db.Uuid
+  authorId   String    @map("author_id") @db.Uuid
+  body       String
   // The comment in this thread that this one answers. Attribution, not
   // nesting: the list stays flat and createdAt-ordered, and SetNull means
   // deleting a comment leaves the replies that pointed at it in place.
-  replyToId String?   @map("reply_to_id") @db.Uuid
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  replyToId  String?   @map("reply_to_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   // Null until the author rewrites the comment — an edit is surfaced as one
   // rather than quietly replacing what someone read.
-  updatedAt DateTime? @map("updated_at") @db.Timestamptz
+  updatedAt  DateTime? @map("updated_at") @db.Timestamptz
   // Which agent wrote this, or null when a person did. MergeRequestThread.source
   // answers the same question for a *thread*, but only about its opening
   // comment — an agent answering an @mention posts into a human's thread, and a
   // reader must still be told a machine is speaking. `authorId` stays the person
   // who mentioned it: they are who authorized the call, and who it is billed to.
-  agentKey  String?   @map("agent_key")
+  agentKey   String?   @map("agent_key")
   // A model turn outlives the request that triggers it, so the comment is
   // written first and filled in after. While set, the body is not yet an answer.
   // The row doubles as the claim that stops one mention firing twice.
-  pending   Boolean   @default(false)
+  pending    Boolean   @default(false)
+  // The agent run this pending reply is waiting on (#70): an agent with an
+  // enabled comment.mention trigger answers with its run's result rather than
+  // a chat turn, filled in by MentionRepliesService.sweepRunReplies. No FK.
+  agentRunId String?   @map("agent_run_id") @db.Uuid
 
   thread  MergeRequestThread    @relation(fields: [threadId], references: [id])
   replyTo MergeRequestComment?  @relation("MergeRequestCommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies MergeRequestComment[] @relation("MergeRequestCommentReplies")
 
   @@index([threadId, createdAt])
+  @@index([agentRunId])
   @@map("merge_request_comments")
 }
 
@@ -377,25 +396,27 @@ model DocumentThread {
 }
 
 model DocumentComment {
-  id        String    @id @default(uuid()) @db.Uuid
-  threadId  String    @map("thread_id") @db.Uuid
-  authorId  String    @map("author_id") @db.Uuid
-  body      String
+  id         String    @id @default(uuid()) @db.Uuid
+  threadId   String    @map("thread_id") @db.Uuid
+  authorId   String    @map("author_id") @db.Uuid
+  body       String
   // See MergeRequestComment.replyToId.
-  replyToId String?   @map("reply_to_id") @db.Uuid
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  replyToId  String?   @map("reply_to_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   // Null until the author rewrites the comment — an edit is surfaced as one
   // rather than quietly replacing what someone read.
-  updatedAt DateTime? @map("updated_at") @db.Timestamptz
-  // See MergeRequestComment.agentKey / .pending.
-  agentKey  String?   @map("agent_key")
-  pending   Boolean   @default(false)
+  updatedAt  DateTime? @map("updated_at") @db.Timestamptz
+  // See MergeRequestComment.agentKey / .pending / .agentRunId.
+  agentKey   String?   @map("agent_key")
+  pending    Boolean   @default(false)
+  agentRunId String?   @map("agent_run_id") @db.Uuid
 
   thread  DocumentThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
   replyTo DocumentComment?  @relation("DocumentCommentReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies DocumentComment[] @relation("DocumentCommentReplies")
 
   @@index([threadId, createdAt])
+  @@index([agentRunId])
   @@map("document_comments")
 }
 
@@ -434,6 +455,8 @@ model Project {
   avatarEmoji     String?   @map("avatar_emoji")
   avatarColor     String?   @map("avatar_color")
   avatarUpdatedAt DateTime? @map("avatar_updated_at") @db.Timestamptz
+  /// Project restriction switch (#76): every page in it inherits the restriction.
+  restricted      Boolean   @default(false)
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   documents     Document[]
@@ -564,7 +587,7 @@ model EmailVerificationToken {
 model WorkspaceMember {
   workspaceId     String   @map("workspace_id") @db.Uuid
   userId          String   @map("user_id") @db.Uuid
-  // viewer < editor < admin (Phase 5 ACL hierarchy).
+  // WORKSPACE_ROLES in contracts: guest < viewer < editor < admin (#76).
   role            String   @default("viewer")
   // Gate for knowledge.query_graph / POST /v1/graph/query (plan.md §9:
   // trusted-operator only). Orthogonal to role on purpose.
@@ -576,6 +599,101 @@ model WorkspaceMember {
 
   @@id([workspaceId, userId])
   @@map("workspace_members")
+}
+
+// A workspace-scoped set of members that page and project restrictions grant
+// to (#76). `source` is GROUP_SOURCES in contracts: `manual` groups are edited
+// over the API, `connector` ones are mirrored by ACL sync (connectorId +
+// externalId name the upstream group) and `scim` is reserved for provisioning;
+// both non-manual kinds answer 409 to a manual edit. No FK on workspace_id or
+// connector_id (house policy).
+model UserGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  name        String
+  description String?
+  source      String   @default("manual")
+  connectorId String?  @map("connector_id") @db.Uuid
+  externalId  String?  @map("external_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  members UserGroupMember[]
+
+  @@unique([workspaceId, name])
+  @@unique([connectorId, externalId])
+  @@map("user_groups")
+}
+
+// No FK on user_id (house policy). Rows are removed with the workspace
+// membership they depend on — WorkspacesService.removeMember — so re-adding a
+// person does not silently restore what their old groups were granted.
+model UserGroupMember {
+  groupId   String   @map("group_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  source    String   @default("manual")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  group UserGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("user_group_members")
+}
+
+/// One grant on a project or page (#76). No FK on workspace, resource or
+/// subject (house policy); the services delete grants with their subject.
+model AccessGrant {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  /// ACCESS_RESOURCE_TYPES: project | document
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id") @db.Uuid
+  /// ACCESS_SUBJECT_TYPES: user | group
+  subjectType  String   @map("subject_type")
+  subjectId    String   @map("subject_id") @db.Uuid
+  /// ACCESS_LEVELS: view | edit | manage
+  level        String
+  /// ACCESS_GRANT_ORIGINS — manual | connector. Connector rows are rewritten
+  /// by that connector's ACL sync (#76, phase 6), manual ones never.
+  origin       String   @default("manual")
+  connectorId  String?  @map("connector_id") @db.Uuid
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([resourceType, resourceId, subjectType, subjectId, origin])
+  @@index([workspaceId, subjectType, subjectId])
+  @@index([resourceId])
+  @@index([connectorId])
+  @@map("access_grants")
+}
+
+/// Somebody refused a page or project asking for a level on it (#76, phase 5).
+/// No FK on workspace, resource, requester or decider (house policy). At most
+/// one pending row per requester and resource: a partial unique index in the
+/// migration (`access_requests_one_pending`), which Prisma cannot express.
+model AccessRequest {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  /// ACCESS_RESOURCE_TYPES: project | document
+  resourceType String    @map("resource_type")
+  resourceId   String    @map("resource_id") @db.Uuid
+  requesterId  String    @map("requester_id") @db.Uuid
+  /// REQUESTABLE_ACCESS_LEVELS: view | edit
+  level        String
+  message      String?
+  /// ACCESS_REQUEST_STATUSES: pending | approved | denied | cancelled | expired
+  status       String    @default("pending")
+  decidedBy    String?   @map("decided_by") @db.Uuid
+  decidedLevel String?   @map("decided_level")
+  decidedAt    DateTime? @map("decided_at") @db.Timestamptz
+  /// Why it was denied, when the manager said.
+  reason       String?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([workspaceId, status, createdAt])
+  @@index([resourceType, resourceId, status])
+  @@index([requesterId, status])
+  @@map("access_requests")
 }
 
 // Phase 5 audit trail: every trusted-operator graph query is recorded here.
@@ -933,8 +1051,22 @@ model AiSkill {
   createdBy    String?  @map("created_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  /// 'manual' | 'repo' (AI_SKILL_SOURCES, #70). A `repo` skill was read from a
+  /// guidance file of a repository connector and imported disabled.
+  source              String    @default("manual")
+  /// No FK: deleting the connector must not delete what an admin enabled.
+  sourceConnectorId   String?   @map("source_connector_id") @db.Uuid
+  sourcePath          String?   @map("source_path")
+  /// SHA-256 of the file's content as last seen upstream.
+  sourceSha           String?   @map("source_sha")
+  /// New upstream text awaiting an admin's Accept — a sync never rewrites the
+  /// live `instructions` of an enabled skill.
+  pendingInstructions String?   @map("pending_instructions")
+  sourceRemovedAt     DateTime? @map("source_removed_at") @db.Timestamptz
 
   @@unique([workspaceId, name])
+  /// One skill per guidance file. NULLs are distinct in PG, so manual rows never collide.
+  @@unique([workspaceId, sourceConnectorId, sourcePath])
   @@index([workspaceId, createdAt])
   @@map("ai_skills")
 }
@@ -979,15 +1111,28 @@ model AiAgent {
   /// Background schedule (docs/features/20). Off by default — the failure mode
   /// of unattended AI is an avalanche, not a slow queue. A due check inside a
   /// fixed sweep, mirroring Connector.syncIntervalMinutes; not a cron.
-  scheduleEnabled Boolean   @default(false) @map("schedule_enabled")
-  scheduleMinutes Int?      @map("schedule_minutes")
+  scheduleEnabled   Boolean   @default(false) @map("schedule_enabled")
+  scheduleMinutes   Int?      @map("schedule_minutes")
   /// Extra instruction seeded into every scheduled run.
-  scheduleNote    String?   @map("schedule_note")
+  scheduleNote      String?   @map("schedule_note")
   /// Who owns scheduled runs: they execute as this user and are capped by that
   /// user's role. NOT NULL in effect for scheduling — the sweeper skips a row
   /// without one rather than inventing ambient authority.
-  scheduleOwner   String?   @map("schedule_owner") @db.Uuid
-  lastRunAt       DateTime? @map("last_run_at") @db.Timestamptz
+  scheduleOwner     String?   @map("schedule_owner") @db.Uuid
+  lastRunAt         DateTime? @map("last_run_at") @db.Timestamptz
+  /// Time-of-day schedules (#70). Sparse: a null kind is 'interval', so every
+  /// row written before these columns behaves exactly as it did. Read through
+  /// contracts' `nextScheduledRun` by the sweeper and the summary alike.
+  scheduleKind      String?   @map("schedule_kind")
+  /// `HH:MM`, 24-hour, in scheduleTimezone. A CHECK in the migration holds the format.
+  scheduleTime      String?   @map("schedule_time")
+  /// number[] of weekdays, 0 = Sunday. Json, not int[] — no Postgres arrays here.
+  scheduleWeekdays  Json?     @map("schedule_weekdays")
+  /// IANA zone; null reads as UTC.
+  scheduleTimezone  String?   @map("schedule_timezone")
+  /// When the schedule's shape last changed. Slots are counted from the later
+  /// of this and lastRunAt, so an edit never fires a slot it moved into the past.
+  scheduleChangedAt DateTime? @map("schedule_changed_at") @db.Timestamptz
 
   createdBy String?  @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -1015,11 +1160,17 @@ model AgentRun {
   /// The override row, when one exists. Null for an untouched built-in.
   agentId     String? @map("agent_id") @db.Uuid
 
-  /// 'manual' | 'schedule' — see AGENT_RUN_TRIGGERS. There is no 'event'
-  /// trigger until something emits one (docs/features/20-agents-todo.md).
-  trigger String @default("manual")
+  /// 'manual' | 'schedule' | 'event' | 'webhook' | 'report' — see
+  /// AGENT_RUN_TRIGGERS. 'event' is written only by AgentTriggerService (#70).
+  trigger    String  @default("manual")
+  /// The agent_triggers row behind an 'event' run. No FK: deleting a trigger
+  /// must not take its history with it.
+  triggerId  String? @map("trigger_id") @db.Uuid
+  /// What the run is about — `doc:<id>`, `mr:<id>`, `connector:<id>`. The key
+  /// the in-flight and cooldown guards read; null for an unscoped run.
+  subjectKey String? @map("subject_key")
   /// pending → running → succeeded | failed | cancelled
-  status  String @default("pending")
+  status     String  @default("pending")
 
   /// The user this run acts as. Its role caps what the run's tools may do, and
   /// a disabled or demoted owner fails the run rather than escalating it.
@@ -1059,7 +1210,84 @@ model AgentRun {
 
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, agentKey, createdAt])
+  @@index([workspaceId, agentKey, subjectKey, createdAt])
+  @@index([triggerId, subjectKey, createdAt])
   @@map("agent_runs")
+}
+
+/// Starts an agent run when something happens in the workspace (#70).
+///
+/// Several per agent, hence a table rather than more ai_agents columns. Every
+/// guard AgentTriggerService applies is configured here and none is optional:
+/// off on creation, an owner to run as, a cooldown per subject.
+model AgentTrigger {
+  id              String    @id @default(uuid()) @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
+  /// Null hears every project in the workspace.
+  projectId       String?   @map("project_id") @db.Uuid
+  /// ai_agents.key — resolved through the registry when the trigger fires.
+  agentKey        String    @map("agent_key")
+  /// AgentTriggerEvent (contracts). A CHECK in the migration holds the vocabulary.
+  event           String
+  /// AgentTriggerFilter — sparse; an absent field matches everything.
+  filter          Json      @default("{}")
+  enabled         Boolean   @default(false)
+  /// Who runs execute and bill as: the admin who last enabled the trigger.
+  /// Null starts nothing (the AiAgent.scheduleOwner rule).
+  ownerId         String?   @map("owner_id") @db.Uuid
+  cooldownMinutes Int       @default(60) @map("cooldown_minutes")
+  /// Seeded into each run's input.note.
+  note            String?
+  /// A 'webhook' trigger's HMAC secret, as an ai/secret-box.ts envelope.
+  /// Write-only over the API: rotate-secret shows a new one once.
+  webhookSecret   String?   @map("webhook_secret")
+  lastFiredAt     DateTime? @map("last_fired_at") @db.Timestamptz
+
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, event, enabled])
+  @@index([workspaceId, agentKey])
+  @@map("agent_triggers")
+}
+
+/// A correction a person taught an agent (#70): "team guidance" appended to
+/// that agent's later prompts. Only `active` rows reach a prompt, and only an
+/// admin makes a row active — the text is trusted because a person approved
+/// it, the same footing as an ai_skills row.
+model AgentLearning {
+  id          String  @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  /// Null applies in every project.
+  projectId   String? @map("project_id") @db.Uuid
+  /// Null applies to every agent.
+  agentKey    String? @map("agent_key")
+  text        String
+  /// AGENT_LEARNING_STATUSES — proposed | active | archived.
+  status      String  @default("proposed")
+
+  /// AGENT_LEARNING_SOURCES — document-thread | mr-thread | finding | manual.
+  /// Provenance only, none of it a FK: the learning outlives its thread.
+  sourceKind     String  @default("manual") @map("source_kind")
+  /// The thread a thread source came from.
+  sourceId       String? @map("source_id") @db.Uuid
+  /// The page the source sits on (a page thread) or cites (a finding).
+  documentId     String? @map("document_id") @db.Uuid
+  /// The merge request an mr-thread source sits on.
+  mergeRequestId String? @map("merge_request_id") @db.Uuid
+  runId          String? @map("run_id") @db.Uuid
+  findingIndex   Int?    @map("finding_index")
+
+  createdBy  String    @map("created_by") @db.Uuid
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, agentKey, status])
+  @@index([runId, findingIndex])
+  @@map("agent_learnings")
 }
 
 /// A plugin is an external MCP server whose tools join the assistant's bounded
@@ -1504,6 +1732,17 @@ model Connector {
   lastRunId    String?   @map("last_run_id") @db.Uuid
   lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz
 
+  /// Access mirroring (#76). Columns rather than `config` keys: like sync_mode
+  /// they apply to every kind, and the schedule sweeper filters on them.
+  /// CONNECTOR_ACL_MODES — 'off' | 'mirror' | 'mirror_strict'.
+  aclMode                String    @default("off") @map("acl_mode")
+  /// Minutes between ACL-only refreshes; null = CONNECTOR_ACL_SYNC_DEFAULT_MIN.
+  aclSyncIntervalMinutes Int?      @map("acl_sync_interval_minutes")
+  /// One workspace group every page is restricted to, for a kind that cannot
+  /// read per-item ACLs (Notion). No FK, as for every subject id.
+  aclAudienceGroupId     String?   @map("acl_audience_group_id") @db.Uuid
+  aclSyncedAt            DateTime? @map("acl_synced_at") @db.Timestamptz
+
   /// Frozen at creation: worker-produced stages and warnings have no request to
   /// read Accept-Language from (same reasoning as import_jobs.locale).
   locale String @default("en")
@@ -1512,11 +1751,12 @@ model Connector {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  project   Project             @relation(fields: [projectId], references: [id])
-  links     ConnectorLink[]
-  runs      ConnectorRun[]
-  conflicts ConnectorConflict[]
-  workItems ConnectorWorkItem[]
+  project    Project             @relation(fields: [projectId], references: [id])
+  links      ConnectorLink[]
+  runs       ConnectorRun[]
+  conflicts  ConnectorConflict[]
+  workItems  ConnectorWorkItem[]
+  identities ExternalIdentity[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId, kind])
@@ -1541,9 +1781,16 @@ model ConnectorLink {
   externalVersion String? @map("external_version")
 
   /// sha256 of the markdown both sides last agreed on.
-  contentHash String? @map("content_hash")
+  contentHash   String? @map("content_hash")
   /// The revision that hash came from.
-  revisionId  String? @map("revision_id") @db.Uuid
+  revisionId    String? @map("revision_id") @db.Uuid
+  /// sha256 of the restriction last written for this page (#76): the switch
+  /// plus its connector grants, after identity mapping. Null = never mirrored.
+  aclHash       String? @map("acl_hash")
+  /// Whether this connector switched the page's restriction on. Only then may
+  /// an upstream that opened up switch it off again: a page a person
+  /// restricted by hand stays restricted.
+  aclRestricted Boolean @default(false) @map("acl_restricted")
 
   lastPulledAt DateTime? @map("last_pulled_at") @db.Timestamptz
   lastPushedAt DateTime? @map("last_pushed_at") @db.Timestamptz
@@ -1554,6 +1801,33 @@ model ConnectorLink {
   @@unique([connectorId, externalId])
   @@index([documentId])
   @@map("connector_links")
+}
+
+/// An upstream person a connector's ACLs name (#76, phase 6), and who they are
+/// here. Kept while unmapped, so the connector page can list them and a later
+/// signup or a manual mapping re-resolves them on the next ACL sync.
+model ExternalIdentity {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  connectorId String   @map("connector_id") @db.Uuid
+  /// Confluence accountId / userKey, GitHub numeric user id.
+  externalId  String   @map("external_id")
+  /// Upstream's name for them. Source text: length-limited, rendered as text.
+  displayName String?  @map("display_name")
+  email       String?
+  /// No FK (house policy).
+  userId      String?  @map("user_id") @db.Uuid
+  /// EXTERNAL_IDENTITY_MAPPINGS — manual | provider | email; null while unmapped.
+  /// A manual mapping is never overwritten by resolution.
+  mappedBy    String?  @map("mapped_by")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@unique([connectorId, externalId])
+  @@index([workspaceId, userId])
+  @@map("external_identities")
 }
 
 /// One sync execution. The row is the truth and the queue is only the
@@ -1652,6 +1926,9 @@ model ConnectorRunItem {
   draft Json?
 
   contentHash String? @map("content_hash")
+  /// The upstream ACL read while staging (#76), normalized — `ExternalAcl`, or
+  /// `{ error }` when it could not be read. Applied with the page.
+  acl         Json?
   /// workspaces/{ws}/connector-runs/{runId}/items/{itemId}/staged.md
   stagedKey   String? @map("staged_key")
   /// .../incoming.md — the unedited conversion. Never rewritten, so "what did

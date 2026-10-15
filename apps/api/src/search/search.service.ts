@@ -1,8 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { DocumentTrust, RelatedDocumentResult, SearchResponse, SearchResult } from '@knowledge/contracts';
 import { isInactive, trustWeight, verificationStateFor } from '@knowledge/contracts';
 import { currentTrace, emitBacktest } from '@knowledge/observability';
+import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { DocumentAclFilter } from '../common/document-acl.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { GraphService, type ChunkHit } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
 import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
@@ -23,9 +28,17 @@ export class SearchService {
     @Inject(FULLTEXT_PROVIDER) private readonly fulltext: FulltextProvider,
     private readonly provenance: ProvenanceService,
     private readonly policy: VerificationPolicyService,
+    private readonly permissions: PermissionService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
-  async search(dto: SearchDto): Promise<SearchResponse> {
+  /**
+   * `scope` is required (#76): every hit, related page and entity returned is
+   * one the caller may open. The stores apply the scope's page list as a
+   * predicate where they can; the PG join below applies the predicate itself
+   * and is the one that decides.
+   */
+  async search(dto: SearchDto, scope: AccessScope): Promise<SearchResponse> {
     const mode = dto.mode ?? 'hybrid';
     const k = dto.limit ?? 20;
     // Feature 02: with any metadata filter (category, project or tag),
@@ -45,10 +58,18 @@ export class SearchService {
     // something to be displaced by; when it is off, fetchK is exactly what it
     // was before #66, because RRF over a longer candidate list is a different
     // ranking and "off" promises the old one.
-    const settings = await this.policy.effective(dto.workspaceId);
+    const [settings, acl] = await Promise.all([
+      this.policy.effective(dto.workspaceId),
+      this.permissions.documentFilterFor(scope),
+    ]);
     const trustOn = settings.trustRanking;
     const filtered = categories || projectIds || tagKeys || states;
-    const fetchK = Math.max(filtered ? k * 5 : k, trustOn ? k * 2 : k);
+    // When the stores could not take the caller's page list as a predicate
+    // (past ACL_DENY_LIST_MAX), the post-filter below is what drops their
+    // hidden pages — over-fetch for that as for any other filter.
+    const aclPostOnly = acl.kind !== 'all' && !acl.pushdown;
+    const aclOverfetch = aclPostOnly ? this.config.get('SEARCH_ACL_OVERFETCH', { infer: true }) : 1;
+    let fetchK = Math.max(filtered ? k * 5 : k, trustOn ? k * 2 : k, k * aclOverfetch);
 
     // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
     // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
@@ -67,18 +88,29 @@ export class SearchService {
       return [value, since(at)];
     };
 
-    const [[vectorHits, vectorMs], [textHits, fulltextMs], [taggedDocs, tagsMs]] = await Promise.all([
-      timed(() =>
-        useVector
-          ? this.embeddings.embed(dto.query).then((e) => this.graph.searchChunks(dto.workspaceId, e, fetchK))
-          : Promise.resolve([] as ChunkHit[]),
-      ),
-      timed(() => (useText ? this.fulltext.search(dto.workspaceId, dto.query, fetchK) : Promise.resolve([]))),
-      // Overlaps the embedding round-trip rather than serializing after it.
-      timed(() => (tagKeys ? this.graph.getDocumentIdsByTags(dto.workspaceId, tagKeys) : Promise.resolve(null))),
-    ]);
+    // The query embedding is computed once and reused by a refill round.
+    let embedding: Promise<number[]> | null = null;
+    const legs = (n: number) =>
+      Promise.all([
+        timed(() =>
+          useVector
+            ? (embedding ??= this.embeddings.embed(dto.query)).then((e) =>
+                this.graph.searchChunks(dto.workspaceId, e, n, acl),
+              )
+            : Promise.resolve([] as ChunkHit[]),
+        ),
+        timed(() => (useText ? this.fulltext.search(dto.workspaceId, dto.query, n, acl) : Promise.resolve([]))),
+      ]);
 
-    const hits = this.fuse(vectorHits, textHits, fetchK);
+    const [[[vectorHitsFirst, vectorMs], [textHitsFirst, fulltextMs]], [taggedDocs, tagsMs]] = await Promise.all([
+      legs(fetchK),
+      // Overlaps the embedding round-trip rather than serializing after it.
+      timed(() => (tagKeys ? this.graph.getDocumentIdsByTags(dto.workspaceId, tagKeys, acl) : Promise.resolve(null))),
+    ]);
+    let vectorHits = vectorHitsFirst;
+    let textHits = textHitsFirst;
+    let hits = this.fuse(vectorHits, textHits, fetchK);
+    let aclFiltered = 0;
 
     /**
      * The measurement a recall@k / MRR sweep replays.
@@ -106,6 +138,7 @@ export class SearchService {
         fulltextHits: textHits.length,
         fusedHits: hits.length,
         trustApplied: trustOn,
+        ...(acl.kind !== 'all' ? { aclFiltered } : {}),
         results: out.map((r) => ({ documentId: r.documentId, chunkId: r.chunkId, score: r.score })),
       });
     };
@@ -116,30 +149,37 @@ export class SearchService {
     }
 
     // Join PG for authoritative titles (three-store separation: PG owns
-    // metadata) and for everything the trust re-rank reads: the stamp, the
-    // flag, the owner, the freshness clock and the archive mark.
-    const docIds = [...new Set(hits.map((h) => h.documentId))];
-    const [docs, issues] = await Promise.all([
-      this.prisma.document.findMany({
-        where: { id: { in: docIds } },
-        select: {
-          id: true,
-          title: true,
-          category: true,
-          projectId: true,
-          defaultBranch: true,
-          verifiedAt: true,
-          verifiedRevisionId: true,
-          verificationExpiresAt: true,
-          verificationFlag: true,
-          ownerId: true,
-          lastActivityAt: true,
-          archivedAt: true,
-          branches: { select: { name: true, headRevisionId: true } },
-        },
-      }),
-      this.provenance.openIssueCounts(docIds),
-    ]);
+    // metadata), for everything the trust re-rank reads — the stamp, the flag,
+    // the owner, the freshness clock and the archive mark — and for the
+    // page-permission predicate itself (#76). The stores' filter came from a
+    // list read a moment earlier; this is the read that decides.
+    // A hit is kept only if this read returns its page, for every reader: a
+    // page gone from PG can leave chunks behind in a store, and those must not
+    // outrank real answers as "(unknown)" for whoever happens to hide nothing.
+    const visibleHits = async (candidates: ChunkHit[]) => {
+      const docIds = [...new Set(candidates.map((h) => h.documentId))];
+      const docs = await this.loadDocs(docIds, scope);
+      const seen = new Set(docs.map((d) => d.id));
+      return { docs, kept: candidates.filter((h) => seen.has(h.documentId)) };
+    };
+    let { docs, kept } = await visibleHits(hits);
+    aclFiltered = hits.length - kept.length;
+
+    // One refill round (#76): the post-filter dropped hits, left fewer than k,
+    // and a leg came back full — so it had more to give. Bounded by
+    // SEARCH_ACL_MAX_FETCH, and only ever once.
+    const maxFetch = this.config.get('SEARCH_ACL_MAX_FETCH', { infer: true });
+    const saturated = vectorHits.length >= fetchK || textHits.length >= fetchK;
+    if (aclFiltered > 0 && kept.length < k && saturated && fetchK < maxFetch) {
+      fetchK = Math.min(fetchK * 2, maxFetch);
+      [[vectorHits], [textHits]] = await legs(fetchK);
+      hits = this.fuse(vectorHits, textHits, fetchK);
+      ({ docs, kept } = await visibleHits(hits));
+      aclFiltered = hits.length - kept.length;
+    }
+
+    const docIds = docs.map((d) => d.id);
+    const issues = await this.provenance.openIssueCounts(docIds);
     const docById = new Map(docs.map((d) => [d.id, d]));
     const now = new Date();
     const trustOf = new Map<string, DocumentTrust>();
@@ -157,7 +197,7 @@ export class SearchService {
     // Archived pages drop first, whatever the switch says: they are put away,
     // not demoted. Then the multiplicative weight, a re-sort, and only then
     // the cut to k — the weight is the point of the over-fetch above.
-    const weighted = hits
+    const weighted = kept
       .filter((h) => includeArchived || !docById.get(h.documentId)?.archivedAt)
       .filter((h) => !taggedDocs || taggedDocs.has(h.documentId))
       .filter((h) => !categories || categories.has((docById.get(h.documentId)?.category ?? 'other') as never))
@@ -187,7 +227,8 @@ export class SearchService {
     // (plan.md §12.7). Walk relation edges out from the hit documents.
     if (mode === 'hybrid' && dto.expandGraph) {
       const related = await this.expandGraph(
-        dto.workspaceId,
+        scope,
+        acl,
         results,
         Math.min(dto.expandGraph.depth ?? 1, 3),
         dto.expandGraph.relationTypes,
@@ -196,6 +237,28 @@ export class SearchService {
       return { results, related };
     }
     return { results };
+  }
+
+  /** The PG rows the join reads, restricted to pages `scope` may open. */
+  private loadDocs(docIds: string[], scope: AccessScope) {
+    return this.prisma.document.findMany({
+      where: { id: { in: docIds }, AND: [visibilityWhere(scope)] },
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        projectId: true,
+        defaultBranch: true,
+        verifiedAt: true,
+        verifiedRevisionId: true,
+        verificationExpiresAt: true,
+        verificationFlag: true,
+        ownerId: true,
+        lastActivityAt: true,
+        archivedAt: true,
+        branches: { select: { name: true, headRevisionId: true } },
+      },
+    });
   }
 
   /**
@@ -227,13 +290,17 @@ export class SearchService {
    * only reachable through the graph, with the connecting edges as evidence.
    */
   private async expandGraph(
-    workspaceId: string,
+    scope: AccessScope,
+    acl: DocumentAclFilter,
     results: SearchResult[],
     depth: number,
     relationTypes?: string[],
     includeArchived = false,
   ): Promise<RelatedDocumentResult[]> {
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+    // The graph comes back without the caller's hidden pages and without the
+    // entities only those pages mention (#76), so the walk cannot pass
+    // through one and an attached entity list cannot name what it introduced.
+    const g = await this.graph.getWorkspaceRelationGraph(scope.workspaceId, acl);
     const allowed = relationTypes?.length ? new Set(relationTypes) : null;
     const edges = allowed ? g.edges.filter((e) => allowed.has(e.type)) : g.edges;
 
@@ -289,12 +356,18 @@ export class SearchService {
     }
     // The graph does not know about archive (docs/features/39): a put-away page
     // keeps its edges, so the walk reaches it and PG says whether to show it.
-    if (!includeArchived && related.size > 0) {
-      const archived = await this.prisma.document.findMany({
-        where: { id: { in: [...related.keys()] }, archivedAt: { not: null } },
-        select: { id: true },
+    // PG also has the last word on visibility (#76) and on existence, as for
+    // the hits: a page it does not return is dropped, whoever is asking.
+    if (related.size > 0) {
+      const rows = await this.prisma.document.findMany({
+        where: { id: { in: [...related.keys()] }, AND: [visibilityWhere(scope)] },
+        select: { id: true, archivedAt: true },
       });
-      for (const { id } of archived) related.delete(id);
+      const shown = new Map(rows.map((r) => [r.id, r]));
+      for (const id of related.keys()) {
+        const row = shown.get(id);
+        if (!row || (!includeArchived && row.archivedAt)) related.delete(id);
+      }
     }
     return [...related.values()].sort((a, b) => a.distance - b.distance || b.via.length - a.via.length);
   }

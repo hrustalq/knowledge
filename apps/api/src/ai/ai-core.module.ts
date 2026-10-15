@@ -4,6 +4,7 @@ import { AiConfigService } from './ai-config.service.js';
 import { AiProvidersService } from './ai-providers.service.js';
 import { AiUsageService } from './ai-usage.service.js';
 import { AiSkillsService } from './ai-skills.service.js';
+import { AgentLearningsService } from './agent-learnings.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 
 /**
@@ -22,11 +23,13 @@ import { SourcePolicyService } from './source-policy.service.js';
  * AiSkillsService lives here for the same reason (it needs only Prisma): a
  * workflow step and a background agent both carry `skillIds`, and rendering
  * them anywhere but through this service is how feature 17 ended up with a
- * second copy of the `<skills>` block.
+ * second copy of the `<skills>` block. AgentLearningsService (#70) sits beside
+ * it for the same reason: the chat turn, a mention reply and every background
+ * executor render one "team guidance" block.
  */
 @Module({
   imports: [PrismaModule],
-  providers: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, SourcePolicyService],
-  exports: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, SourcePolicyService],
+  providers: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService],
+  exports: [AiProvidersService, AiConfigService, AiUsageService, AiSkillsService, AgentLearningsService, SourcePolicyService],
 })
 export class AiCoreModule {}

@@ -20,6 +20,7 @@ import { ConnectorLinksService } from '../connectors/connector-links.service.js'
 import { ConnectorProducer } from '../connectors/connector.producer.js';
 import { ConnectorsService, toRunInfo } from '../connectors/connectors.service.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import type { Principal } from '../auth/principal.js';
 import { DocumentsService } from './documents.service.js';
 import { DocumentRelationsService } from './document-relations.service.js';
@@ -71,17 +72,25 @@ export class DocumentsController {
     private readonly threads: DocumentThreadsService,
     private readonly glossary: GlossaryService,
     private readonly aiReadable: AiReadableService,
+    private readonly permissions: PermissionService,
   ) {}
 
   @Post()
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Create document (optionally inline content, auto-finalizes)' })
-  create(@Body() dto: CreateDocumentDto, @CurrentPrincipal() principal: Principal) {
+  async create(@Body() dto: CreateDocumentDto, @CurrentPrincipal() principal: Principal) {
+    // A page under a restricted node inherits it, so placing one there is
+    // editing that node (#76) — and a hidden parent id cannot be probed by it.
+    await this.permissions.requireCreateUnder(await this.permissions.scopeFor(principal, dto.workspaceId), {
+      projectId: dto.projectId,
+      ...(dto.parentId ? { parentId: dto.parentId } : {}),
+    });
     return this.documents.createDocument(dto, principal?.userId);
   }
 
   @Get()
-  @Access('viewer', 'query')
+  // Guests too: the list is filtered to what they were granted (#76).
+  @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: 'List documents in workspace, filtered by the search facets' })
   @ApiQuery({ name: 'projectId', required: false, description: 'Restrict to one project' })
   @ApiQuery({ name: 'category', required: false, description: 'Restrict to one category' })
@@ -93,7 +102,8 @@ export class DocumentsController {
     description: 'Comma-separated frontmatter tags; bare name or `tag:` entity key',
   })
   @ApiQuery({ name: 'includeArchived', required: false, description: '1 to include archived pages (docs/features/39)' })
-  list(
+  async list(
+    @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
@@ -106,7 +116,8 @@ export class DocumentsController {
   ) {
     // The singular params predate the facets and still work; each is folded
     // into its plural so callers never have to know which one won.
-    return this.documents.listDocuments(workspaceId, limit ? Number(limit) : 20, cursor, {
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    return this.documents.listDocuments(scope, limit ? Number(limit) : 20, cursor, {
       categories: csv(categories, category),
       projectIds: csv(projectIds, projectId),
       tags: csv(tags),
@@ -115,7 +126,7 @@ export class DocumentsController {
   }
 
   @Get('tree')
-  @Access('viewer', 'query')
+  @Access('viewer', 'query', { guests: true })
   @ApiOperation({
     summary: 'Document hierarchy (feature 08). Omit depth for the whole tree; pass depth=1 to walk it a level at a time',
   })
@@ -123,14 +134,16 @@ export class DocumentsController {
   @ApiQuery({ name: 'parentId', required: false, description: 'Children of this node; omit for the top level' })
   @ApiQuery({ name: 'depth', required: false, description: 'Levels to load below parentId; omit to load all of them' })
   @ApiQuery({ name: 'includeArchived', required: false, description: '1 to include archived pages (docs/features/39)' })
-  tree(
+  async tree(
+    @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('projectId') projectId?: string,
     @Query('parentId') parentId?: string,
     @Query('depth') depth?: string,
     @Query('includeArchived') includeArchived?: string,
   ) {
-    return this.documents.getTree(workspaceId, projectId || undefined, {
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    return this.documents.getTree(scope, projectId || undefined, {
       parentId: parentId || null,
       ...(depth ? { depth: Number(depth) } : {}),
       includeArchived: flag(includeArchived),
@@ -142,11 +155,13 @@ export class DocumentsController {
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'Whole-workspace relation graph for the pages landing; scoped to one project when projectId is given' })
   @ApiQuery({ name: 'projectId', required: false, description: 'Restrict the graph to one project' })
-  workspaceGraph(
+  async workspaceGraph(
+    @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('projectId') projectId?: string,
   ) {
-    return this.documents.getWorkspaceGraph(workspaceId, projectId || undefined);
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    return this.documents.getWorkspaceGraph(scope, projectId || undefined);
   }
 
   @Get(':id')
@@ -253,16 +268,21 @@ export class DocumentsController {
   @Get(':id/ancestors')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Ancestor chain (root first) — for breadcrumbs and lazy tree expansion' })
-  ancestors(@Param('id', ParseUUIDPipe) id: string) {
-    return this.documents.getAncestors(id);
+  async ancestors(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+    return this.documents.getAncestors(id, await this.permissions.scopeForDocument(principal, id));
   }
 
   @Get(':id/graph')
   @Access('viewer', 'document')
   @ApiOperation({ summary: 'Document neighbourhood in the knowledge graph (feature 06); depth = entity hops (1-3)' })
   @ApiQuery({ name: 'depth', required: false })
-  graph(@Param('id', ParseUUIDPipe) id: string, @Query('depth') depth?: string) {
-    return this.documents.getDocumentGraph(id, depth ? Number(depth) : 1);
+  async graph(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query('depth') depth?: string,
+  ) {
+    const scope = await this.permissions.scopeForDocument(principal, id);
+    return this.documents.getDocumentGraph(id, depth ? Number(depth) : 1, scope);
   }
 
   @Get(':id/revisions')

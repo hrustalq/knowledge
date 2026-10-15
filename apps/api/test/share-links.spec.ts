@@ -47,6 +47,7 @@ interface DocRow {
   depth: number;
   position: number;
   archivedAt: Date | null;
+  restrictedBy: string[];
 }
 
 function pick<T extends object>(row: T, select?: Record<string, unknown>): Partial<T> {
@@ -57,11 +58,11 @@ function pick<T extends object>(row: T, select?: Record<string, unknown>): Parti
 /** Just enough Prisma for both services, in memory. */
 function fakePrisma() {
   const docs: DocRow[] = [
-    { id: ROOT, workspaceId: WS, parentId: null, title: 'Guide', path: `/${ROOT}/`, depth: 0, position: 0, archivedAt: null },
-    { id: CHILD, workspaceId: WS, parentId: ROOT, title: 'Install', path: `/${ROOT}/${CHILD}/`, depth: 1, position: 0, archivedAt: null },
-    { id: SIBLING, workspaceId: WS, parentId: null, title: 'Secret', path: `/${SIBLING}/`, depth: 0, position: 1, archivedAt: null },
+    { id: ROOT, workspaceId: WS, parentId: null, title: 'Guide', path: `/${ROOT}/`, depth: 0, position: 0, archivedAt: null, restrictedBy: [] },
+    { id: CHILD, workspaceId: WS, parentId: ROOT, title: 'Install', path: `/${ROOT}/${CHILD}/`, depth: 1, position: 0, archivedAt: null, restrictedBy: [] },
+    { id: SIBLING, workspaceId: WS, parentId: null, title: 'Secret', path: `/${SIBLING}/`, depth: 0, position: 1, archivedAt: null, restrictedBy: [] },
     // Same id prefix shape, other tenant — must never resolve through WS's link.
-    { id: FOREIGN, workspaceId: OTHER_WS, parentId: null, title: 'Foreign', path: `/${ROOT}/${FOREIGN}/`, depth: 1, position: 0, archivedAt: null },
+    { id: FOREIGN, workspaceId: OTHER_WS, parentId: null, title: 'Foreign', path: `/${ROOT}/${FOREIGN}/`, depth: 1, position: 0, archivedAt: null, restrictedBy: [] },
   ];
   const attachments = [
     { id: ATT_CHILD, documentId: CHILD, status: 'ready' },
@@ -80,9 +81,17 @@ function fakePrisma() {
         return d ? pick(d, select) : null;
       }),
       findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => docs.find((x) => x.id === where.id)!),
-      findMany: vi.fn(async ({ where, take }: { where: { workspaceId: string; path: { startsWith: string }; id: { not: string } }; take: number }) =>
+      findMany: vi.fn(
+        async ({
+          where,
+          take,
+        }: {
+          where: { workspaceId: string; path: { startsWith: string }; id: { not: string }; restrictedBy?: { isEmpty: true } };
+          take: number;
+        }) =>
         docs
           .filter((d) => d.workspaceId === where.workspaceId && d.path.startsWith(where.path.startsWith) && d.id !== where.id.not && !d.archivedAt)
+          .filter((d) => !where.restrictedBy || d.restrictedBy.length === 0)
           .sort((a, b) => a.depth - b.depth || a.position - b.position)
           .slice(0, take),
       ),
@@ -334,6 +343,22 @@ describe('PublicSharesService (the anonymous reader)', () => {
     // Archiving a page takes it out of the shared tree as well.
     h.prisma.docs.find((d) => d.id === CHILD)!.archivedAt = new Date();
     await expect(h.reader.page(h.token, CHILD, undefined)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('leaves a restricted page out of a subtree link, and kills a link whose page became restricted (#76)', async () => {
+    const h = await shared({ includeSubtree: true });
+    h.prisma.docs.find((d) => d.id === CHILD)!.restrictedBy = [CHILD];
+    const view = await h.reader.view(h.token, undefined);
+    expect(view.locked === false && view.tree.map((n) => n.documentId)).toEqual([ROOT]);
+    await expect(h.reader.page(h.token, CHILD, undefined)).rejects.toMatchObject({ status: 404 });
+    await expect(h.reader.attachmentUrl(h.token, ATT_CHILD, false, undefined)).rejects.toMatchObject({ status: 404 });
+
+    h.prisma.docs.find((d) => d.id === ROOT)!.restrictedBy = [ROOT];
+    await expect(h.reader.view(h.token, undefined)).rejects.toMatchObject({ status: 404 });
+    // A restricted page cannot be shared in the first place.
+    await expect(h.shares.create(ROOT, { password: 'secret1' }, USER)).rejects.toMatchObject({
+      response: { reason: 'share.restricted' },
+    });
   });
 
   it('redirects to an attachment only when its page is in scope', async () => {

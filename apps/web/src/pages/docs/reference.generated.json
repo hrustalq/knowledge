@@ -2,6 +2,116 @@
   "endpoints": [
     {
       "method": "GET",
+      "path": "/v1/access-requests",
+      "tag": "access",
+      "summary": "The caller's own requests (mine=1), or the ones they may decide",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/access-requests",
+      "tag": "access",
+      "summary": "Ask for a level on a page or project (409 when already granted, or already asked)",
+      "role": "viewer",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/access-requests/{id}/approve",
+      "tag": "access",
+      "summary": "Approve with a level: grants it on every restricted node that kept the requester out (needs manage on each)",
+      "role": "viewer",
+      "source": "access-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/access-requests/{id}/cancel",
+      "tag": "access",
+      "summary": "Withdraw your own pending request",
+      "role": "viewer",
+      "source": "access-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/access-requests/{id}/deny",
+      "tag": "access",
+      "summary": "Deny, optionally saying why (needs manage)",
+      "role": "viewer",
+      "source": "access-request",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/access",
+      "tag": "access",
+      "summary": "The page's restriction, the restrictions it inherits and the caller's level; grants only for a manager",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/documents/{id}/access",
+      "tag": "access",
+      "summary": "Set the page's restriction and replace its grants (needs manage; 409 when it would lock the caller out)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/access/effective",
+      "tag": "access",
+      "summary": "Who can open this page and at what level (needs manage on it)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/access",
+      "tag": "access",
+      "summary": "The project's restriction and the caller's level; grants only for a manager",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/projects/{id}/access",
+      "tag": "access",
+      "summary": "Set the project's restriction and replace its grants (needs manage on it)",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/projects/{id}/access/effective",
+      "tag": "access",
+      "summary": "Who can open this project and at what level (needs manage on it)",
+      "role": "viewer",
+      "source": "project",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/activity",
       "tag": "activity",
       "summary": "Workspace activity feed, newest first (docs/features/10)",
@@ -81,12 +191,62 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/ai/agents/{key}/triggers",
+      "tag": "ai",
+      "summary": "Add a trigger to an agent. Off unless enabled is sent; enabling makes the caller its owner.",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/ai/agents/choices",
       "tag": "ai",
       "summary": "Agents offerable in the composer (viewer — names only, no prompts)",
       "role": "viewer",
       "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/agents/learnings",
+      "tag": "ai",
+      "summary": "Learnings — corrections taught to agents — newest first",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/agents/learnings",
+      "tag": "ai",
+      "summary": "Teach an agent something. Proposed unless an admin creates it active; only active learnings reach a prompt.",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/agents/learnings/{id}",
+      "tag": "ai",
+      "summary": "Approve, edit or archive a learning. Approving or rewording an active one records the caller.",
+      "role": "admin",
+      "source": "agent-learning",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/agents/recipes/{recipe}/apply",
+      "tag": "ai",
+      "summary": "Apply a recipe: the schedule and triggers it names, all disabled. What the agent already has is kept, not overwritten.",
+      "role": "admin",
+      "source": "body",
       "public": false,
       "platformAdmin": false
     },
@@ -142,6 +302,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/ai/agents/runs/{id}/findings/{index}/dismiss",
+      "tag": "ai",
+      "summary": "Dismiss a finding; optionally propose a learning saying why",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/ai/agents/runs/{id}/findings/{index}/mark-outdated",
       "tag": "ai",
       "summary": "Declare the page a stale finding cites outdated, as the caller",
@@ -157,6 +327,46 @@
       "summary": "Open a merge request that addresses one finding",
       "role": "editor",
       "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/ai/agents/triggers",
+      "tag": "ai",
+      "summary": "Every agent trigger in the workspace, grouped by agent",
+      "role": "admin",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/ai/agents/triggers/{id}",
+      "tag": "ai",
+      "summary": "Delete a trigger. The runs it started stay.",
+      "role": "admin",
+      "source": "agent-trigger",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/agents/triggers/{id}",
+      "tag": "ai",
+      "summary": "Change a trigger. Enabling it makes the caller the owner its runs execute as; null clears a filter.",
+      "role": "admin",
+      "source": "agent-trigger",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/agents/triggers/{id}/rotate-secret",
+      "tag": "ai",
+      "summary": "Give a webhook trigger a new signing secret. Returned once; the previous one stops verifying at once.",
+      "role": "admin",
+      "source": "agent-trigger",
       "public": false,
       "platformAdmin": false
     },
@@ -405,6 +615,16 @@
       "path": "/v1/ai/skills/{id}",
       "tag": "ai",
       "summary": "Update a skill",
+      "role": "admin",
+      "source": "ai-skill",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/skills/{id}/accept-upstream",
+      "tag": "ai",
+      "summary": "Make an imported skill's pending upstream text its instructions (#70)",
       "role": "admin",
       "source": "ai-skill",
       "public": false,
@@ -1222,9 +1442,59 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connectors/{id}/acl",
+      "tag": "connectors",
+      "summary": "How the connector mirrors upstream access, and the upstream people it has seen",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/connectors/{id}/acl",
+      "tag": "connectors",
+      "summary": "Change access mirroring; switching it off turns what it mirrored into manual access",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/connectors/{id}/acl/identities/{identityId}",
+      "tag": "connectors",
+      "summary": "Map an upstream identity to a workspace member by hand, or clear the mapping",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/acl/sync",
+      "tag": "connectors",
+      "summary": "Refresh mirrored access now — permission calls only, no content",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/connectors/{id}/github",
       "tag": "connectors",
       "summary": "The connector's GitHub App grants and the viewer's GitHub identity",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/guidance/import",
+      "tag": "connectors",
+      "summary": "Read the repository's AGENTS.md / CLAUDE.md / .cursorrules… into disabled skills now",
       "role": "admin",
       "source": "connector",
       "public": false,
@@ -2087,6 +2357,66 @@
       "summary": "Read-only graph query (trusted operator only; row-limited; every call is audited)",
       "role": "admin",
       "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups",
+      "tag": "groups",
+      "summary": "The workspace's user groups, with member counts",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups",
+      "tag": "groups",
+      "summary": "Create a manual group (workspace admin; 409 when the name is taken)",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/groups/{id}",
+      "tag": "groups",
+      "summary": "Delete a group and its memberships (409 for a connector or SCIM group)",
+      "role": "admin",
+      "source": "group",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/groups/{id}",
+      "tag": "groups",
+      "summary": "Rename a group or change its description (409 for a connector or SCIM group)",
+      "role": "admin",
+      "source": "group",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups/{id}/members",
+      "tag": "groups",
+      "summary": "A group's members with their workspace roles",
+      "role": "viewer",
+      "source": "group",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/groups/{id}/members",
+      "tag": "groups",
+      "summary": "Add and remove members in one transaction (workspace admin; 400 for a non-member, 409 for a connector or SCIM group)",
+      "role": "admin",
+      "source": "group",
       "public": false,
       "platformAdmin": false
     },
@@ -3825,6 +4155,16 @@
       ]
     },
     {
+      "name": "knowledge_get_page_access",
+      "description": "The restrictions on a page as they apply to you: whether it is restricted itself, the restricted pages and project above it, and your effective level (view | edit | manage). Grants are listed only when you may manage the page. Use it when a write is refused, or before telling someone a page is visible to a team.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        }
+      ]
+    },
+    {
       "name": "knowledge_get_template",
       "description": "One template: its markdown source, category, default tags and relations, and the placeholders (name, kind, required) to pass as values to knowledge_create_document.",
       "inputs": [
@@ -3898,6 +4238,24 @@
         },
         {
           "name": "documentId",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_list_agent_learnings",
+      "description": "Corrections this team taught its agents (\"learnings\"), newest first. Active ones are approved by an admin and are what the platform's own agents are told — follow them when you do the same kind of work. Pass agentKey for one agent's list (it includes learnings for every agent).",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "agentKey",
+          "optional": true
+        },
+        {
+          "name": "status",
           "optional": true
         }
       ]
@@ -4067,6 +4425,28 @@
       ]
     },
     {
+      "name": "knowledge_propose_agent_learning",
+      "description": "Propose a learning: a correction for one agent (or every agent), in plain words. It is stored as proposed and reaches no prompt until a workspace admin approves it in the app.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "text",
+          "optional": false
+        },
+        {
+          "name": "agentKey",
+          "optional": true
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_query_graph",
       "description": "TRUSTED-OPERATOR ONLY (plan.md §9): read-only SQL over the graph store. Single SELECT statement, row-limited, workspace predicate enforced server-side; every call is written to the audit log.",
       "inputs": [
@@ -4142,6 +4522,24 @@
         },
         {
           "name": "suggestedMarkdown",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_request_access",
+      "description": "Ask for view or edit access to a page you were refused. Its managers and the workspace admins are notified, and you are told when they decide. Only when a person asked for it: the request is sent in their name. Refused with 409 when you already have that level or already asked.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        },
+        {
+          "name": "level",
+          "optional": false
+        },
+        {
+          "name": "message",
           "optional": true
         }
       ]

@@ -22,6 +22,8 @@ export type WorkspaceSource =
   | 'ai-skill' // :id path param is an AI skill id
   | 'ai-plugin' // :id path param is an AI plugin (MCP server) id
   | 'ai-provider' // :id path param is an AI provider profile id
+  | 'agent-trigger' // :id path param is an agent trigger id (#70)
+  | 'agent-learning' // :id path param is an agent learning id (#70)
   | 'glossary-term' // :id path param is a glossary term id
   | 'source-policy' // :id path param is a web source policy id (docs/features/25)
   | 'saved-filter' // :filterId path param is a saved merge-request filter id (integer)
@@ -39,6 +41,8 @@ export type WorkspaceSource =
   | 'chat-integration' // :id path param is a chat bot id (issue #71)
   | 'chat-binding' // :id path param is a chat channel binding id (issue #71)
   | 'chat-subscription' // :id path param is a chat subscription id (issue #71, phase 3)
+  | 'group' // :id path param is a user group id (issue #76)
+  | 'access-request' // :id path param is an access request id (issue #76, phase 5)
   | 'workspace'; // :id path param IS the workspace id (existence-checked)
 
 export interface AccessSpec {
@@ -46,11 +50,27 @@ export interface AccessSpec {
   source: WorkspaceSource;
   /** Additionally require workspace_members.trusted_operator (plan.md §9). */
   operator: boolean;
+  /**
+   * A guest passes this workspace-level `viewer` route (#76). Only for a
+   * handler that filters everything it returns through the caller's
+   * `AccessScope` — a guest otherwise reads the whole workspace through it.
+   * Absent unless set, so every other route's metadata reads as it always did.
+   */
+  guests?: true;
 }
 
 /** Declare a route's ACL: minimum workspace role + where the workspace id comes from. */
-export const Access = (role: WorkspaceRole, source: WorkspaceSource, opts?: { operator?: boolean }) =>
-  SetMetadata(ACCESS_META, { role, source, operator: opts?.operator ?? false } satisfies AccessSpec);
+export const Access = (
+  role: WorkspaceRole,
+  source: WorkspaceSource,
+  opts?: { operator?: boolean; guests?: boolean },
+) =>
+  SetMetadata(ACCESS_META, {
+    role,
+    source,
+    operator: opts?.operator ?? false,
+    ...(opts?.guests ? { guests: true as const } : {}),
+  } satisfies AccessSpec);
 
 /** Route reachable without authentication (health checks, login/signup/reset). */
 export const Public = () => SetMetadata(PUBLIC_META, true);

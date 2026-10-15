@@ -1,20 +1,34 @@
 <script setup lang="ts">
 // Skills: instruction packs merged into the assistant's system prompt when a
 // trigger word matches the user's message, or when picked in the composer.
+// A `repo` skill was imported from a repository's guidance file (#70): it
+// carries its provenance, and an upstream change waits here for Accept.
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { Plus, Sparkles, Trash2 } from 'lucide-vue-next'
-import type { AiSkillSummary, ListAiSkillsResponse } from '@knowledge/contracts'
+import { GitBranch, GitCompareArrows, Plus, Sparkles, Trash2 } from 'lucide-vue-next'
+import type { AiSkillSummary, CompareResponse, ListAiSkillsResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
+import { lineDiff } from '@/lib/line-diff'
+import DiffView from '@/components/knowledge/DiffView.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -38,6 +52,44 @@ const invalidates = () => [['/v1/ai/skills']]
 const createSkill = useApiMutation('post', '/v1/ai/skills', { invalidates })
 const updateSkill = useApiMutation('patch', '/v1/ai/skills/{id}', { invalidates })
 const deleteSkill = useApiMutation('delete', '/v1/ai/skills/{id}', { invalidates })
+const acceptUpstream = useApiMutation('post', '/v1/ai/skills/{id}/accept-upstream', { invalidates })
+
+// The upstream review: the live instructions against the pending text, as the
+// same DiffView a revision comparison is (lib/line-diff.ts).
+const reviewing = ref<AiSkillSummary | null>(null)
+const reviewCompare = computed<CompareResponse | null>(() => {
+  const skill = reviewing.value
+  if (!skill?.pendingInstructions) return null
+  const { hunks, additions, deletions } = lineDiff(skill.instructions, skill.pendingInstructions)
+  const side = (label: string, n: number) => ({ revisionId: `${skill.id}@${label}`, revisionNumber: n, branch: null, contentHash: null })
+  return {
+    documentId: '',
+    from: side('live', 1),
+    to: side('upstream', 2),
+    comparisonMode: 'direct',
+    mergeBaseRevisionId: null,
+    summary: { additions, deletions },
+    hunks,
+    structural: null,
+    semantic: null,
+  }
+})
+
+async function accept(skill: AiSkillSummary) {
+  try {
+    await acceptUpstream.mutateAsync({ path: { id: skill.id } })
+    toast.success(t('ai.skills.acceptedUpstream'))
+    reviewing.value = null
+  } catch (e) {
+    toast.error((e as Error).message)
+  }
+}
+
+function sourceLabel(skill: AiSkillSummary): string {
+  return skill.sourceConnectorName
+    ? t('ai.skills.repoSource', { connector: skill.sourceConnectorName, path: skill.sourcePath ?? '' })
+    : t('ai.skills.repoSourceGone', { path: skill.sourcePath ?? '' })
+}
 
 const open = ref(false)
 const editing = ref<AiSkillSummary | null>(null)
@@ -96,7 +148,11 @@ async function toggle(skill: AiSkillSummary, enabled: boolean) {
   }
 }
 
+/** Deleting is immediate and has no undo, so the bin asks first. */
+const removing = ref<AiSkillSummary | null>(null)
+
 async function remove(skill: AiSkillSummary) {
+  removing.value = null
   try {
     await deleteSkill.mutateAsync({ path: { id: skill.id } })
     toast.success(t('ai.deletedNamed', { name: skill.name }))
@@ -149,18 +205,46 @@ async function remove(skill: AiSkillSummary) {
       <TableHeader>
         <TableRow>
           <TableHead>{{ t('ai.name') }}</TableHead>
-          <TableHead>{{ t('ai.triggers') }}</TableHead>
+          <TableHead>{{ t('ai.triggers.title') }}</TableHead>
           <TableHead class="w-24">{{ t('ai.enabled') }}</TableHead>
           <TableHead class="w-20"></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         <TableRow v-for="skill in skills" :key="skill.id">
-          <TableCell>
+          <!-- Wraps: an imported skill's description and provenance line are long,
+               and the table's nowrap default would push Enabled off the page. -->
+          <TableCell class="whitespace-normal">
             <button class="text-left" :disabled="!canManage" @click="openEdit(skill)">
               <span class="font-medium" :class="canManage && 'hover:text-primary'">{{ skill.name }}</span>
               <span class="text-muted-foreground block text-xs">{{ skill.description }}</span>
             </button>
+            <div v-if="skill.source === 'repo'" class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+              <RouterLink
+                v-if="skill.sourceConnectorId && skill.sourceConnectorName"
+                :to="`/settings/connectors/${skill.sourceConnectorId}`"
+                class="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+              >
+                <GitBranch class="size-3" /> {{ sourceLabel(skill) }}
+              </RouterLink>
+              <span v-else class="text-muted-foreground inline-flex items-center gap-1">
+                <GitBranch class="size-3" /> {{ sourceLabel(skill) }}
+              </span>
+              <Badge v-if="skill.sourceRemovedAt" variant="outline" class="font-normal">{{ t('ai.skills.removedUpstream') }}</Badge>
+              <!-- A button that looks like one: a badge read as a status label,
+                   and the review it opens is the only way to take the change. -->
+              <Button
+                v-if="skill.pendingInstructions !== null"
+                type="button"
+                variant="outline"
+                size="xs"
+                class="font-normal"
+                :title="t('ai.skills.reviewUpstream')"
+                @click="reviewing = skill"
+              >
+                <GitCompareArrows /> {{ t('ai.skills.upstreamChanged') }}
+              </Button>
+            </div>
           </TableCell>
           <TableCell>
             <div v-if="skill.triggers.length" class="flex flex-wrap gap-1">
@@ -181,7 +265,8 @@ async function remove(skill: AiSkillSummary) {
               variant="ghost"
               size="sm"
               :aria-label="t('ai.skills.deleteNamed', { name: skill.name })"
-              @click="remove(skill)"
+              :title="t('ai.skills.deleteNamed', { name: skill.name })"
+              @click="removing = skill"
             >
               <Trash2 class="size-3.5" />
             </Button>
@@ -198,6 +283,10 @@ async function remove(skill: AiSkillSummary) {
             {{ t('ai.skills.dialogDesc') }}
           </DialogDescription>
         </DialogHeader>
+
+        <p v-if="editing?.source === 'repo'" class="text-muted-foreground rounded-md border px-3 py-2 text-xs">
+          {{ t('ai.skills.repoEditNote', { path: editing.sourcePath ?? '' }) }}
+        </p>
 
         <form id="skill-form" class="space-y-4" @submit.prevent="submit">
           <label class="block space-y-1">
@@ -237,6 +326,46 @@ async function remove(skill: AiSkillSummary) {
             :disabled="createSkill.isPending.value || updateSkill.isPending.value"
           >
             {{ editing ? t('common.save') : t('common.create') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <AlertDialog :open="removing !== null" @update:open="(v: boolean) => { if (!v) removing = null }">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('ai.skills.deleteTitle', { name: removing?.name ?? '' }) }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ removing?.source === 'repo' ? t('ai.skills.deleteRepoBody') : t('ai.skills.deleteBody') }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction @click="removing && remove(removing)">{{ t('common.delete') }}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <Dialog :open="reviewing !== null" @update:open="(v: boolean) => !v && (reviewing = null)">
+      <DialogContent class="sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{{ t('ai.skills.reviewUpstreamTitle', { name: reviewing?.name ?? '' }) }}</DialogTitle>
+          <DialogDescription>
+            {{ t('ai.skills.reviewUpstreamDesc', { path: reviewing?.sourcePath ?? '' }) }}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="max-h-[60vh] overflow-auto">
+          <DiffView v-if="reviewCompare" :compare="reviewCompare" />
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" size="sm" @click="reviewing = null">{{ t('common.cancel') }}</Button>
+          <Button
+            v-if="canManage && reviewing"
+            size="sm"
+            :disabled="acceptUpstream.isPending.value"
+            @click="accept(reviewing)"
+          >
+            {{ t('ai.skills.acceptUpstream') }}
           </Button>
         </DialogFooter>
       </DialogContent>

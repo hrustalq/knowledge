@@ -77,6 +77,8 @@ const props = withDefaults(
     resolveDocumentId?: () => Promise<string | null>
     /** The page's own frontmatter — read for `glossary: false` (feature 14). */
     frontmatter?: Record<string, unknown> | null
+    /** Whose threads these are — a page's, or a merge request's in review mode. Read by "Teach agent" (#70). */
+    threadKind?: 'document-thread' | 'mr-thread'
   }>(),
   {
     title: '',
@@ -84,6 +86,7 @@ const props = withDefaults(
     busy: false,
     resolveDocumentId: undefined,
     frontmatter: null,
+    threadKind: 'document-thread',
   },
 )
 const emit = defineEmits<{
@@ -787,6 +790,7 @@ function onOutdated(ids: string[]) {
           :readonly="!canComment"
           :busy="busy"
           :resolve-document-id="resolveDocumentId"
+          :teach-kind="threadKind"
           @reply="(b: string, p: string | null) => emit('reply', thread.threadId, b, p)"
           @resolve="(r: boolean) => emit('resolve', thread.threadId, r)"
           @edit="(c: string, b: string) => emit('edit', thread.threadId, c, b)"

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { IngestionAdminModule } from '../ingestion/ingestion-admin.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
@@ -20,6 +21,7 @@ import { VerificationCoreModule } from '../verification/verification-core.module
 import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { PublishingCoreModule } from '../publishing/publishing-core.module.js';
 import { ExportCoreModule } from '../export/export-core.module.js';
+import { AiCoreModule } from '../ai/ai-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -32,6 +34,8 @@ import { McpService } from './mcp.service.js';
   imports: [
     PrismaModule,
     AuthCoreModule,
+    // Page-level checks behind guard.doc/mr/project and scoped tree/graph tools (#76).
+    PermissionsCoreModule,
     GraphModule,
     IngestionAdminModule,
     StorageModule,
@@ -68,6 +72,8 @@ import { McpService } from './mcp.service.js';
     // knowledge_export / knowledge_get_export (docs/features/45). Controller-free;
     // queues the job, which the worker builds.
     ExportCoreModule,
+    // knowledge_list_agent_learnings / knowledge_propose_agent_learning (#70). Controller-free.
+    AiCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

@@ -1,8 +1,9 @@
 # 20 — Agents: remaining work
 
 Backlog for the agents feature (see `20-agents.md` for the design). Phases A–D
-shipped first; items 1–8 of the original backlog are now closed and recorded
-below, with what was decided where the item was a decision rather than a build.
+shipped first. Items 1–8 of the original backlog are closed, and so are open
+items A and C, shipped by #70 as items 9 and 10. Each is recorded below, with
+what was decided where the item was a decision rather than a build.
 
 Effort: S (≤half a day), M (a day or two), L (more).
 
@@ -67,28 +68,32 @@ was left describing the inline row it actually describes; the Config tab states
 that an agent can override those fields and points at the Agents tab, which is
 where per-agent overrides are already badged.
 
+**9. Event triggers (item A) — shipped in #70.** The unattended workload the
+item waited for turned out to be four bus events (page merged, page indexed, a
+merge request or pull request opened, a connector sync), plus a signed webhook.
+`AGENT_RUN_TRIGGERS` has `'event'` again, and its only writer is
+`AgentTriggerService`, carrying `WorkflowTriggerService`'s guards with one
+deliberate change: a cooldown per (trigger, subject) instead of "once per
+page", because an agent run proposes and never writes, so its output cannot
+re-trigger it. The item's note that a feature-21 mention is not an event
+trigger held, and #70 kept the two apart: a `comment.mention` trigger is opt-in per agent and owns its run as the
+commenter, and without one a mention is still a chat reply. See
+[49](49-agent-triggers.md#triggers).
+
+**10. Dismiss (item C) — the honest version.** `dismissedAt` / `dismissedBy`
+sit beside `proposedAt`, set by the same kind of guarded `jsonb_set`, and the
+runs panel hides dismissed findings behind a switch. The next run *does* know:
+an agent is handed the titles of findings dismissed on its last ten succeeded
+runs as quoted data and told not to report them again. Matching is left to
+the model rather than done by key. **Remember why** on a dismissal turns the
+reason into a proposed learning. See [49 §Learnings](49-agent-triggers.md#learnings).
+
 **8. Committing.** Moot — the tree was already committed (`e832ec7`,
 `9065dbf`); `saved_filters` and connectors landed separately as hoped.
 
 ---
 
 ## Open
-
-### A. Event triggers, when something asks for them — M
-
-See item 1 above for the shape and the guards. The gate is a real trigger to
-hang it on, not the code.
-
-**Still open, and docs/features/21 is deliberately not it.** Tagging `@reviewer`
-in a discussion does start an agent from something that happened, but it is a
-person addressing an agent in a conversation, not an event trigger: it produces a
-comment rather than an `agent_runs` row with findings, and it has an owner by
-construction — the person who typed the mention — which is the property
-`agent_runs.created_by NOT NULL` exists to guarantee and the thing an
-event-triggered run has to invent. Feature 21 needed none of the five
-`WorkflowTriggerService` guards, because a mention is rate-limited by somebody
-typing it. So this item still wants a genuinely unattended workload, and the
-guards remain the interesting part.
 
 ### B. `AgentTiebreakService` has no background counterpart — S
 
@@ -98,15 +103,6 @@ routing in the worker stops at the rules — correct, just less specific. Worth
 measuring before deciding whether it matters: if scheduled runs are only ever
 started for an explicitly named agent, the tiebreak is never reachable there and
 the asymmetry is free.
-
-### C. A finding has no "dismiss" — S
-
-Propose is the only verb. A finding a reviewer judges wrong stays in the run
-forever, and the next run finds it again. The cheap version is a `dismissedAt`
-beside `proposedAt` on the finding (the same guarded `jsonb_set`), plus a filter
-in the runs panel; the honest version notices that a dismissal is only useful if
-the *next* run knows about it, which means matching findings across runs and is
-a bigger question than the field.
 
 ### D. Reviewer findings are all `kind: 'other'` — S
 
@@ -138,3 +134,12 @@ the Usage tab aggregates by operation and the Runs tab shows no tokens at all.
 An admin turning on a nightly curator cannot see what it spends without reading
 the usage chart sideways. The join is `ai_usage.user_id` + the run window; a
 `runId` on `ai_usage` would be better and is a migration.
+
+### G. Deleting a custom agent leaves its triggers — S
+
+`agent_triggers` is keyed by `agent_key` with no FK (house rule), and
+`AiAgentsService.remove` does not touch it. The orphans fire nothing, since the
+trigger service finds no agent to run and skips with `agent-unavailable`, but
+they stay in the table and in `GET /v1/ai/agents/triggers`. Delete them in the
+same transaction as the agent, or refuse the delete while triggers exist.
+Found in the #70 phase 7 pass.

@@ -58,5 +58,18 @@ export const DEV_PRINCIPAL: Principal = {
   locale: 'en',
 };
 
-/** Role hierarchy: higher number ⇒ more rights. */
-export const ROLE_ORDER: Record<WorkspaceRole, number> = { viewer: 0, editor: 1, admin: 2 };
+/**
+ * Role hierarchy: higher number ⇒ more rights. `guest` is below every route's
+ * minimum, so `requireRole(…, 'viewer')` refuses a guest with no special case
+ * (#76) — what a guest may open is decided per page, not by this ladder.
+ */
+export const ROLE_ORDER: Record<WorkspaceRole, number> = { guest: -1, viewer: 0, editor: 1, admin: 2 };
+
+/**
+ * A `workspace_members` filter for the people who read the workspace as a
+ * whole — every role but guest. For the places that ask "is this person a
+ * member" directly instead of through `requireRole` (mention recipients,
+ * reviewers, page owners, site audiences), where a bare membership row would
+ * otherwise let a guest in.
+ */
+export const WORKSPACE_READER = { role: { not: 'guest' } } as const;

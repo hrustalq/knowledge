@@ -29,6 +29,8 @@
   "sentinelDesc": "Checks the pages a pull or merge request may make wrong, and drafts the corrections.",
   "surveyor": "Surveyor",
   "surveyorDesc": "Clusters the questions answers failed on into coverage gaps, and proposes the page that would close each.",
+  "digest": "Digest",
+  "digestDesc": "Summarises what changed since the last digest — new and changed pages, merged changes — as a page you can publish.",
   "route": {
     "explicit": "Explicitly requested.",
     "disabled": "disabled",
@@ -111,6 +113,7 @@
   },
   "report": {
     "noContent": "\"{title}\" has no readable content to judge the report against.",
+    "restricted": "The reported page is restricted to some members. An agent run is listed to the whole workspace, so none judges it — a person with access should review the report.",
     "noModel": "No model is configured for the sentinel, so the report is passed on without a verdict.",
     "reportedTitle": "\"{title}\" — reported as {kind}",
     "summaryNoModel": "Report on \"{title}\" was not judged; it stays open for a person.",
@@ -136,5 +139,21 @@
     "pageNotReviewed": "\"{title}\" could not be reviewed: {error}",
     "pageNotScanned": "\"{title}\" could not be scanned: {error}",
     "stopped": "Stopped early, the remaining items were not checked: {error}"
+  },
+  "digestRun": {
+    "quiet": "Nothing changed in the last {days} days: no new or changed pages, no merged changes, no findings.",
+    "summary": "In the last {days} days: {created} new pages, {changed} changed, {merged} changes merged.",
+    "pageTitle": "Digest {from} — {to}",
+    "draftDetail": "The digest as a page: {created} new, {changed} changed, {merged} merged. Create page publishes it as you.",
+    "highlights": "Highlights",
+    "created": "New pages",
+    "changed": "Changed pages",
+    "merged": "Merged changes",
+    "findings": "Agent findings",
+    "revisions": "{n} revisions"
+  },
+  "recipe": {
+    "freshnessSweepNote": "Focus on freshness: report pages that look stale against the rest of the workspace or against the source they were imported from, as kind \"stale\", and say what has moved on.",
+    "glossarySuggesterNote": "Propose glossary terms only from the page that was just merged."
   }
 }

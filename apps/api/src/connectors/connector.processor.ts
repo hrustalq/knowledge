@@ -9,7 +9,13 @@ import { asLocale } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CONNECTOR_QUEUE } from './connector.constants.js';
-import { ConnectorProducer, type ConnectorJobData, type ConnectorTask } from './connector.producer.js';
+import { ConnectorAclService } from './connector-acl.service.js';
+import {
+  ConnectorProducer,
+  type ConnectorAclJobData,
+  type ConnectorJobData,
+  type ConnectorTask,
+} from './connector.producer.js';
 import { ConnectorSyncService } from './connector-sync.service.js';
 import { ConnectorsService, MAX_WARNINGS } from './connectors.service.js';
 
@@ -39,18 +45,21 @@ export class ConnectorProcessor extends WorkerHost {
     private readonly sync: ConnectorSyncService,
     private readonly producer: ConnectorProducer,
     private readonly events: EventsPublisher,
+    private readonly acl: ConnectorAclService,
   ) {
     super();
     this.timeoutMs = this.config.get('CONNECTOR_SYNC_TIMEOUT_MS', { infer: true });
   }
 
-  async process(job: Job<ConnectorJobData>): Promise<void> {
-    const run = await this.prisma.connectorRun.findUnique({ where: { id: job.data.runId } });
+  async process(job: Job<ConnectorJobData | ConnectorAclJobData>): Promise<void> {
+    if (job.name === 'acl') return this.refreshAcl((job.data as ConnectorAclJobData).connectorId);
+    const data = job.data as ConnectorJobData;
+    const run = await this.prisma.connectorRun.findUnique({ where: { id: data.runId } });
     if (!run) {
-      this.logger.warn(`Connector run ${job.data.runId} not found — skipping`);
+      this.logger.warn(`Connector run ${data.runId} not found — skipping`);
       return;
     }
-    const task = job.data.task;
+    const task = data.task;
     // Everything below runs in the language the connector was configured in.
     return withLocale(asLocale(run.locale), () =>
       task ? this.executeTask(run.id, task) : this.execute(run.id),
@@ -94,6 +103,26 @@ export class ConnectorProcessor extends WorkerHost {
         : (err as Error).message;
       this.logger.error(`Connector run ${runId} ${task.kind} task failed: ${message}`);
       await this.warn(runId, message);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * The ACL-only pass (#76). It has no run row to write a failure to, so a
+   * failure is logged; `acl_synced_at` was stamped before the work, so the
+   * connector is not retried until its next interval.
+   */
+  private async refreshAcl(connectorId: string): Promise<void> {
+    const connector = await this.prisma.connector.findUnique({ where: { id: connectorId } });
+    if (!connector || !connector.enabled || connector.aclMode === 'off') return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), this.timeoutMs);
+    try {
+      const totals = await withLocale(asLocale(connector.locale), () => this.acl.refresh(connector, abort.signal));
+      this.logger.log({ msg: 'Connector ACL refreshed', connectorId, ...totals });
+    } catch (err) {
+      this.logger.warn({ msg: 'Connector ACL refresh failed', code: 'CONNECTOR_ACL_REFRESH_FAILED', connectorId, err });
     } finally {
       clearTimeout(timer);
     }

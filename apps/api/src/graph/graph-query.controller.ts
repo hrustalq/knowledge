@@ -37,7 +37,10 @@ export class GraphQueryController {
       workspaceId: dto.workspaceId,
       actor: principal.mode === 'dev' ? 'dev' : principal.userId,
       action: 'graph.query',
-      params: { query: dto.query, limit },
+      // The query reads raw stores past every page restriction (#76): only an
+      // admin operator reaches it, and admins bypass restrictions anyway, but
+      // the row says so in as many words.
+      params: { query: dto.query, limit, aclBypass: true },
     };
     try {
       const { rows, truncated } = await this.graph.operatorQuery(dto.workspaceId, dto.query, limit);

@@ -11,9 +11,18 @@ import {
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { AGENT_LEARNING_STATUSES, AGENT_RECIPE_KEYS } from '@knowledge/contracts';
 import type {
+  AgentLearningStatus,
+  AgentLearningSummary,
+  DismissAgentFindingResponse,
+  ListAgentLearningsResponse,
+  RotateAgentTriggerSecretResponse,
+  ApplyAgentRecipeResponse,
   AgentRouteDecision,
   AgentRunSummary,
+  AgentTriggerSummary,
+  ListAgentTriggersResponse,
   AiAgentSummary,
   ListAgentRunsResponse,
   ListAiAgentChoicesResponse,
@@ -40,6 +49,7 @@ import type {
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { AccessService } from '../auth/access.service.js';
 import { AiPluginsService } from './ai-plugins.service.js';
 import { AiProvidersService } from './ai-providers.service.js';
 import { AiConfigService } from './ai-config.service.js';
@@ -47,7 +57,10 @@ import { AiSettingsService } from './ai-settings.service.js';
 import { AiSkillsService } from './ai-skills.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
+import { AgentTriggersService } from './agent-triggers.service.js';
+import { AgentRecipesService } from './agent-recipes.service.js';
 import { AgentFindingsService } from './agent-findings.service.js';
+import { AgentLearningsService } from './agent-learnings.service.js';
 import { AgentRouterService } from '../agents/agent-router.service.js';
 import { AgentTiebreakService } from './agent-tiebreak.service.js';
 import {
@@ -64,6 +77,12 @@ import {
   UpdateAiSettingsDto,
   RouteAgentDto,
   StartAgentRunDto,
+  CreateAgentTriggerDto,
+  UpdateAgentTriggerDto,
+  CreateAgentLearningDto,
+  UpdateAgentLearningDto,
+  DismissAgentFindingDto,
+  ApplyAgentRecipeDto,
   UpdateAiAgentDto,
   UpdateAiSkillDto,
 } from './ai.dto.js';
@@ -81,7 +100,10 @@ export class AiController {
     private readonly skills: AiSkillsService,
     private readonly agents: AiAgentsService,
     private readonly runs: AgentRunsService,
+    private readonly triggers: AgentTriggersService,
+    private readonly recipes: AgentRecipesService,
     private readonly findings: AgentFindingsService,
+    private readonly learnings: AgentLearningsService,
     private readonly router: AgentRouterService,
     private readonly tiebreak: AgentTiebreakService,
     private readonly plugins: AiPluginsService,
@@ -89,6 +111,7 @@ export class AiController {
     private readonly aiConfig: AiConfigService,
     private readonly sourcePolicies: SourcePolicyService,
     private readonly activity: ActivityService,
+    private readonly access: AccessService,
   ) {}
 
   // ---- Settings ------------------------------------------------------------
@@ -288,6 +311,24 @@ export class AiController {
     return skill;
   }
 
+  @Post('skills/:id/accept-upstream')
+  @Access('admin', 'ai-skill')
+  @ApiOperation({ summary: "Make an imported skill's pending upstream text its instructions (#70)" })
+  async acceptSkillUpstream(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AiSkillSummary> {
+    const skill = await this.skills.acceptUpstream(id);
+    await this.activity.record({
+      workspaceId: skill.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.skill.updated',
+      subjectId: skill.id,
+      metadata: { name: skill.name, upstream: skill.sourceSha },
+    });
+    return skill;
+  }
+
   @Delete('skills/:id')
   @Access('admin', 'ai-skill')
   @ApiOperation({ summary: 'Delete a skill' })
@@ -321,11 +362,18 @@ export class AiController {
   @Get('agents/choices')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiQuery({
+    name: 'scope',
+    required: false,
+    enum: ['offered', 'all'],
+    description: 'offered (the default): the agents the composer offers. all: every agent, to name one wherever its key appears.',
+  })
   @ApiOperation({ summary: 'Agents offerable in the composer (viewer — names only, no prompts)' })
   async listAgentChoices(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Query('scope') scope?: string,
   ): Promise<ListAiAgentChoicesResponse> {
-    return { agents: await this.agents.choices(workspaceId) };
+    return { agents: await this.agents.choices(workspaceId, scope === 'all' ? 'all' : 'offered') };
   }
 
   // Runs (background execution). Declared before ':key' so "runs" is not read
@@ -357,6 +405,185 @@ export class AiController {
     return this.runs.get(workspaceId, id);
   }
 
+  // Triggers (#70). Declared before ':key' so "triggers" is not read as an
+  // agent key by PATCH and DELETE.
+  @Get('agents/triggers')
+  @Access('admin', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiOperation({ summary: "Every agent trigger in the workspace, grouped by agent" })
+  async listAgentTriggers(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<ListAgentTriggersResponse> {
+    return { triggers: await this.triggers.list(workspaceId), listening: this.triggers.listening };
+  }
+
+  @Patch('agents/triggers/:id')
+  @Access('admin', 'agent-trigger')
+  @ApiOperation({
+    summary: 'Change a trigger. Enabling it makes the caller the owner its runs execute as; null clears a filter.',
+  })
+  async updateAgentTrigger(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAgentTriggerDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AgentTriggerSummary> {
+    const trigger = await this.triggers.update(id, dto, principal.userId);
+    await this.activity.record({
+      workspaceId: trigger.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.trigger.updated',
+      subjectId: trigger.id,
+      metadata: { key: trigger.agentKey, event: trigger.event, enabled: trigger.enabled },
+    });
+    return trigger;
+  }
+
+  @Post('agents/triggers/:id/rotate-secret')
+  @Access('admin', 'agent-trigger')
+  @ApiOperation({
+    summary: "Give a webhook trigger a new signing secret. Returned once; the previous one stops verifying at once.",
+  })
+  async rotateAgentTriggerSecret(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<RotateAgentTriggerSecretResponse> {
+    const { trigger, response } = await this.triggers.rotateSecret(id);
+    await this.activity.record({
+      workspaceId: trigger.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.trigger.updated',
+      subjectId: trigger.id,
+      metadata: { key: trigger.agentKey, event: trigger.event, secretRotated: true },
+    });
+    return response;
+  }
+
+  @Delete('agents/triggers/:id')
+  @Access('admin', 'agent-trigger')
+  @ApiOperation({ summary: 'Delete a trigger. The runs it started stay.' })
+  async deleteAgentTrigger(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<void> {
+    const trigger = await this.triggers.remove(id);
+    await this.activity.record({
+      workspaceId: trigger.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.trigger.deleted',
+      subjectId: trigger.id,
+      metadata: { key: trigger.agentKey, event: trigger.event },
+    });
+  }
+
+  // Learnings (#70). Literal segments, declared before ':key' with the rest.
+  @Get('agents/learnings')
+  @Access('viewer', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiQuery({ name: 'agentKey', required: false, description: "This agent's learnings and those for every agent" })
+  @ApiQuery({ name: 'status', required: false, enum: AGENT_LEARNING_STATUSES })
+  @ApiOperation({ summary: 'Learnings — corrections taught to agents — newest first' })
+  async listAgentLearnings(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Query('agentKey') agentKey?: string,
+    @Query('status') status?: string,
+  ): Promise<ListAgentLearningsResponse> {
+    const known = (AGENT_LEARNING_STATUSES as readonly string[]).includes(status ?? '');
+    return {
+      learnings: await this.learnings.list(workspaceId, {
+        ...(agentKey ? { agentKey } : {}),
+        ...(known ? { status: status as AgentLearningStatus } : {}),
+      }),
+      promptLimit: this.learnings.promptLimit,
+    };
+  }
+
+  @Post('agents/learnings')
+  @Access('editor', 'body')
+  @ApiOperation({
+    summary: 'Teach an agent something. Proposed unless an admin creates it active; only active learnings reach a prompt.',
+  })
+  async createAgentLearning(
+    @Body() dto: CreateAgentLearningDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AgentLearningSummary> {
+    // Active text reaches a prompt at once, so making it so is the admin's act
+    // here exactly as it is on PATCH.
+    if (dto.status === 'active') await this.access.requireRole(principal, dto.workspaceId, 'admin');
+    const learning = await this.learnings.create(dto, principal.userId);
+    await this.activity.record({
+      workspaceId: learning.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.learning.created',
+      subjectId: learning.id,
+      metadata: { key: learning.agentKey, status: learning.status, source: learning.sourceKind },
+    });
+    return learning;
+  }
+
+  @Patch('agents/learnings/:id')
+  @Access('admin', 'agent-learning')
+  @ApiOperation({ summary: 'Approve, edit or archive a learning. Approving or rewording an active one records the caller.' })
+  async updateAgentLearning(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAgentLearningDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AgentLearningSummary> {
+    const learning = await this.learnings.update(id, dto, principal.userId);
+    await this.activity.record({
+      workspaceId: learning.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.learning.updated',
+      subjectId: learning.id,
+      metadata: { key: learning.agentKey, status: learning.status },
+    });
+    return learning;
+  }
+
+  // Recipes (#70). A literal segment, so declared before ':key' with the rest.
+  @Post('agents/recipes/:recipe/apply')
+  @Access('admin', 'body')
+  @ApiParam({ name: 'recipe', enum: AGENT_RECIPE_KEYS })
+  @ApiOperation({
+    summary:
+      "Apply a recipe: the schedule and triggers it names, all disabled. What the agent already has is kept, not overwritten.",
+  })
+  async applyAgentRecipe(
+    @Param('recipe') recipe: string,
+    @Body() dto: ApplyAgentRecipeDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ApplyAgentRecipeResponse> {
+    const applied = await this.recipes.apply(recipe, dto, principal.userId);
+    await this.activity.record({
+      workspaceId: dto.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.recipe.applied',
+      subjectId: applied.agent.id ?? undefined,
+      metadata: { recipe: applied.recipe, key: applied.agent.key, created: applied.created },
+    });
+    return applied;
+  }
+
+  @Post('agents/:key/triggers')
+  @Access('admin', 'body')
+  @ApiOperation({
+    summary: 'Add a trigger to an agent. Off unless enabled is sent; enabling makes the caller its owner.',
+  })
+  async createAgentTrigger(
+    @Param('key') key: string,
+    @Body() dto: CreateAgentTriggerDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AgentTriggerSummary> {
+    const trigger = await this.triggers.create(key, dto, principal.userId);
+    await this.activity.record({
+      workspaceId: trigger.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.trigger.created',
+      subjectId: trigger.id,
+      metadata: { key: trigger.agentKey, event: trigger.event, enabled: trigger.enabled },
+    });
+    return trigger;
+  }
+
   @Post('agents/:key/run')
   @Access('editor', 'body')
   @ApiOperation({
@@ -367,7 +594,11 @@ export class AiController {
     @Body() dto: StartAgentRunDto,
     @CurrentPrincipal() principal: Principal,
   ): Promise<AgentRunSummary> {
-    return this.runs.start(dto.workspaceId, key, principal, { note: dto.note, connectorId: dto.connectorId });
+    return this.runs.start(dto.workspaceId, key, principal, {
+      note: dto.note,
+      connectorId: dto.connectorId,
+      documentIds: dto.documentIds,
+    });
   }
 
   /**
@@ -432,6 +663,29 @@ export class AiController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<FlagFindingOutdatedResponse> {
     return this.findings.markOutdated(workspaceId, id, index, principal);
+  }
+
+  /**
+   * Dismiss a finding (#70). `editor`, the role every other finding verb asks
+   * for. Set once: a repeat press changes nothing and writes no second
+   * learning. The agent's later runs are told not to report it again.
+   */
+  @Post('agents/runs/:id/findings/:index/dismiss')
+  @Access('editor', 'query')
+  @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiParam({ name: 'index', type: Number, description: 'Position in the run\'s findings array' })
+  @ApiOperation({ summary: 'Dismiss a finding; optionally propose a learning saying why' })
+  dismissFinding(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('index', ParseIntPipe) index: number,
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body() dto: DismissAgentFindingDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<DismissAgentFindingResponse> {
+    return this.findings.dismiss(workspaceId, id, index, principal, {
+      text: dto.learning ?? '',
+      allAgents: dto.allAgents === true,
+    });
   }
 
   /**

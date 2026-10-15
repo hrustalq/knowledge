@@ -24,6 +24,8 @@ import { aiSectionLabel } from '@/lib/ai-sections'
 export interface Crumb {
   label: string
   to?: string
+  /** A page the reader may not open (#76): named generically, never linked. */
+  restricted?: boolean
 }
 
 // Route -> message key, translated at render: a crumb must follow the language
@@ -81,6 +83,11 @@ export function useCrumbs(): ComputedRef<Crumb[]> {
       const id = route.params.id as string
       const trail = store.pathTo(id)
       const list: Crumb[] = pageRoot()
+      // What sits above the first page the tree can draw, when some of it is
+      // hidden from this reader (a guest's ungranted parent).
+      for (const a of store.hiddenAbove[id] ?? []) {
+        list.push(a.hidden ? { label: t('access.restrictedPage'), restricted: true } : { label: a.title, to: `/documents/${a.documentId}` })
+      }
       for (const node of trail) list.push({ label: node.title, to: `/documents/${node.documentId}` })
       if (path.endsWith('/edit')) list.push({ label: t('nav.edit') })
       return list

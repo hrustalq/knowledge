@@ -7,6 +7,9 @@ import type {
   WorkspaceRole,
 } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { Prisma } from '@prisma/client';
+import { PermissionService } from '../permissions/permission.service.js';
+import { visibilityWhere } from '../permissions/access-scope.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
 import type { Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
@@ -26,7 +29,10 @@ const PAGE_LIMIT = 12;
  */
 @Injectable()
 export class ProfilesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   async get(principal: Principal, workspaceId: string, userId: string): Promise<UserProfileResponse> {
     const user = await this.prisma.user.findUnique({
@@ -46,9 +52,12 @@ export class ProfilesService {
       where: { workspaceId_userId: { workspaceId, userId } },
     });
 
+    // The pages listed are the ones the *reader* may open (#76): someone's
+    // profile must not name what a restriction keeps from the person reading it.
+    const visible = visibilityWhere(await this.permissions.scopeFor(principal, workspaceId));
     const [pages, pageCount, openWork] = await Promise.all([
-      this.pagesFor(workspaceId, userId),
-      this.pageCountFor(workspaceId, userId),
+      this.pagesFor(workspaceId, userId, visible),
+      this.pageCountFor(workspaceId, userId, visible),
       this.openWorkFor(workspaceId, userId),
     ]);
 
@@ -80,9 +89,9 @@ export class ProfilesService {
    * revision that made it, which is also what makes "authored" (revision 1 is
    * theirs) distinguishable from "revised".
    */
-  private async pagesFor(workspaceId: string, userId: string): Promise<ProfilePage[]> {
+  private async pagesFor(workspaceId: string, userId: string, visible: Prisma.DocumentWhereInput): Promise<ProfilePage[]> {
     const revisions = await this.prisma.documentRevision.findMany({
-      where: { authorId: userId, document: { workspaceId } },
+      where: { authorId: userId, document: { workspaceId, AND: [visible] } },
       select: {
         documentId: true,
         revisionNumber: true,
@@ -139,9 +148,9 @@ export class ProfilesService {
     for (const page of pages) page.status = statusByDocument.get(page.documentId) ?? null;
   }
 
-  private async pageCountFor(workspaceId: string, userId: string): Promise<number> {
+  private async pageCountFor(workspaceId: string, userId: string, visible: Prisma.DocumentWhereInput): Promise<number> {
     const distinct = await this.prisma.documentRevision.findMany({
-      where: { authorId: userId, document: { workspaceId } },
+      where: { authorId: userId, document: { workspaceId, AND: [visible] } },
       select: { documentId: true },
       distinct: ['documentId'],
     });
@@ -193,8 +202,8 @@ export class ProfilesService {
    */
   private async devProfile(principal: Principal, workspaceId: string): Promise<UserProfileResponse> {
     const [pages, pageCount, openWork] = await Promise.all([
-      this.pagesFor(workspaceId, DEV_ACTOR_ID),
-      this.pageCountFor(workspaceId, DEV_ACTOR_ID),
+      this.pagesFor(workspaceId, DEV_ACTOR_ID, {}),
+      this.pageCountFor(workspaceId, DEV_ACTOR_ID, {}),
       this.openWorkFor(workspaceId, DEV_ACTOR_ID),
     ]);
     return {

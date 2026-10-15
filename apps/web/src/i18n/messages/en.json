@@ -160,6 +160,7 @@
     "chatBots": "Chat bots"
   },
   "role": {
+    "guest": "Guest",
     "viewer": "Viewer",
     "editor": "Editor",
     "admin": "Admin"
@@ -553,7 +554,8 @@
         "boards": "project boards",
         "repo-events": "workflow triggers",
         "wiki": "repo wiki on push",
-        "changelog": "release notes"
+        "changelog": "release notes",
+        "acl": "access mirroring"
       },
       "permission": {
         "metadata": "Metadata",
@@ -565,7 +567,8 @@
         "checks": "Checks",
         "actions": "Actions",
         "workflows": "Workflows",
-        "statuses": "Commit statuses"
+        "statuses": "Commit statuses",
+        "members": "Members (organisation)"
       },
       "pendingHint": "The App asks for more than this installation has accepted. The account's owner approves the new permissions on GitHub.",
       "missingHint": "Something here needs a permission or event the App does not request. Whoever owns the App registration adds it; every installation then accepts it.",
@@ -673,6 +676,62 @@
       "notGenerated": "not generated",
       "empty": "No release notes yet — they appear after the next sync.",
       "error": "The repository's tags could not be read right now, so older releases may be missing from this list."
+    },
+    "acl": {
+      "title": "Access mirroring",
+      "introPerItem": "Carry who may open each page at the source onto the page here. A restricted source page is restricted here to the people and groups it names, matched by a linked account or a verified email.",
+      "introAudience": "This source does not say who may open each page, so mirroring restricts every page from it to one workspace group.",
+      "mode": {
+        "off": "Off",
+        "mirror": "Mirror",
+        "mirror_strict": "Mirror, fail closed"
+      },
+      "modeHint": {
+        "off": "Pages from this connector are open to the workspace, as before. Turning it off keeps what was mirrored as ordinary access you can edit.",
+        "mirror": "Restricted source pages are restricted here. People with no account here are left out and listed below.",
+        "mirror_strict": "As Mirror, and a page naming anyone unmapped also admits the connector's owner, so somebody can always fix it."
+      },
+      "interval": "Access sync every (minutes)",
+      "intervalHint": "Permission calls only, no content. Empty uses the server default of {n} minutes.",
+      "intervalInvalid": "The interval is a whole number of minutes between 5 and 10080.",
+      "audience": "Restrict every page to",
+      "audiencePlaceholder": "Choose a group",
+      "audienceNone": "No group",
+      "audienceHint": "Required while mirroring is on. Members of this group, the connector's owner and admins can open its pages.",
+      "offWarning": "Switching off keeps every page restricted as it is now; the mirrored grants and groups become manual ones you can edit.",
+      "syncNow": "Sync access now",
+      "syncQueued": "Access sync queued.",
+      "saved": "Access mirroring saved. The first sync is queued.",
+      "savedOff": "Access mirroring is off. Mirrored access is now manual.",
+      "lastSync": "Last access sync",
+      "restrictedPages": "Pages restricted",
+      "groups": "Mirrored groups",
+      "identitiesTitle": "People at the source",
+      "unmappedCount": "No one is unmapped | {n} person has no account here and is left out of the pages that name them | {n} people have no account here and are left out of the pages that name them",
+      "allMapped": "Everyone the source named has an account here.",
+      "unmapped": "Unmapped",
+      "mappedBy": {
+        "manual": "Mapped by hand",
+        "provider": "Linked account",
+        "email": "Verified email"
+      },
+      "mapLabel": "Map {name} to a member",
+      "mapPlaceholder": "Choose a member",
+      "mapNone": "Nobody (match automatically)",
+      "mapped": "Mapping saved. Access is re-synced now.",
+      "mapHint": "A match by email is only as trustworthy as the email: only verified addresses match. A mapping by hand is never overwritten."
+    },
+    "tabAccess": "Access",
+    "guidance": {
+      "title": "Agent guidance",
+      "body": "Guidance files in this repository are imported as disabled skills after each sync. Enabling one makes its text trusted; later commits only propose changes.",
+      "importNow": "Import now",
+      "imported": "No imported skills | {count} imported skill | {count} imported skills",
+      "none": "No guidance files imported yet.",
+      "open": "Open in Skills",
+      "result": "{created} new, {updated} updated, {pending} awaiting review, {removed} removed",
+      "truncated": "Cut to the skill budget: {paths}",
+      "skipped": "Skipped: {paths}"
     }
   },
   "workflow": {
@@ -1632,7 +1691,6 @@
     "provider": "Provider",
     "instructionsFollowed": "Instructions the assistant follows",
     "noSkills": "No skills yet",
-    "triggers": "Triggers",
     "enabled": "Enabled",
     "triggersCsv": "Triggers (comma separated)",
     "description": "Description",
@@ -1646,6 +1704,7 @@
     "tabConfig": "Configuration",
     "tabAgents": "Agents",
     "tabSkills": "Skills",
+    "tabLearnings": "Learnings",
     "tabPlugins": "Plugins",
     "tabUsage": "Usage",
     "tabLogs": "Logs",
@@ -1702,6 +1761,19 @@
       "pickConnectorHint": "One repository per run. Its pages and the repository's own documents count as already declared.",
       "noRepositories": "Connect a codebase or markdown/git repository first — this agent reads one.",
       "scheduleEnabled": "Run on a schedule",
+      "scheduleKind": "Schedule",
+      "scheduleKinds": {
+        "interval": "Interval",
+        "daily": "Daily",
+        "weekly": "Weekly"
+      },
+      "scheduleTime": "At",
+      "scheduleTimezone": "Timezone",
+      "scheduleWeekdays": "On",
+      "dailyAt": "daily {time}",
+      "weeklyAt": "{days} {time}",
+      "nextRunAt": "Next run {when}",
+      "schedulePrecision": "Starts within {minutes} minutes of the scheduled time; a slot missed while the worker was down runs once.",
       "scheduleHint": "Unattended runs execute as whoever turned the schedule on, and count against this workspace budget. An agent slower than its interval falls behind rather than piling up.",
       "scheduleMinutes": "Every (minutes)",
       "scheduleNote": "Instruction for every run",
@@ -1709,7 +1781,111 @@
       "scheduleOwned": "runs as its owner",
       "everyMinutes": "every {count} min",
       "lastRunAt": "Last run {when}",
-      "neverRun": "Has not run yet"
+      "neverRun": "Has not run yet",
+      "deleteTitle": "Delete {name}?",
+      "deleteBody": "The agent, its instructions and its schedule are deleted. Runs it already made stay in Runs. This cannot be undone."
+    },
+    "triggers": {
+      "title": "Triggers",
+      "hint": "Start a run when something happens. Off until enabled; a run executes as whoever enabled its trigger and counts against the workspace budget.",
+      "notListening": "Triggers are switched off on this server (AGENT_TRIGGERS_ENABLED), so none of these will fire.",
+      "add": "Add trigger",
+      "empty": "No triggers — this agent runs by hand or on its schedule.",
+      "event": "When",
+      "events": {
+        "page": {
+          "merged": "A page is merged",
+          "indexed": "A page is updated"
+        },
+        "merge-request": {
+          "opened": "A merge request is opened"
+        },
+        "connector": {
+          "synced": "A connector finishes syncing"
+        },
+        "webhook": "A signed webhook arrives",
+        "comment": {
+          "mention": "The agent is mentioned in a comment"
+        }
+      },
+      "eventHints": {
+        "page": {
+          "merged": "A merge request landed on the page. The run reads that page.",
+          "indexed": "A new revision of the page was indexed — on its default branch unless a branch is named. The run reads that page."
+        },
+        "merge-request": {
+          "opened": "A merge request on a page, or a pull request on a connected repository."
+        },
+        "connector": {
+          "synced": "A sync run finished without failures."
+        },
+        "webhook": "Any system that can sign a request can start this agent. The delivery body reaches the model as untrusted context.",
+        "comment": {
+          "mention": "An editor mentions the agent in a discussion. Instead of a chat reply, it goes over that page and posts its findings in the thread when the run ends."
+        }
+      },
+      "webhook": {
+        "url": "Delivery URL",
+        "secretSet": "Signing secret set",
+        "noSecret": "No signing secret yet — every delivery is refused until you create one.",
+        "rotate": "Rotate secret",
+        "create": "Create secret",
+        "rotated": "Copy this secret now. It will not be shown again, and the previous one has stopped working.",
+        "copy": "Copy",
+        "copied": "Copied",
+        "signing": "Sign each delivery with HMAC-SHA256 of the timestamp, a dot, then the raw JSON body, and send it as X-Knowledge-Signature: sha256=hex. X-Knowledge-Timestamp is Unix seconds, X-Knowledge-Delivery a unique id per delivery — a retry with the same id starts nothing.",
+        "rotateTitle": "Rotate the signing secret?",
+        "rotateBody": "The current secret stops working at once, so every delivery is refused until the sender has the new one. The new secret is shown once."
+      },
+      "project": "Project",
+      "allProjects": "All projects",
+      "categories": "Page categories",
+      "categoriesPlaceholder": "guide, runbook — empty means any",
+      "connectors": "Connectors",
+      "anyConnector": "None ticked means any connector.",
+      "branch": "Branch",
+      "defaultBranch": "Default branch",
+      "anyBranch": "Any branch",
+      "cooldown": "Cooldown (minutes)",
+      "cooldownDefault": "Server default",
+      "cooldownHint": "The same page, merge request or connector starts at most one run per cooldown. 0 turns it off.",
+      "cooldownShort": "no cooldown | cooldown {count} min | cooldown {count} min",
+      "note": "Instruction for every run",
+      "enabled": "Enabled",
+      "owned": "runs as whoever enabled it",
+      "lastFired": "Last fired {when}",
+      "neverFired": "Has not fired yet",
+      "created": "Trigger added",
+      "saved": "Trigger saved",
+      "deleted": "Trigger deleted",
+      "delete": "Delete trigger",
+      "enabledNamed": "Enabled: {event}",
+      "deleteTitle": "Delete this trigger?",
+      "deleteBody": "The agent stops starting on this event. Runs it already started stay in Runs.",
+      "deleteWebhookBody": "Its delivery URL stops working for good — a new webhook trigger gets a new URL and secret. Runs it already started stay in Runs.",
+      "save": "Save trigger"
+    },
+    "recipes": {
+      "open": "Recipes",
+      "title": "Recipes",
+      "hint": "Ready-made schedules and triggers for agents you already have. Everything a recipe adds starts off: turn it on in the agent's settings, and its runs execute as you. Applying one again keeps whatever is already set up.",
+      "agent": "Agent: {name}",
+      "apply": "Apply",
+      "applying": "Applying…",
+      "applied": "Added to {name}, switched off — turn it on to start.",
+      "alreadyThere": "{name} already has this set up; nothing was changed.",
+      "weeklyDigest": {
+        "title": "Weekly digest",
+        "desc": "Every Monday, a summary of what changed in the workspace — new and changed pages, merged changes — as a page you can publish."
+      },
+      "freshnessSweep": {
+        "title": "Freshness sweep",
+        "desc": "The curator looks for stale pages every Monday and after each connector sync, and reports them for review."
+      },
+      "glossarySuggester": {
+        "title": "Glossary suggester",
+        "desc": "Each time a page is merged, the glossarist proposes the terms it defines."
+      }
     },
     "tabRuns": "Runs",
     "tabCoverage": "Coverage",
@@ -1728,6 +1904,7 @@
         "cancelled": "Cancelled"
       },
       "trigger": {
+        "event": "on event",
         "manual": "manual",
         "schedule": "scheduled",
         "webhook": "pull request",
@@ -1761,7 +1938,19 @@
       "outdatedMarked": "Marked outdated",
       "applyRelations": "Apply relations",
       "relationsApplied": "Opened a merge request: {title}",
-      "nothingToApply": "The page already declares these relations — nothing to propose."
+      "nothingToApply": "The page already declares these relations — nothing to propose.",
+      "dismiss": "Dismiss",
+      "dismissed": "Dismissed",
+      "dismissTitle": "Dismiss this finding",
+      "dismissDesc": "It is hidden from this list, and {agent} is told not to report it again.",
+      "rememberWhy": "Remember why (optional)",
+      "rememberWhyPlaceholder": "Pages under Legal are versioned on purpose; never flag them stale.",
+      "rememberWhyHint": "Becomes a proposed learning. An admin approves it before the agent is told it.",
+      "teachEveryAgent": "Teach every agent, not only {agent}",
+      "dismissedToast": "Finding dismissed",
+      "dismissedWithLearning": "Finding dismissed. Your learning is waiting for review.",
+      "showDismissed": "Show dismissed ({count})",
+      "learningProposed": "Learning proposed"
     },
     "providerNone": "None — assistant disabled",
     "overridden": "· overridden",
@@ -1807,7 +1996,20 @@
       "deleteNamed": "Delete {name}",
       "namePlaceholder": "Release notes writer",
       "descriptionPlaceholder": "Draft release notes from merged merge requests",
-      "instructionsPlaceholder": "Always group by Added / Changed / Fixed.\nCite the MR id for every bullet.\nNever invent a version number."
+      "instructionsPlaceholder": "Always group by Added / Changed / Fixed.\nCite the MR id for every bullet.\nNever invent a version number.",
+      "repoSource": "From {connector} · {path}",
+      "repoSourceGone": "From a deleted connector · {path}",
+      "upstreamChanged": "Upstream changed",
+      "removedUpstream": "Removed upstream",
+      "reviewUpstream": "Review the upstream change",
+      "reviewUpstreamTitle": "Upstream change to {name}",
+      "reviewUpstreamDesc": "{path} changed in the repository. The skill keeps its current instructions until you accept — a commit never changes what an enabled skill says.",
+      "acceptUpstream": "Accept upstream",
+      "acceptedUpstream": "Upstream text accepted",
+      "repoEditNote": "Imported from {path}. While the skill is disabled it follows the repository; once enabled, upstream changes wait for your review.",
+      "deleteTitle": "Delete {name}?",
+      "deleteBody": "The skill and its instructions are deleted. This cannot be undone.",
+      "deleteRepoBody": "The next sync imports the file again as a new, disabled skill while it is still in the repository. To keep it out of prompts, leave it disabled instead."
     },
     "plugins": {
       "add": "Add plugin",
@@ -1996,6 +2198,56 @@
         "surface": "Surface",
         "confidence": "Confidence"
       }
+    },
+    "learnings": {
+      "subtitle": "Corrections your team taught its agents. Only active learnings reach a prompt, newest first, {limit} at most per prompt.",
+      "add": "Add learning",
+      "propose": "Propose",
+      "save": "Save",
+      "emptyTitle": "No learnings yet",
+      "emptyBody": "When an agent gets something wrong, teach it: from a reply in a thread, from a finding you dismiss, or here. A workspace admin approves each one before any agent sees it.",
+      "example1": "Reviewer: never flag pages under Legal as stale, they are versioned on purpose.",
+      "example2": "Every agent: call the product Knowledge, never KB.",
+      "status": {
+        "proposed": "Proposed",
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "none": {
+        "proposed": "Nothing waiting for review.",
+        "active": "No active learnings. Approve a proposed one to put it in front of the agent.",
+        "archived": "Nothing archived."
+      },
+      "everyAgent": "Every agent",
+      "everyProject": "Every project",
+      "agent": "Agent",
+      "project": "Applies in",
+      "text": "What should it do differently?",
+      "textPlaceholder": "A rule for next time, in plain words.",
+      "activeNow": "Make it active now",
+      "approve": "Approve",
+      "archive": "Archive",
+      "restore": "Back to proposed",
+      "moved": {
+        "proposed": "Moved back to proposed",
+        "active": "Approved. The agent follows it from its next turn.",
+        "archived": "Archived"
+      },
+      "source": {
+        "manual": "Written here",
+        "document-thread": "From a page comment",
+        "mr-thread": "From a review thread",
+        "finding": "From a dismissed finding"
+      },
+      "approvedAt": "approved {time}",
+      "teach": "Teach agent",
+      "teachTitle": "Teach {agent}",
+      "editTitle": "Edit learning",
+      "teachDesc": "Write the correction as a rule for next time. It is proposed: a workspace admin approves it before any agent is told it.",
+      "teachDescAdmin": "Write the correction as a rule for next time. Proposed learnings wait for review; an active one is told to the agent from its next turn.",
+      "updated": "Learning updated",
+      "savedActive": "Saved. The agent follows it from its next turn.",
+      "savedProposed": "Proposed. A workspace admin approves it under AI settings, Learnings."
     }
   },
   "search": {
@@ -2247,8 +2499,9 @@
     "memberRemoved": "Removed {email}",
     "tabMembers": "Members",
     "tabRoles": "Roles",
+    "tabGroups": "Groups",
     "tabAccounts": "Accounts",
-    "rolesHint": "Three roles, each one adding to the one before it. A role is held per workspace.",
+    "rolesHint": "Four roles, each one adding to the one before it. A guest starts from nothing. A role is held per workspace.",
     "rolesNoteMerge": "Merging is an editor’s right, not an admin’s — there is no separate approver rank.",
     "rolesNoteViewer": "A viewer can comment and can use the AI assistant; neither needs edit access.",
     "noMembersInRole": "Nobody holds this role yet.",
@@ -2261,6 +2514,10 @@
     "selectMember": "Select {name}",
     "rolesReadOnly": "You can see who holds what, but only an admin can change it.",
     "grant": {
+      "guest": {
+        "granted": "Open only the pages and projects shared with them or one of their groups",
+        "nothingElse": "No search, activity feed, member roster or settings across the workspace"
+      },
       "viewer": {
         "read": "Read every page, its revision history and the graph around it",
         "comment": "Comment on any page, and resolve comment threads",
@@ -2276,14 +2533,158 @@
         "automation": "Run workflows, connector syncs and AI agents"
       },
       "admin": {
-        "members": "Add and remove members, and set their role and operator flag",
+        "members": "Add and remove members, set their role and operator flag, and manage groups",
         "ai": "Configure AI providers, skills, plugins and spending budgets",
         "integrations": "Set up connectors, and define the workflows editors run",
         "housekeeping": "Delete a project, force re-indexing, and read the audit log"
       }
     },
     "roleFor": "Role for {name}",
-    "trustedOperatorFor": "Trusted operator for {name}"
+    "trustedOperatorFor": "Trusted operator for {name}",
+    "groups": {
+      "hint": "A group is a named set of members. Page and project restrictions are granted to groups as well as to people, so a team is added once rather than person by person.",
+      "new": "New group",
+      "create": "Create group",
+      "editTitle": "Edit group",
+      "formHint": "The name is what people pick when they share a page with the group.",
+      "name": "Name",
+      "description": "Description",
+      "created": "Group “{name}” created",
+      "updated": "Group “{name}” saved",
+      "deleted": "Group “{name}” deleted",
+      "empty": "This workspace has no groups yet.",
+      "emptyManage": "No groups yet. Create one to share pages with a team at once.",
+      "source": {
+        "manual": "Manual",
+        "connector": "Synced from a connector",
+        "scim": "Provisioned by SCIM"
+      },
+      "readOnlySource": "This group is kept in step with an external source, so its name and members are changed there, not here.",
+      "noMembers": "Nobody is in this group yet.",
+      "addPeople": "Add people",
+      "everyoneIn": "Every workspace member is already in this group.",
+      "removeMember": "Remove {name} from the group",
+      "editFor": "Edit {name}",
+      "deleteFor": "Delete {name}",
+      "deleteTitle": "Delete group “{name}”?",
+      "deleteBody": "Its members stay in the workspace. Whatever was shared with the group stops reaching them through it."
+    },
+    "action": "Access",
+    "manageAccess": "Access…",
+    "lockedLabel": "Restricted — not open to the whole workspace",
+    "restrictedPage": "Restricted page",
+    "restrictedTitle": "This page is restricted",
+    "restrictedBody": "Ask one of its managers or a workspace admin for access.",
+    "restrictedProject": "Restricted project",
+    "shareRestricted": "Restricted pages can't be shared by link — grant access instead.",
+    "level": {
+      "view": "Can view",
+      "edit": "Can edit",
+      "manage": "Can manage",
+      "none": "No access"
+    },
+    "page": {
+      "title": "Access to “{title}”",
+      "titleProject": "Access to project “{title}”",
+      "intro": "Restricting a page hides it and all its subpages from everyone not granted. Workspace admins always keep access.",
+      "introProject": "Restricting a project hides it and every page in it from everyone not granted. Workspace admins always keep access.",
+      "tabsLabel": "Access sections",
+      "tabSettings": "Restrictions",
+      "tabPeople": "Who can see this",
+      "inheritedTitle": "Inherited",
+      "restrictedByProject": "Restricted by project",
+      "restrictedByPage": "Restricted by",
+      "hiddenAncestor": "Restricted by a page you cannot open",
+      "grantCount": "no grants | {n} grant | {n} grants",
+      "narrowOnly": "A grant here can only narrow these — it never re-opens what a parent has closed.",
+      "restrict": "Restrict this page",
+      "restrictProject": "Restrict this project",
+      "restrictedHint": "Only the people and groups below, and workspace admins, can open it and everything under it.",
+      "openHint": "Everyone in the workspace can open it, within their role.",
+      "grantsTitle": "People and groups",
+      "noGrants": "No grants. Add someone to share it with a guest or to hand out edit or manage.",
+      "noGrantsRestricted": "Nobody is granted yet — only workspace admins will be able to open it.",
+      "goneSubject": "Removed account",
+      "levelFor": "Access level for {name}",
+      "removeGrant": "Remove {name}",
+      "addLabel": "Add people or groups",
+      "addPlaceholder": "Search members and groups…",
+      "addEmpty": "Everyone is already on the list.",
+      "ceilingHint": "The workspace role stays the ceiling: a viewer granted edit still only reads. Where nothing is restricted, a grant admits no one new among members — it shares with guests and hands out edit or manage.",
+      "saved": "Access saved",
+      "selfLockoutHint": "Keep yourself, or a group you are in, at Can manage.",
+      "isRestricted": "Restricted: only the people and groups granted can open it.",
+      "isInheritedOnly": "Not restricted itself, but a restriction above it applies.",
+      "isOpen": "Open to everyone in the workspace, within their role.",
+      "yourLevel": "Your access",
+      "askManager": "To change who can open it, ask one of its managers or a workspace admin.",
+      "unsavedNote": "This list reflects the saved settings, not your unsaved changes.",
+      "effectiveHint": "Everyone who can open it now, and why.",
+      "effectiveEmpty": "No member of this workspace has access. Platform admins still do.",
+      "source": {
+        "admin": "Admin",
+        "role": "Role",
+        "grant": "Grant"
+      },
+      "sourceHint": {
+        "admin": "A workspace admin always has access",
+        "role": "Their workspace role ({role}) decides",
+        "grant": "A grant to them or one of their groups decides"
+      },
+      "mirroredTitle": "Mirrored from the source",
+      "mirroredBadge": "Mirrored",
+      "mirroredHint": "A connector copies these from who may open the page upstream and rewrites them on every access sync. Change them at the source; grants you add below are kept alongside.",
+      "noManualGrants": "No grants added here."
+    },
+    "tabRequests": "Requests",
+    "requests": {
+      "toDecide": "To decide",
+      "mine": "My requests",
+      "statusFilter": "Filter by status",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "denied": "Declined",
+        "expired": "Expired",
+        "cancelled": "Withdrawn",
+        "all": "All"
+      },
+      "emptyDecide": "No requests waiting on you",
+      "emptyMine": "You have not asked for access to anything",
+      "emptyHint": "When someone is refused a page, they can ask its managers for access. Requests land here.",
+      "asksFor": "asks for “{level}” on",
+      "reason": "Reason: {reason}",
+      "expires": "expires {when}",
+      "decided": "decided {when}",
+      "approve": "Approve",
+      "deny": "Decline",
+      "withdraw": "Withdraw",
+      "approveTitle": "Approve access request",
+      "approveHint": "The level is granted on every restricted page or project that kept them out, so they also see what else sits under those.",
+      "level": "Level to grant",
+      "denyTitle": "Decline access request",
+      "denyHint": "They are told it was declined, with your reason if you give one.",
+      "reasonLabel": "Reason (optional)",
+      "approved": "Access granted",
+      "denied": "Request declined",
+      "cancelled": "Request withdrawn"
+    },
+    "request": {
+      "levelLabel": "Access you need",
+      "messageLabel": "Message to the managers (optional)",
+      "messagePlaceholder": "Why you need it — it helps them decide.",
+      "send": "Send request",
+      "sent": "Request sent — its managers have been told.",
+      "pendingTitle": "Your request is waiting",
+      "pendingBody": "Asked {when}. You will be notified when a manager decides.",
+      "withdraw": "Withdraw request",
+      "deniedNote": "Your last request was declined."
+    },
+    "mention": {
+      "title": "Not notified: {names} cannot open this page | Not notified: {names} cannot open this page",
+      "hint": "If you manage this page, grant them view from Access…; otherwise ask one of its managers.",
+      "grant": "Open Access…"
+    }
   },
   "users": {
     "user": "User",
@@ -2999,7 +3400,8 @@
       "comment": "Comments",
       "document": "Page changes",
       "verification": "Verification",
-      "job": "Runs"
+      "job": "Runs",
+      "access": "Access"
     },
     "categoryHint": {
       "mention": "Somebody named you in a comment.",
@@ -3007,7 +3409,8 @@
       "comment": "New discussion on something you follow.",
       "document": "A page you follow was edited, renamed or moved.",
       "verification": "A page you own needs a check, was marked outdated, is about to expire, or was handed to you.",
-      "job": "A workflow, agent, import or sync you started finished."
+      "job": "A workflow, agent, import or sync you started finished.",
+      "access": "Requests to open a page you manage, and answers to your own."
     },
     "reason": {
       "assigned": "Assigned to you"
@@ -3057,7 +3460,12 @@
       "document.outdated": "marked this page outdated",
       "document.verification-expiring": "the verification of this page is about to expire",
       "document.verification-expired": "the verification of this page has expired",
-      "document.owner-changed": "made you the owner of this page"
+      "document.owner-changed": "made you the owner of this page",
+      "access.requested": "asked for access",
+      "access.approved": "approved your access request",
+      "access.denied": "declined your access request",
+      "access.expired": "Your access request expired",
+      "access.granted": "gave you access"
     }
   },
   "connect": {

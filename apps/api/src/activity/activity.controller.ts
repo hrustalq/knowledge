@@ -2,9 +2,13 @@ import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { ActivityCalendarResponse, ListActivityResponse } from '@knowledge/contracts';
-import { Access } from '../auth/access.decorator.js';
+import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
+import type { Principal } from '../auth/principal.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { ActivityService } from './activity.service.js';
 import { t } from '../i18n/t.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Longest window the calendar will aggregate in one request (~14 months). */
 const MAX_CALENDAR_DAYS = 431;
@@ -12,7 +16,10 @@ const MAX_CALENDAR_DAYS = 431;
 @ApiTags('activity')
 @Controller('v1/activity')
 export class ActivityController {
-  constructor(private readonly activity: ActivityService) {}
+  constructor(
+    private readonly activity: ActivityService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   // Declared before @Get() so the literal segment is matched first — house
   // style (see EntitiesController's /trace), not a Nest requirement here.
@@ -25,7 +32,8 @@ export class ActivityController {
   @ApiQuery({ name: 'actor', required: true, description: "users.id, or 'dev' in AUTH_MODE=none" })
   @ApiQuery({ name: 'from', required: false, description: 'Inclusive YYYY-MM-DD; defaults to 52 weeks before `to`' })
   @ApiQuery({ name: 'to', required: false, description: 'Inclusive YYYY-MM-DD; defaults to today' })
-  calendar(
+  async calendar(
+    @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('actor') actor: string,
     @Query('from') from?: string,
@@ -40,11 +48,13 @@ export class ActivityController {
     if (spanInDays(start, end) > MAX_CALENDAR_DAYS) {
       throw new BadRequestException(t('error.activity.rangeTooWide', { max: MAX_CALENDAR_DAYS }));
     }
-    return this.activity.calendar(workspaceId, { actor, from: start, to: end });
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    return this.activity.calendar(workspaceId, { actor, from: start, to: end }, scope);
   }
 
   @Get()
-  @Access('viewer', 'query')
+  // Guests too: the feed is filtered to rows about pages they can open (#76).
+  @Access('viewer', 'query', { guests: true })
   @ApiOperation({ summary: 'Workspace activity feed, newest first (docs/features/10)' })
   @ApiQuery({ name: 'workspaceId', required: true })
   @ApiQuery({ name: 'documentId', required: false })
@@ -55,7 +65,8 @@ export class ActivityController {
   @ApiQuery({ name: 'to', required: false, description: 'Inclusive YYYY-MM-DD upper bound (whole day)' })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'cursor', required: false })
-  list(
+  async list(
+    @CurrentPrincipal() principal: Principal,
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Query('documentId') documentId?: string,
     @Query('projectId') projectId?: string,
@@ -68,6 +79,10 @@ export class ActivityController {
   ): Promise<ListActivityResponse> {
     const fromDate = parseDay(from);
     const toDate = parseDay(to);
+    for (const [subject, value] of [['document', documentId], ['project', projectId], ['id', subjectId], ['id', cursor]] as const) {
+      if (value && !UUID_RE.test(value)) throw new BadRequestException(t('error.invalidUuid', { subject: t(`subject.${subject}`) }));
+    }
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
     return this.activity.list(workspaceId, {
       documentId: documentId || undefined,
       projectId: projectId || undefined,
@@ -77,7 +92,7 @@ export class ActivityController {
       to: toDate ? endOfDay(toDate) : undefined,
       limit: limit ? Number(limit) : undefined,
       cursor: cursor || undefined,
-    });
+    }, scope);
   }
 }
 

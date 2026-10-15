@@ -20,6 +20,7 @@ export class AccessService {
     workspaceId: string,
     role: WorkspaceRole,
     operator = false,
+    opts: { allowGuest?: boolean } = {},
   ): Promise<void> {
     // A key narrows its owner before anything widens them: checked ahead of the
     // platform-admin shortcut, or an admin's read-only key would write anyway.
@@ -30,7 +31,10 @@ export class AccessService {
       where: { workspaceId_userId: { workspaceId, userId: principal.userId } },
     });
     if (!member) throw new ForbiddenException(t('error.auth.notMember', { workspaceId }));
-    if ((ROLE_ORDER[member.role as WorkspaceRole] ?? -1) < ROLE_ORDER[role]) {
+    // `allowGuest`: a route that filters its answer by page grants reads a
+    // guest as a viewer of what they were granted (#76, `@Access({ guests })`).
+    const held = member.role === 'guest' && opts.allowGuest ? ROLE_ORDER.viewer : (ROLE_ORDER[member.role as WorkspaceRole] ?? -1);
+    if (held < ROLE_ORDER[role]) {
       throw new ForbiddenException(
         t('error.auth.roleRequired', {
           role: t(`role.${role}`),
@@ -114,6 +118,16 @@ export class AccessService {
     return mr.document.workspaceId;
   }
 
+  /** The page a merge request changes — what page permissions are checked against (#76). */
+  async documentOfMergeRequest(mergeRequestId: string): Promise<{ workspaceId: string; documentId: string }> {
+    const mr = await this.prisma.mergeRequest.findUnique({
+      where: { id: mergeRequestId },
+      select: { documentId: true, document: { select: { workspaceId: true } } },
+    });
+    if (!mr) throw new NotFoundException(t('error.mergeRequest.notFound', { id: mergeRequestId }));
+    return { workspaceId: mr.document.workspaceId, documentId: mr.documentId };
+  }
+
   /**
    * Saved merge-request filters are private to their owner, but the workspace
    * still gates them: the chips hold member ids and branch names that only
@@ -183,6 +197,24 @@ export class AccessService {
    * `?workspaceId=` — is what stops an admin of workspace A from editing the
    * instructions or MCP credentials of workspace B.
    */
+  async workspaceOfAgentTrigger(triggerId: string): Promise<string> {
+    const trigger = await this.prisma.agentTrigger.findUnique({
+      where: { id: triggerId },
+      select: { workspaceId: true },
+    });
+    if (!trigger) throw new NotFoundException(t('error.ai.agentTriggerNotFound', { id: triggerId }));
+    return trigger.workspaceId;
+  }
+
+  async workspaceOfAgentLearning(learningId: string): Promise<string> {
+    const learning = await this.prisma.agentLearning.findUnique({
+      where: { id: learningId },
+      select: { workspaceId: true },
+    });
+    if (!learning) throw new NotFoundException(t('error.ai.agentLearningNotFound', { id: learningId }));
+    return learning.workspaceId;
+  }
+
   async workspaceOfAiSkill(skillId: string): Promise<string> {
     const skill = await this.prisma.aiSkill.findUnique({
       where: { id: skillId },
@@ -354,6 +386,18 @@ export class AccessService {
     const row = await this.prisma.chatSubscription.findUnique({ where: { id }, select: { workspaceId: true } });
     if (!row) throw new NotFoundException(t('error.chat.subscriptionNotFound', { id }));
     return row.workspaceId;
+  }
+
+  async workspaceOfAccessRequest(requestId: string): Promise<string> {
+    const row = await this.prisma.accessRequest.findUnique({ where: { id: requestId }, select: { workspaceId: true } });
+    if (!row) throw new NotFoundException(t('error.access.requestNotFound', { id: requestId }));
+    return row.workspaceId;
+  }
+
+  async workspaceOfGroup(groupId: string): Promise<string> {
+    const group = await this.prisma.userGroup.findUnique({ where: { id: groupId }, select: { workspaceId: true } });
+    if (!group) throw new NotFoundException(t('error.group.notFound', { id: groupId }));
+    return group.workspaceId;
   }
 
   async workspaceOfConnectorRun(runId: string): Promise<string> {

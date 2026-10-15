@@ -16,7 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { Check, Copy, Link2, Share2 } from 'lucide-vue-next'
+import { Check, Copy, Link2, Lock, Share2 } from 'lucide-vue-next'
 import {
   SHARE_EXPIRY_PRESETS,
   SHARE_PASSWORD_MIN_CHARS,
@@ -28,7 +28,7 @@ import {
 } from '@knowledge/contracts'
 import { api } from '@/api/client'
 import { apiQueryOptions } from '@/api/queries'
-import { errorMessage } from '@/api/errors'
+import { errorMessage, errorReason } from '@/api/errors'
 import { formatDate } from '@/lib/format'
 import { useCopy } from '@/lib/use-copy'
 import { useAuthStore } from '@/stores/auth'
@@ -39,7 +39,16 @@ import { Input } from '@/components/ui/input'
 import { ResponsivePopover } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-const props = defineProps<{ documentId: string }>()
+const props = defineProps<{
+  documentId: string
+  /**
+   * The page is not open to the whole workspace (#76). A public link would
+   * hand it to anyone, so the API refuses one (409 `share.restricted`) and
+   * the form is not offered; links made before the restriction stay listed
+   * so they can still be revoked.
+   */
+  restricted?: boolean
+}>()
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -86,7 +95,8 @@ async function create() {
     toast.success(copyState.value === 'copied' ? t('share.linkCopied') : t('share.created'))
     void queryClient.invalidateQueries({ queryKey: options.value.queryKey })
   } catch (e) {
-    toast.error(errorMessage(e, t))
+    // The page was restricted after this panel loaded: say what to do instead.
+    toast.error(errorReason(e) === 'share.restricted' ? t('access.shareRestricted') : errorMessage(e, t))
   } finally {
     busy.value = false
   }
@@ -136,7 +146,11 @@ function onOpen(next: boolean) {
       </div>
 
       <template v-else-if="policy">
-        <p class="text-muted-foreground">{{ t('share.intro') }}</p>
+        <p v-if="restricted" class="flex items-start gap-2">
+          <Lock class="text-muted-foreground mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          {{ t('access.shareRestricted') }}
+        </p>
+        <p v-else class="text-muted-foreground">{{ t('share.intro') }}</p>
 
         <!-- The link just made. When the server keeps no copy, this is the only time it is shown. -->
         <div v-if="created" class="space-y-1.5 rounded-md border bg-muted/40 p-2.5">
@@ -159,7 +173,7 @@ function onOpen(next: boolean) {
           </p>
         </div>
 
-        <form class="space-y-3" @submit.prevent="create">
+        <form v-if="!restricted" class="space-y-3" @submit.prevent="create">
           <label class="flex items-center gap-2">
             <Checkbox v-model="includeSubtree" />
             <span>{{ t('share.includeSubtree') }}</span>

@@ -45,6 +45,10 @@ export const GITHUB_PERMISSION_REQUIREMENTS: readonly PermissionRequirement[] = 
   { name: 'pull_requests', level: 'read', purpose: 'changelog' },
   // Board membership on the work items tab — decoration, never required.
   { name: 'organization_projects', level: 'read', purpose: 'boards' },
+  // Access mirroring reads a private repository's collaborators (metadata)
+  // and its teams' members, which is an organisation permission (#76).
+  { name: 'metadata', level: 'read', purpose: 'acl' },
+  { name: 'members', level: 'read', purpose: 'acl' },
 ];
 
 export const GITHUB_EVENT_REQUIREMENTS: readonly EventRequirement[] = [
@@ -171,11 +175,14 @@ export function activePurposes(connector: {
   wikiOnPush?: boolean;
   /** Release notes on (feature 46) — absent reads as off. */
   changelog?: boolean;
+  /** Access mirroring on (#76) — absent reads as off. */
+  acl?: boolean;
 }): Set<GithubAccessPurpose> {
   const active = new Set<GithubAccessPurpose>(['sync', 'work-items']);
   if (connector.kind === 'markdown-git' && connector.direction !== 'pull') active.add('push');
   if (connector.driftCheck !== 'off') active.add('drift-check');
   if (connector.kind === 'codebase' && connector.wikiOnPush) active.add('wiki');
   if (connector.kind === 'codebase' && connector.changelog) active.add('changelog');
+  if (connector.acl) active.add('acl');
   return active;
 }

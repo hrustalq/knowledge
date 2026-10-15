@@ -783,6 +783,17 @@ export interface AiConnectionTestResponse {
 
 // ---- Skills ----------------------------------------------------------------
 
+/**
+ * Where a skill's text came from (#70). `manual`: an admin wrote it. `repo`: a
+ * guidance file in a connected repository (`AGENTS.md`, `CLAUDE.md`, …),
+ * imported disabled — fetched bytes are untrusted until an admin enables them.
+ */
+export const AI_SKILL_SOURCES = ['manual', 'repo'] as const;
+export type AiSkillSource = (typeof AI_SKILL_SOURCES)[number];
+
+/** A skill's instruction budget — the DTO's cap and one turn's whole skill budget. */
+export const AI_SKILL_INSTRUCTIONS_MAX = 8_000;
+
 export interface AiSkillSummary {
   id: string;
   workspaceId: string;
@@ -794,10 +805,86 @@ export interface AiSkillSummary {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+  source: AiSkillSource;
+  /** The repository connector a `repo` skill was imported from; null for `manual`. */
+  sourceConnectorId: string | null;
+  /** That connector's current name, resolved on read; null once the connector is gone. */
+  sourceConnectorName: string | null;
+  /** Repo-relative path of the guidance file. */
+  sourcePath: string | null;
+  /** SHA-256 of the file's content as last seen upstream. */
+  sourceSha: string | null;
+  /**
+   * Upstream text that differs from `instructions` and waits for an admin's
+   * Accept. An enabled skill's live text never changes on a sync.
+   */
+  pendingInstructions: string | null;
+  /** When the file disappeared upstream; the skill was disabled then. */
+  sourceRemovedAt: string | null;
 }
 // GET /v1/ai/skills?workspaceId=
 export interface ListAiSkillsResponse {
   skills: AiSkillSummary[];
+}
+
+// ---- Repo guidance import (#70) ---------------------------------------------
+
+/**
+ * The guidance files read from a connected repository, at the repository root
+ * and at the connector's `subdir` root. Exact paths, plus one directory of
+ * Cursor rule files. One list read by the importer and shown by the UI.
+ */
+export const GUIDANCE_FILE_PATTERNS = [
+  'AGENTS.md',
+  'CLAUDE.md',
+  '.cursorrules',
+  '.github/copilot-instructions.md',
+  '.cursor/rules/*.mdc',
+] as const;
+
+/** A guidance file above this is skipped, not truncated: it is not a rules file. */
+export const GUIDANCE_FILE_MAX_BYTES = 65_536;
+/** Files one import takes at most — `.cursor/rules/` can hold dozens. */
+export const GUIDANCE_MAX_FILES = 20;
+
+const GUIDANCE_EXACT: ReadonlySet<string> = new Set(['AGENTS.md', 'CLAUDE.md', '.cursorrules', '.github/copilot-instructions.md']);
+
+/**
+ * The guidance paths among a repository's files, sorted, at the root and at
+ * `subdir`'s root. `.cursor/rules/` is read one level deep only.
+ */
+export function guidancePaths(paths: Iterable<string>, subdir: string): string[] {
+  const roots = [''];
+  const sub = subdir.replace(/^\/+|\/+$/g, '');
+  if (sub) roots.push(`${sub}/`);
+  const found = new Set<string>();
+  for (const path of paths) {
+    for (const root of roots) {
+      if (!path.startsWith(root)) continue;
+      const rest = path.slice(root.length);
+      const rule = rest.startsWith('.cursor/rules/') ? rest.slice('.cursor/rules/'.length) : null;
+      if (GUIDANCE_EXACT.has(rest) || (rule !== null && rule.endsWith('.mdc') && !rule.includes('/'))) found.add(path);
+    }
+  }
+  return [...found].sort();
+}
+
+// POST /v1/connectors/:id/guidance/import
+export interface RepoGuidanceImportResponse {
+  connectorId: string;
+  /** Guidance files found, before the size and count caps. */
+  found: number;
+  created: number;
+  /** Disabled skills whose text was replaced with the new upstream text. */
+  updated: number;
+  /** Enabled skills whose new upstream text now waits in `pendingInstructions`. */
+  pending: number;
+  /** Skills disabled because their file is gone upstream. */
+  removed: number;
+  unchanged: number;
+  /** Files read but cut to `AI_SKILL_INSTRUCTIONS_MAX` characters. */
+  truncated: string[];
+  skipped: Array<{ path: string; reason: 'oversize' | 'empty' | 'limit' }>;
 }
 
 // ---- Plugins (MCP servers) -------------------------------------------------
@@ -1027,6 +1114,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'sentinel',
   /** Clusters the questions answers failed on into coverage gaps (docs/features/38, phase 4). */
   'surveyor',
+  /** Summarises what changed in the workspace since its last digest (#70). */
+  'digest',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -1052,6 +1141,13 @@ export function isConnectorScopedAgent(key: string): boolean {
 export interface AgentRunInput {
   note?: string;
   connectorId?: string;
+  /**
+   * Restrict a page-reading run (curator, reviewer, glossarist) to these pages
+   * instead of the workspace's most recent ones (#70). Still read under the
+   * run's scope: a page the owner cannot open is dropped, never read. At most
+   * {@link AGENT_RUN_MAX_DOCUMENTS}.
+   */
+  documentIds?: string[];
   pullRequest?: AgentRunPullRequest;
   /**
    * The knowledge issue a sentinel run judges (docs/features/38, phase 3). A
@@ -1079,6 +1175,65 @@ export interface AgentRunInput {
   mergedAt?: string;
   /** The sweeper's claim that it acted on `mergedAt`, once. Never set by anything else. */
   outdatedAt?: string;
+  /**
+   * What started an `'event'` run (#70): the trigger event, the bus type it was
+   * heard on, and that event's subject. `revisionId` is set for `page.indexed`
+   * and is what keeps a re-index of one revision from firing twice.
+   */
+  event?: AgentRunEvent;
+  /**
+   * The body of the webhook delivery that started the run (#70), cut to
+   * {@link AGENT_WEBHOOK_PAYLOAD_MAX_CHARS}. Written by whoever holds the
+   * trigger's secret and relaying text anyone may have typed, so an executor
+   * only ever shows it to a model inside `wrapUntrusted`.
+   */
+  payload?: string;
+}
+
+export interface AgentRunEvent {
+  type: AgentTriggerEvent;
+  source: string;
+  subjectId?: string;
+  documentId?: string;
+  revisionId?: string;
+  /**
+   * `X-Knowledge-Delivery` of a `webhook` run: one delivery starts one run
+   * however often the sender retries it.
+   */
+  deliveryId?: string;
+  /** The discussion a `comment.mention` run answers into. */
+  threadId?: string;
+}
+
+/** How much of a webhook body a run keeps — and a prompt therefore sees. */
+export const AGENT_WEBHOOK_PAYLOAD_MAX_CHARS = 8_000;
+
+/**
+ * The headers a signed delivery to an agent trigger carries (#70).
+ *
+ * `signature` is `sha256=` + hex HMAC-SHA256, under the trigger's secret, of
+ * `<timestamp>.<raw body>` — the timestamp is signed so a captured delivery
+ * cannot be replayed under a fresh header. `timestamp` is Unix seconds and must
+ * be within `AGENT_WEBHOOK_TOLERANCE_SECONDS` of the server's clock. `delivery`
+ * is the sender's id for this delivery: a retry with the same id starts nothing.
+ */
+export const AGENT_WEBHOOK_HEADERS = {
+  signature: 'x-knowledge-signature',
+  timestamp: 'x-knowledge-timestamp',
+  delivery: 'x-knowledge-delivery',
+} as const;
+
+/**
+ * The most pages one page-scoped run may name. Each executor still reads no
+ * more than its own per-run cap, so this bounds the input, not the cost.
+ */
+export const AGENT_RUN_MAX_DOCUMENTS = 20;
+
+/** The agents whose executors honour {@link AgentRunInput.documentIds}. */
+export const PAGE_SCOPED_AGENT_KEYS = ['curator', 'reviewer', 'glossarist'] as const;
+
+export function isPageScopedAgent(key: string): boolean {
+  return (PAGE_SCOPED_AGENT_KEYS as readonly string[]).includes(key);
 }
 
 /**
@@ -1274,11 +1429,214 @@ export interface AiAgentSummary {
   overridden: string[];
   /** Background schedule. Off unless an admin turned it on and named an owner. */
   scheduleEnabled: boolean;
+  /** Never null on the wire: a row with no kind stored is an interval schedule. */
+  scheduleKind: AgentScheduleKind;
   scheduleMinutes: number | null;
+  /** `HH:MM`, 24-hour, in `scheduleTimezone`. Daily and weekly schedules only. */
+  scheduleTime: string | null;
+  /** 0 = Sunday … 6 = Saturday. Weekly schedules only. */
+  scheduleWeekdays: number[] | null;
+  /** IANA zone; null reads as UTC. */
+  scheduleTimezone: string | null;
   scheduleNote: string | null;
   scheduleOwner: string | null;
   lastRunAt: string | null;
+  /**
+   * When the sweeper will next start this agent, from {@link nextScheduledRun}.
+   * Null while the schedule is off or incomplete. A time at or before now
+   * means "on the next tick", which is up to five minutes away.
+   */
+  nextRunAt: string | null;
   updatedAt: string | null;
+}
+
+/**
+ * How an agent's background schedule is expressed (#70).
+ *
+ * `interval` is the original shape — every N minutes since the last run.
+ * `daily` and `weekly` fire at a wall-clock time in a timezone; `weekly` on the
+ * named weekdays only, which is also how "weekdays at 09:00" is spelled.
+ *
+ * There are no cron expressions on purpose: the sweeper is a due check inside
+ * a fixed five-minute tick (CLAUDE.md: no cron in this repo), so a schedule
+ * cannot be more precise than that tick, and a syntax that promises minute
+ * precision would lie about it.
+ */
+export const AGENT_SCHEDULE_KINDS = ['interval', 'daily', 'weekly'] as const;
+export type AgentScheduleKind = (typeof AGENT_SCHEDULE_KINDS)[number];
+
+/** `HH:MM`, 00:00–23:59. The DTO, the database CHECK and the predicate agree on it. */
+export const AGENT_SCHEDULE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** The sweeper's tick. A schedule fires on the first tick at or after its slot. */
+export const AGENT_SCHEDULE_TICK_MINUTES = 5;
+
+/** What {@link nextScheduledRun} needs to know about a schedule. */
+export interface AgentScheduleSpec {
+  /** Null reads as `interval`, which is what every row written before #70 is. */
+  kind: AgentScheduleKind | null;
+  minutes: number | null;
+  time: string | null;
+  weekdays: readonly number[] | null;
+  timezone: string | null;
+}
+
+/** What has happened to a schedule: its last run, and its last edit. */
+export interface AgentScheduleState {
+  lastRunAt: Date | null;
+  /**
+   * When the schedule's shape last changed. A daily or weekly schedule counts
+   * slots from the later of this and `lastRunAt`, so moving 09:00 to 08:00 at
+   * ten o'clock does not fire "the missed 08:00 slot" the moment it is saved.
+   * An interval schedule ignores it, which keeps the pre-#70 rows exact.
+   */
+  changedAt: Date | null;
+}
+
+/**
+ * When a schedule next fires — the one predicate the sweeper, the summary's
+ * `nextRunAt` and the editor's preview all read (CLAUDE.md: a guard, a sweeper
+ * and the UI must not disagree about what is runnable).
+ *
+ * A daily or weekly schedule returns the first slot after it last ran (or was
+ * changed). A worker that was down across several slots therefore sees one
+ * slot in the past, fires once, and moves past all of them: a missed slot
+ * fires once, never once per slot missed.
+ *
+ * Null when the schedule cannot fire: an interval with no minutes, a time-of-day
+ * schedule with no time, or a weekly one with no weekdays.
+ */
+export function nextScheduledRun(spec: AgentScheduleSpec, state: AgentScheduleState, now: Date): Date | null {
+  const kind = spec.kind ?? 'interval';
+  if (kind === 'interval') {
+    if (!spec.minutes || spec.minutes <= 0) return null;
+    // Exactly the pre-#70 rule: never run means due now.
+    return state.lastRunAt ? new Date(state.lastRunAt.getTime() + spec.minutes * 60_000) : now;
+  }
+
+  const time = spec.time ? AGENT_SCHEDULE_TIME_PATTERN.exec(spec.time) : null;
+  if (!time) return null;
+  const [hour, minute] = spec.time!.split(':').map(Number);
+  const days = kind === 'weekly' ? new Set(spec.weekdays ?? []) : null;
+  if (days && days.size === 0) return null;
+  const zone = scheduleZone(spec.timezone);
+
+  const anchor = latest(state.lastRunAt, state.changedAt);
+  if (!anchor) {
+    // Never run and never stamped (a row written by hand): the most recent
+    // slot is owed, else the next one.
+    return slotNear(now, zone, hour, minute, days, 'at-or-before') ?? slotNear(now, zone, hour, minute, days, 'after');
+  }
+  return slotNear(anchor, zone, hour, minute, days, 'after');
+}
+
+/** `nextScheduledRun(...) <= now` — the sweeper's question. */
+export function isScheduleDue(spec: AgentScheduleSpec, state: AgentScheduleState, now: Date): boolean {
+  const next = nextScheduledRun(spec, state, now);
+  return next !== null && next.getTime() <= now.getTime();
+}
+
+/** True when `zone` is an IANA name this runtime knows. */
+export function isValidTimezone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * An unknown zone reads as UTC rather than throwing: the DTO refuses one on
+ * write, and a runtime whose zone database lost a name must not stop every
+ * other schedule in the sweep.
+ */
+function scheduleZone(zone: string | null): string {
+  return zone && isValidTimezone(zone) ? zone : 'UTC';
+}
+
+function latest(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a.getTime() >= b.getTime() ? a : b;
+}
+
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** The wall-clock fields of `at` in `zone`. */
+function wallClock(at: Date, zone: string) {
+  let format = zoneFormatters.get(zone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    });
+    zoneFormatters.set(zone, format);
+  }
+  const parts: Record<string, number> = {};
+  for (const part of format.formatToParts(at)) {
+    if (part.type !== 'literal') parts[part.type] = Number(part.value);
+  }
+  return { year: parts.year, month: parts.month, day: parts.day, hour: parts.hour, minute: parts.minute, second: parts.second };
+}
+
+/** `zone`'s offset from UTC at `at`, in milliseconds. */
+function zoneOffset(at: number, zone: string): number {
+  const w = wallClock(new Date(at), zone);
+  return Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second) - Math.floor(at / 1000) * 1000;
+}
+
+/**
+ * The instant that reads `hour:minute` on the calendar day (y, m, d) in `zone`.
+ * Two passes settle a DST boundary. A wall time the spring-forward gap skips
+ * has no instant, and lands on the later candidate (02:30 → 03:30), so that
+ * day's slot still fires once; a repeated fall-back hour takes its first
+ * occurrence.
+ */
+function zonedInstant(y: number, m: number, d: number, hour: number, minute: number, zone: string): Date {
+  const guess = Date.UTC(y, m - 1, d, hour, minute);
+  const first = guess - zoneOffset(guess, zone);
+  const second = guess - zoneOffset(first, zone);
+  const reads = (at: number) => {
+    const w = wallClock(new Date(at), zone);
+    return w.hour === hour && w.minute === minute;
+  };
+  if (reads(second)) return new Date(second);
+  if (reads(first)) return new Date(first);
+  return new Date(Math.max(first, second));
+}
+
+/**
+ * The nearest slot to `ref`: the first one strictly after it, or the last one
+ * at or before it. Scans nine calendar days, which covers a weekly schedule
+ * with a single weekday on either side of a DST change.
+ */
+function slotNear(
+  ref: Date,
+  zone: string,
+  hour: number,
+  minute: number,
+  days: Set<number> | null,
+  direction: 'after' | 'at-or-before',
+): Date | null {
+  const local = wallClock(ref, zone);
+  // Forward from the day before (an offset can put `ref`'s local day one off
+  // the slot's), or backward from the day after.
+  const step = direction === 'after' ? 1 : -1;
+  for (let offset = -step; Math.abs(offset) <= 9; offset += step) {
+    // Day arithmetic on a UTC date carries month and year boundaries for free.
+    const day = new Date(Date.UTC(local.year, local.month - 1, local.day + offset));
+    if (days && !days.has(day.getUTCDay())) continue;
+    const slot = zonedInstant(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), hour, minute, zone);
+    if (direction === 'after' ? slot.getTime() > ref.getTime() : slot.getTime() <= ref.getTime()) return slot;
+  }
+  return null;
 }
 
 // GET /v1/ai/agents?workspaceId=
@@ -1291,11 +1649,13 @@ export const AGENT_RUN_STATUSES = ['pending', 'running', 'succeeded', 'failed', 
 export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
 
 /**
- * How a run was started. Deliberately only what the code emits: an event
- * trigger is a plausible third value, but a closed vocabulary that promises one
- * nothing produces is the defect this feature was written against
- * (`WorkflowStep.tools`, declared and ignored). Add `'event'` back together
- * with the service that emits it, and with WorkflowTriggerService's guards.
+ * How a run was started. Deliberately only what the code emits — a closed
+ * vocabulary that promises a value nothing produces is the defect this feature
+ * was written against (`WorkflowStep.tools`, declared and ignored).
+ *
+ * `'event'` is emitted by exactly one service, `AgentTriggerService` (#70),
+ * which carries WorkflowTriggerService's guards: it came back together with
+ * them, as docs/features/20-agents-todo.md said it must.
  *
  * `'webhook'` is not that `'event'`: it is emitted by exactly one service,
  * `DriftTriggerService`, for exactly one agent, and never from the event bus —
@@ -1304,6 +1664,8 @@ export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
 export const AGENT_RUN_TRIGGERS = [
   'manual',
   'schedule',
+  /** A bus event matched one of the agent's triggers (#70). */
+  'event',
   /** A pull or merge request webhook started a sentinel run (docs/features/35). */
   'webhook',
   /**
@@ -1314,6 +1676,259 @@ export const AGENT_RUN_TRIGGERS = [
   'report',
 ] as const;
 export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
+
+/**
+ * What an agent trigger listens for (#70) — the product's names, not the bus's.
+ *
+ * `webhook` and `comment.mention` are not heard on the bus at all: a signed
+ * delivery fires its trigger inline in `AgentWebhookController`, and a mention
+ * in `MentionRepliesService` while the comment is being posted — each knows
+ * exactly which trigger it is for, and the mention needs the commenter, whom
+ * no bus event carries.
+ */
+export const AGENT_TRIGGER_EVENTS = [
+  'page.merged',
+  'page.indexed',
+  'merge-request.opened',
+  'connector.synced',
+  'webhook',
+  'comment.mention',
+] as const;
+export type AgentTriggerEvent = (typeof AGENT_TRIGGER_EVENTS)[number];
+
+/**
+ * The bus types each trigger event is heard on. One constant read by the DTO,
+ * the listener and the editor's picker, so the three cannot disagree about
+ * what "a merge request was opened" means.
+ *
+ * `page.indexed` rather than `document.updated`: the latter fires on every
+ * autosave of a draft, the former once per revision that reached the index.
+ */
+export const AGENT_TRIGGER_EVENT_SOURCES: Record<AgentTriggerEvent, readonly string[]> = {
+  'page.merged': ['merge-request.merged'],
+  'page.indexed': ['revision.indexed'],
+  'merge-request.opened': ['merge-request.created', 'repo.pull-request.opened'],
+  'connector.synced': ['connector.run.succeeded'],
+  // Fired inline, never from the bus — see AGENT_TRIGGER_EVENTS.
+  webhook: [],
+  'comment.mention': [],
+};
+
+/** The trigger event a bus type is heard as, or null for one no trigger listens to. */
+export function agentTriggerEventFor(busType: string): AgentTriggerEvent | null {
+  for (const event of AGENT_TRIGGER_EVENTS) {
+    if (AGENT_TRIGGER_EVENT_SOURCES[event].includes(busType)) return event;
+  }
+  return null;
+}
+
+/**
+ * Narrows which events of a kind start a run. Every field is optional and an
+ * absent one matches everything — the sparse-override rule.
+ *
+ * `branch` applies to page events: the merge request's target branch for
+ * `page.merged` and `merge-request.opened`, the indexed revision's branch for
+ * `page.indexed`. Absent, `page.indexed` hears only a page's default branch —
+ * a draft branch being edited is not "the page changed".
+ */
+export interface AgentTriggerFilter {
+  categories?: string[];
+  connectorIds?: string[];
+  branch?: string;
+}
+
+/**
+ * Which filter fields mean something for which event — read by the editor
+ * (which fields to show) and the API (which to keep). A field the event has no
+ * dimension for would never match, so it is dropped rather than stored as a
+ * trigger that silently never fires.
+ */
+export const AGENT_TRIGGER_FILTER_FIELDS: Record<AgentTriggerEvent, readonly (keyof AgentTriggerFilter)[]> = {
+  'page.merged': ['categories', 'branch'],
+  'page.indexed': ['categories', 'branch'],
+  'merge-request.opened': ['categories', 'connectorIds', 'branch'],
+  'connector.synced': ['connectorIds'],
+  webhook: [],
+  'comment.mention': ['categories'],
+};
+
+/**
+ * The events an agent can be triggered by. A connector-scoped agent reads one
+ * repository, so only an event that can name one — a pull request, a sync — is
+ * offered to it; any other would skip on every delivery. A mention starts a
+ * run about the page under discussion, so only an agent that can be scoped to
+ * one page answers it.
+ */
+export function agentTriggerEventsFor(agentKey: string): readonly AgentTriggerEvent[] {
+  if (isConnectorScopedAgent(agentKey)) return ['merge-request.opened', 'connector.synced'];
+  return isPageScopedAgent(agentKey) ? AGENT_TRIGGER_EVENTS : AGENT_TRIGGER_EVENTS.filter((e) => e !== 'comment.mention');
+}
+
+/** Bounds of `agent_triggers.cooldown_minutes`; 0 turns the cooldown off. */
+export const AGENT_TRIGGER_COOLDOWN_MAX_MINUTES = 10_080;
+
+export interface AgentTriggerSummary {
+  id: string;
+  workspaceId: string;
+  /** Null hears every project in the workspace. */
+  projectId: string | null;
+  agentKey: string;
+  event: AgentTriggerEvent;
+  filter: AgentTriggerFilter;
+  /** Off on creation: nothing fires until an admin turns it on. */
+  enabled: boolean;
+  /**
+   * Who the runs execute and bill as — the admin who last enabled it. A
+   * trigger without one starts nothing.
+   */
+  ownerId: string | null;
+  /** Minutes before the same subject may start this trigger again. */
+  cooldownMinutes: number;
+  /** Seeded into each run's `input.note`. */
+  note: string | null;
+  /**
+   * Where a `webhook` trigger is delivered to, and whether it has a secret yet
+   * — it refuses every delivery until one is set. Null for any other event.
+   * The secret itself is never read back; rotating is the only way to see one.
+   */
+  webhook: { url: string; secretSet: boolean } | null;
+  lastFiredAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// POST /v1/ai/agents/triggers/:id/rotate-secret
+export interface RotateAgentTriggerSecretResponse {
+  /** Shown once. The previous secret stops verifying at once. */
+  secret: string;
+  url: string;
+}
+
+// GET /v1/ai/agents/triggers?workspaceId=
+export interface ListAgentTriggersResponse {
+  triggers: AgentTriggerSummary[];
+  /**
+   * Whether this server listens at all (`AGENT_TRIGGERS_ENABLED`). An enabled
+   * trigger on a server that does not listen fires nothing, and the editor
+   * says so rather than letting the toggle claim otherwise.
+   */
+  listening: boolean;
+}
+
+/**
+ * Recipes (#70): a ready-made configuration of an agent that already exists —
+ * a schedule, a trigger, or both — applied in one press.
+ *
+ * A recipe writes the same rows an admin would write by hand, through the same
+ * services, so nothing downstream knows a recipe was involved: the sweeper and
+ * the trigger listener read the schedule and the trigger, never this list.
+ * Everything a recipe writes starts **disabled**. Turning it on is a separate,
+ * deliberate act, and whoever does it becomes the owner its runs execute and
+ * bill as — the rule every schedule and trigger already follows.
+ *
+ * Applying is idempotent: a schedule the agent already has, or a trigger it
+ * already has for the event, is kept as it is, never overwritten.
+ */
+export const AGENT_RECIPE_KEYS = ['weekly-digest', 'freshness-sweep', 'glossary-suggester'] as const;
+export type AgentRecipeKey = (typeof AGENT_RECIPE_KEYS)[number];
+
+export interface AgentRecipe {
+  key: AgentRecipeKey;
+  agentKey: BuiltInAgentKey;
+  /** A time-of-day schedule, in the timezone the person applying it sends (UTC without one). */
+  schedule?: { kind: Exclude<AgentScheduleKind, 'interval'>; time: string; weekdays?: number[] };
+  trigger?: { event: AgentTriggerEvent };
+}
+
+export const AGENT_RECIPES: Record<AgentRecipeKey, AgentRecipe> = {
+  /** The digest agent, Mondays at 09:00 — a week of changes in one page-shaped summary. */
+  'weekly-digest': { key: 'weekly-digest', agentKey: 'digest', schedule: { kind: 'weekly', time: '09:00', weekdays: [1] } },
+  /**
+   * The curator, told to look for staleness: weekly, and after every connector
+   * sync, which is when imported pages most often fall behind their source.
+   */
+  'freshness-sweep': {
+    key: 'freshness-sweep',
+    agentKey: 'curator',
+    schedule: { kind: 'weekly', time: '08:00', weekdays: [1] },
+    trigger: { event: 'connector.synced' },
+  },
+  /** The glossarist on every merge, scoped to the merged page. */
+  'glossary-suggester': { key: 'glossary-suggester', agentKey: 'glossarist', trigger: { event: 'page.merged' } },
+};
+
+// POST /v1/ai/agents/recipes/:recipe/apply
+export interface ApplyAgentRecipeResponse {
+  recipe: AgentRecipeKey;
+  agent: AiAgentSummary;
+  /** Every trigger the recipe asks for, whether this press created it or found it. */
+  triggers: AgentTriggerSummary[];
+  /** What this press wrote. A re-apply writes nothing that is already there. */
+  created: { schedule: boolean; triggers: number };
+}
+
+/**
+ * Learnings (#70): a correction a person taught an agent, kept and handed to
+ * that agent's later turns as "team guidance".
+ *
+ * Only `active` text ever reaches a prompt, and only an admin makes a learning
+ * active — the text is trusted because a person approved it, the rule skills
+ * already follow. `proposed` is what anyone with edit rights (or an MCP client)
+ * may write; `archived` keeps the provenance of a learning nobody wants applied.
+ */
+export const AGENT_LEARNING_STATUSES = ['proposed', 'active', 'archived'] as const;
+export type AgentLearningStatus = (typeof AGENT_LEARNING_STATUSES)[number];
+
+/** Where a learning came from — what its provenance link points at. */
+export const AGENT_LEARNING_SOURCES = ['document-thread', 'mr-thread', 'finding', 'manual'] as const;
+export type AgentLearningSource = (typeof AGENT_LEARNING_SOURCES)[number];
+
+/** Longest learning a person may write. A learning is a rule, not a page. */
+export const AGENT_LEARNING_MAX_CHARS = 1_000;
+
+export interface AgentLearningSummary {
+  id: string;
+  workspaceId: string;
+  /** Null applies in every project. */
+  projectId: string | null;
+  /** Null applies to every agent. */
+  agentKey: string | null;
+  text: string;
+  status: AgentLearningStatus;
+  sourceKind: AgentLearningSource;
+  /** A thread id for a thread source; null otherwise. */
+  sourceId: string | null;
+  /** The page a `document-thread` source sits on, or a `finding` source cites. */
+  sourceDocumentId: string | null;
+  /** The merge request an `mr-thread` source sits on. */
+  sourceMergeRequestId: string | null;
+  /** The run and finding a `finding` source was dismissed from. */
+  runId: string | null;
+  findingIndex: number | null;
+  createdBy: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /v1/ai/agents/learnings?workspaceId=&agentKey=&status=
+export interface ListAgentLearningsResponse {
+  learnings: AgentLearningSummary[];
+  /** How many `active` learnings a prompt takes at most (`AGENT_LEARNINGS_MAX`). Newest first. */
+  promptLimit: number;
+}
+
+// POST /v1/ai/agents/runs/:id/findings/:index/dismiss
+export interface DismissAgentFindingResponse {
+  dismissedAt: string;
+  dismissedBy: string;
+  /** The proposed learning "Remember why" wrote — the first press's, on a repeat. */
+  learningId: string | null;
+  /** False when somebody had already dismissed it; nothing was written. */
+  dismissed: boolean;
+}
 
 export const AGENT_FINDING_KINDS = [
   'stale',
@@ -1360,6 +1975,15 @@ export interface AgentFinding {
    * the button does not offer the same declaration twice.
    */
   flaggedAt?: string | null;
+  /**
+   * When a person dismissed this finding as wrong or not worth acting on (#70).
+   * Set once — a second press changes nothing. The runs panel hides it by
+   * default, and the agent's next runs are told not to report it again.
+   */
+  dismissedAt?: string | null;
+  dismissedBy?: string | null;
+  /** The proposed learning written with the dismissal ("Remember why"), if any. */
+  learningId?: string | null;
   /**
    * The knowledge issue this finding answers (docs/features/38, phase 3): a
    * sentinel judging a report points its verdict back at the report, which is
@@ -1461,6 +2085,10 @@ export interface AgentRunSummary {
   agentKey: string;
   agentName: string;
   trigger: AgentRunTrigger;
+  /** The agent trigger behind an `'event'` run, null for any other. It may since have been deleted. */
+  triggerId: string | null;
+  /** What the run is about — `doc:<id>`, `mr:<id>`, `connector:<id>`; null for an unscoped run. */
+  subjectKey: string | null;
   status: AgentRunStatus;
   createdBy: string;
   /** What the run was asked to do; null for a run that took no parameters. */

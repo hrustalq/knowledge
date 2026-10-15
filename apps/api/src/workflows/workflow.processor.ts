@@ -85,7 +85,7 @@ export class WorkflowProcessor extends WorkerHost {
         // can outlive the month whose budget it was admitted under.
         await this.usage.assertWithinBudget(run.workspaceId, run.createdBy);
 
-        const result = await this.executors.run(step, node, run);
+        const result = await this.executors.run(step, node, run, principal);
 
         if (result.kind === 'items') {
           // A fan-out step's own node did its job the moment it produced the

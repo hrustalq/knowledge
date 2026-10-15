@@ -1,3 +1,4 @@
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { forwardRef, Module } from '@nestjs/common';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
@@ -55,6 +56,8 @@ import { TemplatesCoreModule } from '../templates/templates-core.module.js';
     FeedbackCoreModule,
     // The template a draft started from (issue #69), for the fill clause.
     TemplatesCoreModule,
+    // Grounding and breadcrumbs follow page permissions (#76).
+    PermissionsCoreModule,
     forwardRef(() => AiModule),
   ],
   controllers: [AssistantController],

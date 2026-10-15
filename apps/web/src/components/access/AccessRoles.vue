@@ -4,7 +4,8 @@
  *
  * The roster already answers "what role does Alice have"; nothing answered the
  * question underneath it — "and what does that let her do". The vocabulary is
- * closed and cumulative (`ROLE_ORDER` in the API: viewer < editor < admin), so
+ * closed and cumulative (`ROLE_ORDER` in the API: guest < viewer < editor <
+ * admin), so
  * the honest shape is a ladder rather than a matrix: each rung says what it
  * adds to the one below, and the summary line says so out loud.
  *
@@ -16,7 +17,7 @@
  *
  * Trusted operator sits apart because it is not a rung. It is a flag on top of
  * admin gating exactly one route (`POST /v1/graph/query`), and putting it in
- * the ladder would imply a fourth, higher role.
+ * the ladder would imply another, higher role.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -49,6 +50,9 @@ const emit = defineEmits<{ assign: [userIds: string[], role: WorkspaceRole] }>()
  * stays in the message catalogs where the Russian half can keep up with it.
  */
 const GRANTS: Record<WorkspaceRole, readonly string[]> = {
+  // The bottom rung grants nothing of the workspace's own: what a guest opens
+  // is decided per page, by the grants made to them or their groups (#76).
+  guest: ['granted', 'nothingElse'],
   viewer: ['read', 'comment', 'search', 'assistant', 'follow'],
   editor: ['pages', 'relations', 'merge', 'projects', 'automation'],
   admin: ['members', 'ai', 'integrations', 'housekeeping'],
@@ -173,7 +177,7 @@ function assign(role: string) {
       <li>{{ t('access.rolesNoteViewer') }}</li>
     </ul>
 
-    <!-- Apart from the ladder: a flag, not a fourth role. -->
+    <!-- Apart from the ladder: a flag, not another role. -->
     <section class="rounded-xl border bg-card px-5 py-4">
       <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 class="font-display text-[15px] font-semibold tracking-tight">

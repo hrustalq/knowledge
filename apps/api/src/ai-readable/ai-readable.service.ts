@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { parseMarkdown } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
-import { type AiReadableScope, isReadableRevisionStatus, readableDocumentsWhere } from './ai-readable-scope.js';
+import { type AiReadableScope, isReadableRevisionStatus, listedProjectsWhere, readableDocumentsWhere } from './ai-readable-scope.js';
 import { AI_READABLE_FORMAT_VERSION, etagFor, etagMatches, renderPageMarkdown } from './render.js';
 import {
   type IndexPage,
@@ -18,6 +18,7 @@ import {
   truncatedMarker,
   unavailableMarker,
 } from './llms.js';
+import { WORKSPACE_READER } from '../auth/principal.js';
 
 export type TextResult = { status: 304; etag: string } | { status: 200; etag: string; body: string };
 
@@ -188,7 +189,7 @@ export class AiReadableService {
   async workspaceIndex(workspaceId: string, ifNoneMatch?: string): Promise<TextResult> {
     const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
     if (!workspace) throw new NotFoundException();
-    const projects = await this.prisma.project.findMany({ where: { workspaceId }, orderBy: { createdAt: 'asc' } });
+    const projects = await this.prisma.project.findMany({ where: listedProjectsWhere(workspaceId), orderBy: { createdAt: 'asc' } });
     const pages = await this.readablePages({ workspaceId });
     const etag = this.listEtag('index', pages, [workspace.name, ...projects.map((p) => `${p.id}:${p.name}`)]);
     if (etagMatches(ifNoneMatch, etag)) return { status: 304, etag };
@@ -219,7 +220,7 @@ export class AiReadableService {
   async workspaceFullPlan(workspaceId: string): Promise<FullPlan> {
     const workspace = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
     if (!workspace) throw new NotFoundException();
-    const projects = await this.prisma.project.findMany({ where: { workspaceId }, orderBy: { createdAt: 'asc' } });
+    const projects = await this.prisma.project.findMany({ where: listedProjectsWhere(workspaceId), orderBy: { createdAt: 'asc' } });
     const all = await this.readablePages({ workspaceId });
     // Project by project, each in tree order — the same order as the index.
     const pages = projects.flatMap((p) => orderPages(all.filter((x) => x.projectId === p.id)));
@@ -314,7 +315,8 @@ export class AiReadableService {
       ? [pinned]
       : seesAll
         ? undefined
-        : (await this.prisma.workspaceMember.findMany({ where: { userId: principal.userId } })).map(
+        : // A guest cannot read a workspace's llms.txt (#76), so it is no candidate.
+          (await this.prisma.workspaceMember.findMany({ where: { userId: principal.userId, ...WORKSPACE_READER } })).map(
             (m) => m.workspaceId,
           );
     const workspaces = await this.prisma.workspace.findMany({
@@ -324,7 +326,7 @@ export class AiReadableService {
     return Promise.all(
       workspaces.map(async (w) => {
         const projects = await this.prisma.project.findMany({
-          where: { workspaceId: w.id },
+          where: listedProjectsWhere(w.id),
           orderBy: { createdAt: 'asc' },
         });
         return { workspaceId: w.id, name: w.name, projects: projects.map((p) => ({ projectId: p.id, name: p.name })) };

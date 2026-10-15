@@ -45,7 +45,7 @@ import type {
   RelationInputDto,
   UpdateDocumentDto,
 } from './dto/documents.dto.js';
-import type { Document, DocumentBranch, DocumentRevision } from '@prisma/client';
+import type { Document, DocumentBranch, DocumentRevision, Prisma } from '@prisma/client';
 import {
   isInactive,
   verificationStateFor,
@@ -56,6 +56,9 @@ import { ProvenanceService } from '../feedback/provenance.service.js';
 import { expiryFor, VerificationPolicyService } from '../verification/verification-policy.service.js';
 import { TemplatesService } from '../templates/templates.service.js';
 import { t } from '../i18n/t.js';
+import { WORKSPACE_READER } from '../auth/principal.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { canSee, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 
 /** Fallback author when no principal is supplied (AUTH_MODE=none, MCP stdio). */
 const AUTHOR_ID_STUB = '00000000-0000-0000-0000-000000000000';
@@ -100,6 +103,7 @@ export class DocumentsService {
     private readonly provenance: ProvenanceService,
     private readonly policy: VerificationPolicyService,
     private readonly templates: TemplatesService,
+    private readonly permissions: PermissionService,
   ) {}
 
   async createDocument(input: CreateDocumentDto, authorId: string = AUTHOR_ID_STUB): Promise<CreateDocumentResponse> {
@@ -148,6 +152,8 @@ export class DocumentsService {
           templateVersion: template?.version ?? null,
         },
       });
+      // A page is born under its parent's and project's restrictions (#76).
+      await this.permissions.recomputeRestrictedBy({ documentId: id });
       const branch = await this.prisma.documentBranch.create({
         data: { documentId: document.id, name: 'main', headRevisionId: null },
       });
@@ -457,11 +463,12 @@ export class DocumentsService {
    * the same GraphService call, so a tag means one thing in both surfaces.
    */
   async listDocuments(
-    workspaceId: string,
+    scope: AccessScope,
     limit = 20,
     cursor?: string,
     filters: { categories?: string[]; projectIds?: string[]; tags?: string[]; includeArchived?: boolean } = {},
   ): Promise<ListDocumentsResponse> {
+    const { workspaceId } = scope;
     const categories = filters.categories?.filter(Boolean) ?? [];
     const projectIds = filters.projectIds?.filter(Boolean) ?? [];
     const tags = filters.tags?.filter(Boolean) ?? [];
@@ -470,7 +477,7 @@ export class DocumentsService {
     if (tags.length) {
       // Accept the bare name or the entity key, like the search filters do.
       const keys = [...new Set(tags.map(tagFilterKey))];
-      const set = await this.graph.getDocumentIdsByTags(workspaceId, keys);
+      const set = await this.graph.getDocumentIdsByTags(workspaceId, keys, await this.permissions.documentFilterFor(scope));
       taggedIds = [...set];
       // No document carries the tag: answer an empty page rather than dropping
       // the filter and showing everything, which is the wrong kind of helpful.
@@ -485,6 +492,8 @@ export class DocumentsService {
         ...(categories.length ? { category: { in: categories } } : {}),
         ...(projectIds.length ? { projectId: { in: projectIds } } : {}),
         ...(taggedIds ? { id: { in: taggedIds } } : {}),
+        // Pages the caller may not open are not in the list at all (#76).
+        AND: [visibilityWhere(scope)],
       },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
@@ -554,6 +563,7 @@ export class DocumentsService {
     | 'archivedBy'
     | 'templateRef'
     | 'templateVersion'
+    | 'restricted'
   > {
     return {
       verifiedAt: d.verifiedAt?.toISOString() ?? null,
@@ -574,6 +584,7 @@ export class DocumentsService {
       // the full page row, and a second spread at each would be a third place to forget.
       templateRef: d.templateRef,
       templateVersion: d.templateVersion,
+      restricted: d.restrictedBy.length > 0,
     };
   }
 
@@ -618,7 +629,9 @@ export class DocumentsService {
 
   private async assertMember(workspaceId: string, userId: string): Promise<void> {
     if (userId === AUTHOR_ID_STUB) return;
-    const member = await this.prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } });
+    // A guest cannot own a page: ownership is review duty over something they
+    // may not even be able to read (#76).
+    const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId, userId, ...WORKSPACE_READER } });
     if (!member) throw new BadRequestException(t('error.document.ownerNotMember'));
   }
 
@@ -972,6 +985,10 @@ export class DocumentsService {
           data: { projectId: data.projectId },
         });
       }
+      // New ancestors or a new project mean a new chain of restrictions for the
+      // whole subtree, in this transaction, so nobody reads the page in between
+      // with the old ones (#76).
+      if (reparented || data.projectId) await this.permissions.recomputeRestrictedBy({ documentId });
       return row;
     });
     if (data.title && data.title !== document.title) {
@@ -1116,7 +1133,10 @@ export class DocumentsService {
         data: reparented ? { parentId, path: newPath, depth: document.depth + depthDelta } : { parentId },
       });
 
-      if (reparented) await this.repathSubtree(document.workspaceId, documentId, oldPath, newPath, depthDelta);
+      if (reparented) {
+        await this.repathSubtree(document.workspaceId, documentId, oldPath, newPath, depthDelta);
+        await this.permissions.recomputeRestrictedBy({ documentId });
+      }
       return row;
     });
 
@@ -1151,17 +1171,23 @@ export class DocumentsService {
    * disclosure chevron truthfully before anything under it exists.
    */
   async getTree(
-    workspaceId: string,
+    access: AccessScope,
     projectId?: string,
     opts: { parentId?: string | null; depth?: number; includeArchived?: boolean } = {},
   ): Promise<DocumentTreeResponse> {
+    const { workspaceId } = access;
     // Archived pages leave the tree unless asked for (docs/features/39). A live
     // child of an archived parent then surfaces as a root, by the same orphan
     // rule legacy rows already use — nothing is hidden by accident.
+    //
+    // Pages the caller may not open are left out of every level, child counts
+    // included (#76). A guest's granted page whose parent they cannot open then
+    // surfaces as a root by that same orphan rule.
     const scope = {
       workspaceId,
       ...(projectId ? { projectId } : {}),
       ...(opts.includeArchived ? {} : { archivedAt: null }),
+      AND: [visibilityWhere(access)],
     };
     const lazy = typeof opts.depth === 'number';
     const parentId = opts.parentId ?? null;
@@ -1202,11 +1228,11 @@ export class DocumentsService {
    * `parentId: null` alone would make them unreachable instead.
    */
   private async treeLevel(
-    scope: { workspaceId: string; projectId?: string; archivedAt?: null },
+    scope: Prisma.DocumentWhereInput,
     parentId: string | null,
     depth: number,
   ): Promise<DocumentTreeNode[]> {
-    let where: Record<string, unknown> = { ...scope, parentId };
+    let where: Prisma.DocumentWhereInput = { ...scope, parentId };
     if (parentId === null) {
       const referenced = await this.prisma.document.findMany({
         where: { ...scope, parentId: { not: null } },
@@ -1286,6 +1312,7 @@ export class DocumentsService {
       verificationFlag: (d.verificationFlag as VerificationFlag | null) ?? null,
       ownerId: d.ownerId,
       archivedAt: d.archivedAt?.toISOString() ?? null,
+      restricted: d.restrictedBy.length > 0,
       children: [],
       childCount: childCount ?? 0,
     };
@@ -1312,7 +1339,7 @@ export class DocumentsService {
    * legacy row can point at a deleted page) and moves are cycle-checked only on
    * the way in, so a corrupt chain must terminate rather than spin.
    */
-  async getAncestors(documentId: string): Promise<DocumentAncestorsResponse> {
+  async getAncestors(documentId: string, scope: AccessScope): Promise<DocumentAncestorsResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const chain: DocumentSummary[] = [];
     const seen = new Set<string>([documentId]);
@@ -1330,17 +1357,23 @@ export class DocumentsService {
       const head = headId
         ? await this.prisma.documentRevision.findUnique({ where: { id: headId }, select: { status: true } })
         : null;
+      // Only a guest can open a page without opening what is above it (a
+      // member who passes a page's restrictions passes its ancestors' too), and
+      // what they were not granted is a placeholder: its id, nothing else (#76).
+      const hidden = !canSee(scope, parent);
       chain.push({
         documentId: parent.id,
         workspaceId: parent.workspaceId,
         projectId: parent.projectId,
-        title: parent.title,
+        title: hidden ? '' : parent.title,
         defaultBranch: parent.defaultBranch,
-        category: parent.category as DocumentCategory,
+        category: hidden ? 'other' : (parent.category as DocumentCategory),
         parentId: parent.parentId,
-        headRevisionId: headId,
-        headRevisionStatus: (head?.status as RevisionStatus) ?? null,
+        headRevisionId: hidden ? null : headId,
+        headRevisionStatus: hidden ? null : ((head?.status as RevisionStatus) ?? null),
         createdAt: parent.createdAt.toISOString(),
+        restricted: parent.restrictedBy.length > 0,
+        ...(hidden ? { hidden: true } : {}),
       });
       parentId = parent.parentId;
     }
@@ -1360,9 +1393,12 @@ export class DocumentsService {
    * those documents still reach: an entity whose every mention lives in
    * another project is not part of this project's vocabulary.
    */
-  async getWorkspaceGraph(workspaceId: string, projectId?: string): Promise<WorkspaceGraphResponse> {
+  async getWorkspaceGraph(scope: AccessScope, projectId?: string): Promise<WorkspaceGraphResponse> {
+    const { workspaceId } = scope;
+    // Pages the caller may not open are not nodes, so their edges go (below,
+    // `inScope`) and with them every entity only they mention (#76).
     const docs = await this.prisma.document.findMany({
-      where: { workspaceId, ...(projectId ? { projectId } : {}) },
+      where: { workspaceId, ...(projectId ? { projectId } : {}), AND: [visibilityWhere(scope)] },
       include: { branches: true },
       orderBy: { title: 'asc' },
     });
@@ -1377,7 +1413,9 @@ export class DocumentsService {
     });
     const statusById = new Map(heads.map((r) => [r.id, r.status as RevisionStatus]));
 
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+    // `inScope` is the authority (it is PG under the same predicate); the
+    // graph filter only keeps hidden pages' edges off the wire (#76).
+    const g = await this.graph.getWorkspaceRelationGraph(workspaceId, await this.permissions.documentFilterFor(scope));
 
     // The renderer draws every edge each frame; past this the canvas stops
     // being readable long before it stops being fast, so the cap is a
@@ -1428,11 +1466,14 @@ export class DocumentsService {
    * knowledge graph. depth = entity hops (one entity hop = two BFS hops over
    * the bipartite doc→entity graph, same convention as Phase 4 traversal).
    */
-  async getDocumentGraph(documentId: string, depth = 1): Promise<DocumentGraphResponse> {
+  async getDocumentGraph(documentId: string, depth: number, scope: AccessScope): Promise<DocumentGraphResponse> {
     const document = await this.getDocumentOrThrow(documentId);
     const d = Math.min(Math.max(Math.floor(depth) || 1, 1), 3);
 
-    const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId);
+    // Walk only what the caller may open: an edge from a page they cannot see
+    // would otherwise both reveal the page and carry the walk on through it
+    // to entities only it mentions. GraphService drops both (#76).
+    const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId, await this.permissions.documentFilterFor(scope));
     const adj = buildAdjacency(g.edges);
     const hits = bfs(adj, docNode(documentId), d * 2);
 
@@ -1498,7 +1539,8 @@ export class DocumentsService {
    * A page whose ancestor left the workspace is named by the ancestors that
    * remain rather than dropped; the trail is a reading aid, not an ACL.
    */
-  async breadcrumbsFor(workspaceId: string, ids: string[]): Promise<Map<string, string>> {
+  async breadcrumbsFor(scope: AccessScope, ids: string[]): Promise<Map<string, string>> {
+    const { workspaceId } = scope;
     const out = new Map<string, string>();
     if (ids.length === 0) return out;
 
@@ -1517,10 +1559,12 @@ export class DocumentsService {
       return out;
     }
 
+    // An ancestor the caller may not open — only ever a guest's — leaves the
+    // trail rather than naming itself in it (#76).
     const titles = new Map(
       (
         await this.prisma.document.findMany({
-          where: { workspaceId, id: { in: [...ancestorIds] } },
+          where: { workspaceId, id: { in: [...ancestorIds] }, AND: [visibilityWhere(scope)] },
           select: { id: true, title: true },
         })
       ).map((a) => [a.id, a.title]),

@@ -52,11 +52,18 @@ export class ApiError extends Error {
    */
   readonly code?: ApiErrorCode
 
-  constructor(status: number, message: string, code?: ApiErrorCode) {
+  /**
+   * The envelope's `details` — the flat extras a 4xx carries, such as a
+   * restricted page's `canRequestAccess` (#76). Branch on these, not on text.
+   */
+  readonly details?: Record<string, unknown>
+
+  constructor(status: number, message: string, code?: ApiErrorCode, details?: Record<string, unknown>) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.details = details
   }
 }
 
@@ -437,7 +444,7 @@ async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
     } catch {
       /* not JSON — fall through to the raw-text form below */
     }
-    if (isApiErrorPayload(parsed)) throw new ApiError(res.status, parsed.message, parsed.code)
+    if (isApiErrorPayload(parsed)) throw new ApiError(res.status, parsed.message, parsed.code, parsed.details)
     throw new ApiError(res.status, `${res.status} ${res.statusText}: ${text.slice(0, 300)}`)
   }
   return res

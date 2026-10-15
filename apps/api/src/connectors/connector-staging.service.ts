@@ -14,6 +14,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import type { ConnectorAdapter, ConnectorContext, ExternalRef } from './adapters/connector.types.js';
 import { composeMarkdown, sha256 } from './connector-markdown.js';
+import { ConnectorAclService } from './connector-acl.service.js';
+import type { StoredAcl } from './connector-acl.js';
 
 /** The item's own metadata blob. Small on purpose — the markdown is in the bucket. */
 export interface ItemDraft {
@@ -48,6 +50,7 @@ export class ConnectorStagingService {
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
     private readonly storage: StorageService,
+    private readonly acl: ConnectorAclService,
   ) {}
 
   // --- stage ---
@@ -68,22 +71,26 @@ export class ConnectorStagingService {
     item: ConnectorRunItem,
     link: ConnectorLink | null,
   ): Promise<StageOutcome> {
-    // Cheapest possible skip: the far side says nothing changed.
-    if (link && item.externalVersion && link.externalVersion === item.externalVersion) {
-      ctx.debug('item: unchanged (version)', { id: item.externalId, version: item.externalVersion });
-      await this.prisma.connectorRunItem.update({
-        where: { id: item.id },
-        data: { status: 'unchanged', action: 'unchanged', linkId: link.id, documentId: link.documentId },
-      });
-      return { action: 'unchanged', unchanged: true };
-    }
-
     const ref: ExternalRef = {
       externalId: item.externalId,
       title: item.title,
       ...(item.externalUrl ? { url: item.externalUrl } : {}),
       ...(item.externalVersion ? { version: item.externalVersion } : {}),
     };
+    // Read before either skip (#76): who may open a page can change upstream
+    // while its content does not, and an unchanged page still mirrors that now.
+    const acl = await this.acl.capture(row, adapter, ctx, ref);
+
+    // Cheapest possible skip: the far side says nothing changed.
+    if (link && item.externalVersion && link.externalVersion === item.externalVersion) {
+      ctx.debug('item: unchanged (version)', { id: item.externalId, version: item.externalVersion });
+      await this.acl.applyToPage(row, link, acl);
+      await this.prisma.connectorRunItem.update({
+        where: { id: item.id },
+        data: { status: 'unchanged', action: 'unchanged', linkId: link.id, documentId: link.documentId },
+      });
+      return { action: 'unchanged', unchanged: true };
+    }
 
     const doc = await adapter.fetch(ctx, ref);
     const markdown = composeMarkdown(doc);
@@ -93,6 +100,7 @@ export class ConnectorStagingService {
     // bump from a label edit, say. Record the version and move on.
     if (link && link.contentHash === hash) {
       ctx.debug('item: unchanged (hash)', { id: item.externalId });
+      await this.acl.applyToPage(row, link, acl);
       await this.prisma.connectorLink.update({
         where: { id: link.id },
         data: { externalVersion: doc.ref.version ?? null, lastPulledAt: new Date() },
@@ -121,9 +129,11 @@ export class ConnectorStagingService {
     await this.storage.putObjectText(stagedKey, markdown, 'text/markdown');
     await this.storage.putObjectText(incomingKey, markdown, 'text/markdown');
 
+    // What mirroring will do to this page is said before anyone approves it.
+    const warnings = [...doc.warnings, ...(acl ? await this.acl.preview(row, acl) : [])];
     const draft: ItemDraft = {
       ...((item.draft as ItemDraft | null) ?? {}),
-      ...(doc.warnings.length > 0 ? { warnings: doc.warnings } : {}),
+      ...(warnings.length > 0 ? { warnings } : {}),
     };
 
     ctx.debug('item: staged', { id: item.externalId, action, hash: hash.slice(0, 12) });
@@ -141,6 +151,7 @@ export class ConnectorStagingService {
         linkId: link?.id ?? null,
         documentId: link?.documentId ?? null,
         draft: draft as unknown as Prisma.InputJsonValue,
+        acl: acl ? (acl as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         error: null,
       },
     });
@@ -215,6 +226,7 @@ export class ConnectorStagingService {
         where: { id: item.id },
         data: { status: 'unchanged', documentId: link.documentId },
       });
+      await this.acl.applyToPage(row, link, storedAcl(item));
       return;
     }
 
@@ -224,6 +236,8 @@ export class ConnectorStagingService {
     // so their approval writes straight to the page.
     if (item.action === 'conflict' && run.mode === 'auto') {
       await this.openConflictBranch(row, run, link, item, markdown, 'conflict');
+      // Who may read the page is not part of the conflict: it mirrors now.
+      await this.acl.applyToPage(row, link, storedAcl(item));
       return;
     }
 
@@ -233,6 +247,7 @@ export class ConnectorStagingService {
     // a review or step run has already put a person in front of it.
     if (item.action === 'update' && run.mode === 'auto' && deliversByMergeRequest(row, item.externalId)) {
       await this.openConflictBranch(row, run, link, item, markdown, 'regenerated');
+      await this.acl.applyToPage(row, link, storedAcl(item));
       return;
     }
 
@@ -261,6 +276,7 @@ export class ConnectorStagingService {
         error: null,
       },
     });
+    await this.acl.applyToPage(row, link, storedAcl(item));
   }
 
   private async createPage(
@@ -329,6 +345,9 @@ export class ConnectorStagingService {
         lastPulledAt: new Date(),
       },
     });
+    // In the same transaction as the page (#76): a page private upstream is
+    // never, for any length of time, a page the whole workspace can open.
+    await this.acl.applyToPage(row, link, storedAcl(item));
 
     // The page above this one has not been imported, so it was filed at the
     // connector's destination instead. That is the defined behaviour — a parent
@@ -516,4 +535,9 @@ function deliversByMergeRequest(row: Connector, externalId: string): boolean {
     isWikiUnitKey(externalId) ||
     externalId === 'changelog:unreleased'
   );
+}
+
+/** The ACL staging read for this item, if the connector mirrors (#76). */
+function storedAcl(item: ConnectorRunItem): StoredAcl | null {
+  return (item.acl as unknown as StoredAcl | null) ?? null;
 }

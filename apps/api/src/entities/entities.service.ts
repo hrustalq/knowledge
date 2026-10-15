@@ -10,6 +10,8 @@ import type {
 import { GraphService, type WorkspaceRelationGraph } from '../graph/graph.service.js';
 import { bfs, buildAdjacency, docIdOf, docNode, isDocNode, shortestPath } from '../graph/graph-walk.js';
 import { t } from '../i18n/t.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import type { AccessScope } from '../permissions/access-scope.js';
 
 /**
  * Phase 4 entity traversal (plan.md §9: find_relations / impact_analysis /
@@ -18,7 +20,20 @@ import { t } from '../i18n/t.js';
  */
 @Injectable()
 export class EntitiesService {
-  constructor(private readonly graph: GraphService) {}
+  constructor(
+    private readonly graph: GraphService,
+    private readonly permissions: PermissionService,
+  ) {}
+
+  /**
+   * The workspace graph as the caller may see it (#76): edges from pages they
+   * cannot open go, those pages go, and so does every entity only those pages
+   * mention — otherwise a restricted page leaks the names it introduces.
+   * GraphService does the pruning; this only supplies the caller's filter.
+   */
+  private async graphFor(scope: AccessScope): Promise<WorkspaceRelationGraph> {
+    return this.graph.getWorkspaceRelationGraph(scope.workspaceId, await this.permissions.documentFilterFor(scope));
+  }
 
   /**
    * Workspace entities ranked by relation degree. `type` and `q` back the
@@ -26,10 +41,10 @@ export class EntitiesService {
    * have to pull — and rank — the whole entity roster itself.
    */
   async listEntities(
-    workspaceId: string,
+    scope: AccessScope,
     opts: { type?: string; q?: string; limit?: number } = {},
   ): Promise<ListEntitiesResponse> {
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+    const g = await this.graphFor(scope);
     const degree = new Map<string, number>();
     for (const e of g.edges) degree.set(e.targetKey, (degree.get(e.targetKey) ?? 0) + 1);
 
@@ -46,12 +61,12 @@ export class EntitiesService {
 
   /** Depth-limited neighborhood of an entity (plan.md §9 knowledge.find_relations). */
   async neighbors(
-    workspaceId: string,
+    scope: AccessScope,
     entityKey: string,
     depth = 1,
     relationTypes?: string[],
   ): Promise<EntityNeighborsResponse> {
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+    const g = await this.graphFor(scope);
     const entity = this.entityRef(g, entityKey);
     const adj = buildAdjacency(g.edges, relationTypes);
 
@@ -85,12 +100,12 @@ export class EntitiesService {
    *    entities they reference are its dependencies.
    */
   async impactAnalysis(
-    workspaceId: string,
+    scope: AccessScope,
     entityKey: string,
     direction: 'dependents' | 'dependencies' = 'dependents',
     maxDepth = 3,
   ): Promise<ImpactAnalysisResponse> {
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+    const g = await this.graphFor(scope);
     const entity = this.entityRef(g, entityKey);
     const adj = buildAdjacency(g.edges);
 
@@ -125,12 +140,12 @@ export class EntitiesService {
 
   /** Shortest relation path between two entities (plan.md §9 knowledge.trace_relation). */
   async trace(
-    workspaceId: string,
+    scope: AccessScope,
     fromKey: string,
     toKey: string,
     maxDepth = 4,
   ): Promise<TraceRelationResponse> {
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+    const g = await this.graphFor(scope);
     this.entityRef(g, fromKey);
     this.entityRef(g, toKey);
     const adj = buildAdjacency(g.edges);

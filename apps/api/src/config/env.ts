@@ -135,6 +135,28 @@ export const envSchema = z.object({
   /** Phase 5 stale-doc detection & reindex scheduling (worker sweeper). */
   STALE_SWEEP_ENABLED: boolish(true),
   /**
+   * Permission-aware retrieval (#76). A caller's hidden (member) or reachable
+   * (guest) page list goes to ArcadeDB and OpenSearch as a predicate up to this
+   * length; past it the stores filter what they scanned in memory instead.
+   */
+  ACL_DENY_LIST_MAX: z.coerce.number().int().min(0).default(5000),
+  /** Candidate multiplier when a caller's restrictions could not be pushed into the stores. */
+  SEARCH_ACL_OVERFETCH: z.coerce.number().int().min(1).default(5),
+  /** Cap on candidates per leg for the one refill round after the permission post-filter. */
+  SEARCH_ACL_MAX_FETCH: z.coerce.number().int().positive().default(500),
+  /** Worker tick that copies changed page restrictions onto chunk stamps in ArcadeDB/OpenSearch. */
+  ACL_RESTAMP_TICK_MS: z.coerce.number().int().min(1000).default(30_000),
+  /** Pages re-stamped per tick. */
+  ACL_RESTAMP_BATCH: z.coerce.number().int().positive().default(200),
+  /**
+   * How long a live connection (SSE/WS) trusts the visibility it computed for
+   * its holder (#76) before asking PG again. An `acl.changed` event clears it
+   * at once; this bounds what a missed one costs.
+   */
+  ACL_CACHE_TTL_MS: z.coerce.number().int().min(0).default(5000),
+  /** Days a pending access request waits on a manager before it expires (#76). */
+  ACCESS_REQUEST_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  /**
    * Page verification and knowledge health (docs/features/39 + 40, issue #66).
    * Defaults, not ceilings: a `knowledge_health_settings` row overrides each
    * per workspace, and an absent row reproduces exactly these values.
@@ -243,6 +265,34 @@ export const envSchema = z.object({
   // Background agent schedules (docs/features/20). Off by default: the failure
   // mode of unattended AI is an avalanche, not a slow queue.
   AGENT_SCHEDULE_ENABLED: boolish(false),
+  // Event-triggered agent runs (#70). The kill switch for the listener, off by
+  // default for the same reason; a trigger is also off until an admin enables it.
+  AGENT_TRIGGERS_ENABLED: boolish(false),
+  /** Triggered runs one workspace may have pending or running at once. */
+  AGENT_TRIGGER_MAX_ACTIVE: z.coerce.number().int().min(0).default(5),
+  /** The cooldown a new trigger starts with, per subject. The trigger's own column decides after that. */
+  AGENT_TRIGGER_COOLDOWN_MINUTES: z.coerce.number().int().min(0).max(10_080).default(60),
+  /**
+   * Largest body a signed agent-trigger webhook accepts, in bytes (#70). Below
+   * HTTP_BODY_LIMIT on purpose: a run keeps only AGENT_WEBHOOK_PAYLOAD_MAX_CHARS
+   * of it, and an unauthenticated caller should not get to make the API hash
+   * two megabytes. Checked before the signature.
+   */
+  AGENT_WEBHOOK_MAX_BYTES: z.coerce.number().int().positive().default(65_536),
+  /** How far `X-Knowledge-Timestamp` may be from the server's clock — the replay window. */
+  AGENT_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().positive().default(300),
+  /**
+   * Active learnings one prompt takes, newest first (#70). Bounded so a team's
+   * corrections cannot quietly eat the context window documents need.
+   */
+  AGENT_LEARNINGS_MAX: z.coerce.number().int().min(0).max(100).default(20),
+  /**
+   * Re-read a repository connector's AGENTS.md / CLAUDE.md / .cursorrules…
+   * after each successful sync (#70). On by default: an import only ever
+   * creates DISABLED skills, and an enabled one's text changes only when an
+   * admin accepts the upstream diff. Off leaves the connector page's Import.
+   */
+  REPO_GUIDANCE_IMPORT_ENABLED: boolish(true),
   STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
   STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 
@@ -450,6 +500,12 @@ export const envSchema = z.object({
    * also how often a pause is noticed.
    */
   CONNECTOR_SYNC_BATCH: z.coerce.number().int().positive().default(25),
+  /**
+   * Minutes between ACL-only refreshes of a connector that mirrors access
+   * (#76), when the connector does not set its own. Permission calls only, no
+   * content fetch; a due check inside the schedule sweeper's tick.
+   */
+  CONNECTOR_ACL_SYNC_DEFAULT_MIN: z.coerce.number().int().positive().default(60),
 
   /**
    * Code research (docs/features/31). A repository read by the code tools is

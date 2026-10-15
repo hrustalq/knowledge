@@ -299,6 +299,7 @@ const loading = computed(() => activityQuery.isPending.value && entries.value.le
                 :readonly="readonly"
                 :busy="busy"
                 :resolve-document-id="resolveDocumentId"
+                teach-kind="mr-thread"
                 @reply="(b: string, p: string | null) => emit('reply', threadAt(item.index)!.threadId, b, p)"
                 @resolve="(r: boolean) => emit('resolve', threadAt(item.index)!.threadId, r)"
                 @edit="(c: string, b: string) => emit('edit', threadAt(item.index)!.threadId, c, b)"

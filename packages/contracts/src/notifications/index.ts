@@ -20,6 +20,9 @@ export type NotificationSubjectType = (typeof NOTIFICATION_SUBJECT_TYPES)[number
  */
 export const NOTIFICATION_REASONS = [
   'watching',
+  // Manages a page or project somebody asked to open (#76): below
+  // `participant`, because a request is addressed to a role, not to you.
+  'manager',
   'participant',
   'author',
   // The page's owner (docs/features/39): told about requests, expiry and being
@@ -47,7 +50,7 @@ export function notificationReasonRank(reason: string): number {
  * export and a connector sync because they are one thing to the reader — background work
  * they started, now finished.
  */
-export const NOTIFICATION_CATEGORIES = ['mention', 'review', 'comment', 'document', 'verification', 'job'] as const;
+export const NOTIFICATION_CATEGORIES = ['mention', 'review', 'comment', 'document', 'verification', 'access', 'job'] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 /**
@@ -74,6 +77,7 @@ export function notificationCategoryFor(type: string): NotificationCategory | nu
   if (NOTIFIED_REVIEW_TYPES.includes(type)) return 'review';
   if (NOTIFIED_DOCUMENT_TYPES.includes(type)) return 'document';
   if (NOTIFIED_VERIFICATION_TYPES.includes(type)) return 'verification';
+  if (NOTIFIED_ACCESS_TYPES.includes(type)) return 'access';
   if (NOTIFIED_JOB_TYPES.includes(type)) return 'job';
   return null;
 }
@@ -91,6 +95,19 @@ const NOTIFIED_VERIFICATION_TYPES: readonly string[] = [
   'document.verification-expiring',
   'document.verification-expired',
   'document.owner-changed',
+];
+
+/**
+ * Who may open what (#76, phase 5): a request waiting on a manager, and the
+ * answer to one's own request. `access.cancelled` is absent — withdrawing a
+ * request is not news to anyone.
+ */
+const NOTIFIED_ACCESS_TYPES: readonly string[] = [
+  'access.requested',
+  'access.approved',
+  'access.denied',
+  'access.expired',
+  'access.granted',
 ];
 
 /**

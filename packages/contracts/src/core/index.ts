@@ -99,6 +99,17 @@ export interface DocumentSummary {
    */
   templateRef?: string | null;
   templateVersion?: number | null;
+  /**
+   * The page is not open to the whole workspace: it, its project or an
+   * ancestor is restricted (#76). Drawn as a lock.
+   */
+  restricted?: boolean;
+  /**
+   * The caller may not open this page, so only its id is real and `title` is
+   * blank. Only ever an ancestor in a guest's breadcrumb trail (#76): a member
+   * who can read a page can read everything above it.
+   */
+  hidden?: boolean;
 }
 
 export interface RevisionInfo {
@@ -350,6 +361,9 @@ export const KNOWN_EVENT_TYPES = [
   'agent.run.started',
   'agent.run.succeeded',
   'agent.run.failed',
+  // A trigger started a run (#70): `subjectId` is the run, `documentId` the
+  // page it is about, when it is about one.
+  'agent.trigger.fired',
   'connector.created',
   'connector.updated',
   'connector.deleted',
@@ -375,6 +389,8 @@ export const KNOWN_EVENT_TYPES = [
   'ai.skill.created',
   'ai.skill.updated',
   'ai.skill.deleted',
+  // Guidance files read from a repository connector into disabled skills (#70).
+  'ai.skill.imported',
   'ai.plugin.created',
   'ai.plugin.updated',
   'ai.plugin.deleted',
@@ -383,6 +399,15 @@ export const KNOWN_EVENT_TYPES = [
   'ai.agent.deleted',
   // An agent override reset back to its built-in default (docs/features/20).
   'ai.agent.reset',
+  'ai.agent.trigger.created',
+  'ai.agent.trigger.updated',
+  'ai.agent.trigger.deleted',
+  // A recipe's schedule and triggers written, disabled (#70).
+  'ai.agent.recipe.applied',
+  // A learning proposed, or approved / edited / archived (#70). Configuration
+  // like the rest of this block: what an agent is told, not news for an inbox.
+  'ai.agent.learning.created',
+  'ai.agent.learning.updated',
   'ai.sourcePolicy.created',
   'ai.sourcePolicy.updated',
   'ai.sourcePolicy.deleted',
@@ -401,6 +426,19 @@ export const KNOWN_EVENT_TYPES = [
   'glossary.term.created',
   'glossary.term.updated',
   'glossary.term.deleted',
+  // Access requests (#76, phase 5). `requested` reaches the node's managers and
+  // workspace admins; the rest reach the requester. `granted` is a grant made
+  // to a person directly from the access dialog.
+  'access.requested',
+  'access.approved',
+  'access.denied',
+  'access.cancelled',
+  'access.expired',
+  'access.granted',
+  // A restriction, a grant or a group's membership changed (#76). Carries no
+  // page and no names: it tells live clients to drop what they cached about
+  // who sees what and refetch the tree and search.
+  'acl.changed',
   'attachment.created',
   'attachment.deleted',
   // A turn in progress, for a client rendering the assistant's own work

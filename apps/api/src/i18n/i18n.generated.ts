@@ -36,6 +36,8 @@ export type I18nTranslations = {
         "sentinelDesc": string;
         "surveyor": string;
         "surveyorDesc": string;
+        "digest": string;
+        "digestDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -124,6 +126,7 @@ export type I18nTranslations = {
         };
         "report": {
             "noContent": string;
+            "restricted": string;
             "noModel": string;
             "reportedTitle": string;
             "summaryNoModel": string;
@@ -149,6 +152,22 @@ export type I18nTranslations = {
             "pageNotReviewed": string;
             "pageNotScanned": string;
             "stopped": string;
+        };
+        "digestRun": {
+            "quiet": string;
+            "summary": string;
+            "pageTitle": string;
+            "draftDetail": string;
+            "highlights": string;
+            "created": string;
+            "changed": string;
+            "merged": string;
+            "findings": string;
+            "revisions": string;
+        };
+        "recipe": {
+            "freshnessSweepNote": string;
+            "glossarySuggesterNote": string;
         };
     };
     "assistant": {
@@ -309,6 +328,16 @@ export type I18nTranslations = {
                 "changelog": string;
                 "unreleased": string;
             };
+        };
+        "acl": {
+            "unmappedPrincipal": string;
+            "readFailed": string;
+            "readFailedKept": string;
+            "groupDescription": string;
+        };
+        "guidance": {
+            "skillDescription": string;
+            "skillDescriptionTruncated": string;
         };
     };
     "error": {
@@ -496,6 +525,10 @@ export type I18nTranslations = {
             "agentNotFound": string;
             "agentScheduleNeedsOwner": string;
             "agentScheduleNeedsInterval": string;
+            "agentScheduleNeedsTime": string;
+            "agentScheduleNeedsWeekdays": string;
+            "agentScheduleBadTimezone": string;
+            "agentNotPageScoped": string;
             "agentNotBuiltIn": string;
             "agentKeyInvalid": string;
             "agentIsBuiltInCreate": string;
@@ -524,9 +557,26 @@ export type I18nTranslations = {
             "agentRunInFlight": string;
             "agentNeedsConnector": string;
             "agentConnectorInvalid": string;
+            "agentTriggerNotFound": string;
+            "agentLearningNotFound": string;
+            "agentLearningText": string;
+            "agentLearningSourceInvalid": string;
+            "agentRecipeNotFound": string;
+            "agentTriggerNeedsRepository": string;
+            "agentTriggerProjectInvalid": string;
+            "agentTriggerConnectorInvalid": string;
             "agentNeedsPullRequest": string;
             "findingNoDraft": string;
             "findingAlreadyCreated": string;
+            "agentTriggerMentionNeedsPage": string;
+            "agentTriggerWebhookOnly": string;
+            "agentTriggerSecretNeedsKey": string;
+            "agentWebhookTooLarge": string;
+            "agentWebhookNotConfigured": string;
+            "agentWebhookBadSignature": string;
+            "agentWebhookStale": string;
+            "agentWebhookDeliveryId": string;
+            "skillNoUpstream": string;
         };
         "assistant": {
             "providerDisabled": string;
@@ -628,6 +678,12 @@ export type I18nTranslations = {
             "repoNotFoundNoCredential": string;
             "branchMissingDefault": string;
             "branchMissing": string;
+            "aclUnsupportedHost": string;
+            "aclAudienceRequired": string;
+            "aclAudienceGroup": string;
+            "identityNotFound": string;
+            "identityNotMember": string;
+            "guidanceNotARepository": string;
         };
         "routeNotFound": string;
         "validationFailed": string;
@@ -717,6 +773,7 @@ export type I18nTranslations = {
             "rateLimited": string;
             "unlockRateLimited": string;
             "locked": string;
+            "restricted": string;
         };
         "site": {
             "notFound": string;
@@ -800,6 +857,28 @@ export type I18nTranslations = {
             "serverUrlNotHttps": string;
             "serverUrlPrivate": string;
             "serverHostUnresolved": string;
+        };
+        "group": {
+            "notFound": string;
+            "nameTaken": string;
+            "notMembers": string;
+        };
+        "access": {
+            "groupReadOnly": string;
+            "pageRestricted": string;
+            "projectRestricted": string;
+            "editRequired": string;
+            "manageRequired": string;
+            "selfLockout": string;
+            "unknownSubjects": string;
+            "usersWithoutView": string;
+            "requestDuplicate": string;
+            "requestNotPending": string;
+            "requestNotFound": string;
+            "requestOwnOnly": string;
+            "alreadyGranted": string;
+            "levelAboveRole": string;
+            "requestSelf": string;
         };
     };
     "import": {
@@ -930,6 +1009,18 @@ export type I18nTranslations = {
         "providerDisabled": string;
         "notConversational": string;
         "modelMissing": string;
+        "run": {
+            "inFlight": string;
+            "cooldown": string;
+            "cap": string;
+            "budget": string;
+            "notStarted": string;
+            "failed": string;
+            "cancelled": string;
+            "noSummary": string;
+            "more": string;
+            "open": string;
+        };
     };
     "prompt": {
         "localeDirective": string;
@@ -942,6 +1033,7 @@ export type I18nTranslations = {
         "proposeNote": string;
     };
     "role": {
+        "guest": string;
         "viewer": string;
         "editor": string;
         "admin": string;
@@ -1001,6 +1093,8 @@ export type I18nTranslations = {
         "skill": string;
         "plugin": string;
         "provider": string;
+        "agentTrigger": string;
+        "agentLearning": string;
         "glossaryTerm": string;
         "import": string;
         "workflow": string;
@@ -1020,6 +1114,8 @@ export type I18nTranslations = {
         "chatBinding": string;
         "chatSubscription": string;
         "chatIdentity": string;
+        "group": string;
+        "accessRequest": string;
     };
     "validation": {
         "isDefined": string;

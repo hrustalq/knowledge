@@ -14,6 +14,7 @@ import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MergeRequestsService } from './merge-requests.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { MergeRequestThreadsService } from './merge-request-threads.service.js';
 import { SavedFiltersService } from './saved-filters.service.js';
 import {
@@ -44,6 +45,7 @@ export class MergeRequestsController {
     private readonly mergeRequests: MergeRequestsService,
     private readonly threads: MergeRequestThreadsService,
     private readonly savedFilters: SavedFiltersService,
+    private readonly permissions: PermissionService,
   ) {}
 
   @Post('documents/:id/merge-requests')
@@ -67,8 +69,8 @@ export class MergeRequestsController {
   @Get('merge-requests')
   @Access('viewer', 'query')
   @ApiOperation({ summary: 'List merge requests across a workspace (filterable, cursor-paginated)' })
-  listWorkspace(@Query() query: ListMergeRequestsQueryDto) {
-    return this.mergeRequests.listWorkspace(query);
+  async listWorkspace(@Query() query: ListMergeRequestsQueryDto, @CurrentPrincipal() principal: Principal) {
+    return this.mergeRequests.listWorkspace(query, await this.permissions.scopeFor(principal, query.workspaceId));
   }
 
   /**

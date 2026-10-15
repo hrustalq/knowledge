@@ -30,6 +30,8 @@ import type { AssistantThread } from '@prisma/client';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { canSee, type Audience } from '../permissions/access-scope.js';
 import { SearchService } from '../search/search.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import type { Principal } from '../auth/principal.js';
@@ -37,6 +39,7 @@ import { AssistantClient, type AiCallContext } from './assistant.client.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
 import { AiUsageService } from '../ai/ai-usage.service.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
+import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { AiPluginsService } from '../ai/ai-plugins.service.js';
 import { AssistantToolsService } from './assistant.tools.js';
 import { AssistantThreadsService } from './assistant-threads.service.js';
@@ -286,6 +289,8 @@ export class AssistantService {
     private readonly feedback: AnswerFeedbackService,
     private readonly templates: TemplatesService,
     private readonly env: ConfigService,
+    private readonly permissions: PermissionService,
+    private readonly learnings: AgentLearningsService,
   ) {}
 
   /**
@@ -404,12 +409,14 @@ export class AssistantService {
   async ask(dto: AssistantAskDto, principal: Principal): Promise<AssistantAskResponse> {
     // AclGuard checked dto.workspaceId — make sure the page actually belongs to it
     // (before any other branch, so disabled mode behaves identically).
+    // A page the caller may not open is as absent as one in another workspace (#76).
     const document = await this.prisma.document.findUnique({ where: { id: dto.documentId } });
-    if (!document || document.workspaceId !== dto.workspaceId) {
+    const scope = await this.permissions.scopeFor(principal, dto.workspaceId);
+    if (!document || document.workspaceId !== dto.workspaceId || !canSee(scope, document)) {
       throw new NotFoundException(t('error.document.notFoundInWorkspace', { id: dto.documentId }));
     }
     const call = await this.openCall(dto.workspaceId, principal, 'ask');
-    const askTrail = await this.documents.breadcrumbsFor(dto.workspaceId, [document.id]);
+    const askTrail = await this.documents.breadcrumbsFor(scope, [document.id]);
     const groundingTrail = askTrail.get(document.id) ? ` — in ${askTrail.get(document.id)}` : '';
     if (!call) {
       return { enabled: false, answer: t('assistant.disabled'), sources: [] };
@@ -604,6 +611,9 @@ export class AssistantService {
    *   produce something only the web pane can draw; a chat client would show a
    *   turn that ended on nothing.
    * - **The binding's project**, as a retrieval filter the model cannot widen.
+   * - **The audience**, in a group (#76): the asker's pages clamped to what
+   *   every member can open, since the answer is read by people the asker's
+   *   grants say nothing about. A direct message is the asker's alone.
    *
    * It is still a persisted thread turn, so the asker finds the conversation,
    * its sources and its tool trace under /assistant, and a weak answer leaves
@@ -611,7 +621,7 @@ export class AssistantService {
    */
   async runChatTurn(
     threadId: string,
-    input: { content: string; agentKey?: string | null; projectId?: string | null },
+    input: { content: string; agentKey?: string | null; projectId?: string | null; audience?: Audience },
     principal: Principal,
   ): Promise<{ enabled: boolean; message: AssistantMessageInfo }> {
     const dto: PostAssistantMessageDto = { content: input.content, mode: 'ask', ...(input.agentKey ? { agentKey: input.agentKey } : {}) };
@@ -639,7 +649,14 @@ export class AssistantService {
         ],
         turn.agent,
       ),
-      (name, args) => this.runTool(name, args, { principal, thread, turn, projectId }),
+      (name, args) =>
+        this.runTool(name, args, {
+          principal,
+          thread,
+          turn,
+          projectId,
+          ...(input.audience ? { audience: input.audience } : {}),
+        }),
     );
 
     const message = await this.finishTurn(thread, turn, content, trace, principal, 'chat');
@@ -824,7 +841,7 @@ export class AssistantService {
       actor: principal.userId,
     });
 
-    const turn = await this.prepareTurn(thread, dto, userMessage.id, agent, mode);
+    const turn = await this.prepareTurn(thread, dto, userMessage.id, agent, mode, principal);
     return { enabled: true, userMessage, thread, turn, call };
   }
 
@@ -899,6 +916,8 @@ export class AssistantService {
       emit?: (frame: AssistantStreamFrame) => void;
       /** Chat turns only: the bound project, pinned into the tool context. */
       projectId?: string;
+      /** Chat turns only: who reads the answer besides the asker (#76). */
+      audience?: Audience;
     },
   ): Promise<{ content: string; ok: boolean }> {
     const { thread, turn } = ctx;
@@ -952,6 +971,7 @@ export class AssistantService {
       workspaceId: thread.workspaceId,
       cite: (source) => turn.labels.label(source),
       ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
+      ...(ctx.audience ? { audience: ctx.audience } : {}),
     });
     if (!result.ok) turn.toolErrors++;
     for (const source of result.sources) {
@@ -1119,6 +1139,7 @@ export class AssistantService {
     userMessageId: string,
     agent: ResolvedAgent,
     mode: AssistantChatMode,
+    principal: Principal,
   ): Promise<PreparedTurn> {
     const threadId = thread.id;
     const attachmentsBlock = (dto.attachments ?? [])
@@ -1130,7 +1151,7 @@ export class AssistantService {
     const draft = dto.draft ?? null;
     const draftTemplate = draft?.template ? await this.draftTemplateClause(thread.workspaceId, draft.template) : '';
     const labels = new CiteLabels();
-    let groundingDoc: { id: string; title: string } | null = null;
+    let groundingDoc: { id: string; title: string; projectId: string } | null = null;
     let groundingMarkdown = '';
     // Same reasoning as in `ask`: the chat pane's grounding page carried its
     // title and nothing about where it lives, so "what section is this in"
@@ -1138,9 +1159,11 @@ export class AssistantService {
     let turnTrail = '';
     if (groundingDocumentId) {
       const doc = await this.prisma.document.findUnique({ where: { id: groundingDocumentId } });
-      if (doc && doc.workspaceId === thread.workspaceId) {
+      // Grounding is reading: a page the caller may not open grounds nothing (#76).
+      const scope = await this.permissions.scopeFor(principal, thread.workspaceId);
+      if (doc && doc.workspaceId === thread.workspaceId && canSee(scope, doc)) {
         groundingDoc = doc;
-        const trail = await this.documents.breadcrumbsFor(thread.workspaceId, [doc.id]);
+        const trail = await this.documents.breadcrumbsFor(scope, [doc.id]);
         turnTrail = trail.get(doc.id) ? ` — in ${trail.get(doc.id)}` : '';
         try {
           groundingMarkdown = (await this.documents.getContent(groundingDocumentId)).markdown;
@@ -1231,7 +1254,14 @@ export class AssistantService {
           ...(dto.skillIds ?? []),
           ...agent.skillIds,
         ]),
-      );
+      ) +
+      // Team guidance (#70): learnings an admin approved for this agent, after
+      // the skills they sit beside. Project-scoped ones apply on that project's pages.
+      (await this.learnings.promptFor({
+        workspaceId: thread.workspaceId,
+        agentKey: agent.key,
+        projectIds: groundingDoc ? [groundingDoc.projectId] : [],
+      }));
 
     const priorTurns = (await this.threads.recentHistory(threadId, 16)).filter((m) => m.id !== userMessageId);
     const history: ChatCompletionMessageParam[] = priorTurns.map((m) => ({
@@ -1285,14 +1315,17 @@ export class AssistantService {
   }
 
   /** Relevant-document lookup — plain hybrid search over a draft excerpt; always available. */
-  async related(dto: AssistantRelatedDto): Promise<AssistantRelatedResponse> {
-    const res = await this.search.search({
-      workspaceId: dto.workspaceId,
-      query: dto.text.slice(0, 2_000),
-      mode: 'hybrid',
-      limit: dto.limit ?? 5,
-      expandGraph: { depth: 1 },
-    });
+  async related(dto: AssistantRelatedDto, principal: Principal): Promise<AssistantRelatedResponse> {
+    const res = await this.search.search(
+      {
+        workspaceId: dto.workspaceId,
+        query: dto.text.slice(0, 2_000),
+        mode: 'hybrid',
+        limit: dto.limit ?? 5,
+        expandGraph: { depth: 1 },
+      },
+      await this.permissions.scopeFor(principal, dto.workspaceId),
+    );
     return { results: res.results, related: res.related };
   }
 

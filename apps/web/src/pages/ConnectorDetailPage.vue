@@ -18,7 +18,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useInfiniteQuery, useQuery } from '@tanstack/vue-query'
-import { BookOpenText, CircleAlert, GitPullRequest, Link2, RefreshCw, ScrollText, Tag } from 'lucide-vue-next'
+import { BookOpenText, CircleAlert, GitPullRequest, Link2, RefreshCw, ScrollText, ShieldCheck, Tag } from 'lucide-vue-next'
 import { CHANGELOG_CONFIG_KEY, connectorKindInfo, wikiEnabled } from '@knowledge/contracts'
 import type {
   ConnectorResponse,
@@ -40,16 +40,18 @@ import {
   usePageTabs,
 } from '@/components/layout/page'
 import type { PageTab } from '@/components/layout/page'
+import ConnectorAccessMirroring from '@/components/connectors/ConnectorAccessMirroring.vue'
 import ConnectorReleases from '@/components/connectors/ConnectorReleases.vue'
 import ConnectorWiki from '@/components/connectors/ConnectorWiki.vue'
 import ConnectorWorkItems from '@/components/connectors/ConnectorWorkItems.vue'
 import GithubAccessCard from '@/components/connectors/GithubAccessCard.vue'
+import ConnectorGuidanceCard from '@/components/connectors/ConnectorGuidanceCard.vue'
 import { RUN_STATUS_CLASS, RUN_STATUS_LABEL } from '@/components/connectors/connector-ui'
 import { useAuthStore } from '@/stores/auth'
 import { relativeTime } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 
-type TabKey = 'work-items' | 'wiki' | 'releases' | 'links' | 'runs'
+type TabKey = 'work-items' | 'wiki' | 'releases' | 'links' | 'runs' | 'access'
 
 const route = useRoute()
 const router = useRouter()
@@ -86,6 +88,8 @@ const tabs = computed<PageTab<TabKey>[]>(() => {
   }
   list.push({ key: 'links', label: t('connectors.tabLinks'), icon: Link2, count: connector.value?.linkCount ?? null })
   list.push({ key: 'runs', label: t('connectors.tabRuns'), icon: ScrollText })
+  // Access mirroring (#76): an admin's setting, so an admin's tab.
+  if (canManage.value) list.push({ key: 'access', label: t('connectors.tabAccess'), icon: ShieldCheck })
   return list
 })
 const tab = usePageTabs<TabKey>(tabs, 'links')
@@ -139,6 +143,8 @@ async function startSync(direction: 'pull' | 'push') {
  * GitHub App and GitHub's OAuth, so a GitLab or self-hosted remote has nothing
  * for it to show — absent, not empty, the Work items tab rule.
  */
+// The connector kinds a repository archive is read from (REPO_CONNECTOR_KINDS on the API).
+const isRepository = computed(() => connector.value?.kind === 'codebase' || connector.value?.kind === 'markdown-git')
 const onGithub = computed(() => /^https:\/\/github\.com\//i.test(connector.value?.config.repoUrl ?? ''))
 
 /**
@@ -218,11 +224,11 @@ watch(connectorId, () => {
               <dt class="text-muted-foreground">{{ t('connectors.fieldDirection') }}</dt>
               <dd>
                 {{
-                  t(
-                    `connectors.direction${
-                      connector.direction === 'both' ? t('connectors.directionBoth') : connector.direction === 'push' ? t('connectors.directionPush') : t('connectors.directionPull')
-                    }`,
-                  )
+                  connector.direction === 'both'
+                    ? t('connectors.directionBoth')
+                    : connector.direction === 'push'
+                      ? t('connectors.directionPush')
+                      : t('connectors.directionPull')
                 }}
               </dd>
             </div>
@@ -266,6 +272,7 @@ watch(connectorId, () => {
         </div>
 
         <GithubAccessCard v-if="canManage && onGithub" :connector-id="connectorId" />
+        <ConnectorGuidanceCard v-if="canManage && isRepository" :connector-id="connectorId" />
 
         <!-- Said once, on the connector, rather than as an empty state inside a
              tab that is not offered: the reason there is no Work items tab is a
@@ -280,6 +287,7 @@ watch(connectorId, () => {
       <ConnectorWorkItems v-if="tab === 'work-items'" :connector-id="connectorId" :can-manage="canManage" />
       <ConnectorWiki v-else-if="tab === 'wiki'" :connector-id="connectorId" :can-edit="auth.canEdit" />
       <ConnectorReleases v-else-if="tab === 'releases'" :connector-id="connectorId" />
+      <ConnectorAccessMirroring v-else-if="tab === 'access'" :connector-id="connectorId" />
 
       <div v-else-if="tab === 'links'">
         <PageState v-if="links.isPending.value" state="loading" />

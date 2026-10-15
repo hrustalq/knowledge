@@ -4,6 +4,8 @@ import type { AssistantAskSource, DocumentTreeNode } from '@knowledge/contracts'
 import { AccessService } from '../auth/access.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import type { AccessScope } from '../permissions/access-scope.js';
 import { SearchService } from '../search/search.service.js';
 import { readFrontmatterRelations, readFrontmatterTags } from '../common/relations.js';
 import { wrapUntrusted } from '../common/untrusted.js';
@@ -53,7 +55,19 @@ export class AssistantReadToolsService {
     private readonly search: SearchService,
     private readonly documents: DocumentsService,
     private readonly templates: TemplatesService,
+    private readonly permissions: PermissionService,
   ) {}
+
+  /**
+   * The caller's page visibility, asked afresh on every tool call rather than
+   * once per turn: a grant revoked mid-turn holds from the next call (#76).
+   * Clamped to the run's audience when the output is read by more people
+   * than the caller.
+   */
+  private async scopeOf(ctx: AssistantToolContext): Promise<AccessScope> {
+    const scope = await this.permissions.scopeFor(ctx.principal, ctx.workspaceId);
+    return ctx.audience ? this.permissions.audienceScope(scope, ctx.audience) : scope;
+  }
 
   definitions(): ChatCompletionFunctionTool[] {
     return [
@@ -252,22 +266,28 @@ export class AssistantReadToolsService {
     if (!query) return this.fail('query is required');
     const limit = Math.min(Math.max(Math.floor(Number(args.limit)) || 5, 1), 10);
 
-    const res = await this.search.search({
-      workspaceId: ctx.workspaceId, // pinned — never from args
-      query,
-      mode: 'hybrid',
-      limit,
-      // A project-scoped turn (issue #71) gets no graph expansion: related
-      // pages are walked across the whole workspace, and offering them would
-      // steer the model straight back out of the project it was bound to.
-      ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : { expandGraph: { depth: 1 } }),
-    });
+    // Asked on this call, not once per turn: a grant revoked mid-turn holds
+    // from the next search (#76).
+    const scope = await this.scopeOf(ctx);
+    const res = await this.search.search(
+      {
+        workspaceId: ctx.workspaceId, // pinned — never from args
+        query,
+        mode: 'hybrid',
+        limit,
+        // A project-scoped turn (issue #71) gets no graph expansion: related
+        // pages are walked across the whole workspace, and offering them would
+        // steer the model straight back out of the project it was bound to.
+        ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : { expandGraph: { depth: 1 } }),
+      },
+      scope,
+    );
     // Where each hit lives, not just what it is called. Two pages both called
     // "Overview" in different sections were indistinguishable to the model,
     // which is how it ended up citing the wrong one and nesting new pages
     // beside it.
     const trails = await this.documents.breadcrumbsFor(
-      ctx.workspaceId,
+      scope,
       res.results.map((r) => r.documentId),
     );
     // One source per page, carrying the best chunk: the label is per page
@@ -376,11 +396,13 @@ export class AssistantReadToolsService {
     ctx: AssistantToolContext,
   ): Promise<AssistantToolResult> {
     const documentId = String(args.documentId ?? '');
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
+    const scope = await this.scopeOf(ctx);
+    const doc = await this.requireVisibleDocument(documentId, ctx, scope);
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
+    await this.permissions.auditBypassRead(ctx.principal, scope, { type: 'document', id: documentId });
     try {
       const content = await this.documents.getContent(documentId);
-      const trails = await this.documents.breadcrumbsFor(ctx.workspaceId, [documentId]);
+      const trails = await this.documents.breadcrumbsFor(scope, [documentId]);
       const source: AssistantAskSource = { documentId, title: doc.title, revisionId: content.revisionId, factClass: 'explicit' };
       return {
         content: JSON.stringify({
@@ -418,7 +440,7 @@ export class AssistantReadToolsService {
     const parentId = typeof args.parentId === 'string' && args.parentId ? args.parentId : undefined;
     const projectId = typeof args.projectId === 'string' && args.projectId ? args.projectId : undefined;
 
-    const tree = await this.documents.getTree(ctx.workspaceId, projectId, {
+    const tree = await this.documents.getTree(await this.scopeOf(ctx), projectId, {
       ...(parentId ? { parentId } : {}),
       depth,
     });
@@ -477,10 +499,11 @@ export class AssistantReadToolsService {
   ): Promise<AssistantToolResult> {
     const documentId = String(args.documentId ?? '');
     const depth = Math.min(Math.max(Math.floor(Number(args.depth)) || 1, 1), 2);
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
+    const scope = await this.scopeOf(ctx);
+    const doc = await this.requireVisibleDocument(documentId, ctx, scope);
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
 
-    const graph = await this.documents.getDocumentGraph(documentId, depth);
+    const graph = await this.documents.getDocumentGraph(documentId, depth, scope);
     // A page reached through the graph is evidence of the kind the edge is:
     // an `inferred` edge is a model's guess, `frontmatter` the author's word.
     // The weakest edge that led to a node is what the citation inherits.
@@ -528,7 +551,7 @@ export class AssistantReadToolsService {
     ctx: AssistantToolContext,
   ): Promise<AssistantToolResult> {
     const documentId = String(args.documentId ?? '');
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
+    const doc = await this.requireVisibleDocument(documentId, ctx, await this.scopeOf(ctx));
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
 
     const { relations } = await this.documents.listRelations(documentId);
@@ -573,14 +596,20 @@ export class AssistantReadToolsService {
     return { cite };
   }
 
-  /** Model-supplied ids are only honoured when the document lives in the pinned workspace. */
-  private async requireWorkspaceDocument(documentId: string, ctx: AssistantToolContext) {
+  /**
+   * Model-supplied ids are only honoured when the document lives in the pinned
+   * workspace and `scope` may open it (#76). A page the caller cannot see is
+   * the same "not found" as one that does not exist: the model learns nothing
+   * about it, not even that it is there.
+   */
+  private async requireVisibleDocument(documentId: string, ctx: AssistantToolContext, scope: AccessScope) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) return null;
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
       select: { id: true, workspaceId: true, title: true },
     });
     if (!doc || doc.workspaceId !== ctx.workspaceId) return null;
+    if (!(await this.permissions.visibleDocumentIds(scope, [documentId])).has(documentId)) return null;
     return doc;
   }
 

@@ -1,12 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AiSkill } from '@prisma/client';
-import type { AiSkillSummary } from '@knowledge/contracts';
+import { AI_SKILL_INSTRUCTIONS_MAX, type AiSkillSummary } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { t } from '../i18n/t.js';
 
 /** Skills merged into one turn, and the total instruction budget they share. */
 const MAX_SKILLS_PER_TURN = 3;
-const MAX_SKILL_CHARS = 8_000;
+const MAX_SKILL_CHARS = AI_SKILL_INSTRUCTIONS_MAX;
 
 /** How long the enabled-skill roster is reused before PG is consulted again. */
 const CACHE_TTL_MS = 30_000;
@@ -41,13 +41,40 @@ export class AiSkillsService {
       where: { workspaceId },
       orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
     });
-    return skills.map(toSummary);
+    const names = await this.connectorNames(skills);
+    return skills.map((s) => toSummary(s, names));
   }
 
   async get(id: string): Promise<AiSkillSummary> {
     const skill = await this.prisma.aiSkill.findUnique({ where: { id } });
     if (!skill) throw new NotFoundException(t('error.ai.skillNotFound', { id }));
-    return toSummary(skill);
+    return toSummary(skill, await this.connectorNames([skill]));
+  }
+
+  /**
+   * Promote an imported skill's upstream text to its live instructions (#70).
+   * The one way a commit's change reaches an enabled skill: an admin read the
+   * diff and pressed Accept. Guarded on the pending text still being there, so
+   * a second press (or a sync that settled it meanwhile) is a 409, not a no-op
+   * that pretends to have accepted something.
+   */
+  async acceptUpstream(id: string): Promise<AiSkillSummary> {
+    const skill = await this.prisma.aiSkill.findUnique({ where: { id } });
+    if (!skill) throw new NotFoundException(t('error.ai.skillNotFound', { id }));
+    const pending = skill.pendingInstructions;
+    if (pending === null) throw new ConflictException(t('error.ai.skillNoUpstream', { id }));
+    const { count } = await this.prisma.aiSkill.updateMany({
+      where: { id, pendingInstructions: pending },
+      data: { instructions: pending, pendingInstructions: null },
+    });
+    if (count === 0) throw new ConflictException(t('error.ai.skillNoUpstream', { id }));
+    this.cache.delete(skill.workspaceId);
+    return this.get(id);
+  }
+
+  /** Forget a workspace's cached roster — for writers outside this service (the repo import). */
+  invalidate(workspaceId: string): void {
+    this.cache.delete(workspaceId);
   }
 
   async create(workspaceId: string, input: UpsertSkillInput, actorId?: string): Promise<AiSkillSummary> {
@@ -68,7 +95,7 @@ export class AiSkillsService {
       },
     });
     this.cache.delete(workspaceId);
-    return toSummary(skill);
+    return toSummary(skill, new Map());
   }
 
   async update(id: string, input: Partial<UpsertSkillInput>): Promise<AiSkillSummary> {
@@ -93,7 +120,7 @@ export class AiSkillsService {
       },
     });
     this.cache.delete(current.workspaceId);
-    return toSummary(skill);
+    return toSummary(skill, await this.connectorNames([skill]));
   }
 
   async remove(id: string): Promise<void> {
@@ -149,6 +176,14 @@ export class AiSkillsService {
     );
   }
 
+  /** The names of the connectors imported skills came from — one read for a whole roster. */
+  private async connectorNames(skills: AiSkill[]): Promise<Map<string, string>> {
+    const ids = [...new Set(skills.map((s) => s.sourceConnectorId).filter((id): id is string => id !== null))];
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.connector.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+
   private async enabledSkills(workspaceId: string): Promise<AiSkill[]> {
     const hit = this.cache.get(workspaceId);
     if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.skills;
@@ -188,7 +223,7 @@ function normalizeTriggers(triggers: string[] | undefined): string[] {
   return [...new Set((triggers ?? []).map((t) => t.trim()).filter(Boolean))].slice(0, 20);
 }
 
-function toSummary(skill: AiSkill): AiSkillSummary {
+function toSummary(skill: AiSkill, connectorNames: ReadonlyMap<string, string>): AiSkillSummary {
   return {
     id: skill.id,
     workspaceId: skill.workspaceId,
@@ -200,5 +235,12 @@ function toSummary(skill: AiSkill): AiSkillSummary {
     createdBy: skill.createdBy,
     createdAt: skill.createdAt.toISOString(),
     updatedAt: skill.updatedAt.toISOString(),
+    source: skill.source === 'repo' ? 'repo' : 'manual',
+    sourceConnectorId: skill.sourceConnectorId,
+    sourceConnectorName: skill.sourceConnectorId ? (connectorNames.get(skill.sourceConnectorId) ?? null) : null,
+    sourcePath: skill.sourcePath,
+    sourceSha: skill.sourceSha,
+    pendingInstructions: skill.pendingInstructions,
+    sourceRemovedAt: skill.sourceRemovedAt?.toISOString() ?? null,
   };
 }

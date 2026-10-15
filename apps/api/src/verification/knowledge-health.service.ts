@@ -16,6 +16,8 @@ import type {
 } from '@knowledge/contracts';
 import { HEALTH_FILTERS, isInactive, OPEN_KNOWLEDGE_ISSUE_STATUSES } from '@knowledge/contracts';
 import { DocumentsService } from '../documents/documents.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { visibilitySql, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
@@ -79,9 +81,11 @@ export class KnowledgeHealthService {
     private readonly policy: VerificationPolicyService,
     private readonly verification: VerificationService,
     private readonly documents: DocumentsService,
+    private readonly permissions: PermissionService,
   ) {}
 
-  async list(workspaceId: string, query: HealthListQuery): Promise<KnowledgeHealthListResponse> {
+  async list(access: AccessScope, query: HealthListQuery): Promise<KnowledgeHealthListResponse> {
+    const { workspaceId } = access;
     const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
     const settings = await this.policy.effective(workspaceId);
     const now = new Date();
@@ -99,7 +103,7 @@ export class KnowledgeHealthService {
       : Prisma.empty;
 
     const rows = await this.prisma.$queryRaw<HealthSqlRow[]>`
-      WITH r AS (${this.rowsCte(workspaceId, query, settings, now)})
+      WITH r AS (${this.rowsCte(access, query, settings, now)})
       SELECT r.* FROM r
        WHERE ${healthFilterSql(query.filter, settings, now)}
        ${after}
@@ -109,7 +113,7 @@ export class KnowledgeHealthService {
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const trails = await this.documents.breadcrumbsFor(
-      workspaceId,
+      access,
       page.map((r) => r.id),
     );
     const last = page[page.length - 1];
@@ -123,14 +127,15 @@ export class KnowledgeHealthService {
     };
   }
 
-  async summary(workspaceId: string, projectId?: string): Promise<KnowledgeHealthSummaryResponse> {
+  async summary(access: AccessScope, projectId?: string): Promise<KnowledgeHealthSummaryResponse> {
+    const { workspaceId } = access;
     const settings = await this.policy.effective(workspaceId);
     const now = new Date();
     const counted = HEALTH_FILTERS.map(
       (f) => Prisma.sql`count(*) FILTER (WHERE ${healthFilterSql(f, settings, now)})::int AS ${Prisma.raw(`"${f}"`)}`,
     );
     const [row] = await this.prisma.$queryRaw<Array<Record<string, number>>>`
-      WITH r AS (${this.rowsCte(workspaceId, { projectId }, settings, now)})
+      WITH r AS (${this.rowsCte(access, { projectId }, settings, now)})
       SELECT count(*) FILTER (WHERE r.archived_at IS NULL)::int AS total, ${Prisma.join(counted)} FROM r
     `;
     const counts = Object.fromEntries(HEALTH_FILTERS.map((f) => [f, row?.[f] ?? 0])) as Record<HealthFilter, number>;
@@ -145,9 +150,14 @@ export class KnowledgeHealthService {
    * that refuses (archived, no head) is reported per id rather than failing
    * the batch — the caller asked about two hundred pages, not one.
    */
-  async bulk(workspaceId: string, input: HealthBulkInput, actorId: string): Promise<KnowledgeHealthBulkResponse> {
+  async bulk(access: AccessScope, input: HealthBulkInput, actorId: string): Promise<KnowledgeHealthBulkResponse> {
+    const { workspaceId } = access;
     const ids = [...new Set(input.documentIds)];
-    const owned = await this.prisma.document.findMany({ where: { id: { in: ids }, workspaceId }, select: { id: true } });
+    // A page the caller may not open is as foreign as another tenant's (#76).
+    const owned = await this.prisma.document.findMany({
+      where: { id: { in: ids }, workspaceId, AND: [visibilityWhere(access)] },
+      select: { id: true },
+    });
     const ownedIds = new Set(owned.map((d) => d.id));
     const foreign = ids.filter((id) => !ownedIds.has(id));
     if (foreign.length > 0) {
@@ -160,6 +170,8 @@ export class KnowledgeHealthService {
     const results: KnowledgeHealthBulkResult[] = [];
     for (const documentId of ids) {
       try {
+        // The single-page routes check edit on the page itself; so does this (#76).
+        await this.permissions.requireLevel(access, { type: 'document', id: documentId }, 'edit');
         await this.apply(documentId, input, actorId);
         results.push({ documentId, ok: true });
       } catch (error) {
@@ -214,7 +226,7 @@ export class KnowledgeHealthService {
    * and change the other.
    */
   private rowsCte(
-    workspaceId: string,
+    access: AccessScope,
     scope: { projectId?: string; ownerId?: string; q?: string },
     _settings: KnowledgeHealthSettingsValues,
     now: Date,
@@ -226,7 +238,7 @@ export class KnowledgeHealthService {
       SELECT d.id, d.project_id, d.title, d.owner_id, d.verified_by, d.verified_at, d.verification_expires_at,
              d.verification_flag, d.verification_note, d.last_activity_at, d.archived_at,
              rev.body_chars,
-             (SELECT count(*)::int FROM documents c WHERE c.parent_id = d.id) AS child_count,
+             (SELECT count(*)::int FROM documents c WHERE c.parent_id = d.id AND ${visibilitySql(access, 'c')}) AS child_count,
              CASE
                WHEN d.verification_flag = 'outdated' THEN 'outdated'
                WHEN EXISTS (
@@ -242,7 +254,9 @@ export class KnowledgeHealthService {
         FROM documents d
         LEFT JOIN document_branches b ON b.document_id = d.id AND b.name = d.default_branch
         LEFT JOIN document_revisions rev ON rev.id = b.head_revision_id
-       WHERE d.workspace_id = ${workspaceId}::uuid ${project} ${owner} ${q}
+       WHERE d.workspace_id = ${access.workspaceId}::uuid ${project} ${owner} ${q}
+         -- Pages the caller may not open are not on the dashboard (#76).
+         AND ${visibilitySql(access, 'd')}
     `;
   }
 
@@ -314,6 +328,7 @@ function bulkErrorCode(error: unknown): string {
     if (reason === 'document_archived') return 'archived';
     if (reason === 'no_head_revision') return 'no-head';
     if (error.getStatus() === 404) return 'not-found';
+    if (error.getStatus() === 403) return 'forbidden';
     if (error.getStatus() === 400) return 'invalid';
   }
   return 'failed';

@@ -75,9 +75,86 @@ because that resource is keyed by an autoincrementing integer
 
 ## Roles
 
-`viewer < editor < admin`, held in `workspace_members`, plus a separate
-**`trusted_operator`** flag that is not a role — it gates the raw graph query and
-nothing else.
+`guest < viewer < editor < admin`, held in `workspace_members`
+(`WORKSPACE_ROLES` in contracts), plus a separate **`trusted_operator`** flag
+that is not a role — it gates the raw graph query and nothing else.
+
+**`guest`** (issue #76) sits below the ladder at `ROLE_ORDER.guest = -1`, so
+every `@Access('viewer', …)` route refuses one with no special case. A guest
+reads only what is granted to them or their groups (see _Page restrictions_
+below): they pass a `'document'`, `'merge-request'` or `'project'` route when the
+page level covers it, and a workspace-level route only when it is marked
+`@Access(…, { guests: true })`, which promises the handler filters its answer
+by the caller's scope (the document list and tree, the project list). Code that
+asks "is this person a member" directly rather than through `requireRole` —
+mention recipients, page owners, members-only site audiences, the llms.txt hub,
+MCP `whoami` — filters with `WORKSPACE_READER` (`auth/principal.ts`).
+Notifications follow page visibility instead (below), so a guest is told about
+the pages granted to them and nothing else.
+
+**User groups** (`user_groups`, `user_group_members`) are workspace-scoped sets
+of members that restrictions grant to. `source` is `manual`, `connector`
+(mirrored by ACL sync) or `scim`; the API answers 409 to any edit of a
+non-manual group, since the next sync would undo it. Members must already belong
+to the workspace. `WorkspacesService.removeMember` deletes a person's group rows
+and their page grants with their membership, and deleting a group deletes the
+grants to it, so a re-added person or a reused id inherits nothing.
+
+## Page restrictions
+
+Issue #76, phase 2. The workspace is still the tenant boundary; below it a
+**project or a page can be restricted**, with `view | edit | manage` grants to
+people or groups (`access_grants`, no FK on subject or resource).
+
+- **View is intersective down the chain** project → root → … → page. A reader
+  must hold a grant on _every_ restricted node, so restricting a page hides its
+  subtree and a child can narrow but never re-open. An empty table reproduces
+  the old behaviour exactly: nothing restricted, nobody filtered.
+- **The workspace role is the ceiling.** A viewer with an `edit` grant reads.
+  Edit is decided by the nearest restricted node carrying any edit/manage grant;
+  without one, `editor` edits as before. Manage (change restrictions) belongs to
+  whoever edits until the chain names a manager, then only to holders of a
+  manage grant — an editor may restrict an open page, and keeps it once they do.
+- **Guests** reach only nodes with a grant on their chain, at no more than edit.
+- **Workspace and platform admins bypass**, as they control membership anyway.
+  A bypass read of something no grant admits them to writes `acl.bypass` into
+  `audit_logs` (at most once a minute per admin and page).
+- A read-only key caps every level at view.
+
+The rule is one pure function, `levelOn` (`permissions/access-scope.ts`), used
+by the guard, the access routes and `whoCanOpen` (reviewers).
+
+**The visibility predicate is denormalized.** `documents.restricted_by` holds
+the ids of every restricted node on the page's chain, outermost first.
+`PermissionService.scopeFor(principal, workspaceId)` computes an `AccessScope`
+once per request — `denied` (restricted nodes the caller holds no grant on) and
+`granted` (nodes they hold any grant on) — and a page is visible iff
+`restricted_by && denied` is empty (GIN index), plus, for a guest, a granted id
+on its chain. It has three spellings — `canSee` (memory), `visibilityWhere`
+(Prisma) and `visibilitySql` (raw) — kept adjacent and pinned against each
+other in `test/permissions.spec.ts`. **Every service method that returns pages
+takes a required `AccessScope`**, so a new call site cannot forget it.
+
+`restricted_by` is rewritten only by `PermissionService.recomputeRestrictedBy`:
+one statement over a subtree (left-anchored `path LIKE`) or a project, run inside
+the transaction that created, moved or re-projected a page, flipped a switch or
+deleted a project into another. Rows whose value is already right keep their
+`acl_version`; changed rows bump it, and the worker's `AclRestampSweeper` copies
+the new value onto the search stores' `aclNodes` stamps — see
+[04](04-search-graph.md#page-restrictions).
+
+**The guard checks the resource.** For `'document'`, `'merge-request'` (its
+page) and `'project'` sources, `AclGuard` keeps the resolved id and calls
+`PermissionService.requireResource`, mapping viewer→view, editor→edit,
+admin→manage. A page the caller may not open is a **404 for a guest** and a
+**403 `{ canRequestAccess, resourceType, resourceId }` for a member — never its
+title**. MCP's `guard.doc/mr/project` call the same method.
+
+Restricted pages never leave the workspace's own access model: a share link to
+one is refused (409 `share.restricted`) and an existing one 404s; published
+sites, llms.txt and the workspace/project listings carry only pages with an
+empty `restricted_by`; exports hold what the requester may open, resolved again
+in the worker from `requested_by`.
 
 `users.is_admin` is a **platform** admin: it bypasses workspace ACLs entirely and
 gates `@PlatformAdmin()` routes (`GET/POST/PATCH /v1/users`). **Self-disable and
@@ -87,6 +164,39 @@ default.
 
 `WorkspacesService` holds the matching invariant for workspaces: **the last admin
 cannot be demoted or removed.**
+
+### Who hears about what (#76, phase 5)
+
+The same predicate reaches the per-person surfaces:
+
+- **Notifications.** `NotificationsService.deliver` keeps a recipient only if
+  `whoCanOpen` admits them to the event's page, or project. An event about
+  neither (a run, an import) still skips guests. `whoCanOpen` and
+  `resolveChain` live as plain functions in `permissions/acl-read.ts`, because
+  `NotificationsService` may not inject `PermissionService`: the permission
+  module publishes through `EventsModule`, which imports notifications. A
+  mention of someone who cannot open the page notifies nobody, and the thread
+  routes return them in `mentionedWithoutAccess`. The answer to someone's own
+  access request is the one row sent with `requireAccess: false`, and it carries
+  no title.
+- **Activity.** `ActivityService.list` and `calendar` take the caller's
+  `AccessScope` and pick rows in SQL: `NOT EXISTS` a hidden page for a member,
+  `EXISTS` a visible page for a guest. They page by `(created_at, id)` with the
+  same cursor as before. A row about a deleted page stays visible, as it did.
+- **Live events.** `LiveVisibility` (`events/live-visibility.ts`) is shared by
+  the SSE stream and the WS gateway. It caches each connection's scope for
+  `ACL_CACHE_TTL_MS`, reads a page's chain once per frame and only when some
+  listener's scope hides anything, and judges frames in order. `acl.changed`,
+  published by `AclEventsService` from the access dialog, group membership
+  edits and approvals, names no page. It clears the cache and tells clients to
+  refetch.
+- **Access requests** (`access_requests`, `AccessRequestsService`). Approving
+  grants the decided level on every restricted node on the chain that the
+  requester lacked a grant on (`grantTargets`), because view is intersective.
+  The approver must manage each of those nodes. Managers to notify are the
+  holders of manage grants on the chain plus the workspace admins. A partial
+  unique index allows one pending request per person and node. Expiry is a
+  due check in the API's `AccessRequestSweeper` tick.
 
 ## Credentials
 
@@ -132,6 +242,8 @@ the graph an arbitrary question. It is fenced on five sides:
 4. **Rows without a `workspaceId` are dropped** — deny by default, so a query
    that projects away the tenant column returns nothing rather than everything.
 5. **Audited** into `audit_logs`, readable at `GET /v1/audit-logs` (admin).
+   The row carries `aclBypass: true`: the query reads the stores past every page
+   restriction, as only an admin operator may.
 
 ## WebSockets are a separate door
 
@@ -146,11 +258,44 @@ principal from `users` and calls the same `AccessService.requireRole` an HTTP
 request would, which is what `AuthCoreModule` (AccessService without the guards)
 exists to make possible in the worker.
 
+### The audience clamp
+
+A run whose output is read by more people than the person it acts for reads
+that person's pages **clamped to its audience** (#76):
+`PermissionService.audienceScope(scope, audience)` keeps a page D only when
+`D.restricted_by ⊆ P.restricted_by`, where P is the destination page, or `{}`
+for a workspace-wide audience. Everyone who can read P then passes every
+restricted node on D's chain. The rule is expressed as extra `denied` nodes
+(`clampToAudience` in `access-scope.ts`), so `canSee`, `visibilityWhere`,
+`visibilitySql` and `documentFilterFor` apply it unchanged. A clamped scope
+never bypasses: an admin's run is read by people who are not admins.
+
+| Run | Acts for | Audience |
+| --- | --- | --- |
+| Assistant turn in the pane | the asker | none: the asker's own pages |
+| Chat bot answer in a DM | the linked person | none |
+| Chat bot answer in a group | the linked person | workspace |
+| Chat subscription digest | nobody | workspace (`OPEN_TO_WORKSPACE`) |
+| Agent run (every kind) | the run's owner | workspace: findings are listed to every member, and the sentinel's verdict reaches a pull request |
+| Workflow `search` step | the run's owner | the run's source page |
+
+The assistant's read tools take the audience from `AssistantToolContext.audience`
+and ask `scopeFor` (then `audienceScope`) **on every tool call**, so a grant
+revoked mid-turn holds from the next call. A page outside the scope is "not
+found" to the model. The write tools check the page level (`edit`), and
+creating a page needs edit on its parent, or on the project for a root page
+(`requireCreateUnder`, the same check REST and MCP make). A sentinel asked to
+judge a report on a page the clamp hides fails the run with
+`agent.report.restricted`, which sends the report back to `open` for a person.
+
 ## Modules
 
 `AuthModule` is `@Global()` and registers both guards. `AuthCoreModule` carries
-`AccessService` alone for worker-side use. `UsersModule` and `WorkspacesModule`
-are **API-only**, for the same reason as `GraphQueryModule`: they carry
+`AccessService` and `AuditService` for worker-side use, and
+`PermissionsCoreModule` carries `GroupsService`, `PermissionService` and
+`ResourceAccessService` for every process; `AuthModule` imports it because
+`AclGuard` asks it about the page behind a `:id`.
+`UsersModule`, `WorkspacesModule` and `PermissionsModule` are **API-only**, for the same reason as `GraphQueryModule`: they carry
 controllers, and controllers must not load in the worker
 ([01](01-entrypoints-modules.md)).
 
@@ -165,6 +310,14 @@ GET  /v1/me   PATCH /v1/me                                        self
 GET/POST/PATCH /v1/users                                          @PlatformAdmin()
 GET/POST /v1/workspaces                                           creator → admin+operator
 *    /v1/workspaces/:id/members                                   @Access(viewer|admin, 'workspace')
+GET  /v1/groups?workspaceId=   POST /v1/groups                    @Access(viewer, 'query') | (admin, 'body')
+PATCH|DELETE /v1/groups/:id   PUT /v1/groups/:id/members          @Access(admin, 'group')
+GET  /v1/groups/:id/members                                       @Access(viewer, 'group')
+GET|PUT /v1/documents/:id/access   GET …/access/effective         @Access(viewer, 'document') + manage for PUT/effective
+GET|PUT /v1/projects/:id/access    GET …/access/effective         @Access(viewer, 'project') + manage for PUT/effective
+POST /v1/access-requests   GET /v1/access-requests?workspaceId=   @Access(viewer, 'body'|'query', { guests: true })
+POST /v1/access-requests/:id/approve | deny                     @Access(viewer, 'access-request') + manage on every grant target
+POST /v1/access-requests/:id/cancel                             @Access(viewer, 'access-request', { guests: true }), requester only
 POST /v1/graph/query                                              trusted_operator
 GET  /v1/audit-logs                                               admin
 ```
@@ -225,9 +378,34 @@ at all: the web server answers it only for an internal peer with no
 
 ## Limits
 
-- ACLs stop at the workspace. There are no project-level roles; projects are
-  organizational only ([feature 11](../features/11-projects.md)). The `'project'`
-  guard source is the hook if that ever changes.
+- Page restrictions cover the REST routes, MCP (per-page guard, tree, graph,
+  project and search tools; guests may use the search, tree and project
+  tools), search (all three legs and graph expansion), every assistant tool,
+  agent and workflow runs and chat bots (through the audience clamp above),
+  notifications, the activity feed and live events, and connectors with
+  mirroring on carry a source's restrictions onto the pages they write
+  ([19](../features/19-connectors.md#access-mirroring-76-phase-6)). With
+  mirroring off, the default, imported pages are open to the whole workspace
+  unless restricted by hand. The product view is
+  [48 — Page permissions](../features/48-page-permissions.md), and
+  `test/page-permissions.e2e-spec.ts` exercises it as real users.
+- A live connection may receive frames for up to `ACL_CACHE_TTL_MS` after a
+  restriction tightens if it misses `acl.changed` (e.g. a Redis blip). Every
+  request still reads PG, so this costs at most a few frames of titles, never
+  content.
+- The audience clamp is conservative: two pages restricted to the same people
+  through different nodes still exclude each other. In a workspace whose pages
+  are mostly restricted, agent runs and group chat answers see little.
+- A `@reviewer` mention reply reads only the page and thread it was asked on,
+  so it needs no clamp; it would need one the moment it gains retrieval tools.
+- The clamp vouches for the members who can read the destination, not for a
+  guest granted only that page: a guest reading a thread could be shown a
+  page that is open to every member but not granted to them.
+- Existing assistant threads, agent findings and chat messages that quoted a
+  page before it was restricted are not redacted.
+- Members who cannot open a page get a 403 that confirms it exists (the
+  Confluence trade-off, so they can ask for access). There is no "hidden" flag
+  that would make it a 404 for them.
 - Mail is outbound only: no bounce handling, so a dead address stays unverified
   rather than being flagged.
 - The trusted-operator query is read-only by construction but still trusts the

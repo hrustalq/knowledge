@@ -12,11 +12,14 @@ import {
   KNOWLEDGE_ISSUE_KINDS,
   KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS,
   VERIFICATION_FLAGS,
+  AGENT_LEARNING_MAX_CHARS,
+  AGENT_LEARNING_STATUSES,
   EXPORT_FORMATS,
   SHARE_PASSWORD_MAX_CHARS,
   SHARE_PASSWORD_MIN_CHARS,
   VERIFICATION_NOTE_MAX_CHARS,
   WIKI_SECTIONS,
+  REQUESTABLE_ACCESS_LEVELS,
 } from '@knowledge/contracts';
 import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
@@ -30,6 +33,9 @@ import { SearchService } from '../search/search.service.js';
 import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { AuditService } from '../auth/audit.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { ResourceAccessService } from '../permissions/resource-access.service.js';
+import { AccessRequestsService } from '../permissions/access-requests.service.js';
 import { HistoryService } from '../documents/history.service.js';
 import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
@@ -39,6 +45,7 @@ import { ConnectorWorkItemsService } from '../connectors/connector-work-items.se
 import { RepoWikiService } from '../connectors/repo-wiki.service.js';
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
+import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
@@ -58,7 +65,7 @@ import { renderSkill, type McpWhoami } from './skill.js';
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.21.1';
+export const MCP_SERVER_VERSION = '0.22.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -117,6 +124,7 @@ export class McpService {
     private readonly entities: EntitiesService,
     private readonly graph: GraphService,
     private readonly audit: AuditService,
+    private readonly permissions: PermissionService,
     private readonly history: HistoryService,
     private readonly ingestionAdmin: IngestionAdminService,
     private readonly workflows: WorkflowsService,
@@ -136,6 +144,9 @@ export class McpService {
     private readonly shareLinks: ShareLinksService,
     private readonly exports: ExportService,
     private readonly repoWiki: RepoWikiService,
+    private readonly resourceAccess: ResourceAccessService,
+    private readonly accessRequests: AccessRequestsService,
+    private readonly learnings: AgentLearningsService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -190,19 +201,22 @@ export class McpService {
         },
       },
       async ({ workspaceId, query, limit, projectIds, tags, includeArchived }) => {
-        await guard.ws(workspaceId, 'viewer');
+        const scope = await guard.pages(workspaceId);
         // One merged object: separate spreads would clobber each other.
         const filters = {
           ...(projectIds?.length ? { projectIds } : {}),
           ...(tags?.length ? { tags } : {}),
           ...(includeArchived ? { includeArchived: true } : {}),
         };
-        const res = await this.search.search({
-          workspaceId,
-          query,
-          limit: limit ?? 20,
-          ...(Object.keys(filters).length ? { filters } : {}),
-        });
+        const res = await this.search.search(
+          {
+            workspaceId,
+            query,
+            limit: limit ?? 20,
+            ...(Object.keys(filters).length ? { filters } : {}),
+          },
+          scope,
+        );
         // One batched read for the whole hit list (docs/features/38), and the
         // trace id of this call so an agent can quote it back to
         // knowledge_feedback.
@@ -440,8 +454,7 @@ export class McpService {
         inputSchema: { workspaceId: z.string().uuid() },
       },
       async ({ workspaceId }) => {
-        await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.projects.list({ workspaceId }));
+        return this.json(await this.projects.list({ workspaceId }, await guard.pages(workspaceId)));
       },
     );
 
@@ -579,7 +592,58 @@ export class McpService {
       },
       async ({ workspaceId, projectId }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.documents.getWorkspaceGraph(workspaceId, projectId));
+        return this.json(await this.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId));
+      },
+    );
+
+    // ------------------------------------------------------------ learnings
+    // Team guidance (#70). Reading the approved list is how an external coding
+    // agent picks up what this team has taught its agents; proposing is open to
+    // editors, and only an admin, in the app, makes a proposal active.
+    server.registerTool(
+      'knowledge_list_agent_learnings',
+      {
+        description:
+          'Corrections this team taught its agents ("learnings"), newest first. Active ones are approved by an admin ' +
+          'and are what the platform\'s own agents are told — follow them when you do the same kind of work. ' +
+          'Pass agentKey for one agent\'s list (it includes learnings for every agent).',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          agentKey: z.string().max(64).optional().describe('e.g. reviewer, curator'),
+          status: z.enum(AGENT_LEARNING_STATUSES).optional().describe('Defaults to active'),
+        },
+      },
+      async ({ workspaceId, agentKey, status }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json({
+          learnings: await this.learnings.list(workspaceId, { status: status ?? 'active', ...(agentKey ? { agentKey } : {}) }),
+        });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_propose_agent_learning',
+      {
+        description:
+          'Propose a learning: a correction for one agent (or every agent), in plain words. It is stored as ' +
+          'proposed and reaches no prompt until a workspace admin approves it in the app.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          text: z.string().min(1).max(AGENT_LEARNING_MAX_CHARS),
+          agentKey: z.string().max(64).optional().describe('The agent it teaches; omit for every agent'),
+          projectId: z.string().uuid().optional().describe('Applies only in this project'),
+        },
+      },
+      async ({ workspaceId, text, agentKey, projectId }) => {
+        // The REST twin is `@Access('editor', 'body')`; the proposed status is
+        // fixed here, so no key — whatever its owner's role — can make one active.
+        await guard.ws(workspaceId, 'editor');
+        return this.json(
+          await this.learnings.create(
+            { workspaceId, text, agentKey: agentKey ?? null, projectId: projectId ?? null, status: 'proposed', sourceKind: 'manual' },
+            principal.userId,
+          ),
+        );
       },
     );
 
@@ -687,7 +751,7 @@ export class McpService {
       async ({ workspaceId, entity, relationship, depth }) => {
         await guard.ws(workspaceId, 'viewer');
         return this.json(
-            await this.entities.neighbors(workspaceId, entity, depth ?? 1, relationship ? [relationship] : undefined),
+            await this.entities.neighbors(await guard.scope(workspaceId), entity, depth ?? 1, relationship ? [relationship] : undefined),
           );
       },
     );
@@ -706,7 +770,7 @@ export class McpService {
       },
       async ({ workspaceId, entityId, direction, maxDepth }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.entities.impactAnalysis(workspaceId, entityId, direction ?? 'dependents', maxDepth ?? 3));
+        return this.json(await this.entities.impactAnalysis(await guard.scope(workspaceId), entityId, direction ?? 'dependents', maxDepth ?? 3));
       },
     );
 
@@ -723,7 +787,7 @@ export class McpService {
       },
       async ({ workspaceId, fromEntityId, toEntityId, maxDepth }) => {
         await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.entities.trace(workspaceId, fromEntityId, toEntityId, maxDepth ?? 4));
+        return this.json(await this.entities.trace(await guard.scope(workspaceId), fromEntityId, toEntityId, maxDepth ?? 4));
       },
     );
 
@@ -739,6 +803,55 @@ export class McpService {
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
         return this.json(await this.documents.getDocument(documentId, revisionId));
+      },
+    );
+
+    // Read-only (#76): why a page is or is not open to this caller. Grant
+    // management stays out of MCP — a restriction is a person's decision.
+    server.registerTool(
+      'knowledge_get_page_access',
+      {
+        description:
+          'The restrictions on a page as they apply to you: whether it is restricted itself, the restricted pages and ' +
+          'project above it, and your effective level (view | edit | manage). Grants are listed only when you may ' +
+          'manage the page. Use it when a write is refused, or before telling someone a page is visible to a team.',
+        inputSchema: { documentId: z.string().uuid() },
+      },
+      async ({ documentId }) => {
+        await guard.doc(documentId, 'viewer');
+        return this.json(await this.resourceAccess.get(principal, { type: 'document', id: documentId }));
+      },
+    );
+
+    // A write (#76, phase 5): files a request the page's managers are told
+    // about. Guests pass the workspace gate (`guard.pages`) and are refused
+    // by the service exactly as REST refuses them — a 404 for a page they
+    // cannot open, so asking is not a way to learn that one exists.
+    server.registerTool(
+      'knowledge_request_access',
+      {
+        description:
+          'Ask for view or edit access to a page you were refused. Its managers and the workspace admins are notified, ' +
+          'and you are told when they decide. Only when a person asked for it: the request is sent in their name. ' +
+          'Refused with 409 when you already have that level or already asked.',
+        inputSchema: {
+          documentId: z.string().uuid(),
+          level: z.enum(REQUESTABLE_ACCESS_LEVELS),
+          message: z.string().max(1000).optional().describe('Why the access is needed, shown to the managers'),
+        },
+      },
+      async ({ documentId, level, message }) => {
+        const workspaceId = await this.access.workspaceOfDocument(documentId);
+        await guard.pages(workspaceId);
+        return this.json(
+          await this.accessRequests.create(principal, {
+            workspaceId,
+            resourceType: 'document',
+            resourceId: documentId,
+            level,
+            message: message ?? null,
+          }),
+        );
       },
     );
 
@@ -875,7 +988,7 @@ export class McpService {
       },
       async (query) => {
         await guard.ws(query.workspaceId, 'viewer');
-        return this.json(await this.mergeRequests.listWorkspace(query));
+        return this.json(await this.mergeRequests.listWorkspace(query, await guard.scope(query.workspaceId)));
       },
     );
 
@@ -986,7 +1099,8 @@ export class McpService {
           workspaceId,
           actor: principal.mode === 'dev' ? 'mcp-operator' : principal.userId,
           action: 'graph.query',
-          params: { query, limit: limit ?? 200 },
+          // Past every page restriction, as the REST twin records (#76).
+          params: { query, limit: limit ?? 200, aclBypass: true },
         };
         try {
           const { rows, truncated } = await this.graph.operatorQuery(workspaceId, query, limit ?? 200);
@@ -1025,8 +1139,11 @@ export class McpService {
         if (!revision || revision.document.workspaceId !== workspaceId) {
           throw new Error(`Revision ${atRevisionId} not found in workspace ${workspaceId}`);
         }
+        await guard.doc(revision.documentId, 'viewer');
         const at = await this.history.factsAt(revision.documentId, atRevisionId);
-        const currentNeighborhood = await this.entities.neighbors(workspaceId, entityId, 1).catch(() => null);
+        const currentNeighborhood = await this.entities
+          .neighbors(await guard.scope(workspaceId), entityId, 1)
+          .catch(() => null);
         return this.json({
           entityId,
           atRevisionId,
@@ -1085,9 +1202,8 @@ export class McpService {
         },
       },
       async ({ workspaceId, projectId, parentId, depth, includeArchived }) => {
-        await guard.ws(workspaceId, 'viewer');
         return this.json(
-          await this.documents.getTree(workspaceId, projectId, {
+          await this.documents.getTree(await guard.pages(workspaceId), projectId, {
             parentId: parentId ?? null,
             ...(depth ? { depth } : {}),
             ...(includeArchived ? { includeArchived: true } : {}),
@@ -1127,6 +1243,10 @@ export class McpService {
       async ({ workspaceId, projectId, title, content, parentId, category, templateRef, templateVersion, values }) => {
         await guard.ws(workspaceId, 'editor');
         if (!content && !templateRef) throw new Error('Pass content, or a templateRef to start from.');
+        await this.permissions.requireCreateUnder(await guard.scope(workspaceId), {
+          projectId,
+          ...(parentId ? { parentId } : {}),
+        });
         return this.json(
           await this.documents.createDocument(
             {
@@ -1295,7 +1415,13 @@ export class McpService {
       where: ids ? { id: { in: ids } } : {},
       orderBy: { createdAt: 'asc' },
     });
-    const projects = await Promise.all(reachable.map((w) => this.projects.list({ workspaceId: w.id })));
+    const projects = await Promise.all(
+      reachable.map(async (w) => {
+        // A key pinned to a workspace its person has left reaches no project in it.
+        const scope = await this.permissions.scopeFor(principal, w.id).catch(() => null);
+        return scope ? this.projects.list({ workspaceId: w.id }, scope) : { projects: [], nextCursor: null };
+      }),
+    );
     const readOnly = principal.apiKey?.scope === 'read';
     return {
       userId: principal.userId,
@@ -1308,14 +1434,23 @@ export class McpService {
       workspaces: reachable
         // A key pinned to a workspace its owner has since left reaches nothing.
         .filter((w) => seesAll || roleOf.has(w.id))
-        .map((w) => ({
-          workspaceId: w.id,
-          name: w.name,
-          // What this connection may actually do, not merely the membership
-          // row: a read-only key caps it, and dev/platform admin has no row.
-          role: readOnly ? 'viewer' : (roleOf.get(w.id) ?? 'admin'),
-          projects: projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),
-        })),
+        .map((w) => {
+          const role = roleOf.get(w.id) ?? 'admin';
+          // A guest reads only what is granted to them (#76), so the workspace's
+          // project names are not theirs to list, and a read-only key cannot
+          // lift them to viewer.
+          const guest = role === 'guest';
+          return {
+            workspaceId: w.id,
+            name: w.name,
+            // What this connection may actually do, not merely the membership
+            // row: a read-only key caps it, and dev/platform admin has no row.
+            role: readOnly && !guest ? 'viewer' : role,
+            projects: guest
+              ? []
+              : projects[reachable.indexOf(w)].projects.map((p) => ({ projectId: p.projectId, name: p.name })),
+          };
+        }),
     };
   }
 
@@ -1332,9 +1467,31 @@ export class McpService {
     return {
       ws: (workspaceId: string, role: WorkspaceRole, operator = false) =>
         check(() => this.access.workspaceExists(workspaceId), role, operator),
-      doc: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfDocument(id), role),
-      project: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfProject(id), role),
-      mr: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfMergeRequest(id), role),
+      // A page, its merge request or a project: the same page-level check the
+      // REST guard makes (#76), so an MCP client opens exactly what its person can.
+      doc: async (id: string, role: WorkspaceRole) =>
+        this.permissions.requireResource(principal, await this.access.workspaceOfDocument(id), { type: 'document', id }, role, false),
+      project: async (id: string, role: WorkspaceRole) =>
+        this.permissions.requireResource(principal, await this.access.workspaceOfProject(id), { type: 'project', id }, role, false),
+      mr: async (id: string, role: WorkspaceRole) => {
+        const { workspaceId, documentId } = await this.access.documentOfMergeRequest(id);
+        await this.permissions.requireResource(principal, workspaceId, { type: 'document', id: documentId }, role, false);
+      },
+      /** The caller's page visibility over a workspace, for tools that list pages. */
+      scope: (workspaceId: string) => this.permissions.scopeFor(principal, workspaceId),
+      /**
+       * A viewer tool whose answer is filtered to what the caller may open, so
+       * a guest passes it too and sees only their grants — the twin of
+       * `@Access('viewer', …, { guests: true })` (#76). Returns that scope.
+       */
+      pages: async (workspaceId: string) => {
+        if (principal.mode !== 'dev') {
+          await this.access.requireRole(principal, await this.access.workspaceExists(workspaceId), 'viewer', false, {
+            allowGuest: true,
+          });
+        }
+        return this.permissions.scopeFor(principal, workspaceId);
+      },
       connector: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnector(id), role),
       connectorRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnectorRun(id), role),
       workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfWorkflowRun(id), role),

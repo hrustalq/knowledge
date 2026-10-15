@@ -20,7 +20,7 @@ export type ResolvedRevision =
   | { revisionId: null };
 
 export interface PlanInput {
-  /** Every live (unarchived) page in scope: the project, or the root's subtree. */
+  /** Every live (unarchived, unrestricted) page in scope: the project, or the root's subtree. */
   documents: PlanDocument[];
   /** documentId → what it publishes. A page missing here publishes nothing. */
   revisions: Map<string, ResolvedRevision>;

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AccessService } from './access.service.js';
+import { AuditService } from './audit.service.js';
 
 /**
  * Controller-free, guard-free half of the auth layer (docs/features/20).
@@ -17,7 +18,9 @@ import { AccessService } from './access.service.js';
  */
 @Module({
   imports: [PrismaModule],
-  providers: [AccessService],
-  exports: [AccessService],
+  // AuditService rides along (Prisma only): PermissionService audits an
+  // admin's bypass reads from whichever process asked (#76).
+  providers: [AccessService, AuditService],
+  exports: [AccessService, AuditService],
 })
 export class AuthCoreModule {}

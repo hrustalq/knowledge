@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { verifyHmacSha256 } from '../common/hmac.js';
 
 /**
  * Reading an inbound webhook: verify the signature, then parse the body.
@@ -30,12 +30,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  */
 export function verifyHubSignature(headers: Record<string, string>, rawBody: string, secret: string): boolean {
   const header = headers['x-hub-signature-256'] ?? headers['x-hub-signature'] ?? '';
-  const sent = header.replace(/^sha256=/, '');
-  if (!sent) return false;
-  const expected = createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex');
-  const a = Buffer.from(sent, 'hex');
-  const b = Buffer.from(expected, 'hex');
-  return a.length === b.length && timingSafeEqual(a, b);
+  return verifyHmacSha256(rawBody, secret, header);
 }
 
 /** Parse a payload we did not write. Anything that is not an object reads as absent. */

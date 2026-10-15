@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { GraphModule } from '../graph/graph.module.js';
 import { EventsModule } from '../events/events.module.js';
+import { EventsSubscriberModule } from '../events/events-subscriber.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AssistantReadToolsModule } from '../assistant/assistant-read-tools.module.js';
 import { WebResearchModule } from '../assistant/web-research.module.js';
@@ -17,6 +19,8 @@ import { AgentQueueModule } from './agent-queue.module.js';
 import { AgentExecutor } from './agent.executor.js';
 import { AgentProcessor } from './agent.processor.js';
 import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
+import { AgentTriggerCoreModule } from './agent-trigger-core.module.js';
+import { AgentTriggerListener } from './agent-trigger.listener.js';
 
 /**
  * Worker-only half of the agents layer (docs/features/20) — imported by
@@ -68,6 +72,8 @@ import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
     // The sentinel (docs/features/35) searches once per run for the pages a
     // change reads like — the hand-written ones no connector link reaches.
     SearchCoreModule,
+    // The owner's page visibility and the audience clamp (#76).
+    PermissionsCoreModule,
     // The surveyor (docs/features/38, phase 4) embeds the questions answers
     // failed on, to cluster them — the same provider the ingestion worker
     // indexes with, so a question and the chunk that would answer it share a
@@ -75,7 +81,11 @@ import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
     EmbeddingModule,
     DocumentsCoreModule,
     GlossaryCoreModule,
+    // Event triggers (#70): the bus listener is here, the service it fires
+    // through is in the core module so the API can fire it too.
+    EventsSubscriberModule,
+    AgentTriggerCoreModule,
   ],
-  providers: [AgentExecutor, AgentProcessor, AgentScheduleSweeper],
+  providers: [AgentExecutor, AgentProcessor, AgentScheduleSweeper, AgentTriggerListener],
 })
 export class AgentWorkerModule {}

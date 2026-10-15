@@ -13,7 +13,9 @@ attach entities and reach documents that no vector would have surfaced.
 **All graph queries go through `GraphService`.** It is the single injection point
 for the mandatory workspace predicate ([plan.md §6](../../plan.md) security
 note) — there is no second path to ArcadeDB, and adding one would remove the
-only guarantee that a query cannot cross a tenant boundary.
+only guarantee that a query cannot cross a tenant boundary. Its read methods
+also take a required `DocumentAclFilter`, so the same single point is where a
+page restriction reaches the graph ([§Page restrictions](#page-restrictions)).
 
 ## Only the live projection is served
 
@@ -66,6 +68,47 @@ PostgreSQL**, under a 5× candidate over-fetch. The graph holds semantic facts,
 not UI structure, so project and category membership are not modelled as edges —
 which means filtering cannot happen during the graph query and must happen after
 it, with enough candidates over-fetched that a filtered page is still full.
+
+## Page restrictions
+
+`SearchService.search(dto, scope)` takes a required `AccessScope` (#76), and so
+does every caller: the HTTP and MCP routes pass the person's, a system job passes
+`systemScope(workspaceId)`, which is greppable on purpose.
+
+- **The stores get a list.** `PermissionService.documentFilterFor(scope)` reads
+  PG once per search and returns a `DocumentAclFilter` (`common/document-acl.ts`):
+  `all`, `deny` (a member's hidden pages) or `allow` (a guest's reachable pages).
+  `GraphService.searchChunks`, `getDocumentIdsByTags` and
+  `getWorkspaceRelationGraph` and the fulltext provider's `search` all require
+  one. Up to `ACL_DENY_LIST_MAX` ids it goes into the query (`documentId IN` /
+  `NOT IN` in ArcadeDB, a `terms` filter in OpenSearch); past that the store
+  filters what it scanned in memory, and search over-fetches by
+  `SEARCH_ACL_OVERFETCH`.
+- **PG decides.** The join that loads titles and trust applies
+  `visibilityWhere(scope)` itself, and a hit whose page it does not return is
+  dropped, **for every reader**. That covers pages deleted from PG whose chunks
+  outlived them in a store, which used to come back as "(unknown)" for a reader
+  who hid nothing and outrank the real answer. Graph expansion's related pages
+  pass the same check. A store that lagged or ignored the filter can lose
+  recall, never show a page.
+- **The limit holds.** If that post-filter dropped hits, left fewer than `limit`
+  and a leg came back full, one refill round runs with the fetch doubled, capped
+  at `SEARCH_ACL_MAX_FETCH`. `search.executed` records `aclFiltered`.
+- **Entities follow their pages.** `getWorkspaceRelationGraph` drops a hidden
+  page's edges and then every entity no remaining edge names, so a restricted
+  page cannot leak a name it introduced through expansion, the graph view or
+  entity lists. With `all` it returns exactly what it did before.
+- **Stamps are a prefilter.** Indexing stamps `aclNodes` (the page's
+  `restricted_by`) and `aclRestricted` on the Document vertex, every chunk and
+  every OpenSearch row. `AclRestampSweeper` (worker, `ACL_RESTAMP_TICK_MS`)
+  rewrites them for pages whose `acl_version` is ahead of
+  `acl_stamped_version`, guarded on the version it stamped; nothing is
+  re-embedded. OpenSearch falls back to `must_not aclNodes ∈ denied` past the
+  list cap; nothing else reads the stamps yet. They are groundwork for an HNSW
+  pre-filter.
+- `getDocumentRelations` takes no filter: it is per page, reached through a
+  route the guard has already checked, and its edges point at entities, not
+  pages.
 
 ## Trust re-rank
 
@@ -192,18 +235,33 @@ the allowlist check** — it is the only thing standing between a relation type 
 injection.
 
 Operator access to the raw graph is a separate, audited path; see
-[06 — Auth & ACLs](06-auth-acl.md).
+[06 — Auth & ACLs](06-auth-acl.md). It is the one graph read that ignores page
+restrictions, since it is open only to admins, who bypass them anyway; its
+audit row carries `aclBypass: true`.
 
 ## MCP
 
 `knowledge_search`, `knowledge_find_relations`, `knowledge_impact_analysis`,
-`knowledge_trace_relation`, `knowledge_get_historical_context`.
+`knowledge_trace_relation`, `knowledge_get_historical_context`. Each passes the
+caller's `AccessScope`, exactly as the REST route it mirrors does; guests may
+use `knowledge_search`.
 
 ## Limits
 
 - Cosine in Node is O(chunks) per query; it is correct, not fast, and is the
   first thing to replace under load.
 - The 5× over-fetch is a heuristic. A filter matching very few documents in a
-  large workspace can still return a short page.
+  large workspace can still return a short page. The same holds for a reader
+  who can open only a small slice of a large workspace: the one refill round is
+  capped at `SEARCH_ACL_MAX_FETCH`.
+- Past `ACL_DENY_LIST_MAX` ids, a deny or allow list is applied to what the
+  vector leg scanned (at most `CHUNK_SCAN_LIMIT` chunks), not inside the query,
+  so recall can fall for a reader who sees a small slice of a large workspace.
+  The real fix is an HNSW index pre-filtered on the `aclNodes` stamps, which
+  exist for that reason.
+- `make backtest ARGS="--generate --as <userId>"` measures known-item recall
+  through one person's scope. It asks only about the pages that person can
+  open, so a restricted page is never counted as a miss. Run it beside the
+  unfiltered `--generate` to see what the filter costs a reader.
 - Entity keys are free-form strings (`service:identity`); nothing normalises two
   spellings of the same entity into one node.

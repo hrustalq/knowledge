@@ -203,9 +203,17 @@ describe('groups', () => {
     await h.svc.receive(integration, inbound({ isDm: false, chatId: '-100', mentioned: true }));
     expect(h.assistant.runChatTurn).toHaveBeenCalledWith(
       'thread-1',
-      { content: 'How do we deploy?', agentKey: 'support', projectId: 'p-1' },
+      // A group reads the answer, so retrieval is clamped to what every member can open (#76).
+      { content: 'How do we deploy?', agentKey: 'support', projectId: 'p-1', audience: { kind: 'workspace' } },
       DEV_PRINCIPAL,
     );
+  });
+
+  it('answers a direct message with the asker’s own pages, unclamped (#76)', async () => {
+    const h = harness({});
+    await h.svc.receive(integration, inbound({ isDm: true }));
+    expect(h.assistant.runChatTurn).toHaveBeenCalledOnce();
+    expect(h.assistant.runChatTurn.mock.calls[0]![1]).not.toHaveProperty('audience');
   });
 
   it('/bind needs a linked workspace admin', async () => {

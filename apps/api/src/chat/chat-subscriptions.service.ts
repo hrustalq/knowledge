@@ -20,6 +20,8 @@ import { ChatAdapterRegistry } from './adapters/chat-adapter.registry.js';
 import type { ChatUpdatesView } from './adapters/chat-adapter.types.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
 import type { CreateChatSubscriptionDto, UpdateChatSubscriptionDto } from './chat.dto.js';
+import { UNFILTERED } from '../common/document-acl.js';
+import { OPEN_TO_WORKSPACE } from '../permissions/access-scope.js';
 
 /**
  * Rows younger than this are left for the next tick. `created_at` is stamped
@@ -281,7 +283,9 @@ export class ChatSubscriptionsService {
     const wanted = new Set(kinds);
     const revisions = await this.revisionFacts(rows, wanted.has('merge-request-merged'));
     const tagged = tags.length
-      ? await this.graph.getDocumentIdsByTags(sub.workspaceId, tags.map((tag) => `tag:${tag}`))
+      ? // Only narrows which activity rows match; who may read the digest is
+        // the audience clamp on `docs` below.
+        await this.graph.getDocumentIdsByTags(sub.workspaceId, tags.map((tag) => `tag:${tag}`), UNFILTERED)
       : null;
 
     let end = rows.length;
@@ -300,7 +304,9 @@ export class ChatSubscriptionsService {
     const docs = new Map(
       (
         await this.prisma.document.findMany({
-          where: { id: { in: docIds }, workspaceId: sub.workspaceId, archivedAt: null },
+          // A digest is posted into a chat whose readers no grant can vouch
+          // for (#76), so it names only pages every member can open.
+          where: { id: { in: docIds }, workspaceId: sub.workspaceId, archivedAt: null, ...OPEN_TO_WORKSPACE },
           select: { id: true, title: true },
         })
       ).map((d) => [d.id, d.title]),

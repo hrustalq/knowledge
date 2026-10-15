@@ -11,6 +11,8 @@
   "skill": "skill id",
   "plugin": "plugin id",
   "provider": "provider id",
+  "agentTrigger": "agent trigger id",
+  "agentLearning": "agent learning id",
   "glossaryTerm": "glossary term id",
   "import": "import id",
   "workflow": "workflow id",
@@ -29,5 +31,7 @@
   "chatIntegration": "chat bot id",
   "chatBinding": "chat binding id",
   "chatSubscription": "chat subscription id",
-  "chatIdentity": "linked chat account id"
+  "chatIdentity": "linked chat account id",
+  "group": "group id",
+  "accessRequest": "access request id"
 }

@@ -281,6 +281,13 @@ function world(opts: { provider?: string; model?: 'none' | 'json' | 'throws'; co
     {} as never,
     embedding as never,
     config as never,
+    // Page permissions (#76): the owner sees everything, so the clamp is a no-op.
+    {
+      scopeFor: async (_p: unknown, workspaceId: string) => ({ workspaceId, bypass: true }),
+      audienceScope: async (scope: unknown) => scope,
+    } as never,
+    // Learnings (#70): none, so the guidance is the skills block alone.
+    { promptFor: async () => '', dismissedPrompt: async () => '' } as never,
   );
   return { executor, prisma, embedding, client, reports, report };
 }

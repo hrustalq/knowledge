@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { GraphModule } from '../graph/graph.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { EntitiesController } from './entities.controller.js';
 import { EntitiesService } from './entities.service.js';
 
 @Module({
-  imports: [GraphModule],
+  imports: [GraphModule, PermissionsCoreModule],
   controllers: [EntitiesController],
   providers: [EntitiesService],
   exports: [EntitiesService],

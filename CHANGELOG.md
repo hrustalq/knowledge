@@ -13,6 +13,358 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.22.0] — 2026-10-15
+
+### Added
+
+- **User groups** in **Settings → Access → Groups**: named sets of workspace
+  members that page and project restrictions will be granted to. Workspace
+  admins create, rename and delete groups and add or remove members. Everyone
+  else in the workspace can see them. Groups mirrored from a connector or
+  provisioned by SCIM are shown read-only, and the API answers 409 to an edit.
+  Removing someone from the workspace also removes them from its groups. The
+  routes are `/v1/groups` and `/v1/groups/:id/members`. (#76)
+- A **guest** workspace role, below viewer. A guest can open only pages and
+  projects shared with them or one of their groups, and sees just those in the
+  page tree, the page list, the project list and search results. Every other
+  page answers 404. A guest's activity feed shows only rows about those pages,
+  and they are notified only about those pages. Other workspace-level routes,
+  such as the member roster and settings, still refuse a guest. A guest
+  cannot be made a reviewer, a page owner or a member of a members-only
+  site. MCP `knowledge_whoami` reports the role. (#76)
+- **Page and project restrictions.** Anyone who can edit a page can restrict it
+  from **Access** in the page header or the tree menu, granting view, edit or
+  manage to people or groups; workspace admins can restrict a whole project.
+  A restricted page is hidden, with everything under it, from everyone it does
+  not name: it leaves the tree, page lists, project counts and overviews,
+  merge-request lists, the knowledge-health dashboard, profiles, the graph
+  views and entity lookups, and its ancestors' breadcrumbs for a guest. A child
+  can narrow its parent's restriction but never reopen it, and a page moved
+  under a restricted parent is restricted at once. The workspace role stays
+  the ceiling (a viewer with an edit grant still only reads), and workspace
+  admins still see everything; each time they open a restricted page they were
+  not granted, it is recorded in the audit log. Opening a restricted page
+  without access answers 403 with `details.canRequestAccess` and no title, and
+  **Access → Who can see this** lists everyone who can, with their level. A
+  restricted page cannot be shared by public link, an existing link to it stops
+  working, and published sites, `llms.txt` and exports leave it out for anyone
+  who may not open it. MCP's page, merge-request and project tools and its
+  tree, graph and project listings apply the same rules. Routes:
+  `GET|PUT /v1/documents/:id/access`, `GET /v1/documents/:id/access/effective`,
+  and the same under `/v1/projects/:id`. (#76)
+- **Search respects page restrictions.** `POST /v1/search`, the assistant's
+  `search_knowledge` tool, **Related pages** in the editor and MCP
+  `knowledge_search` return only pages the caller can open, in semantic,
+  keyword and hybrid mode. Graph expansion neither walks through a hidden page
+  nor lists an entity that only hidden pages mention, and the same holds for
+  the graph view and entity lists. A change to a restriction applies to the
+  next search. A search still fills its `limit` when enough visible pages
+  match. (#76)
+- **The assistant, agents, workflows and chat bots respect page
+  restrictions.** Every assistant tool reads only pages the person asking can
+  open, checked again on each tool call, so access removed during an answer
+  holds from the next step. A page they cannot open is "not found" to the
+  model. Proposing an update or a relation change needs edit on the page.
+  Output that more people read than the person it acts for is held to what
+  those readers could open: agent runs (whose findings every member sees, and
+  whose pull-request comments leave the workspace) and bot answers in a group
+  chat use only pages open to the whole workspace. Chat digests list only
+  those pages, and a workflow's search step uses only pages at least as open as
+  the page the workflow runs on. MCP guests can now use `knowledge_search`,
+  `knowledge_list_documents` and `knowledge_list_projects`, scoped to their
+  grants, and the new read tool `knowledge_get_page_access` tells an agent why
+  a page is or is not open to it. (#76)
+
+- **Access requests.** Someone refused a page or project can ask for view or
+  edit right on the refusal screen, with a note. The people who manage it and
+  the workspace admins are notified. They approve (choosing the level) or
+  decline (optionally saying why) under **Settings → Access → Requests**, and
+  the requester is notified of the answer. A pending request expires after 30
+  days. Approving grants the level on every restricted page or project that
+  kept the requester out, since a grant under a closed parent would admit no
+  one. Asking twice answers 409, and a guest asking about a page they cannot
+  open gets a 404, so a request is never a way to learn that a page exists.
+  New notification category **Access**. MCP gains `knowledge_request_access`,
+  a write tool hidden from read-only keys. Routes: `POST|GET
+  /v1/access-requests` and `POST /v1/access-requests/:id/approve|deny|cancel`.
+  (#76)
+- **Notifications, the activity feed and live updates respect page
+  restrictions.** A notification about a page reaches only people who can open
+  it, however they came to watch it. Naming someone in a comment who cannot
+  open the page does not notify them; the comment response lists them in
+  `mentionedWithoutAccess`, and the page warns the author and offers
+  **Access…**. The activity feed and the profile calendar leave out rows about
+  pages the reader cannot open, and its cursors still page correctly. SSE and
+  WebSocket clients receive no events about pages they cannot open, and every
+  client gets an `acl.changed` event (naming no page) when a restriction, a
+  grant or a group's membership changes, so open trees and lists refresh. A
+  person granted access directly from the Access dialog is notified. (#76)
+
+- **Connectors can mirror source permissions.** A connector's new **Access**
+  tab (workspace admins) switches on access mirroring. A Confluence page with a
+  read restriction, on itself or an ancestor, is imported restricted to the
+  same people and groups, and a page from a private GitHub repository to its
+  collaborators and teams; a public repository's pages stay open. Upstream
+  groups appear as read-only groups. People are matched by a linked GitHub
+  account or a verified email, and anyone unmatched is listed on the tab, where
+  an admin can map them by hand. **Mirror, fail closed** also admits the
+  connector's owner wherever someone is unmatched. Notion and Jira pages can be
+  restricted to one chosen group. Permissions are re-read on their own
+  interval without fetching content, so a restriction lifted at the source is
+  lifted here on the next access sync; **Sync access now** queues one at once.
+  Grants added by hand on a mirrored page are kept, and the page's Access
+  dialog shows the mirrored ones read-only. The GitHub access card lists
+  `members: read` for this. Routes: `GET|PUT /v1/connectors/:id/acl`,
+  `PUT /v1/connectors/:id/acl/identities/:identityId` and
+  `POST /v1/connectors/:id/acl/sync`. (#76)
+- `make backtest ARGS="--generate --as <userId>"` measures known-item search
+  recall as one person sees it, through their page restrictions. Pages they
+  cannot open are left out of the question set, not counted as misses. Page
+  permissions are written up in `docs/features/48-page-permissions.md`. (#76)
+- Agent schedules can now run at a time of day: **Daily** at HH:MM, or
+  **Weekly** on chosen weekdays (Mon–Fri at 09:00, say), in an IANA timezone
+  that defaults to the browser's. The editor in **Settings → AI → Agents**
+  shows the next run, and so does `nextRunAt` on `GET /v1/ai/agents`. A run
+  starts within five minutes of its slot. If the worker was down across
+  several slots, the schedule runs once when it comes back, not once per missed
+  slot. Changing a schedule never fires a slot the change moved into the past.
+  Interval schedules work as before. `PATCH /v1/ai/agents/:key` takes
+  `scheduleKind`, `scheduleTime`, `scheduleWeekdays` and `scheduleTimezone`.
+  (#70)
+- `POST /v1/ai/agents/:key/run` takes `documentIds` (up to 20), which limits
+  a curator, reviewer or glossarist run to those pages instead of the most
+  recent ones. Pages the caller cannot open are skipped. Any other agent
+  answers 400. (#70)
+- **Agent triggers** start a background run when something happens in the
+  workspace: a page is merged, a page is updated (a new revision indexed on its
+  default branch, or a named branch), a merge request or a connected
+  repository's pull request is opened, or a connector finishes a sync. Add
+  them in **Settings → AI → Agents**, in an agent's dialog, optionally narrowed
+  to a project, page categories, connectors or a branch. A trigger is off until
+  an admin enables it, and its runs execute and bill as whoever enabled it. A
+  page-reading agent's run reads just the page the event is about. The same
+  page, merge request or connector starts at most one run per cooldown (60
+  minutes unless set), never while a run of that agent for it is still going,
+  and a re-index of a revision that already fired starts nothing. Runs show
+  what started them in **Runs**. Routes: `GET /v1/ai/agents/triggers`,
+  `POST /v1/ai/agents/:key/triggers`, `PATCH|DELETE /v1/ai/agents/triggers/:id`
+  (admin). (#70)
+- **Webhook triggers** let any system that can sign a request start an agent
+  run. Add a "A signed webhook arrives" trigger to an agent, press **Create
+  secret**, and give the sender the URL and the secret, which is shown only
+  once. The sender POSTs JSON to `/v1/ai/agents/triggers/:id/webhook` with
+  `X-Knowledge-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<body>">`,
+  `X-Knowledge-Timestamp` (Unix seconds, within 5 minutes of the server) and
+  `X-Knowledge-Delivery` (a unique id). The answer is 202 with the run id, or
+  with the reason nothing started. A wrong signature or a stale timestamp
+  answers 401, a body over 64 KB answers 413, and a delivery id seen before
+  starts nothing, however long after. The body reaches the model only as
+  untrusted context. Rotating the secret stops the old one at once:
+  `POST /v1/ai/agents/triggers/:id/rotate-secret` (admin). (#70)
+- **Mention triggers.** Give a curator, reviewer or glossarist a "The agent is
+  mentioned in a comment" trigger, and mentioning it in a page or merge-request
+  discussion starts its background pass over that page instead of a chat
+  reply. The run belongs to, and bills, the person who mentioned the agent. The
+  agent's comment says it is working and, when the run ends, fills in with the
+  run's summary, its first findings and a link to the run. If the run cannot
+  start (one is already going over the page, the workspace is at its limit, the
+  budget is spent), the comment says so. Only editors start runs this way;
+  viewers, and every mention of an agent without such a trigger, get the
+  ordinary reply as before. (#70)
+- A **Digest** agent summarises what changed since its last successful run,
+  or over the last 7 days if it has none (31 days at most). The summary
+  covers new pages, pages whose default branch changed, merged changes and how
+  many findings other agents reported. It lists only pages the whole workspace
+  can open. The run proposes the digest as a page. **Create page** on its first
+  finding publishes it as you, in the workspace's first project. Every link in
+  that page points to a page that exists. The model writes only the summary and
+  the highlights, and any link it invents is removed. Without a model
+  configured, the digest still lists the changes. (#70)
+- **Recipes** in **Settings → AI → Agents** set an agent up in one step:
+  **Weekly digest** runs the digest on Mondays at 09:00. **Freshness sweep**
+  runs the curator, told to look for stale pages, on Mondays at 08:00 and after
+  every connector sync. **Glossary suggester** runs the glossarist on each
+  merged page. Schedules use your browser's timezone. A recipe adds its schedule
+  and triggers switched off, then opens the agent so you can turn them on. Its
+  runs execute and bill as whoever turns them on. Applying a recipe again
+  changes nothing: an agent that already has a schedule, or a trigger for the
+  same event, keeps it. Route: `POST /v1/ai/agents/recipes/:recipe/apply`
+  (admin). (#70)
+- **Learnings**: teach an agent a correction and it is told it on later
+  turns. **Teach agent** on an agent's reply in a page comment or review
+  thread, **Dismiss → Remember why** on a finding, or **Settings → AI →
+  Learnings** writes one, for one agent or every agent and optionally only in
+  one project. What an editor writes is *proposed* and reaches no prompt; a
+  workspace admin approves, rewords or archives it under **Learnings**. Active
+  learnings are added to the agent's chat turns, its @mention replies and its
+  background runs, newest first, up to `AGENT_LEARNINGS_MAX` per prompt.
+  Routes: `GET /v1/ai/agents/learnings` (viewer), `POST /v1/ai/agents/learnings`
+  (editor; `status: "active"` needs an admin), `PATCH
+  /v1/ai/agents/learnings/:id` (admin). MCP gains
+  `knowledge_list_agent_learnings` (active by default, open to read-only keys)
+  and `knowledge_propose_agent_learning` (editor, proposes only). (#70)
+- **Dismiss** a finding in **Settings → AI → Runs** when it is wrong or not
+  worth acting on. It is hidden from the run (a switch shows dismissed ones),
+  and the agent's next runs are given the titles of findings dismissed on its
+  last ten runs and told not to report them again. Dismissing twice changes
+  nothing and proposes at most one learning. Route:
+  `POST /v1/ai/agents/runs/:id/findings/:index/dismiss` (editor). (#70)
+- **Repository guidance files become skills.** After each successful sync of a
+  codebase or Markdown/Git connector, its `AGENTS.md`, `CLAUDE.md`,
+  `.cursorrules`, `.github/copilot-instructions.md` and `.cursor/rules/*.mdc`
+  (at the repository root and at the connector's subdirectory) are imported
+  into **Settings → AI → Skills** as **disabled** skills with no trigger words,
+  marked with the connector and path. Nothing reaches a prompt until an admin
+  enables one. A file over 64 KB is skipped, at most 20 are read, and one
+  longer than a skill's 8 000-character budget is cut at a line break, which
+  its description says. While a skill is disabled it follows the repository;
+  once enabled, a commit never changes its text — the new version shows as
+  **Upstream changed**, with a diff and **Accept upstream**. A file deleted
+  upstream disables its skill and marks it **Removed upstream**. The connector
+  page has an **Agent guidance** card with **Import now**. Routes:
+  `POST /v1/connectors/:id/guidance/import` and
+  `POST /v1/ai/skills/:id/accept-upstream` (both admin). (#70)
+- `GET /v1/ai/agents/choices` takes `scope=all`, which names every agent in the
+  workspace (still names and descriptions only, still open to viewers). The
+  default is unchanged, so the composer and chat-bot pickers offer the same
+  agents as before. With it, a learning for the curator or the digest, and a
+  mention reply from a background agent, show the agent's name rather than its
+  key, and **Teach agent** offers every agent. Triggers, recipes, learnings and
+  repository guidance are written up in `docs/features/49-agent-triggers.md`.
+  (#70)
+
+### Changed
+
+- Deleting a connector, or switching its access mirroring off, now turns the
+  access it mirrored into ordinary grants and groups that admins can edit.
+  Pages it restricted stay restricted. (#76)
+- Assigning a merge-request reviewer who cannot open the page now answers 409
+  with `details.reason = access.usersWithoutView` and the user ids. (#76)
+- Creating a page under a parent now needs edit on that parent, or on the
+  project for a top-level page, from `POST /v1/documents`, MCP
+  `knowledge_create_document` and the assistant. In a workspace without
+  restrictions every editor still has it. (#76)
+- In a workspace with restricted pages, agents (curator, reviewer, glossarist,
+  cartographer, archaeologist, surveyor, sentinel) no longer read them, even
+  when an admin owns the run. A report on a restricted page is not judged by
+  the sentinel: its run fails and the report returns to `open` for a person
+  with access. (#76)
+
+- Deleting a custom agent or a skill now asks for confirmation first. For a
+  skill imported from a repository, the confirmation says it comes back,
+  disabled, on the next sync. (#70)
+
+### Fixed
+
+- The **Direction** row on a connector's page showed a raw message key
+  (`connectors.directionPull in`) instead of the direction. (#70)
+- Search no longer returns hits from pages that were deleted. Their chunks
+  could stay behind in ArcadeDB or OpenSearch and came back titled
+  "(unknown)", often ranked above the page actually asked for; on the demo
+  workspace, a page's own title found it first 0 times in 30. Only readers who
+  had a restricted page hidden from them were spared, so results also differed
+  by who was asking. Those hits are now dropped for everyone, in graph
+  expansion too, and the same 30 titles find their page first 19 times. (#76)
+
+### Operations
+
+- Migration `20261025100000_ai_skill_repo_source` adds nullable provenance
+  columns to `ai_skills` (plus `source`, defaulting to `manual`) and a unique
+  index on (workspace, connector, path); the previous image runs against it
+  unchanged. If the code is rolled back, imported skills stay as ordinary
+  skills and stop following their repository. The import runs in the **API**
+  after it hears a sync finish on the Redis bus, which does not redeliver:
+  a sync that finishes while the API is down is read on the next sync or by
+  **Import now**. Each import downloads the repository archive once more. One
+  more optional setting, `REPO_GUIDANCE_IMPORT_ENABLED` (true), turns the
+  after-sync import off; **Import now** still works.
+- Migration `20261024100000_agent_learnings` only adds the `agent_learnings`
+  table, so the previous image runs against it unchanged. A dismissal is
+  written into the existing `agent_runs.findings` JSON. If the code is rolled
+  back, learnings stop reaching prompts and dismissed findings show again, and
+  both return when the release is restored. One more optional setting,
+  `AGENT_LEARNINGS_MAX` (20): active learnings one prompt takes; `0` turns them
+  off.
+- Agent triggers are off server-wide until `AGENT_TRIGGERS_ENABLED=true` is set
+  **for both the API and the worker**: the worker hears bus events, the API
+  serves the webhook route (404 while off) and starts mention runs (mentions
+  get the ordinary reply while off). The trigger editor says when it is off.
+  A webhook secret is stored encrypted, so creating one needs
+  `SETTINGS_ENCRYPTION_KEY`; without it the button answers 409. Two more
+  optional settings: `AGENT_WEBHOOK_MAX_BYTES` (65536), the largest delivery
+  accepted, and `AGENT_WEBHOOK_TOLERANCE_SECONDS` (300), how far a delivery's
+  timestamp may be from the server clock. Two more optional
+  settings: `AGENT_TRIGGER_MAX_ACTIVE` (5), the triggered runs one workspace
+  may have in flight before further events are skipped, and
+  `AGENT_TRIGGER_COOLDOWN_MINUTES` (60), the cooldown a new trigger starts
+  with. Triggers hear the Redis event bus, which does not redeliver: an event
+  published while the worker is down starts no run.
+- Migration `20261023100000_agent_trigger_webhooks` adds a nullable
+  `agent_triggers.webhook_secret`, widens the `agent_triggers_event_check`
+  constraint to the two new events, and adds a nullable, indexed
+  `agent_run_id` to `document_comments` and `merge_request_comments`. Nothing
+  is backfilled. If the code is rolled back, webhook and mention triggers stop
+  firing (the previous image ignores rows it does not know), and an agent reply
+  still waiting on a run when that happens is timed out by the old 10-minute
+  sweep.
+- Migration `20261022100000_agent_triggers` adds the `agent_triggers` table,
+  two nullable columns on `agent_runs` (`trigger_id`, `subject_key`) and two
+  indexes. Nothing is backfilled and the previous image ignores all of it. If
+  the code is rolled back, triggers stop firing; runs they started stay
+  listed, with a trigger label the old web shows as a raw key.
+- Migration `20261021100000_agent_schedule_time_of_day` adds five nullable
+  columns to `ai_agents` (`schedule_kind`, `schedule_time`,
+  `schedule_weekdays`, `schedule_timezone`, `schedule_changed_at`) and two
+  CHECK constraints. Nothing is backfilled: a null kind reads as an interval.
+  The previous image ignores the columns. If the code is rolled back, daily
+  and weekly schedules stop firing, and interval schedules keep running.
+- One more optional setting, `CONNECTOR_ACL_SYNC_DEFAULT_MIN` (60): minutes
+  between access syncs for a connector that mirrors permissions and sets no
+  interval of its own. Access syncs run from the worker's existing connector
+  schedule tick, so `CONNECTOR_SCHEDULE_ENABLED=false` stops them too.
+- Migration `20261020100000_connector_acl` adds four columns to `connectors`
+  (`acl_mode` defaults to `off`), two to `connector_links`, one to
+  `connector_run_items`, an index on `access_grants.connector_id` and the
+  `external_identities` table. All are additive; the previous image ignores
+  them. Rolling the code back leaves mirrored restrictions in place but stops
+  refreshing them, and the rolled-back Access dialog would save mirrored grants
+  back as manual ones.
+- Two more optional settings: `ACL_CACHE_TTL_MS` (5000), how long a live
+  connection trusts the page visibility it computed before reading it again
+  (an `acl.changed` event clears it at once), and `ACCESS_REQUEST_TTL_DAYS`
+  (30). The API runs a five-minute tick that expires pending requests and
+  tells each requester.
+- Migration `20261019100000_access_requests` only adds the `access_requests`
+  table, with a partial unique index allowing one pending request per person
+  and page. The previous image never reads it and runs against it unchanged.
+  Rolling the code back leaves pending requests unanswered until the release
+  is restored.
+- Five new settings, all optional: `ACL_DENY_LIST_MAX` (5000),
+  `SEARCH_ACL_OVERFETCH` (5), `SEARCH_ACL_MAX_FETCH` (500),
+  `ACL_RESTAMP_TICK_MS` (30000) and `ACL_RESTAMP_BATCH` (200). The worker now
+  runs a re-stamp tick that copies each page's restrictions onto its chunks in
+  ArcadeDB and OpenSearch, without re-embedding anything. With
+  `FULLTEXT_PROVIDER=opensearch`, the first search or indexing after the
+  deploy adds two fields (`aclNodes`, `aclRestricted`) to the existing index
+  mapping. That change is additive, needs no reindex, and the previous image
+  ignores the fields. Search always decides visibility from Postgres, so a
+  stamp that lags only costs recall, and only past `ACL_DENY_LIST_MAX` hidden
+  pages.
+- Migration `20261018100000_page_restrictions` adds the `access_grants` table
+  and new columns with defaults on `documents` (`restricted`, `restricted_by`,
+  `acl_version`, `acl_stamped_version`) and `projects` (`restricted`), plus a
+  GIN index on `documents.restricted_by`. Nothing is restricted when it runs,
+  so no backfill is needed and the previous image runs against it unchanged.
+  **Rolling the code back does not roll restrictions back with it:** the
+  previous image ignores these columns, so every restricted page becomes
+  readable by every member (and guests are refused everywhere) until the
+  release is restored.
+- Migration `20261017100000_user_groups` only adds two tables
+  (`user_groups`, `user_group_members`), so the previous image runs against it
+  unchanged. `workspace_members.role` now also accepts `guest`. That column has
+  no constraint, so no DDL is needed for it. Rolling the code back leaves any
+  guest members refused everywhere, which is the same as what they can open now.
+
 ## [0.21.1] — 2026-10-14
 
 ### Changed
@@ -1904,7 +2256,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.21.1...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/hrustalq/knowledge/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/hrustalq/knowledge/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/hrustalq/knowledge/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/hrustalq/knowledge/compare/v0.19.1...v0.20.0

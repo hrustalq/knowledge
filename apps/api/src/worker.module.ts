@@ -9,6 +9,7 @@ import { AgentWorkerModule } from './agents/agent-worker.module.js';
 import { MailWorkerModule } from './mail/mail-worker.module.js';
 import { PublishingWorkerModule } from './publishing/publishing-worker.module.js';
 import { ExportWorkerModule } from './export/export-worker.module.js';
+import { AclWorkerModule } from './permissions/acl-worker.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ExportWorkerModule } from './export/export-worker.module.js';
     MailWorkerModule,
     PublishingWorkerModule,
     ExportWorkerModule,
+    AclWorkerModule,
   ],
 })
 export class WorkerModule {}

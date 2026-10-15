@@ -12,6 +12,7 @@ import {
   isReadableRevisionStatus,
   READABLE_REVISION_STATUSES,
   readableDocumentsWhere,
+  listedProjectsWhere,
 } from '../src/ai-readable/ai-readable-scope.js';
 import {
   etagFor,
@@ -40,12 +41,22 @@ describe('scope predicate', () => {
   });
 
   it('keys on the workspace, narrows by project and document when given', () => {
-    expect(readableDocumentsWhere({ workspaceId: 'w' })).toEqual({ workspaceId: 'w' });
     expect(readableDocumentsWhere({ workspaceId: 'w', projectId: 'p', documentId: 'd' })).toEqual({
       workspaceId: 'w',
       projectId: 'p',
       id: 'd',
     });
+  });
+
+  it('lists only pages open to the whole workspace; one page the guard admitted reads whatever it is (#76)', () => {
+    expect(readableDocumentsWhere({ workspaceId: 'w' })).toEqual({ workspaceId: 'w', restrictedBy: { isEmpty: true } });
+    expect(readableDocumentsWhere({ workspaceId: 'w', projectId: 'p' })).toEqual({
+      workspaceId: 'w',
+      projectId: 'p',
+      restrictedBy: { isEmpty: true },
+    });
+    expect(readableDocumentsWhere({ workspaceId: 'w', documentId: 'd' })).not.toHaveProperty('restrictedBy');
+    expect(listedProjectsWhere('w')).toEqual({ workspaceId: 'w', restricted: false });
   });
 });
 

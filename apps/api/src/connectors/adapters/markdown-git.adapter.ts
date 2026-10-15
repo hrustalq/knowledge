@@ -18,10 +18,14 @@ import {
   connectorFetch,
   type ConnectorAdapter,
   type ConnectorContext,
+  type ExternalAcl,
   type ExternalDocument,
+  type ExternalGroupMember,
+  type ExternalPrincipal,
   type ExternalRef,
   type OutboundDocument,
 } from './connector.types.js';
+import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
 
 /**
  * Markdown in a git repository (docs/features/19).
@@ -41,7 +45,17 @@ import {
 @Injectable()
 export class MarkdownGitAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'markdown-git';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: true };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: true, acl: true };
+
+  /** The repository's readers, the same for every page (#76) — see `github-acl.ts`. */
+  permissions(ctx: ConnectorContext): Promise<ExternalAcl> {
+    return githubRepoAcl(ctx);
+  }
+
+  groupMembers(ctx: ConnectorContext, group: ExternalPrincipal): Promise<ExternalGroupMember[]> {
+    return githubTeamMembers(ctx, group);
+  }
+
 
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
     const files = await this.markdownFiles(ctx);

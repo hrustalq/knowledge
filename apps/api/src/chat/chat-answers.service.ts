@@ -32,6 +32,7 @@ import { decodeChatAction, encodeChatAction } from './chat-actions.js';
 import { ChatCapturesService } from './chat-captures.service.js';
 import { ChatIdentityService } from './chat-identity.service.js';
 import { ChatIntegrationsService } from './chat-integrations.service.js';
+import { WORKSPACE_AUDIENCE } from '../permissions/access-scope.js';
 
 /** A DM picks up where it left off within this window; after it, a new conversation. */
 const DM_CONTINUATION_MS = 30 * 60_000;
@@ -259,7 +260,13 @@ export class ChatAnswersService {
       await this.prisma.chatAnswer.update({ where: { id: claim.id }, data: { conversationId: conversation.id } });
       const turn = await this.assistant.runChatTurn(
         conversation.assistantThreadId,
-        { content: question, agentKey, projectId: binding?.projectId ?? null },
+        {
+          content: question,
+          agentKey,
+          projectId: binding?.projectId ?? null,
+          // A group reads the answer, not only the asker (#76).
+          ...(inbound.isDm ? {} : { audience: WORKSPACE_AUDIENCE }),
+        },
         principal,
       );
       const view: ChatView = turn.enabled

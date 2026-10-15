@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -17,9 +18,21 @@ import {
 } from 'class-validator';
 import {
   AGENT_CAPABILITIES,
+  AGENT_LEARNING_MAX_CHARS,
+  AGENT_LEARNING_SOURCES,
+  AGENT_LEARNING_STATUSES,
+  AGENT_RUN_MAX_DOCUMENTS,
+  AGENT_SCHEDULE_KINDS,
+  AGENT_SCHEDULE_TIME_PATTERN,
   AGENT_SURFACES,
+  AGENT_TRIGGER_COOLDOWN_MAX_MINUTES,
+  AGENT_TRIGGER_EVENTS,
   WEB_ACCESS_MODES,
   type AgentCapability,
+  type AgentLearningSource,
+  type AgentLearningStatus,
+  type AgentScheduleKind,
+  type AgentTriggerEvent,
   type AgentSurface,
   type WebAccessMode,
 } from '@knowledge/contracts';
@@ -698,6 +711,46 @@ export class UpdateAiAgentDto {
   @Max(20_160, { message: vmsg('max') })
   scheduleMinutes?: number | null;
 
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    enum: AGENT_SCHEDULE_KINDS,
+    description: 'interval (every scheduleMinutes), daily or weekly (at scheduleTime). Null reads as interval.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleKind')
+  @IsIn(AGENT_SCHEDULE_KINDS as unknown as string[], { message: vmsg('isIn') })
+  scheduleKind?: AgentScheduleKind | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: '09:00', description: 'HH:MM, 24-hour, in scheduleTimezone.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleTime')
+  @IsString()
+  @Matches(AGENT_SCHEDULE_TIME_PATTERN, { message: vmsg('matches') })
+  scheduleTime?: string | null;
+
+  @ApiPropertyOptional({
+    type: [Number],
+    nullable: true,
+    example: [1, 2, 3, 4, 5],
+    description: 'Weekdays a weekly schedule fires on, 0 = Sunday … 6 = Saturday.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleWeekdays')
+  @IsArray()
+  @ArrayMaxSize(7, { message: vmsg('arrayMaxSize') })
+  @IsInt({ each: true })
+  @Min(0, { each: true, message: vmsg('min') })
+  @Max(6, { each: true, message: vmsg('max') })
+  scheduleWeekdays?: number[] | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Europe/Moscow', description: 'IANA timezone. Null reads as UTC.' })
+  @IsOptional()
+  @NULLABLE<UpdateAiAgentDto>('scheduleTimezone')
+  @IsString()
+  @MaxLength(64, { message: vmsg('maxLength') })
+  scheduleTimezone?: string | null;
+
   @ApiPropertyOptional({ type: String, nullable: true, description: 'Instruction seeded into every scheduled run.' })
   @IsOptional()
   @NULLABLE<UpdateAiAgentDto>('scheduleNote')
@@ -809,6 +862,207 @@ export class StartAgentRunDto {
   @IsOptional()
   @IsUUID()
   connectorId?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      'Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most ' +
+      'recent ones. Pages the caller cannot open are skipped.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(AGENT_RUN_MAX_DOCUMENTS, { message: vmsg('arrayMaxSize') })
+  @IsUUID('all', { each: true })
+  documentIds?: string[];
+}
+
+// ---- Agent triggers (#70) ---------------------------------------------------
+
+/**
+ * The filter fields, flat rather than nested: a `filter` object would need
+ * nested validation for three optional fields. The service folds them into
+ * `agent_triggers.filter` and drops the ones the event has no dimension for.
+ */
+class AgentTriggerFieldsDto {
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Only events in this project. Null hears every project.' })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('projectId')
+  @IsUUID()
+  projectId?: string | null;
+
+  @ApiPropertyOptional({ type: [String], nullable: true, description: 'Only pages in these categories (page and merge request events).' })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('categories')
+  @IsArray()
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  @MaxLength(64, { each: true, message: vmsg('maxLength') })
+  categories?: string[] | null;
+
+  @ApiPropertyOptional({ type: [String], nullable: true, description: 'Only these connectors (connector syncs and pull requests).' })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('connectorIds')
+  @IsArray()
+  @ArrayMaxSize(20, { message: vmsg('arrayMaxSize') })
+  @IsUUID('all', { each: true })
+  connectorIds?: string[] | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Only this branch. Absent, a page.indexed trigger hears the default branch only.',
+  })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('branch')
+  @IsString()
+  @MaxLength(200, { message: vmsg('maxLength') })
+  branch?: string | null;
+
+  @ApiPropertyOptional({ description: 'Enabling makes the caller the owner the runs execute as. Off unless sent.' })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: `Minutes before the same subject may fire this trigger again; 0 turns it off. Defaults to AGENT_TRIGGER_COOLDOWN_MINUTES.`,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0, { message: vmsg('min') })
+  @Max(AGENT_TRIGGER_COOLDOWN_MAX_MINUTES, { message: vmsg('max') })
+  cooldownMinutes?: number;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Instruction seeded into every run this trigger starts.' })
+  @IsOptional()
+  @NULLABLE<AgentTriggerFieldsDto>('note')
+  @IsString()
+  @MaxLength(2_000, { message: vmsg('maxLength') })
+  note?: string | null;
+}
+
+export class CreateAgentTriggerDto extends AgentTriggerFieldsDto {
+  // Field name must stay `workspaceId`: @Access('admin', 'body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ enum: AGENT_TRIGGER_EVENTS })
+  @IsIn(AGENT_TRIGGER_EVENTS as unknown as string[], { message: vmsg('isIn') })
+  event!: AgentTriggerEvent;
+}
+
+/** The event is fixed once created: a different event is a different trigger. */
+export class UpdateAgentTriggerDto extends AgentTriggerFieldsDto {}
+
+/**
+ * Apply a recipe (#70). Only the timezone a time-of-day schedule is read in:
+ * everything else is the recipe, and everything it writes starts disabled.
+ */
+export class ApplyAgentRecipeDto {
+  // Field name must stay `workspaceId`: @Access('admin', 'body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ type: String, example: 'Europe/Moscow', description: "IANA timezone for the recipe's schedule. Absent reads as UTC." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64, { message: vmsg('maxLength') })
+  timezone?: string;
+}
+
+// ---- Learnings (#70) ---------------------------------------------------------
+
+/** Fields a learning shares between create and update. */
+class AgentLearningScopeDto {
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'The agent it teaches. Null teaches every agent.' })
+  @IsOptional()
+  @NULLABLE<AgentLearningScopeDto>('agentKey')
+  @IsString()
+  @MaxLength(64, { message: vmsg('maxLength') })
+  agentKey?: string | null;
+
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Applies only to work in this project. Null applies everywhere.' })
+  @IsOptional()
+  @NULLABLE<AgentLearningScopeDto>('projectId')
+  @IsUUID()
+  projectId?: string | null;
+}
+
+/**
+ * Teach an agent something. Anyone with edit rights may propose; only an admin
+ * may create a learning `active` — the controller checks, because the text
+ * reaches a prompt the moment it is.
+ */
+export class CreateAgentLearningDto extends AgentLearningScopeDto {
+  // Field name must stay `workspaceId`: @Access('editor', 'body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ maxLength: AGENT_LEARNING_MAX_CHARS, description: 'The correction, in plain words.' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(AGENT_LEARNING_MAX_CHARS, { message: vmsg('maxLength') })
+  text!: string;
+
+  @ApiPropertyOptional({ enum: ['proposed', 'active'], description: 'Absent is proposed. Active needs an admin.' })
+  @IsOptional()
+  @IsIn(['proposed', 'active'], { message: vmsg('isIn') })
+  status?: 'proposed' | 'active';
+
+  @ApiPropertyOptional({ enum: AGENT_LEARNING_SOURCES, description: 'Where it came from. Absent is manual.' })
+  @IsOptional()
+  @IsIn(AGENT_LEARNING_SOURCES as unknown as string[], { message: vmsg('isIn') })
+  sourceKind?: AgentLearningSource;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'The thread, for a document-thread or mr-thread source.' })
+  @IsOptional()
+  @IsUUID()
+  sourceId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'The run, for a finding source.' })
+  @IsOptional()
+  @IsUUID()
+  runId?: string;
+
+  @ApiPropertyOptional({ description: "The finding's position in its run, for a finding source." })
+  @IsOptional()
+  @IsInt()
+  @Min(0, { message: vmsg('min') })
+  findingIndex?: number;
+}
+
+/** Approve, edit or archive (admin). Making it active, or rewording an active one, records the caller as approver. */
+export class UpdateAgentLearningDto extends AgentLearningScopeDto {
+  @ApiPropertyOptional({ maxLength: AGENT_LEARNING_MAX_CHARS })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(AGENT_LEARNING_MAX_CHARS, { message: vmsg('maxLength') })
+  text?: string;
+
+  @ApiPropertyOptional({ enum: AGENT_LEARNING_STATUSES })
+  @IsOptional()
+  @IsIn(AGENT_LEARNING_STATUSES as unknown as string[], { message: vmsg('isIn') })
+  status?: AgentLearningStatus;
+}
+
+/** Dismiss a finding; with `learning`, "Remember why" proposes one. */
+export class DismissAgentFindingDto {
+  @ApiPropertyOptional({
+    maxLength: AGENT_LEARNING_MAX_CHARS,
+    description: 'Why it was wrong, as a rule for next time. Becomes a proposed learning for this agent.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(AGENT_LEARNING_MAX_CHARS, { message: vmsg('maxLength') })
+  learning?: string;
+
+  @ApiPropertyOptional({ description: 'The learning teaches every agent, not only the one that ran.' })
+  @IsOptional()
+  @IsBoolean()
+  allAgents?: boolean;
 }
 
 // ---- Source policies (docs/features/25) ------------------------------------

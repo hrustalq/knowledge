@@ -13,6 +13,8 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { warnMentionedWithoutAccess } from '@/components/access/mention-access'
+import { useMembers } from '@/components/merge-requests/use-members'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
 import { Pencil } from 'lucide-vue-next'
@@ -251,7 +253,10 @@ function onCreateThread(
   createThread.mutate(
     { path: { id: id.value }, body: { body, resolvable, source, ...(anchor ? { anchor } : {}) } },
     {
-      onSuccess: () => (pendingAnchor.value = null),
+      onSuccess: (data) => {
+        pendingAnchor.value = null
+        warnMentions(data)
+      },
       onError: (e) => toast.error(errorMessage(e, t)),
     },
   )
@@ -265,8 +270,20 @@ function onAiComment(body: string) {
 function onReply(threadId: string, body: string, replyToId: string | null = null) {
   replyThread.mutate(
     { path: { id: id.value, threadId }, body: { body, ...(replyToId ? { replyToId } : {}) } },
-    { onError: (e) => toast.error(errorMessage(e, t)) },
+    { onSuccess: warnMentions, onError: (e) => toast.error(errorMessage(e, t)) },
   )
+}
+
+/** Named people who cannot open the page were not told (#76); its Access dialog is on the page. */
+const { nameOf } = useMembers()
+function warnMentions(data: unknown) {
+  warnMentionedWithoutAccess(data, {
+    t,
+    nameOf,
+    openAccess: () => {
+      if (mr.value?.documentId) void router.push(`/documents/${mr.value.documentId}?access=1`)
+    },
+  })
 }
 function onResolve(threadId: string, resolved: boolean) {
   resolveThread.mutate(
@@ -436,6 +453,7 @@ function refresh() {
             :can-comment="canComment"
             :busy="threadsBusy"
             :resolve-document-id="resolveDocumentId"
+            thread-kind="mr-thread"
             @create-thread="onCreateThread"
             @reply="onReply"
             @resolve="onResolve"
@@ -481,6 +499,7 @@ function refresh() {
                   :readonly="!canComment"
                   :busy="threadsBusy"
                   :resolve-document-id="resolveDocumentId"
+                  teach-kind="mr-thread"
                   @reply="(b, p) => onReply(thread.threadId, b, p)"
                   @resolve="(r) => onResolve(thread.threadId, r)"
                   @edit="(c, b) => onEditComment(thread.threadId, c, b)"

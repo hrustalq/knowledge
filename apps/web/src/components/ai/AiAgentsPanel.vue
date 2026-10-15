@@ -6,10 +6,14 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { Play, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { BookOpen, Play, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
 import {
+  AGENT_SCHEDULE_KINDS,
+  AGENT_SCHEDULE_TICK_MINUTES,
   ASSISTANT_TOOL_NAMES,
   isConnectorScopedAgent,
+  nextScheduledRun,
+  type AgentScheduleKind,
   type AiAgentSummary,
   type AiProviderSummary,
   type ListAiAgentsResponse,
@@ -18,6 +22,7 @@ import {
 } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { getWorkspaceId, relativeTime } from '@/lib/api'
+import { formatCalendarPart, formatDateTime, formatList } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -25,6 +30,16 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -34,6 +49,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import AgentTriggersEditor from './AgentTriggersEditor.vue'
+import AgentRecipesDialog from './AgentRecipesDialog.vue'
 
 const { t } = useI18n()
 
@@ -90,7 +107,11 @@ const blank = {
   tools: [] as string[],
   providerId: ROUTED,
   scheduleEnabled: false,
+  scheduleKind: 'interval' as AgentScheduleKind,
   scheduleMinutes: null as number | null,
+  scheduleTime: '09:00',
+  scheduleWeekdays: [1] as number[],
+  scheduleTimezone: '',
   scheduleNote: '',
 }
 const form = ref({ ...blank })
@@ -119,12 +140,92 @@ function openEdit(agent: AiAgentSummary) {
     tools: [...agent.tools],
     providerId: agent.providerId ?? ROUTED,
     scheduleEnabled: agent.scheduleEnabled,
+    scheduleKind: agent.scheduleKind,
     scheduleMinutes: agent.scheduleMinutes,
+    scheduleTime: agent.scheduleTime ?? blank.scheduleTime,
+    scheduleWeekdays: agent.scheduleWeekdays ?? [...blank.scheduleWeekdays],
+    scheduleTimezone: agent.scheduleTimezone ?? '',
     scheduleNote: agent.scheduleNote ?? '',
   }
-  form.value = { ...loaded, tools: [...loaded.tools] }
-  snapshot.value = { ...loaded, tools: [...loaded.tools] }
+  form.value = { ...loaded, tools: [...loaded.tools], scheduleWeekdays: [...loaded.scheduleWeekdays] }
+  snapshot.value = { ...loaded, tools: [...loaded.tools], scheduleWeekdays: [...loaded.scheduleWeekdays] }
   open.value = true
+}
+
+/**
+ * Time-of-day schedules (#70). The browser's zone is the natural default for
+ * the person setting one, so picking Daily or Weekly fills it in; the dialog
+ * only opens on a click, so this never runs during SSR.
+ */
+function setScheduleKind(kind: AgentScheduleKind) {
+  form.value.scheduleKind = kind
+  if (kind !== 'interval' && !form.value.scheduleTimezone) {
+    form.value.scheduleTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? UTC_ZONE
+  }
+}
+
+function toggleWeekday(day: number) {
+  const set = new Set(form.value.scheduleWeekdays)
+  if (set.has(day)) set.delete(day)
+  else set.add(day)
+  form.value.scheduleWeekdays = [...set].sort((a, b) => a - b)
+}
+
+/** 0 = Sunday. 2026-10-11 is a Sunday, so day `i` of that week names weekday `i`. */
+const weekdays = computed(() =>
+  [0, 1, 2, 3, 4, 5, 6].map((day) => ({ day, label: formatCalendarPart(`2026-10-${11 + day}`, 'weekday') })),
+)
+/** What an empty timezone means — an IANA name, so not a translatable string. */
+const UTC_ZONE = 'UTC'
+const timezones = computed<string[]>(() =>
+  typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [],
+)
+
+const SHAPE = ['scheduleEnabled', 'scheduleKind', 'scheduleMinutes', 'scheduleTime', 'scheduleTimezone'] as const
+const reshaped = computed(
+  () =>
+    SHAPE.some((field) => form.value[field] !== snapshot.value[field]) ||
+    form.value.scheduleWeekdays.join() !== snapshot.value.scheduleWeekdays.join(),
+)
+
+/**
+ * "Next run" in the editor. Untouched, it is the API's own answer; edited, it
+ * is the same contracts predicate the sweeper reads, applied to the form — and
+ * an edit restarts the slot count there exactly as it does here.
+ */
+const nextRun = computed<string | null>(() => {
+  const agent = editing.value
+  if (!agent || !form.value.scheduleEnabled) return null
+  if (!reshaped.value) return agent.nextRunAt
+  const f = form.value
+  const now = new Date()
+  const next = nextScheduledRun(
+    {
+      kind: f.scheduleKind,
+      minutes: f.scheduleMinutes,
+      time: f.scheduleTime || null,
+      weekdays: f.scheduleWeekdays,
+      timezone: f.scheduleTimezone || null,
+    },
+    {
+      lastRunAt: agent.lastRunAt ? new Date(agent.lastRunAt) : null,
+      changedAt: f.scheduleKind === 'interval' ? null : now,
+    },
+    now,
+  )
+  return next ? next.toISOString() : null
+})
+
+/** The table badge: "every 60 min", "daily 09:00", "Mon, Wed 09:00". */
+function scheduleLabel(agent: AiAgentSummary): string | null {
+  if (!agent.scheduleEnabled) return null
+  if (agent.scheduleKind === 'interval') {
+    return agent.scheduleMinutes ? t('ai.agents.everyMinutes', { count: agent.scheduleMinutes }) : null
+  }
+  if (!agent.scheduleTime) return null
+  if (agent.scheduleKind === 'daily') return t('ai.agents.dailyAt', { time: agent.scheduleTime })
+  const days = (agent.scheduleWeekdays ?? []).map((day) => weekdays.value[day]?.label ?? String(day))
+  return t('ai.agents.weeklyAt', { days: formatList(days), time: agent.scheduleTime })
 }
 
 function toggleTool(name: string, on: boolean) {
@@ -162,7 +263,11 @@ async function submit() {
         tools?: string[]
         providerId?: string | null
         scheduleEnabled?: boolean
+        scheduleKind?: AgentScheduleKind | null
         scheduleMinutes?: number | null
+        scheduleTime?: string | null
+        scheduleWeekdays?: number[] | null
+        scheduleTimezone?: string | null
         scheduleNote?: string | null
       } = { workspaceId }
       if (f.name !== s.name) body.name = f.name.trim()
@@ -171,7 +276,15 @@ async function submit() {
       if (JSON.stringify([...f.tools].sort()) !== JSON.stringify([...s.tools].sort())) body.tools = f.tools
       if (f.providerId !== s.providerId) body.providerId = f.providerId === ROUTED ? null : f.providerId
       if (f.scheduleEnabled !== s.scheduleEnabled) body.scheduleEnabled = f.scheduleEnabled
+      if (f.scheduleKind !== s.scheduleKind) body.scheduleKind = f.scheduleKind
       if (f.scheduleMinutes !== s.scheduleMinutes) body.scheduleMinutes = f.scheduleMinutes
+      // A time-of-day schedule sends its whole shape, so the defaults the form
+      // filled in (09:00, Monday) are saved rather than shown and then lost.
+      if (f.scheduleKind !== 'interval' && reshaped.value) {
+        body.scheduleTime = f.scheduleTime
+        body.scheduleTimezone = f.scheduleTimezone || null
+        if (f.scheduleKind === 'weekly') body.scheduleWeekdays = f.scheduleWeekdays
+      }
       if (f.scheduleNote !== s.scheduleNote) body.scheduleNote = f.scheduleNote.trim() || null
       if (Object.keys(body).length === 1) {
         open.value = false
@@ -236,7 +349,19 @@ async function reset(agent: AiAgentSummary) {
   }
 }
 
+/** Recipes (#70): applied disabled, so the agent's editor opens next to turn them on. */
+const recipesOpen = ref(false)
+async function afterRecipe(key: string) {
+  await query.refetch()
+  const agent = agents.value.find((a) => a.key === key)
+  if (agent) openEdit(agent)
+}
+
+/** A custom agent is gone for good once deleted, so the bin asks first. */
+const removing = ref<AiAgentSummary | null>(null)
+
 async function remove(agent: AiAgentSummary) {
+  removing.value = null
   try {
     await deleteAgent.mutateAsync({ path: { key: agent.key }, query: { workspaceId } })
     toast.success(t('ai.agents.deleted', { name: agent.name }))
@@ -250,10 +375,17 @@ async function remove(agent: AiAgentSummary) {
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       <p class="text-muted-foreground text-sm">{{ t('ai.agents.subtitle') }}</p>
-      <Button v-if="canManage" size="sm" @click="openNew">
-        <Plus class="size-3.5" /> {{ t('ai.agents.new') }}
-      </Button>
+      <div v-if="canManage" class="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" @click="recipesOpen = true">
+          <BookOpen class="size-3.5" /> {{ t('ai.recipes.open') }}
+        </Button>
+        <Button size="sm" @click="openNew">
+          <Plus class="size-3.5" /> {{ t('ai.agents.new') }}
+        </Button>
+      </div>
     </div>
+
+    <AgentRecipesDialog v-if="canManage" v-model:open="recipesOpen" :agents="agents" @applied="afterRecipe" />
 
     <div v-if="query.isPending.value" class="space-y-2">
       <Skeleton v-for="i in 6" :key="i" class="h-10 w-full" />
@@ -270,7 +402,9 @@ async function remove(agent: AiAgentSummary) {
       </TableHeader>
       <TableBody>
         <TableRow v-for="agent in agents" :key="agent.key">
-          <TableCell>
+          <!-- Wraps: a description is a sentence, and the table's nowrap
+               default pushed Model, Enabled and Run off the right edge. -->
+          <TableCell class="whitespace-normal">
             <button class="text-left" :disabled="!canManage" @click="openEdit(agent)">
               <span class="flex flex-wrap items-center gap-1.5">
                 <span class="font-medium" :class="canManage && 'hover:text-primary'">{{ agent.name }}</span>
@@ -285,8 +419,8 @@ async function remove(agent: AiAgentSummary) {
                 <Badge v-if="agent.missing.length" variant="destructive" class="font-normal">
                   {{ t('ai.agents.missing', { caps: agent.missing.join(', ') }) }}
                 </Badge>
-                <Badge v-if="agent.scheduleEnabled && agent.scheduleMinutes" variant="outline" class="font-normal">
-                  {{ t('ai.agents.everyMinutes', { count: agent.scheduleMinutes }) }}
+                <Badge v-if="scheduleLabel(agent)" variant="outline" class="font-normal">
+                  {{ scheduleLabel(agent) }}
                 </Badge>
               </span>
               <span class="text-muted-foreground block text-xs">{{ agent.description }}</span>
@@ -330,7 +464,8 @@ async function remove(agent: AiAgentSummary) {
               variant="ghost"
               size="sm"
               :aria-label="t('ai.agents.delete', { name: agent.name })"
-              @click="remove(agent)"
+              :title="t('ai.agents.delete', { name: agent.name })"
+              @click="removing = agent"
             >
               <Trash2 class="size-3.5" />
             </Button>
@@ -338,6 +473,19 @@ async function remove(agent: AiAgentSummary) {
         </TableRow>
       </TableBody>
     </Table>
+
+    <AlertDialog :open="removing !== null" @update:open="(v: boolean) => { if (!v) removing = null }">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('ai.agents.deleteTitle', { name: removing?.name ?? '' }) }}</AlertDialogTitle>
+          <AlertDialogDescription>{{ t('ai.agents.deleteBody') }}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction @click="removing && remove(removing)">{{ t('common.delete') }}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <!-- Which repository a connector-scoped run reads (docs/features/31).
          Opened only when there is a real choice; one repository is implied. -->
@@ -442,8 +590,66 @@ async function remove(agent: AiAgentSummary) {
               </span>
             </label>
 
-            <div v-if="form.scheduleEnabled" class="space-y-3 pl-7">
-              <label class="block max-w-48 space-y-1">
+            <!-- Indented under the checkbox only where there is room for it. -->
+            <div v-if="form.scheduleEnabled" class="space-y-3 sm:pl-7">
+              <!-- One segmented control: the kind is one choice of three, and
+                   ghost buttons beside a filled one read as three unrelated
+                   actions. Toggle buttons rather than role=radio, which would
+                   promise arrow-key movement these do not implement. -->
+              <div
+                class="bg-muted/60 flex max-w-full flex-wrap gap-0.5 rounded-md border p-0.5 sm:inline-flex"
+                role="group"
+                :aria-label="t('ai.agents.scheduleKind')"
+              >
+                <button
+                  v-for="kind in AGENT_SCHEDULE_KINDS"
+                  :key="kind"
+                  type="button"
+                  :aria-pressed="form.scheduleKind === kind"
+                  class="focus-visible:ring-ring/50 flex-1 rounded-[5px] px-2 py-1 text-sm transition-colors outline-none focus-visible:ring-3 sm:flex-none sm:px-3"
+                  :class="
+                    form.scheduleKind === kind
+                      ? 'bg-background text-foreground ring-border font-medium ring-1'
+                      : 'text-muted-foreground hover:text-foreground'
+                  "
+                  @click="setScheduleKind(kind)"
+                >
+                  {{ t(`ai.agents.scheduleKinds.${kind}`) }}
+                </button>
+              </div>
+              <div v-if="form.scheduleKind !== 'interval'" class="flex flex-wrap items-start gap-3">
+                <label class="block w-32 space-y-1">
+                  <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.scheduleTime') }}</span>
+                  <Input v-model="form.scheduleTime" type="time" step="300" required />
+                </label>
+                <label class="block w-full space-y-1 sm:w-64">
+                  <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.scheduleTimezone') }}</span>
+                  <Input v-model="form.scheduleTimezone" list="agent-timezones" :placeholder="UTC_ZONE" />
+                  <datalist id="agent-timezones">
+                    <option v-for="zone in timezones" :key="zone" :value="zone" />
+                  </datalist>
+                </label>
+              </div>
+              <div
+                v-if="form.scheduleKind === 'weekly'"
+                class="flex flex-wrap gap-1"
+                role="group"
+                :aria-label="t('ai.agents.scheduleWeekdays')"
+              >
+                <Button
+                  v-for="w in weekdays"
+                  :key="w.day"
+                  type="button"
+                  size="sm"
+                  class="min-w-12"
+                  :aria-pressed="form.scheduleWeekdays.includes(w.day)"
+                  :variant="form.scheduleWeekdays.includes(w.day) ? 'default' : 'outline'"
+                  @click="toggleWeekday(w.day)"
+                >
+                  {{ w.label }}
+                </Button>
+              </div>
+              <label v-if="form.scheduleKind === 'interval'" class="block max-w-48 space-y-1">
                 <span class="text-muted-foreground text-xs font-medium">{{ t('ai.agents.scheduleMinutes') }}</span>
                 <Input
                   :model-value="form.scheduleMinutes ?? ''"
@@ -466,8 +672,14 @@ async function remove(agent: AiAgentSummary) {
                 }}
                 <span v-if="editing.scheduleOwner"> · {{ t('ai.agents.scheduleOwned') }}</span>
               </p>
+              <p v-if="form.scheduleKind !== 'interval' || nextRun" class="text-muted-foreground text-xs">
+                <template v-if="nextRun">{{ t('ai.agents.nextRunAt', { when: formatDateTime(nextRun) }) }} · </template>
+                {{ t('ai.agents.schedulePrecision', { minutes: AGENT_SCHEDULE_TICK_MINUTES }) }}
+              </p>
             </div>
           </div>
+
+          <AgentTriggersEditor v-if="editing?.runnable" :agent="editing" />
         </form>
 
         <DialogFooter class="gap-2">

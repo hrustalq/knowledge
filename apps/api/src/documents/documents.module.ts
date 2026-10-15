@@ -20,11 +20,13 @@ import { ConnectorsCoreModule } from '../connectors/connectors-core.module.js';
 import { ConnectorQueueModule } from '../connectors/connector-queue.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { AgentCoreModule } from '../agents/agent-core.module.js';
+import { AgentTriggerCoreModule } from '../agents/agent-trigger-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { MentionRepliesService } from './mention-replies.service.js';
 import { MentionReplySweeper } from './mention-reply.sweeper.js';
 import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 
 /**
  * API side. DocumentsService itself lives in DocumentsCoreModule (worker-safe);
@@ -47,6 +49,8 @@ import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js'
     // none of them imports DocumentsModule back — which is what lets a mention
     // reply live here instead of behind a forwardRef.
     AgentCoreModule,
+    // A mention of an agent with a comment.mention trigger starts a run (#70).
+    AgentTriggerCoreModule,
     AiCoreModule,
     EventsModule,
     AssistantClientModule,
@@ -60,6 +64,8 @@ import { AiReadableCoreModule } from '../ai-readable/ai-readable-core.module.js'
     // `Accept: text/markdown` on GET :id/content (issue #68). Core-only and it
     // reaches for DocumentsCoreModule, not this module, so there is no cycle.
     AiReadableCoreModule,
+    // Page permissions (#76): lists filter by the caller's scope, reviewers need view.
+    PermissionsCoreModule,
   ],
   controllers: [DocumentsController, MergeRequestsController],
   providers: [

@@ -11,7 +11,7 @@
 import { onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
-import { ChevronRight } from 'lucide-vue-next'
+import { ChevronRight, Lock } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
 import { useProjectsStore } from '@/stores/projects'
 import { useWorkflowsStore } from '@/stores/workflows'
@@ -58,8 +58,16 @@ watch(
   >
     <template v-for="(c, i) in crumbs" :key="i">
       <ChevronRight v-if="i > 0" class="size-3 shrink-0" aria-hidden="true" />
+      <span
+        v-if="c.restricted"
+        class="flex max-w-56 shrink-0 items-center gap-1 italic"
+        :title="t('access.lockedLabel')"
+      >
+        <Lock class="size-3 shrink-0" aria-hidden="true" />
+        <span class="truncate">{{ c.label }}</span>
+      </span>
       <RouterLink
-        v-if="c.to && i < crumbs.length - 1"
+        v-else-if="c.to && i < crumbs.length - 1"
         :to="c.to"
         class="max-w-56 truncate transition-colors hover:text-foreground"
       >

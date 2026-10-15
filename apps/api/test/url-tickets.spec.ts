@@ -9,6 +9,7 @@ import { AuthFlowController } from '../src/auth/auth-flow.controller.js';
 import { AuthFlowService } from '../src/auth/auth-flow.service.js';
 import { EventsController } from '../src/events/events.controller.js';
 import { EventsSubscriber } from '../src/events/events.subscriber.js';
+import { LiveVisibility } from '../src/events/live-visibility.js';
 import { TokenAuthService } from '../src/auth/token-auth.service.js';
 import { UrlTicketsService, type TicketStore } from '../src/auth/url-tickets.service.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
@@ -141,6 +142,7 @@ describe('url tickets over HTTP (real AuthGuard, real controllers)', () => {
         { provide: UrlTicketsService, useValue: tickets },
         { provide: AuthFlowService, useValue: {} },
         { provide: EventsSubscriber, useValue: { stream } },
+        { provide: LiveVisibility, useValue: { observe: () => undefined, allows: async (_e: unknown, ps: unknown[]) => ps.map(() => true) } },
         { provide: APP_GUARD, useClass: AuthGuard },
       ],
     }).compile();
@@ -160,7 +162,7 @@ describe('url tickets over HTTP (real AuthGuard, real controllers)', () => {
 
     const first = await http.get(`/v1/events?workspaceId=${W}&token=${ticket}`);
     expect(first.status).toBe(200);
-    expect(stream).toHaveBeenLastCalledWith(W, 'u-key');
+    expect(stream).toHaveBeenLastCalledWith(W, expect.objectContaining({ userId: 'u-key' }), expect.any(Function));
 
     const replay = await http.get(`/v1/events?workspaceId=${W}&token=${ticket}`);
     expect(replay.status).toBe(401);

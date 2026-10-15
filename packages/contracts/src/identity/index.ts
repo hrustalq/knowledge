@@ -4,8 +4,16 @@ import type { FactExtractor } from '@knowledge/contracts/graph';
 // stale detection / reindex scheduling, historical fact queries
 // ---------------------------------------------------------------------------
 
-/** Workspace role hierarchy: viewer < editor < admin. */
-export type WorkspaceRole = 'viewer' | 'editor' | 'admin';
+/**
+ * Workspace role hierarchy: guest < viewer < editor < admin.
+ *
+ * `guest` sits below the ladder rather than on it: a guest reads nothing in the
+ * workspace except what is granted to them or their groups (#76), so every
+ * workspace-level `@Access('viewer', …)` route refuses one without knowing
+ * guests exist.
+ */
+export const WORKSPACE_ROLES = ['guest', 'viewer', 'editor', 'admin'] as const;
+export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
 export interface WorkspaceMembership {
   workspaceId: string;
@@ -412,8 +420,11 @@ export interface ProjectSummary {
   avatarEmoji: string | null;
   /** Backs the emoji only; an image brings its own colours. Hex, e.g. `#3b82f6`. */
   avatarColor: string | null;
+  /** Pages in it the caller may open. */
   documentCount: number;
   createdAt: string;
+  /** Only grantees (and admins) open it or anything in it (#76). */
+  restricted?: boolean;
 }
 
 export interface ListProjectsResponse {
@@ -656,6 +667,237 @@ export interface WorkspaceCandidate {
 export interface ListWorkspaceCandidatesResponse {
   workspaceId: string;
   candidates: WorkspaceCandidate[];
+}
+
+// ---------------------------------------------------------------------------
+// User groups (#76): workspace-scoped sets of members that page and project
+// restrictions grant to. Membership is manual today; `connector` groups are
+// mirrored from a source by ACL sync and `scim` ones by provisioning, and both
+// are read-only over the API — a manual edit would be overwritten next sync.
+
+export const GROUP_SOURCES = ['manual', 'connector', 'scim'] as const;
+export type GroupSource = (typeof GROUP_SOURCES)[number];
+
+export interface UserGroupSummary {
+  groupId: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  source: GroupSource;
+  memberCount: number;
+  createdAt: string;
+}
+
+// GET /v1/groups?workspaceId=
+export interface ListUserGroupsResponse {
+  workspaceId: string;
+  groups: UserGroupSummary[];
+}
+
+export interface UserGroupMemberEntry {
+  userId: string;
+  email: string;
+  displayName: string;
+  avatarUrl: AvatarUrl;
+  /** The person's workspace role — a guest in a group still reads only what the group is granted. */
+  role: WorkspaceRole;
+  source: GroupSource;
+  createdAt: string;
+}
+
+// GET /v1/groups/:id/members · PUT /v1/groups/:id/members
+export interface ListUserGroupMembersResponse {
+  groupId: string;
+  members: UserGroupMemberEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// Page and project restrictions (#76, phase 2).
+//
+// A project or page is *restricted* when its own switch is on. A reader must be
+// admitted by every restricted node on the chain project → root → … → page, so
+// restricting a parent hides its whole subtree and a child can only narrow.
+// Grants on an unrestricted node admit nobody new to the workspace's members;
+// they are how a guest reaches a page and how edit/manage are handed out.
+// The workspace role stays the ceiling: a viewer with an `edit` grant still
+// reads only. Workspace admins see and manage everything.
+
+export const ACCESS_LEVELS = ['view', 'edit', 'manage'] as const;
+export type AccessLevel = (typeof ACCESS_LEVELS)[number];
+/** What a caller may do with one page or project; `none` = they may not open it. */
+export type EffectiveAccessLevel = AccessLevel | 'none';
+
+/** none < view < edit < manage, for comparing two levels without a lookup table at each site. */
+export function accessRank(level: EffectiveAccessLevel): number {
+  return level === 'none' ? -1 : ACCESS_LEVELS.indexOf(level);
+}
+
+export const ACCESS_RESOURCE_TYPES = ['project', 'document'] as const;
+export type AccessResourceType = (typeof ACCESS_RESOURCE_TYPES)[number];
+
+export const ACCESS_SUBJECT_TYPES = ['user', 'group'] as const;
+export type AccessSubjectType = (typeof ACCESS_SUBJECT_TYPES)[number];
+
+export interface AccessGrantInput {
+  subjectType: AccessSubjectType;
+  subjectId: string;
+  level: AccessLevel;
+}
+
+/**
+ * Who wrote a grant. `manual` rows are a manager's, replaced by `PUT …/access`;
+ * `connector` rows mirror an upstream ACL (#76, phase 6) and are rewritten
+ * only by that connector's sync, so the dialog shows them read-only and never
+ * sends them back.
+ */
+export const ACCESS_GRANT_ORIGINS = ['manual', 'connector'] as const;
+export type AccessGrantOrigin = (typeof ACCESS_GRANT_ORIGINS)[number];
+
+export interface AccessGrantEntry extends AccessGrantInput {
+  origin: AccessGrantOrigin;
+  /** The connector a `connector` grant came from; null for manual ones. */
+  connectorId: string | null;
+  /** The group's name or the person's display name; null when the subject is gone. */
+  name: string | null;
+  /** People only. */
+  email: string | null;
+  avatarUrl: AvatarUrl;
+  /** Groups only. */
+  memberCount: number | null;
+}
+
+/** A restricted node above the one being looked at, which every reader must also pass. */
+export interface InheritedRestriction {
+  resourceType: AccessResourceType;
+  resourceId: string;
+  /** Null when the caller may not open that node — a guest's ungranted ancestor. */
+  title: string | null;
+  grantCount: number;
+}
+
+// GET /v1/documents/:id/access · GET /v1/projects/:id/access
+export interface ResourceAccessResponse {
+  resourceType: AccessResourceType;
+  resourceId: string;
+  restricted: boolean;
+  /** Outermost first: the project, then ancestors root-first. Empty when nothing above is restricted. */
+  inherited: InheritedRestriction[];
+  /** What the caller may do here. */
+  level: EffectiveAccessLevel;
+  canManage: boolean;
+  /** Grants on this node itself. Empty unless `canManage`: who holds what is a manager's business. */
+  grants: AccessGrantEntry[];
+}
+
+// PUT /v1/documents/:id/access · PUT /v1/projects/:id/access
+export interface UpdateResourceAccessRequest {
+  restricted: boolean;
+  /** Replaces the node's grants as a whole. */
+  grants: AccessGrantInput[];
+}
+
+/** Why someone holds the level they do. */
+export const EFFECTIVE_ACCESS_SOURCES = ['admin', 'role', 'grant'] as const;
+export type EffectiveAccessSource = (typeof EFFECTIVE_ACCESS_SOURCES)[number];
+
+export interface EffectiveAccessEntry {
+  userId: string;
+  displayName: string;
+  email: string;
+  avatarUrl: AvatarUrl;
+  role: WorkspaceRole;
+  level: AccessLevel;
+  /** `admin`: workspace admin; `role`: the workspace role decides; `grant`: a user or group grant does. */
+  source: EffectiveAccessSource;
+}
+
+// GET /v1/documents/:id/access/effective · GET /v1/projects/:id/access/effective
+export interface EffectiveAccessResponse {
+  resourceType: AccessResourceType;
+  resourceId: string;
+  /** Everyone who may open it, highest level first. */
+  entries: EffectiveAccessEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// Access requests (#76, phase 5): somebody refused a page or project asks for a
+// level on it; whoever manages it approves (choosing the level) or denies.
+// A pending request expires after ACCESS_REQUEST_TTL_DAYS.
+
+export const ACCESS_REQUEST_STATUSES = ['pending', 'approved', 'denied', 'cancelled', 'expired'] as const;
+export type AccessRequestStatus = (typeof ACCESS_REQUEST_STATUSES)[number];
+
+/** A level a person may ask for: manage is handed out, never requested. */
+export const REQUESTABLE_ACCESS_LEVELS = ['view', 'edit'] as const;
+export type RequestableAccessLevel = (typeof REQUESTABLE_ACCESS_LEVELS)[number];
+
+export interface AccessRequestPerson {
+  userId: string;
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: AvatarUrl;
+}
+
+export interface AccessRequestEntry {
+  requestId: string;
+  workspaceId: string;
+  resourceType: AccessResourceType;
+  resourceId: string;
+  /**
+   * The page or project name — for its managers, who can open it, and for the
+   * requester once approved. Null for a requester who still cannot open it:
+   * asking for a page is not a way to learn what it is called.
+   */
+  resourceTitle: string | null;
+  requester: AccessRequestPerson;
+  level: RequestableAccessLevel;
+  message: string | null;
+  status: AccessRequestStatus;
+  decidedBy: AccessRequestPerson | null;
+  decidedLevel: AccessLevel | null;
+  decidedAt: string | null;
+  /** Why a request was denied, when the manager said. */
+  reason: string | null;
+  /** When a pending request lapses. */
+  expiresAt: string;
+  createdAt: string;
+  /** Whether the caller may approve or deny it. */
+  canDecide: boolean;
+}
+
+// POST /v1/access-requests
+export interface CreateAccessRequestRequest {
+  workspaceId: string;
+  resourceType: AccessResourceType;
+  resourceId: string;
+  level: RequestableAccessLevel;
+  message?: string | null;
+}
+
+// GET /v1/access-requests?workspaceId=&status=&mine=&resourceType=&resourceId=
+export interface ListAccessRequestsResponse {
+  workspaceId: string;
+  requests: AccessRequestEntry[];
+}
+
+// POST /v1/access-requests/:id/approve
+export interface ApproveAccessRequestRequest {
+  /** Defaults to the level asked for; a manager may hand out less, or more up to the requester's ceiling. */
+  level?: AccessLevel;
+}
+
+// POST /v1/access-requests/:id/deny
+export interface DenyAccessRequestRequest {
+  reason?: string | null;
+}
+
+/**
+ * What a posted comment adds to its thread response (#76, phase 5): the people
+ * it named who cannot open the page. They were not notified; the editor offers
+ * a manager "Grant view" and everyone else "Ask a manager".
+ */
+export interface MentionAccessNote {
+  mentionedWithoutAccess: string[];
 }
 
 

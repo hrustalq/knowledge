@@ -22,6 +22,7 @@ import { TokenAuthService } from '../auth/token-auth.service.js';
 import type { Principal } from '../auth/principal.js';
 import type { Env } from '../config/env.js';
 import { EventsSubscriber } from './events.subscriber.js';
+import { LiveVisibility } from './live-visibility.js';
 import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts';
 import { localeFromRequest } from '../i18n/locale.js';
 import { t, withLocale } from '../i18n/t.js';
@@ -43,7 +44,8 @@ function matchesType(pattern: string, type: string): boolean {
  * Live tracked-entity updates (WS twin of the SSE feed, docs/features/04):
  * one Redis-fed stream fanned out per socket, filtered by BOTH access control
  * (viewer role per subscribed workspace, checked in PG before the
- * subscription exists — same deny-by-default stance as GraphService) and
+ * subscription exists — same deny-by-default stance as GraphService — and,
+ * per frame, page restrictions through `LiveVisibility`, #76) and
  * tracking configuration (server-side LIVE_TRACKED_EVENTS allowlist ∩ the
  * client's per-subscription events/documents filters). Auth mirrors SSE:
  * ?token=<kn_|ks_> on the upgrade URL, resolved by TokenAuthService because
@@ -62,12 +64,15 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   private readonly locales = new Map<WebSocket, Locale>();
   private eventsSub?: Subscription;
   private heartbeat?: NodeJS.Timeout;
+  /** Frames are judged one at a time, so a slow ACL read never reorders them. */
+  private queue: Promise<void> = Promise.resolve();
 
   constructor(
     config: ConfigService<Env, true>,
     private readonly tokenAuth: TokenAuthService,
     private readonly access: AccessService,
     private readonly events: EventsSubscriber,
+    private readonly visibility: LiveVisibility,
   ) {
     this.enabled = config.get('LIVE_WS_ENABLED', { infer: true });
     this.serverTracked = config
@@ -80,7 +85,11 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   afterInit(_server: Server): void {
     // Single upstream subscription; per-socket filtering happens in fanOut.
-    this.eventsSub = this.events.all().subscribe((event) => this.fanOut(event));
+    this.eventsSub = this.events.all().subscribe((event) => {
+      this.queue = this.queue.then(() => this.fanOut(event)).catch((e: unknown) => {
+        this.logger.warn(`Live fan-out failed: ${(e as Error)?.message ?? String(e)}`);
+      });
+    });
     this.heartbeat = setInterval(() => {
       for (const [socket, st] of this.state) {
         if (!st.alive) { socket.terminate(); continue; }
@@ -207,8 +216,10 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
   }
 
-  private fanOut(event: KnowledgeEvent): void {
+  private async fanOut(event: KnowledgeEvent): Promise<void> {
     if (!this.serverTracked.some((p) => matchesType(p, event.type))) return;
+    this.visibility.observe(event);
+    const targets: [WebSocket, SocketState][] = [];
     for (const [socket, st] of this.state) {
       const tracking = st.subscriptions.get(event.workspaceId);
       if (!tracking) continue; // not subscribed to this workspace → never delivered
@@ -218,8 +229,14 @@ export class LiveGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       if (event.userId && event.userId !== st.principal.userId) continue;
       if (tracking.events?.length && !tracking.events.some((p) => matchesType(p, event.type))) continue;
       if (tracking.documents?.length && (!event.documentId || !tracking.documents.includes(event.documentId))) continue;
-      this.send(socket, { type: 'event', event });
+      targets.push([socket, st]);
     }
+    if (targets.length === 0) return;
+    // Page restrictions (#76): a frame about a page reaches only those who can open it.
+    const allowed = await this.visibility.allows(event, targets.map(([, st]) => st.principal));
+    targets.forEach(([socket], i) => {
+      if (allowed[i]) this.send(socket, { type: 'event', event });
+    });
   }
 
   private localeOf(socket: WebSocket): Locale {

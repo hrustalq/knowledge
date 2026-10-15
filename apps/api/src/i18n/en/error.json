@@ -183,6 +183,10 @@
     "agentNotFound": "Unknown agent \"{key}\"",
     "agentScheduleNeedsOwner": "A scheduled agent needs an owner to run as.",
     "agentScheduleNeedsInterval": "A scheduled agent needs an interval in minutes.",
+    "agentScheduleNeedsTime": "A daily or weekly schedule needs a time of day.",
+    "agentScheduleNeedsWeekdays": "A weekly schedule needs at least one weekday.",
+    "agentScheduleBadTimezone": "Unknown timezone \"{zone}\".",
+    "agentNotPageScoped": "Agent \"{key}\" does not read individual pages, so it cannot be run on chosen pages.",
     "agentNotBuiltIn": "\"{key}\" is not a built-in agent — there is no default to reset to.",
     "agentKeyInvalid": "Key must be lowercase letters, digits and dashes.",
     "agentIsBuiltInCreate": "\"{key}\" is a built-in agent — edit it instead of creating one.",
@@ -211,9 +215,26 @@
     "agentRunInFlight": "A run of \"{key}\" is already in progress.",
     "agentNeedsConnector": "Agent \"{key}\" reads one repository — pick which connector it should run against.",
     "agentConnectorInvalid": "{id} is not an enabled repository connector in this workspace.",
+    "agentTriggerNotFound": "Unknown agent trigger {id}",
+    "agentLearningNotFound": "Unknown agent learning {id}",
+    "agentLearningText": "A learning is between 1 and {max} characters of text.",
+    "agentLearningSourceInvalid": "That thread, finding or project is not in this workspace.",
+    "agentRecipeNotFound": "Unknown agent recipe {key}",
+    "agentTriggerNeedsRepository": "Agent \"{key}\" reads one repository, so only a connector sync or a pull request can trigger it.",
+    "agentTriggerProjectInvalid": "{id} is not a project in this workspace.",
+    "agentTriggerConnectorInvalid": "Not connectors in this workspace: {ids}",
     "agentNeedsPullRequest": "Agent \"{key}\" checks one pull or merge request, and this run names none.",
     "findingNoDraft": "This finding carries no page draft to create.",
-    "findingAlreadyCreated": "This finding's page has already been created."
+    "findingAlreadyCreated": "This finding's page has already been created.",
+    "agentTriggerMentionNeedsPage": "Agent \"{key}\" does not go over a single page, so a mention cannot trigger it.",
+    "agentTriggerWebhookOnly": "Only a webhook trigger has a signing secret.",
+    "agentTriggerSecretNeedsKey": "SETTINGS_ENCRYPTION_KEY is not set, so a webhook secret cannot be stored.",
+    "agentWebhookTooLarge": "The delivery is larger than {max} bytes.",
+    "agentWebhookNotConfigured": "This trigger has no signing secret yet. Rotate one in AI settings first.",
+    "agentWebhookBadSignature": "The X-Knowledge-Signature header does not match this delivery.",
+    "agentWebhookStale": "X-Knowledge-Timestamp is more than {seconds} seconds away from the server's clock.",
+    "agentWebhookDeliveryId": "X-Knowledge-Delivery is missing or invalid: 1–200 letters, digits and . _ : -",
+    "skillNoUpstream": "Skill {id} has no upstream change to accept"
   },
   "assistant": {
     "providerDisabled": "Assistant provider is disabled for this workspace",
@@ -312,7 +333,13 @@
     "repoNotFound": "{slug} was not found, or the credential cannot read it — check that the repository exists and that the token or GitHub App installation has read access to it",
     "repoNotFoundNoCredential": "{slug} was not found, and no credential is configured — a private repository needs a token or a GitHub App installation with read access",
     "branchMissingDefault": "Branch \"{branch}\" does not exist in {slug} — its default branch is \"{actual}\". Leave the Branch field empty to follow the default.",
-    "branchMissing": "Branch \"{branch}\" does not exist in {slug}"
+    "branchMissing": "Branch \"{branch}\" does not exist in {slug}",
+    "aclUnsupportedHost": "Access mirroring reads GitHub repositories only; this connector points at {host}.",
+    "aclAudienceRequired": "{kind} cannot say who may open each page upstream. Choose a workspace group to restrict its pages to.",
+    "aclAudienceGroup": "The audience must be a group in this workspace.",
+    "identityNotFound": "No upstream identity {id} on this connector.",
+    "identityNotMember": "Only a member of this workspace can be mapped to an upstream identity.",
+    "guidanceNotARepository": "Connector {name} is not a repository — guidance files are read from codebase and markdown/git connectors only"
   },
   "routeNotFound": "Cannot {method} {path}",
   "validationFailed": "Validation failed",
@@ -401,7 +428,8 @@
     "expiryInPast": "The expiry must be in the future",
     "rateLimited": "Too many requests — try again in a minute",
     "unlockRateLimited": "Too many password attempts — try again later",
-    "locked": "This link is password-protected"
+    "locked": "This link is password-protected",
+    "restricted": "A restricted page cannot be shared by link. Grant access to the people who need it instead"
   },
   "site": {
     "notFound": "This site does not exist",
@@ -485,5 +513,27 @@
     "serverUrlNotHttps": "The messenger server must use https (http is allowed only with CHAT_ALLOW_PRIVATE_URLS)",
     "serverUrlPrivate": "{address} is on a private network; set CHAT_ALLOW_PRIVATE_URLS to allow it",
     "serverHostUnresolved": "{host} could not be resolved"
+  },
+  "group": {
+    "notFound": "Group {id} not found",
+    "nameTaken": "A group named “{name}” already exists in this workspace",
+    "notMembers": "Only workspace members can join a group: {users}"
+  },
+  "access": {
+    "groupReadOnly": "Group “{name}” is synced from an external source and cannot be edited here",
+    "pageRestricted": "This page is restricted. Ask one of its managers for access",
+    "projectRestricted": "This project is restricted. Ask one of its managers for access",
+    "editRequired": "Editing this page is restricted to the people it names",
+    "manageRequired": "Only this page's managers and workspace admins can change who has access",
+    "selfLockout": "This change would leave you without access to manage this page. Keep yourself (or a group you are in) as a manager",
+    "unknownSubjects": "Not a member or group of this workspace: {subjects}",
+    "usersWithoutView": "These people cannot open the page, so they cannot be given work on it: {users}",
+    "requestDuplicate": "You already asked for access to this. A manager has your request",
+    "requestNotPending": "This request has already been decided or withdrawn",
+    "requestNotFound": "Access request {id} not found",
+    "requestOwnOnly": "Only the person who asked can withdraw a request",
+    "alreadyGranted": "You can already open this at the level you asked for",
+    "levelAboveRole": "Your workspace role does not allow editing, so edit access cannot be requested or granted",
+    "requestSelf": "You manage this already — nothing to ask for"
   }
 }

@@ -208,6 +208,37 @@ Schedules are off by default and need an owner and an interval before they can
 be enabled, because the failure mode of unattended AI is an avalanche, not a
 slow queue.
 
+A schedule can also run at a time of day (#70): `daily` at `HH:MM`, or
+`weekly` on a set of weekdays, in an IANA timezone (null means UTC; the
+editor fills in the browser's zone). The tick does not change. A slot is due
+on the first tick at or after it, so precision is five minutes and the editor
+says so. There are no cron expressions, because a syntax that promises
+minute precision would misstate what the tick can do. Whether a schedule is
+due is answered by one function, `nextScheduledRun` in
+`@knowledge/contracts`. The sweeper, the summary's `nextRunAt` and the
+editor's preview all call it. Slots are counted from the later of `lastRunAt`
+and `schedule_changed_at`, which gives two guarantees: a worker that was down
+across five slots runs once, and moving 09:00 to 08:00 at ten o'clock does not
+fire the 08:00 slot the moment it is saved. A null `schedule_kind` is
+`interval`, so rows written before #70 behave exactly as they did.
+
+`AgentRunInput.documentIds` limits a curator, reviewer or glossarist run to
+the named pages (`PAGE_SCOPED_AGENT_KEYS`). The pages are added to the
+executor's query next to `visibilityWhere`, never instead of it, so naming a
+page the owner cannot open gives the run nothing to read. It does not let the
+run read that page. Event triggers depend on this: a "page merged" run reads
+that page only.
+
+Events start runs too, since #70: a page merged or indexed, a merge request or
+pull request opened, a connector sync, a signed webhook, or a mention. They are
+**not** a second scheduler. `AgentTriggerService` writes the same `agent_runs`
+row the sweeper does, with `trigger: 'event'`, and enqueues it on the same
+queue, so the processor, the owner rule and the budget check are shared. What
+it adds is the guards an unattended source needs (enabled, filter, owner,
+in flight per subject, a cooldown, a per-workspace cap). Triggers, recipes,
+learnings and imported repository guidance are written up in
+[49](49-agent-triggers.md).
+
 ## Data model
 
 | Table                       | Notes                                                                                                                                                                                                                                                                          |
@@ -242,7 +273,7 @@ instead of hiding it in module wiring.
 | Route                                  | Access | Notes                                      |
 | -------------------------------------- | ------ | ------------------------------------------ |
 | `GET /v1/ai/agents`                    | admin  | Effective roster: defaults ⊕ overrides     |
-| `GET /v1/ai/agents/choices`            | viewer | Names only — no prompts, no tools          |
+| `GET /v1/ai/agents/choices`            | viewer | Names only — no prompts, no tools; `scope=all` names every agent, not just the offered ones |
 | `POST /v1/ai/agents`                   | admin  | A workspace's own agent                    |
 | `PATCH /v1/ai/agents/:key`             | admin  | `null` on a field restores its default     |
 | `DELETE /v1/ai/agents/:key/override`   | admin  | Reset a built-in                           |
@@ -250,6 +281,9 @@ instead of hiding it in module wiring.
 | `POST /v1/ai/agents/route`             | viewer | Dry-run the router, with rejection reasons |
 | `POST /v1/ai/agents/:key/run`          | editor | Runs as the caller, capped by their role   |
 | `GET /v1/ai/agents/runs` · `/runs/:id` | viewer | Runs and their findings                    |
+
+Triggers, recipes, learnings and finding dismissal add routes of their own;
+they are listed in [49 §Routes](49-agent-triggers.md#routes).
 
 Agents are addressed by **key**, not id: a built-in has no row until it is
 overridden, so it has no id to address. That means `workspaceId` always travels

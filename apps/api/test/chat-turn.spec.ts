@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { ASSISTANT_WRITE_TOOL_NAMES } from '@knowledge/contracts';
 import { AssistantService } from '../src/assistant/assistant.service.js';
 import { AssistantToolsService } from '../src/assistant/assistant.tools.js';
+import { systemScope } from '../src/permissions/access-scope.js';
+import type { PermissionService } from '../src/permissions/permission.service.js';
 import { AssistantReadToolsService } from '../src/assistant/assistant-read-tools.service.js';
 import type { AccessService } from '../src/auth/access.service.js';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
@@ -28,6 +30,8 @@ function readTools(search: Partial<SearchService>) {
     search as SearchService,
     { breadcrumbsFor: vi.fn(async () => new Map()) } as unknown as DocumentsService,
     {} as TemplatesService,
+    // The scope is asked before the search now (#76), so it must answer.
+    { scopeFor: vi.fn(async (_p: unknown, workspaceId: string) => systemScope(workspaceId)) } as unknown as PermissionService,
   );
 }
 

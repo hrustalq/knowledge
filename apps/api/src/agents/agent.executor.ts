@@ -14,7 +14,7 @@ import type {
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
-import { AGENT_FINDING_KINDS, isAuthorableRelationType } from '@knowledge/contracts';
+import { AGENT_FINDING_KINDS, AGENT_RUN_MAX_DOCUMENTS, isAuthorableRelationType } from '@knowledge/contracts';
 import { normalizeRelation } from '../common/relations.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -28,9 +28,12 @@ import { RepoSnapshotService } from '../connectors/code-research/repo-snapshot.s
 import { PullRequestService } from '../connectors/code-research/pull-request.service.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { SearchService } from '../search/search.service.js';
+import { visibilityWhere, WORKSPACE_AUDIENCE, type AccessScope } from '../permissions/access-scope.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { AgentRegistryService, type ResolvedAgent } from './agent-registry.service.js';
 import { runCodeReadingLoop } from './code-reading-loop.js';
 import { AiSkillsService } from '../ai/ai-skills.service.js';
+import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
 import type { Principal } from '../auth/principal.js';
@@ -85,13 +88,36 @@ import {
   readCoverageVerdict,
   type CoverageSignal,
 } from './coverage.js';
+import {
+  DIGEST_OUTPUT_CONTRACT,
+  MAX_DIGEST_MERGES,
+  MAX_DIGEST_PAGES,
+  digestKnown,
+  digestListing,
+  digestMarkdown,
+  digestSince,
+  highlightFinding,
+  isQuietDigest,
+  isoDay,
+  readDigestHighlights,
+  type DigestFacts,
+  type DigestHighlight,
+} from './digest.js';
 
 /**
  * Agents with a background executor. Exported so the API can refuse a run at
  * the point somebody asks for it, rather than accepting it and failing in the
  * worker a second later with nothing to show for the round trip.
  */
-export const RUNNABLE_AGENTS = new Set(['curator', 'reviewer', 'glossarist', 'cartographer', 'archaeologist', 'surveyor']);
+export const RUNNABLE_AGENTS = new Set([
+  'curator',
+  'reviewer',
+  'glossarist',
+  'cartographer',
+  'archaeologist',
+  'surveyor',
+  'digest',
+]);
 
 /** A page id the model named is checked against the database only if it could be one. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -172,7 +198,68 @@ export class AgentExecutor {
     private readonly search: SearchService,
     @Inject(EMBEDDING_PROVIDER) private readonly embedding: EmbeddingProvider,
     private readonly config: ConfigService<Env, true>,
+    private readonly permissions: PermissionService,
+    private readonly learnings: AgentLearningsService,
   ) {}
+
+  /**
+   * What a background agent is told beyond its instructions: the skills it
+   * names, the learnings an admin approved for it, and the findings people
+   * dismissed on its earlier runs (#70). One helper, so every executor renders
+   * the same blocks in the same order and none can forget one.
+   *
+   * There is no trigger message in a background run, so only the skills the
+   * agent explicitly names apply. Project-scoped learnings apply when the run
+   * is about pages, or a connector, in that project.
+   */
+  private async guidance(run: AgentRun, agent: ResolvedAgent): Promise<string> {
+    const [skills, projectIds] = await Promise.all([
+      this.skills.forTurn(run.workspaceId, '', agent.skillIds),
+      this.runProjects(run),
+    ]);
+    const [learnings, dismissed] = await Promise.all([
+      this.learnings.promptFor({ workspaceId: run.workspaceId, agentKey: agent.key, projectIds }),
+      this.learnings.dismissedPrompt(run.workspaceId, agent.key),
+    ]);
+    return this.skills.renderPrompt(skills) + learnings + dismissed;
+  }
+
+  /** The projects a run is about: its pages', else its connector's. Empty for a workspace-wide run. */
+  private async runProjects(run: AgentRun): Promise<string[]> {
+    const input = (run.input ?? {}) as AgentRunInput;
+    if (input.documentIds?.length) {
+      const pages = await this.prisma.document.findMany({
+        where: { id: { in: input.documentIds }, workspaceId: run.workspaceId },
+        select: { projectId: true },
+      });
+      return [...new Set(pages.map((p) => p.projectId))];
+    }
+    if (input.connectorId) {
+      const connector = await this.prisma.connector.findFirst({
+        where: { id: input.connectorId, workspaceId: run.workspaceId },
+        select: { projectId: true },
+      });
+      return connector?.projectId ? [connector.projectId] : [];
+    }
+    return [];
+  }
+
+  /**
+   * What a run may read (#76): its owner's pages, clamped to the workspace
+   * audience. A run's summary and findings are listed to every member, and a
+   * sentinel's verdict also lands on a pull request, so a page only some
+   * members can open must not feed either — even when the owner is an admin.
+   * Read once per stage for the run's own enumeration; the tool loop asks
+   * again on every call through `ctx.audience`.
+   */
+  private async runScope(run: AgentRun, principal: Principal): Promise<AccessScope> {
+    return this.permissions.audienceScope(await this.permissions.scopeFor(principal, run.workspaceId), WORKSPACE_AUDIENCE);
+  }
+
+  /** The tool context every agent loop runs with: the owner, clamped like {@link runScope}. */
+  private toolCtx(run: AgentRun, principal: Principal) {
+    return { principal, workspaceId: run.workspaceId, audience: WORKSPACE_AUDIENCE };
+  }
 
   /**
    * `principal` is the run's rehydrated owner, already authorised by the
@@ -199,6 +286,8 @@ export class AgentExecutor {
         return this.excavate(run, agent, principal, report);
       case 'surveyor':
         return this.surveyCoverage(run, agent, principal, report);
+      case 'digest':
+        return this.digest(run, agent, principal, report);
       // Deliberately not in RUNNABLE_AGENTS (docs/features/35): that set offers
       // the Run button and feeds the schedule sweeper, and a sentinel run with
       // neither a pull request nor a report has nothing to check. Only
@@ -222,8 +311,9 @@ export class AgentExecutor {
     report: AgentReporter,
   ): Promise<AgentRunResult> {
     await report({ stage: 'scanning', progress: 0.05 });
+    const scope = await this.runScope(run, principal);
     const documents = await this.prisma.document.findMany({
-      where: { workspaceId: run.workspaceId },
+      where: { workspaceId: run.workspaceId, ...pageScope(run), AND: [visibilityWhere(scope)] },
       select: { id: true, title: true, category: true, projectId: true },
       orderBy: { createdAt: 'desc' },
       take: MAX_PAGES,
@@ -247,7 +337,10 @@ export class AgentExecutor {
     // opinion, so it becomes a finding without asking a model.
     const degree = new Map<string, number>();
     try {
-      const relations = await this.graph.getWorkspaceRelationGraph(run.workspaceId);
+      const relations = await this.graph.getWorkspaceRelationGraph(
+        run.workspaceId,
+        await this.permissions.documentFilterFor(scope),
+      );
       for (const edge of relations.edges) {
         degree.set(edge.documentId, (degree.get(edge.documentId) ?? 0) + 1);
       }
@@ -312,14 +405,12 @@ export class AgentExecutor {
             // only what the agent explicitly names applies.
             content:
               `${agent.instructions}\n\n${OUTPUT_CONTRACT}` +
-              this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
+              await this.guidance(run, agent),
           },
           {
             role: 'user',
             content:
-              (run.input && typeof (run.input as { note?: string }).note === 'string'
-                ? `Extra instructions: ${(run.input as { note?: string }).note}\n\n`
-                : '') +
+              runBrief(run.input) +
               `Pages in this workspace (id | category | title | last updated):\n${listing}`,
           },
         ];
@@ -336,8 +427,7 @@ export class AgentExecutor {
                 call,
                 messages,
                 this.readTools.definitions(),
-                (name, args) =>
-                  this.readTools.execute(name, args, { principal, workspaceId: run.workspaceId }),
+                (name, args) => this.readTools.execute(name, args, this.toolCtx(run, principal)),
                 { jsonFinalRound: true },
               )
             ).content;
@@ -367,7 +457,8 @@ export class AgentExecutor {
   // ------------------------------------------------------------------ reviewer
 
   /**
-   * Reviews the pages that changed most recently, one model call each.
+   * Reviews the pages that changed most recently — or the run's named pages
+   * (#70) — one model call each.
    *
    * The same division of labour as the curator: *which* pages changed is a
    * query, so the worker answers it, and the model is spent only on reading
@@ -386,8 +477,12 @@ export class AgentExecutor {
 
     // Newest revision first, then back to the page — "recently changed" is a
     // fact about revisions, and `documents` carries no updatedAt.
+    const scope = await this.runScope(run, principal);
     const recent = await this.prisma.documentRevision.findMany({
-      where: { document: { workspaceId: run.workspaceId }, status: 'indexed' },
+      where: {
+        document: { workspaceId: run.workspaceId, ...pageScope(run), AND: [visibilityWhere(scope)] },
+        status: 'indexed',
+      },
       distinct: ['documentId'],
       orderBy: { createdAt: 'desc' },
       select: { documentId: true, createdAt: true },
@@ -400,9 +495,7 @@ export class AgentExecutor {
       select: { id: true, title: true },
     });
     const byId = new Map(documents.map((d) => [d.id, d]));
-    const skillText = this.skills.renderPrompt(
-      await this.skills.forTurn(run.workspaceId, '', agent.skillIds),
-    );
+    const skillText = await this.guidance(run, agent);
 
     const findings: AgentFinding[] = [];
     let reviewed = 0;
@@ -430,7 +523,7 @@ export class AgentExecutor {
             { role: 'system', content: agent.instructions + skillText },
             {
               role: 'user',
-              content: `Title: ${doc.title}\n\nPage:\n\n${content.markdown.slice(0, MAX_REVIEW_CHARS)}`,
+              content: `${runBrief(run.input)}Title: ${doc.title}\n\nPage:\n\n${content.markdown.slice(0, MAX_REVIEW_CHARS)}`,
             },
           ],
           { json: true },
@@ -515,8 +608,9 @@ export class AgentExecutor {
     principal: Principal,
     report: AgentReporter,
   ): Promise<AgentRunResult> {
+    const scope = await this.runScope(run, principal);
     const documents = await this.prisma.document.findMany({
-      where: { workspaceId: run.workspaceId },
+      where: { workspaceId: run.workspaceId, ...pageScope(run), AND: [visibilityWhere(scope)] },
       select: { id: true, title: true },
       orderBy: { createdAt: 'desc' },
       take: MAX_GLOSSARY_PAGES,
@@ -634,7 +728,7 @@ export class AgentExecutor {
     // --- what is already declared: repo docs + workspace pages, and a digest of them
     await report({ stage: 'docs', progress: 0.15 });
     const docs = selectRepoDocs(snapshot.files);
-    const pages = connector ? await this.destinationPages(run.workspaceId, connector) : [];
+    const pages = connector ? await this.destinationPages(await this.runScope(run, principal), connector) : [];
     // Lower-cased once: coverage is a substring test against this, per file.
     const declared = [...docs.map((d) => d.text), ...pages.map(declaredText)].join('\n').toLowerCase();
     // Modules the repo wiki documents as a whole (docs/features/46): their
@@ -702,9 +796,9 @@ export class AgentExecutor {
     if (candidates.length === 0) return { summary: t('agent.archaeology.noCandidates', counts), findings: [] };
 
     // --- the judgement: one tool loop per file
-    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const skills = await this.guidance(run, agent);
     const tools = [...this.readTools.definitions(), ...this.code.definitions()];
-    const toolCtx = { principal, workspaceId: run.workspaceId };
+    const toolCtx = this.toolCtx(run, principal);
     const findings: AgentFinding[] = [];
     let filesRead = 0;
 
@@ -730,7 +824,7 @@ export class AgentExecutor {
         {
           role: 'user',
           content:
-            (typeof input.note === 'string' && input.note ? `Extra instructions: ${input.note}\n\n` : '') +
+            runBrief(input) +
             `Repository: ${snapshot.name} (${snapshot.host.owner}/${snapshot.host.repo} @ ${snapshot.branch}). ` +
             `Every code tool call reads this repository; connectorId is ${connectorId}.\n\n` +
             `What the repository's documents and the workspace's pages already declare:\n${digest || '(nothing)'}\n\n` +
@@ -829,7 +923,7 @@ export class AgentExecutor {
 
     // --- which pages it touches, strongest tie first
     await report({ stage: 'related', progress: 0.2 });
-    const candidates = await this.driftCandidates(run.workspaceId, connector, pr, files, report);
+    const candidates = await this.driftCandidates(await this.runScope(run, principal), connector, pr, files, report);
     if (candidates.length === 0) {
       return { summary: t('agent.drift.noRelated', { number: pr.number, files: files.length }), findings: [] };
     }
@@ -858,7 +952,7 @@ export class AgentExecutor {
     }
 
     // --- the judgement: one call per page
-    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const skills = await this.guidance(run, agent);
     const call = {
       config: agent.config,
       userId: run.createdBy,
@@ -866,7 +960,7 @@ export class AgentExecutor {
       locale: run.locale as Locale,
     };
     const tools = [...this.readTools.definitions(), ...this.code.definitions()];
-    const toolCtx = { principal, workspaceId: run.workspaceId };
+    const toolCtx = this.toolCtx(run, principal);
     // The run reads one repository, whatever connectorId the model writes —
     // the archaeologist's rule. The code tools read the connector's branch, not
     // the change; the change itself is in the prompt.
@@ -980,6 +1074,13 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       select: { id: true, title: true },
     });
     if (!page) throw new Error(t('error.document.notFound', { id: issue.documentId }));
+    // A failure, not an empty verdict: the publisher reads "no finding" as
+    // "judged wrong" and would resolve the report. A failed run sends it back
+    // to `open` with this note, in front of a person who can open the page.
+    const scope = await this.runScope(run, principal);
+    if (!(await this.permissions.visibleDocumentIds(scope, [page.id])).has(page.id)) {
+      throw new Error(t('agent.report.restricted'));
+    }
     const head = await this.documents.getContent(page.id).catch(() => null);
     if (!head || !head.markdown.trim()) {
       return { summary: t('agent.report.noContent', { title: page.title }), findings: [] };
@@ -1010,10 +1111,10 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
     }
 
     await report({ stage: 'judging', progress: 0.4 });
-    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const skills = await this.guidance(run, agent);
     const call = { config: agent.config, userId: run.createdBy, operation: 'agent' as const, locale: run.locale as Locale };
     const tools = this.readTools.definitions();
-    const toolCtx = { principal, workspaceId: run.workspaceId };
+    const toolCtx = this.toolCtx(run, principal);
     const execute = (name: string, args: Record<string, unknown>) => this.readTools.execute(name, args, toolCtx);
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: `${agent.instructions}\n\n${REPORT_OUTPUT_CONTRACT}${skills}` },
@@ -1066,12 +1167,13 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
    * in the second, and the third merely reads like the change's title.
    */
   private async driftCandidates(
-    workspaceId: string,
+    scope: AccessScope,
     connector: { id: string; kind: string; projectId: string; parentId: string | null },
     pr: NonNullable<AgentRunInput['pullRequest']>,
     files: ReturnType<typeof scopeFiles>,
     report: AgentReporter,
   ): Promise<DriftCandidate[]> {
+    const workspaceId = scope.workspaceId;
     const links = await this.prisma.connectorLink.findMany({
       where: { connectorId: connector.id },
       select: { externalId: true, documentId: true },
@@ -1082,7 +1184,7 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
     const titles = new Map(
       (
         await this.prisma.document.findMany({
-          where: { id: { in: [...ties.keys()] }, workspaceId },
+          where: { id: { in: [...ties.keys()] }, workspaceId, AND: [visibilityWhere(scope)] },
           select: { id: true, title: true },
         })
       ).map((d) => [d.id, d.title]),
@@ -1092,7 +1194,7 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       if (title) out.set(documentId, { documentId, title, tie: 'linked', ...tie });
     }
 
-    for (const page of await this.destinationPages(workspaceId, connector)) {
+    for (const page of await this.destinationPages(scope, connector)) {
       if (inChange.has(page.id) || out.has(page.id)) continue;
       const named = mentionedFiles(`${page.title}
 ${page.markdown}`, files);
@@ -1110,12 +1212,15 @@ ${page.markdown}`, files);
     // is the one most likely to drift and least likely to be tied above. One
     // search, few hits; a failure costs the weakest tie, never the run.
     try {
-      const res = await this.search.search({
-        workspaceId,
-        query: searchQueryFor(pr, files),
-        mode: 'hybrid',
-        limit: MAX_SEARCHED_PAGES * 3,
-      });
+      const res = await this.search.search(
+        {
+          workspaceId,
+          query: searchQueryFor(pr, files),
+          mode: 'hybrid',
+          limit: MAX_SEARCHED_PAGES * 3,
+        },
+        scope,
+      );
       let added = 0;
       for (const hit of res.results) {
         if (added >= MAX_SEARCHED_PAGES) break;
@@ -1156,9 +1261,10 @@ ${page.markdown}`, files);
    * through the same `getContent` a reader uses; a draft-only page is skipped.
    */
   private async destinationPages(
-    workspaceId: string,
+    scope: AccessScope,
     connector: { id: string; projectId: string; parentId: string | null },
   ): Promise<Array<{ id: string; title: string; markdown: string; frontmatter: Record<string, unknown> | null }>> {
+    const workspaceId = scope.workspaceId;
     const ids = new Set<string>();
     for (const link of await this.prisma.connectorLink.findMany({
       where: { connectorId: connector.id },
@@ -1190,8 +1296,10 @@ ${page.markdown}`, files);
       }
     }
 
+    // Walked unfiltered so a hidden section does not cut off what is under
+    // it, then filtered: a page the run may not read declares nothing to it.
     const rows = await this.prisma.document.findMany({
-      where: { id: { in: [...ids].slice(0, MAX_DECLARED_PAGES) }, workspaceId },
+      where: { id: { in: [...ids].slice(0, MAX_DECLARED_PAGES) }, workspaceId, AND: [visibilityWhere(scope)] },
       select: { id: true, title: true },
     });
     const out: Array<{ id: string; title: string; markdown: string; frontmatter: Record<string, unknown> | null }> = [];
@@ -1262,6 +1370,7 @@ ${page.markdown}`, files);
 
     // --- what failed, in the window
     await report({ stage: 'signals', progress: 0.05 });
+    const scope = await this.runScope(run, principal);
     const since = new Date(Date.now() - windowDays * 86_400_000);
     const rows = await this.prisma.answerFeedback.findMany({
       where: {
@@ -1316,10 +1425,10 @@ ${page.markdown}`, files);
       };
     }
 
-    const skills = this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds));
+    const skills = await this.guidance(run, agent);
     const call = { config: agent.config, userId: run.createdBy, operation: 'agent' as const, locale: run.locale as Locale };
     const tools = this.readTools.definitions();
-    const toolCtx = { principal, workspaceId: run.workspaceId };
+    const toolCtx = this.toolCtx(run, principal);
     const execute = (name: string, args: Record<string, unknown>) => this.readTools.execute(name, args, toolCtx);
     const findings: AgentFinding[] = [];
     let judged = 0;
@@ -1331,7 +1440,7 @@ ${page.markdown}`, files);
         {
           role: 'user',
           content:
-            (typeof input.note === 'string' && input.note ? `Extra instructions: ${input.note}\n\n` : '') +
+            runBrief(input) +
             coveragePrompt(cluster, { hasCodebase, windowDays }),
         },
       ];
@@ -1349,7 +1458,7 @@ ${page.markdown}`, files);
           cited.length
             ? (
                 await this.prisma.document.findMany({
-                  where: { id: { in: cited }, workspaceId: run.workspaceId },
+                  where: { id: { in: cited }, workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
                   select: { id: true, title: true },
                 })
               ).map((d) => [d.id, d.title])
@@ -1379,6 +1488,181 @@ ${page.markdown}`, files);
     };
   }
 
+  // ------------------------------------------------------------------- digest
+
+  /**
+   * What changed since the last digest (#70, phase 4), as a page a person can
+   * publish.
+   *
+   * The curator's division of labour: which pages were created or changed,
+   * what was merged and how many findings the other agents reported are
+   * queries over the run's scope — clamped to the workspace audience, because
+   * the digest is listed to every member — and the model is spent once, on
+   * what mattered. The proposed page is the first finding's `draft`; Create
+   * page publishes it through the archaeologist's path, as whoever presses it.
+   */
+  private async digest(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    await report({ stage: 'scanning', progress: 0.05 });
+    const facts = await this.digestFacts(run, principal);
+    const days = Math.max(1, Math.round((facts.until.getTime() - facts.since.getTime()) / 86_400_000));
+    if (isQuietDigest(facts)) return { summary: t('agent.digestRun.quiet', { days }), findings: [] };
+
+    const counts = { days, created: facts.created.length, changed: facts.changed.length, merged: facts.merged.length };
+    let summary = t('agent.digestRun.summary', counts);
+    let highlights: DigestHighlight[] = [];
+    const known = digestKnown(facts);
+
+    const blocking = agent.missing.filter((capability) => capability !== 'tools');
+    if (agent.config.enabled && blocking.length === 0) {
+      await report({ stage: 'thinking', progress: 0.4 });
+      try {
+        const call = { config: agent.config, userId: run.createdBy, operation: 'agent' as const, locale: run.locale as Locale };
+        const messages: ChatCompletionMessageParam[] = [
+          {
+            role: 'system',
+            content:
+              `${agent.instructions}\n\n${DIGEST_OUTPUT_CONTRACT}` +
+              await this.guidance(run, agent),
+          },
+          { role: 'user', content: runBrief(run.input) + digestListing(facts) },
+        ];
+        const raw = agent.missing.includes('tools')
+          ? await this.client.chat(call, messages, { json: true })
+          : (
+              await this.client.runWithTools(
+                call,
+                messages,
+                this.readTools.definitions(),
+                (name, args) => this.readTools.execute(name, args, this.toolCtx(run, principal)),
+                { jsonFinalRound: true },
+              )
+            ).content;
+        const parsed = safeJson(raw);
+        highlights = readDigestHighlights(parsed, known);
+        if (typeof parsed?.summary === 'string' && parsed.summary.trim()) {
+          summary = parsed.summary.trim().slice(0, 2_000);
+        }
+      } catch (error) {
+        // The lists are the digest's facts and stand without the model.
+        this.logger.warn(`Digest model pass failed: ${String(error)}`);
+        await report({ warning: t('agent.warning.modelPassFailed', { error: reasonOf(error) }) });
+      }
+    }
+
+    const title = t('agent.digestRun.pageTitle', { from: isoDay(facts.since), to: isoDay(facts.until) });
+    const markdown = digestMarkdown(facts, summary, highlights, {
+      highlights: t('agent.digestRun.highlights'),
+      created: t('agent.digestRun.created'),
+      changed: t('agent.digestRun.changed'),
+      merged: t('agent.digestRun.merged'),
+      findings: t('agent.digestRun.findings'),
+      revisions: (n) => t('agent.digestRun.revisions', { n }),
+    });
+    return {
+      summary,
+      findings: [
+        // First, and citing nothing: `createPage` reads an empty documentIds as
+        // "not published yet" and records the new page there once it is.
+        {
+          kind: 'other',
+          severity: 'info',
+          title,
+          detail: t('agent.digestRun.draftDetail', counts),
+          documentIds: [],
+          documentTitles: [],
+          draft: { title, markdown },
+        },
+        ...highlights.map((h) => highlightFinding(h, known)),
+      ],
+    };
+  }
+
+  /** The digest's facts, every page read under the run's audience-clamped scope. */
+  private async digestFacts(run: AgentRun, principal: Principal): Promise<DigestFacts> {
+    const until = new Date();
+    const previous = await this.prisma.agentRun.findFirst({
+      where: { workspaceId: run.workspaceId, agentKey: 'digest', status: 'succeeded', id: { not: run.id } },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    const since = digestSince(previous?.createdAt ?? null, until);
+    const scope = await this.runScope(run, principal);
+    const visible = { workspaceId: run.workspaceId, archivedAt: null, AND: [visibilityWhere(scope)] };
+    const page = { id: true, title: true, category: true } as const;
+
+    const [created, revisions, merged, runs, agents] = await Promise.all([
+      this.prisma.document.findMany({
+        where: { ...visible, createdAt: { gte: since } },
+        select: { ...page, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: MAX_DIGEST_PAGES,
+      }),
+      // Indexed revisions only — a draft that never reached the index changed
+      // nothing a reader can see. Bounded; the default-branch check is a
+      // column-to-column compare Prisma cannot express, so it runs below.
+      this.prisma.documentRevision.findMany({
+        where: { createdAt: { gte: since }, status: 'indexed', document: visible },
+        select: { documentId: true, branch: { select: { name: true } }, document: { select: { ...page, defaultBranch: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+      this.prisma.mergeRequest.findMany({
+        where: { status: 'merged', mergedAt: { gte: since }, document: visible },
+        select: { title: true, mergedAt: true, document: { select: page } },
+        orderBy: { mergedAt: 'desc' },
+        take: MAX_DIGEST_MERGES,
+      }),
+      this.prisma.agentRun.findMany({
+        where: {
+          workspaceId: run.workspaceId,
+          status: 'succeeded',
+          finishedAt: { gte: since },
+          agentKey: { not: 'digest' },
+        },
+        select: { agentKey: true, findings: true },
+        take: 200,
+      }),
+      this.registry.list(run.workspaceId),
+    ]);
+
+    const createdIds = new Set(created.map((d) => d.id));
+    const changed = new Map<string, DigestFacts['changed'][number]>();
+    for (const rev of revisions) {
+      // A new page's first revisions are its creation, already listed.
+      if (createdIds.has(rev.documentId) || rev.branch?.name !== rev.document.defaultBranch) continue;
+      const entry = changed.get(rev.documentId);
+      if (entry) entry.revisions += 1;
+      else
+        changed.set(rev.documentId, {
+          id: rev.document.id,
+          title: rev.document.title,
+          category: rev.document.category,
+          revisions: 1,
+        });
+    }
+
+    const names = new Map(agents.map((a) => [a.key, a.name]));
+    const findings = new Map<string, number>();
+    for (const r of runs) {
+      const count = Array.isArray(r.findings) ? r.findings.length : 0;
+      if (count > 0) findings.set(r.agentKey, (findings.get(r.agentKey) ?? 0) + count);
+    }
+
+    return {
+      since,
+      until,
+      created,
+      changed: [...changed.values()].sort((a, b) => b.revisions - a.revisions).slice(0, MAX_DIGEST_PAGES),
+      merged: merged.flatMap((m) => (m.mergedAt ? [{ title: m.title, mergedAt: m.mergedAt, document: m.document }] : [])),
+      findings: [...findings].map(([key, count]) => ({ agent: names.get(key) ?? key, count })),
+    };
+  }
+
   // ------------------------------------------------------------- cartographer
 
   /**
@@ -1405,8 +1689,9 @@ ${page.markdown}`, files);
     report: AgentReporter,
   ): Promise<AgentRunResult> {
     await report({ stage: 'scanning', progress: 0.05 });
+    const scope = await this.runScope(run, principal);
     const documents = await this.prisma.document.findMany({
-      where: { workspaceId: run.workspaceId },
+      where: { workspaceId: run.workspaceId, AND: [visibilityWhere(scope)] },
       select: { id: true, title: true, category: true },
       orderBy: { createdAt: 'desc' },
       take: MAX_PAGES,
@@ -1421,7 +1706,12 @@ ${page.markdown}`, files);
 
     await report({ stage: 'graph', progress: 0.2 });
     try {
-      const graph = await this.graph.getWorkspaceRelationGraph(run.workspaceId);
+      // Filtered, not only matched against `documents` below: an entity whose
+      // only edges come from pages the run may not read is not one to name.
+      const graph = await this.graph.getWorkspaceRelationGraph(
+        run.workspaceId,
+        await this.permissions.documentFilterFor(scope),
+      );
       for (const [key, entity] of Object.entries(graph.entities)) entityNames.set(key, entity.name);
       for (const edge of graph.edges) {
         if (!known.has(edge.documentId)) continue;
@@ -1506,14 +1796,12 @@ ${page.markdown}`, files);
             role: 'system',
             content:
               `${agent.instructions}\n\n${RELATION_OUTPUT_CONTRACT}` +
-              this.skills.renderPrompt(await this.skills.forTurn(run.workspaceId, '', agent.skillIds)),
+              await this.guidance(run, agent),
           },
           {
             role: 'user',
             content:
-              (run.input && typeof (run.input as { note?: string }).note === 'string'
-                ? `Extra instructions: ${(run.input as { note?: string }).note}\n\n`
-                : '') +
+              runBrief(run.input) +
               `Pages in this workspace (id | category | title | relations it already declares):\n${listing}`,
           },
         ];
@@ -1533,8 +1821,7 @@ ${page.markdown}`, files);
                 call,
                 messages,
                 this.readTools.definitions(),
-                (name, args) =>
-                  this.readTools.execute(name, args, { principal, workspaceId: run.workspaceId }),
+                (name, args) => this.readTools.execute(name, args, this.toolCtx(run, principal)),
                 { jsonFinalRound: true },
               )
             ).content;
@@ -1711,4 +1998,32 @@ function safeJson(raw: string): Record<string, unknown> | null {
     }
     return null;
   }
+}
+
+/**
+ * The page filter a page-scoped run (#70) adds to its gathering query, or
+ * nothing. Spread beside the run's `visibilityWhere`, never instead of it:
+ * naming a page the owner cannot open narrows the run to nothing, it does not
+ * widen what the run may read.
+ */
+function pageScope(run: AgentRun): { id?: { in: string[] } } {
+  const ids = ((run.input ?? {}) as AgentRunInput).documentIds;
+  return Array.isArray(ids) && ids.length > 0 ? { id: { in: ids.slice(0, AGENT_RUN_MAX_DOCUMENTS) } } : {};
+}
+
+/**
+ * What the run was asked beyond its own instructions: the trigger's or the
+ * person's note, and — for a webhook run (#70) — the delivery's body. The note
+ * is trusted (an admin or the person pressing Run wrote it); the payload never
+ * is, so it reaches the model only inside `wrapUntrusted`. One helper so no
+ * executor can render the payload any other way.
+ */
+export function runBrief(input: unknown): string {
+  const { note, payload } = (input ?? {}) as { note?: unknown; payload?: unknown };
+  return (
+    (typeof note === 'string' && note ? `Extra instructions: ${note}\n\n` : '') +
+    (typeof payload === 'string' && payload
+      ? `What started this run:\n${wrapUntrusted(payload, 'webhook', 'webhook')}\n\n`
+      : '')
+  );
 }

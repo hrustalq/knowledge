@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * Access — who is in this workspace, what a role grants, and who has an account
- * at all. One surface, three tabs.
+ * Access — who is in this workspace, what a role grants, which groups they
+ * form, who is asking for what, and who has an account at all. One surface,
+ * five tabs.
  *
  * These were two routes. `/settings/access` held the workspace roster and
  * `/settings/users` held the platform accounts, which meant the two halves of a
@@ -22,6 +23,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { AtSign, Library, ShieldCheck, UserPlus, Wrench } from 'lucide-vue-next'
+import { WORKSPACE_ROLES } from '@knowledge/contracts'
 import type {
   ListWorkspaceCandidatesResponse,
   ListWorkspaceMembersResponse,
@@ -68,10 +70,12 @@ import {
 import { usePageTabs, type PageTab } from '@/components/layout/page/page-chrome'
 import AccessRoles from '@/components/access/AccessRoles.vue'
 import AccessAccounts from '@/components/access/AccessAccounts.vue'
+import AccessGroups from '@/components/access/AccessGroups.vue'
+import AccessRequests from '@/components/access/AccessRequests.vue'
 
 const { t } = useI18n()
 
-const ROLES: WorkspaceRole[] = ['viewer', 'editor', 'admin']
+const ROLES: readonly WorkspaceRole[] = WORKSPACE_ROLES
 
 const auth = useAuthStore()
 const workspaces = ref<WorkspaceSummary[]>([])
@@ -309,6 +313,9 @@ const canSeeAccounts = computed(() => auth.isAdmin || auth.isDev)
 const tabs = computed<PageTab[]>(() => [
   { key: 'members', label: t('access.tabMembers'), count: members.value.length },
   { key: 'roles', label: t('access.tabRoles') },
+  { key: 'groups', label: t('access.tabGroups') },
+  // Every member: managers decide here, and anyone reads their own (#76).
+  { key: 'requests', label: t('access.tabRequests') },
   ...(canSeeAccounts.value ? [{ key: 'accounts', label: t('access.tabAccounts') }] : []),
 ])
 
@@ -428,6 +435,17 @@ const tab = usePageTabs(tabs, 'members')
         @assign="assignRole"
       />
     </div>
+
+    <!-- Groups: what page and project restrictions grant to. -->
+    <AccessGroups
+      v-else-if="tab === 'groups'"
+      :workspace-id="selected"
+      :members="members"
+      :can-manage="canManage"
+    />
+
+    <!-- Requests: access asked for, decided by whoever manages the page. -->
+    <AccessRequests v-else-if="tab === 'requests'" :workspace-id="selected" />
 
     <!-- Accounts: the platform layer. Only rendered where it can be used. -->
     <AccessAccounts v-else-if="tab === 'accounts' && canSeeAccounts" />

@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ACCESS_META, PLATFORM_ADMIN_META, PUBLIC_META, READ_KEY_OK_META, type AccessSpec } from './access.decorator.js';
 import { AccessService } from './access.service.js';
+import { PermissionService, type AccessResource } from '../permissions/permission.service.js';
 import type { Principal } from './principal.js';
 import { t } from '../i18n/t.js';
 import { bindTrace } from '@knowledge/observability';
@@ -28,6 +29,7 @@ export class AclGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly access: AccessService,
+    private readonly permissions: PermissionService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -66,26 +68,59 @@ export class AclGuard implements CanActivate {
       return true; // AUTH_MODE=none
     }
 
-    const workspaceId = await this.resolveWorkspace(spec, req);
+    const { workspaceId, resource } = await this.resolveTarget(spec, req);
     // From here on every record carries the tenant — including records from
     // services that never receive a workspaceId argument at all.
     bindTrace({ workspaceId });
-    await this.access.requireRole(principal, workspaceId, spec.role, spec.operator);
+    if (resource) {
+      // A page, its merge request or a project: the page level must cover the
+      // route as well as the workspace role (#76).
+      await this.permissions.requireResource(principal, workspaceId, resource, spec.role, spec.operator);
+    } else {
+      await this.access.requireRole(principal, workspaceId, spec.role, spec.operator, { allowGuest: spec.guests === true });
+    }
     return true;
+  }
+
+  /** The workspace, plus the resource page permissions apply to when the route names one. */
+  private async resolveTarget(
+    spec: AccessSpec,
+    req: { body?: Record<string, unknown>; query?: Record<string, unknown>; params?: Record<string, string> },
+  ): Promise<{ workspaceId: string; resource?: AccessResource }> {
+    switch (spec.source) {
+      case 'document': {
+        const id = this.uuid(req.params?.id, 'document');
+        return { workspaceId: await this.access.workspaceOfDocument(id), resource: { type: 'document', id } };
+      }
+      case 'merge-request': {
+        const { workspaceId, documentId } = await this.access.documentOfMergeRequest(
+          this.uuid(req.params?.id, 'mergeRequest'),
+        );
+        return { workspaceId, resource: { type: 'document', id: documentId } };
+      }
+      case 'project': {
+        const id = this.uuid(req.params?.id, 'project');
+        return { workspaceId: await this.access.workspaceOfProject(id), resource: { type: 'project', id } };
+      }
+      default:
+        return { workspaceId: await this.resolveWorkspace(spec, req) };
+    }
+  }
+
+  // `subject` is a catalog key (subject.*), not an English fragment: Russian
+  // needs the noun declined, so it is translated rather than concatenated.
+  private uuid(value: unknown, subject: string): string {
+    if (typeof value !== 'string' || !UUID_RE.test(value)) {
+      throw new BadRequestException(t('error.invalidUuid', { subject: t(`subject.${subject}`) }));
+    }
+    return value;
   }
 
   private async resolveWorkspace(
     spec: AccessSpec,
     req: { body?: Record<string, unknown>; query?: Record<string, unknown>; params?: Record<string, string> },
   ): Promise<string> {
-    // `subject` is a catalog key (subject.*), not an English fragment: Russian
-    // needs the noun declined, so it is translated rather than concatenated.
-    const uuid = (value: unknown, subject: string): string => {
-      if (typeof value !== 'string' || !UUID_RE.test(value)) {
-        throw new BadRequestException(t('error.invalidUuid', { subject: t(`subject.${subject}`) }));
-      }
-      return value;
-    };
+    const uuid = (value: unknown, subject: string): string => this.uuid(value, subject);
     // Saved filters are the one resource keyed by an integer (they are shown
     // and linked as `#7`), so they need their own parse — uuid() would reject
     // every valid id.
@@ -101,14 +136,8 @@ export class AclGuard implements CanActivate {
         return uuid(req.body?.workspaceId, 'workspaceId');
       case 'query':
         return uuid(req.query?.workspaceId, 'workspaceId');
-      case 'document':
-        return this.access.workspaceOfDocument(uuid(req.params?.id, 'document'));
-      case 'merge-request':
-        return this.access.workspaceOfMergeRequest(uuid(req.params?.id, 'mergeRequest'));
       case 'job':
         return this.access.workspaceOfJob(uuid(req.params?.id, 'job'));
-      case 'project':
-        return this.access.workspaceOfProject(uuid(req.params?.id, 'project'));
       case 'assistant-thread':
         return this.access.workspaceOfAssistantThread(uuid(req.params?.id, 'assistantThread'));
       case 'assistant-message':
@@ -121,6 +150,10 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfAiPlugin(uuid(req.params?.id, 'plugin'));
       case 'ai-provider':
         return this.access.workspaceOfAiProvider(uuid(req.params?.id, 'provider'));
+      case 'agent-trigger':
+        return this.access.workspaceOfAgentTrigger(uuid(req.params?.id, 'agentTrigger'));
+      case 'agent-learning':
+        return this.access.workspaceOfAgentLearning(uuid(req.params?.id, 'agentLearning'));
       case 'saved-filter':
         return this.access.workspaceOfSavedFilter(intId(req.params?.filterId, 'savedFilter'));
       case 'glossary-term':
@@ -155,8 +188,16 @@ export class AclGuard implements CanActivate {
         return this.access.workspaceOfChatBinding(uuid(req.params?.id, 'chatBinding'));
       case 'chat-subscription':
         return this.access.workspaceOfChatSubscription(uuid(req.params?.id, 'chatSubscription'));
+      case 'group':
+        return this.access.workspaceOfGroup(uuid(req.params?.id, 'group'));
+      case 'access-request':
+        return this.access.workspaceOfAccessRequest(uuid(req.params?.id, 'accessRequest'));
       case 'workspace':
         return this.access.workspaceExists(uuid(req.params?.id, 'workspace'));
+      case 'document':
+      case 'merge-request':
+      case 'project':
+        throw new Error(`resolveTarget handles ${spec.source}`);
     }
   }
 }

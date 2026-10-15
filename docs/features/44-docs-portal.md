@@ -124,7 +124,8 @@ per-IP `PublicRateLimitGuard` as shares, `Cache-Control: no-store`):
 | --- | --- |
 | `GET resolve?slug=\|host=&path=&from=` | site chrome (title, normalized theme, logo, root URL), the version, every built version, the nav's first render of the tree (below), and the page (markdown at its pinned revision, frontmatter stripped; its prev/next in reading order; where each page it links to lives), or `page: null`. Carries an `ETag`; a matching `If-None-Match` answers 304 without reading the body (see the render cache below) |
 | `GET :siteId/tree?parent=&version=` | one level of the version's tree as the viewer sees it: the children of `parent` (the top level without it), each with its own `childCount`. A parent the viewer may not see, or that is not in the version, is a 404 (issue #204) |
-| `GET :siteId/search?q=&version=` | up to 20 pages of one version matching `q`, each with a snippet as text runs (see Search) |
+| `GET :siteId/search?q=&version=&category=&tag=` | up to 20 pages of one version matching `q`, each with a snippet as text runs and its category and tags, narrowed by any repeated `category` / `tag`; any other parameter is a 400 (see Search) |
+| `GET :siteId/facets?version=` | the categories and tags of the version's pages the viewer may read, each with a page count, for the reader's filter rail (#205) |
 | `GET :siteId/versions/:versionId/attachments/:attachmentId` | 302 to a presigned URL, only for an attachment of a page in that snapshot |
 | `GET :siteId/logo` | 302 to the project's uploaded avatar, when the theme shows a logo |
 
@@ -320,16 +321,37 @@ have been a second copy of the snapshot to keep in step).
   one statement over `site_version_pages WHERE version_id = …`. A draft, an
   unpublished page or another version's page has no row there, and there is
   no semantic path: the workspace-wide vector index is never consulted.
-- **Older snapshots.** Rows written before the migration have no vector. The
-  worker fills them at boot from their pinned revisions
-  (`SiteSearchTextService.backfill`), matched on revision so a build that
-  swapped in meanwhile is not overwritten. It never rebuilds a version, so a
-  frozen version stays frozen.
-- **Reader.** `pages/public/SiteSearch.vue` is the app's search sheet without its stores:
-  the same `Sheet`, the same "/" and ⌘K shortcut and the same focus return
-  on close (`lib/search-shortcut.ts`, which `AppTopbar` and `SearchSheet`
-  now use too). It searches the version being read; a result is a plain link.
-  It needs JavaScript; nothing else in the reader does.
+- **Facets (#205).** Each row also carries the page's `category` as the build
+  read it and its pinned revision's frontmatter `tags` (jsonb, `[{key, name}]`:
+  `key` folded by `tagEntityKey` exactly as the graph folds it, `name` the
+  author's spelling). Both are snapshot columns, never a join to `documents` or
+  the graph, so a frozen version filters by the facets it was built with.
+  `category` and `tag` filters AND together; the values of one facet OR. The
+  route accepts only `SITE_SEARCH_PARAMS` (`q`, `version`, `category`, `tag`):
+  a workspace, project or mode is refused rather than ignored, so nobody
+  believes a filter applied that was dropped. `GET :siteId/facets` counts both
+  over the rows the viewer may read, so a value only a hidden page carries is
+  never offered.
+- **Older snapshots.** Rows written before the migration have no vector, and
+  rows from before #205 no tags (`tags IS NULL`; their category was copied
+  from `documents` by the migration). The worker fills them at boot from their
+  pinned revisions (`SiteSearchTextService.backfill`), matched on revision so
+  a build that swapped in meanwhile is not overwritten. It never rebuilds a
+  version, so a frozen version stays frozen. A row with no tags yet is never a
+  source for the per-revision text copy.
+- **Reader.** `pages/public/SiteSearch.vue` renders the app's own search
+  components (#205): `SearchSheetFrame` (the sheet, focus handling, the
+  re-run on a facet change), `SearchPanel`, `SearchResults` and `FacetFields`,
+  all store-free. The app's `SearchSheet` mounts the same frame over its
+  stores. What differs is the `SearchSource` passed to `useSearch`
+  (`app-search-source.ts` vs `site-search-source.ts`) and the filters slot:
+  the app passes its workspace/project/mode rail, the reader only the
+  category field (when the version has more than one category) and the tag
+  field. Failures from the public route (too short, 429, offline) are
+  `SearchNotice`s shown as written. Results follow the typing, as before; the
+  same "/" and ⌘K shortcut and focus return on close
+  (`lib/search-shortcut.ts`). It needs JavaScript; nothing else in the reader
+  does.
 
 ## The render cache
 

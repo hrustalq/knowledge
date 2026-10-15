@@ -1,17 +1,18 @@
 <script setup lang="ts">
 // Global search surface: filters on the left rail, query top-right, results
-// below it. Opened from the topbar trigger, "/" or Cmd/Ctrl+K.
+// below it. Opened from the topbar trigger, "/" or Cmd/Ctrl+K. The sheet is
+// SearchSheetFrame, shared with a published site's reader; what is the app's
+// own lives here — the stores, the workspace switch, "open as page".
 import { useI18n } from 'vue-i18n'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { watchDebounced } from '@vueuse/core'
 import { ExternalLink } from 'lucide-vue-next'
-import { createFocusReturn } from '@/lib/search-shortcut'
 import { useProjectsStore } from '@/stores/projects'
 import { useSearchUiStore } from '@/stores/search-ui'
 import { useWorkspacesStore } from '@/stores/workspaces'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import SearchPanel from './SearchPanel.vue'
+import { appSearchSource } from './app-search-source'
+import SearchFilters from './SearchFilters.vue'
+import SearchSheetFrame from './SearchSheetFrame.vue'
 import { useSearch } from './use-search'
 
 const { t } = useI18n()
@@ -22,8 +23,7 @@ const projects = useProjectsStore()
 const router = useRouter()
 const route = useRoute()
 
-const search = useSearch()
-const panelEl = ref<InstanceType<typeof SearchPanel> | null>(null)
+const search = useSearch(appSearchSource)
 /** Set when a workspace switch dropped project/tag filters, so we can say so. */
 const clearedNotice = ref(false)
 
@@ -58,38 +58,6 @@ watch(
   },
 )
 
-/** Focus the query field rather than the close button. */
-function focusQuery() {
-  void nextTick(() => panelEl.value?.focusQuery())
-}
-
-// Opened programmatically, so focus is handed back by hand (search-shortcut.ts).
-const focusReturn = createFocusReturn('global-search-trigger')
-watch(
-  () => ui.open,
-  (isOpen) => {
-    if (isOpen) focusReturn.remember()
-  },
-)
-
-// Toggling a facet re-runs the query — but only once there are results to
-// refine, so flipping filters before the first search fires nothing.
-watchDebounced(
-  () => [
-    search.mode.value,
-    [...search.categories.value],
-    [...search.projectIds.value],
-    [...search.tags.value],
-    search.expand.value,
-    search.depth.value,
-    search.limit.value,
-  ],
-  () => {
-    if (search.hasSearched.value && search.query.value.trim()) void search.run()
-  },
-  { debounce: 250, deep: true },
-)
-
 function switchWorkspace(workspaceId: string) {
   ui.stashForWorkspaceSwitch(workspaceId, search.snapshot())
   workspaces.switchWorkspace(workspaceId)
@@ -106,44 +74,34 @@ watch(() => route.fullPath, () => ui.close())
 </script>
 
 <template>
-  <Sheet v-model:open="open">
-    <SheetContent
-      side="right"
-      class="w-full gap-0 p-0 sm:max-w-3xl lg:max-w-5xl"
-      @open-auto-focus.prevent="focusQuery"
-      @close-auto-focus="focusReturn.onCloseAutoFocus"
-    >
-      <SheetHeader class="sr-only">
-        <SheetTitle>{{ t('nav.search') }}</SheetTitle>
-        <SheetDescription>
-          {{ t('search.sheetDescription') }}
-        </SheetDescription>
-      </SheetHeader>
+  <SearchSheetFrame
+    v-model:open="open"
+    :search="search"
+    trigger-id="global-search-trigger"
+    :title="t('nav.search')"
+    :description="t('search.sheetDescription')"
+    @navigate="ui.close()"
+  >
+    <template #filters>
+      <SearchFilters :search="search" @switch-workspace="switchWorkspace" />
+    </template>
 
-      <SearchPanel
-        ref="panelEl"
-        class="min-h-0 flex-1"
-        rail-surface
-        :search="search"
-        @navigate="ui.close()"
-        @switch-workspace="switchWorkspace"
+    <template #actions>
+      <button
+        v-if="search.hasSearched.value"
+        type="button"
+        class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        @click="openFullPage"
       >
-        <template #actions>
-          <button
-            v-if="search.hasSearched.value"
-            type="button"
-            class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            @click="openFullPage"
-          >
-            {{ t('search.openAsPage') }}
-            <ExternalLink class="size-3" />
-          </button>
-        </template>
-      </SearchPanel>
+        {{ t('search.openAsPage') }}
+        <ExternalLink class="size-3" />
+      </button>
+    </template>
 
+    <template #footer>
       <p v-if="clearedNotice" class="px-4 pb-3 text-xs text-muted-foreground">
         {{ t('search.filtersClearedForWorkspace') }}
       </p>
-    </SheetContent>
-  </Sheet>
+    </template>
+  </SearchSheetFrame>
 </template>

@@ -1,20 +1,21 @@
 <script setup lang="ts">
 // The whole search surface — filters rail, query field, results — shared by the
-// global sheet (SearchSheet.vue) and the standalone /search page
-// (SearchWidget.vue) so the two can never drift apart.
+// global sheet (SearchSheet.vue), the standalone /search page (SearchWidget.vue)
+// and a published site's reader (SiteSearch.vue, #205) so they can never drift
+// apart. Store-free: each surface passes the filters it offers in the
+// `filters` slot, drawn twice — the desktop rail and the mobile disclosure.
 import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { Search, SlidersHorizontal } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { nativeEl } from '@/lib/utils'
-import SearchFilters from './SearchFilters.vue'
 import SearchResults from './SearchResults.vue'
 import type { UseSearch } from './use-search'
 
 const { t } = useI18n()
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     search: UseSearch
     /** The sheet tints its rail to match the app shell; the page keeps the ground. */
@@ -24,7 +25,8 @@ withDefaults(
   { railSurface: false, placeholder: '' },
 )
 
-const emit = defineEmits<{ navigate: []; 'switch-workspace': [workspaceId: string] }>()
+const emit = defineEmits<{ navigate: [] }>()
+defineSlots<{ filters?(): unknown; actions?(): unknown }>()
 
 const queryEl = ref<HTMLInputElement | null>(null)
 const setQueryEl = (c: unknown) => {
@@ -33,11 +35,22 @@ const setQueryEl = (c: unknown) => {
 const filtersOpen = ref(false)
 
 defineExpose({ focusQuery: () => queryEl.value?.focus() })
+
+function clearLabel() {
+  const n = props.search.activeFilterCount.value
+  return t('search.clearFilters', { filters: t('search.activeFilters', { n }, n) })
+}
 </script>
 
 <template>
-  <div class="grid min-h-0 items-stretch lg:grid-cols-[15rem_minmax(0,1fr)]">
+  <!-- minmax(0,…) on every breakpoint: an auto column grows to the widest
+       unbreakable snippet and pushes the query field off a phone screen. -->
+  <div
+    class="grid min-h-0 grid-cols-[minmax(0,1fr)] items-stretch"
+    :class="$slots.filters ? 'lg:grid-cols-[15rem_minmax(0,1fr)]' : ''"
+  >
     <aside
+      v-if="$slots.filters"
       class="sidebar-scroll hidden min-h-0 overflow-y-auto lg:block"
       :class="
         railSurface
@@ -45,10 +58,17 @@ defineExpose({ focusQuery: () => queryEl.value?.focus() })
           : 'border-r pr-5'
       "
     >
-      <SearchFilters
-        :search="search"
-        @switch-workspace="emit('switch-workspace', $event)"
-      />
+      <div class="space-y-5">
+        <slot name="filters" />
+        <button
+          v-if="search.activeFilterCount.value > 0"
+          type="button"
+          class="text-xs text-primary hover:underline"
+          @click="search.clearFilters()"
+        >
+          {{ clearLabel() }}
+        </button>
+      </div>
     </aside>
 
     <section class="flex min-h-0 flex-col">
@@ -73,6 +93,7 @@ defineExpose({ focusQuery: () => queryEl.value?.focus() })
 
         <div class="mt-2 flex items-center gap-3">
           <button
+            v-if="$slots.filters"
             type="button"
             class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground lg:hidden"
             :aria-expanded="filtersOpen"
@@ -90,14 +111,19 @@ defineExpose({ focusQuery: () => queryEl.value?.focus() })
 
       <!-- Same filters component, second mount point: no duplicated markup. -->
       <div
-        v-if="filtersOpen"
-        class="max-h-[45vh] overflow-y-auto border-b lg:hidden"
+        v-if="$slots.filters && filtersOpen"
+        class="max-h-[45vh] space-y-5 overflow-y-auto border-b lg:hidden"
         :class="railSurface ? 'p-4' : 'py-4'"
       >
-        <SearchFilters
-          :search="search"
-          @switch-workspace="emit('switch-workspace', $event)"
-        />
+        <slot name="filters" />
+        <button
+          v-if="search.activeFilterCount.value > 0"
+          type="button"
+          class="text-xs text-primary hover:underline"
+          @click="search.clearFilters()"
+        >
+          {{ clearLabel() }}
+        </button>
       </div>
 
       <div class="min-h-0 flex-1 overflow-y-auto" :class="railSurface ? 'p-4' : 'pl-5'">

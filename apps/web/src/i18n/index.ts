@@ -2,6 +2,7 @@ import { createI18n, type I18n } from 'vue-i18n'
 import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts'
 import en from './messages/en.json'
 import ru from './messages/ru.json'
+import { russianPluralRule } from '@/lib/plural'
 
 /**
  * Message catalogs are JSON, matching apps/api (docs/features/18): one format
@@ -17,24 +18,6 @@ export type MessageSchema = typeof en
 
 // English is the key vocabulary; this is what makes a gap in ru a build error.
 const russian: MessageSchema = ru
-
-/**
- * Russian plural selection.
- *
- * vue-i18n's default rule is English (two forms). Russian needs four choices —
- * `нет страниц | 1 страница | 2 страницы | 5 страниц` — and 11–14 are "many"
- * despite ending in 1–4, which is exactly the case a naive `n === 1` gets wrong.
- * The teen test is on `n % 100`, not `n`: 111 and 212 are "many" too.
- */
-function russianPluralRule(choice: number, choicesLength: number): number {
-  if (choice === 0) return 0
-  const mod100 = choice % 100
-  const teen = mod100 >= 11 && mod100 <= 19
-  const endsWithOne = choice % 10 === 1
-  if (!teen && endsWithOne) return 1
-  if (!teen && choice % 10 >= 2 && choice % 10 <= 4) return 2
-  return choicesLength < 4 ? 2 : 3
-}
 
 /**
  * One instance per app instance — created inside createApp(), never at module

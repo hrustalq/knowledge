@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// Filter rail for the search sheet. Rendered twice — as the desktop left rail
-// and inside the mobile disclosure — so it owns no layout of its own.
+// The app's filter rail for the search sheet and the /search page, passed into
+// SearchPanel's `filters` slot. Rendered twice — as the desktop left rail and
+// inside the mobile disclosure — so it owns no layout of its own.
 //
 // The three document facets (project, category, tag) live in DocumentFacets so
 // the pages list offers exactly the same ones; what stays here is the part that
@@ -153,18 +154,5 @@ function onWorkspace(next: string[]) {
         </Select>
       </div>
     </section>
-
-    <button
-      v-if="search.activeFilterCount.value > 0"
-      type="button"
-      class="text-xs text-primary hover:underline"
-      @click="search.clearFilters()"
-    >
-      {{
-        t('search.clearFilters', {
-          filters: t('search.activeFilters', { n: search.activeFilterCount.value }, search.activeFilterCount.value),
-        })
-      }}
-    </button>
   </div>
 </template>

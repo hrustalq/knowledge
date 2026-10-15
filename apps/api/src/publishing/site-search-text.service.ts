@@ -1,14 +1,18 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import matter from 'gray-matter';
+import type { SiteSearchTag } from '@knowledge/contracts';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
-import { searchTextOf, type SearchText } from './site-search.text.js';
+import { searchTagsOf, searchTextOf, storedTags, type SearchText } from './site-search.text.js';
 
 /** Object reads in flight while collecting text, as the site's llms-full.txt does. */
 const READ_CONCURRENCY = 8;
 
-const EMPTY: SearchText = { headings: '', body: '' };
+/** What a snapshot row stores per revision: its text, and its frontmatter tags (#205). */
+export type PageSearchText = SearchText & { tags: SiteSearchTag[] };
+
+const EMPTY: PageSearchText = { headings: '', body: '', tags: [] };
 
 /**
  * title (A) + headings (B) + body (C). A fragment of SQL, never input: the
@@ -43,17 +47,24 @@ export class SiteSearchTextService implements OnApplicationBootstrap {
    * title alone and logged, rather than failing the build: one broken object
    * must not freeze a whole site at its last snapshot.
    */
-  async texts(revisionIds: string[]): Promise<Map<string, SearchText>> {
-    const out = new Map<string, SearchText>();
+  async texts(revisionIds: string[]): Promise<Map<string, PageSearchText>> {
+    const out = new Map<string, PageSearchText>();
     const wanted = [...new Set(revisionIds)];
     if (!wanted.length) return out;
 
     const known = await this.prisma.siteVersionPage.findMany({
-      where: { revisionId: { in: wanted }, OR: [{ searchBody: { not: '' } }, { searchHeadings: { not: '' } }] },
+      where: {
+        revisionId: { in: wanted },
+        OR: [{ searchBody: { not: '' } }, { searchHeadings: { not: '' } }],
+        // A row from before tags were stored has text but no tags: read it again.
+        tags: { not: Prisma.DbNull },
+      },
       distinct: ['revisionId'],
-      select: { revisionId: true, searchHeadings: true, searchBody: true },
+      select: { revisionId: true, searchHeadings: true, searchBody: true, tags: true },
     });
-    for (const row of known) out.set(row.revisionId, { headings: row.searchHeadings, body: row.searchBody });
+    for (const row of known) {
+      out.set(row.revisionId, { headings: row.searchHeadings, body: row.searchBody, tags: storedTags(row.tags) });
+    }
 
     const missing = wanted.filter((id) => !out.has(id));
     if (!missing.length) return out;
@@ -66,7 +77,10 @@ export class SiteSearchTextService implements OnApplicationBootstrap {
       const texts = await Promise.all(
         batch.map((r) =>
           this.storage.getObjectText(r.s3Key).then(
-            (raw) => searchTextOf(matter(raw).content),
+            (raw) => {
+              const { content, data } = matter(raw);
+              return { ...searchTextOf(content), tags: searchTagsOf(data) };
+            },
             (e: unknown) => {
               this.logger.warn(`site search: revision ${r.id} unreadable, indexed by title only: ${(e as Error).message}`);
               return EMPTY;
@@ -100,8 +114,9 @@ export class SiteSearchTextService implements OnApplicationBootstrap {
   /**
    * Snapshots written before search existed (or by a build interrupted
    * between its insert and its vector, which the transaction rules out) have
-   * no vector. Filled from their pinned revisions, never by rebuilding: a
-   * rebuild would re-resolve a frozen version's pages.
+   * no vector, and those written before #205 no tags. Filled from their
+   * pinned revisions, never by rebuilding: a rebuild would re-resolve a
+   * frozen version's pages.
    */
   onApplicationBootstrap(): void {
     void this.backfill().catch((e: Error) => this.logger.warn(`Site search backfill failed (non-fatal): ${e.message}`));
@@ -112,11 +127,11 @@ export class SiteSearchTextService implements OnApplicationBootstrap {
     this.backfilling = true;
     try {
       const versions = await this.prisma.$queryRaw<{ version_id: string }[]>`
-        SELECT DISTINCT version_id FROM site_version_pages WHERE search_vector IS NULL`;
+        SELECT DISTINCT version_id FROM site_version_pages WHERE search_vector IS NULL OR tags IS NULL`;
       for (const { version_id: versionId } of versions) {
         const rows = await this.prisma.$queryRaw<{ document_id: string; revision_id: string }[]>`
           SELECT document_id, revision_id FROM site_version_pages
-          WHERE version_id = ${versionId}::uuid AND search_vector IS NULL`;
+          WHERE version_id = ${versionId}::uuid AND (search_vector IS NULL OR tags IS NULL)`;
         const texts = await this.texts(rows.map((r) => r.revision_id));
         // Matched on the revision too: a build that swapped the snapshot in
         // the meantime wrote its own text, and this must not overwrite it.
@@ -125,7 +140,7 @@ export class SiteSearchTextService implements OnApplicationBootstrap {
             const text = texts.get(r.revision_id) ?? EMPTY;
             return this.prisma.siteVersionPage.updateMany({
               where: { versionId, documentId: r.document_id, revisionId: r.revision_id },
-              data: { searchHeadings: text.headings, searchBody: text.body },
+              data: { searchHeadings: text.headings, searchBody: text.body, tags: text.tags as unknown as Prisma.InputJsonValue },
             });
           }),
           this.indexVersion(versionId, true),

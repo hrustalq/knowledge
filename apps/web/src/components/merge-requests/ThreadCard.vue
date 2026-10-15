@@ -357,14 +357,17 @@ const replyTarget = computed(() =>
             </div>
 
             <div class="kn-comment-surface min-w-0 flex-1">
-              <p class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span class="truncate font-medium text-foreground">
+              <!-- Wraps rather than truncating: in a narrow rail the byline's
+                   tail ("tagged by …", the time, the actions) otherwise squeezes
+                   the author's name down to nothing. -->
+              <p class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+                <span class="max-w-full truncate font-medium text-foreground">
                   {{ authorLabel(comment, i) }}
                 </span>
                 <!-- An agent replies under the identity of whoever tagged it —
                      it has no account — so the person is named here rather than
                      silently standing in as the author. -->
-                <span v-if="comment.agentKey" class="shrink-0 truncate">
+                <span v-if="comment.agentKey" class="max-w-full truncate">
                   · {{ t('mention.viaActor', { actor: nameOf(comment.authorId) }) }}
                 </span>
                 <span class="shrink-0" :title="fullTime(comment.createdAt)">

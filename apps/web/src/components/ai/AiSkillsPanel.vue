@@ -7,7 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { toast } from 'vue-sonner'
-import { GitBranch, Plus, Sparkles, Trash2 } from 'lucide-vue-next'
+import { GitBranch, GitCompareArrows, Plus, Sparkles, Trash2 } from 'lucide-vue-next'
 import type { AiSkillSummary, CompareResponse, ListAiSkillsResponse } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
 import { getWorkspaceId } from '@/lib/api'
@@ -19,6 +19,16 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -138,7 +148,11 @@ async function toggle(skill: AiSkillSummary, enabled: boolean) {
   }
 }
 
+/** Deleting is immediate and has no undo, so the bin asks first. */
+const removing = ref<AiSkillSummary | null>(null)
+
 async function remove(skill: AiSkillSummary) {
+  removing.value = null
   try {
     await deleteSkill.mutateAsync({ path: { id: skill.id } })
     toast.success(t('ai.deletedNamed', { name: skill.name }))
@@ -217,14 +231,19 @@ async function remove(skill: AiSkillSummary) {
                 <GitBranch class="size-3" /> {{ sourceLabel(skill) }}
               </span>
               <Badge v-if="skill.sourceRemovedAt" variant="outline" class="font-normal">{{ t('ai.skills.removedUpstream') }}</Badge>
-              <button
+              <!-- A button that looks like one: a badge read as a status label,
+                   and the review it opens is the only way to take the change. -->
+              <Button
                 v-if="skill.pendingInstructions !== null"
                 type="button"
-                :aria-label="t('ai.skills.reviewUpstream')"
+                variant="outline"
+                size="xs"
+                class="font-normal"
+                :title="t('ai.skills.reviewUpstream')"
                 @click="reviewing = skill"
               >
-                <Badge variant="secondary" class="hover:bg-secondary/70 font-normal">{{ t('ai.skills.upstreamChanged') }}</Badge>
-              </button>
+                <GitCompareArrows /> {{ t('ai.skills.upstreamChanged') }}
+              </Button>
             </div>
           </TableCell>
           <TableCell>
@@ -246,7 +265,8 @@ async function remove(skill: AiSkillSummary) {
               variant="ghost"
               size="sm"
               :aria-label="t('ai.skills.deleteNamed', { name: skill.name })"
-              @click="remove(skill)"
+              :title="t('ai.skills.deleteNamed', { name: skill.name })"
+              @click="removing = skill"
             >
               <Trash2 class="size-3.5" />
             </Button>
@@ -310,6 +330,21 @@ async function remove(skill: AiSkillSummary) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog :open="removing !== null" @update:open="(v: boolean) => { if (!v) removing = null }">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('ai.skills.deleteTitle', { name: removing?.name ?? '' }) }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ removing?.source === 'repo' ? t('ai.skills.deleteRepoBody') : t('ai.skills.deleteBody') }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction @click="removing && remove(removing)">{{ t('common.delete') }}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <Dialog :open="reviewing !== null" @update:open="(v: boolean) => !v && (reviewing = null)">
       <DialogContent class="sm:max-w-4xl">

@@ -1781,7 +1781,9 @@
       "scheduleOwned": "runs as its owner",
       "everyMinutes": "every {count} min",
       "lastRunAt": "Last run {when}",
-      "neverRun": "Has not run yet"
+      "neverRun": "Has not run yet",
+      "deleteTitle": "Delete {name}?",
+      "deleteBody": "The agent, its instructions and its schedule are deleted. Runs it already made stay in Runs. This cannot be undone."
     },
     "triggers": {
       "title": "Triggers",
@@ -1831,7 +1833,9 @@
         "rotated": "Copy this secret now. It will not be shown again, and the previous one has stopped working.",
         "copy": "Copy",
         "copied": "Copied",
-        "signing": "Sign each delivery with HMAC-SHA256 of the timestamp, a dot, then the raw JSON body, and send it as X-Knowledge-Signature: sha256=hex. X-Knowledge-Timestamp is Unix seconds, X-Knowledge-Delivery a unique id per delivery — a retry with the same id starts nothing."
+        "signing": "Sign each delivery with HMAC-SHA256 of the timestamp, a dot, then the raw JSON body, and send it as X-Knowledge-Signature: sha256=hex. X-Knowledge-Timestamp is Unix seconds, X-Knowledge-Delivery a unique id per delivery — a retry with the same id starts nothing.",
+        "rotateTitle": "Rotate the signing secret?",
+        "rotateBody": "The current secret stops working at once, so every delivery is refused until the sender has the new one. The new secret is shown once."
       },
       "project": "Project",
       "allProjects": "All projects",
@@ -1854,7 +1858,12 @@
       "created": "Trigger added",
       "saved": "Trigger saved",
       "deleted": "Trigger deleted",
-      "delete": "Delete trigger"
+      "delete": "Delete trigger",
+      "enabledNamed": "Enabled: {event}",
+      "deleteTitle": "Delete this trigger?",
+      "deleteBody": "The agent stops starting on this event. Runs it already started stay in Runs.",
+      "deleteWebhookBody": "Its delivery URL stops working for good — a new webhook trigger gets a new URL and secret. Runs it already started stay in Runs.",
+      "save": "Save trigger"
     },
     "recipes": {
       "open": "Recipes",
@@ -1997,7 +2006,10 @@
       "reviewUpstreamDesc": "{path} changed in the repository. The skill keeps its current instructions until you accept — a commit never changes what an enabled skill says.",
       "acceptUpstream": "Accept upstream",
       "acceptedUpstream": "Upstream text accepted",
-      "repoEditNote": "Imported from {path}. While the skill is disabled it follows the repository; once enabled, upstream changes wait for your review."
+      "repoEditNote": "Imported from {path}. While the skill is disabled it follows the repository; once enabled, upstream changes wait for your review.",
+      "deleteTitle": "Delete {name}?",
+      "deleteBody": "The skill and its instructions are deleted. This cannot be undone.",
+      "deleteRepoBody": "The next sync imports the file again as a new, disabled skill while it is still in the repository. To keep it out of prompts, leave it disabled instead."
     },
     "plugins": {
       "add": "Add plugin",

@@ -11097,6 +11097,19 @@
             }
           },
           {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "offered (the default): the agents the composer offers. all: every agent, to name one wherever its key appears.",
+            "schema": {
+              "enum": [
+                "offered",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,

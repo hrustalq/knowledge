@@ -224,11 +224,11 @@ watch(connectorId, () => {
               <dt class="text-muted-foreground">{{ t('connectors.fieldDirection') }}</dt>
               <dd>
                 {{
-                  t(
-                    `connectors.direction${
-                      connector.direction === 'both' ? t('connectors.directionBoth') : connector.direction === 'push' ? t('connectors.directionPush') : t('connectors.directionPull')
-                    }`,
-                  )
+                  connector.direction === 'both'
+                    ? t('connectors.directionBoth')
+                    : connector.direction === 'push'
+                      ? t('connectors.directionPush')
+                      : t('connectors.directionPull')
                 }}
               </dd>
             </div>

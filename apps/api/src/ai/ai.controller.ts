@@ -362,11 +362,18 @@ export class AiController {
   @Get('agents/choices')
   @Access('viewer', 'query')
   @ApiQuery({ name: 'workspaceId', required: true })
+  @ApiQuery({
+    name: 'scope',
+    required: false,
+    enum: ['offered', 'all'],
+    description: 'offered (the default): the agents the composer offers. all: every agent, to name one wherever its key appears.',
+  })
   @ApiOperation({ summary: 'Agents offerable in the composer (viewer — names only, no prompts)' })
   async listAgentChoices(
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Query('scope') scope?: string,
   ): Promise<ListAiAgentChoicesResponse> {
-    return { agents: await this.agents.choices(workspaceId) };
+    return { agents: await this.agents.choices(workspaceId, scope === 'all' ? 'all' : 'offered') };
   }
 
   // Runs (background execution). Declared before ':key' so "runs" is not read

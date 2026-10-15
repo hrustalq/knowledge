@@ -127,7 +127,7 @@ function sourceLink(l: AgentLearningSummary): string | null {
           type="button"
           role="tab"
           :aria-selected="status === s"
-          class="rounded-md px-3 py-1.5 text-sm transition-colors"
+          class="rounded-md px-2.5 py-1.5 text-sm transition-colors"
           :class="status === s ? 'bg-primary/10 font-medium text-primary' : 'text-foreground/80 hover:bg-accent'"
           @click="status = s"
         >

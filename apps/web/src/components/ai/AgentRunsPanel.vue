@@ -7,7 +7,21 @@
 import { useI18n } from 'vue-i18n'
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { CircleAlert, CircleCheck, Clock, FilePlus2, GitPullRequest, GraduationCap, Link2, Loader2, OctagonAlert, TriangleAlert, X } from 'lucide-vue-next'
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleSlash,
+  Clock,
+  FilePlus2,
+  GitPullRequest,
+  GraduationCap,
+  Info,
+  Link2,
+  Loader2,
+  OctagonAlert,
+  TriangleAlert,
+  X,
+} from 'lucide-vue-next'
 import { AGENT_LEARNING_MAX_CHARS } from '@knowledge/contracts'
 import type {
   AgentFinding,
@@ -245,12 +259,19 @@ const STATUS_ICON = {
   running: Loader2,
   succeeded: CircleCheck,
   failed: CircleAlert,
-  cancelled: CircleAlert,
+  // Its own shape: a cancelled run is not a failed one, and the icon is what
+  // a reader scans the list by.
+  cancelled: CircleSlash,
 } as const
 
-const SEVERITY_ICON = { info: CircleCheck, warning: TriangleAlert, error: CircleAlert } as const
+// Info is not a check mark: a tick next to a finding reads as "resolved".
+const SEVERITY_ICON = { info: Info, warning: TriangleAlert, error: CircleAlert } as const
 const severityClass = (f: AgentFinding) =>
-  f.severity === 'error' ? 'text-destructive' : f.severity === 'warning' ? 'text-amber-600' : 'text-muted-foreground'
+  f.severity === 'error'
+    ? 'text-destructive dark:text-destructive-foreground'
+    : f.severity === 'warning'
+      ? 'text-amber-600 dark:text-amber-500'
+      : 'text-muted-foreground'
 </script>
 
 <template>
@@ -277,30 +298,42 @@ const severityClass = (f: AgentFinding) =>
 
     <ul v-else class="space-y-2">
       <li v-for="run in runs" :key="run.id" class="rounded-md border">
-        <button class="flex w-full items-start gap-3 p-3 text-left" @click="toggle(run.id)">
+        <button
+          class="flex w-full items-start gap-3 p-3 text-left"
+          :aria-expanded="expanded === run.id"
+          @click="toggle(run.id)"
+        >
+          <!-- The status is said, not only drawn: the icon is the one place a
+               run's outcome shows in the row. -->
           <component
             :is="STATUS_ICON[run.status]"
             class="mt-0.5 size-4 shrink-0"
+            role="img"
+            :aria-label="t(`ai.runs.status.${run.status}`)"
             :class="[
-              run.status === 'failed' && 'text-destructive',
-              run.status === 'succeeded' && 'text-emerald-600',
+              run.status === 'failed' && 'text-destructive dark:text-destructive-foreground',
+              run.status === 'succeeded' && 'text-emerald-600 dark:text-emerald-500',
               run.status === 'running' && 'animate-spin',
             ]"
           />
           <span class="min-w-0 flex-1">
             <span class="flex flex-wrap items-center gap-2">
               <span class="font-medium">{{ run.agentName }}</span>
-              <Badge variant="secondary" class="font-normal">{{ t(`ai.runs.trigger.${run.trigger}`) }}</Badge>
-              <!-- What an event run was started by (#70). -->
-              <Badge v-if="run.input?.event" variant="outline" class="font-normal">
-                {{ t(`ai.triggers.events.${run.input.event.type}`) }}
+              <!-- What started it. An event run names its event (#70) in place
+                   of the generic "on event", which said the same thing twice. -->
+              <Badge variant="secondary" class="font-normal">
+                {{
+                  run.input?.event
+                    ? t(`ai.triggers.events.${run.input.event.type}`)
+                    : t(`ai.runs.trigger.${run.trigger}`)
+                }}
               </Badge>
               <Badge v-if="repositoryName(run)" variant="outline" class="font-normal">{{ repositoryName(run) }}</Badge>
               <!-- The change a sentinel run checked (docs/features/35). Text, not
                    a link: this sits inside the row's toggle button, where a link
                    is invalid markup — each finding's source chip links out. -->
-              <Badge v-if="run.input?.pullRequest" variant="outline" class="max-w-64 truncate font-normal">
-                #{{ run.input.pullRequest.number }} {{ run.input.pullRequest.title }}
+              <Badge v-if="run.input?.pullRequest" variant="outline" class="max-w-64 font-normal">
+                <span class="truncate">#{{ run.input.pullRequest.number }} {{ run.input.pullRequest.title }}</span>
               </Badge>
               <span v-if="run.findingCount" class="text-muted-foreground text-xs">
                 {{ t('ai.runs.findings', { count: run.findingCount }) }}
@@ -332,20 +365,20 @@ const severityClass = (f: AgentFinding) =>
              warned is still a run that succeeded — putting it in the row would
              read as a failure. -->
         <ul v-if="expanded === run.id && run.warnings.length" class="space-y-1 border-t px-3 py-2">
-          <li v-for="(w, i) in run.warnings" :key="i" class="flex gap-2 text-[11px] text-amber-600">
+          <li v-for="(w, i) in run.warnings" :key="i" class="flex gap-2 text-[11px] text-amber-600 dark:text-amber-500">
             <TriangleAlert class="mt-0.5 size-3 shrink-0" />
             <span>{{ w }}</span>
           </li>
         </ul>
 
         <!-- Dismissed findings are hidden by default (#70); one switch shows them. -->
-        <div
+        <label
           v-if="expanded === run.id && dismissedCount(run) > 0"
-          class="text-muted-foreground flex items-center gap-2 border-t px-3 py-2 text-xs"
+          class="text-muted-foreground flex cursor-pointer items-center gap-2 border-t px-3 py-2 text-xs"
         >
           <Checkbox :model-value="showDismissed" @update:model-value="showDismissed = $event === true" />
           {{ t('ai.runs.showDismissed', { count: dismissedCount(run) }) }}
-        </div>
+        </label>
 
         <ul v-if="expanded === run.id && findingRows(run).length" class="space-y-2 border-t px-3 py-3">
           <li v-for="{ f, i } in findingRows(run)" :key="i" class="flex gap-2.5" :class="f.dismissedAt && 'opacity-60'">

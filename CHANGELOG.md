@@ -58,14 +58,36 @@ in the pull request that introduces them — see
   nor lists an entity that only hidden pages mention, and the same holds for
   the graph view and entity lists. A change to a restriction applies to the
   next search. A search still fills its `limit` when enough visible pages
-  match. The assistant's `read_document` and other read tools,
-  notifications, the activity feed and live events are not filtered by
+  match. Notifications, the activity feed and live events are not filtered by
   restrictions yet; that follows in the next phases. (#76)
+- **The assistant, agents, workflows and chat bots respect page
+  restrictions.** Every assistant tool reads only pages the person asking can
+  open, checked again on each tool call, so access removed during an answer
+  holds from the next step. A page they cannot open is "not found" to the
+  model. Proposing an update or a relation change needs edit on the page.
+  Output that more people read than the person it acts for is held to what
+  those readers could open: agent runs (whose findings every member sees, and
+  whose pull-request comments leave the workspace) and bot answers in a group
+  chat use only pages open to the whole workspace. Chat digests list only
+  those pages, and a workflow's search step uses only pages at least as open as
+  the page the workflow runs on. MCP guests can now use `knowledge_search`,
+  `knowledge_list_documents` and `knowledge_list_projects`, scoped to their
+  grants, and the new read tool `knowledge_get_page_access` tells an agent why
+  a page is or is not open to it. (#76)
 
 ### Changed
 
 - Assigning a merge-request reviewer who cannot open the page now answers 409
   with `details.reason = access.usersWithoutView` and the user ids. (#76)
+- Creating a page under a parent now needs edit on that parent, or on the
+  project for a top-level page, from `POST /v1/documents`, MCP
+  `knowledge_create_document` and the assistant. In a workspace without
+  restrictions every editor still has it. (#76)
+- In a workspace with restricted pages, agents (curator, reviewer, glossarist,
+  cartographer, archaeologist, surveyor, sentinel) no longer read them, even
+  when an admin owns the run. A report on a restricted page is not judged by
+  the sentinel: its run fails and the report returns to `open` for a person
+  with access. (#76)
 
 ### Operations
 

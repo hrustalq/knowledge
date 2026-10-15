@@ -225,6 +225,36 @@ principal from `users` and calls the same `AccessService.requireRole` an HTTP
 request would, which is what `AuthCoreModule` (AccessService without the guards)
 exists to make possible in the worker.
 
+### The audience clamp
+
+A run whose output is read by more people than the person it acts for reads
+that person's pages **clamped to its audience** (#76):
+`PermissionService.audienceScope(scope, audience)` keeps a page D only when
+`D.restricted_by ⊆ P.restricted_by`, where P is the destination page, or `{}`
+for a workspace-wide audience. Everyone who can read P then passes every
+restricted node on D's chain. The rule is expressed as extra `denied` nodes
+(`clampToAudience` in `access-scope.ts`), so `canSee`, `visibilityWhere`,
+`visibilitySql` and `documentFilterFor` apply it unchanged. A clamped scope
+never bypasses: an admin's run is read by people who are not admins.
+
+| Run | Acts for | Audience |
+| --- | --- | --- |
+| Assistant turn in the pane | the asker | none: the asker's own pages |
+| Chat bot answer in a DM | the linked person | none |
+| Chat bot answer in a group | the linked person | workspace |
+| Chat subscription digest | nobody | workspace (`OPEN_TO_WORKSPACE`) |
+| Agent run (every kind) | the run's owner | workspace: findings are listed to every member, and the sentinel's verdict reaches a pull request |
+| Workflow `search` step | the run's owner | the run's source page |
+
+The assistant's read tools take the audience from `AssistantToolContext.audience`
+and ask `scopeFor` (then `audienceScope`) **on every tool call**, so a grant
+revoked mid-turn holds from the next call. A page outside the scope is "not
+found" to the model. The write tools check the page level (`edit`), and
+creating a page needs edit on its parent, or on the project for a root page
+(`requireCreateUnder`, the same check REST and MCP make). A sentinel asked to
+judge a report on a page the clamp hides fails the run with
+`agent.report.restricted`, which sends the report back to `open` for a person.
+
 ## Modules
 
 `AuthModule` is `@Global()` and registers both guards. `AuthCoreModule` carries
@@ -312,13 +342,23 @@ at all: the web server answers it only for an internal peer with no
 
 ## Limits
 
-- Page restrictions cover the REST routes, MCP's per-page guard and its
-  tree/graph/project tools, search (all three legs, graph expansion, MCP
-  `knowledge_search`), the assistant's search/tree/graph/breadcrumb reads and
-  its grounding page. The assistant's `read_document` and other read tools,
-  agents' and workflows' audience clamp (they search through `systemScope`
-  today), notifications, activity and live events follow in the next phases of
-  issue #76; until then they are workspace-filtered only.
+- Page restrictions cover the REST routes, MCP (per-page guard, tree, graph,
+  project and search tools; guests may use the search, tree and project
+  tools), search (all three legs and graph expansion), every assistant tool,
+  agent and workflow runs and chat bots (through the audience clamp above).
+  Notifications, activity and live events follow in the next phases of issue
+  #76; until then they are workspace-filtered only. Access requests (and MCP
+  `knowledge_request_access`) arrive with them.
+- The audience clamp is conservative: two pages restricted to the same people
+  through different nodes still exclude each other. In a workspace whose pages
+  are mostly restricted, agent runs and group chat answers see little.
+- A `@reviewer` mention reply reads only the page and thread it was asked on,
+  so it needs no clamp; it would need one the moment it gains retrieval tools.
+- The clamp vouches for the members who can read the destination, not for a
+  guest granted only that page: a guest reading a thread could be shown a
+  page that is open to every member but not granted to them.
+- Existing assistant threads, agent findings and chat messages that quoted a
+  page before it was restricted are not redacted.
 - Members who cannot open a page get a 403 that confirms it exists (the
   Confluence trade-off, so they can ask for access). There is no "hidden" flag
   that would make it a 404 for them.

@@ -201,6 +201,7 @@ describe('ai.draft with produces.templateRef', () => {
     return { executors, chat };
   }
 
+  const principal = {} as never;
   const step: WorkflowStep = {
     id: 'write',
     kind: 'ai.draft',
@@ -214,7 +215,7 @@ describe('ai.draft with produces.templateRef', () => {
 
   it('hands the skeleton to the model wrapped untrusted, behind a code-owned rule', async () => {
     const { executors, chat } = makeExecutors({ title: 'Runbook: Refunds', markdown: '# Refunds\n\n## Symptoms\nx' });
-    await withLocale('en', () => executors.run(step, node, run));
+    await withLocale('en', () => executors.run(step, node, run, principal));
 
     const [system, user] = chat.mock.calls[0][1];
     expect(system.content).toContain('The page is written into a page template');
@@ -241,7 +242,7 @@ describe('ai.draft with produces.templateRef', () => {
         { type: 'RELATED_TO', targetKey: 'service:ledger' },
       ],
     });
-    const result = await withLocale('en', () => executors.run(step, node, run));
+    const result = await withLocale('en', () => executors.run(step, node, run, principal));
     expect(result.kind).toBe('draft');
     const draft = (result as { draft: WorkflowNodeDraft }).draft;
     expect(draft.templateRef).toBe(LIVE);
@@ -256,7 +257,7 @@ describe('ai.draft with produces.templateRef', () => {
   it('leaves a step without a template exactly as before', async () => {
     const { executors, chat } = makeExecutors({ markdown: '# x' });
     const { templateRef: _omit, ...produces } = step.produces!;
-    const result = await withLocale('en', () => executors.run({ ...step, produces }, node, run));
+    const result = await withLocale('en', () => executors.run({ ...step, produces }, node, run, principal));
     const draft = (result as { draft: WorkflowNodeDraft }).draft;
     expect(draft.templateRef).toBeUndefined();
     expect(draft.frontmatter).toBeUndefined();

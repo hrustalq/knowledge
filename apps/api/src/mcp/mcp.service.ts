@@ -31,6 +31,7 @@ import { EntitiesService } from '../entities/entities.service.js';
 import { GraphService } from '../graph/graph.service.js';
 import { AuditService } from '../auth/audit.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
+import { ResourceAccessService } from '../permissions/resource-access.service.js';
 import { HistoryService } from '../documents/history.service.js';
 import { IngestionAdminService } from '../ingestion/ingestion-admin.service.js';
 import { ProjectsService } from '../projects/projects.service.js';
@@ -138,6 +139,7 @@ export class McpService {
     private readonly shareLinks: ShareLinksService,
     private readonly exports: ExportService,
     private readonly repoWiki: RepoWikiService,
+    private readonly resourceAccess: ResourceAccessService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -192,7 +194,7 @@ export class McpService {
         },
       },
       async ({ workspaceId, query, limit, projectIds, tags, includeArchived }) => {
-        await guard.ws(workspaceId, 'viewer');
+        const scope = await guard.pages(workspaceId);
         // One merged object: separate spreads would clobber each other.
         const filters = {
           ...(projectIds?.length ? { projectIds } : {}),
@@ -206,7 +208,7 @@ export class McpService {
             limit: limit ?? 20,
             ...(Object.keys(filters).length ? { filters } : {}),
           },
-          await guard.scope(workspaceId),
+          scope,
         );
         // One batched read for the whole hit list (docs/features/38), and the
         // trace id of this call so an agent can quote it back to
@@ -445,8 +447,7 @@ export class McpService {
         inputSchema: { workspaceId: z.string().uuid() },
       },
       async ({ workspaceId }) => {
-        await guard.ws(workspaceId, 'viewer');
-        return this.json(await this.projects.list({ workspaceId }, await guard.scope(workspaceId)));
+        return this.json(await this.projects.list({ workspaceId }, await guard.pages(workspaceId)));
       },
     );
 
@@ -744,6 +745,23 @@ export class McpService {
       async ({ documentId, revisionId }) => {
         await guard.doc(documentId, 'viewer');
         return this.json(await this.documents.getDocument(documentId, revisionId));
+      },
+    );
+
+    // Read-only (#76): why a page is or is not open to this caller. Grant
+    // management stays out of MCP — a restriction is a person's decision.
+    server.registerTool(
+      'knowledge_get_page_access',
+      {
+        description:
+          'The restrictions on a page as they apply to you: whether it is restricted itself, the restricted pages and ' +
+          'project above it, and your effective level (view | edit | manage). Grants are listed only when you may ' +
+          'manage the page. Use it when a write is refused, or before telling someone a page is visible to a team.',
+        inputSchema: { documentId: z.string().uuid() },
+      },
+      async ({ documentId }) => {
+        await guard.doc(documentId, 'viewer');
+        return this.json(await this.resourceAccess.get(principal, { type: 'document', id: documentId }));
       },
     );
 
@@ -1094,9 +1112,8 @@ export class McpService {
         },
       },
       async ({ workspaceId, projectId, parentId, depth, includeArchived }) => {
-        await guard.ws(workspaceId, 'viewer');
         return this.json(
-          await this.documents.getTree(await guard.scope(workspaceId), projectId, {
+          await this.documents.getTree(await guard.pages(workspaceId), projectId, {
             parentId: parentId ?? null,
             ...(depth ? { depth } : {}),
             ...(includeArchived ? { includeArchived: true } : {}),
@@ -1136,6 +1153,10 @@ export class McpService {
       async ({ workspaceId, projectId, title, content, parentId, category, templateRef, templateVersion, values }) => {
         await guard.ws(workspaceId, 'editor');
         if (!content && !templateRef) throw new Error('Pass content, or a templateRef to start from.');
+        await this.permissions.requireCreateUnder(await guard.scope(workspaceId), {
+          projectId,
+          ...(parentId ? { parentId } : {}),
+        });
         return this.json(
           await this.documents.createDocument(
             {
@@ -1368,6 +1389,19 @@ export class McpService {
       },
       /** The caller's page visibility over a workspace, for tools that list pages. */
       scope: (workspaceId: string) => this.permissions.scopeFor(principal, workspaceId),
+      /**
+       * A viewer tool whose answer is filtered to what the caller may open, so
+       * a guest passes it too and sees only their grants — the twin of
+       * `@Access('viewer', …, { guests: true })` (#76). Returns that scope.
+       */
+      pages: async (workspaceId: string) => {
+        if (principal.mode !== 'dev') {
+          await this.access.requireRole(principal, await this.access.workspaceExists(workspaceId), 'viewer', false, {
+            allowGuest: true,
+          });
+        }
+        return this.permissions.scopeFor(principal, workspaceId);
+      },
       connector: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnector(id), role),
       connectorRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfConnectorRun(id), role),
       workflowRun: (id: string, role: WorkspaceRole) => check(() => this.access.workspaceOfWorkflowRun(id), role),

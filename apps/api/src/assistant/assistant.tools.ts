@@ -1,12 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import {
+  accessRank,
   ASSISTANT_WRITE_TOOL_NAMES,
   AUTHORABLE_RELATION_TYPES,
   DRAFT_EDIT_OPS,
   isAuthorableRelationType,
 } from '@knowledge/contracts';
 import type {
+  AccessLevel,
   AssistantChatMode,
   AssistantPrompt,
   AssistantPromptField,
@@ -21,6 +23,7 @@ import { DocumentRelationsService } from '../documents/document-relations.servic
 import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { AiConfigService } from '../ai/ai-config.service.js';
+import { PermissionService } from '../permissions/permission.service.js';
 import { WebResearchService } from './web-research.service.js';
 import { AssistantReadToolsService } from './assistant-read-tools.service.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
@@ -106,6 +109,7 @@ export class AssistantToolsService {
     // half and reached here the same way — delegated to, never re-implemented.
     private readonly code: CodeResearchService,
     private readonly tasks: WorkItemToolsService,
+    private readonly permissions: PermissionService,
   ) {}
 
   /** @param mode 'ask' (default) hides create_document/propose_update from the model entirely,
@@ -509,8 +513,8 @@ export class AssistantToolsService {
 
   private async editRelations(args: Record<string, unknown>, ctx: AssistantToolContext): Promise<AssistantToolResult> {
     const documentId = String(args.documentId ?? '');
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
-    if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
+    const doc = await this.requireWorkspaceDocument(documentId, ctx, 'edit');
+    if (typeof doc === 'string') return this.fail(doc);
 
     // Models spell a target either way round; accept both rather than failing on
     // a shape difference that carries no meaning.
@@ -610,6 +614,19 @@ export class AssistantToolsService {
         ? args.projectId
         : await this.defaultProjectId(ctx.workspaceId);
     if (!projectId) return this.fail('workspace has no project to create the document in');
+    const parentId = typeof args.parentId === 'string' && args.parentId ? args.parentId : undefined;
+    // Placing a page is editing where it goes (#76): the parent's (or, at the
+    // root, the project's) edit level, read on this call.
+    try {
+      await this.permissions.requireCreateUnder(await this.permissions.scopeFor(ctx.principal, ctx.workspaceId), {
+        projectId,
+        ...(parentId ? { parentId } : {}),
+      });
+    } catch {
+      return this.fail(
+        parentId ? `You cannot create pages under ${parentId}` : `You cannot create pages in project ${projectId}`,
+      );
+    }
 
     const created = await this.documents.createDocument(
       {
@@ -618,7 +635,7 @@ export class AssistantToolsService {
         title,
         ...(markdown.trim() ? { content: { mode: 'inline', format: 'markdown', text: markdown } } : {}),
         ...(typeof args.category === 'string' && args.category ? { category: args.category as DocumentCategory } : {}),
-        ...(typeof args.parentId === 'string' && args.parentId ? { parentId: args.parentId } : {}),
+        ...(parentId ? { parentId } : {}),
         // Issue #69. Resolved and rendered inside the pinned workspace by
         // createDocument, so a ref from another tenant is a not-found there.
         ...(templateRef ? { template: { ref: templateRef, values: templateValues(args.values) } } : {}),
@@ -651,8 +668,8 @@ export class AssistantToolsService {
     const documentId = String(args.documentId ?? '');
     const markdown = String(args.markdown ?? '');
     const title = String(args.title ?? '').trim().slice(0, 300);
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
-    if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
+    const doc = await this.requireWorkspaceDocument(documentId, ctx, 'edit');
+    if (typeof doc === 'string') return this.fail(doc);
     if (!markdown.trim()) return this.fail('markdown is required');
     if (!title) return this.fail('title is required');
     const authorId = ctx.principal.userId; // matches DEV_PRINCIPAL's stub id in AUTH_MODE=none
@@ -813,8 +830,9 @@ export class AssistantToolsService {
     const rawDocumentId = typeof args.documentId === 'string' ? args.documentId : '';
     let doc: { id: string; title: string } | null = null;
     if (rawDocumentId) {
-      doc = await this.requireWorkspaceDocument(rawDocumentId, ctx);
-      if (!doc) return this.fail(`Document ${rawDocumentId} not found in this workspace`);
+      const found = await this.requireWorkspaceDocument(rawDocumentId, ctx, 'view');
+      if (typeof found === 'string') return this.fail(found);
+      doc = found;
     } else if (component === 'graph') {
       return this.fail('documentId is required for the graph component');
     }
@@ -827,15 +845,30 @@ export class AssistantToolsService {
     };
   }
 
-  /** Model-supplied ids are only honoured when the document lives in the pinned workspace. */
-  private async requireWorkspaceDocument(documentId: string, ctx: AssistantToolContext) {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) return null;
+  /**
+   * Model-supplied ids are only honoured when the document lives in the pinned
+   * workspace and the caller's page level covers `needed`, read on this call
+   * (#76). A page they cannot open is "not found" — the model learns nothing
+   * about it; one they can read but not edit says so. Returns the error to
+   * hand the model instead of the page when either fails.
+   */
+  private async requireWorkspaceDocument(
+    documentId: string,
+    ctx: AssistantToolContext,
+    needed: AccessLevel,
+  ): Promise<{ id: string; title: string } | string> {
+    const notFound = `Document ${documentId} not found in this workspace`;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) return notFound;
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
       select: { id: true, workspaceId: true, title: true },
     });
-    if (!doc || doc.workspaceId !== ctx.workspaceId) return null;
-    return doc;
+    if (!doc || doc.workspaceId !== ctx.workspaceId) return notFound;
+    const scope = await this.permissions.scopeFor(ctx.principal, ctx.workspaceId);
+    const level = await this.permissions.levelFor(scope, { type: 'document', id: documentId });
+    if (level === 'none') return notFound;
+    if (accessRank(level) < accessRank(needed)) return `You can read "${doc.title}" but not edit it`;
+    return { id: doc.id, title: doc.title };
   }
 
   // ---- Web research (docs/features/25) --------------------------------------

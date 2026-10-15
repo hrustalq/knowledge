@@ -31,7 +31,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
-import { canSee } from '../permissions/access-scope.js';
+import { canSee, type Audience } from '../permissions/access-scope.js';
 import { SearchService } from '../search/search.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import type { Principal } from '../auth/principal.js';
@@ -609,6 +609,9 @@ export class AssistantService {
    *   produce something only the web pane can draw; a chat client would show a
    *   turn that ended on nothing.
    * - **The binding's project**, as a retrieval filter the model cannot widen.
+   * - **The audience**, in a group (#76): the asker's pages clamped to what
+   *   every member can open, since the answer is read by people the asker's
+   *   grants say nothing about. A direct message is the asker's alone.
    *
    * It is still a persisted thread turn, so the asker finds the conversation,
    * its sources and its tool trace under /assistant, and a weak answer leaves
@@ -616,7 +619,7 @@ export class AssistantService {
    */
   async runChatTurn(
     threadId: string,
-    input: { content: string; agentKey?: string | null; projectId?: string | null },
+    input: { content: string; agentKey?: string | null; projectId?: string | null; audience?: Audience },
     principal: Principal,
   ): Promise<{ enabled: boolean; message: AssistantMessageInfo }> {
     const dto: PostAssistantMessageDto = { content: input.content, mode: 'ask', ...(input.agentKey ? { agentKey: input.agentKey } : {}) };
@@ -644,7 +647,14 @@ export class AssistantService {
         ],
         turn.agent,
       ),
-      (name, args) => this.runTool(name, args, { principal, thread, turn, projectId }),
+      (name, args) =>
+        this.runTool(name, args, {
+          principal,
+          thread,
+          turn,
+          projectId,
+          ...(input.audience ? { audience: input.audience } : {}),
+        }),
     );
 
     const message = await this.finishTurn(thread, turn, content, trace, principal, 'chat');
@@ -904,6 +914,8 @@ export class AssistantService {
       emit?: (frame: AssistantStreamFrame) => void;
       /** Chat turns only: the bound project, pinned into the tool context. */
       projectId?: string;
+      /** Chat turns only: who reads the answer besides the asker (#76). */
+      audience?: Audience;
     },
   ): Promise<{ content: string; ok: boolean }> {
     const { thread, turn } = ctx;
@@ -957,6 +969,7 @@ export class AssistantService {
       workspaceId: thread.workspaceId,
       cite: (source) => turn.labels.label(source),
       ...(ctx.projectId ? { projectId: ctx.projectId } : {}),
+      ...(ctx.audience ? { audience: ctx.audience } : {}),
     });
     if (!result.ok) turn.toolErrors++;
     for (const source of result.sources) {

@@ -12,7 +12,8 @@ import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-regist
 import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { SearchService } from '../search/search.service.js';
-import { systemScope } from '../permissions/access-scope.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import type { Principal } from '../auth/principal.js';
 import { StorageService } from '../storage/storage.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
@@ -70,14 +71,16 @@ export class WorkflowExecutors {
     private readonly skills: AiSkillsService,
     private readonly workItems: ConnectorWorkItemsService,
     private readonly templates: TemplatesService,
+    private readonly permissions: PermissionService,
   ) {}
 
-  async run(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
+  /** `principal` is the run's rehydrated owner, already authorised by the processor. */
+  async run(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun, principal: Principal): Promise<StepResult> {
     switch (step.kind) {
       case 'review':
         return { kind: 'gate' };
       case 'search':
-        return this.runSearch(step, node, run);
+        return this.runSearch(step, node, run, principal);
       case 'ai.generate':
         return this.runGenerate(step, node, run);
       case 'ai.draft':
@@ -122,8 +125,20 @@ export class WorkflowExecutors {
 
   // ------------------------------------------------------------------ search
 
-  private async runSearch(step: WorkflowStep, node: WorkflowRunNode, run: WorkflowRun): Promise<StepResult> {
+  private async runSearch(
+    step: WorkflowStep,
+    node: WorkflowRunNode,
+    run: WorkflowRun,
+    principal: Principal,
+  ): Promise<StepResult> {
     const context = await this.gather(node, run);
+    // The owner's pages, clamped to the source page's audience (#76): what the
+    // search finds feeds drafts that land under that page, read by whoever can
+    // open it — not necessarily by everyone the owner can see.
+    const scope = await this.permissions.audienceScope(await this.permissions.scopeFor(principal, run.workspaceId), {
+      kind: 'document',
+      documentId: run.rootDocumentId,
+    });
     const results = await this.search.search(
       {
         workspaceId: run.workspaceId,
@@ -134,8 +149,7 @@ export class WorkflowExecutors {
           ? { filters: { projectIds: step.filters.projectIds } }
           : {}),
       } as Parameters<SearchService['search']>[0],
-      // A run acts for no one person yet; #76 phase 4 narrows it to its audience.
-      systemScope(run.workspaceId),
+      scope,
     );
     return { kind: 'context', context: results };
   }

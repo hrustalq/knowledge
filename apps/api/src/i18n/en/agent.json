@@ -111,6 +111,7 @@
   },
   "report": {
     "noContent": "\"{title}\" has no readable content to judge the report against.",
+    "restricted": "The reported page is restricted to some members. An agent run is listed to the whole workspace, so none judges it — a person with access should review the report.",
     "noModel": "No model is configured for the sentinel, so the report is passed on without a verdict.",
     "reportedTitle": "\"{title}\" — reported as {kind}",
     "summaryNoModel": "Report on \"{title}\" was not judged; it stays open for a person.",

@@ -69,10 +69,11 @@ export function hidesAnything(scope: AccessScope): boolean {
 }
 
 /**
- * A scope that sees the whole workspace, for a reader acting for no person:
- * agent and workflow runs until #76 phase 4 narrows them to their owner and
- * audience. A named function rather than a hand-built literal, so every such
- * caller can be found and replaced.
+ * A scope that sees the whole workspace, for a reader acting for no person —
+ * today only the retrieval backtest, an operator's script. Agent, workflow and
+ * chat runs act for their owner, clamped to their audience (`clampToAudience`).
+ * A named function rather than a hand-built literal, so every such caller can
+ * be found.
  */
 export function systemScope(workspaceId: string): AccessScope {
   return {
@@ -85,6 +86,55 @@ export function systemScope(workspaceId: string): AccessScope {
     groupIds: new Set(),
     denied: new Set(),
     granted: new Set(),
+  };
+}
+
+/**
+ * Who will read what a run writes (#76). A reply in a thread on page P is read
+ * by whoever can open P; an agent run's findings, a chat digest or a bot answer
+ * in a group are read by the whole workspace (or by people it cannot vouch for
+ * at all), so they get the narrowest audience: pages every member can open.
+ */
+export type Audience = { kind: 'workspace' } | { kind: 'document'; documentId: string };
+
+export const WORKSPACE_AUDIENCE: Audience = { kind: 'workspace' };
+
+/**
+ * Pages every member of the workspace can open: nothing on their chain is
+ * restricted. The audience clamp for an output that names pages to people
+ * nobody can enumerate, with no one person's scope to start from.
+ */
+export const OPEN_TO_WORKSPACE: Prisma.DocumentWhereInput = { restrictedBy: { isEmpty: true } };
+
+/**
+ * The audience clamp (#76): `scope` narrowed so a page D survives only when
+ * `D.restricted_by ⊆ audienceNodes` — the destination page's own
+ * `restricted_by`, or nothing for a workspace-wide audience. Everyone who can
+ * read the destination then satisfies every restricted node on D's chain, so
+ * what the run cites cannot reach anyone through it who could not open D.
+ *
+ * Expressed as more `denied`, so every reader of a scope (`canSee`,
+ * `visibilityWhere`, `visibilitySql`, `documentFilterFor`) applies it unchanged.
+ * `restrictedNodes` is every restricted node in the workspace; the ones outside
+ * the audience join `denied`. A clamped scope never bypasses: an admin's run
+ * posting into a thread is clamped like anyone's, since the admin is not the
+ * one reading it.
+ *
+ * Conservative by construction: D and P restricted to the same people through
+ * different nodes still drops D. Not a grant check on the audience — `levelOn`
+ * would refuse an admin owner the destination's own chain, so the readers of a
+ * clamped scope are the set-based ones above.
+ */
+export function clampToAudience(
+  scope: AccessScope,
+  restrictedNodes: Iterable<string>,
+  audienceNodes: ReadonlySet<string>,
+): AccessScope {
+  const outside = [...restrictedNodes].filter((id) => !audienceNodes.has(id));
+  return {
+    ...scope,
+    bypass: false,
+    denied: new Set(scope.bypass ? outside : [...scope.denied, ...outside]),
   };
 }
 

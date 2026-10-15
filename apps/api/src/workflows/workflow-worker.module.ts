@@ -7,6 +7,7 @@ import { EventsModule } from '../events/events.module.js';
 import { EventsSubscriberModule } from '../events/events-subscriber.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { ConnectorWorkItemsModule } from '../connectors/connector-work-items.module.js';
 import { WorkflowCoreModule } from './workflow-core.module.js';
@@ -41,6 +42,8 @@ import { WorkflowTriggerService } from './workflow-trigger.service.js';
     ActivityCoreModule,
     StorageModule,
     SearchCoreModule,
+    // The owner's page visibility and the audience clamp (#76).
+    PermissionsCoreModule,
     EventsModule,
     EventsSubscriberModule,
     AiCoreModule,

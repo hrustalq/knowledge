@@ -19,6 +19,7 @@ export function matchesWhere(where: Prisma.DocumentWhereInput, row: WhereRow): b
       case 'NOT':
         return !matchesWhere(value as Prisma.DocumentWhereInput, row);
       case 'restrictedBy':
+        if (v.isEmpty === true) return row.restrictedBy.length === 0;
         return (v.hasSome as string[]).some((id) => row.restrictedBy.includes(id));
       case 'projectId':
         return (v.in as string[]).includes(row.projectId);

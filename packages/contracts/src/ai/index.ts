@@ -1027,6 +1027,8 @@ export const BUILT_IN_AGENT_KEYS = [
   'sentinel',
   /** Clusters the questions answers failed on into coverage gaps (docs/features/38, phase 4). */
   'surveyor',
+  /** Summarises what changed in the workspace since its last digest (#70). */
+  'digest',
 ] as const;
 export type BuiltInAgentKey = (typeof BUILT_IN_AGENT_KEYS)[number];
 
@@ -1725,6 +1727,58 @@ export interface ListAgentTriggersResponse {
    * says so rather than letting the toggle claim otherwise.
    */
   listening: boolean;
+}
+
+/**
+ * Recipes (#70): a ready-made configuration of an agent that already exists —
+ * a schedule, a trigger, or both — applied in one press.
+ *
+ * A recipe writes the same rows an admin would write by hand, through the same
+ * services, so nothing downstream knows a recipe was involved: the sweeper and
+ * the trigger listener read the schedule and the trigger, never this list.
+ * Everything a recipe writes starts **disabled**. Turning it on is a separate,
+ * deliberate act, and whoever does it becomes the owner its runs execute and
+ * bill as — the rule every schedule and trigger already follows.
+ *
+ * Applying is idempotent: a schedule the agent already has, or a trigger it
+ * already has for the event, is kept as it is, never overwritten.
+ */
+export const AGENT_RECIPE_KEYS = ['weekly-digest', 'freshness-sweep', 'glossary-suggester'] as const;
+export type AgentRecipeKey = (typeof AGENT_RECIPE_KEYS)[number];
+
+export interface AgentRecipe {
+  key: AgentRecipeKey;
+  agentKey: BuiltInAgentKey;
+  /** A time-of-day schedule, in the timezone the person applying it sends (UTC without one). */
+  schedule?: { kind: Exclude<AgentScheduleKind, 'interval'>; time: string; weekdays?: number[] };
+  trigger?: { event: AgentTriggerEvent };
+}
+
+export const AGENT_RECIPES: Record<AgentRecipeKey, AgentRecipe> = {
+  /** The digest agent, Mondays at 09:00 — a week of changes in one page-shaped summary. */
+  'weekly-digest': { key: 'weekly-digest', agentKey: 'digest', schedule: { kind: 'weekly', time: '09:00', weekdays: [1] } },
+  /**
+   * The curator, told to look for staleness: weekly, and after every connector
+   * sync, which is when imported pages most often fall behind their source.
+   */
+  'freshness-sweep': {
+    key: 'freshness-sweep',
+    agentKey: 'curator',
+    schedule: { kind: 'weekly', time: '08:00', weekdays: [1] },
+    trigger: { event: 'connector.synced' },
+  },
+  /** The glossarist on every merge, scoped to the merged page. */
+  'glossary-suggester': { key: 'glossary-suggester', agentKey: 'glossarist', trigger: { event: 'page.merged' } },
+};
+
+// POST /v1/ai/agents/recipes/:recipe/apply
+export interface ApplyAgentRecipeResponse {
+  recipe: AgentRecipeKey;
+  agent: AiAgentSummary;
+  /** Every trigger the recipe asks for, whether this press created it or found it. */
+  triggers: AgentTriggerSummary[];
+  /** What this press wrote. A re-apply writes nothing that is already there. */
+  created: { schedule: boolean; triggers: number };
 }
 
 export const AGENT_FINDING_KINDS = [

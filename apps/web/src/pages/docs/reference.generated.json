@@ -212,6 +212,16 @@
     },
     {
       "method": "POST",
+      "path": "/v1/ai/agents/recipes/{recipe}/apply",
+      "tag": "ai",
+      "summary": "Apply a recipe: the schedule and triggers it names, all disabled. What the agent already has is kept, not overwritten.",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
       "path": "/v1/ai/agents/route",
       "tag": "ai",
       "summary": "Ask the router which agent and model would handle a request, without running it",

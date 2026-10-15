@@ -949,6 +949,23 @@ export class CreateAgentTriggerDto extends AgentTriggerFieldsDto {
 /** The event is fixed once created: a different event is a different trigger. */
 export class UpdateAgentTriggerDto extends AgentTriggerFieldsDto {}
 
+/**
+ * Apply a recipe (#70). Only the timezone a time-of-day schedule is read in:
+ * everything else is the recipe, and everything it writes starts disabled.
+ */
+export class ApplyAgentRecipeDto {
+  // Field name must stay `workspaceId`: @Access('admin', 'body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiPropertyOptional({ type: String, example: 'Europe/Moscow', description: "IANA timezone for the recipe's schedule. Absent reads as UTC." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64, { message: vmsg('maxLength') })
+  timezone?: string;
+}
+
 // ---- Source policies (docs/features/25) ------------------------------------
 
 /**

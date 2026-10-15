@@ -171,6 +171,25 @@ in the pull request that introduces them — see
   budget is spent), the comment says so. Only editors start runs this way;
   viewers, and every mention of an agent without such a trigger, get the
   ordinary reply as before. (#70)
+- A **Digest** agent summarises what changed since its last successful run,
+  or over the last 7 days if it has none (31 days at most). The summary
+  covers new pages, pages whose default branch changed, merged changes and how
+  many findings other agents reported. It lists only pages the whole workspace
+  can open. The run proposes the digest as a page. **Create page** on its first
+  finding publishes it as you, in the workspace's first project. Every link in
+  that page points to a page that exists. The model writes only the summary and
+  the highlights, and any link it invents is removed. Without a model
+  configured, the digest still lists the changes. (#70)
+- **Recipes** in **Settings → AI → Agents** set an agent up in one step:
+  **Weekly digest** runs the digest on Mondays at 09:00. **Freshness sweep**
+  runs the curator, told to look for stale pages, on Mondays at 08:00 and after
+  every connector sync. **Glossary suggester** runs the glossarist on each
+  merged page. Schedules use your browser's timezone. A recipe adds its schedule
+  and triggers switched off, then opens the agent so you can turn them on. Its
+  runs execute and bill as whoever turns them on. Applying a recipe again
+  changes nothing: an agent that already has a schedule, or a trigger for the
+  same event, keeps it. Route: `POST /v1/ai/agents/recipes/:recipe/apply`
+  (admin). (#70)
 
 ### Changed
 

@@ -11,8 +11,10 @@ import {
 } from '@nestjs/common';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { AGENT_RECIPE_KEYS } from '@knowledge/contracts';
 import type {
   RotateAgentTriggerSecretResponse,
+  ApplyAgentRecipeResponse,
   AgentRouteDecision,
   AgentRunSummary,
   AgentTriggerSummary,
@@ -51,6 +53,7 @@ import { AiSkillsService } from './ai-skills.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { AiAgentsService, AgentRunsService } from './ai-agents.service.js';
 import { AgentTriggersService } from './agent-triggers.service.js';
+import { AgentRecipesService } from './agent-recipes.service.js';
 import { AgentFindingsService } from './agent-findings.service.js';
 import { AgentRouterService } from '../agents/agent-router.service.js';
 import { AgentTiebreakService } from './agent-tiebreak.service.js';
@@ -70,6 +73,7 @@ import {
   StartAgentRunDto,
   CreateAgentTriggerDto,
   UpdateAgentTriggerDto,
+  ApplyAgentRecipeDto,
   UpdateAiAgentDto,
   UpdateAiSkillDto,
 } from './ai.dto.js';
@@ -88,6 +92,7 @@ export class AiController {
     private readonly agents: AiAgentsService,
     private readonly runs: AgentRunsService,
     private readonly triggers: AgentTriggersService,
+    private readonly recipes: AgentRecipesService,
     private readonly findings: AgentFindingsService,
     private readonly router: AgentRouterService,
     private readonly tiebreak: AgentTiebreakService,
@@ -432,6 +437,30 @@ export class AiController {
       subjectId: trigger.id,
       metadata: { key: trigger.agentKey, event: trigger.event },
     });
+  }
+
+  // Recipes (#70). A literal segment, so declared before ':key' with the rest.
+  @Post('agents/recipes/:recipe/apply')
+  @Access('admin', 'body')
+  @ApiParam({ name: 'recipe', enum: AGENT_RECIPE_KEYS })
+  @ApiOperation({
+    summary:
+      "Apply a recipe: the schedule and triggers it names, all disabled. What the agent already has is kept, not overwritten.",
+  })
+  async applyAgentRecipe(
+    @Param('recipe') recipe: string,
+    @Body() dto: ApplyAgentRecipeDto,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ApplyAgentRecipeResponse> {
+    const applied = await this.recipes.apply(recipe, dto, principal.userId);
+    await this.activity.record({
+      workspaceId: dto.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.agent.recipe.applied',
+      subjectId: applied.agent.id ?? undefined,
+      metadata: { recipe: applied.recipe, key: applied.agent.key, created: applied.created },
+    });
+    return applied;
   }
 
   @Post('agents/:key/triggers')

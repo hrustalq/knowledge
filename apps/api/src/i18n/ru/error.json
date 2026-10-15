@@ -216,6 +216,7 @@
     "agentNeedsConnector": "Агент «{key}» читает один репозиторий — выберите коннектор, по которому его запустить.",
     "agentConnectorInvalid": "{id} — не включённый коннектор репозитория в этом рабочем пространстве.",
     "agentTriggerNotFound": "Неизвестный триггер агента {id}",
+    "agentRecipeNotFound": "Неизвестный рецепт агента {key}",
     "agentTriggerNeedsRepository": "Агент «{key}» читает один репозиторий, поэтому его может запустить только синхронизация коннектора или pull request.",
     "agentTriggerProjectInvalid": "{id} — не проект этого рабочего пространства.",
     "agentTriggerConnectorInvalid": "Не коннекторы этого рабочего пространства: {ids}",

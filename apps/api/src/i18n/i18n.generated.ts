@@ -36,6 +36,8 @@ export type I18nTranslations = {
         "sentinelDesc": string;
         "surveyor": string;
         "surveyorDesc": string;
+        "digest": string;
+        "digestDesc": string;
         "route": {
             "explicit": string;
             "disabled": string;
@@ -150,6 +152,22 @@ export type I18nTranslations = {
             "pageNotReviewed": string;
             "pageNotScanned": string;
             "stopped": string;
+        };
+        "digestRun": {
+            "quiet": string;
+            "summary": string;
+            "pageTitle": string;
+            "draftDetail": string;
+            "highlights": string;
+            "created": string;
+            "changed": string;
+            "merged": string;
+            "findings": string;
+            "revisions": string;
+        };
+        "recipe": {
+            "freshnessSweepNote": string;
+            "glossarySuggesterNote": string;
         };
     };
     "assistant": {
@@ -536,6 +554,7 @@ export type I18nTranslations = {
             "agentNeedsConnector": string;
             "agentConnectorInvalid": string;
             "agentTriggerNotFound": string;
+            "agentRecipeNotFound": string;
             "agentTriggerNeedsRepository": string;
             "agentTriggerProjectInvalid": string;
             "agentTriggerConnectorInvalid": string;

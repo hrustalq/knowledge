@@ -27,6 +27,16 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const props = defineProps<{ agent: AiAgentSummary }>()
@@ -53,6 +63,23 @@ const rotateSecret = useApiMutation('post', '/v1/ai/agents/triggers/{id}/rotate-
  * exists outside the sender.
  */
 const revealed = ref<{ id: string; secret: string } | null>(null)
+
+/**
+ * Rotating a secret that exists stops the sender's deliveries until it is
+ * given the new one, and deleting a webhook trigger retires its URL for good —
+ * so both ask first. Creating the first secret breaks nothing and does not.
+ */
+const confirming = ref<{ kind: 'rotate' | 'delete'; trigger: AgentTriggerSummary } | null>(null)
+function askRotate(trigger: AgentTriggerSummary) {
+  if (trigger.webhook?.secretSet) confirming.value = { kind: 'rotate', trigger }
+  else void rotate(trigger)
+}
+function confirmed() {
+  const c = confirming.value
+  confirming.value = null
+  if (c?.kind === 'rotate') void rotate(c.trigger)
+  else if (c) void remove(c.trigger)
+}
 
 async function rotate(trigger: AgentTriggerSummary) {
   try {
@@ -192,8 +219,8 @@ function scopeLabel(trigger: AgentTriggerSummary): string {
   <!-- Mounted inside the agent dialog's form: Enter in a field here must not
        submit the agent. -->
   <div class="space-y-3 border-t pt-4" @keydown.enter="onEnter">
-    <div class="flex items-start justify-between gap-3">
-      <div>
+    <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+      <div class="min-w-0 flex-1 basis-64">
         <p class="text-sm">{{ t('ai.triggers.title') }}</p>
         <p class="text-muted-foreground mt-0.5 text-xs">{{ t('ai.triggers.hint') }}</p>
       </div>
@@ -203,94 +230,116 @@ function scopeLabel(trigger: AgentTriggerSummary): string {
     </div>
 
     <!-- The env kill switch is a ceiling the toggles below cannot lift. -->
-    <p v-if="response && !response.listening" class="text-destructive text-xs">{{ t('ai.triggers.notListening') }}</p>
+    <p v-if="response && !response.listening" class="text-destructive dark:text-destructive-foreground text-xs">{{ t('ai.triggers.notListening') }}</p>
 
     <ul v-if="triggers.length" class="divide-y rounded-md border">
-      <li v-for="trigger in triggers" :key="trigger.id" class="flex items-start gap-3 p-2.5">
-        <Checkbox
-          class="mt-0.5"
-          :model-value="trigger.enabled"
-          :aria-label="t('ai.triggers.enabled')"
-          @update:model-value="setEnabled(trigger, $event === true)"
-        />
-        <div class="min-w-0 flex-1">
-          <span class="flex flex-wrap items-center gap-1.5 text-sm">
-            {{ t(`ai.triggers.events.${trigger.event}`) }}
-            <Badge v-if="scopeLabel(trigger)" variant="outline" class="max-w-64 truncate font-normal">
-              {{ scopeLabel(trigger) }}
-            </Badge>
-          </span>
-          <span class="text-muted-foreground block text-xs">
-            {{ t('ai.triggers.cooldownShort', { count: trigger.cooldownMinutes }) }}
-            ·
-            {{
-              trigger.lastFiredAt
-                ? t('ai.triggers.lastFired', { when: relativeTime(trigger.lastFiredAt) })
-                : t('ai.triggers.neverFired')
-            }}
-            <template v-if="trigger.ownerId"> · {{ t('ai.triggers.owned') }}</template>
-          </span>
-          <!-- A webhook is configured on the sender's side: it needs the URL
-               and a secret, and a trigger without a secret refuses everything. -->
-          <div v-if="trigger.webhook" class="mt-2 space-y-1.5 text-xs">
-            <p class="text-muted-foreground font-medium">{{ t('ai.triggers.webhook.url') }}</p>
+      <li v-for="trigger in triggers" :key="trigger.id" class="p-2.5">
+        <div class="flex items-start gap-3">
+          <Checkbox
+            class="mt-0.5"
+            :model-value="trigger.enabled"
+            :aria-label="t('ai.triggers.enabledNamed', { event: t(`ai.triggers.events.${trigger.event}`) })"
+            @update:model-value="setEnabled(trigger, $event === true)"
+          />
+          <div class="min-w-0 flex-1">
+            <span class="flex flex-wrap items-center gap-1.5 text-sm">
+              {{ t(`ai.triggers.events.${trigger.event}`) }}
+              <!-- The text truncates, not the badge: a badge is an inline-flex
+                   box, where an ellipsis never renders and both ends get cut. -->
+              <Badge v-if="scopeLabel(trigger)" variant="outline" class="max-w-full font-normal" :title="scopeLabel(trigger)">
+                <span class="truncate">{{ scopeLabel(trigger) }}</span>
+              </Badge>
+            </span>
+            <span class="text-muted-foreground block text-xs">
+              {{ t('ai.triggers.cooldownShort', { count: trigger.cooldownMinutes }) }}
+              ·
+              {{
+                trigger.lastFiredAt
+                  ? t('ai.triggers.lastFired', { when: relativeTime(trigger.lastFiredAt) })
+                  : t('ai.triggers.neverFired')
+              }}
+              <template v-if="trigger.ownerId"> · {{ t('ai.triggers.owned') }}</template>
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            :aria-label="t('common.edit')"
+            :title="t('common.edit')"
+            @click="openEdit(trigger)"
+          >
+            <Pencil class="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            :aria-label="t('ai.triggers.delete')"
+            :title="t('ai.triggers.delete')"
+            @click="confirming = { kind: 'delete', trigger }"
+          >
+            <Trash2 class="size-3.5" />
+          </Button>
+        </div>
+        <!-- A webhook is configured on the sender's side: it needs the URL
+             and a secret, and a trigger without a secret refuses everything. -->
+        <div v-if="trigger.webhook" class="mt-2 space-y-1.5 text-xs sm:pl-7">
+          <p class="text-muted-foreground font-medium">{{ t('ai.triggers.webhook.url') }}</p>
+          <p class="flex items-center gap-1">
+            <code class="bg-muted min-w-0 break-all rounded px-1 py-0.5 font-mono">{{ trigger.webhook.url }}</code>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              :aria-label="t('ai.triggers.webhook.copy')"
+              :title="t('ai.triggers.webhook.copy')"
+              @click="copy(trigger.webhook.url)"
+            >
+              <Copy class="size-3.5" />
+            </Button>
+          </p>
+          <p :class="trigger.webhook.secretSet ? 'text-muted-foreground' : 'text-destructive dark:text-destructive-foreground'">
+            {{ trigger.webhook.secretSet ? t('ai.triggers.webhook.secretSet') : t('ai.triggers.webhook.noSecret') }}
+          </p>
+          <div v-if="revealed?.id === trigger.id" class="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+            <p>{{ t('ai.triggers.webhook.rotated') }}</p>
             <p class="flex items-center gap-1">
-              <code class="bg-muted min-w-0 break-all rounded px-1 py-0.5 font-mono">{{ trigger.webhook.url }}</code>
+              <code class="bg-background min-w-0 break-all rounded px-1 py-0.5 font-mono">{{ revealed.secret }}</code>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 :aria-label="t('ai.triggers.webhook.copy')"
-                @click="copy(trigger.webhook.url)"
+                :title="t('ai.triggers.webhook.copy')"
+                @click="copy(revealed.secret)"
               >
                 <Copy class="size-3.5" />
               </Button>
             </p>
-            <p :class="trigger.webhook.secretSet ? 'text-muted-foreground' : 'text-destructive'">
-              {{ trigger.webhook.secretSet ? t('ai.triggers.webhook.secretSet') : t('ai.triggers.webhook.noSecret') }}
-            </p>
-            <div v-if="revealed?.id === trigger.id" class="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
-              <p>{{ t('ai.triggers.webhook.rotated') }}</p>
-              <p class="flex items-center gap-1">
-                <code class="bg-background min-w-0 break-all rounded px-1 py-0.5 font-mono">{{ revealed.secret }}</code>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  :aria-label="t('ai.triggers.webhook.copy')"
-                  @click="copy(revealed.secret)"
-                >
-                  <Copy class="size-3.5" />
-                </Button>
-              </p>
-            </div>
-            <p class="text-muted-foreground">{{ t('ai.triggers.webhook.signing') }}</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              :disabled="rotateSecret.isPending.value"
-              @click="rotate(trigger)"
-            >
-              <KeyRound class="size-3.5" />
-              {{ trigger.webhook.secretSet ? t('ai.triggers.webhook.rotate') : t('ai.triggers.webhook.create') }}
-            </Button>
           </div>
+          <p class="text-muted-foreground">{{ t('ai.triggers.webhook.signing') }}</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            :disabled="rotateSecret.isPending.value"
+            @click="askRotate(trigger)"
+          >
+            <KeyRound class="size-3.5" />
+            {{ trigger.webhook.secretSet ? t('ai.triggers.webhook.rotate') : t('ai.triggers.webhook.create') }}
+          </Button>
         </div>
-        <Button type="button" variant="ghost" size="sm" :aria-label="t('common.edit')" @click="openEdit(trigger)">
-          <Pencil class="size-3.5" />
-        </Button>
-        <Button type="button" variant="ghost" size="sm" :aria-label="t('ai.triggers.delete')" @click="remove(trigger)">
-          <Trash2 class="size-3.5" />
-        </Button>
       </li>
     </ul>
     <p v-else-if="editingId === null && !query.isPending.value" class="text-muted-foreground text-xs">
       {{ t('ai.triggers.empty') }}
     </p>
 
-    <!-- Inline rather than a second dialog: this already sits in one. -->
-    <div v-if="editingId !== null" class="space-y-3 rounded-md border p-3">
+    <!-- Inline rather than a second dialog: this already sits in one. Tinted,
+         and its buttons say "trigger", because the dialog's own Cancel/Save sit
+         right below and save something else. -->
+    <div v-if="editingId !== null" class="bg-muted/40 space-y-3 rounded-md border p-3">
       <label class="block space-y-1">
         <span class="text-muted-foreground text-xs font-medium">{{ t('ai.triggers.event') }}</span>
         <Select v-model="form.event" :disabled="editingId !== 'new'">
@@ -373,9 +422,34 @@ function scopeLabel(trigger: AgentTriggerSummary): string {
           :disabled="createTrigger.isPending.value || updateTrigger.isPending.value"
           @click="save"
         >
-          {{ editingId === 'new' ? t('common.create') : t('common.save') }}
+          {{ editingId === 'new' ? t('ai.triggers.add') : t('ai.triggers.save') }}
         </Button>
       </div>
     </div>
+
+    <AlertDialog :open="confirming !== null" @update:open="(v: boolean) => { if (!v) confirming = null }">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {{ confirming?.kind === 'rotate' ? t('ai.triggers.webhook.rotateTitle') : t('ai.triggers.deleteTitle') }}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {{
+              confirming?.kind === 'rotate'
+                ? t('ai.triggers.webhook.rotateBody')
+                : confirming?.trigger.webhook
+                  ? t('ai.triggers.deleteWebhookBody')
+                  : t('ai.triggers.deleteBody')
+            }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction @click="confirmed">
+            {{ confirming?.kind === 'rotate' ? t('ai.triggers.webhook.rotate') : t('common.delete') }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>

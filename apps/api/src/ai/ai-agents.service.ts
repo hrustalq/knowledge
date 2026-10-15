@@ -75,17 +75,25 @@ export class AiAgentsService {
     return resolved.map((agent) => toSummary(agent, byKey.get(agent.key) ?? null));
   }
 
-  /** Viewer-safe: names only. No prompts, no tool lists, no provider endpoints. */
-  async choices(workspaceId: string): Promise<AiAgentChoice[]> {
+  /**
+   * Viewer-safe: names only. No prompts, no tool lists, no provider endpoints.
+   *
+   * `all` names every agent rather than the ones offered in the composer. A
+   * thread, a learning or a run can carry any agent's key — a background agent
+   * answering a mention (#70), a learning taught to the curator — and a key
+   * nobody can name renders as itself.
+   */
+  async choices(workspaceId: string, scope: 'offered' | 'all' = 'offered'): Promise<AiAgentChoice[]> {
     const resolved = await this.registry.list(workspaceId);
     return resolved
       .filter(
         (agent) =>
-          agent.enabled &&
+          scope === 'all' ||
+          (agent.enabled &&
           agent.surfaces.includes('interactive') &&
           // The router picks an agent; offering it as one to pick is a category
           // error, and choosing it would just make the choice twice.
-          agent.key !== 'router',
+          agent.key !== 'router'),
       )
       .map((agent) => ({ key: agent.key, name: agent.name, description: agent.description }));
   }

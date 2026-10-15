@@ -14040,6 +14040,8 @@ export interface operations {
         parameters: {
             query: {
                 workspaceId: string;
+                /** @description offered (the default): the agents the composer offers. all: every agent, to name one wherever its key appears. */
+                scope?: "offered" | "all";
             };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */

@@ -209,6 +209,21 @@ in the pull request that introduces them — see
   last ten runs and told not to report them again. Dismissing twice changes
   nothing and proposes at most one learning. Route:
   `POST /v1/ai/agents/runs/:id/findings/:index/dismiss` (editor). (#70)
+- **Repository guidance files become skills.** After each successful sync of a
+  codebase or Markdown/Git connector, its `AGENTS.md`, `CLAUDE.md`,
+  `.cursorrules`, `.github/copilot-instructions.md` and `.cursor/rules/*.mdc`
+  (at the repository root and at the connector's subdirectory) are imported
+  into **Settings → AI → Skills** as **disabled** skills with no trigger words,
+  marked with the connector and path. Nothing reaches a prompt until an admin
+  enables one. A file over 64 KB is skipped, at most 20 are read, and one
+  longer than a skill's 8 000-character budget is cut at a line break, which
+  its description says. While a skill is disabled it follows the repository;
+  once enabled, a commit never changes its text — the new version shows as
+  **Upstream changed**, with a diff and **Accept upstream**. A file deleted
+  upstream disables its skill and marks it **Removed upstream**. The connector
+  page has an **Agent guidance** card with **Import now**. Routes:
+  `POST /v1/connectors/:id/guidance/import` and
+  `POST /v1/ai/skills/:id/accept-upstream` (both admin). (#70)
 
 ### Changed
 
@@ -239,6 +254,16 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261025100000_ai_skill_repo_source` adds nullable provenance
+  columns to `ai_skills` (plus `source`, defaulting to `manual`) and a unique
+  index on (workspace, connector, path); the previous image runs against it
+  unchanged. If the code is rolled back, imported skills stay as ordinary
+  skills and stop following their repository. The import runs in the **API**
+  after it hears a sync finish on the Redis bus, which does not redeliver:
+  a sync that finishes while the API is down is read on the next sync or by
+  **Import now**. Each import downloads the repository archive once more. One
+  more optional setting, `REPO_GUIDANCE_IMPORT_ENABLED` (true), turns the
+  after-sync import off; **Import now** still works.
 - Migration `20261024100000_agent_learnings` only adds the `agent_learnings`
   table, so the previous image runs against it unchanged. A dismissal is
   written into the existing `agent_runs.findings` JSON. If the code is rolled

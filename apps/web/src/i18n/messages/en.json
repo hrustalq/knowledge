@@ -721,7 +721,18 @@
       "mapped": "Mapping saved. Access is re-synced now.",
       "mapHint": "A match by email is only as trustworthy as the email: only verified addresses match. A mapping by hand is never overwritten."
     },
-    "tabAccess": "Access"
+    "tabAccess": "Access",
+    "guidance": {
+      "title": "Agent guidance",
+      "body": "Guidance files in this repository are imported as disabled skills after each sync. Enabling one makes its text trusted; later commits only propose changes.",
+      "importNow": "Import now",
+      "imported": "No imported skills | {count} imported skill | {count} imported skills",
+      "none": "No guidance files imported yet.",
+      "open": "Open in Skills",
+      "result": "{created} new, {updated} updated, {pending} awaiting review, {removed} removed",
+      "truncated": "Cut to the skill budget: {paths}",
+      "skipped": "Skipped: {paths}"
+    }
   },
   "workflow": {
     "nodeStatus": {
@@ -1976,7 +1987,17 @@
       "deleteNamed": "Delete {name}",
       "namePlaceholder": "Release notes writer",
       "descriptionPlaceholder": "Draft release notes from merged merge requests",
-      "instructionsPlaceholder": "Always group by Added / Changed / Fixed.\nCite the MR id for every bullet.\nNever invent a version number."
+      "instructionsPlaceholder": "Always group by Added / Changed / Fixed.\nCite the MR id for every bullet.\nNever invent a version number.",
+      "repoSource": "From {connector} · {path}",
+      "repoSourceGone": "From a deleted connector · {path}",
+      "upstreamChanged": "Upstream changed",
+      "removedUpstream": "Removed upstream",
+      "reviewUpstream": "Review the upstream change",
+      "reviewUpstreamTitle": "Upstream change to {name}",
+      "reviewUpstreamDesc": "{path} changed in the repository. The skill keeps its current instructions until you accept — a commit never changes what an enabled skill says.",
+      "acceptUpstream": "Accept upstream",
+      "acceptedUpstream": "Upstream text accepted",
+      "repoEditNote": "Imported from {path}. While the skill is disabled it follows the repository; once enabled, upstream changes wait for your review."
     },
     "plugins": {
       "add": "Add plugin",

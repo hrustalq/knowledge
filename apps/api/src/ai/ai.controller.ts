@@ -311,6 +311,24 @@ export class AiController {
     return skill;
   }
 
+  @Post('skills/:id/accept-upstream')
+  @Access('admin', 'ai-skill')
+  @ApiOperation({ summary: "Make an imported skill's pending upstream text its instructions (#70)" })
+  async acceptSkillUpstream(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<AiSkillSummary> {
+    const skill = await this.skills.acceptUpstream(id);
+    await this.activity.record({
+      workspaceId: skill.workspaceId,
+      actor: principal?.userId,
+      action: 'ai.skill.updated',
+      subjectId: skill.id,
+      metadata: { name: skill.name, upstream: skill.sourceSha },
+    });
+    return skill;
+  }
+
   @Delete('skills/:id')
   @Access('admin', 'ai-skill')
   @ApiOperation({ summary: 'Delete a skill' })

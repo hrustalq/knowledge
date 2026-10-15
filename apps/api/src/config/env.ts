@@ -286,6 +286,13 @@ export const envSchema = z.object({
    * corrections cannot quietly eat the context window documents need.
    */
   AGENT_LEARNINGS_MAX: z.coerce.number().int().min(0).max(100).default(20),
+  /**
+   * Re-read a repository connector's AGENTS.md / CLAUDE.md / .cursorrules…
+   * after each successful sync (#70). On by default: an import only ever
+   * creates DISABLED skills, and an enabled one's text changes only when an
+   * admin accepts the upstream diff. Off leaves the connector page's Import.
+   */
+  REPO_GUIDANCE_IMPORT_ENABLED: boolish(true),
   STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
   STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 

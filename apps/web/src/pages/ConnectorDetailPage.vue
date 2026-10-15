@@ -45,6 +45,7 @@ import ConnectorReleases from '@/components/connectors/ConnectorReleases.vue'
 import ConnectorWiki from '@/components/connectors/ConnectorWiki.vue'
 import ConnectorWorkItems from '@/components/connectors/ConnectorWorkItems.vue'
 import GithubAccessCard from '@/components/connectors/GithubAccessCard.vue'
+import ConnectorGuidanceCard from '@/components/connectors/ConnectorGuidanceCard.vue'
 import { RUN_STATUS_CLASS, RUN_STATUS_LABEL } from '@/components/connectors/connector-ui'
 import { useAuthStore } from '@/stores/auth'
 import { relativeTime } from '@/lib/api'
@@ -142,6 +143,8 @@ async function startSync(direction: 'pull' | 'push') {
  * GitHub App and GitHub's OAuth, so a GitLab or self-hosted remote has nothing
  * for it to show — absent, not empty, the Work items tab rule.
  */
+// The connector kinds a repository archive is read from (REPO_CONNECTOR_KINDS on the API).
+const isRepository = computed(() => connector.value?.kind === 'codebase' || connector.value?.kind === 'markdown-git')
 const onGithub = computed(() => /^https:\/\/github\.com\//i.test(connector.value?.config.repoUrl ?? ''))
 
 /**
@@ -269,6 +272,7 @@ watch(connectorId, () => {
         </div>
 
         <GithubAccessCard v-if="canManage && onGithub" :connector-id="connectorId" />
+        <ConnectorGuidanceCard v-if="canManage && isRepository" :connector-id="connectorId" />
 
         <!-- Said once, on the connector, rather than as an empty state inside a
              tab that is not offered: the reason there is no Work items tab is a

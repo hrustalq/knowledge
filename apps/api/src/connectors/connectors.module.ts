@@ -5,6 +5,7 @@ import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { DocumentsModule } from '../documents/documents.module.js';
 import { EventsModule } from '../events/events.module.js';
+import { EventsSubscriberModule } from '../events/events-subscriber.module.js';
 import { ProjectsModule } from '../projects/projects.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ConnectorConflictSweeper } from './connector-conflict.sweeper.js';
@@ -23,6 +24,8 @@ import { GithubWebhookController } from './github/github-webhook.controller.js';
 import { AgentQueueModule } from '../agents/agent-queue.module.js';
 import { DriftTriggerService } from './drift/drift-trigger.service.js';
 import { GithubAccessService } from './github/github-access.service.js';
+import { RepoGuidanceListener } from './guidance/repo-guidance.listener.js';
+import { RepoGuidanceService } from './guidance/repo-guidance.service.js';
 
 /**
  * API side (docs/features/19). Holds the controllers and the conflict sweeper,
@@ -52,6 +55,8 @@ import { GithubAccessService } from './github/github-access.service.js';
     AiCoreModule,
     AssistantClientModule,
     GithubCoreModule,
+    // The repo guidance listener (#70) — API-side, so the shared subscriber.
+    EventsSubscriberModule,
   ],
   // GithubWebhookController comes FIRST, before ConnectorWebhookController:
   // `/v1/connectors/github/webhook` and `/v1/connectors/:id/webhook` have the
@@ -71,6 +76,10 @@ import { GithubAccessService } from './github/github-access.service.js';
     GithubAccessService,
     // Both webhook controllers hand pull and merge requests to it.
     DriftTriggerService,
+    // Guidance files into disabled skills (#70): configuration attributed to a
+    // person, so API-side — the manual route and the after-sync listener.
+    RepoGuidanceService,
+    RepoGuidanceListener,
   ],
   exports: [ConnectorsCoreModule, ConnectorWorkItemsModule],
 })

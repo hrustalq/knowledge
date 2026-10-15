@@ -783,6 +783,17 @@ export interface AiConnectionTestResponse {
 
 // ---- Skills ----------------------------------------------------------------
 
+/**
+ * Where a skill's text came from (#70). `manual`: an admin wrote it. `repo`: a
+ * guidance file in a connected repository (`AGENTS.md`, `CLAUDE.md`, …),
+ * imported disabled — fetched bytes are untrusted until an admin enables them.
+ */
+export const AI_SKILL_SOURCES = ['manual', 'repo'] as const;
+export type AiSkillSource = (typeof AI_SKILL_SOURCES)[number];
+
+/** A skill's instruction budget — the DTO's cap and one turn's whole skill budget. */
+export const AI_SKILL_INSTRUCTIONS_MAX = 8_000;
+
 export interface AiSkillSummary {
   id: string;
   workspaceId: string;
@@ -794,10 +805,86 @@ export interface AiSkillSummary {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+  source: AiSkillSource;
+  /** The repository connector a `repo` skill was imported from; null for `manual`. */
+  sourceConnectorId: string | null;
+  /** That connector's current name, resolved on read; null once the connector is gone. */
+  sourceConnectorName: string | null;
+  /** Repo-relative path of the guidance file. */
+  sourcePath: string | null;
+  /** SHA-256 of the file's content as last seen upstream. */
+  sourceSha: string | null;
+  /**
+   * Upstream text that differs from `instructions` and waits for an admin's
+   * Accept. An enabled skill's live text never changes on a sync.
+   */
+  pendingInstructions: string | null;
+  /** When the file disappeared upstream; the skill was disabled then. */
+  sourceRemovedAt: string | null;
 }
 // GET /v1/ai/skills?workspaceId=
 export interface ListAiSkillsResponse {
   skills: AiSkillSummary[];
+}
+
+// ---- Repo guidance import (#70) ---------------------------------------------
+
+/**
+ * The guidance files read from a connected repository, at the repository root
+ * and at the connector's `subdir` root. Exact paths, plus one directory of
+ * Cursor rule files. One list read by the importer and shown by the UI.
+ */
+export const GUIDANCE_FILE_PATTERNS = [
+  'AGENTS.md',
+  'CLAUDE.md',
+  '.cursorrules',
+  '.github/copilot-instructions.md',
+  '.cursor/rules/*.mdc',
+] as const;
+
+/** A guidance file above this is skipped, not truncated: it is not a rules file. */
+export const GUIDANCE_FILE_MAX_BYTES = 65_536;
+/** Files one import takes at most — `.cursor/rules/` can hold dozens. */
+export const GUIDANCE_MAX_FILES = 20;
+
+const GUIDANCE_EXACT: ReadonlySet<string> = new Set(['AGENTS.md', 'CLAUDE.md', '.cursorrules', '.github/copilot-instructions.md']);
+
+/**
+ * The guidance paths among a repository's files, sorted, at the root and at
+ * `subdir`'s root. `.cursor/rules/` is read one level deep only.
+ */
+export function guidancePaths(paths: Iterable<string>, subdir: string): string[] {
+  const roots = [''];
+  const sub = subdir.replace(/^\/+|\/+$/g, '');
+  if (sub) roots.push(`${sub}/`);
+  const found = new Set<string>();
+  for (const path of paths) {
+    for (const root of roots) {
+      if (!path.startsWith(root)) continue;
+      const rest = path.slice(root.length);
+      const rule = rest.startsWith('.cursor/rules/') ? rest.slice('.cursor/rules/'.length) : null;
+      if (GUIDANCE_EXACT.has(rest) || (rule !== null && rule.endsWith('.mdc') && !rule.includes('/'))) found.add(path);
+    }
+  }
+  return [...found].sort();
+}
+
+// POST /v1/connectors/:id/guidance/import
+export interface RepoGuidanceImportResponse {
+  connectorId: string;
+  /** Guidance files found, before the size and count caps. */
+  found: number;
+  created: number;
+  /** Disabled skills whose text was replaced with the new upstream text. */
+  updated: number;
+  /** Enabled skills whose new upstream text now waits in `pendingInstructions`. */
+  pending: number;
+  /** Skills disabled because their file is gone upstream. */
+  removed: number;
+  unchanged: number;
+  /** Files read but cut to `AI_SKILL_INSTRUCTIONS_MAX` characters. */
+  truncated: string[];
+  skipped: Array<{ path: string; reason: 'oversize' | 'empty' | 'limit' }>;
 }
 
 // ---- Plugins (MCP servers) -------------------------------------------------

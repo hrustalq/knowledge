@@ -239,7 +239,8 @@ predicate is resolved in PostgreSQL first and injected server-side; a
 every 5 minutes (`setInterval(…, 5 * 60_000)` — an inline literal, there is no
 interval constant or env var), is gated by `STALE_SWEEP_ENABLED`, calls
 `.unref()` so it never holds the process open, and guards re-entrancy with a
-`running` flag. Each pass does three unrelated jobs, each capped at 10 rows:
+`running` flag. Each pass does four unrelated jobs, the first three capped at
+10 rows:
 
 1. **`requeueStuck()`** — revisions stuck `running` longer than
    `STALE_INDEXING_TIMEOUT_MIN` (default 15) go back on the queue. This is the
@@ -249,6 +250,17 @@ interval constant or env var), is gated by `STALE_SWEEP_ENABLED`, calls
    hammered.
 3. **`reindexDrifted()`** — branch heads whose `document_revisions.embedding_model`
    is null or no longer equals the current signature.
+4. **`repairFulltext()`** — `indexed` revisions with `fulltext_stale_at` set, 25
+   a pass, only when a BM25 provider is configured (#173). The processor stamps
+   that column when step 6b or the fulltext half of the live flip fails, and
+   clears it when a later 6b succeeds. The repair reads the revision's chunks
+   back from the graph (`GraphService.getRevisionChunkTexts`), so nothing is
+   re-chunked or re-embedded and the chunk ids stay the ones the vector store
+   has. It mirrors them into the BM25 index, makes them live there if the
+   revision is the default-branch head, and clears the stamp with
+   `updateMany({ where: { id, fulltextStaleAt: <the value it read> } })`, so a
+   failure recorded meanwhile keeps the revision due. The first failure ends
+   the pass, since an index that is still down would fail every row.
 
 Drift detection is the interesting one. `embeddingSignature(config)` builds
 `provider:model:dim:recipe` — four segments, e.g. `stub:default:384:r2` on a
@@ -344,7 +356,7 @@ Chunk sizing (3200 / 400), the embed batch stride (32) and the sweep caps (10
 per job, per pass) are all inline literals. They are not tunable without a
 deploy, which is fine while they are right and invisible when they are not.
 
-The sweeper's three jobs share one 5-minute tick, so a workspace with many stuck
+The sweeper's four jobs share one 5-minute tick, so a workspace with many stuck
 jobs drains at 10 per job per 5 minutes regardless of how idle the worker is.
 
 `OutboxSweeper` and `StaleSweeper` both assume a single worker is enough; neither

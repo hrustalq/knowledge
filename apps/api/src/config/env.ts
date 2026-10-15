@@ -131,6 +131,11 @@ export const envSchema = z.object({
   FULLTEXT_PROVIDER: z.enum(['none', 'opensearch']).default('none'),
   OPENSEARCH_URL: z.string().optional().default('http://localhost:9200'),
   OPENSEARCH_INDEX: z.string().optional().default('knowledge-chunks'),
+  /**
+   * How long a search waits for the BM25 leg (#173). Past it, or on any error,
+   * the search answers from vectors alone and says `degraded: ['fulltext']`.
+   */
+  FULLTEXT_TIMEOUT_MS: z.coerce.number().int().positive().default(1500),
 
   /** Phase 5 stale-doc detection & reindex scheduling (worker sweeper). */
   STALE_SWEEP_ENABLED: boolish(true),

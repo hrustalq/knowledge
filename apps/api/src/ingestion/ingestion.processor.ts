@@ -182,7 +182,9 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
 
       // 6b. Phase 5 optional BM25 layer: mirror the chunks into the fulltext
       //     index (idempotent per revision). Non-fatal — the vector index in
-      //     the graph store stays authoritative.
+      //     the graph store stays authoritative. A failure stamps the revision
+      //     for the stale sweeper to re-mirror (#173); a success clears a stamp
+      //     an earlier attempt left.
       try {
         await this.fulltext.indexRevisionChunks(
           revision.document.workspaceId,
@@ -197,8 +199,12 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
           })),
           { live, aclNodes },
         );
+        if (this.fulltext.enabled) await this.markFulltext(revision.id, 'in-step');
       } catch (e) {
-        this.logger.warn(`Fulltext indexing failed for revision ${revision.id} (non-fatal): ${(e as Error).message}`);
+        this.logger.warn(
+          `Fulltext indexing failed for revision ${revision.id} (non-fatal; the stale sweeper re-mirrors it): ${(e as Error).message}`,
+        );
+        await this.markFulltext(revision.id, 'stale');
       }
       mark('fulltext');
 
@@ -383,8 +389,25 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     try {
       await this.fulltext.setLiveRevision(workspaceId, documentId, headId);
     } catch (e) {
-      this.logger.warn(`Fulltext live update failed for document ${documentId} (non-fatal): ${(e as Error).message}`);
+      this.logger.warn(
+        `Fulltext live update failed for document ${documentId} (non-fatal; the stale sweeper retries it): ${(e as Error).message}`,
+      );
+      await this.markFulltext(headId, 'stale');
     }
+  }
+
+  /**
+   * The BM25 drift stamp (#173). `stale` restamps with the current time, so a
+   * repair already in flight for an older stamp cannot clear this one; never
+   * throws, because the write it records was already non-fatal.
+   */
+  private async markFulltext(revisionId: string, state: 'stale' | 'in-step'): Promise<void> {
+    await this.prisma.documentRevision
+      .updateMany({
+        where: state === 'stale' ? { id: revisionId } : { id: revisionId, fulltextStaleAt: { not: null } },
+        data: { fulltextStaleAt: state === 'stale' ? new Date() : null },
+      })
+      .catch((e: Error) => this.logger.warn(`Could not record fulltext state for revision ${revisionId}: ${e.message}`));
   }
 
   /**

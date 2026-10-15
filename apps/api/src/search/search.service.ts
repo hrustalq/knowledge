@@ -1,6 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { DocumentTrust, RelatedDocumentResult, SearchResponse, SearchResult } from '@knowledge/contracts';
+import type {
+  DocumentTrust,
+  RelatedDocumentResult,
+  SearchDegradedLeg,
+  SearchResponse,
+  SearchResult,
+} from '@knowledge/contracts';
 import { isInactive, trustWeight, verificationStateFor } from '@knowledge/contracts';
 import { currentTrace, emitBacktest } from '@knowledge/observability';
 import type { Env } from '../config/env.js';
@@ -10,7 +16,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
 import { GraphService, type ChunkHit } from '../graph/graph.service.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
-import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
+import { FULLTEXT_PROVIDER, type FulltextHit, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
 import { VerificationPolicyService } from '../verification/verification-policy.service.js';
 import { tagFilterKey } from '../common/relations.js';
@@ -21,6 +27,10 @@ const RRF_K = 60;
 
 @Injectable()
 export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
+  /** Set while the BM25 leg is failing, so an outage logs once, not once per search. */
+  private fulltextDownSince: Date | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly graph: GraphService,
@@ -74,8 +84,11 @@ export class SearchService {
     // Phase 5 BM25 layer (plan.md §11): when a fulltext provider is
     // configured, 'hybrid' fuses vector + BM25 rankings (RRF) and 'keyword'
     // is BM25-only. Without a provider both fall back to vector search.
-    const useText = this.fulltext.enabled && mode !== 'semantic';
-    const useVector = mode !== 'keyword' || !this.fulltext.enabled;
+    // Mutable (#173): a BM25 leg that fails is dropped for the rest of this
+    // search, and 'keyword' then stands on the vector leg rather than on nothing.
+    let useText = this.fulltext.enabled && mode !== 'semantic';
+    let useVector = mode !== 'keyword' || !this.fulltext.enabled;
+    const degraded: SearchDegradedLeg[] = [];
 
     const startedAt = process.hrtime.bigint();
     const since = (from: bigint) => Number(process.hrtime.bigint() - from) / 1e6;
@@ -90,17 +103,26 @@ export class SearchService {
 
     // The query embedding is computed once and reused by a refill round.
     let embedding: Promise<number[]> | null = null;
-    const legs = (n: number) =>
-      Promise.all([
-        timed(() =>
-          useVector
-            ? (embedding ??= this.embeddings.embed(dto.query)).then((e) =>
-                this.graph.searchChunks(dto.workspaceId, e, n, acl),
-              )
-            : Promise.resolve([] as ChunkHit[]),
-        ),
-        timed(() => (useText ? this.fulltext.search(dto.workspaceId, dto.query, n, acl) : Promise.resolve([]))),
+    const vectorLeg = (n: number) =>
+      (embedding ??= this.embeddings.embed(dto.query)).then((e) => this.graph.searchChunks(dto.workspaceId, e, n, acl));
+    /**
+     * Both legs, concurrently. The vector index is authoritative and the BM25
+     * one optional (docs/architecture/04), so a failed or slow BM25 leg is
+     * answered without, not thrown (#173): the search goes vector-only, says so
+     * in `degraded`, and a keyword search runs the vector leg it skipped.
+     */
+    const legs = async (n: number): Promise<[[ChunkHit[], number], [FulltextHit[], number]]> => {
+      const [vector, [text, textMs]] = await Promise.all([
+        timed(() => (useVector ? vectorLeg(n) : Promise.resolve([] as ChunkHit[]))),
+        timed(() => (useText ? this.fulltextLeg(dto.workspaceId, dto.query, n, acl) : Promise.resolve([]))),
       ]);
+      if (text) return [vector, [text, textMs]];
+      useText = false;
+      degraded.push('fulltext');
+      if (useVector) return [vector, [[], textMs]];
+      useVector = true;
+      return [await timed(() => vectorLeg(n)), [[], textMs]];
+    };
 
     const [[[vectorHitsFirst, vectorMs], [textHitsFirst, fulltextMs]], [taggedDocs, tagsMs]] = await Promise.all([
       legs(fetchK),
@@ -132,20 +154,24 @@ export class SearchService {
         limit: k,
         fetchK,
         vectorMs: useVector ? vectorMs : undefined,
-        fulltextMs: useText ? fulltextMs : undefined,
+        fulltextMs: useText || degraded.length ? fulltextMs : undefined,
         tagsMs: tagKeys ? tagsMs : undefined,
         vectorHits: vectorHits.length,
         fulltextHits: textHits.length,
         fusedHits: hits.length,
         trustApplied: trustOn,
         ...(acl.kind !== 'all' ? { aclFiltered } : {}),
+        ...(degraded.length ? { degraded } : {}),
         results: out.map((r) => ({ documentId: r.documentId, chunkId: r.chunkId, score: r.score })),
       });
     };
 
+    // Absent unless a leg was skipped, so a healthy response is unchanged.
+    const health = () => (degraded.length ? { degraded } : {});
+
     if (hits.length === 0) {
       record([]);
-      return { results: [] };
+      return { results: [], ...health() };
     }
 
     // Join PG for authoritative titles (three-store separation: PG owns
@@ -234,9 +260,52 @@ export class SearchService {
         dto.expandGraph.relationTypes,
         includeArchived,
       );
-      return { results, related };
+      return { results, related, ...health() };
     }
-    return { results };
+    return { results, ...health() };
+  }
+
+  /**
+   * The BM25 leg with its own deadline, or `null` when it failed or ran past
+   * FULLTEXT_TIMEOUT_MS (#173). A hung index cannot hold the request; the call
+   * it raced keeps running and its answer is dropped.
+   *
+   * Logged once per outage and once on recovery: an OpenSearch restart fails
+   * every search for a minute, and a warning per request would bury the cause.
+   */
+  private async fulltextLeg(
+    workspaceId: string,
+    query: string,
+    k: number,
+    acl: DocumentAclFilter,
+  ): Promise<FulltextHit[] | null> {
+    const ms = this.config.get('FULLTEXT_TIMEOUT_MS', { infer: true });
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const hits = await Promise.race([
+        this.fulltext.search(workspaceId, query, k, acl),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`no answer within ${ms} ms`)), ms);
+        }),
+      ]);
+      if (this.fulltextDownSince) {
+        this.logger.log(`Fulltext search recovered after an outage since ${this.fulltextDownSince.toISOString()}`);
+        this.fulltextDownSince = null;
+      }
+      return hits;
+    } catch (e) {
+      if (!this.fulltextDownSince) {
+        this.fulltextDownSince = new Date();
+        this.logger.warn({
+          msg: 'Fulltext search failed; answering from vectors alone until it recovers',
+          code: 'FULLTEXT_DEGRADED',
+          err: e,
+        });
+      }
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /** The PG rows the join reads, restricted to pages `scope` may open. */

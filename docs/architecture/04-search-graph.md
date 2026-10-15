@@ -61,6 +61,22 @@ to index for keyword search must never fail a revision that is otherwise
 retrievable. Hybrid ranking fuses the vector and BM25 orderings by **reciprocal
 rank fusion**; `mode: 'keyword'` is BM25-only.
 
+The read path is just as optional (#173). `SearchService.fulltextLeg` races the
+BM25 query against `FULLTEXT_TIMEOUT_MS` (default 1500). If it errors or loses
+the race, the search drops that leg and answers from vectors alone. A keyword
+search runs the vector leg it would have skipped. The response carries
+`degraded: ['fulltext']`, and so does the `search.executed` measurement, so a
+backtest does not score a vector-only answer as a hybrid one. A healthy
+response has no `degraded` key at all. The service warns once when the index
+starts failing and logs again when it recovers, rather than warning on every
+search during an outage.
+
+A failed write leaves the index behind the graph. The revision is stamped
+`fulltext_stale_at`, and the stale sweeper re-mirrors it from the graph's
+chunks ([03](03-ingestion.md#stale-detection-and-reindex)). Restriction stamps
+need nothing new: `AclRestampSweeper` advances `acl_stamped_version` only after
+both stores take the stamp, so a failed OpenSearch restamp is simply retried.
+
 ## Filters are applied after ranking
 
 `filters.categories` and `filters.projectIds` are resolved **post-ranking against

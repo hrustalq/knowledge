@@ -148,6 +148,8 @@ export interface SearchExecutedEvent extends BacktestEventBase {
   trustApplied?: boolean;
   /** Fused hits dropped by the page-permission post-filter (#76), so restricted recall can be measured. */
   aclFiltered?: number;
+  /** Legs that failed or timed out (#173), so a vector-only answer is not scored as a hybrid one. */
+  degraded?: string[];
   results: Array<{ documentId: string; chunkId?: string; score: number }>;
 }
 

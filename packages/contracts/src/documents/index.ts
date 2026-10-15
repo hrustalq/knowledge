@@ -143,10 +143,18 @@ export interface SearchResult {
   /** Entities related to the result's document (present when expandGraph is used). */
   entities?: EntityRef[];
 }
+/** A retrieval leg a search skipped because its store failed or timed out (#173). */
+export type SearchDegradedLeg = 'fulltext';
 export interface SearchResponse {
   results: SearchResult[];
   /** Documents reached only via graph expansion (not in the vector hits). */
   related?: RelatedDocumentResult[];
+  /**
+   * Legs that were asked for and did not run. Absent when every requested leg
+   * answered: `['fulltext']` means the BM25 index was unreachable and these
+   * results are vector-only.
+   */
+  degraded?: SearchDegradedLeg[];
 }
 /** A document discovered by graph expansion, with the connecting evidence. */
 export interface RelatedDocumentResult {

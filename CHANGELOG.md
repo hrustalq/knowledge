@@ -17,6 +17,32 @@ in the pull request that introduces them — see
 
 ### Fixed
 
+- Search no longer fails when OpenSearch is down, restarting or slow.
+  `/v1/search`, the search widget, MCP `knowledge_search` and the assistant's
+  search tools now answer from vector results alone and report
+  `degraded: ["fulltext"]`. Before, any OpenSearch error failed the whole
+  request. A keyword search falls back to the vector index instead of
+  returning nothing. (#173)
+- Pages indexed or re-pointed while OpenSearch was down no longer drop out of
+  keyword search, and superseded text no longer stays ranked there. The
+  worker's stale sweeper repairs them from the graph within a few sweeps of
+  OpenSearch coming back, with no reindex and no re-embedding. (#173)
+
+### Operations
+
+- New env var `FULLTEXT_TIMEOUT_MS` (default `1500`): how long a search waits
+  for OpenSearch before answering without it. Only read when
+  `FULLTEXT_PROVIDER=opensearch`.
+- Migration `20261026100000_fulltext_stale_at` adds a nullable
+  `document_revisions.fulltext_stale_at` column and its index. It survives a
+  rollback: the previous release neither reads nor writes it. Revisions that
+  drifted before this release are not stamped; run `POST /v1/ingestion/reindex`
+  once if keyword search has been missing pages.
+
+## [Unreleased]
+
+### Fixed
+
 - The **⋯** menu on a page in the sidebar tree opened in the top-left corner
   of the window instead of beside the row. It now opens next to the row and
   stays there when the pointer leaves it. (#203)

@@ -1,4 +1,6 @@
 import { marked, type Token } from 'marked';
+import type { SiteSearchTag } from '@knowledge/contracts';
+import { readFrontmatterTags, tagEntityKey } from '../common/relations.js';
 
 /**
  * What a published page is searched by (docs/features/44, issue #77 phase
@@ -111,4 +113,17 @@ function clean(text: string): string {
     .replace(/[\u0000-\u001f\u007f]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** A revision's frontmatter tags as the reader filters them: one per canonical key, the author's spelling kept. */
+export function searchTagsOf(frontmatter: Record<string, unknown>): SiteSearchTag[] {
+  return readFrontmatterTags(frontmatter).map((name) => ({ key: tagEntityKey(name), name }));
+}
+
+/** The stored column back as tags; anything else reads as none. */
+export function storedTags(value: unknown): SiteSearchTag[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (t): t is SiteSearchTag => !!t && typeof t === 'object' && typeof t.key === 'string' && typeof t.name === 'string',
+  );
 }

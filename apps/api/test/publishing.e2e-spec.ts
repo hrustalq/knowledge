@@ -150,6 +150,84 @@ describe('publishing (e2e)', () => {
     }
   });
 
+  it('site search facets (#205): category and tag filter inside the snapshot; the rail names only what a reader may see', async () => {
+    const project = await prisma.project.create({ data: { workspaceId: WORKSPACE, name: `Sundew ${nonce} facets` } });
+    const site = await prisma.publishedSite.create({
+      data: { workspaceId: WORKSPACE, projectId: project.id, slug: `sundew-f-${nonce}`, status: 'live', createdBy: randomUUID() },
+    });
+    try {
+      const version = await prisma.siteVersion.create({
+        data: { siteId: site.id, name: 'Latest', slug: 'latest', kind: 'live', status: 'built', builtAt: new Date(), createdBy: site.createdBy },
+      });
+      await prisma.publishedSite.update({ where: { id: site.id }, data: { defaultVersionId: version.id } });
+      const [guide, ref, secret] = [randomUUID(), randomUUID(), randomUUID()];
+      const row = (documentId: string, position: number, slugPath: string, category: string, tags: string[], audience = 'public') => ({
+        versionId: version.id,
+        documentId,
+        revisionId: randomUUID(),
+        parentId: null,
+        position,
+        depth: 0,
+        slugPath,
+        title: `Sundew ${slugPath}`,
+        searchBody: `How the sundew ${nonce} traps insects.`,
+        category,
+        tags: tags.map((name) => ({ key: `tag:${name.toLowerCase()}`, name })),
+        audience,
+      });
+      await prisma.siteVersionPage.createMany({
+        data: [
+          row(guide, 0, 'guide', 'guide', ['Plants', 'Care']),
+          row(ref, 1, 'ref', 'reference', ['Plants']),
+          row(secret, 2, 'secret', 'guide', ['Hidden'], 'members'),
+        ],
+      });
+      // What the build's swap computes (SiteSearchTextService.indexVersion, a worker service).
+      await prisma.$executeRaw`
+        UPDATE site_version_pages
+        SET search_vector = setweight(to_tsvector('russian', title), 'A') || setweight(to_tsvector('russian', search_body), 'C')
+        WHERE version_id = ${version.id}::uuid`;
+
+      const ids = (res: request.Response) => (res.body.results as { documentId: string }[]).map((r) => r.documentId).sort();
+      const search = (qs: string) => http().get(`/v1/public/sites/${site.id}/search?q=sundew ${nonce}${qs}`);
+
+      const all = await search('').expect(200);
+      expect(ids(all)).toEqual([guide, ref].sort());
+      expect(all.body.results.find((r: { documentId: string }) => r.documentId === guide)).toMatchObject({
+        category: 'guide',
+        tags: [{ key: 'tag:plants', name: 'Plants' }, { key: 'tag:care', name: 'Care' }],
+      });
+      expect(ids(await search('&category=guide').expect(200))).toEqual([guide]);
+      expect(ids(await search('&category=guide&category=reference').expect(200))).toEqual([guide, ref].sort());
+      // Folded as the build folded it; facets AND together.
+      expect(ids(await search('&tag=CARE').expect(200))).toEqual([guide]);
+      expect(ids(await search('&category=reference&tag=care').expect(200))).toEqual([]);
+      // The members-only page carries `Hidden`; an anonymous filter for it finds nothing.
+      expect(ids(await search('&tag=hidden').expect(200))).toEqual([]);
+
+      for (const extra of [`&projectId=${project.id}`, `&workspaceId=${WORKSPACE}`, '&mode=semantic']) {
+        const refused = await search(extra).expect(400);
+        expect(refused.body.details?.params).toHaveLength(1);
+      }
+
+      const facets = await http().get(`/v1/public/sites/${site.id}/facets`).expect(200);
+      expect(facets.body).toEqual({
+        categories: [
+          { value: 'guide', count: 1 },
+          { value: 'reference', count: 1 },
+        ],
+        tags: [
+          { key: 'tag:plants', name: 'Plants', count: 2 },
+          { key: 'tag:care', name: 'Care', count: 1 },
+        ],
+      });
+      await http().get(`/v1/public/sites/${site.id}/facets?version=nope`).expect(404);
+    } finally {
+      await prisma.publishedSite.delete({ where: { id: site.id } });
+      await prisma.project.delete({ where: { id: project.id } });
+    }
+  });
+
   it(
     'export ZIP → download: the archive holds the manifest and every page source',
     async () => {

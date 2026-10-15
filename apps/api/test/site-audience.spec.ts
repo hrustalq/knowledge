@@ -357,7 +357,10 @@ describe('search keeps hidden pages out in the statement itself', () => {
     const { service, prisma } = searcher(rows, { kind: 'anonymous' });
     await service.search(SITE, { q: 'pricing' });
     const values = (prisma.$queryRaw.mock.calls[0] as unknown[]).slice(1);
-    const filter = values.find((v) => typeof v === 'object' && v !== null && 'values' in v) as { sql: string; values: unknown[] };
+    // The visibility fragment, beside the (here empty) facet filter (#205).
+    const filter = values.find(
+      (v) => typeof v === 'object' && v !== null && 'sql' in v && (v as { sql: string }).sql.includes('document_id'),
+    ) as { sql: string; values: unknown[] };
     expect(filter.sql).toContain('document_id = ANY');
     expect(filter.values).toContainEqual(['pub']);
   });

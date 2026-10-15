@@ -40,10 +40,8 @@
     "search": "Search",
     "searchPlaceholder": "Search this site…",
     "searchHint": "Type at least 2 characters.",
-    "searchEmpty": "No pages match “{query}”.",
     "searchFailed": "Search is not available right now. Try again in a moment.",
     "searchRateLimited": "Too many searches from your address. Wait a minute and try again.",
-    "searchResults": "Search results",
     "signIn": "Sign in",
     "signOut": "Sign out",
     "signedInMember": "Signed in as a workspace member",
@@ -70,7 +68,12 @@
     "closePages": "Close pages"
   },
   "common": {
-    "close": "Close"
+    "close": "Close",
+    "searchPlaceholder": "Search…",
+    "typeAtLeast": "Type at least {n} characters",
+    "noMatchFor": "No match for {query}",
+    "none": "None",
+    "removeNamed": "Remove {name}"
   },
   "exportReader": {
     "contents": "Contents",
@@ -87,5 +90,35 @@
   "tree": {
     "expand": "Expand",
     "collapse": "Collapse"
+  },
+  "search": {
+    "searchEveryPage": "Search the pages of this site.",
+    "emptyHint": "Results follow your typing. Narrow them by category or tag where the site offers them.",
+    "noMatches": "No pages matched.",
+    "narrowedBy": "{n} filter is narrowing the results. | {n} filters are narrowing the results.",
+    "broaderQuery": "Try fewer or different words.",
+    "clearAllFilters": "Clear filters",
+    "query": "Search query",
+    "searching": "Searching…",
+    "filters": "Filters",
+    "clearFilters": "Clear {filters}",
+    "activeFilters": "{n} filter | {n} filters",
+    "category": "Category",
+    "tags": "Tags",
+    "filterByCategory": "Filter by category…",
+    "filterByTag": "Filter by tag…"
+  },
+  "nav": {
+    "search": "Search"
+  },
+  "category": {
+    "process": "Process",
+    "use-case": "Use case",
+    "contract": "Contract",
+    "erd": "ERD",
+    "architecture": "Architecture",
+    "guide": "Guide",
+    "reference": "Reference",
+    "other": "Other"
   }
 }

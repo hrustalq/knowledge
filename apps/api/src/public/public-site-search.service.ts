@@ -4,11 +4,14 @@ import {
   SITE_SEARCH_MAX_CHARS,
   SITE_SEARCH_MAX_RESULTS,
   SITE_SEARCH_MIN_CHARS,
+  type PublicSiteFacetsResponse,
   type PublicSiteSearchResponse,
   type PublicSiteSearchSnippetPart,
 } from '@knowledge/contracts';
+import { tagFilterKey } from '../common/relations.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { storedTags } from '../publishing/site-search.text.js';
 import { PublicSitesService, visibleRows } from './public-sites.service.js';
 
 /** Words a query is cut to; past this, a query is a paste, not a search. */
@@ -36,6 +39,33 @@ export function siteSearchQuery(raw: string): string | null {
   if (!terms.length) return null;
   return terms.map((w, i) => (i === terms.length - 1 ? `${w}:*` : w)).join(' & ');
 }
+
+/** What the reader may narrow a search by (#205): facets the snapshot rows carry, nothing else. */
+export interface SiteSearchFilters {
+  category?: string[];
+  tag?: string[];
+}
+
+/**
+ * The filters as SQL over `site_version_pages`. Any value of a facet matches,
+ * and the facets AND together, as in the app's search. Tags are folded the way
+ * the build folded them, so `Billing` finds a page tagged `billing`.
+ */
+export function siteFacetFilter(filters: SiteSearchFilters): Prisma.Sql {
+  const categories = [...new Set(filters.category ?? [])];
+  const tagKeys = [...new Set((filters.tag ?? []).map(tagFilterKey))];
+  const conditions: Prisma.Sql[] = [];
+  if (categories.length) conditions.push(Prisma.sql`AND category = ANY(${categories}::text[])`);
+  if (tagKeys.length) {
+    conditions.push(Prisma.sql`AND EXISTS (
+      SELECT 1 FROM jsonb_array_elements(COALESCE(tags, '[]'::jsonb)) AS t(tag)
+      WHERE t.tag->>'key' = ANY(${tagKeys}::text[]))`);
+  }
+  return conditions.length ? Prisma.join(conditions, ' ') : Prisma.empty;
+}
+
+/** How many tags the rail offers, most common first. */
+const MAX_FACET_TAGS = 200;
 
 /** `ts_headline` output → text runs, hits flagged. */
 export function snippetParts(headline: string): PublicSiteSearchSnippetPart[] {
@@ -70,10 +100,12 @@ export class PublicSiteSearchService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async search(siteId: string, query: { q?: string; version?: string }, cookieHeader?: string): Promise<PublicSiteSearchResponse> {
-    const site = await this.sites.findById(siteId);
-    const version = query.version ? site.versions.find((v) => v.slug === query.version) : site.defaultVersion;
-    if (!version) throw new NotFoundException(t('error.site.notFound'));
+  async search(
+    siteId: string,
+    query: { q?: string; version?: string } & SiteSearchFilters,
+    cookieHeader?: string,
+  ): Promise<PublicSiteSearchResponse> {
+    const { site, version } = await this.resolve(siteId, query.version);
     const tsquery = siteSearchQuery(query.q ?? '');
     if (!tsquery) return { results: [] };
     const visible = await this.visibleFilter(site, version.id, cookieHeader);
@@ -81,15 +113,18 @@ export class PublicSiteSearchService {
 
     // Ranked and cut in the inner query; the headline, which re-parses the
     // body, is computed for the survivors only.
-    const rows = await this.prisma.$queryRaw<{ document_id: string; title: string; slug_path: string; snippet: string }[]>`
-      SELECT hit.document_id, hit.title, hit.slug_path,
+    const rows = await this.prisma.$queryRaw<
+      { document_id: string; title: string; slug_path: string; category: string; tags: unknown; snippet: string }[]
+    >`
+      SELECT hit.document_id, hit.title, hit.slug_path, hit.category, hit.tags,
              ts_headline('russian', hit.search_body, to_tsquery('russian', ${tsquery}), ${HEADLINE_OPTIONS}) AS snippet
       FROM (
-        SELECT document_id, title, slug_path, search_body, depth, position,
+        SELECT document_id, title, slug_path, category, tags, search_body, depth, position,
                ts_rank_cd(search_vector, to_tsquery('russian', ${tsquery}), 1) AS rank
         FROM site_version_pages
         WHERE version_id = ${version.id}::uuid
           AND search_vector @@ to_tsquery('russian', ${tsquery})
+          ${siteFacetFilter(query)}
           ${visible}
         ORDER BY rank DESC, depth, position
         LIMIT ${SITE_SEARCH_MAX_RESULTS}
@@ -102,8 +137,47 @@ export class PublicSiteSearchService {
         title: r.title,
         slugPath: r.slug_path,
         snippet: snippetParts(r.snippet ?? ''),
+        category: r.category,
+        tags: storedTags(r.tags),
       })),
     };
+  }
+
+  /**
+   * The facets the reader's rail offers (#205): the categories and tags of
+   * the rows this viewer may read in this version, counted, so the rail never
+   * names a value that only a hidden page carries.
+   */
+  async facets(siteId: string, query: { version?: string }, cookieHeader?: string): Promise<PublicSiteFacetsResponse> {
+    const { site, version } = await this.resolve(siteId, query.version);
+    const visible = await this.visibleFilter(site, version.id, cookieHeader);
+    if (visible === null) return { categories: [], tags: [] };
+
+    const [categories, tags] = await Promise.all([
+      this.prisma.$queryRaw<{ value: string; count: number }[]>`
+        SELECT category AS value, count(*)::int AS count
+        FROM site_version_pages
+        WHERE version_id = ${version.id}::uuid ${visible}
+        GROUP BY category
+        ORDER BY count DESC, value`,
+      // One spelling per key: the authors may disagree on case, the filter does not.
+      this.prisma.$queryRaw<{ key: string; name: string; count: number }[]>`
+        SELECT t.tag->>'key' AS key, min(t.tag->>'name') AS name, count(*)::int AS count
+        FROM site_version_pages, jsonb_array_elements(COALESCE(tags, '[]'::jsonb)) AS t(tag)
+        WHERE version_id = ${version.id}::uuid ${visible}
+        GROUP BY 1
+        ORDER BY count DESC, key
+        LIMIT ${MAX_FACET_TAGS}`,
+    ]);
+    return { categories, tags };
+  }
+
+  /** The live site and the version a reader named, or its default: a 404 before anything is read. */
+  private async resolve(siteId: string, versionSlug: string | undefined) {
+    const site = await this.sites.findById(siteId);
+    const version = versionSlug ? site.versions.find((v) => v.slug === versionSlug) : site.defaultVersion;
+    if (!version) throw new NotFoundException(t('error.site.notFound'));
+    return { site, version };
   }
 
   /**

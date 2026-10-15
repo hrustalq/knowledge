@@ -6,6 +6,8 @@ import { useI18n } from 'vue-i18n'
 import { onMounted } from 'vue'
 import { useProjectsStore } from '@/stores/projects'
 import { useWorkspacesStore } from '@/stores/workspaces'
+import { appSearchSource } from './app-search-source'
+import SearchFilters from './SearchFilters.vue'
 import SearchPanel from './SearchPanel.vue'
 import { useSearch } from './use-search'
 
@@ -16,7 +18,7 @@ const props = defineProps<{ initialQuery?: string }>()
 const projects = useProjectsStore()
 const workspaces = useWorkspacesStore()
 
-const search = useSearch({ query: props.initialQuery ?? '' })
+const search = useSearch(appSearchSource, { query: props.initialQuery ?? '' })
 
 onMounted(() => {
   if (!projects.loaded) void projects.fetchList().catch(() => undefined)
@@ -26,9 +28,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <SearchPanel
-    :search="search"
-    :placeholder="t('search.examplePlaceholder')"
-    @switch-workspace="workspaces.switchWorkspace($event)"
-  />
+  <SearchPanel :search="search" :placeholder="t('search.examplePlaceholder')">
+    <template #filters>
+      <SearchFilters :search="search" @switch-workspace="workspaces.switchWorkspace($event)" />
+    </template>
+  </SearchPanel>
 </template>

@@ -900,12 +900,27 @@ export function publicSiteTreePath(siteId: string): string {
   return `/v1/public/sites/${encodeURIComponent(siteId)}/tree`;
 }
 
-// GET /v1/public/sites/:siteId/search?q=&version= (issue #77 phase 2b-2)
+// GET /v1/public/sites/:siteId/search?q=&version=&category=&tag= (issue #77 phase 2b-2, #205)
 
 /** Shorter queries answer nothing: one letter matches most of a site. */
 export const SITE_SEARCH_MIN_CHARS = 2;
 export const SITE_SEARCH_MAX_CHARS = 200;
 export const SITE_SEARCH_MAX_RESULTS = 20;
+/** Values one facet filter may carry (`category=a&category=b`); any of them matches. */
+export const SITE_SEARCH_MAX_FILTER_VALUES = 20;
+
+/**
+ * Every query parameter the search route reads. The reader's facets are the
+ * ones a snapshot carries, so anything else — a workspace, a project, a mode —
+ * is refused rather than silently ignored.
+ */
+export const SITE_SEARCH_PARAMS = ['q', 'version', 'category', 'tag'] as const;
+
+/** A tag as a published page carries it: `key` is what a filter sends (`tag:billing`), `name` the author's spelling. */
+export interface SiteSearchTag {
+  key: string;
+  name: string;
+}
 
 /** A run of snippet text. `hit` marks words the query matched; the reader highlights them, never as HTML. */
 export interface PublicSiteSearchSnippetPart {
@@ -919,6 +934,9 @@ export interface PublicSiteSearchResult {
   slugPath: string;
   /** Empty when the page has no body text; the title matched. */
   snippet: PublicSiteSearchSnippetPart[];
+  /** As the version was built (#205). Free text, like `documents.category`. */
+  category: string;
+  tags: SiteSearchTag[];
 }
 
 export interface PublicSiteSearchResponse {
@@ -928,6 +946,22 @@ export interface PublicSiteSearchResponse {
 /** The search route of a site; `version` is a version slug, omitted for the default. */
 export function publicSiteSearchPath(siteId: string): string {
   return `/v1/public/sites/${encodeURIComponent(siteId)}/search`;
+}
+
+// GET /v1/public/sites/:siteId/facets?version= (#205)
+
+/**
+ * What the reader's filter rail offers: the categories and tags of the pages
+ * this viewer may read in this version, most common first. Nothing is offered
+ * that would filter to an empty result before a word is typed.
+ */
+export interface PublicSiteFacetsResponse {
+  categories: { value: string; count: number }[];
+  tags: (SiteSearchTag & { count: number })[];
+}
+
+export function publicSiteFacetsPath(siteId: string): string {
+  return `/v1/public/sites/${encodeURIComponent(siteId)}/facets`;
 }
 
 // ---------------------------------------------------------------------------

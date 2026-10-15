@@ -778,6 +778,7 @@ export type I18nTranslations = {
         "site": {
             "notFound": string;
             "versionNotFound": string;
+            "searchParamUnknown": string;
             "disabledByWorkspace": string;
             "exists": string;
             "slugInvalid": string;

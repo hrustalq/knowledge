@@ -2561,6 +2561,12 @@ model SiteVersionPage {
   /// which stems English words too. Set by raw SQL after the rows are written;
   /// null = not indexed yet (SiteSearchTextService backfills it).
   searchVector   Unsupported("tsvector")? @map("search_vector")
+  /// Search facets (issue #205), so the reader filters inside the snapshot,
+  /// never against a head: the page's category when the version was built,
+  /// and its pinned revision's frontmatter tags as SiteSearchTag[] — null =
+  /// not read yet (SiteSearchTextService backfills it).
+  category       String                   @default("other")
+  tags           Json?
   /// SITE_AUDIENCES (issue #77 phase 3): the site's audience rules folded down
   /// this page's path. Written by the build and restamped on every rule change,
   /// so a frozen version follows today's rules without changing its content.

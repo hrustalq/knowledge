@@ -15,7 +15,22 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- Search on a published site can be narrowed by **category** and **tag**.
+  The filter rail offers only the categories and tags of pages the reader can
+  see in the version they are on, with page counts, and results show each
+  page's tags. A frozen version filters by the categories and tags it was
+  built with. Search on a site still never offers a workspace, project or
+  mode, and the public search route now refuses those parameters (400)
+  instead of ignoring them. (#205)
+
 ### Changed
+
+- A published site's search is now drawn by the app's own search sheet,
+  result list and filter fields, so the two look and behave the same. On a
+  phone the search field and its button no longer get pushed off-screen by a
+  long result, in the app's search sheet too. (#205)
 
 - A published site's page list now looks and behaves like the app's sidebar
   tree. Pages expand and collapse with a chevron, and opening a branch loads
@@ -54,6 +69,12 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- Migration `20261027100000_site_search_facets` adds `category` (backfilled
+  from each page's current category) and a nullable `tags` column to
+  `site_version_pages`. It survives a rollback: the previous release neither
+  reads nor writes them. On first boot the worker reads the frontmatter of
+  every published revision once to fill `tags`; until it finishes, site
+  search returns those pages untagged and a tag filter does not match them. (#205)
 - New env var `FULLTEXT_TIMEOUT_MS` (default `1500`): how long a search waits
   for OpenSearch before answering without it. Only read when
   `FULLTEXT_PROVIDER=opensearch`.

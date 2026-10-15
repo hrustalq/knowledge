@@ -22000,6 +22000,99 @@
             }
           },
           {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Only pages of any of these categories, as the version was built. Repeat the parameter for more than one",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "tag",
+            "required": false,
+            "in": "query",
+            "description": "Only pages carrying any of these tags (`billing` or `tag:billing`), as their published revision does",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "A parameter the route does not read, such as a workspace or project filter"
+          },
+          "404": {
+            "description": "No live site with this id, or no such version"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Search one version of a live site: its published pages only, at the revisions it shows",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/{siteId}/facets": {
+      "get": {
+        "operationId": "PublicSitesController_facets",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "A version slug; omitted = the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "Accept-Language",
             "in": "header",
             "required": false,
@@ -22038,7 +22131,7 @@
             }
           }
         },
-        "summary": "Search one version of a live site: its published pages only, at the revisions it shows",
+        "summary": "The categories and tags a viewer can filter one version of a live site by, with page counts",
         "tags": [
           "public"
         ]

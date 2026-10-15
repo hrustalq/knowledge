@@ -13,6 +13,14 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- The **⋯** menu on a page in the sidebar tree opened in the top-left corner
+  of the window instead of beside the row. It now opens next to the row and
+  stays there when the pointer leaves it. (#203)
+
 ## [0.22.0] — 2026-10-15
 
 ### Added

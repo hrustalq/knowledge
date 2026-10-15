@@ -20,7 +20,7 @@ import { ActivityService } from '../activity/activity.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
-import type { Principal } from '../auth/principal.js';
+import { WORKSPACE_READER, type Principal } from '../auth/principal.js';
 import { DOCUMENT_ARCHIVED, DocumentsService } from './documents.service.js';
 import { CompareService } from './compare.service.js';
 import type { CreateMergeRequestDto, UpdateMergeRequestDto } from './dto/merge-requests.dto.js';
@@ -604,7 +604,7 @@ export class MergeRequestsService {
     return this.toInfo(mr, mergeBase, stats.get(mr.id));
   }
 
-  /** 400 unless every id is a member of the document's workspace. */
+  /** 400 unless every id reads the document's workspace — a member, and not a guest (#76). */
   private async assertWorkspaceMembers(documentId: string, userIds: string[]): Promise<void> {
     if (userIds.length === 0) return;
     const doc = await this.prisma.document.findUniqueOrThrow({
@@ -612,7 +612,7 @@ export class MergeRequestsService {
       select: { workspaceId: true },
     });
     const members = await this.prisma.workspaceMember.findMany({
-      where: { workspaceId: doc.workspaceId, userId: { in: userIds } },
+      where: { workspaceId: doc.workspaceId, userId: { in: userIds }, ...WORKSPACE_READER },
       select: { userId: true },
     });
     const memberIds = new Set(members.map((m) => m.userId));

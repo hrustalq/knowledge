@@ -23,6 +23,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { isDevActor } from '../activity/actor.js';
 import { parseUserMentions } from '../documents/mentions.js';
 import { t } from '../i18n/t.js';
+import { WORKSPACE_READER } from '../auth/principal.js';
 
 /** A row the fan-out wrote, so the caller can push it to exactly one person. */
 export interface NotificationDelivery {
@@ -190,8 +191,10 @@ export class NotificationsService {
   }): Promise<NotificationDelivery[]> {
     if (input.userIds.length === 0) return [];
     try {
+      // Readers only: a mention subscribes the person it names, and a guest's
+      // subscription would only ever be filtered out again in `deliver` (#76).
       const members = await this.prisma.workspaceMember.findMany({
-        where: { workspaceId: input.workspaceId, userId: { in: input.userIds } },
+        where: { workspaceId: input.workspaceId, userId: { in: input.userIds }, ...WORKSPACE_READER },
         select: { userId: true },
       });
       const real = members.map((m) => m.userId);
@@ -296,6 +299,14 @@ export class NotificationsService {
     // without a bootstrapped key. Same accommodation the merge-request approval
     // gate makes for the same principal, and for the same reason.
     if (actor && !isDevActor(actor)) recipients.delete(actor);
+    if (recipients.size === 0) return [];
+
+    // A guest reads nothing in the workspace it was not granted (#76), and a
+    // notification carries the page title — so none reaches one, whether they
+    // were mentioned or still hold a subscription from before a demotion.
+    for (const userId of await this.guestsOf(subject.workspaceId, [...recipients.keys()])) {
+      recipients.delete(userId);
+    }
     if (recipients.size === 0) return [];
 
     for (const userId of await this.mutedBy(subject.workspaceId, [...recipients.keys()], category)) {
@@ -479,6 +490,14 @@ export class NotificationsService {
   }
 
   /** Which of these people have switched this category off. */
+  private async guestsOf(workspaceId: string, userIds: string[]): Promise<string[]> {
+    const rows = await this.prisma.workspaceMember.findMany({
+      where: { workspaceId, userId: { in: userIds }, role: 'guest' },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
+  }
+
   private async mutedBy(
     workspaceId: string,
     userIds: string[],

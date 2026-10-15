@@ -487,5 +487,13 @@
     "serverUrlNotHttps": "Сервер мессенджера должен использовать https (http допустим только при CHAT_ALLOW_PRIVATE_URLS)",
     "serverUrlPrivate": "Адрес {address} находится в частной сети; разрешите его через CHAT_ALLOW_PRIVATE_URLS",
     "serverHostUnresolved": "Не удалось разрешить хост {host}"
+  },
+  "group": {
+    "notFound": "Группа {id} не найдена",
+    "nameTaken": "Группа «{name}» уже есть в этом рабочем пространстве",
+    "notMembers": "В группу можно добавить только участников рабочего пространства: {users}"
+  },
+  "access": {
+    "groupReadOnly": "Группа «{name}» синхронизируется из внешнего источника, и изменить её здесь нельзя"
   }
 }

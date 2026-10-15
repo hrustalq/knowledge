@@ -29,5 +29,6 @@
   "chatIntegration": "chat bot id",
   "chatBinding": "chat binding id",
   "chatSubscription": "chat subscription id",
-  "chatIdentity": "linked chat account id"
+  "chatIdentity": "linked chat account id",
+  "group": "group id"
 }

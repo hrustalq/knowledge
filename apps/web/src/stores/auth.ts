@@ -36,7 +36,9 @@ export const useAuthStore = defineStore('auth', {
      * thread routes.
      */
     canComment(): boolean {
-      return this.role !== null
+      // A guest reads only what is granted to it (#76), so workspace-wide it
+      // can comment on nothing — the API refuses it every `viewer` route.
+      return this.role !== null && this.role !== 'guest'
     },
     canAdminWorkspace(): boolean {
       return this.role === 'admin'

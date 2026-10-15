@@ -564,7 +564,7 @@ model EmailVerificationToken {
 model WorkspaceMember {
   workspaceId     String   @map("workspace_id") @db.Uuid
   userId          String   @map("user_id") @db.Uuid
-  // viewer < editor < admin (Phase 5 ACL hierarchy).
+  // WORKSPACE_ROLES in contracts: guest < viewer < editor < admin (#76).
   role            String   @default("viewer")
   // Gate for knowledge.query_graph / POST /v1/graph/query (plan.md §9:
   // trusted-operator only). Orthogonal to role on purpose.
@@ -576,6 +576,45 @@ model WorkspaceMember {
 
   @@id([workspaceId, userId])
   @@map("workspace_members")
+}
+
+// A workspace-scoped set of members that page and project restrictions grant
+// to (#76). `source` is GROUP_SOURCES in contracts: `manual` groups are edited
+// over the API, `connector` ones are mirrored by ACL sync (connectorId +
+// externalId name the upstream group) and `scim` is reserved for provisioning;
+// both non-manual kinds answer 409 to a manual edit. No FK on workspace_id or
+// connector_id (house policy).
+model UserGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  name        String
+  description String?
+  source      String   @default("manual")
+  connectorId String?  @map("connector_id") @db.Uuid
+  externalId  String?  @map("external_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  members UserGroupMember[]
+
+  @@unique([workspaceId, name])
+  @@unique([connectorId, externalId])
+  @@map("user_groups")
+}
+
+// No FK on user_id (house policy). Rows are removed with the workspace
+// membership they depend on — WorkspacesService.removeMember — so re-adding a
+// person does not silently restore what their old groups were granted.
+model UserGroupMember {
+  groupId   String   @map("group_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  source    String   @default("manual")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  group UserGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("user_group_members")
 }
 
 // Phase 5 audit trail: every trusted-operator graph query is recorded here.

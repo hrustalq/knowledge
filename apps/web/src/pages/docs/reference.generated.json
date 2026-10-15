@@ -2091,6 +2091,66 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/groups",
+      "tag": "groups",
+      "summary": "The workspace's user groups, with member counts",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/groups",
+      "tag": "groups",
+      "summary": "Create a manual group (workspace admin; 409 when the name is taken)",
+      "role": "admin",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/groups/{id}",
+      "tag": "groups",
+      "summary": "Delete a group and its memberships (409 for a connector or SCIM group)",
+      "role": "admin",
+      "source": "group",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/groups/{id}",
+      "tag": "groups",
+      "summary": "Rename a group or change its description (409 for a connector or SCIM group)",
+      "role": "admin",
+      "source": "group",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/groups/{id}/members",
+      "tag": "groups",
+      "summary": "A group's members with their workspace roles",
+      "role": "viewer",
+      "source": "group",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/groups/{id}/members",
+      "tag": "groups",
+      "summary": "Add and remove members in one transaction (workspace admin; 400 for a non-member, 409 for a connector or SCIM group)",
+      "role": "admin",
+      "source": "group",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/imports",
       "tag": "imports",

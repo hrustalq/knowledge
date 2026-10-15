@@ -1,4 +1,5 @@
 {
+  "guest": "guest",
   "viewer": "viewer",
   "editor": "editor",
   "admin": "admin"

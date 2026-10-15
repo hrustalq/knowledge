@@ -4,8 +4,16 @@ import type { FactExtractor } from '@knowledge/contracts/graph';
 // stale detection / reindex scheduling, historical fact queries
 // ---------------------------------------------------------------------------
 
-/** Workspace role hierarchy: viewer < editor < admin. */
-export type WorkspaceRole = 'viewer' | 'editor' | 'admin';
+/**
+ * Workspace role hierarchy: guest < viewer < editor < admin.
+ *
+ * `guest` sits below the ladder rather than on it: a guest reads nothing in the
+ * workspace except what is granted to them or their groups (#76), so every
+ * workspace-level `@Access('viewer', …)` route refuses one without knowing
+ * guests exist.
+ */
+export const WORKSPACE_ROLES = ['guest', 'viewer', 'editor', 'admin'] as const;
+export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
 export interface WorkspaceMembership {
   workspaceId: string;
@@ -656,6 +664,48 @@ export interface WorkspaceCandidate {
 export interface ListWorkspaceCandidatesResponse {
   workspaceId: string;
   candidates: WorkspaceCandidate[];
+}
+
+// ---------------------------------------------------------------------------
+// User groups (#76): workspace-scoped sets of members that page and project
+// restrictions grant to. Membership is manual today; `connector` groups are
+// mirrored from a source by ACL sync and `scim` ones by provisioning, and both
+// are read-only over the API — a manual edit would be overwritten next sync.
+
+export const GROUP_SOURCES = ['manual', 'connector', 'scim'] as const;
+export type GroupSource = (typeof GROUP_SOURCES)[number];
+
+export interface UserGroupSummary {
+  groupId: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  source: GroupSource;
+  memberCount: number;
+  createdAt: string;
+}
+
+// GET /v1/groups?workspaceId=
+export interface ListUserGroupsResponse {
+  workspaceId: string;
+  groups: UserGroupSummary[];
+}
+
+export interface UserGroupMemberEntry {
+  userId: string;
+  email: string;
+  displayName: string;
+  avatarUrl: AvatarUrl;
+  /** The person's workspace role — a guest in a group still reads only what the group is granted. */
+  role: WorkspaceRole;
+  source: GroupSource;
+  createdAt: string;
+}
+
+// GET /v1/groups/:id/members · PUT /v1/groups/:id/members
+export interface ListUserGroupMembersResponse {
+  groupId: string;
+  members: UserGroupMemberEntry[];
 }
 
 

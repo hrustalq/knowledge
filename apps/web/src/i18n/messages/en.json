@@ -160,6 +160,7 @@
     "chatBots": "Chat bots"
   },
   "role": {
+    "guest": "Guest",
     "viewer": "Viewer",
     "editor": "Editor",
     "admin": "Admin"
@@ -2247,8 +2248,9 @@
     "memberRemoved": "Removed {email}",
     "tabMembers": "Members",
     "tabRoles": "Roles",
+    "tabGroups": "Groups",
     "tabAccounts": "Accounts",
-    "rolesHint": "Three roles, each one adding to the one before it. A role is held per workspace.",
+    "rolesHint": "Four roles, each one adding to the one before it. A guest starts from nothing. A role is held per workspace.",
     "rolesNoteMerge": "Merging is an editor’s right, not an admin’s — there is no separate approver rank.",
     "rolesNoteViewer": "A viewer can comment and can use the AI assistant; neither needs edit access.",
     "noMembersInRole": "Nobody holds this role yet.",
@@ -2261,6 +2263,10 @@
     "selectMember": "Select {name}",
     "rolesReadOnly": "You can see who holds what, but only an admin can change it.",
     "grant": {
+      "guest": {
+        "granted": "Open only the pages and projects shared with them or one of their groups",
+        "nothingElse": "No search, activity feed, member roster or settings across the workspace"
+      },
       "viewer": {
         "read": "Read every page, its revision history and the graph around it",
         "comment": "Comment on any page, and resolve comment threads",
@@ -2276,14 +2282,42 @@
         "automation": "Run workflows, connector syncs and AI agents"
       },
       "admin": {
-        "members": "Add and remove members, and set their role and operator flag",
+        "members": "Add and remove members, set their role and operator flag, and manage groups",
         "ai": "Configure AI providers, skills, plugins and spending budgets",
         "integrations": "Set up connectors, and define the workflows editors run",
         "housekeeping": "Delete a project, force re-indexing, and read the audit log"
       }
     },
     "roleFor": "Role for {name}",
-    "trustedOperatorFor": "Trusted operator for {name}"
+    "trustedOperatorFor": "Trusted operator for {name}",
+    "groups": {
+      "hint": "A group is a named set of members. Page and project restrictions are granted to groups as well as to people, so a team is added once rather than person by person.",
+      "new": "New group",
+      "create": "Create group",
+      "editTitle": "Edit group",
+      "formHint": "The name is what people pick when they share a page with the group.",
+      "name": "Name",
+      "description": "Description",
+      "created": "Group “{name}” created",
+      "updated": "Group “{name}” saved",
+      "deleted": "Group “{name}” deleted",
+      "empty": "This workspace has no groups yet.",
+      "emptyManage": "No groups yet. Create one to share pages with a team at once.",
+      "source": {
+        "manual": "Manual",
+        "connector": "Synced from a connector",
+        "scim": "Provisioned by SCIM"
+      },
+      "readOnlySource": "This group is kept in step with an external source, so its name and members are changed there, not here.",
+      "noMembers": "Nobody is in this group yet.",
+      "addPeople": "Add people",
+      "everyoneIn": "Every workspace member is already in this group.",
+      "removeMember": "Remove {name} from the group",
+      "editFor": "Edit {name}",
+      "deleteFor": "Delete {name}",
+      "deleteTitle": "Delete group “{name}”?",
+      "deleteBody": "Its members stay in the workspace. Whatever was shared with the group stops reaching them through it."
+    }
   },
   "users": {
     "user": "User",

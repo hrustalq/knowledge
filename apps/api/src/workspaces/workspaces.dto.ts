@@ -12,9 +12,10 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { WORKSPACE_ROLES } from '@knowledge/contracts';
 import { vmsg } from '../common/validation.js';
 
-const ROLES = ['viewer', 'editor', 'admin'] as const;
+const ROLES = WORKSPACE_ROLES;
 
 export class ListCandidatesQueryDto {
   @ApiPropertyOptional({ description: 'Case-insensitive email/display-name substring match' })

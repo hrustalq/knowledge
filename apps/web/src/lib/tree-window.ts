@@ -23,3 +23,23 @@ export interface TreeWindow {
 }
 
 export const TreeWindowKey: InjectionKey<TreeWindow> = Symbol('kn-tree-window')
+
+/** One tree level: `ml-[13px]` plus the list's `pl-2` (TreeBranch). */
+export const TREE_INDENT = 21
+/** Rail chrome before a title starts: 8px list padding either side, the 20px disclosure slot, the 8px trailing gutter. */
+const TREE_CHROME = 44
+/** Roughly eighteen characters — below this a title stops being a title and becomes an ellipsis. */
+const TREE_MIN_TITLE = 128
+
+/**
+ * How many levels of indent a rail this wide can spend and still leave a
+ * readable title. Everything deeper is what the window slides to reach.
+ */
+export function treeDepthBudget(width: number): number {
+  return Math.min(12, Math.max(1, Math.floor((width - TREE_CHROME - TREE_MIN_TITLE) / TREE_INDENT)))
+}
+
+/** How far the list pans left so that `focusDepth` fits a rail of `budget` levels. */
+export function treeShift(focusDepth: number, budget: number): number {
+  return Math.max(0, focusDepth - budget) * TREE_INDENT
+}

@@ -2,6 +2,7 @@ import type {
   Locale,
   PublicShareTreeNode,
   PublicSiteLogo,
+  PublicSitePageRef,
   PublicSiteTreeNode,
   PublicSiteVersionRef,
   SiteTheme,
@@ -30,6 +31,7 @@ export interface PublicSiteChrome {
   prefix: string
   version: PublicSiteVersionRef
   versions: PublicSiteVersionRef[]
+  /** The top level and the open path's children; the nav loads the rest a level at a time (issue #204). */
   tree: PublicSiteTreeNode[]
   /**
    * Who the API read this as, and how to change it (issue #77 phase 3). The
@@ -69,6 +71,9 @@ export type PublicReaderView =
             slugPath: string
             /** The same page in other versions, by version slug: the switcher links straight there. */
             alternates: { versionSlug: string; href: string }[]
+            /** Neighbours in the whole reading order, which the trimmed tree cannot tell. */
+            prev: PublicSitePageRef | null
+            next: PublicSitePageRef | null
           })
         | null
     }

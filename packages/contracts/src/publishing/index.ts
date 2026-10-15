@@ -802,6 +802,19 @@ export interface PublicSiteTreeNode {
   /** `guides/install`; `''` for the root page of a site published from one page. */
   slugPath: string;
   position: number;
+  /**
+   * Children of this page the viewer may see. The tree arrives a level at a
+   * time (issue #204), so a branch whose children have not been sent yet still
+   * knows to draw itself as a branch.
+   */
+  childCount: number;
+}
+
+/** A page named by the reader's chrome: enough to link to it. */
+export interface PublicSitePageRef {
+  documentId: string;
+  title: string;
+  slugPath: string;
 }
 
 export interface PublicSiteVersionRef {
@@ -830,6 +843,15 @@ export interface PublicSitePage {
    * Drives `<link rel="alternate">` and lets the switcher link straight to it.
    */
   alternates: { version: PublicSiteVersionRef; path: string }[];
+  /** The pages before and after this one in reading order (depth first), among those the viewer may see. */
+  prev: PublicSitePageRef | null;
+  next: PublicSitePageRef | null;
+  /**
+   * Where the pages this body links to live, for those the viewer may see. The
+   * tree no longer names every page, so the reader rewrites `/documents/<id>`
+   * links from this; a link to any other page is unlinked.
+   */
+  links: { documentId: string; slugPath: string }[];
 }
 
 // GET /v1/public/sites/resolve?slug=|host=&path=&from=
@@ -857,9 +879,25 @@ export interface PublicSiteResolveResponse {
   viewer: SiteViewerKind;
   version: PublicSiteVersionRef & { id: string; builtAt: string };
   versions: PublicSiteVersionRef[];
+  /**
+   * The top level, plus the children of every page on the path to the current
+   * one: what the reader's nav draws before anyone expands a branch (issue
+   * #204). Deeper levels come from the tree route.
+   */
   tree: PublicSiteTreeNode[];
   /** Null when the site and version exist but no page answers the path: a 404 inside the site's chrome. */
   page: PublicSitePage | null;
+}
+
+// GET /v1/public/sites/:siteId/tree?parent=&version= (issue #204)
+export interface PublicSiteTreeResponse {
+  /** One level: the children of `parent` (the top level without it) the viewer may see, in reading order. */
+  nodes: PublicSiteTreeNode[];
+}
+
+/** The tree route of a site; `parent` is a page id (omitted for the top level), `version` a version slug. */
+export function publicSiteTreePath(siteId: string): string {
+  return `/v1/public/sites/${encodeURIComponent(siteId)}/tree`;
 }
 
 // GET /v1/public/sites/:siteId/search?q=&version= (issue #77 phase 2b-2)

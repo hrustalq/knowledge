@@ -28,6 +28,7 @@ import {
   siteSessionCookieName,
   type PublicSiteAskResponse,
   type PublicSiteResolveResponse,
+  type PublicSiteTreeResponse,
   type PublicSiteWidgetResponse,
   type PublicSiteSearchResponse,
 } from '@knowledge/contracts';
@@ -72,6 +73,20 @@ export class SearchSiteQueryDto {
   @IsString()
   @MaxLength(SITE_SEARCH_MAX_CHARS)
   q?: string;
+
+  @ApiPropertyOptional({ description: 'A version slug; omitted = the default version' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  version?: string;
+}
+
+export class TreeSiteQueryDto {
+  @ApiPropertyOptional({ description: 'The page whose children to list; omitted = the top level' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  parent?: string;
 
   @ApiPropertyOptional({ description: 'A version slug; omitted = the default version' })
   @IsOptional()
@@ -221,6 +236,22 @@ export class PublicSitesController {
     @Req() req: Request,
   ): Promise<PublicSiteAskResponse> {
     return this.asks.ask(siteId, body, { ip: clientIp(req), cookieHeader: req.headers.cookie, locale: currentLocale() });
+  }
+
+  /**
+   * One level of the reader's nav (issue #204): what expanding a branch
+   * loads. The same visibility as the rest of the reader — a parent the
+   * viewer may not see is a 404, and a hidden child is simply not listed.
+   */
+  @Get(':siteId/tree')
+  @ApiOperation({ summary: 'The children of one page of a live site (or its top level), as the viewer sees them' })
+  @ApiResponse({ status: 404, description: 'No live site with this id, no such version, or a parent the viewer may not see' })
+  treeLevel(
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Query() query: TreeSiteQueryDto,
+    @Req() req: Request,
+  ): Promise<PublicSiteTreeResponse> {
+    return this.sites.children(siteId, query, req.headers.cookie);
   }
 
   @Get(':siteId/search')

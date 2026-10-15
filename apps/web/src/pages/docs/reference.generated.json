@@ -3092,6 +3092,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/public/sites/{siteId}/tree",
+      "tag": "public",
+      "summary": "The children of one page of a live site (or its top level), as the viewer sees them",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/public/sites/llms-full.txt",
       "tag": "public",
       "summary": "Every page of a version at its published revision, concatenated and streamed (LLMS_FULL_MAX_DOCS / _BYTES)",

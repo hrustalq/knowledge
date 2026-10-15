@@ -4390,6 +4390,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/sites/{siteId}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The children of one page of a live site (or its top level), as the viewer sees them */
+        get: operations["PublicSitesController_treeLevel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/sites/{siteId}/search": {
         parameters: {
             query?: never;
@@ -21097,6 +21114,52 @@ export interface operations {
             };
             /** @description No model is configured for the workspace, or its AI budget is spent */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSitesController_treeLevel: {
+        parameters: {
+            query?: {
+                /** @description The page whose children to list; omitted = the top level */
+                parent?: string;
+                /** @description A version slug; omitted = the default version */
+                version?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No live site with this id, no such version, or a parent the viewer may not see */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

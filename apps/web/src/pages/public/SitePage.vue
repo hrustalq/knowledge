@@ -9,8 +9,12 @@
  * what a crawler sees. The client only upgrades mermaid and the theme toggle,
  * and adds search (SiteSearch), which has no server-rendered form.
  *
- * The nav shows the top level and the open path to the current page, the way
- * docs sites do: a 500-page tree drawn whole is a list nobody reads.
+ * The nav is the app rail's tree (TreeRow, issue #204): the server sends the
+ * top level and the open path to the current page, the way docs sites do — a
+ * 500-page tree drawn whole is a list nobody reads — and expanding any other
+ * branch loads that one level (site-tree). The layout is the app shell's: the
+ * rail pinned to the left edge, the content filling the rest, and below `lg`
+ * the same rail as a drawer that opens from `#site-nav` with JavaScript off.
  *
  * A site with pages that are not public (issue #77 phase 3) offers sign-in, a
  * plain link through the app; whoever is signed in can sign out, which needs
@@ -20,17 +24,21 @@
  * embeddable widget shows) in a sheet beside search. It asks as this reader,
  * so a signed-in reader's answers may draw on pages others cannot see.
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, LogIn, LogOut, Menu, MessageCircleQuestion, Moon, Sun } from 'lucide-vue-next'
+import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, LogIn, LogOut, Menu, MessageCircleQuestion, Moon, Sun, X } from 'lucide-vue-next'
+import type { PublicSiteTreeNode, PublicSiteTreeResponse } from '@knowledge/contracts'
 import { formatDate } from '@/lib/format'
 import { toggleTheme } from '@/lib/theme'
+import { TreeWindowKey, treeDepthBudget, treeShift } from '@/lib/tree-window'
 import PublicMarkdown from '@/components/public/PublicMarkdown.vue'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import SiteAsk from './SiteAsk.vue'
 import SiteSearch from './SiteSearch.vue'
-import { publicSiteSessionPath } from '@knowledge/contracts/publishing'
-import { siteHomeId, siteHref, treeRows, type PublicReaderState } from './reader-state'
+import SiteTreeNode from './SiteTreeNode.vue'
+import { publicSiteSessionPath, publicSiteTreePath } from '@knowledge/contracts/publishing'
+import { siteHomeId, siteHref, type PublicReaderState } from './reader-state'
+import { createSiteTree, SiteTreeKey } from './site-tree'
 
 const props = defineProps<{ state: PublicReaderState }>()
 
@@ -41,31 +49,83 @@ const site = computed(() => view.value?.site ?? null)
 const page = computed(() => view.value?.page ?? null)
 const homeId = computed(() => (site.value ? siteHomeId(site.value.tree) : null))
 
-/** Every page in reading order. */
-const allRows = computed(() => (site.value ? treeRows(site.value.tree) : []))
-
-/** The current page and its ancestors: the open path through the tree. */
-const openPath = computed(() => {
-  const open = new Set<string>()
-  if (!site.value || !page.value) return open
-  const parentOf = new Map(site.value.tree.map((n) => [n.documentId, n.parentId]))
-  for (let id: string | null | undefined = page.value.documentId; id; id = parentOf.get(id)) open.add(id)
-  return open
-})
-
-/** Top level, plus the children of every page on the open path. */
-const navRows = computed(() =>
-  allRows.value.filter((row) => row.parentId === null || openPath.value.has(row.parentId)),
-)
-const hasChildren = computed(() => new Set(site.value?.tree.map((n) => n.parentId).filter(Boolean) as string[]))
-
 const href = (documentId: string, slugPath: string) =>
   site.value ? siteHref(site.value, site.value.version, slugPath, documentId === homeId.value) : '#'
+const hrefOf = (node: PublicSiteTreeNode) => href(node.documentId, node.slugPath)
 const homeHref = computed(() => (site.value ? siteHref(site.value, site.value.version, '', true) : '/'))
 
-const index = computed(() => allRows.value.findIndex((r) => r.documentId === page.value?.documentId))
-const prev = computed(() => (index.value > 0 ? allRows.value[index.value - 1] : null))
-const next = computed(() => (index.value >= 0 && index.value < allRows.value.length - 1 ? allRows.value[index.value + 1] : null))
+const prev = computed(() => page.value?.prev ?? null)
+const next = computed(() => page.value?.next ?? null)
+
+/** One level of the nav, as this reader sees it: the cookie travels, so a signed-in reader gets their pages. */
+async function loadLevel(parentId: string): Promise<PublicSiteTreeNode[]> {
+  const s = site.value!
+  const params = new URLSearchParams({ parent: parentId })
+  if (!s.version.isDefault) params.set('version', s.version.slug)
+  const res = await fetch(`${props.state.apiBase}${publicSiteTreePath(s.id)}?${params}`, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  })
+  if (!res.ok) throw new Error(String(res.status))
+  return ((await res.json()) as PublicSiteTreeResponse).nodes
+}
+
+const tree = createSiteTree({
+  initial: site.value?.tree ?? [],
+  activeId: page.value?.documentId ?? null,
+  load: loadLevel,
+})
+provide(SiteTreeKey, tree)
+const topLevel = computed(() => tree.children.get(null) ?? [])
+
+/** The rail's horizontal window (lib/tree-window), as in the app; the rail is a fixed 16rem here. */
+const RAIL_PX = 256
+const focusDepth = ref(tree.activeDepth)
+provide(TreeWindowKey, {
+  reveal: (depth) => (focusDepth.value = depth),
+  retreat: (depth) => (focusDepth.value = Math.min(focusDepth.value, depth)),
+})
+const shift = computed(() => treeShift(focusDepth.value, treeDepthBudget(RAIL_PX)))
+
+/**
+ * The current page can sit a hundred rows down an open branch. The rail is
+ * scrolled to it (the rail, not the page) so it answers "where am I" on
+ * arrival rather than after a hunt.
+ */
+const railScroll = ref<HTMLElement | null>(null)
+onMounted(() => {
+  const el = railScroll.value
+  const active = el?.querySelector<HTMLElement>('[aria-current="page"]')
+  if (!el || !active) return
+  const offset = active.getBoundingClientRect().top - el.getBoundingClientRect().top
+  if (offset > el.clientHeight - 48) el.scrollTop += offset - el.clientHeight / 3
+})
+
+/**
+ * The drawer below `lg`. With JavaScript it is state, so the URL keeps no
+ * `#site-nav`; without, the same links open it through `:target` (style.css).
+ */
+const navOpen = ref(false)
+const navClose = ref<HTMLAnchorElement | null>(null)
+const navToggle = ref<HTMLAnchorElement | null>(null)
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeNav()
+}
+watch(navOpen, async (open) => {
+  if (open) {
+    window.addEventListener('keydown', onKeydown)
+    await nextTick()
+    navClose.value?.focus()
+  } else {
+    window.removeEventListener('keydown', onKeydown)
+  }
+})
+function closeNav() {
+  if (!navOpen.value) return
+  navOpen.value = false
+  navToggle.value?.focus()
+}
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 const toc = computed(() => page.value?.headings.filter((h) => h.level > 1) ?? [])
 const date = (iso: string) => formatDate(iso, props.state.locale)
@@ -117,8 +177,20 @@ async function signOut() {
     </main>
 
     <template v-else>
-      <header class="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
-        <div class="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:px-6">
+      <header class="sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
+        <div class="flex h-14 items-center gap-3 px-4">
+          <a
+            v-if="topLevel.length"
+            ref="navToggle"
+            href="#site-nav"
+            class="-ml-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+            :aria-label="t('siteReader.pages')"
+            aria-controls="site-nav"
+            :aria-expanded="navOpen"
+            @click.prevent="navOpen = !navOpen"
+          >
+            <Menu class="size-4" aria-hidden="true" />
+          </a>
           <a :href="homeHref" class="flex min-w-0 items-center gap-2.5 font-semibold">
             <img
               v-if="site.logo?.kind === 'image'"
@@ -237,113 +309,118 @@ async function signOut() {
         <a :href="versionHref(currentVersion)" class="font-medium underline">{{ t('siteReader.toCurrent') }}</a>
       </p>
 
-      <div class="mx-auto flex max-w-7xl gap-8 px-4 py-8 sm:px-6">
-        <nav v-if="navRows.length" class="hidden w-64 shrink-0 lg:block" :aria-label="t('siteReader.pages')">
-          <div class="sticky top-22 max-h-[calc(100dvh-7rem)] overflow-y-auto pr-1">
-            <ul class="space-y-px text-sm">
-              <li v-for="row in navRows" :key="row.documentId">
-                <a
-                  :href="href(row.documentId, row.slugPath)"
-                  class="flex items-center gap-1 rounded-md py-1 pr-2 hover:bg-muted"
-                  :class="row.documentId === page?.documentId ? 'bg-primary/10 font-medium text-primary' : 'text-foreground/80'"
-                  :style="{ paddingLeft: `${0.5 + row.depth * 0.875}rem` }"
-                  :aria-current="row.documentId === page?.documentId ? 'page' : undefined"
-                >
-                  <span class="min-w-0 flex-1 truncate">{{ row.title }}</span>
-                  <ChevronRight
-                    v-if="hasChildren.has(row.documentId) && !openPath.has(row.documentId)"
-                    class="size-3 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </a>
-              </li>
+      <div class="flex">
+        <!-- The rail: pinned to the left edge from `lg`, a drawer below it. -->
+        <nav
+          v-if="topLevel.length"
+          id="site-nav"
+          class="kn-site-rail flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:sticky lg:top-14 lg:h-[calc(100dvh-3.5rem)] lg:w-64 lg:shrink-0"
+          :data-open="navOpen"
+          :aria-label="t('siteReader.pages')"
+        >
+          <div class="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4 lg:hidden">
+            <span class="truncate text-sm font-semibold">{{ site.title }}</span>
+            <a
+              ref="navClose"
+              href="#"
+              class="-mr-1 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              :aria-label="t('siteReader.closePages')"
+              @click.prevent="closeNav"
+            ><X class="size-4" aria-hidden="true" /></a>
+          </div>
+          <div
+            ref="railScroll"
+            class="sidebar-scroll kn-tree-window min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-4"
+            :style="{ '--kn-tree-shift': `${shift}px` }"
+            :data-windowed="shift > 0"
+          >
+            <ul class="space-y-px">
+              <SiteTreeNode v-for="node in topLevel" :key="node.documentId" :node="node" :depth="0" :href="hrefOf" />
             </ul>
           </div>
         </nav>
+        <!-- Without JavaScript the scrim is a link back out of `:target`. -->
+        <a
+          v-if="topLevel.length"
+          href="#"
+          class="kn-site-scrim"
+          tabindex="-1"
+          aria-hidden="true"
+          @click.prevent="closeNav"
+        />
 
-        <article class="min-w-0 flex-1">
-          <div class="mx-auto max-w-3xl">
-            <!-- The same nav for screens too narrow for the side column. -->
-            <details v-if="navRows.length" class="mb-6 rounded-md border px-3 py-2 text-sm lg:hidden">
-              <summary class="flex cursor-pointer items-center gap-2 font-medium">
-                <Menu class="size-4" aria-hidden="true" />{{ t('siteReader.pages') }}
-              </summary>
-              <ul class="mt-2 space-y-1">
-                <li v-for="row in navRows" :key="row.documentId" :style="{ paddingLeft: `${row.depth * 0.875}rem` }">
-                  <a
-                    :href="href(row.documentId, row.slugPath)"
-                    class="hover:underline"
-                    :class="row.documentId === page?.documentId ? 'font-medium text-primary' : ''"
-                  >{{ row.title }}</a>
-                </li>
-              </ul>
-            </details>
+        <div class="flex min-w-0 flex-1 flex-col">
+          <div class="flex flex-1 gap-10 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+            <article class="min-w-0 flex-1">
+              <!-- The measure, not the window, sets the width of the prose. -->
+              <div class="mx-auto max-w-[46rem]">
+                <template v-if="page">
+                  <h1 class="mb-1 text-3xl font-semibold tracking-tight text-balance">{{ page.title }}</h1>
+                  <p v-if="page.updatedAt" class="mb-8 text-xs text-muted-foreground">
+                    {{ t('siteReader.updated', { date: date(page.updatedAt) }) }}
+                  </p>
+                  <PublicMarkdown :html="page.html" />
 
-            <template v-if="page">
-              <h1 class="mb-1 text-3xl font-semibold tracking-tight">{{ page.title }}</h1>
-              <p v-if="page.updatedAt" class="mb-8 text-xs text-muted-foreground">
-                {{ t('siteReader.updated', { date: date(page.updatedAt) }) }}
-              </p>
-              <PublicMarkdown :html="page.html" />
+                  <nav v-if="prev || next" class="mt-12 grid gap-3 border-t pt-6 sm:grid-cols-2" :aria-label="t('siteReader.pages')">
+                    <a
+                      v-if="prev"
+                      :href="href(prev.documentId, prev.slugPath)"
+                      class="group rounded-md border px-4 py-3 hover:border-primary"
+                    >
+                      <span class="flex items-center gap-1 text-xs text-muted-foreground">
+                        <ChevronLeft class="size-3" aria-hidden="true" />{{ t('siteReader.previous') }}
+                      </span>
+                      <span class="mt-0.5 block truncate font-medium group-hover:text-primary">{{ prev.title }}</span>
+                    </a>
+                    <span v-else />
+                    <a
+                      v-if="next"
+                      :href="href(next.documentId, next.slugPath)"
+                      class="group rounded-md border px-4 py-3 text-right hover:border-primary"
+                    >
+                      <span class="flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                        {{ t('siteReader.next') }}<ChevronRight class="size-3" aria-hidden="true" />
+                      </span>
+                      <span class="mt-0.5 block truncate font-medium group-hover:text-primary">{{ next.title }}</span>
+                    </a>
+                  </nav>
+                </template>
 
-              <nav v-if="prev || next" class="mt-12 grid gap-3 border-t pt-6 sm:grid-cols-2" :aria-label="t('siteReader.pages')">
-                <a
-                  v-if="prev"
-                  :href="href(prev.documentId, prev.slugPath)"
-                  class="group rounded-md border px-4 py-3 hover:border-primary"
-                >
-                  <span class="flex items-center gap-1 text-xs text-muted-foreground">
-                    <ChevronLeft class="size-3" aria-hidden="true" />{{ t('siteReader.previous') }}
-                  </span>
-                  <span class="mt-0.5 block truncate font-medium group-hover:text-primary">{{ prev.title }}</span>
-                </a>
-                <span v-else />
-                <a
-                  v-if="next"
-                  :href="href(next.documentId, next.slugPath)"
-                  class="group rounded-md border px-4 py-3 text-right hover:border-primary"
-                >
-                  <span class="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                    {{ t('siteReader.next') }}<ChevronRight class="size-3" aria-hidden="true" />
-                  </span>
-                  <span class="mt-0.5 block truncate font-medium group-hover:text-primary">{{ next.title }}</span>
-                </a>
-              </nav>
-            </template>
+                <div v-else class="mt-16 space-y-3 text-center">
+                  <template v-if="site.tree.length">
+                    <h1 class="text-xl font-semibold">{{ t('siteReader.pageNotFoundTitle') }}</h1>
+                    <p class="text-sm text-muted-foreground">{{ t('siteReader.pageNotFoundBody') }}</p>
+                    <a :href="homeHref" class="inline-block text-sm font-medium text-primary hover:underline">{{ t('siteReader.backHome') }}</a>
+                  </template>
+                  <p v-else-if="!site.signInUrl || signedIn" class="text-sm text-muted-foreground">{{ t('siteReader.emptySite') }}</p>
+                  <!-- Said on any miss of a site with restricted pages: it names no page, so it confirms none. -->
+                  <p v-if="site.signInUrl && !signedIn" class="text-sm text-muted-foreground">
+                    {{ t('siteReader.restrictedHint') }}
+                    <a :href="site.signInUrl" class="font-medium text-primary hover:underline">{{ t('siteReader.signIn') }}</a>
+                  </p>
+                </div>
+              </div>
+            </article>
 
-            <div v-else class="mt-16 space-y-3 text-center">
-              <template v-if="site.tree.length">
-                <h1 class="text-xl font-semibold">{{ t('siteReader.pageNotFoundTitle') }}</h1>
-                <p class="text-sm text-muted-foreground">{{ t('siteReader.pageNotFoundBody') }}</p>
-                <a :href="homeHref" class="inline-block text-sm font-medium text-primary hover:underline">{{ t('siteReader.backHome') }}</a>
-              </template>
-              <p v-else-if="!site.signInUrl || signedIn" class="text-sm text-muted-foreground">{{ t('siteReader.emptySite') }}</p>
-              <!-- Said on any miss of a site with restricted pages: it names no page, so it confirms none. -->
-              <p v-if="site.signInUrl && !signedIn" class="text-sm text-muted-foreground">
-                {{ t('siteReader.restrictedHint') }}
-                <a :href="site.signInUrl" class="font-medium text-primary hover:underline">{{ t('siteReader.signIn') }}</a>
-              </p>
-            </div>
+            <aside v-if="toc.length > 1" class="hidden w-52 shrink-0 xl:block" :aria-label="t('siteReader.onThisPage')">
+              <div class="sticky top-24">
+                <p class="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">{{ t('siteReader.onThisPage') }}</p>
+                <ul class="space-y-1 text-sm">
+                  <li v-for="h in toc" :key="h.id" :style="{ paddingLeft: `${(h.level - 2) * 0.75}rem` }">
+                    <a :href="`#${h.id}`" class="text-muted-foreground hover:text-foreground">{{ h.text }}</a>
+                  </li>
+                </ul>
+              </div>
+            </aside>
           </div>
-        </article>
 
-        <aside v-if="toc.length > 1" class="hidden w-52 shrink-0 xl:block" :aria-label="t('siteReader.onThisPage')">
-          <div class="sticky top-22">
-            <p class="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">{{ t('siteReader.onThisPage') }}</p>
-            <ul class="space-y-1 text-sm">
-              <li v-for="h in toc" :key="h.id" :style="{ paddingLeft: `${(h.level - 2) * 0.75}rem` }">
-                <a :href="`#${h.id}`" class="text-muted-foreground hover:text-foreground">{{ h.text }}</a>
-              </li>
-            </ul>
-          </div>
-        </aside>
+          <footer v-if="site.theme.footerText" class="border-t">
+            <p class="px-4 py-6 text-sm whitespace-pre-line text-muted-foreground sm:px-8 lg:px-12">
+              {{ site.theme.footerText }}
+            </p>
+          </footer>
+        </div>
       </div>
-
-      <footer v-if="site.theme.footerText" class="border-t">
-        <p class="mx-auto max-w-7xl px-4 py-6 text-sm whitespace-pre-line text-muted-foreground sm:px-6">
-          {{ site.theme.footerText }}
-        </p>
-      </footer>
     </template>
   </div>
 </template>

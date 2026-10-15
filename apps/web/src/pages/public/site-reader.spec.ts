@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PublicSiteTreeNode } from '@knowledge/contracts'
 import { siteHomeId, siteHref, treeRows } from './reader-state'
+import { createSiteTree } from './site-tree'
 import { foregroundFor, siteThemeCss } from './site-theme'
 
 /**
@@ -15,6 +16,7 @@ const node = (documentId: string, slugPath: string, parentId: string | null = nu
   parentId,
   position,
   title: documentId,
+  childCount: 0,
 })
 
 describe('siteHref', () => {
@@ -43,6 +45,69 @@ describe('siteHomeId', () => {
   it('agrees with reading order', () => {
     const tree = [node('a', 'a', null, 1), node('b', 'b', null, 0), node('c', 'b/c', 'b')]
     expect(treeRows(tree)[0]!.documentId).toBe(siteHomeId(tree))
+  })
+})
+
+describe('createSiteTree (issue #204)', () => {
+  const withKids = (n: PublicSiteTreeNode, childCount: number) => ({ ...n, childCount })
+  // The server's first render for page `c`: the top level, and the children of `b` (c's parent) and of `c`.
+  const initial = [
+    withKids(node('a', 'a', null, 0), 2),
+    withKids(node('b', 'b', null, 1), 1),
+    withKids(node('c', 'b/c', 'b'), 1),
+    node('d', 'b/c/d', 'c'),
+  ]
+
+  it('opens the path to the current page onto the levels the server sent, and nothing else', () => {
+    const tree = createSiteTree({ initial, activeId: 'c', load: async () => [] })
+    expect([...tree.open].sort()).toEqual(['b', 'c'])
+    expect(tree.activeDepth).toBe(1)
+    expect(tree.children.get(null)?.map((n) => n.documentId)).toEqual(['a', 'b'])
+    expect(tree.children.has('a')).toBe(false)
+  })
+
+  it('expanding asks for that one level once, showing it as loading meanwhile', async () => {
+    const asked: string[] = []
+    let release!: (nodes: PublicSiteTreeNode[]) => void
+    const tree = createSiteTree({
+      initial,
+      activeId: 'c',
+      load: (id) => {
+        asked.push(id)
+        return new Promise((r) => (release = r))
+      },
+    })
+    const done = tree.toggle(initial[0]!)
+    expect(tree.open.has('a')).toBe(true)
+    expect(tree.loading.has('a')).toBe(true)
+    release([node('a1', 'a/a1', 'a'), node('a2', 'a/a2', 'a', 1)])
+    await done
+    expect(tree.loading.has('a')).toBe(false)
+    expect(tree.children.get('a')?.map((n) => n.documentId)).toEqual(['a1', 'a2'])
+
+    await tree.toggle(initial[0]!) // collapse
+    await tree.toggle(initial[0]!) // reopen: already here
+    await tree.toggle(initial[1]!) // collapse b, sent by the server
+    await tree.toggle(initial[1]!)
+    expect(asked).toEqual(['a'])
+  })
+
+  it('a level that fails to load closes its branch again, and the next click retries', async () => {
+    let fail = true
+    const tree = createSiteTree({
+      initial,
+      activeId: null,
+      load: async () => {
+        if (fail) throw new Error('503')
+        return []
+      },
+    })
+    expect(tree.open.size).toBe(0)
+    await tree.toggle(initial[0]!)
+    expect(tree.open.has('a')).toBe(false)
+    fail = false
+    await tree.toggle(initial[0]!)
+    expect(tree.open.has('a')).toBe(true)
   })
 })
 

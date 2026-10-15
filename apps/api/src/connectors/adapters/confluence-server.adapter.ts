@@ -13,10 +13,14 @@ import {
   trimBaseUrl,
   type ConnectorAdapter,
   type ConnectorContext,
+  type ExternalAcl,
   type ExternalDocument,
+  type ExternalGroupMember,
+  type ExternalPrincipal,
   type ExternalRef,
   type OutboundDocument,
 } from './connector.types.js';
+import { combineLayers } from './acl-layers.js';
 
 const PAGE_SIZE = 50;
 
@@ -47,7 +51,7 @@ const PAGE_SIZE = 50;
 @Injectable()
 export class ConfluenceServerAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'confluence-server';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: true };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: true, acl: true };
 
   /**
    * Whether this instance answers the bulk page endpoints, decided once per
@@ -342,6 +346,59 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
     return [{ externalId: String(id), title: String(payload?.page?.title ?? payload?.content?.title ?? '') }];
   }
 
+  /**
+   * The Cloud adapter's rule over v1 (#76, phase 6): the page's and every
+   * ancestor's read restrictions, intersected. Server identifies people by
+   * `userKey` and groups by name, and does not hand out email addresses here,
+   * so its people are mapped by hand on the connector page.
+   */
+  async permissions(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalAcl> {
+    const base = this.base(ctx);
+    const page = (await (
+      await connectorFetch(
+        `${base}/rest/api/content/${encodeURIComponent(ref.externalId)}?expand=ancestors`,
+        { headers: this.headers(ctx), signal: ctx.signal },
+        ctx,
+      )
+    ).json()) as ServerContent;
+    const ids = [...(page.ancestors ?? []).map((a) => String(a.id)), ref.externalId];
+    const layers: ExternalPrincipal[][] = [];
+    for (const id of ids) {
+      const url = `${base}/rest/api/content/${encodeURIComponent(id)}/restriction/byOperation/read?expand=restrictions.user,restrictions.group`;
+      const body = (await (
+        await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
+      ).json()) as ServerRestriction;
+      layers.push([
+        ...(body.restrictions?.user?.results ?? []).flatMap((u): ExternalPrincipal[] => {
+          const externalId = u.userKey ?? u.username;
+          return externalId ? [{ type: 'user', externalId, name: u.displayName ?? u.username, level: 'view' }] : [];
+        }),
+        ...(body.restrictions?.group?.results ?? []).map(
+          (g): ExternalPrincipal => ({ type: 'group', externalId: g.name, name: g.name, level: 'view' }),
+        ),
+      ]);
+    }
+    return combineLayers(layers, (group) => this.groupMembers(ctx, group));
+  }
+
+  async groupMembers(ctx: ConnectorContext, group: ExternalPrincipal): Promise<ExternalGroupMember[]> {
+    const base = this.base(ctx);
+    const out: ExternalGroupMember[] = [];
+    for (let start = 0; start < 5_000; start += 200) {
+      const url = `${base}/rest/api/group/${encodeURIComponent(group.externalId)}/member?start=${start}&limit=200`;
+      const body = (await (
+        await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
+      ).json()) as ServerList<{ userKey?: string; username?: string; displayName?: string }>;
+      const results = body.results ?? [];
+      for (const u of results) {
+        const externalId = u.userKey ?? u.username;
+        if (externalId) out.push({ externalId, name: u.displayName ?? u.username });
+      }
+      if (results.length < 200) break;
+    }
+    return out;
+  }
+
   private base(ctx: ConnectorContext): string {
     return trimBaseUrl(requireConfig(ctx.config, 'baseUrl'));
   }
@@ -378,6 +435,13 @@ export class ConfluenceServerAdapter implements ConnectorAdapter {
 }
 
 // --- upstream shapes (only the fields actually read) ---
+
+interface ServerRestriction {
+  restrictions?: {
+    user?: { results?: Array<{ userKey?: string; username?: string; displayName?: string }> };
+    group?: { results?: Array<{ name: string }> };
+  };
+}
 
 interface ServerList<T> {
   results?: T[];

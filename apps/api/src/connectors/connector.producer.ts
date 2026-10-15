@@ -20,9 +20,14 @@ export interface ConnectorJobData {
   task?: ConnectorTask;
 }
 
+/** An ACL-only refresh of one connector (#76): no run row, no content. Job name `acl`. */
+export interface ConnectorAclJobData {
+  connectorId: string;
+}
+
 @Injectable()
 export class ConnectorProducer {
-  constructor(@InjectQueue(CONNECTOR_QUEUE) private readonly queue: Queue<ConnectorJobData>) {}
+  constructor(@InjectQueue(CONNECTOR_QUEUE) private readonly queue: Queue<ConnectorJobData | ConnectorAclJobData>) {}
 
   /**
    * jobId = connector_runs.id, so a double-enqueue collapses into one job.
@@ -64,6 +69,20 @@ export class ConnectorProducer {
       'sync',
       { runId, task },
       { jobId: `${runId}#${task.kind}#${salt}`, attempts: 1, removeOnComplete: true, removeOnFail: false },
+    );
+  }
+
+  /**
+   * An ACL-only refresh (#76). One per connector at a time: the jobId is the
+   * connector's, so the sweeper's due check and an admin's "sync access now"
+   * collapse into one job while it waits, and a finished job is removed so the
+   * next one can be queued.
+   */
+  async enqueueAcl(connectorId: string): Promise<void> {
+    await this.queue.add(
+      'acl',
+      { connectorId },
+      { jobId: `acl-${connectorId}`, attempts: 1, removeOnComplete: true, removeOnFail: true },
     );
   }
 }

@@ -60,5 +60,11 @@
       "changelog": "Releases",
       "unreleased": "Unreleased"
     }
+  },
+  "acl": {
+    "unmappedPrincipal": "{count} upstream principal(s) have no person here and were left out of this page's access: {names}. Map them on the connector page.",
+    "readFailed": "Could not read who may open this page upstream, so it is restricted to the connector's owner until the next access sync: {error}",
+    "readFailedKept": "Could not re-read who may open this page upstream; its access stays as last mirrored: {error}",
+    "groupDescription": "Mirrored from the connector \"{connector}\". Membership is replaced on every access sync."
   }
 }

@@ -472,6 +472,12 @@ export const envSchema = z.object({
    * also how often a pause is noticed.
    */
   CONNECTOR_SYNC_BATCH: z.coerce.number().int().positive().default(25),
+  /**
+   * Minutes between ACL-only refreshes of a connector that mirrors access
+   * (#76), when the connector does not set its own. Permission calls only, no
+   * content fetch; a due check inside the schedule sweeper's tick.
+   */
+  CONNECTOR_ACL_SYNC_DEFAULT_MIN: z.coerce.number().int().positive().default(60),
 
   /**
    * Code research (docs/features/31). A repository read by the code tools is

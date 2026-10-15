@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type {
+  ConnectorAclResponse,
   ConnectorGithubAccessResponse,
   ConnectorItemEventResponse,
   ConnectorResponse,
@@ -23,6 +24,7 @@ import { ActivityService } from '../activity/activity.service.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
+import { ConnectorAclService } from './connector-acl.service.js';
 import { ConnectorLinksService } from './connector-links.service.js';
 import { ConnectorWorkItemsService } from './connector-work-items.service.js';
 import { ConnectorItemAiService } from './connector-item-ai.service.js';
@@ -37,6 +39,8 @@ import {
   ConnectorPageQueryDto,
   ConnectorRunEventDto,
   CreateConnectorDto,
+  MapExternalIdentityDto,
+  UpdateConnectorAclDto,
   StartConnectorSyncDto,
   UpdateConnectorDto,
   CreateConnectorWorkItemDto,
@@ -66,6 +70,7 @@ export class ConnectorsController {
     private readonly activity: ActivityService,
     private readonly githubAccess: GithubAccessService,
     private readonly repoWiki: RepoWikiService,
+    private readonly acl: ConnectorAclService,
   ) {}
 
   @Get()
@@ -237,6 +242,64 @@ export class ConnectorsController {
       metadata: { title: connector.name },
     });
     return { ok: true };
+  }
+
+  // --- access mirroring (#76, phase 6) ---
+  //
+  // `admin` throughout, like the GitHub access card: who may read the pages a
+  // connector writes is the connector's most consequential setting, and the
+  // identity list names people from outside the workspace.
+
+  @Get(':id/acl')
+  @Access('admin', 'connector')
+  @ApiOperation({ summary: "How the connector mirrors upstream access, and the upstream people it has seen" })
+  aclSettings(@Param('id', ParseUUIDPipe) id: string): Promise<ConnectorAclResponse> {
+    return this.acl.describe(id);
+  }
+
+  @Put(':id/acl')
+  @Access('admin', 'connector')
+  @ApiOperation({ summary: 'Change access mirroring; switching it off turns what it mirrored into manual access' })
+  async updateAcl(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateConnectorAclDto,
+    @CurrentPrincipal() principal?: Principal,
+  ): Promise<ConnectorAclResponse> {
+    const refresh = await this.acl.updateSettings(id, dto);
+    if (refresh) await this.producer.enqueueAcl(id);
+    const result = await this.acl.describe(id);
+    const row = await this.connectors.require(id);
+    void this.activity.record({
+      workspaceId: row.workspaceId,
+      actor: principal?.userId,
+      action: 'connector.updated',
+      subjectId: id,
+      metadata: { title: row.name, fields: ['aclMode'], aclMode: dto.mode },
+    });
+    return result;
+  }
+
+  @Put(':id/acl/identities/:identityId')
+  @Access('admin', 'connector')
+  @ApiOperation({ summary: 'Map an upstream identity to a workspace member by hand, or clear the mapping' })
+  async mapIdentity(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('identityId', ParseUUIDPipe) identityId: string,
+    @Body() dto: MapExternalIdentityDto,
+  ): Promise<ConnectorAclResponse> {
+    await this.acl.mapIdentity(id, identityId, dto.userId);
+    // The pages and groups naming them are rewritten by the refresh.
+    await this.producer.enqueueAcl(id);
+    return this.acl.describe(id);
+  }
+
+  @Post(':id/acl/sync')
+  @Access('admin', 'connector')
+  @ApiOperation({ summary: 'Refresh mirrored access now — permission calls only, no content' })
+  async syncAcl(@Param('id', ParseUUIDPipe) id: string): Promise<ConnectorAclResponse> {
+    const row = await this.connectors.require(id);
+    if (row.aclMode !== 'off') await this.producer.enqueueAcl(id);
+    return this.acl.describe(id);
   }
 
   @Post(':id/test')

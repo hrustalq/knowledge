@@ -1332,6 +1332,46 @@
     },
     {
       "method": "GET",
+      "path": "/v1/connectors/{id}/acl",
+      "tag": "connectors",
+      "summary": "How the connector mirrors upstream access, and the upstream people it has seen",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/connectors/{id}/acl",
+      "tag": "connectors",
+      "summary": "Change access mirroring; switching it off turns what it mirrored into manual access",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/connectors/{id}/acl/identities/{identityId}",
+      "tag": "connectors",
+      "summary": "Map an upstream identity to a workspace member by hand, or clear the mapping",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/connectors/{id}/acl/sync",
+      "tag": "connectors",
+      "summary": "Refresh mirrored access now — permission calls only, no content",
+      "role": "admin",
+      "source": "connector",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/connectors/{id}/github",
       "tag": "connectors",
       "summary": "The connector's GitHub App grants and the viewer's GitHub identity",

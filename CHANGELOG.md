@@ -101,8 +101,29 @@ in the pull request that introduces them — see
   grant or a group's membership changes, so open trees and lists refresh. A
   person granted access directly from the Access dialog is notified. (#76)
 
+- **Connectors can mirror source permissions.** A connector's new **Access**
+  tab (workspace admins) switches on access mirroring. A Confluence page with a
+  read restriction, on itself or an ancestor, is imported restricted to the
+  same people and groups, and a page from a private GitHub repository to its
+  collaborators and teams; a public repository's pages stay open. Upstream
+  groups appear as read-only groups. People are matched by a linked GitHub
+  account or a verified email, and anyone unmatched is listed on the tab, where
+  an admin can map them by hand. **Mirror, fail closed** also admits the
+  connector's owner wherever someone is unmatched. Notion and Jira pages can be
+  restricted to one chosen group. Permissions are re-read on their own
+  interval without fetching content, so a restriction lifted at the source is
+  lifted here on the next access sync; **Sync access now** queues one at once.
+  Grants added by hand on a mirrored page are kept, and the page's Access
+  dialog shows the mirrored ones read-only. The GitHub access card lists
+  `members: read` for this. Routes: `GET|PUT /v1/connectors/:id/acl`,
+  `PUT /v1/connectors/:id/acl/identities/:identityId` and
+  `POST /v1/connectors/:id/acl/sync`. (#76)
+
 ### Changed
 
+- Deleting a connector, or switching its access mirroring off, now turns the
+  access it mirrored into ordinary grants and groups that admins can edit.
+  Pages it restricted stay restricted. (#76)
 - Assigning a merge-request reviewer who cannot open the page now answers 409
   with `details.reason = access.usersWithoutView` and the user ids. (#76)
 - Creating a page under a parent now needs edit on that parent, or on the
@@ -117,6 +138,17 @@ in the pull request that introduces them — see
 
 ### Operations
 
+- One more optional setting, `CONNECTOR_ACL_SYNC_DEFAULT_MIN` (60): minutes
+  between access syncs for a connector that mirrors permissions and sets no
+  interval of its own. Access syncs run from the worker's existing connector
+  schedule tick, so `CONNECTOR_SCHEDULE_ENABLED=false` stops them too.
+- Migration `20261020100000_connector_acl` adds four columns to `connectors`
+  (`acl_mode` defaults to `off`), two to `connector_links`, one to
+  `connector_run_items`, an index on `access_grants.connector_id` and the
+  `external_identities` table. All are additive; the previous image ignores
+  them. Rolling the code back leaves mirrored restrictions in place but stops
+  refreshing them, and the rolled-back Access dialog would save mirrored grants
+  back as manual ones.
 - Two more optional settings: `ACL_CACHE_TTL_MS` (5000), how long a live
   connection trusts the page visibility it computed before reading it again
   (an `acl.changed` event clears it at once), and `ACCESS_REQUEST_TTL_DAYS`

@@ -1,4 +1,4 @@
-import type { ConnectorCapabilities, ConnectorKind, Locale } from '@knowledge/contracts';
+import type { ConnectorCapabilities, ConnectorKind, ExternalAclAudience, Locale } from '@knowledge/contracts';
 import { safeFetch } from '../../common/safe-fetch.js';
 import { t } from '../../i18n/t.js';
 
@@ -49,6 +49,37 @@ export interface ExternalDocument {
   attachments?: ExternalAttachment[];
   /** What the conversion could not carry. Surfaced verbatim on the run. */
   warnings: string[];
+}
+
+/**
+ * Somebody an upstream ACL names (#76, phase 6). `externalId` is the source's
+ * stable id — a Confluence accountId or userKey, a GitHub user id or team slug.
+ * Names and emails are untrusted source text: stored length-limited, shown as
+ * text, never interpolated.
+ */
+export interface ExternalPrincipal {
+  type: 'user' | 'group';
+  externalId: string;
+  name?: string;
+  email?: string;
+  level: 'view' | 'edit';
+}
+
+/**
+ * Who may open one item upstream. `source-wide` means everyone who can see the
+ * connector's scope, which mirrors as no restriction; `restricted` means only
+ * `principals`. An adapter folds whatever inheritance the source has into this
+ * one list, so a page reads correctly even when its ancestors were not imported.
+ */
+export interface ExternalAcl {
+  audience: ExternalAclAudience;
+  principals: ExternalPrincipal[];
+}
+
+export interface ExternalGroupMember {
+  externalId: string;
+  name?: string;
+  email?: string;
 }
 
 /** A page on its way out. */
@@ -134,6 +165,22 @@ export interface ConnectorAdapter {
   fetch(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalDocument>;
 
   push?(ctx: ConnectorContext, doc: OutboundDocument): Promise<ExternalRef>;
+
+  /**
+   * Who may open `ref` upstream (#76, phase 6). Present exactly when
+   * `capabilities.acl` is true. Permission calls only — no content — so the
+   * ACL-only refresh can run it over every linked page cheaply. Throws when the
+   * ACL cannot be read; the caller fails closed rather than guessing.
+   */
+  permissions?(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalAcl>;
+
+  /**
+   * The people in an upstream group a `permissions()` result named. Asked
+   * lazily, per group an ACL actually uses, rather than enumerating every
+   * group in the source: a Confluence site can hold thousands that no page in
+   * this connector's scope mentions.
+   */
+  groupMembers?(ctx: ConnectorContext, group: ExternalPrincipal): Promise<ExternalGroupMember[]>;
 
   /**
    * Verify an inbound webhook and say which items changed. Returning null means

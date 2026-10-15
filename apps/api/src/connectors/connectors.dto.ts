@@ -18,6 +18,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 import {
+  CONNECTOR_ACL_MODES,
   CONNECTOR_ITEM_AI_OPS,
   CONNECTOR_ITEM_EVENTS,
   CONNECTOR_KINDS,
@@ -28,6 +29,7 @@ import {
 } from '@knowledge/contracts';
 import type {
   WikiSection,
+  ConnectorAclMode,
   ConnectorConflictPolicy,
   ConnectorDirection,
   ConnectorItemAiOp,
@@ -236,6 +238,45 @@ export class UpdateConnectorDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean;
+}
+
+/** Access mirroring settings (#76, phase 6). Absent keeps, null clears. */
+export class UpdateConnectorAclDto {
+  @ApiProperty({ enum: CONNECTOR_ACL_MODES })
+  @IsIn(CONNECTOR_ACL_MODES)
+  mode!: ConnectorAclMode;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 5,
+    maximum: 10080,
+    description: 'Minutes between ACL-only refreshes; null = CONNECTOR_ACL_SYNC_DEFAULT_MIN.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateConnectorAclDto>('syncIntervalMinutes')
+  @IsInt()
+  @Min(5, { message: vmsg('min') })
+  @Max(10080, { message: vmsg('max') })
+  syncIntervalMinutes?: number | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: 'A workspace group every page is restricted to; required for kinds without per-item ACLs.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateConnectorAclDto>('audienceGroupId')
+  @Matches(UUID_RE)
+  audienceGroupId?: string | null;
+}
+
+export class MapExternalIdentityDto {
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: 'null clears a manual mapping.' })
+  @NULLABLE<MapExternalIdentityDto>('userId')
+  @Matches(UUID_RE)
+  userId!: string | null;
 }
 
 export class StartConnectorSyncDto {

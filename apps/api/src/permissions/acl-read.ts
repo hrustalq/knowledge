@@ -73,7 +73,7 @@ export async function resolveChain(db: AclDb, resource: AccessResource): Promise
   }
   const grants = await db.accessGrant.findMany({
     where: { resourceId: { in: chain.map((n) => n.id) } },
-    select: { resourceId: true, subjectType: true, subjectId: true, level: true },
+    select: { resourceId: true, subjectType: true, subjectId: true, level: true, origin: true },
   });
   return { workspaceId, chain, grants };
 }

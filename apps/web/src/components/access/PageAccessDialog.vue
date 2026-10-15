@@ -126,10 +126,20 @@ watch(open, (isOpen) => {
 
 /* ------------------------------------------------------------ editing */
 
-const keyOf = (g: { subjectType: string; subjectId: string }) => `${g.subjectType}:${g.subjectId}`
+const keyOf = (g: { subjectType: string; subjectId: string; origin?: string }) =>
+  `${g.origin ?? 'manual'}:${g.subjectType}:${g.subjectId}`
+const subjectOf = (g: { subjectType: string; subjectId: string }) => `${g.subjectType}:${g.subjectId}`
+
+/**
+ * Grants a connector mirrored from the source (#76, phase 6). Shown, never
+ * edited and never sent: the PUT replaces manual grants only, and the
+ * connector rewrites its own on every access sync.
+ */
+const mirrored = computed(() => grants.value.filter((g) => g.origin === 'connector'))
+const manual = computed(() => grants.value.filter((g) => g.origin !== 'connector'))
 
 const candidates = computed<AutocompleteOption[]>(() => {
-  const taken = new Set(grants.value.map(keyOf))
+  const taken = new Set(manual.value.map(subjectOf))
   const people = members.value
     .filter((m) => !m.disabled && !taken.has(`user:${m.userId}`))
     .map((m) => ({ value: `user:${m.userId}`, label: `${m.displayName} · ${m.email}`, meta: t(`role.${m.role}`) }))
@@ -150,11 +160,11 @@ function addSelected() {
     if (type === 'group') {
       const g = groups.value.find((x) => x.groupId === id)
       if (!g) continue
-      next.push({ subjectType: 'group', subjectId: id, level: 'view', name: g.name, email: null, avatarUrl: null, memberCount: g.memberCount })
+      next.push({ subjectType: 'group', subjectId: id, level: 'view', origin: 'manual', connectorId: null, name: g.name, email: null, avatarUrl: null, memberCount: g.memberCount })
     } else {
       const m = members.value.find((x) => x.userId === id)
       if (!m) continue
-      next.push({ subjectType: 'user', subjectId: id, level: 'view', name: m.displayName, email: m.email, avatarUrl: m.avatarUrl, memberCount: null })
+      next.push({ subjectType: 'user', subjectId: id, level: 'view', origin: 'manual', connectorId: null, name: m.displayName, email: m.email, avatarUrl: m.avatarUrl, memberCount: null })
     }
   }
   grants.value = next
@@ -180,14 +190,14 @@ function onRestrictedChange(value: boolean | 'indeterminate') {
   restricted.value = value === true
   if (!restricted.value || auth.canAdminWorkspace) return
   const me = auth.me
-  if (!me || grants.value.some((g) => g.level === 'manage')) return
-  const mine = grants.value.find((g) => g.subjectType === 'user' && g.subjectId === me.userId)
+  if (!me || manual.value.some((g) => g.level === 'manage')) return
+  const mine = manual.value.find((g) => g.subjectType === 'user' && g.subjectId === me.userId)
   if (mine) {
     setLevel(mine, 'manage')
     return
   }
   grants.value = [
-    { subjectType: 'user', subjectId: me.userId, level: 'manage', name: me.displayName, email: me.email, avatarUrl: me.avatarUrl, memberCount: null },
+    { subjectType: 'user', subjectId: me.userId, level: 'manage', origin: 'manual', connectorId: null, name: me.displayName, email: me.email, avatarUrl: me.avatarUrl, memberCount: null },
     ...grants.value,
   ]
 }
@@ -196,9 +206,10 @@ const dirty = computed(() => {
   const a = access.value
   if (!a) return false
   if (a.restricted !== restricted.value) return true
-  if (a.grants.length !== grants.value.length) return true
-  const before = new Map(a.grants.map((g) => [keyOf(g), g.level]))
-  return grants.value.some((g) => before.get(keyOf(g)) !== g.level)
+  const was = a.grants.filter((g) => g.origin !== 'connector')
+  if (was.length !== manual.value.length) return true
+  const before = new Map(was.map((g) => [keyOf(g), g.level]))
+  return manual.value.some((g) => before.get(keyOf(g)) !== g.level)
 })
 
 async function save() {
@@ -206,7 +217,7 @@ async function save() {
   saving.value = true
   const body = {
     restricted: restricted.value,
-    grants: grants.value.map(({ subjectType, subjectId, level }) => ({ subjectType, subjectId, level })),
+    grants: manual.value.map(({ subjectType, subjectId, level }) => ({ subjectType, subjectId, level })),
   }
   try {
     const res = (
@@ -324,15 +335,49 @@ const heading = computed(() =>
               </span>
             </Label>
 
+            <!-- Mirrored from the source: read-only, rewritten by the connector. -->
+            <section v-if="mirrored.length" class="space-y-1.5">
+              <h3 class="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                {{ t('access.page.mirroredTitle') }}
+              </h3>
+              <ul class="divide-y rounded-md border bg-muted/30">
+                <li v-for="grant in mirrored" :key="keyOf(grant)" class="flex items-center gap-2 px-2.5 py-1.5">
+                  <div class="flex min-w-0 flex-1 items-center gap-2">
+                    <UserChip
+                      v-if="grant.subjectType === 'user'"
+                      :user-id="grant.subjectId"
+                      :name="grant.name ?? t('access.page.goneSubject')"
+                      size="sm"
+                    />
+                    <template v-else>
+                      <span class="bg-muted grid size-5 shrink-0 place-items-center rounded-full">
+                        <Users class="size-3" aria-hidden="true" />
+                      </span>
+                      <span class="truncate font-medium">{{ grant.name ?? t('access.page.goneSubject') }}</span>
+                    </template>
+                  </div>
+                  <Badge variant="outline" class="shrink-0">{{ t('access.page.mirroredBadge') }}</Badge>
+                  <span class="text-muted-foreground w-16 shrink-0 text-right text-xs">{{ t(`access.level.${grant.level}`) }}</span>
+                </li>
+              </ul>
+              <p class="text-muted-foreground text-xs">{{ t('access.page.mirroredHint') }}</p>
+            </section>
+
             <section class="space-y-2">
               <h3 class="text-muted-foreground text-xs font-medium uppercase tracking-wide">
                 {{ t('access.page.grantsTitle') }}
               </h3>
-              <p v-if="grants.length === 0" class="text-muted-foreground text-xs">
-                {{ restricted ? t('access.page.noGrantsRestricted') : t('access.page.noGrants') }}
+              <p v-if="manual.length === 0" class="text-muted-foreground text-xs">
+                {{
+                  mirrored.length
+                    ? t('access.page.noManualGrants')
+                    : restricted
+                      ? t('access.page.noGrantsRestricted')
+                      : t('access.page.noGrants')
+                }}
               </p>
               <ul v-else class="divide-y rounded-md border">
-                <li v-for="grant in grants" :key="keyOf(grant)" class="flex items-center gap-2 px-2.5 py-1.5">
+                <li v-for="grant in manual" :key="keyOf(grant)" class="flex items-center gap-2 px-2.5 py-1.5">
                   <div class="flex min-w-0 flex-1 items-center gap-2">
                     <UserChip
                       v-if="grant.subjectType === 'user'"

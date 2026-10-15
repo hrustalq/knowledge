@@ -11,10 +11,14 @@ import {
   trimBaseUrl,
   type ConnectorAdapter,
   type ConnectorContext,
+  type ExternalAcl,
   type ExternalDocument,
+  type ExternalGroupMember,
+  type ExternalPrincipal,
   type ExternalRef,
   type OutboundDocument,
 } from './connector.types.js';
+import { combineLayers } from './acl-layers.js';
 
 const PAGE_SIZE = 50;
 
@@ -32,7 +36,7 @@ const PAGE_SIZE = 50;
 @Injectable()
 export class ConfluenceAdapter implements ConnectorAdapter {
   readonly kind: ConnectorKind = 'confluence';
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: true };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: true, webhook: true, tree: true, acl: true };
 
   async testConnection(ctx: ConnectorContext): Promise<{ ok: boolean; detail?: string }> {
     const spaceKey = requireConfig(ctx.config, 'spaceKey');
@@ -237,6 +241,74 @@ export class ConfluenceAdapter implements ConnectorAdapter {
     return [{ externalId: String(id), title: String(payload?.page?.title ?? payload?.content?.title ?? '') }];
   }
 
+  /**
+   * Who may read a page (#76, phase 6): the read restrictions on the page and
+   * on every ancestor, folded into one list by `combineLayers` — Confluence's
+   * inheritance is intersective, exactly like `restricted_by`.
+   *
+   * Space permissions are not read: a connector's scope is one space an admin
+   * chose to import into one project, and restricting that project is how its
+   * readers are narrowed. A page with no restriction anywhere above it is
+   * `source-wide`.
+   */
+  async permissions(ctx: ConnectorContext, ref: ExternalRef): Promise<ExternalAcl> {
+    const base = this.base(ctx);
+    const ancestors = (await (
+      await connectorFetch(
+        `${base}/api/v2/pages/${encodeURIComponent(ref.externalId)}/ancestors?limit=250`,
+        { headers: this.headers(ctx), signal: ctx.signal },
+        ctx,
+      )
+    ).json()) as ConfluenceList<{ id: string | number }>;
+    const ids = [...(ancestors.results ?? []).map((a) => String(a.id)), ref.externalId];
+    const layers: ExternalPrincipal[][] = [];
+    for (const id of ids) layers.push(await this.readRestriction(ctx, base, id));
+    return combineLayers(layers, (group) => this.groupMembers(ctx, group));
+  }
+
+  async groupMembers(ctx: ConnectorContext, group: ExternalPrincipal): Promise<ExternalGroupMember[]> {
+    const base = this.base(ctx);
+    const out: ExternalGroupMember[] = [];
+    for (let start = 0; start < MAX_GROUP_MEMBERS; start += GROUP_PAGE) {
+      const url = group.externalId.startsWith('name:')
+        ? `${base}/rest/api/group/member?name=${encodeURIComponent(group.externalId.slice(5))}&start=${start}&limit=${GROUP_PAGE}`
+        : `${base}/rest/api/group/${encodeURIComponent(group.externalId)}/membersByGroupId?start=${start}&limit=${GROUP_PAGE}`;
+      const body = (await (
+        await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
+      ).json()) as ConfluenceList<CloudUser>;
+      const results = body.results ?? [];
+      for (const u of results) {
+        if (u.accountId) out.push({ externalId: u.accountId, name: u.displayName ?? u.publicName, email: u.email || undefined });
+      }
+      if (results.length < GROUP_PAGE) break;
+    }
+    return out;
+  }
+
+  /** One page's own read restriction, as principals. Empty = this page restricts nothing. */
+  private async readRestriction(ctx: ConnectorContext, base: string, id: string): Promise<ExternalPrincipal[]> {
+    const url = `${base}/rest/api/content/${encodeURIComponent(id)}/restriction/byOperation/read?expand=restrictions.user,restrictions.group`;
+    const body = (await (
+      await connectorFetch(url, { headers: this.headers(ctx), signal: ctx.signal }, ctx)
+    ).json()) as CloudRestriction;
+    const users = body.restrictions?.user?.results ?? [];
+    const groups = body.restrictions?.group?.results ?? [];
+    return [
+      ...users.flatMap((u): ExternalPrincipal[] =>
+        u.accountId
+          ? [{ type: 'user', externalId: u.accountId, name: u.displayName ?? u.publicName, email: u.email || undefined, level: 'view' }]
+          : [],
+      ),
+      // Ids where the site gives them; older sites name groups only.
+      ...groups.map((g): ExternalPrincipal => ({
+        type: 'group',
+        externalId: g.id ? String(g.id) : `name:${g.name}`,
+        name: g.name,
+        level: 'view',
+      })),
+    ];
+  }
+
   private base(ctx: ConnectorContext): string {
     return trimBaseUrl(requireConfig(ctx.config, 'baseUrl'));
   }
@@ -266,6 +338,24 @@ export class ConfluenceAdapter implements ConnectorAdapter {
 }
 
 // --- upstream shapes (only the fields actually read) ---
+
+const GROUP_PAGE = 200;
+/** Past this a group is cut short, which narrows a page rather than widening it. */
+const MAX_GROUP_MEMBERS = 5_000;
+
+interface CloudUser {
+  accountId?: string;
+  displayName?: string;
+  publicName?: string;
+  /** Present only where the person's profile visibility allows it. */
+  email?: string;
+}
+interface CloudRestriction {
+  restrictions?: {
+    user?: { results?: CloudUser[] };
+    group?: { results?: Array<{ id?: string; name: string }> };
+  };
+}
 
 interface ConfluenceList<T> {
   results?: T[];

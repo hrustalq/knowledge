@@ -73,6 +73,92 @@ export interface ConnectorCapabilities {
    * adapters that have no work items from claiming a capability by boilerplate.
    */
   tasks?: boolean;
+  /**
+   * The adapter can read who may open an item upstream and mirror it as a page
+   * restriction (#76). Optional for the reason `tasks` is. An adapter without
+   * it can still be restricted, as a whole, to one workspace group: the
+   * connector-level audience (`aclAudienceGroupId`).
+   */
+  acl?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Access mirroring (#76, phase 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * How a connector carries upstream permissions onto the pages it writes.
+ *
+ * - `off` — nothing. The default, and the pre-milestone behaviour.
+ * - `mirror` — a page restricted upstream is restricted here to the mapped
+ *   people and mirrored groups. Principals with no mapped person are dropped
+ *   and listed on the connector page.
+ * - `mirror_strict` — `mirror`, failing closed: a page with any unmapped
+ *   principal also admits the connector's owner (and admins, as always), so it
+ *   cannot end up readable by nobody who could fix the mapping.
+ *
+ * Either mode restricts a page whose upstream ACL could not be read to the
+ * owner, rather than leaving it open.
+ */
+export const CONNECTOR_ACL_MODES = ['off', 'mirror', 'mirror_strict'] as const;
+export type ConnectorAclMode = (typeof CONNECTOR_ACL_MODES)[number];
+
+/** `source-wide`: everyone who can see the connector's scope upstream. `restricted`: only the listed principals. */
+export const EXTERNAL_ACL_AUDIENCES = ['source-wide', 'restricted'] as const;
+export type ExternalAclAudience = (typeof EXTERNAL_ACL_AUDIENCES)[number];
+
+/**
+ * How an upstream identity got its person here, strongest first: an admin
+ * said so, the provider account is linked (GitHub), or a verified email
+ * matched. Null while unmapped.
+ */
+export const EXTERNAL_IDENTITY_MAPPINGS = ['manual', 'provider', 'email'] as const;
+export type ExternalIdentityMapping = (typeof EXTERNAL_IDENTITY_MAPPINGS)[number];
+
+export interface ExternalIdentityEntry {
+  id: string;
+  externalId: string;
+  /** Upstream's name for them — a login, a display name. Rendered as text. */
+  displayName: string | null;
+  email: string | null;
+  userId: string | null;
+  /** The mapped person's name here, when there is one. */
+  userDisplayName: string | null;
+  mappedBy: ExternalIdentityMapping | null;
+  lastSeenAt: string;
+}
+
+// GET /v1/connectors/:id/acl
+export interface ConnectorAclResponse {
+  connectorId: string;
+  mode: ConnectorAclMode;
+  /** Minutes between ACL-only refreshes; null = the server default. */
+  syncIntervalMinutes: number | null;
+  /** The default that applies when `syncIntervalMinutes` is null. */
+  defaultSyncIntervalMinutes: number;
+  /** One workspace group every page is restricted to, for adapters that cannot read upstream ACLs. */
+  audienceGroupId: string | null;
+  /** Whether this kind reads per-item ACLs; false means only the audience group applies. */
+  perItem: boolean;
+  syncedAt: string | null;
+  /** Pages this connector currently restricts. */
+  restrictedPages: number;
+  /** Groups mirrored from the source, read-only in the groups tab. */
+  groupCount: number;
+  identities: ExternalIdentityEntry[];
+}
+
+// PUT /v1/connectors/:id/acl
+export interface UpdateConnectorAclRequest {
+  mode: ConnectorAclMode;
+  syncIntervalMinutes?: number | null;
+  audienceGroupId?: string | null;
+}
+
+// PUT /v1/connectors/:id/acl/identities/:identityId
+export interface MapExternalIdentityRequest {
+  /** A workspace member, or null to clear a manual mapping (it re-resolves on the next sync). */
+  userId: string | null;
 }
 
 /** One configurable, non-secret setting an adapter needs (drives the settings form). */
@@ -105,7 +191,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
   {
     kind: 'confluence',
     label: 'Confluence',
-    capabilities: { pull: true, push: true, webhook: true, tree: true },
+    capabilities: { pull: true, push: true, webhook: true, tree: true, acl: true },
     credentialLabel: 'email:api-token',
     fields: [
       {
@@ -136,7 +222,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
     // Record<ConnectorKind, ...> in the API and the web.
     kind: 'confluence-server',
     label: 'Confluence (Server / Data Center)',
-    capabilities: { pull: true, push: true, webhook: true, tree: true },
+    capabilities: { pull: true, push: true, webhook: true, tree: true, acl: true },
     credentialLabel: 'Personal access token',
     fields: [
       {
@@ -199,7 +285,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
   {
     kind: 'markdown-git',
     label: 'Markdown / Git',
-    capabilities: { pull: true, push: true, webhook: true, tree: false, tasks: true },
+    capabilities: { pull: true, push: true, webhook: true, tree: false, tasks: true, acl: true },
     credentialLabel: 'Personal access token',
     fields: [
       {
@@ -247,7 +333,7 @@ export const CONNECTOR_KIND_INFO: readonly ConnectorKindInfo[] = [
     // that does not exist). Since the repo wiki (docs/features/46) a push queues
     // an *unscoped* run instead, debounced, and the input-hash check skips
     // every unit whose inputs did not move before anything is fetched.
-    capabilities: { pull: true, push: false, webhook: true, tree: false, tasks: true },
+    capabilities: { pull: true, push: false, webhook: true, tree: false, tasks: true, acl: true },
     credentialLabel: 'Personal access token',
     fields: [
       {
@@ -381,6 +467,9 @@ export interface ConnectorSummary {
   preserveHierarchy: boolean;
   /** null = manual only. */
   syncIntervalMinutes: number | null;
+  /** Access mirroring (#76); the details are on `GET /v1/connectors/:id/acl`. */
+  aclMode: ConnectorAclMode;
+  aclSyncedAt: string | null;
   hasWebhookSecret: boolean;
   /** Absolute path to POST external events at; null when no secret is set. */
   webhookPath: string | null;
@@ -880,7 +969,9 @@ export type GithubAccessPurpose =
   /** The repo wiki regenerating on push (docs/features/46). */
   | 'wiki'
   /** Release notes from tags, commits and merged pull requests (docs/features/46). */
-  | 'changelog';
+  | 'changelog'
+  /** Mirroring a private repository's collaborators and teams as a page restriction (#76). */
+  | 'acl';
 
 /**
  * Where one requirement stands.

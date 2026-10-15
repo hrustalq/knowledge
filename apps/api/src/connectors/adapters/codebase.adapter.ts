@@ -67,9 +67,13 @@ import {
   optionalConfig,
   type ConnectorAdapter,
   type ConnectorContext,
+  type ExternalAcl,
   type ExternalDocument,
+  type ExternalGroupMember,
+  type ExternalPrincipal,
   type ExternalRef,
 } from './connector.types.js';
+import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
 
 /**
  * A repository as a subject to document (docs/features/27).
@@ -162,7 +166,17 @@ export class CodebaseAdapter implements ConnectorAdapter {
   // `webhook: true` since the repo wiki (docs/features/46): a push queues an
   // unscoped run in `ConnectorWebhookController`, and this adapter is never
   // asked to name units from a delivery — which is why it has no `verifyWebhook`.
-  readonly capabilities: ConnectorCapabilities = { pull: true, push: false, webhook: true, tree: true };
+  readonly capabilities: ConnectorCapabilities = { pull: true, push: false, webhook: true, tree: true, acl: true };
+
+  /** The repository's readers, the same for every page (#76) — see `github-acl.ts`. */
+  permissions(ctx: ConnectorContext): Promise<ExternalAcl> {
+    return githubRepoAcl(ctx);
+  }
+
+  groupMembers(ctx: ConnectorContext, group: ExternalPrincipal): Promise<ExternalGroupMember[]> {
+    return githubTeamMembers(ctx, group);
+  }
+
 
   private readonly logger = new Logger(CodebaseAdapter.name);
 

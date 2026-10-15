@@ -259,6 +259,17 @@ Best-effort delivery, no replay for a reconnecting client (Redis streams were
 noted as future work in feature 04), and only one level of dependent re-index —
 transitive cascades would need a depth budget and cycle detection.
 
+Two server-side listeners accept that loss rather than work around it, and
+say so in their docs ([../features/49-agent-triggers.md](../features/49-agent-triggers.md#where-it-runs)):
+`AgentTriggerListener` (worker, behind `AGENT_TRIGGERS_ENABLED`) starts agent
+runs from four bus types, and `RepoGuidanceListener` (API) imports a
+repository's guidance files after `connector.run.succeeded`. Both subscribe
+through `EventsSubscriber.all()`, so neither opens a connection of its own. An
+event published while the listening process is down starts nothing: a trigger
+is a convenience over an event, not a queue, and the guidance import catches up
+on the next sync or on **Import now**. Neither hears an `agent.*` event, which
+is what keeps an agent run from triggering itself.
+
 Where a missed event is a correctness problem, the reader does not use the
 bus. Chat-bot channel notifications ([../features/47-chat-bots.md](../features/47-chat-bots.md#channel-notifications))
 read `activity_log` past a per-rule cursor instead: `ActivityService.record`

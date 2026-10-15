@@ -135,6 +135,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 46 | Repo wiki            | `codebase` connector wiki + Releases steered by `.knowledge/wiki.yml`; `effectiveWikiConfig` (code ← file ← connector, `WIKI_MAX_EFFORT` ceiling); Mermaid only via `wiki-diagrams.ts` |
 | 47 | Chat bots            | Telegram + Time bots answer as the **linked** person, never a bot principal; groups silent until bound; turns run API-side via `AssistantService.runChatTurn`                          |
 | 48 | Page permissions     | Page/project restrictions, groups, guests, access requests; view is intersective down the tree; every retrieval path takes an `AccessScope`, PG has the final say; connectors mirror source ACLs |
+| 49 | Agent triggers       | Events, a signed webhook, a mention or a time of day start agent runs; `AgentTriggerService` is the only `trigger:'event'` writer; recipes, admin-approved learnings, repo guidance as disabled skills |
 
 ## Conventions
 

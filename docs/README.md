@@ -73,6 +73,7 @@ Features 01–17 come from the original list in [`../features.md`](../features.m
 | 46  | Repo wiki (wiki-shaped codebase connector, `.knowledge/wiki.yml` steering, diagrams, release notes)  | [features/46-repo-wiki.md](features/46-repo-wiki.md)                   | ✅ #72                      |
 | 47  | Chat bots (Telegram and Time: cited Q&A as the linked person, ratings, save as draft, group notifications) | [features/47-chat-bots.md](features/47-chat-bots.md)                   | ✅ #71 phases 1–4           |
 | 48  | Page permissions (restrictions, groups, guests, access requests, permission-aware retrieval, connector ACL mirroring) | [features/48-page-permissions.md](features/48-page-permissions.md)     | ✅ #76                      |
+| 49  | Agent triggers (events, signed webhooks, mentions, time-of-day schedules, recipes, digest, learnings, repo guidance as skills) | [features/49-agent-triggers.md](features/49-agent-triggers.md)     | ✅ #70                      |
 
 Open work against the agents feature is tracked in
 [features/20-agents-todo.md](features/20-agents-todo.md).

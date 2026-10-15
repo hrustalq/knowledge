@@ -224,6 +224,14 @@ in the pull request that introduces them — see
   page has an **Agent guidance** card with **Import now**. Routes:
   `POST /v1/connectors/:id/guidance/import` and
   `POST /v1/ai/skills/:id/accept-upstream` (both admin). (#70)
+- `GET /v1/ai/agents/choices` takes `scope=all`, which names every agent in the
+  workspace (still names and descriptions only, still open to viewers). The
+  default is unchanged, so the composer and chat-bot pickers offer the same
+  agents as before. With it, a learning for the curator or the digest, and a
+  mention reply from a background agent, show the agent's name rather than its
+  key, and **Teach agent** offers every agent. Triggers, recipes, learnings and
+  repository guidance are written up in `docs/features/49-agent-triggers.md`.
+  (#70)
 
 ### Changed
 
@@ -242,8 +250,14 @@ in the pull request that introduces them — see
   the sentinel: its run fails and the report returns to `open` for a person
   with access. (#76)
 
+- Deleting a custom agent or a skill now asks for confirmation first. For a
+  skill imported from a repository, the confirmation says it comes back,
+  disabled, on the next sync. (#70)
+
 ### Fixed
 
+- The **Direction** row on a connector's page showed a raw message key
+  (`connectors.directionPull in`) instead of the direction. (#70)
 - Search no longer returns hits from pages that were deleted. Their chunks
   could stay behind in ArcadeDB or OpenSearch and came back titled
   "(unknown)", often ranked above the page actually asked for; on the demo

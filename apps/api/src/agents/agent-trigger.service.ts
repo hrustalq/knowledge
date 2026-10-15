@@ -41,6 +41,18 @@ export interface TriggerFacts {
    * trigger is not news to it: a re-index of an old page is not "it changed".
    */
   occurredAt?: Date;
+  /** A webhook body, kept on the run as `input.payload` (already cut to size). */
+  payload?: string;
+}
+
+/**
+ * Who a run is for when it is not the trigger's owner. A mention is somebody
+ * addressing the agent: the run executes and bills as them, in their language,
+ * and they have already been checked for the role the run needs.
+ */
+export interface FireOptions {
+  ownerId?: string;
+  locale?: string;
 }
 
 /** Why a trigger started nothing. Each is one guard, and each is observable on its own. */
@@ -70,7 +82,8 @@ const IN_FLIGHT = ['pending', 'running'];
  *
  *   1. the trigger is enabled (off on creation) and the event is in its filter;
  *   2. it has an owner — the identity the run executes and bills as. Without one
- *      it is skipped, never started under nobody (`AiAgent.scheduleOwner`);
+ *      it is skipped, never started under nobody (`AiAgent.scheduleOwner`). A
+ *      mention passes the commenter instead ({@link FireOptions});
  *   3. the agent is enabled and has a background executor;
  *   4. no run of this agent is pending or running for the same subject;
  *   5. `AGENT_TRIGGER_MAX_ACTIVE` triggered runs in flight per workspace.
@@ -81,7 +94,10 @@ const IN_FLIGHT = ['pending', 'running'];
  * writes no pages — it proposes — so the chain cannot feed itself. The cooldown
  * bounds the far side instead: a page merged ten times in an hour is one run.
  * Self-trigger suppression is structural for the same reason: the listener
- * hears four bus types and no `agent.*` event is among them.
+ * hears four bus types and no `agent.*` event is among them, and the other two
+ * callers — a signed webhook and a mention — are a person or a system outside.
+ * A webhook delivery is deduplicated for good, not just while in flight: its
+ * subject is the delivery id, and a sender retrying one must not start two.
  *
  * Guards 4 and 5 are read and the run written under one advisory lock per
  * workspace, so two events landing together cannot both pass them.
@@ -102,16 +118,21 @@ export class AgentTriggerService {
     this.maxActive = Number(config.get('AGENT_TRIGGER_MAX_ACTIVE', { infer: true }) ?? 5);
   }
 
-  async fire(trigger: AgentTrigger, facts: TriggerFacts, now = new Date()): Promise<TriggerOutcome> {
+  async fire(
+    trigger: AgentTrigger,
+    facts: TriggerFacts,
+    now = new Date(),
+    options: FireOptions = {},
+  ): Promise<TriggerOutcome> {
     if (!trigger.enabled || trigger.workspaceId !== facts.workspaceId) return skip('disabled');
     if (!matchesTrigger(trigger, facts)) return skip('filter');
     const label = `${trigger.agentKey} on ${facts.event.type} (${trigger.id})`;
 
-    if (!trigger.ownerId) {
+    const ownerId = options.ownerId ?? trigger.ownerId;
+    if (!ownerId) {
       this.logger.warn(`Trigger skipped for ${label}: it has no owner to run as`);
       return skip('no-owner');
     }
-    const ownerId = trigger.ownerId;
 
     const agent = await this.registry.resolve(trigger.workspaceId, trigger.agentKey).catch(() => null);
     if (!agent?.enabled || !agent.surfaces.includes('background') || !RUNNABLE_AGENTS.has(trigger.agentKey)) {
@@ -141,8 +162,11 @@ export class AgentTriggerService {
       ...(documentId && isPageScopedAgent(trigger.agentKey) ? { documentIds: [documentId] } : {}),
       ...(connectorScoped && facts.connectorId ? { connectorId: facts.connectorId } : {}),
       event: facts.event,
+      ...(facts.payload ? { payload: facts.payload } : {}),
     };
-    const owner = await this.prisma.user.findUnique({ where: { id: ownerId }, select: { locale: true } });
+    const owner = options.locale
+      ? { locale: options.locale }
+      : await this.prisma.user.findUnique({ where: { id: ownerId }, select: { locale: true } });
     const agentRow = await this.prisma.aiAgent.findUnique({
       where: { workspaceId_key: { workspaceId: trigger.workspaceId, key: trigger.agentKey } },
       select: { id: true },
@@ -156,6 +180,11 @@ export class AgentTriggerService {
         const seen = await tx.agentRun.count({
           where: { triggerId: trigger.id, input: { path: ['event', 'revisionId'], equals: facts.event.revisionId } },
         });
+        if (seen > 0) return skip('already-seen');
+      }
+      // A retried delivery is the same delivery, however long after the first.
+      if (facts.event.deliveryId) {
+        const seen = await tx.agentRun.count({ where: { triggerId: trigger.id, subjectKey: facts.subjectKey } });
         if (seen > 0) return skip('already-seen');
       }
       const inFlight = await tx.agentRun.count({

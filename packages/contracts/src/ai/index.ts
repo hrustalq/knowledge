@@ -1092,6 +1092,13 @@ export interface AgentRunInput {
    * and is what keeps a re-index of one revision from firing twice.
    */
   event?: AgentRunEvent;
+  /**
+   * The body of the webhook delivery that started the run (#70), cut to
+   * {@link AGENT_WEBHOOK_PAYLOAD_MAX_CHARS}. Written by whoever holds the
+   * trigger's secret and relaying text anyone may have typed, so an executor
+   * only ever shows it to a model inside `wrapUntrusted`.
+   */
+  payload?: string;
 }
 
 export interface AgentRunEvent {
@@ -1100,7 +1107,32 @@ export interface AgentRunEvent {
   subjectId?: string;
   documentId?: string;
   revisionId?: string;
+  /**
+   * `X-Knowledge-Delivery` of a `webhook` run: one delivery starts one run
+   * however often the sender retries it.
+   */
+  deliveryId?: string;
+  /** The discussion a `comment.mention` run answers into. */
+  threadId?: string;
 }
+
+/** How much of a webhook body a run keeps — and a prompt therefore sees. */
+export const AGENT_WEBHOOK_PAYLOAD_MAX_CHARS = 8_000;
+
+/**
+ * The headers a signed delivery to an agent trigger carries (#70).
+ *
+ * `signature` is `sha256=` + hex HMAC-SHA256, under the trigger's secret, of
+ * `<timestamp>.<raw body>` — the timestamp is signed so a captured delivery
+ * cannot be replayed under a fresh header. `timestamp` is Unix seconds and must
+ * be within `AGENT_WEBHOOK_TOLERANCE_SECONDS` of the server's clock. `delivery`
+ * is the sender's id for this delivery: a retry with the same id starts nothing.
+ */
+export const AGENT_WEBHOOK_HEADERS = {
+  signature: 'x-knowledge-signature',
+  timestamp: 'x-knowledge-timestamp',
+  delivery: 'x-knowledge-delivery',
+} as const;
 
 /**
  * The most pages one page-scoped run may name. Each executor still reads no
@@ -1559,11 +1591,20 @@ export type AgentRunTrigger = (typeof AGENT_RUN_TRIGGERS)[number];
 /**
  * What an agent trigger listens for (#70) — the product's names, not the bus's.
  *
- * Only what the listener actually handles: the signed inbound webhook and the
- * comment mention ship with the code that emits them (#70 phase 3), not ahead
- * of it.
+ * `webhook` and `comment.mention` are not heard on the bus at all: a signed
+ * delivery fires its trigger inline in `AgentWebhookController`, and a mention
+ * in `MentionRepliesService` while the comment is being posted — each knows
+ * exactly which trigger it is for, and the mention needs the commenter, whom
+ * no bus event carries.
  */
-export const AGENT_TRIGGER_EVENTS = ['page.merged', 'page.indexed', 'merge-request.opened', 'connector.synced'] as const;
+export const AGENT_TRIGGER_EVENTS = [
+  'page.merged',
+  'page.indexed',
+  'merge-request.opened',
+  'connector.synced',
+  'webhook',
+  'comment.mention',
+] as const;
 export type AgentTriggerEvent = (typeof AGENT_TRIGGER_EVENTS)[number];
 
 /**
@@ -1579,6 +1620,9 @@ export const AGENT_TRIGGER_EVENT_SOURCES: Record<AgentTriggerEvent, readonly str
   'page.indexed': ['revision.indexed'],
   'merge-request.opened': ['merge-request.created', 'repo.pull-request.opened'],
   'connector.synced': ['connector.run.succeeded'],
+  // Fired inline, never from the bus — see AGENT_TRIGGER_EVENTS.
+  webhook: [],
+  'comment.mention': [],
 };
 
 /** The trigger event a bus type is heard as, or null for one no trigger listens to. */
@@ -1615,15 +1659,20 @@ export const AGENT_TRIGGER_FILTER_FIELDS: Record<AgentTriggerEvent, readonly (ke
   'page.indexed': ['categories', 'branch'],
   'merge-request.opened': ['categories', 'connectorIds', 'branch'],
   'connector.synced': ['connectorIds'],
+  webhook: [],
+  'comment.mention': ['categories'],
 };
 
 /**
  * The events an agent can be triggered by. A connector-scoped agent reads one
  * repository, so only an event that can name one — a pull request, a sync — is
- * offered to it; any other would skip on every delivery.
+ * offered to it; any other would skip on every delivery. A mention starts a
+ * run about the page under discussion, so only an agent that can be scoped to
+ * one page answers it.
  */
 export function agentTriggerEventsFor(agentKey: string): readonly AgentTriggerEvent[] {
-  return isConnectorScopedAgent(agentKey) ? ['merge-request.opened', 'connector.synced'] : AGENT_TRIGGER_EVENTS;
+  if (isConnectorScopedAgent(agentKey)) return ['merge-request.opened', 'connector.synced'];
+  return isPageScopedAgent(agentKey) ? AGENT_TRIGGER_EVENTS : AGENT_TRIGGER_EVENTS.filter((e) => e !== 'comment.mention');
 }
 
 /** Bounds of `agent_triggers.cooldown_minutes`; 0 turns the cooldown off. */
@@ -1648,10 +1697,23 @@ export interface AgentTriggerSummary {
   cooldownMinutes: number;
   /** Seeded into each run's `input.note`. */
   note: string | null;
+  /**
+   * Where a `webhook` trigger is delivered to, and whether it has a secret yet
+   * — it refuses every delivery until one is set. Null for any other event.
+   * The secret itself is never read back; rotating is the only way to see one.
+   */
+  webhook: { url: string; secretSet: boolean } | null;
   lastFiredAt: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// POST /v1/ai/agents/triggers/:id/rotate-secret
+export interface RotateAgentTriggerSecretResponse {
+  /** Shown once. The previous secret stops verifying at once. */
+  secret: string;
+  url: string;
 }
 
 // GET /v1/ai/agents/triggers?workspaceId=

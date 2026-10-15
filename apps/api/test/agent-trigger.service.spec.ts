@@ -46,6 +46,7 @@ const trigger = (over: Partial<AgentTrigger> = {}): AgentTrigger => ({
   ownerId: OWNER,
   cooldownMinutes: 60,
   note: null,
+  webhookSecret: null,
   lastFiredAt: null,
   createdBy: OWNER,
   createdAt: new Date('2026-10-01T00:00:00Z'),
@@ -266,6 +267,39 @@ describe('AgentTriggerService.fire', () => {
       const { service } = harness();
       const old = indexed('rev-0', new Date('2026-09-01T00:00:00Z'));
       expect(await service.fire(onIndex, old, NOW)).toEqual({ started: false, reason: 'already-seen' });
+    });
+  });
+
+  describe('webhook and mention callers (phase 3)', () => {
+    const delivery = (id: string): TriggerFacts => ({
+      workspaceId: WS,
+      event: { type: 'webhook', source: 'webhook', deliveryId: id },
+      subjectKey: `webhook:${id}`,
+      projectId: null,
+      payload: '{"x":1}',
+    });
+    const onWebhook = trigger({ event: 'webhook', agentKey: 'curator', cooldownMinutes: 0 });
+
+    it('a repeated delivery id starts no second run, however long after the first finished', async () => {
+      const { service, runs } = harness();
+      expect((await service.fire(onWebhook, delivery('d-1'), NOW)).started).toBe(true);
+      expect(runs[0].input).toMatchObject({ payload: '{"x":1}', event: { deliveryId: 'd-1' } });
+      runs[0].status = 'succeeded';
+      const nextDay = new Date(NOW.getTime() + 86_400_000);
+      expect(await service.fire(onWebhook, delivery('d-1'), nextDay)).toEqual({ started: false, reason: 'already-seen' });
+      expect((await service.fire(onWebhook, delivery('d-2'), nextDay)).started).toBe(true);
+      expect(runs).toHaveLength(2);
+    });
+
+    it('an owner passed by the caller runs and bills in place of the trigger owner — and stands in for a missing one', async () => {
+      const COMMENTER = '55555555-5555-4555-8555-555555555555';
+      const { service, runs, usage, prisma } = harness();
+      const t = trigger({ event: 'comment.mention', ownerId: null, cooldownMinutes: 0 });
+      const facts = merged({ event: { type: 'comment.mention', source: 'document.comment.created', documentId: PAGE } });
+      expect((await service.fire(t, facts, NOW, { ownerId: COMMENTER, locale: 'en' })).started).toBe(true);
+      expect(runs[0]).toMatchObject({ createdBy: COMMENTER, locale: 'en', input: { documentIds: [PAGE] } });
+      expect(usage.assertWithinBudget).toHaveBeenCalledWith(WS, COMMENTER);
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
     });
   });
 

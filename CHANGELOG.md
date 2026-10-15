@@ -149,6 +149,28 @@ in the pull request that introduces them — see
   what started them in **Runs**. Routes: `GET /v1/ai/agents/triggers`,
   `POST /v1/ai/agents/:key/triggers`, `PATCH|DELETE /v1/ai/agents/triggers/:id`
   (admin). (#70)
+- **Webhook triggers** let any system that can sign a request start an agent
+  run. Add a "A signed webhook arrives" trigger to an agent, press **Create
+  secret**, and give the sender the URL and the secret, which is shown only
+  once. The sender POSTs JSON to `/v1/ai/agents/triggers/:id/webhook` with
+  `X-Knowledge-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<body>">`,
+  `X-Knowledge-Timestamp` (Unix seconds, within 5 minutes of the server) and
+  `X-Knowledge-Delivery` (a unique id). The answer is 202 with the run id, or
+  with the reason nothing started. A wrong signature or a stale timestamp
+  answers 401, a body over 64 KB answers 413, and a delivery id seen before
+  starts nothing, however long after. The body reaches the model only as
+  untrusted context. Rotating the secret stops the old one at once:
+  `POST /v1/ai/agents/triggers/:id/rotate-secret` (admin). (#70)
+- **Mention triggers.** Give a curator, reviewer or glossarist a "The agent is
+  mentioned in a comment" trigger, and mentioning it in a page or merge-request
+  discussion starts its background pass over that page instead of a chat
+  reply. The run belongs to, and bills, the person who mentioned the agent. The
+  agent's comment says it is working and, when the run ends, fills in with the
+  run's summary, its first findings and a link to the run. If the run cannot
+  start (one is already going over the page, the workspace is at its limit, the
+  budget is spent), the comment says so. Only editors start runs this way;
+  viewers, and every mention of an agent without such a trigger, get the
+  ordinary reply as before. (#70)
 
 ### Changed
 
@@ -180,12 +202,27 @@ in the pull request that introduces them — see
 ### Operations
 
 - Agent triggers are off server-wide until `AGENT_TRIGGERS_ENABLED=true` is set
-  for the worker; the trigger editor says when it is not. Two more optional
+  **for both the API and the worker**: the worker hears bus events, the API
+  serves the webhook route (404 while off) and starts mention runs (mentions
+  get the ordinary reply while off). The trigger editor says when it is off.
+  A webhook secret is stored encrypted, so creating one needs
+  `SETTINGS_ENCRYPTION_KEY`; without it the button answers 409. Two more
+  optional settings: `AGENT_WEBHOOK_MAX_BYTES` (65536), the largest delivery
+  accepted, and `AGENT_WEBHOOK_TOLERANCE_SECONDS` (300), how far a delivery's
+  timestamp may be from the server clock. Two more optional
   settings: `AGENT_TRIGGER_MAX_ACTIVE` (5), the triggered runs one workspace
   may have in flight before further events are skipped, and
   `AGENT_TRIGGER_COOLDOWN_MINUTES` (60), the cooldown a new trigger starts
   with. Triggers hear the Redis event bus, which does not redeliver: an event
   published while the worker is down starts no run.
+- Migration `20261023100000_agent_trigger_webhooks` adds a nullable
+  `agent_triggers.webhook_secret`, widens the `agent_triggers_event_check`
+  constraint to the two new events, and adds a nullable, indexed
+  `agent_run_id` to `document_comments` and `merge_request_comments`. Nothing
+  is backfilled. If the code is rolled back, webhook and mention triggers stop
+  firing (the previous image ignores rows it does not know), and an agent reply
+  still waiting on a run when that happens is timed out by the old 10-minute
+  sweep.
 - Migration `20261022100000_agent_triggers` adds the `agent_triggers` table,
   two nullable columns on `agent_runs` (`trigger_id`, `subject_key`) and two
   indexes. Nothing is backfilled and the previous image ignores all of it. If

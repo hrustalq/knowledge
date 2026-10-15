@@ -2231,6 +2231,23 @@ export interface paths {
         patch: operations["AiController_updateAgentTrigger"];
         trace?: never;
     };
+    "/v1/ai/agents/triggers/{id}/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give a webhook trigger a new signing secret. Returned once; the previous one stops verifying at once. */
+        post: operations["AiController_rotateAgentTriggerSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai/agents/{key}/triggers": {
         parameters: {
             query?: never;
@@ -5614,7 +5631,7 @@ export interface components {
             /** Format: uuid */
             workspaceId: string;
             /** @enum {string} */
-            event: "page.merged" | "page.indexed" | "merge-request.opened" | "connector.synced";
+            event: "page.merged" | "page.indexed" | "merge-request.opened" | "connector.synced" | "webhook" | "comment.mention";
         };
         StartAgentRunDto: {
             /** Format: uuid */
@@ -14038,6 +14055,46 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_rotateAgentTriggerSecret: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1680,7 +1680,6 @@
     "provider": "Provider",
     "instructionsFollowed": "Instructions the assistant follows",
     "noSkills": "No skills yet",
-    "triggers": "Triggers",
     "enabled": "Enabled",
     "triggersCsv": "Triggers (comma separated)",
     "description": "Description",
@@ -1789,6 +1788,10 @@
         },
         "connector": {
           "synced": "A connector finishes syncing"
+        },
+        "webhook": "A signed webhook arrives",
+        "comment": {
+          "mention": "The agent is mentioned in a comment"
         }
       },
       "eventHints": {
@@ -1801,7 +1804,22 @@
         },
         "connector": {
           "synced": "A sync run finished without failures."
+        },
+        "webhook": "Any system that can sign a request can start this agent. The delivery body reaches the model as untrusted context.",
+        "comment": {
+          "mention": "An editor mentions the agent in a discussion. Instead of a chat reply, it goes over that page and posts its findings in the thread when the run ends."
         }
+      },
+      "webhook": {
+        "url": "Delivery URL",
+        "secretSet": "Signing secret set",
+        "noSecret": "No signing secret yet — every delivery is refused until you create one.",
+        "rotate": "Rotate secret",
+        "create": "Create secret",
+        "rotated": "Copy this secret now. It will not be shown again, and the previous one has stopped working.",
+        "copy": "Copy",
+        "copied": "Copied",
+        "signing": "Sign each delivery with HMAC-SHA256 of the timestamp, a dot, then the raw JSON body, and send it as X-Knowledge-Signature: sha256=hex. X-Knowledge-Timestamp is Unix seconds, X-Knowledge-Delivery a unique id per delivery — a retry with the same id starts nothing."
       },
       "project": "Project",
       "allProjects": "All projects",

@@ -11409,6 +11409,63 @@
         ]
       }
     },
+    "/v1/ai/agents/triggers/{id}/rotate-secret": {
+      "post": {
+        "operationId": "AiController_rotateAgentTriggerSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Give a webhook trigger a new signing secret. Returned once; the previous one stops verifying at once.",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/v1/ai/agents/{key}/triggers": {
       "post": {
         "operationId": "AiController_createAgentTrigger",
@@ -26060,7 +26117,9 @@
               "page.merged",
               "page.indexed",
               "merge-request.opened",
-              "connector.synced"
+              "connector.synced",
+              "webhook",
+              "comment.mention"
             ]
           }
         },

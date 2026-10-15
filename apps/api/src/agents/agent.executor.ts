@@ -341,9 +341,7 @@ export class AgentExecutor {
           {
             role: 'user',
             content:
-              (run.input && typeof (run.input as { note?: string }).note === 'string'
-                ? `Extra instructions: ${(run.input as { note?: string }).note}\n\n`
-                : '') +
+              runBrief(run.input) +
               `Pages in this workspace (id | category | title | last updated):\n${listing}`,
           },
         ];
@@ -458,7 +456,7 @@ export class AgentExecutor {
             { role: 'system', content: agent.instructions + skillText },
             {
               role: 'user',
-              content: `Title: ${doc.title}\n\nPage:\n\n${content.markdown.slice(0, MAX_REVIEW_CHARS)}`,
+              content: `${runBrief(run.input)}Title: ${doc.title}\n\nPage:\n\n${content.markdown.slice(0, MAX_REVIEW_CHARS)}`,
             },
           ],
           { json: true },
@@ -759,7 +757,7 @@ export class AgentExecutor {
         {
           role: 'user',
           content:
-            (typeof input.note === 'string' && input.note ? `Extra instructions: ${input.note}\n\n` : '') +
+            runBrief(input) +
             `Repository: ${snapshot.name} (${snapshot.host.owner}/${snapshot.host.repo} @ ${snapshot.branch}). ` +
             `Every code tool call reads this repository; connectorId is ${connectorId}.\n\n` +
             `What the repository's documents and the workspace's pages already declare:\n${digest || '(nothing)'}\n\n` +
@@ -1375,7 +1373,7 @@ ${page.markdown}`, files);
         {
           role: 'user',
           content:
-            (typeof input.note === 'string' && input.note ? `Extra instructions: ${input.note}\n\n` : '') +
+            runBrief(input) +
             coveragePrompt(cluster, { hasCodebase, windowDays }),
         },
       ];
@@ -1561,9 +1559,7 @@ ${page.markdown}`, files);
           {
             role: 'user',
             content:
-              (run.input && typeof (run.input as { note?: string }).note === 'string'
-                ? `Extra instructions: ${(run.input as { note?: string }).note}\n\n`
-                : '') +
+              runBrief(run.input) +
               `Pages in this workspace (id | category | title | relations it already declares):\n${listing}`,
           },
         ];
@@ -1771,4 +1767,21 @@ function safeJson(raw: string): Record<string, unknown> | null {
 function pageScope(run: AgentRun): { id?: { in: string[] } } {
   const ids = ((run.input ?? {}) as AgentRunInput).documentIds;
   return Array.isArray(ids) && ids.length > 0 ? { id: { in: ids.slice(0, AGENT_RUN_MAX_DOCUMENTS) } } : {};
+}
+
+/**
+ * What the run was asked beyond its own instructions: the trigger's or the
+ * person's note, and — for a webhook run (#70) — the delivery's body. The note
+ * is trusted (an admin or the person pressing Run wrote it); the payload never
+ * is, so it reaches the model only inside `wrapUntrusted`. One helper so no
+ * executor can render the payload any other way.
+ */
+export function runBrief(input: unknown): string {
+  const { note, payload } = (input ?? {}) as { note?: unknown; payload?: unknown };
+  return (
+    (typeof note === 'string' && note ? `Extra instructions: ${note}\n\n` : '') +
+    (typeof payload === 'string' && payload
+      ? `What started this run:\n${wrapUntrusted(payload, 'webhook', 'webhook')}\n\n`
+      : '')
+  );
 }

@@ -105,6 +105,25 @@ execution step to check.
   than `AI_ACTION_INLINE_MAX_CHARS` are copied to the clipboard instead.
 - The agent link is key-free; the agent authenticates with its own key.
 
+## Page restrictions
+
+[48 — Page permissions](48-page-permissions.md) (#76) sets the contract below,
+and `ai-readable/ai-readable-scope.ts` is the one place that implements it.
+
+- **The listings are the same for every reader.** `llms.txt`, `llms-full.txt`
+  and their project variants carry only pages open to the whole workspace:
+  `restricted_by` empty, which also leaves out every page of a restricted
+  project. A restricted project is not named at all. A listing is one document
+  read by many agents and cached by ETag, so it cannot be cut per reader. The
+  plan proposed a per-principal variant built on `visibleDocumentIds`; it was
+  not built, because a reader who may open a restricted page reaches it through
+  search or the tree instead.
+- **One page is checked per caller.** The `.md` read goes through `AclGuard` like
+  any other page route, so a restricted page the caller may open still reads as
+  markdown, and one they may not is a 403 (member) or a 404 (guest).
+- Anything public that builds on this (published sites, share links) must treat
+  a page with a non-empty `restricted_by` as unpublishable. Both already do.
+
 ## Where it lives
 
 | Piece                                             | File                                                               |

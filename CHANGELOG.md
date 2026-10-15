@@ -59,8 +59,7 @@ in the pull request that introduces them — see
   nor lists an entity that only hidden pages mention, and the same holds for
   the graph view and entity lists. A change to a restriction applies to the
   next search. A search still fills its `limit` when enough visible pages
-  match. Notifications, the activity feed and live events are not filtered by
-  restrictions yet; that follows in the next phases. (#76)
+  match. (#76)
 - **The assistant, agents, workflows and chat bots respect page
   restrictions.** Every assistant tool reads only pages the person asking can
   open, checked again on each tool call, so access removed during an answer
@@ -118,6 +117,10 @@ in the pull request that introduces them — see
   `members: read` for this. Routes: `GET|PUT /v1/connectors/:id/acl`,
   `PUT /v1/connectors/:id/acl/identities/:identityId` and
   `POST /v1/connectors/:id/acl/sync`. (#76)
+- `make backtest ARGS="--generate --as <userId>"` measures known-item search
+  recall as one person sees it, through their page restrictions. Pages they
+  cannot open are left out of the question set, not counted as misses. Page
+  permissions are written up in `docs/features/48-page-permissions.md`. (#76)
 
 ### Changed
 
@@ -135,6 +138,16 @@ in the pull request that introduces them — see
   when an admin owns the run. A report on a restricted page is not judged by
   the sentinel: its run fails and the report returns to `open` for a person
   with access. (#76)
+
+### Fixed
+
+- Search no longer returns hits from pages that were deleted. Their chunks
+  could stay behind in ArcadeDB or OpenSearch and came back titled
+  "(unknown)", often ranked above the page actually asked for; on the demo
+  workspace, a page's own title found it first 0 times in 30. Only readers who
+  had a restricted page hidden from them were spared, so results also differed
+  by who was asking. Those hits are now dropped for everyone, in graph
+  expansion too, and the same 30 titles find their page first 19 times. (#76)
 
 ### Operations
 

@@ -8,7 +8,9 @@ import { AppModule } from '../app.module.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SearchService } from '../search/search.service.js';
 import type { SearchDto } from '../search/search.dto.js';
-import { systemScope } from '../permissions/access-scope.js';
+import { systemScope, type AccessScope } from '../permissions/access-scope.js';
+import { PermissionService } from '../permissions/permission.service.js';
+import { AccessService } from '../auth/access.service.js';
 import { EXPORT_MAX_ROWS, FeedbackDatasetService } from '../feedback/feedback-dataset.service.js';
 
 /**
@@ -19,6 +21,7 @@ import { EXPORT_MAX_ROWS, FeedbackDatasetService } from '../feedback/feedback-da
  * This is that measurement, in the repo.
  *
  *   make backtest ARGS="--generate --limit 120"                       known-item retrieval quality
+ *   make backtest ARGS="--generate --as <userId>"                     the same, through one person's page restrictions
  *   make backtest ARGS="--report"                                     aggregate the recorded stream
  *   make backtest ARGS="--export-feedback --workspace <id> --out f"   votes → labelled dataset (NDJSON)
  *   make backtest ARGS="--feedback f.ndjson --k 10"                   replay that dataset through search
@@ -58,11 +61,20 @@ function summarize(label: string, values: number[]): string {
   return `${label.padEnd(22)} n=${String(values.length).padEnd(6)} p50=${p(50).padStart(9)}ms  p95=${p(95).padStart(9)}ms  max=${p(100).padStart(9)}ms`;
 }
 
-/** Known-item retrieval: each document's own title, answered by that document. */
+/**
+ * Known-item retrieval: each document's own title, answered by that document.
+ *
+ * `--as <userId>` searches with that person's `AccessScope` instead of the
+ * unfiltered system scope (#76), and asks only for the pages they can open: a
+ * page they cannot see is not a miss, it is out of the question set. Run it
+ * once without and once with, on the same workspace, to see what the
+ * restriction filter costs a reader it does not exclude.
+ */
 async function generate(): Promise<void> {
   const workspaceId = option('--workspace', DEMO_WORKSPACE);
   const limit = Number(option('--limit', '120'));
   const k = Number(option('--k', '10'));
+  const asUser = option('--as', '');
 
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: false,
@@ -71,12 +83,20 @@ async function generate(): Promise<void> {
   const prisma = app.get(PrismaService);
   const search = app.get(SearchService);
 
-  const docs = await prisma.document.findMany({
+  let scope: AccessScope = systemScope(workspaceId);
+  if (asUser) {
+    const principal = await app.get(AccessService).principalFor(asUser, 'en');
+    scope = await app.get(PermissionService).scopeFor(principal, workspaceId);
+  }
+
+  const all = await prisma.document.findMany({
     where: { workspaceId },
     select: { id: true, title: true },
     orderBy: { createdAt: 'asc' },
     take: limit,
   });
+  const visible = await app.get(PermissionService).visibleDocumentIds(scope, all.map((d) => d.id));
+  const docs = all.filter((d) => visible.has(d.id));
 
   if (docs.length === 0) {
     console.error(`No documents in workspace ${workspaceId} — nothing to measure.`);
@@ -91,7 +111,7 @@ async function generate(): Promise<void> {
 
   for (const doc of docs) {
     const dto = { workspaceId, query: doc.title, limit: k } as SearchDto;
-    const { results } = await search.search(dto, systemScope(dto.workspaceId));
+    const { results } = await search.search(dto, scope);
     const rank = results.findIndex((r) => r.documentId === doc.id);
     if (rank === 0) hitAt1 += 1;
     if (rank >= 0) {
@@ -104,7 +124,8 @@ async function generate(): Promise<void> {
 
   const pct = (n: number) => ((n / docs.length) * 100).toFixed(1);
   console.log('');
-  console.log(`known-item retrieval — workspace ${workspaceId}`);
+  console.log(`known-item retrieval — workspace ${workspaceId}${asUser ? `, as ${asUser}` : ''}`);
+  if (asUser) console.log(`hidden from them     ${all.length - docs.length} of ${all.length} (left out of the question set)`);
   console.log(`queries              ${docs.length} (each document's own title)`);
   console.log(`recall@1             ${pct(hitAt1)}%  (${hitAt1}/${docs.length})`);
   console.log(`recall@${k}${String(k).length === 1 ? ' ' : ''}            ${pct(hitAtK)}%  (${hitAtK}/${docs.length})`);

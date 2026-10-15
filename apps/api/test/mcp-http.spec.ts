@@ -203,6 +203,10 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         status: 'pending',
       })),
     },
+    learnings: {
+      list: vi.fn(async (_ws: string, filter: { status?: string }) => [{ id: 'l-1', text: 'Cite the MR id', status: filter.status }]),
+      create: vi.fn(async (input: { text: string; status: string }) => ({ id: 'l-2', text: input.text, status: input.status })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -218,6 +222,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     repoWiki: deps.repoWiki,
     resourceAccess: deps.resourceAccess,
     accessRequests: deps.accessRequests,
+    learnings: deps.learnings,
   };
 }
 
@@ -357,6 +362,42 @@ describe('McpService over a principal', () => {
     const refused = await outsiderClient.callTool({ name: 'knowledge_request_access', arguments: { documentId: doc, level: 'view' } });
     expect(refused.isError).toBe(true);
     expect(outsider.accessRequests.create).not.toHaveBeenCalled();
+  });
+
+  it('learnings: a read-only key lists them; proposing is an editor write that can only propose (#70)', async () => {
+    const reader = service(accessWith('viewer'));
+    const readClient = await connect(reader.mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A }));
+    const names = (await readClient.listTools()).tools.map((t) => t.name);
+    expect(names).toContain('knowledge_list_agent_learnings');
+    expect(names).not.toContain('knowledge_propose_agent_learning');
+    const listed = await readClient.callTool({ name: 'knowledge_list_agent_learnings', arguments: { workspaceId: WS_A } });
+    expect(listed.isError).toBeFalsy();
+    // Active by default: what an outside agent should follow is what an admin approved.
+    expect(reader.learnings.list).toHaveBeenCalledWith(WS_A, { status: 'active' });
+
+    // A viewer holding a write key is still a viewer.
+    const viewerClient = await connect(reader.mcp, keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A }));
+    const refused = await viewerClient.callTool({
+      name: 'knowledge_propose_agent_learning',
+      arguments: { workspaceId: WS_A, text: 'Cite the MR id' },
+    });
+    expect(refused.isError).toBe(true);
+    expect(reader.learnings.create).not.toHaveBeenCalled();
+
+    const editor = service(accessWith('editor'));
+    const p = keyPrincipal({ id: 'k', scope: 'write', workspaceId: WS_A });
+    const client = await connect(editor.mcp, p);
+    const tool = (await client.listTools()).tools.find((t) => t.name === 'knowledge_propose_agent_learning');
+    expect(tool?.annotations?.readOnlyHint).toBe(false);
+    const res = await client.callTool({
+      name: 'knowledge_propose_agent_learning',
+      arguments: { workspaceId: WS_A, text: 'Cite the MR id', agentKey: 'reviewer' },
+    });
+    expect(res.isError).toBeFalsy();
+    expect(editor.learnings.create).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: WS_A, agentKey: 'reviewer', status: 'proposed', sourceKind: 'manual' }),
+      p.userId,
+    );
   });
 
   it('decorates search hits with provenance in one batch and names the trace (docs/features/38)', async () => {

@@ -12,6 +12,8 @@ import {
   KNOWLEDGE_ISSUE_KINDS,
   KNOWLEDGE_ISSUE_SUGGESTION_MAX_CHARS,
   VERIFICATION_FLAGS,
+  AGENT_LEARNING_MAX_CHARS,
+  AGENT_LEARNING_STATUSES,
   EXPORT_FORMATS,
   SHARE_PASSWORD_MAX_CHARS,
   SHARE_PASSWORD_MIN_CHARS,
@@ -43,6 +45,7 @@ import { ConnectorWorkItemsService } from '../connectors/connector-work-items.se
 import { RepoWikiService } from '../connectors/repo-wiki.service.js';
 import { WorkflowsService } from '../workflows/workflows.service.js';
 import { AgentRegistryService } from '../agents/agent-registry.service.js';
+import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AiReadableService } from '../ai-readable/ai-readable.service.js';
 import { ProvenanceService } from '../feedback/provenance.service.js';
@@ -143,6 +146,7 @@ export class McpService {
     private readonly repoWiki: RepoWikiService,
     private readonly resourceAccess: ResourceAccessService,
     private readonly accessRequests: AccessRequestsService,
+    private readonly learnings: AgentLearningsService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -589,6 +593,57 @@ export class McpService {
       async ({ workspaceId, projectId }) => {
         await guard.ws(workspaceId, 'viewer');
         return this.json(await this.documents.getWorkspaceGraph(await guard.scope(workspaceId), projectId));
+      },
+    );
+
+    // ------------------------------------------------------------ learnings
+    // Team guidance (#70). Reading the approved list is how an external coding
+    // agent picks up what this team has taught its agents; proposing is open to
+    // editors, and only an admin, in the app, makes a proposal active.
+    server.registerTool(
+      'knowledge_list_agent_learnings',
+      {
+        description:
+          'Corrections this team taught its agents ("learnings"), newest first. Active ones are approved by an admin ' +
+          'and are what the platform\'s own agents are told — follow them when you do the same kind of work. ' +
+          'Pass agentKey for one agent\'s list (it includes learnings for every agent).',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          agentKey: z.string().max(64).optional().describe('e.g. reviewer, curator'),
+          status: z.enum(AGENT_LEARNING_STATUSES).optional().describe('Defaults to active'),
+        },
+      },
+      async ({ workspaceId, agentKey, status }) => {
+        await guard.ws(workspaceId, 'viewer');
+        return this.json({
+          learnings: await this.learnings.list(workspaceId, { status: status ?? 'active', ...(agentKey ? { agentKey } : {}) }),
+        });
+      },
+    );
+
+    server.registerTool(
+      'knowledge_propose_agent_learning',
+      {
+        description:
+          'Propose a learning: a correction for one agent (or every agent), in plain words. It is stored as ' +
+          'proposed and reaches no prompt until a workspace admin approves it in the app.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          text: z.string().min(1).max(AGENT_LEARNING_MAX_CHARS),
+          agentKey: z.string().max(64).optional().describe('The agent it teaches; omit for every agent'),
+          projectId: z.string().uuid().optional().describe('Applies only in this project'),
+        },
+      },
+      async ({ workspaceId, text, agentKey, projectId }) => {
+        // The REST twin is `@Access('editor', 'body')`; the proposed status is
+        // fixed here, so no key — whatever its owner's role — can make one active.
+        await guard.ws(workspaceId, 'editor');
+        return this.json(
+          await this.learnings.create(
+            { workspaceId, text, agentKey: agentKey ?? null, projectId: projectId ?? null, status: 'proposed', sourceKind: 'manual' },
+            principal.userId,
+          ),
+        );
       },
     );
 

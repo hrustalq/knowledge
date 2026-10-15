@@ -286,6 +286,8 @@ function world(opts: { provider?: string; model?: 'none' | 'json' | 'throws'; co
       scopeFor: async (_p: unknown, workspaceId: string) => ({ workspaceId, bypass: true }),
       audienceScope: async (scope: unknown) => scope,
     } as never,
+    // Learnings (#70): none, so the guidance is the skills block alone.
+    { promptFor: async () => '', dismissedPrompt: async () => '' } as never,
   );
   return { executor, prisma, embedding, client, reports, report };
 }

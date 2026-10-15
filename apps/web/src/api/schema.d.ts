@@ -2248,6 +2248,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai/agents/learnings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Learnings — corrections taught to agents — newest first */
+        get: operations["AiController_listAgentLearnings"];
+        put?: never;
+        /** Teach an agent something. Proposed unless an admin creates it active; only active learnings reach a prompt. */
+        post: operations["AiController_createAgentLearning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/agents/learnings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Approve, edit or archive a learning. Approving or rewording an active one records the caller. */
+        patch: operations["AiController_updateAgentLearning"];
+        trace?: never;
+    };
     "/v1/ai/agents/recipes/{recipe}/apply": {
         parameters: {
             query?: never;
@@ -2344,6 +2379,23 @@ export interface paths {
         put?: never;
         /** Declare the page a stale finding cites outdated, as the caller */
         post: operations["AiController_markFindingOutdated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ai/agents/runs/{id}/findings/{index}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss a finding; optionally propose a learning saying why */
+        post: operations["AiController_dismissFinding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5627,6 +5679,53 @@ export interface components {
             /** @description Instruction seeded into every run this trigger starts. */
             note?: string | null;
         };
+        CreateAgentLearningDto: {
+            /** @description The agent it teaches. Null teaches every agent. */
+            agentKey?: string | null;
+            /**
+             * Format: uuid
+             * @description Applies only to work in this project. Null applies everywhere.
+             */
+            projectId?: string | null;
+            /** Format: uuid */
+            workspaceId: string;
+            /** @description The correction, in plain words. */
+            text: string;
+            /**
+             * @description Absent is proposed. Active needs an admin.
+             * @enum {string}
+             */
+            status?: "proposed" | "active";
+            /**
+             * @description Where it came from. Absent is manual.
+             * @enum {string}
+             */
+            sourceKind?: "document-thread" | "mr-thread" | "finding" | "manual";
+            /**
+             * Format: uuid
+             * @description The thread, for a document-thread or mr-thread source.
+             */
+            sourceId?: string;
+            /**
+             * Format: uuid
+             * @description The run, for a finding source.
+             */
+            runId?: string;
+            /** @description The finding's position in its run, for a finding source. */
+            findingIndex?: number;
+        };
+        UpdateAgentLearningDto: {
+            /** @description The agent it teaches. Null teaches every agent. */
+            agentKey?: string | null;
+            /**
+             * Format: uuid
+             * @description Applies only to work in this project. Null applies everywhere.
+             */
+            projectId?: string | null;
+            text?: string;
+            /** @enum {string} */
+            status?: "proposed" | "active" | "archived";
+        };
         ApplyAgentRecipeDto: {
             /** Format: uuid */
             workspaceId: string;
@@ -5671,6 +5770,12 @@ export interface components {
             connectorId?: string;
             /** @description Restrict a page-reading agent (curator, reviewer, glossarist) to these pages instead of the most recent ones. Pages the caller cannot open are skipped. */
             documentIds?: string[];
+        };
+        DismissAgentFindingDto: {
+            /** @description Why it was wrong, as a rule for next time. Becomes a proposed learning for this agent. */
+            learning?: string;
+            /** @description The learning teaches every agent, not only the one that ran. */
+            allAgents?: boolean;
         };
         RouteAgentDto: {
             /** Format: uuid */
@@ -14146,6 +14251,135 @@ export interface operations {
             };
         };
     };
+    AiController_listAgentLearnings: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description This agent's learnings and those for every agent */
+                agentKey?: string;
+                status?: "proposed" | "active" | "archived";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_createAgentLearning: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentLearningDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_updateAgentLearning: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentLearningDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     AiController_applyAgentRecipe: {
         parameters: {
             query?: never;
@@ -14383,6 +14617,54 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AiController_dismissFinding: {
+        parameters: {
+            query: {
+                workspaceId: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+                /** @description Position in the run's findings array */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissAgentFindingDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {

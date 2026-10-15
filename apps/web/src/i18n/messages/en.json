@@ -1693,6 +1693,7 @@
     "tabConfig": "Configuration",
     "tabAgents": "Agents",
     "tabSkills": "Skills",
+    "tabLearnings": "Learnings",
     "tabPlugins": "Plugins",
     "tabUsage": "Usage",
     "tabLogs": "Logs",
@@ -1917,7 +1918,19 @@
       "outdatedMarked": "Marked outdated",
       "applyRelations": "Apply relations",
       "relationsApplied": "Opened a merge request: {title}",
-      "nothingToApply": "The page already declares these relations — nothing to propose."
+      "nothingToApply": "The page already declares these relations — nothing to propose.",
+      "dismiss": "Dismiss",
+      "dismissed": "Dismissed",
+      "dismissTitle": "Dismiss this finding",
+      "dismissDesc": "It is hidden from this list, and {agent} is told not to report it again.",
+      "rememberWhy": "Remember why (optional)",
+      "rememberWhyPlaceholder": "Pages under Legal are versioned on purpose; never flag them stale.",
+      "rememberWhyHint": "Becomes a proposed learning. An admin approves it before the agent is told it.",
+      "teachEveryAgent": "Teach every agent, not only {agent}",
+      "dismissedToast": "Finding dismissed",
+      "dismissedWithLearning": "Finding dismissed. Your learning is waiting for review.",
+      "showDismissed": "Show dismissed ({count})",
+      "learningProposed": "Learning proposed"
     },
     "providerNone": "None — assistant disabled",
     "overridden": "· overridden",
@@ -2152,6 +2165,56 @@
         "surface": "Surface",
         "confidence": "Confidence"
       }
+    },
+    "learnings": {
+      "subtitle": "Corrections your team taught its agents. Only active learnings reach a prompt, newest first, {limit} at most per prompt.",
+      "add": "Add learning",
+      "propose": "Propose",
+      "save": "Save",
+      "emptyTitle": "No learnings yet",
+      "emptyBody": "When an agent gets something wrong, teach it: from a reply in a thread, from a finding you dismiss, or here. A workspace admin approves each one before any agent sees it.",
+      "example1": "Reviewer: never flag pages under Legal as stale, they are versioned on purpose.",
+      "example2": "Every agent: call the product Knowledge, never KB.",
+      "status": {
+        "proposed": "Proposed",
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "none": {
+        "proposed": "Nothing waiting for review.",
+        "active": "No active learnings. Approve a proposed one to put it in front of the agent.",
+        "archived": "Nothing archived."
+      },
+      "everyAgent": "Every agent",
+      "everyProject": "Every project",
+      "agent": "Agent",
+      "project": "Applies in",
+      "text": "What should it do differently?",
+      "textPlaceholder": "A rule for next time, in plain words.",
+      "activeNow": "Make it active now",
+      "approve": "Approve",
+      "archive": "Archive",
+      "restore": "Back to proposed",
+      "moved": {
+        "proposed": "Moved back to proposed",
+        "active": "Approved. The agent follows it from its next turn.",
+        "archived": "Archived"
+      },
+      "source": {
+        "manual": "Written here",
+        "document-thread": "From a page comment",
+        "mr-thread": "From a review thread",
+        "finding": "From a dismissed finding"
+      },
+      "approvedAt": "approved {time}",
+      "teach": "Teach agent",
+      "teachTitle": "Teach {agent}",
+      "editTitle": "Edit learning",
+      "teachDesc": "Write the correction as a rule for next time. It is proposed: a workspace admin approves it before any agent is told it.",
+      "teachDescAdmin": "Write the correction as a rule for next time. Proposed learnings wait for review; an active one is told to the agent from its next turn.",
+      "updated": "Learning updated",
+      "savedActive": "Saved. The agent follows it from its next turn.",
+      "savedProposed": "Proposed. A workspace admin approves it under AI settings, Learnings."
     }
   },
   "search": {

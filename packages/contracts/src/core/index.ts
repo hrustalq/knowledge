@@ -402,6 +402,10 @@ export const KNOWN_EVENT_TYPES = [
   'ai.agent.trigger.deleted',
   // A recipe's schedule and triggers written, disabled (#70).
   'ai.agent.recipe.applied',
+  // A learning proposed, or approved / edited / archived (#70). Configuration
+  // like the rest of this block: what an agent is told, not news for an inbox.
+  'ai.agent.learning.created',
+  'ai.agent.learning.updated',
   'ai.sourcePolicy.created',
   'ai.sourcePolicy.updated',
   'ai.sourcePolicy.deleted',

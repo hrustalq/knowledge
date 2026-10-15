@@ -281,6 +281,11 @@ export const envSchema = z.object({
   AGENT_WEBHOOK_MAX_BYTES: z.coerce.number().int().positive().default(65_536),
   /** How far `X-Knowledge-Timestamp` may be from the server's clock — the replay window. */
   AGENT_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().positive().default(300),
+  /**
+   * Active learnings one prompt takes, newest first (#70). Bounded so a team's
+   * corrections cannot quietly eat the context window documents need.
+   */
+  AGENT_LEARNINGS_MAX: z.coerce.number().int().min(0).max(100).default(20),
   STALE_INDEXING_TIMEOUT_MIN: z.coerce.number().int().positive().default(15),
   STALE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 

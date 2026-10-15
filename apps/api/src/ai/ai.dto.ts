@@ -18,6 +18,9 @@ import {
 } from 'class-validator';
 import {
   AGENT_CAPABILITIES,
+  AGENT_LEARNING_MAX_CHARS,
+  AGENT_LEARNING_SOURCES,
+  AGENT_LEARNING_STATUSES,
   AGENT_RUN_MAX_DOCUMENTS,
   AGENT_SCHEDULE_KINDS,
   AGENT_SCHEDULE_TIME_PATTERN,
@@ -26,6 +29,8 @@ import {
   AGENT_TRIGGER_EVENTS,
   WEB_ACCESS_MODES,
   type AgentCapability,
+  type AgentLearningSource,
+  type AgentLearningStatus,
   type AgentScheduleKind,
   type AgentTriggerEvent,
   type AgentSurface,
@@ -964,6 +969,100 @@ export class ApplyAgentRecipeDto {
   @IsString()
   @MaxLength(64, { message: vmsg('maxLength') })
   timezone?: string;
+}
+
+// ---- Learnings (#70) ---------------------------------------------------------
+
+/** Fields a learning shares between create and update. */
+class AgentLearningScopeDto {
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'The agent it teaches. Null teaches every agent.' })
+  @IsOptional()
+  @NULLABLE<AgentLearningScopeDto>('agentKey')
+  @IsString()
+  @MaxLength(64, { message: vmsg('maxLength') })
+  agentKey?: string | null;
+
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Applies only to work in this project. Null applies everywhere.' })
+  @IsOptional()
+  @NULLABLE<AgentLearningScopeDto>('projectId')
+  @IsUUID()
+  projectId?: string | null;
+}
+
+/**
+ * Teach an agent something. Anyone with edit rights may propose; only an admin
+ * may create a learning `active` — the controller checks, because the text
+ * reaches a prompt the moment it is.
+ */
+export class CreateAgentLearningDto extends AgentLearningScopeDto {
+  // Field name must stay `workspaceId`: @Access('editor', 'body') resolves it.
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  workspaceId!: string;
+
+  @ApiProperty({ maxLength: AGENT_LEARNING_MAX_CHARS, description: 'The correction, in plain words.' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(AGENT_LEARNING_MAX_CHARS, { message: vmsg('maxLength') })
+  text!: string;
+
+  @ApiPropertyOptional({ enum: ['proposed', 'active'], description: 'Absent is proposed. Active needs an admin.' })
+  @IsOptional()
+  @IsIn(['proposed', 'active'], { message: vmsg('isIn') })
+  status?: 'proposed' | 'active';
+
+  @ApiPropertyOptional({ enum: AGENT_LEARNING_SOURCES, description: 'Where it came from. Absent is manual.' })
+  @IsOptional()
+  @IsIn(AGENT_LEARNING_SOURCES as unknown as string[], { message: vmsg('isIn') })
+  sourceKind?: AgentLearningSource;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'The thread, for a document-thread or mr-thread source.' })
+  @IsOptional()
+  @IsUUID()
+  sourceId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'The run, for a finding source.' })
+  @IsOptional()
+  @IsUUID()
+  runId?: string;
+
+  @ApiPropertyOptional({ description: "The finding's position in its run, for a finding source." })
+  @IsOptional()
+  @IsInt()
+  @Min(0, { message: vmsg('min') })
+  findingIndex?: number;
+}
+
+/** Approve, edit or archive (admin). Making it active, or rewording an active one, records the caller as approver. */
+export class UpdateAgentLearningDto extends AgentLearningScopeDto {
+  @ApiPropertyOptional({ maxLength: AGENT_LEARNING_MAX_CHARS })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(AGENT_LEARNING_MAX_CHARS, { message: vmsg('maxLength') })
+  text?: string;
+
+  @ApiPropertyOptional({ enum: AGENT_LEARNING_STATUSES })
+  @IsOptional()
+  @IsIn(AGENT_LEARNING_STATUSES as unknown as string[], { message: vmsg('isIn') })
+  status?: AgentLearningStatus;
+}
+
+/** Dismiss a finding; with `learning`, "Remember why" proposes one. */
+export class DismissAgentFindingDto {
+  @ApiPropertyOptional({
+    maxLength: AGENT_LEARNING_MAX_CHARS,
+    description: 'Why it was wrong, as a rule for next time. Becomes a proposed learning for this agent.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(AGENT_LEARNING_MAX_CHARS, { message: vmsg('maxLength') })
+  learning?: string;
+
+  @ApiPropertyOptional({ description: 'The learning teaches every agent, not only the one that ran.' })
+  @IsOptional()
+  @IsBoolean()
+  allAgents?: boolean;
 }
 
 // ---- Source policies (docs/features/25) ------------------------------------

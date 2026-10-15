@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   ChevronRight,
   CornerUpLeft,
+  GraduationCap,
   History,
   Loader2,
   MapPin,
@@ -56,6 +57,7 @@ import { useMembers } from './use-members'
 import { useAgentNames } from './use-agent-names'
 import { fullTime, timelineTime } from './mr-ui'
 import { useAuthStore } from '@/stores/auth'
+import TeachAgentDialog from '@/components/ai/TeachAgentDialog.vue'
 
 const { t } = useI18n()
 
@@ -67,8 +69,13 @@ const props = withDefaults(
     busy?: boolean
     /** Document that reply attachments belong to; without it the control hides. */
     resolveDocumentId?: () => Promise<string | null>
+    /**
+     * What kind of thread this is, for "Teach agent" (#70) — the learning's
+     * provenance. Without it the action hides.
+     */
+    teachKind?: 'document-thread' | 'mr-thread' | null
   }>(),
-  { outdated: false, readonly: false, busy: false, resolveDocumentId: undefined },
+  { outdated: false, readonly: false, busy: false, resolveDocumentId: undefined, teachKind: null },
 )
 const emit = defineEmits<{
   /** `replyToId` names the comment answered, or null for the thread at large. */
@@ -103,6 +110,24 @@ const deleting = ref<string | null>(null)
 /** Pointer-hovered target, lifted so the link is legible without a click. */
 const linked = ref<string | null>(null)
 const flashed = ref<string | null>(null)
+
+/**
+ * "Teach agent" (#70): on an agent's reply, an editor writes the correction as
+ * a learning for that agent. Offered on resolved threads too — a wrong answer
+ * is usually corrected and resolved before anyone thinks to teach it.
+ */
+const teaching = ref<string | null>(null)
+const teachOpen = computed({
+  get: () => teaching.value !== null,
+  set: (open: boolean) => {
+    if (!open) teaching.value = null
+  },
+})
+function canTeach(comment: ReviewComment): boolean {
+  return !!props.teachKind && !!comment.agentKey && !comment.pending && auth.canEdit
+}
+/** Comment actions other than teaching need an open, writable thread. */
+const canAct = computed(() => !props.readonly && !props.thread.resolved)
 
 const byId = computed(() => new Map(props.thread.comments.map((c) => [c.commentId, c])))
 function parentOf(comment: ReviewComment): ReviewComment | null {
@@ -355,10 +380,21 @@ const replyTarget = computed(() =>
                 <!-- Actions ride the row rather than a menu: three of them, and
                      a discussion is read far more often than it is corrected. -->
                 <span
-                  v-if="!readonly && !thread.resolved && editing !== comment.commentId"
+                  v-if="(canAct || canTeach(comment)) && editing !== comment.commentId"
                   class="kn-comment-actions ml-auto flex shrink-0 items-center gap-0.5"
                 >
                   <button
+                    v-if="canTeach(comment)"
+                    type="button"
+                    class="rounded p-1 hover:bg-accent hover:text-foreground"
+                    :title="t('ai.learnings.teach')"
+                    :aria-label="t('ai.learnings.teach')"
+                    @click="teaching = comment.agentKey"
+                  >
+                    <GraduationCap class="size-3.5" />
+                  </button>
+                  <button
+                    v-if="canAct"
                     type="button"
                     class="rounded p-1 hover:bg-accent hover:text-foreground"
                     :title="t('mr.replyToName', { name: nameOf(comment.authorId) })"
@@ -494,5 +530,13 @@ const replyTarget = computed(() =>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <TeachAgentDialog
+      v-if="teachKind"
+      v-model:open="teachOpen"
+      :agent-key="teaching"
+      :source-kind="teachKind"
+      :source-id="thread.threadId"
+    />
   </article>
 </template>

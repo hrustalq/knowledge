@@ -1781,6 +1781,68 @@ export interface ApplyAgentRecipeResponse {
   created: { schedule: boolean; triggers: number };
 }
 
+/**
+ * Learnings (#70): a correction a person taught an agent, kept and handed to
+ * that agent's later turns as "team guidance".
+ *
+ * Only `active` text ever reaches a prompt, and only an admin makes a learning
+ * active — the text is trusted because a person approved it, the rule skills
+ * already follow. `proposed` is what anyone with edit rights (or an MCP client)
+ * may write; `archived` keeps the provenance of a learning nobody wants applied.
+ */
+export const AGENT_LEARNING_STATUSES = ['proposed', 'active', 'archived'] as const;
+export type AgentLearningStatus = (typeof AGENT_LEARNING_STATUSES)[number];
+
+/** Where a learning came from — what its provenance link points at. */
+export const AGENT_LEARNING_SOURCES = ['document-thread', 'mr-thread', 'finding', 'manual'] as const;
+export type AgentLearningSource = (typeof AGENT_LEARNING_SOURCES)[number];
+
+/** Longest learning a person may write. A learning is a rule, not a page. */
+export const AGENT_LEARNING_MAX_CHARS = 1_000;
+
+export interface AgentLearningSummary {
+  id: string;
+  workspaceId: string;
+  /** Null applies in every project. */
+  projectId: string | null;
+  /** Null applies to every agent. */
+  agentKey: string | null;
+  text: string;
+  status: AgentLearningStatus;
+  sourceKind: AgentLearningSource;
+  /** A thread id for a thread source; null otherwise. */
+  sourceId: string | null;
+  /** The page a `document-thread` source sits on, or a `finding` source cites. */
+  sourceDocumentId: string | null;
+  /** The merge request an `mr-thread` source sits on. */
+  sourceMergeRequestId: string | null;
+  /** The run and finding a `finding` source was dismissed from. */
+  runId: string | null;
+  findingIndex: number | null;
+  createdBy: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /v1/ai/agents/learnings?workspaceId=&agentKey=&status=
+export interface ListAgentLearningsResponse {
+  learnings: AgentLearningSummary[];
+  /** How many `active` learnings a prompt takes at most (`AGENT_LEARNINGS_MAX`). Newest first. */
+  promptLimit: number;
+}
+
+// POST /v1/ai/agents/runs/:id/findings/:index/dismiss
+export interface DismissAgentFindingResponse {
+  dismissedAt: string;
+  dismissedBy: string;
+  /** The proposed learning "Remember why" wrote — the first press's, on a repeat. */
+  learningId: string | null;
+  /** False when somebody had already dismissed it; nothing was written. */
+  dismissed: boolean;
+}
+
 export const AGENT_FINDING_KINDS = [
   'stale',
   'duplicate',
@@ -1826,6 +1888,15 @@ export interface AgentFinding {
    * the button does not offer the same declaration twice.
    */
   flaggedAt?: string | null;
+  /**
+   * When a person dismissed this finding as wrong or not worth acting on (#70).
+   * Set once — a second press changes nothing. The runs panel hides it by
+   * default, and the agent's next runs are told not to report it again.
+   */
+  dismissedAt?: string | null;
+  dismissedBy?: string | null;
+  /** The proposed learning written with the dismissal ("Remember why"), if any. */
+  learningId?: string | null;
   /**
    * The knowledge issue this finding answers (docs/features/38, phase 3): a
    * sentinel judging a report points its verdict back at the report, which is

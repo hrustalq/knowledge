@@ -232,6 +232,7 @@ describe('MentionRepliesService — a mention answered by a run', () => {
       { fire } as never,
       access as never,
       config as never,
+      { promptFor: async () => '' } as never,
     );
     const mention = () =>
       s.handleMention({
@@ -320,6 +321,7 @@ describe('MentionRepliesService.sweepRunReplies', () => {
       {} as never,
       {} as never,
       { get: () => true } as never,
+      {} as never,
     );
     return { s, comment, events };
   }

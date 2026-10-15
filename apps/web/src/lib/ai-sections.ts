@@ -19,6 +19,7 @@ export const AI_SECTION_GROUPS = [
       { key: 'config', label: 'ai.tabConfig' },
       { key: 'agents', label: 'ai.tabAgents' },
       { key: 'skills', label: 'ai.tabSkills' },
+      { key: 'learnings', label: 'ai.tabLearnings' },
       { key: 'plugins', label: 'ai.tabPlugins' },
     ],
   },

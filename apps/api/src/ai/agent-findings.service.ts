@@ -3,6 +3,7 @@ import type {
   AgentFinding,
   AgentRunInput,
   CreatePageFromFindingResponse,
+  DismissAgentFindingResponse,
   DocumentCategory,
   FlagFindingOutdatedResponse,
   Locale,
@@ -20,6 +21,7 @@ import { openDraftMergeRequest } from '../documents/draft-merge-request.js';
 import { AgentRegistryService, type ResolvedAgent } from '../agents/agent-registry.service.js';
 import { AssistantClient } from '../assistant/assistant.client.js';
 import { AiUsageService } from './ai-usage.service.js';
+import { AgentLearningsService } from './agent-learnings.service.js';
 import { VerificationService } from '../verification/verification.service.js';
 import type { Principal } from '../auth/principal.js';
 
@@ -56,7 +58,83 @@ export class AgentFindingsService {
     private readonly client: AssistantClient,
     private readonly usage: AiUsageService,
     private readonly verification: VerificationService,
+    private readonly learnings: AgentLearningsService,
   ) {}
+
+  /**
+   * Dismiss a finding as wrong or not worth acting on (#70; 20-agents-todo
+   * item C in its cheap form).
+   *
+   * Set once, in one guarded statement: two presses race on the row lock, and
+   * the loser's `WHERE` sees `dismissedAt` already set and writes nothing — so
+   * "Remember why" makes exactly one proposed learning however many times it
+   * is pressed. The learning is written in the same transaction as the
+   * dismissal, so a failure leaves neither.
+   *
+   * Nothing else about the finding changes, and nothing is deleted: the run
+   * stays the record of what the agent said. The agent's next runs are told
+   * about it (`AgentLearningsService.dismissedPrompt`).
+   */
+  async dismiss(
+    workspaceId: string,
+    runId: string,
+    index: number,
+    principal: Principal,
+    learning?: { text: string; projectId?: string | null; allAgents?: boolean },
+  ): Promise<DismissAgentFindingResponse> {
+    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
+    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
+    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
+    if (!findings[index]) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+
+    const at = new Date().toISOString();
+    const won = await this.prisma.$transaction(async (tx) => {
+      const affected = await tx.$executeRaw`
+        UPDATE agent_runs
+           SET findings = jsonb_set(
+                 jsonb_set(findings, ARRAY[${String(index)}::text, 'dismissedAt'], to_jsonb(${at}::text), true),
+                 ARRAY[${String(index)}::text, 'dismissedBy'],
+                 to_jsonb(${principal.userId}::text),
+                 true
+               )
+         WHERE id = ${runId}::uuid
+           AND findings -> ${index}::int IS NOT NULL
+           AND COALESCE(findings -> ${index}::int ->> 'dismissedAt', '') = ''
+      `;
+      if (affected === 0) return false;
+      if (learning?.text.trim()) {
+        const created = await this.learnings.create(
+          {
+            workspaceId,
+            text: learning.text,
+            agentKey: learning.allAgents ? null : run.agentKey,
+            projectId: learning.projectId ?? null,
+            status: 'proposed',
+            sourceKind: 'finding',
+            runId,
+            findingIndex: index,
+          },
+          principal.userId,
+          tx,
+        );
+        await tx.$executeRaw`
+          UPDATE agent_runs
+             SET findings = jsonb_set(findings, ARRAY[${String(index)}::text, 'learningId'], to_jsonb(${created.id}::text), true)
+           WHERE id = ${runId}::uuid
+        `;
+      }
+      return true;
+    });
+
+    const after = await this.prisma.agentRun.findUnique({ where: { id: runId }, select: { findings: true } });
+    const finding = ((after?.findings ?? []) as unknown as AgentFinding[])[index];
+    return {
+      dismissedAt: finding?.dismissedAt ?? at,
+      dismissedBy: finding?.dismissedBy ?? principal.userId,
+      learningId: finding?.learningId ?? null,
+      dismissed: won,
+    };
+  }
 
   async propose(
     workspaceId: string,

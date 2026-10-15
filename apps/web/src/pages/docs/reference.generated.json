@@ -211,6 +211,36 @@
       "platformAdmin": false
     },
     {
+      "method": "GET",
+      "path": "/v1/ai/agents/learnings",
+      "tag": "ai",
+      "summary": "Learnings — corrections taught to agents — newest first",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/agents/learnings",
+      "tag": "ai",
+      "summary": "Teach an agent something. Proposed unless an admin creates it active; only active learnings reach a prompt.",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/ai/agents/learnings/{id}",
+      "tag": "ai",
+      "summary": "Approve, edit or archive a learning. Approving or rewording an active one records the caller.",
+      "role": "admin",
+      "source": "agent-learning",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "POST",
       "path": "/v1/ai/agents/recipes/{recipe}/apply",
       "tag": "ai",
@@ -265,6 +295,16 @@
       "path": "/v1/ai/agents/runs/{id}/findings/{index}/create-page",
       "tag": "ai",
       "summary": "Create the page a finding drafted, under the connector's destination",
+      "role": "editor",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/ai/agents/runs/{id}/findings/{index}/dismiss",
+      "tag": "ai",
+      "summary": "Dismiss a finding; optionally propose a learning saying why",
       "role": "editor",
       "source": "query",
       "public": false,
@@ -4183,6 +4223,24 @@
       ]
     },
     {
+      "name": "knowledge_list_agent_learnings",
+      "description": "Corrections this team taught its agents (\"learnings\"), newest first. Active ones are approved by an admin and are what the platform's own agents are told — follow them when you do the same kind of work. Pass agentKey for one agent's list (it includes learnings for every agent).",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "agentKey",
+          "optional": true
+        },
+        {
+          "name": "status",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_list_agents",
       "description": "s AI calls (feature 20): which agents exist, what each is for, \" + +",
       "inputs": [
@@ -4342,6 +4400,28 @@
         },
         {
           "name": "strategy",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_propose_agent_learning",
+      "description": "Propose a learning: a correction for one agent (or every agent), in plain words. It is stored as proposed and reaches no prompt until a workspace admin approves it in the app.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "text",
+          "optional": false
+        },
+        {
+          "name": "agentKey",
+          "optional": true
+        },
+        {
+          "name": "projectId",
           "optional": true
         }
       ]

@@ -61,9 +61,12 @@ export class AssistantReadToolsService {
   /**
    * The caller's page visibility, asked afresh on every tool call rather than
    * once per turn: a grant revoked mid-turn holds from the next call (#76).
+   * Clamped to the run's audience when the output is read by more people
+   * than the caller.
    */
-  private scopeOf(ctx: AssistantToolContext): Promise<AccessScope> {
-    return this.permissions.scopeFor(ctx.principal, ctx.workspaceId);
+  private async scopeOf(ctx: AssistantToolContext): Promise<AccessScope> {
+    const scope = await this.permissions.scopeFor(ctx.principal, ctx.workspaceId);
+    return ctx.audience ? this.permissions.audienceScope(scope, ctx.audience) : scope;
   }
 
   definitions(): ChatCompletionFunctionTool[] {
@@ -393,11 +396,13 @@ export class AssistantReadToolsService {
     ctx: AssistantToolContext,
   ): Promise<AssistantToolResult> {
     const documentId = String(args.documentId ?? '');
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
+    const scope = await this.scopeOf(ctx);
+    const doc = await this.requireVisibleDocument(documentId, ctx, scope);
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
+    await this.permissions.auditBypassRead(ctx.principal, scope, { type: 'document', id: documentId });
     try {
       const content = await this.documents.getContent(documentId);
-      const trails = await this.documents.breadcrumbsFor(await this.scopeOf(ctx), [documentId]);
+      const trails = await this.documents.breadcrumbsFor(scope, [documentId]);
       const source: AssistantAskSource = { documentId, title: doc.title, revisionId: content.revisionId, factClass: 'explicit' };
       return {
         content: JSON.stringify({
@@ -494,10 +499,11 @@ export class AssistantReadToolsService {
   ): Promise<AssistantToolResult> {
     const documentId = String(args.documentId ?? '');
     const depth = Math.min(Math.max(Math.floor(Number(args.depth)) || 1, 1), 2);
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
+    const scope = await this.scopeOf(ctx);
+    const doc = await this.requireVisibleDocument(documentId, ctx, scope);
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
 
-    const graph = await this.documents.getDocumentGraph(documentId, depth, await this.scopeOf(ctx));
+    const graph = await this.documents.getDocumentGraph(documentId, depth, scope);
     // A page reached through the graph is evidence of the kind the edge is:
     // an `inferred` edge is a model's guess, `frontmatter` the author's word.
     // The weakest edge that led to a node is what the citation inherits.
@@ -545,7 +551,7 @@ export class AssistantReadToolsService {
     ctx: AssistantToolContext,
   ): Promise<AssistantToolResult> {
     const documentId = String(args.documentId ?? '');
-    const doc = await this.requireWorkspaceDocument(documentId, ctx);
+    const doc = await this.requireVisibleDocument(documentId, ctx, await this.scopeOf(ctx));
     if (!doc) return this.fail(`Document ${documentId} not found in this workspace`);
 
     const { relations } = await this.documents.listRelations(documentId);
@@ -590,14 +596,20 @@ export class AssistantReadToolsService {
     return { cite };
   }
 
-  /** Model-supplied ids are only honoured when the document lives in the pinned workspace. */
-  private async requireWorkspaceDocument(documentId: string, ctx: AssistantToolContext) {
+  /**
+   * Model-supplied ids are only honoured when the document lives in the pinned
+   * workspace and `scope` may open it (#76). A page the caller cannot see is
+   * the same "not found" as one that does not exist: the model learns nothing
+   * about it, not even that it is there.
+   */
+  private async requireVisibleDocument(documentId: string, ctx: AssistantToolContext, scope: AccessScope) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(documentId)) return null;
     const doc = await this.prisma.document.findUnique({
       where: { id: documentId },
       select: { id: true, workspaceId: true, title: true },
     });
     if (!doc || doc.workspaceId !== ctx.workspaceId) return null;
+    if (!(await this.permissions.visibleDocumentIds(scope, [documentId])).has(documentId)) return null;
     return doc;
   }
 

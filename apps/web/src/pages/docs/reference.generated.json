@@ -3945,6 +3945,16 @@
       ]
     },
     {
+      "name": "knowledge_get_page_access",
+      "description": "The restrictions on a page as they apply to you: whether it is restricted itself, the restricted pages and project above it, and your effective level (view | edit | manage). Grants are listed only when you may manage the page. Use it when a write is refused, or before telling someone a page is visible to a team.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": false
+        }
+      ]
+    },
+    {
       "name": "knowledge_get_template",
       "description": "One template: its markdown source, category, default tags and relations, and the placeholders (name, kind, required) to pass as values to knowledge_create_document.",
       "inputs": [

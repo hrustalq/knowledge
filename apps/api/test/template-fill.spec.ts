@@ -154,6 +154,7 @@ describe('create_document tool with a template', () => {
     Object.assign(svc, {
       documents: { createDocument },
       prisma: { project: { findFirst: vi.fn(async () => ({ id: 'proj-1' })) } },
+      permissions: { scopeFor: vi.fn(async () => ({})), requireCreateUnder: vi.fn(async () => undefined) },
     });
     return svc as unknown as {
       createDocument(args: Record<string, unknown>, c: typeof ctx): Promise<{ ok: boolean; content: string }>;

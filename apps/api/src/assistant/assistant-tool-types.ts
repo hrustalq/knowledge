@@ -1,6 +1,7 @@
 import { ASSISTANT_CODE_TOOL_NAMES, ASSISTANT_TASK_READ_TOOL_NAMES, ASSISTANT_TASK_TOOL_NAMES } from '@knowledge/contracts';
 import type { AssistantPrompt, AssistantSource, AssistantUiBlock } from '@knowledge/contracts';
 import type { Principal } from '../auth/principal.js';
+import type { Audience } from '../permissions/access-scope.js';
 
 /**
  * The shared vocabulary of a tool run, in a leaf module on purpose.
@@ -40,10 +41,18 @@ export interface AssistantToolContext {
   /**
    * Narrows retrieval to one project — a chat channel bound to a project
    * (issue #71). Pinned like `workspaceId`, never read from tool arguments.
-   * Organizational, not an ACL: `read_document` still reaches any page in the
-   * workspace by id, as the caller could.
+   * Organizational, not an ACL: `read_document` still reaches any page the
+   * caller can open by id.
    */
   projectId?: string;
+  /**
+   * Who reads what this run writes, when that is not only the caller (#76): a
+   * background agent's findings, a bot answer in a group. Every read tool then
+   * sees the caller's pages clamped to that audience
+   * (`PermissionService.audienceScope`). Absent for a person's own turn, which
+   * sees exactly what they can open. Pinned by the harness, never from args.
+   */
+  audience?: Audience;
 }
 
 export interface AssistantToolResult {

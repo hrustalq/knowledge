@@ -124,6 +124,7 @@ export type I18nTranslations = {
         };
         "report": {
             "noContent": string;
+            "restricted": string;
             "noModel": string;
             "reportedTitle": string;
             "summaryNoModel": string;

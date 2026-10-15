@@ -47,7 +47,7 @@ function keyPrincipal(apiKey: NonNullable<Principal['apiKey']>, extra: Partial<P
   };
 }
 
-function accessWith(role: 'viewer' | 'editor' | 'admin' | null) {
+function accessWith(role: 'guest' | 'viewer' | 'editor' | 'admin' | null) {
   const prisma = {
     workspaceMember: {
       findUnique: vi.fn(async () => (role ? { role, trustedOperator: false } : null)),
@@ -118,6 +118,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         denied: new Set(),
         granted: new Set(),
       })),
+      requireCreateUnder: vi.fn(async () => undefined),
     },
     history: {},
     ingestionAdmin: {},
@@ -183,6 +184,17 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
         completedAt: null,
       })),
     },
+    resourceAccess: {
+      get: vi.fn(async (_p: Principal, r: { type: string; id: string }) => ({
+        resourceType: r.type,
+        resourceId: r.id,
+        restricted: true,
+        inherited: [],
+        level: 'view',
+        canManage: false,
+        grants: [],
+      })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -196,6 +208,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     shareLinks: deps.shareLinks,
     exports: deps.exports,
     repoWiki: deps.repoWiki,
+    resourceAccess: deps.resourceAccess,
   };
 }
 
@@ -268,6 +281,39 @@ describe('McpService over a principal', () => {
     const allowed = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
     expect(allowed.isError).toBeFalsy();
     expect(search.search).toHaveBeenCalledOnce();
+  });
+
+  it('lets a guest search and browse the tree, scoped, but not reach workspace tools (#76)', async () => {
+    const { mcp, search, documents } = service(accessWith('guest'));
+    const client = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const found = await client.callTool({ name: 'knowledge_search', arguments: { workspaceId: WS_A, query: 'x' } });
+    expect(found.isError).toBeFalsy();
+    expect(search.search).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ workspaceId: WS_A }));
+    const tree = await client.callTool({ name: 'knowledge_list_documents', arguments: { workspaceId: WS_A } });
+    expect(tree.isError).toBeFalsy();
+    expect(documents.getTree).toHaveBeenCalledOnce();
+
+    const refused = await client.callTool({ name: 'knowledge_list_templates', arguments: { workspaceId: WS_A } });
+    expect(refused.isError).toBe(true);
+  });
+
+  it('knowledge_get_page_access is a read that checks the page before describing it (#76)', async () => {
+    const doc = '44444444-4444-4444-8444-444444444444';
+    const svc = service(accessWith('viewer'));
+    (svc.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_B);
+    const p = keyPrincipal({ id: 'k', scope: 'read', workspaceId: WS_A });
+    const client = await connect(svc.mcp, p);
+    const { tools } = await client.listTools();
+    expect(tools.find((t) => t.name === 'knowledge_get_page_access')?.annotations?.readOnlyHint).toBe(true);
+
+    const refused = await client.callTool({ name: 'knowledge_get_page_access', arguments: { documentId: doc } });
+    expect(refused.isError).toBe(true);
+    expect(svc.resourceAccess.get).not.toHaveBeenCalled();
+
+    (svc.mcp as unknown as { access: AccessService }).access.workspaceOfDocument = vi.fn(async () => WS_A);
+    const res = await client.callTool({ name: 'knowledge_get_page_access', arguments: { documentId: doc } });
+    expect(res.isError).toBeFalsy();
+    expect(svc.resourceAccess.get).toHaveBeenCalledWith(p, { type: 'document', id: doc });
   });
 
   it('decorates search hits with provenance in one batch and names the trace (docs/features/38)', async () => {

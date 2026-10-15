@@ -16,10 +16,12 @@ import { AuditService } from '../auth/audit.service.js';
 import { ROLE_ORDER, type Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
 import {
+  clampToAudience,
   hidesAnything,
   levelOn,
   visibilityWhere,
   type AccessScope,
+  type Audience,
   type ChainNode,
   type GrantRow,
 } from './access-scope.js';
@@ -179,6 +181,31 @@ export class PermissionService {
     return level;
   }
 
+  /**
+   * Whether `scope`'s holder may place a new page here: edit on the parent, or
+   * on the project for a root page. A page created under a node inherits its
+   * restrictions, so this is the same question as editing the node — and it
+   * keeps a hidden parent id from being probed by creating under it.
+   */
+  async requireCreateUnder(scope: AccessScope, at: { projectId: string; parentId?: string }): Promise<void> {
+    await this.requireLevel(
+      scope,
+      at.parentId ? { type: 'document', id: at.parentId } : { type: 'project', id: at.projectId },
+      'edit',
+    );
+  }
+
+  /**
+   * An admin's read of a page outside the guard — an assistant tool, say —
+   * audited the way `requireResource` audits one through a route. A no-op for
+   * anyone who is not bypassing, and for a page nothing restricts from them.
+   */
+  async auditBypassRead(principal: Principal, scope: AccessScope, resource: AccessResource): Promise<void> {
+    if (!scope.bypass || principal.mode === 'dev' || scope.denied.size === 0) return;
+    const { chain } = await this.resolveChain(resource);
+    this.auditBypass(principal, scope, resource, chain);
+  }
+
   /** The subset of `ids` the scope may open — the one call behind every "drop what they cannot see". */
   async visibleDocumentIds(scope: AccessScope, ids: string[]): Promise<Set<string>> {
     const unique = [...new Set(ids)];
@@ -188,6 +215,31 @@ export class PermissionService {
       select: { id: true },
     });
     return new Set(rows.map((r) => r.id));
+  }
+
+  /**
+   * `scope` clamped to who will read the output (#76, `clampToAudience`): a
+   * page survives only when its `restricted_by` is a subset of the
+   * destination's. A destination that is gone, or in another workspace, clamps
+   * to the workspace audience — the narrowest, never the widest.
+   *
+   * Read from PG on every call, like `scopeFor`: a tool loop asks per call, so
+   * a restriction placed mid-run holds from the next one.
+   */
+  async audienceScope(scope: AccessScope, audience: Audience): Promise<AccessScope> {
+    const [docs, projects, destination] = await Promise.all([
+      this.prisma.document.findMany({ where: { workspaceId: scope.workspaceId, restricted: true }, select: { id: true } }),
+      this.prisma.project.findMany({ where: { workspaceId: scope.workspaceId, restricted: true }, select: { id: true } }),
+      audience.kind === 'document'
+        ? this.prisma.document.findUnique({
+            where: { id: audience.documentId },
+            select: { workspaceId: true, restrictedBy: true },
+          })
+        : null,
+    ]);
+    const audienceNodes =
+      destination && destination.workspaceId === scope.workspaceId ? new Set(destination.restrictedBy) : new Set<string>();
+    return clampToAudience(scope, [...projects, ...docs].map((n) => n.id), audienceNodes);
   }
 
   /**

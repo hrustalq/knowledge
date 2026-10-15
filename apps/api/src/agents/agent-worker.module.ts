@@ -4,6 +4,7 @@ import { GraphModule } from '../graph/graph.module.js';
 import { EventsModule } from '../events/events.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
 import { AuthCoreModule } from '../auth/auth-core.module.js';
+import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AssistantReadToolsModule } from '../assistant/assistant-read-tools.module.js';
 import { WebResearchModule } from '../assistant/web-research.module.js';
@@ -68,6 +69,8 @@ import { AgentScheduleSweeper } from './agent-schedule.sweeper.js';
     // The sentinel (docs/features/35) searches once per run for the pages a
     // change reads like — the hand-written ones no connector link reaches.
     SearchCoreModule,
+    // The owner's page visibility and the audience clamp (#76).
+    PermissionsCoreModule,
     // The surveyor (docs/features/38, phase 4) embeds the questions answers
     // failed on, to cluster them — the same provider the ingestion worker
     // indexes with, so a question and the chunk that would answer it share a

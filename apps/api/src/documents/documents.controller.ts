@@ -78,7 +78,13 @@ export class DocumentsController {
   @Post()
   @Access('editor', 'body')
   @ApiOperation({ summary: 'Create document (optionally inline content, auto-finalizes)' })
-  create(@Body() dto: CreateDocumentDto, @CurrentPrincipal() principal: Principal) {
+  async create(@Body() dto: CreateDocumentDto, @CurrentPrincipal() principal: Principal) {
+    // A page under a restricted node inherits it, so placing one there is
+    // editing that node (#76) — and a hidden parent id cannot be probed by it.
+    await this.permissions.requireCreateUnder(await this.permissions.scopeFor(principal, dto.workspaceId), {
+      projectId: dto.projectId,
+      ...(dto.parentId ? { parentId: dto.parentId } : {}),
+    });
     return this.documents.createDocument(dto, principal?.userId);
   }
 

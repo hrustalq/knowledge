@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TRUST_WEIGHTS } from '@knowledge/contracts';
 import { SearchService } from '../src/search/search.service.js';
+import { systemScope } from '../src/permissions/access-scope.js';
 
 /**
  * The trust re-rank (docs/features/39): archived pages drop, a page's state
@@ -52,6 +53,9 @@ function hit(documentId: string, score: number) {
   return { documentId, revisionId: 'head', chunkId: `c-${documentId}`, text: `text of ${documentId}`, headingPath: [], score };
 }
 
+/** An admin's scope: sees everything, so these cases measure ranking alone. */
+const ADMIN = systemScope(WS);
+
 function build(docs: Row[], hits: ReturnType<typeof hit>[], trustRanking = true) {
   const prisma = {
     document: {
@@ -71,7 +75,18 @@ function build(docs: Row[], hits: ReturnType<typeof hit>[], trustRanking = true)
   const policy = {
     effective: vi.fn(async () => ({ reviewIntervalDays: 90, remindBeforeDays: 7, inactiveAfterDays: 180, emptyMaxChars: 40, trustRanking })),
   };
-  const svc = new SearchService(prisma as never, graph as never, embeddings as never, fulltext as never, provenance as never, policy as never);
+  const permissions = { documentFilterFor: vi.fn(async () => ({ kind: 'all' as const })) };
+  const config = { get: vi.fn((key: string) => ({ SEARCH_ACL_OVERFETCH: 5, SEARCH_ACL_MAX_FETCH: 500 })[key]) };
+  const svc = new SearchService(
+    prisma as never,
+    graph as never,
+    embeddings as never,
+    fulltext as never,
+    provenance as never,
+    policy as never,
+    permissions as never,
+    config as never,
+  );
   return { svc, graph, prisma };
 }
 
@@ -88,7 +103,7 @@ describe('SearchService trust re-rank', () => {
       [verified, plain, expired, outdated],
       [hit('outdated', 0.5), hit('expired', 0.5), hit('plain', 0.5), hit('verified', 0.5)],
     );
-    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic' });
+    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic' }, ADMIN);
     expect(res.results.map((r) => r.documentId)).toEqual(['verified', 'plain', 'expired', 'outdated']);
     expect(res.results.map((r) => r.trust?.status)).toEqual(['verified', 'unverified', 'expired', 'outdated']);
     expect(res.results[0]!.score).toBeCloseTo(0.5 * TRUST_WEIGHTS.verified, 4);
@@ -101,10 +116,10 @@ describe('SearchService trust re-rank', () => {
       [verified, archived, inactive, outdated],
       [hit('archived', 0.9), hit('outdated', 0.8), hit('inactive', 0.7), hit('verified', 0.5)],
     );
-    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic', limit: 2 });
+    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic', limit: 2 }, ADMIN);
     // At least 2k candidates were asked for so the demoted hits could be displaced:
     // the archived top hit drops, the outdated one sinks under the verified one.
-    expect(graph.searchChunks).toHaveBeenCalledWith(WS, expect.any(Array), 4);
+    expect(graph.searchChunks).toHaveBeenCalledWith(WS, expect.any(Array), 4, { kind: 'all' });
     expect(res.results.map((r) => r.documentId)).toEqual(['inactive', 'verified']);
     expect(res.results[0]!.trust).toMatchObject({ status: 'unverified', inactive: true });
     expect(res.results[0]!.score).toBeCloseTo(0.7 * TRUST_WEIGHTS.inactive, 4);
@@ -112,7 +127,7 @@ describe('SearchService trust re-rank', () => {
 
   it('includeArchived keeps archived pages and verificationStates narrows the hit set', async () => {
     const { svc } = build([verified, plain, archived], [hit('archived', 0.9), hit('plain', 0.6), hit('verified', 0.5)]);
-    const withArchived = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic', filters: { includeArchived: true } });
+    const withArchived = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic', filters: { includeArchived: true } }, ADMIN);
     expect(withArchived.results.map((r) => r.documentId)).toContain('archived');
 
     const onlyVerified = await svc.search({
@@ -120,7 +135,7 @@ describe('SearchService trust re-rank', () => {
       query: 'q',
       mode: 'semantic',
       filters: { verificationStates: ['verified'] },
-    });
+    }, ADMIN);
     expect(onlyVerified.results.map((r) => r.documentId)).toEqual(['verified']);
   });
 
@@ -130,8 +145,8 @@ describe('SearchService trust re-rank', () => {
       [hit('outdated', 0.8), hit('expired', 0.7), hit('plain', 0.6), hit('verified', 0.5)],
       false,
     );
-    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic', limit: 3 });
-    expect(graph.searchChunks).toHaveBeenCalledWith(WS, expect.any(Array), 3);
+    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic', limit: 3 }, ADMIN);
+    expect(graph.searchChunks).toHaveBeenCalledWith(WS, expect.any(Array), 3, { kind: 'all' });
     expect(res.results.map((r) => r.documentId)).toEqual(['outdated', 'expired', 'plain']);
     expect(res.results.map((r) => r.score)).toEqual([0.8, 0.7, 0.6]);
     // The status still travels with the hit; only the weight is off.
@@ -140,7 +155,7 @@ describe('SearchService trust re-rank', () => {
 
   it('still drops archived pages with the switch off: archive is not a demotion', async () => {
     const { svc } = build([plain, archived], [hit('archived', 0.9), hit('plain', 0.6)], false);
-    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic' });
+    const res = await svc.search({ workspaceId: WS, query: 'q', mode: 'semantic' }, ADMIN);
     expect(res.results.map((r) => r.documentId)).toEqual(['plain']);
   });
 });

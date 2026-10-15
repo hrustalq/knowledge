@@ -263,22 +263,28 @@ export class AssistantReadToolsService {
     if (!query) return this.fail('query is required');
     const limit = Math.min(Math.max(Math.floor(Number(args.limit)) || 5, 1), 10);
 
-    const res = await this.search.search({
-      workspaceId: ctx.workspaceId, // pinned — never from args
-      query,
-      mode: 'hybrid',
-      limit,
-      // A project-scoped turn (issue #71) gets no graph expansion: related
-      // pages are walked across the whole workspace, and offering them would
-      // steer the model straight back out of the project it was bound to.
-      ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : { expandGraph: { depth: 1 } }),
-    });
+    // Asked on this call, not once per turn: a grant revoked mid-turn holds
+    // from the next search (#76).
+    const scope = await this.scopeOf(ctx);
+    const res = await this.search.search(
+      {
+        workspaceId: ctx.workspaceId, // pinned — never from args
+        query,
+        mode: 'hybrid',
+        limit,
+        // A project-scoped turn (issue #71) gets no graph expansion: related
+        // pages are walked across the whole workspace, and offering them would
+        // steer the model straight back out of the project it was bound to.
+        ...(ctx.projectId ? { filters: { projectIds: [ctx.projectId] } } : { expandGraph: { depth: 1 } }),
+      },
+      scope,
+    );
     // Where each hit lives, not just what it is called. Two pages both called
     // "Overview" in different sections were indistinguishable to the model,
     // which is how it ended up citing the wrong one and nesting new pages
     // beside it.
     const trails = await this.documents.breadcrumbsFor(
-      await this.scopeOf(ctx),
+      scope,
       res.results.map((r) => r.documentId),
     );
     // One source per page, carrying the best chunk: the label is per page

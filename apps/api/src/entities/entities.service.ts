@@ -29,21 +29,10 @@ export class EntitiesService {
    * The workspace graph as the caller may see it (#76): edges from pages they
    * cannot open go, those pages go, and so does every entity only those pages
    * mention — otherwise a restricted page leaks the names it introduces.
+   * GraphService does the pruning; this only supplies the caller's filter.
    */
   private async graphFor(scope: AccessScope): Promise<WorkspaceRelationGraph> {
-    const g = await this.graph.getWorkspaceRelationGraph(scope.workspaceId);
-    if (scope.bypass) return g;
-    const visible = await this.permissions.visibleDocumentIds(scope, [
-      ...Object.keys(g.documents),
-      ...g.edges.map((e) => e.documentId),
-    ]);
-    const edges = g.edges.filter((e) => visible.has(e.documentId));
-    const mentioned = new Set(edges.map((e) => e.targetKey));
-    return {
-      edges,
-      documents: Object.fromEntries(Object.entries(g.documents).filter(([id]) => visible.has(id))),
-      entities: Object.fromEntries(Object.entries(g.entities).filter(([key]) => mentioned.has(key))),
-    };
+    return this.graph.getWorkspaceRelationGraph(scope.workspaceId, await this.permissions.documentFilterFor(scope));
   }
 
   /**

@@ -67,6 +67,44 @@ not UI structure, so project and category membership are not modelled as edges â
 which means filtering cannot happen during the graph query and must happen after
 it, with enough candidates over-fetched that a filtered page is still full.
 
+## Page restrictions
+
+`SearchService.search(dto, scope)` takes a required `AccessScope` (#76), and so
+does every caller: the HTTP and MCP routes pass the person's, a system job passes
+`systemScope(workspaceId)`, which is greppable on purpose.
+
+- **The stores get a list.** `PermissionService.documentFilterFor(scope)` reads
+  PG once per search and returns a `DocumentAclFilter` (`common/document-acl.ts`):
+  `all`, `deny` (a member's hidden pages) or `allow` (a guest's reachable pages).
+  `GraphService.searchChunks`, `getDocumentIdsByTags` and
+  `getWorkspaceRelationGraph` and the fulltext provider's `search` all require
+  one. Up to `ACL_DENY_LIST_MAX` ids it goes into the query (`documentId IN` /
+  `NOT IN` in ArcadeDB, a `terms` filter in OpenSearch); past that the store
+  filters what it scanned in memory, and search over-fetches by
+  `SEARCH_ACL_OVERFETCH`.
+- **PG decides.** The join that loads titles and trust applies
+  `visibilityWhere(scope)` itself, and a hit whose page it does not return is
+  dropped. Graph expansion's related pages pass the same check. A store that
+  lagged or ignored the filter can lose recall, never show a page.
+- **The limit holds.** If that post-filter dropped hits, left fewer than `limit`
+  and a leg came back full, one refill round runs with the fetch doubled, capped
+  at `SEARCH_ACL_MAX_FETCH`. `search.executed` records `aclFiltered`.
+- **Entities follow their pages.** `getWorkspaceRelationGraph` drops a hidden
+  page's edges and then every entity no remaining edge names, so a restricted
+  page cannot leak a name it introduced through expansion, the graph view or
+  entity lists. With `all` it returns exactly what it did before.
+- **Stamps are a prefilter.** Indexing stamps `aclNodes` (the page's
+  `restricted_by`) and `aclRestricted` on the Document vertex, every chunk and
+  every OpenSearch row. `AclRestampSweeper` (worker, `ACL_RESTAMP_TICK_MS`)
+  rewrites them for pages whose `acl_version` is ahead of
+  `acl_stamped_version`, guarded on the version it stamped; nothing is
+  re-embedded. OpenSearch falls back to `must_not aclNodes âˆˆ denied` past the
+  list cap; nothing else reads the stamps yet. They are groundwork for an HNSW
+  pre-filter.
+- `getDocumentRelations` takes no filter: it is per page, reached through a
+  route the guard has already checked, and its edges point at entities, not
+  pages.
+
 ## Trust re-rank
 
 Since [feature 39](../features/39-page-verification.md) the PostgreSQL join also

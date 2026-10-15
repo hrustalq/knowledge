@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
   accessRank,
@@ -7,12 +8,15 @@ import {
   type EffectiveAccessLevel,
   type WorkspaceRole,
 } from '@knowledge/contracts';
+import type { Env } from '../config/env.js';
+import type { DocumentAclFilter } from '../common/document-acl.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { AuditService } from '../auth/audit.service.js';
 import { ROLE_ORDER, type Principal } from '../auth/principal.js';
 import { t } from '../i18n/t.js';
 import {
+  hidesAnything,
   levelOn,
   visibilityWhere,
   type AccessScope,
@@ -54,6 +58,7 @@ export class PermissionService {
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
     private readonly audit: AuditService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   /**
@@ -183,6 +188,34 @@ export class PermissionService {
       select: { id: true },
     });
     return new Set(rows.map((r) => r.id));
+  }
+
+  /**
+   * The scope as a store filter for ArcadeDB and OpenSearch (#76): the pages a
+   * member may not open, or the pages a guest may. Read from PG on every call,
+   * so a grant changed a second ago already holds in the stores' predicates —
+   * the `aclNodes` stamps the re-stamp sweeper writes are only a prefilter.
+   *
+   * A failure here fails the read: there is no fallback to "unfiltered".
+   */
+  async documentFilterFor(scope: AccessScope): Promise<DocumentAclFilter> {
+    if (!hidesAnything(scope)) return { kind: 'all' };
+    const max = this.config.get('ACL_DENY_LIST_MAX', { infer: true });
+    if (scope.guest) {
+      const rows = await this.prisma.document.findMany({
+        where: { workspaceId: scope.workspaceId, AND: [visibilityWhere(scope)] },
+        select: { id: true },
+      });
+      return { kind: 'allow', documentIds: new Set(rows.map((r) => r.id)), pushdown: rows.length <= max };
+    }
+    const nodeIds = [...scope.denied];
+    const rows = await this.prisma.document.findMany({
+      where: { workspaceId: scope.workspaceId, restrictedBy: { hasSome: nodeIds } },
+      select: { id: true },
+    });
+    // Restricted nodes with nothing under them hide nothing.
+    if (rows.length === 0) return { kind: 'all' };
+    return { kind: 'deny', documentIds: new Set(rows.map((r) => r.id)), nodeIds, pushdown: rows.length <= max };
   }
 
   /**

@@ -477,7 +477,7 @@ export class DocumentsService {
     if (tags.length) {
       // Accept the bare name or the entity key, like the search filters do.
       const keys = [...new Set(tags.map(tagFilterKey))];
-      const set = await this.graph.getDocumentIdsByTags(workspaceId, keys);
+      const set = await this.graph.getDocumentIdsByTags(workspaceId, keys, await this.permissions.documentFilterFor(scope));
       taggedIds = [...set];
       // No document carries the tag: answer an empty page rather than dropping
       // the filter and showing everything, which is the wrong kind of helpful.
@@ -1413,7 +1413,9 @@ export class DocumentsService {
     });
     const statusById = new Map(heads.map((r) => [r.id, r.status as RevisionStatus]));
 
-    const g = await this.graph.getWorkspaceRelationGraph(workspaceId);
+    // `inScope` is the authority (it is PG under the same predicate); the
+    // graph filter only keeps hidden pages' edges off the wire (#76).
+    const g = await this.graph.getWorkspaceRelationGraph(workspaceId, await this.permissions.documentFilterFor(scope));
 
     // The renderer draws every edge each frame; past this the canvas stops
     // being readable long before it stops being fast, so the cap is a
@@ -1468,12 +1470,11 @@ export class DocumentsService {
     const document = await this.getDocumentOrThrow(documentId);
     const d = Math.min(Math.max(Math.floor(depth) || 1, 1), 3);
 
-    const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId);
     // Walk only what the caller may open: an edge from a page they cannot see
     // would otherwise both reveal the page and carry the walk on through it
-    // to entities only it mentions (#76).
-    const visible = await this.permissions.visibleDocumentIds(scope, [...new Set(g.edges.map((e) => e.documentId))]);
-    const adj = buildAdjacency(g.edges.filter((e) => visible.has(e.documentId)));
+    // to entities only it mentions. GraphService drops both (#76).
+    const g = await this.graph.getWorkspaceRelationGraph(document.workspaceId, await this.permissions.documentFilterFor(scope));
+    const adj = buildAdjacency(g.edges);
     const hits = bfs(adj, docNode(documentId), d * 2);
 
     const docIds = new Set<string>([documentId]);

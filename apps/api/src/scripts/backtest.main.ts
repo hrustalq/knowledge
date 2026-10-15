@@ -8,6 +8,7 @@ import { AppModule } from '../app.module.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SearchService } from '../search/search.service.js';
 import type { SearchDto } from '../search/search.dto.js';
+import { systemScope } from '../permissions/access-scope.js';
 import { EXPORT_MAX_ROWS, FeedbackDatasetService } from '../feedback/feedback-dataset.service.js';
 
 /**
@@ -90,7 +91,7 @@ async function generate(): Promise<void> {
 
   for (const doc of docs) {
     const dto = { workspaceId, query: doc.title, limit: k } as SearchDto;
-    const { results } = await search.search(dto);
+    const { results } = await search.search(dto, systemScope(dto.workspaceId));
     const rank = results.findIndex((r) => r.documentId === doc.id);
     if (rank === 0) hitAt1 += 1;
     if (rank >= 0) {
@@ -286,7 +287,7 @@ async function replayFeedback(): Promise<void> {
   const byReason = new Map<string, FeedbackCaseScore[]>();
   for (const c of cases) {
     const dto = { workspaceId: c.workspaceId, query: c.query, limit: k } as SearchDto;
-    const { results } = await search.search(dto);
+    const { results } = await search.search(dto, systemScope(dto.workspaceId));
     const score = scoreFeedbackCase(c, results.map((r) => r.documentId), k);
     all.push(score);
     bySurface.set(c.surface, [...(bySurface.get(c.surface) ?? []), score]);

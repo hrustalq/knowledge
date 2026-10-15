@@ -67,8 +67,8 @@ export class AssistantController {
   @Post('related')
   @Access('viewer', 'body')
   @ApiOperation({ summary: 'Relevant documents for a draft — hybrid search, no LLM required' })
-  related(@Body() dto: AssistantRelatedDto) {
-    return this.assistant.related(dto);
+  related(@Body() dto: AssistantRelatedDto, @CurrentPrincipal() principal: Principal) {
+    return this.assistant.related(dto, principal);
   }
 
   // -------------------------------------------------------------------------

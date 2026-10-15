@@ -135,6 +135,20 @@ export const envSchema = z.object({
   /** Phase 5 stale-doc detection & reindex scheduling (worker sweeper). */
   STALE_SWEEP_ENABLED: boolish(true),
   /**
+   * Permission-aware retrieval (#76). A caller's hidden (member) or reachable
+   * (guest) page list goes to ArcadeDB and OpenSearch as a predicate up to this
+   * length; past it the stores filter what they scanned in memory instead.
+   */
+  ACL_DENY_LIST_MAX: z.coerce.number().int().min(0).default(5000),
+  /** Candidate multiplier when a caller's restrictions could not be pushed into the stores. */
+  SEARCH_ACL_OVERFETCH: z.coerce.number().int().min(1).default(5),
+  /** Cap on candidates per leg for the one refill round after the permission post-filter. */
+  SEARCH_ACL_MAX_FETCH: z.coerce.number().int().positive().default(500),
+  /** Worker tick that copies changed page restrictions onto chunk stamps in ArcadeDB/OpenSearch. */
+  ACL_RESTAMP_TICK_MS: z.coerce.number().int().min(1000).default(30_000),
+  /** Pages re-stamped per tick. */
+  ACL_RESTAMP_BATCH: z.coerce.number().int().positive().default(200),
+  /**
    * Page verification and knowledge health (docs/features/39 + 40, issue #66).
    * Defaults, not ceilings: a `knowledge_health_settings` row overrides each
    * per workspace, and an absent row reproduces exactly these values.

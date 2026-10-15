@@ -1,5 +1,17 @@
 import { Logger } from '@nestjs/common';
+import { aclAdmits, type DocumentAclFilter } from '../common/document-acl.js';
 import type { FulltextChunk, FulltextHit, FulltextProvider } from './fulltext.provider.js';
+
+/**
+ * The ACL fields (#76). Declared on create and again on every boot with
+ * `_mapping`, which is additive, so an index created before them gains them —
+ * left to dynamic mapping, a uuid list would be analyzed as text and a
+ * `terms` filter on it would match nothing.
+ */
+const ACL_PROPERTIES = {
+  aclNodes: { type: 'keyword' },
+  aclRestricted: { type: 'boolean' },
+};
 
 interface SearchHit {
   _score: number;
@@ -37,6 +49,7 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
               index: { type: 'integer' },
               headingPath: { type: 'keyword' },
               text: { type: 'text' },
+              ...ACL_PROPERTIES,
             },
           },
         }),
@@ -47,6 +60,15 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
           this.ready = undefined; // retry on next call
           throw new Error(`OpenSearch index create failed (${res.status}): ${body.slice(0, 300)}`);
         }
+        const mapped = await fetch(`${this.baseUrl}/${this.index}/_mapping`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ properties: ACL_PROPERTIES }),
+        });
+        if (!mapped.ok) {
+          this.ready = undefined;
+          throw new Error(`OpenSearch mapping update failed (${mapped.status}): ${(await mapped.text()).slice(0, 300)}`);
+        }
       }
     })();
     return this.ready;
@@ -56,7 +78,7 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
     workspaceId: string,
     revisionId: string,
     chunks: FulltextChunk[],
-    live = true,
+    { live, aclNodes }: { live: boolean; aclNodes: string[] },
   ): Promise<void> {
     await this.ensureIndex();
     await this.deleteRevision(revisionId);
@@ -65,7 +87,7 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
       chunks
         .flatMap((c) => [
           JSON.stringify({ index: { _index: this.index, _id: c.chunkId } }),
-          JSON.stringify({ ...c, workspaceId, live }),
+          JSON.stringify({ ...c, workspaceId, live, aclNodes, aclRestricted: aclNodes.length > 0 }),
         ])
         .join('\n') + '\n';
     const res = await fetch(`${this.baseUrl}/_bulk?refresh=true`, {
@@ -127,8 +149,49 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
     }
   }
 
-  async search(workspaceId: string, query: string, k: number): Promise<FulltextHit[]> {
+  async restamp(workspaceId: string, documentId: string, aclNodes: string[]): Promise<void> {
     await this.ensureIndex();
+    const res = await fetch(`${this.baseUrl}/${this.index}/_update_by_query?refresh=true&conflicts=proceed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: { bool: { filter: [{ term: { workspaceId } }, { term: { documentId } }] } },
+        script: {
+          source: 'ctx._source.aclNodes = params.aclNodes; ctx._source.aclRestricted = params.aclRestricted',
+          lang: 'painless',
+          params: { aclNodes, aclRestricted: aclNodes.length > 0 },
+        },
+      }),
+    });
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`OpenSearch restamp failed (${res.status}) for document ${documentId}`);
+    }
+  }
+
+  /**
+   * `acl` (#76) goes in as an exact page-id predicate while the list is short
+   * enough. Past `ACL_DENY_LIST_MAX`, a member's filter falls back to the
+   * `aclNodes` stamps (a page under any node they are denied), which lag a
+   * restriction change by up to one re-stamp tick; a guest's is not pushed at
+   * all. Either way the hits are filtered again below and in PG afterwards,
+   * so a lagging stamp can only cost recall, never leak a page.
+   */
+  async search(workspaceId: string, query: string, k: number, acl: DocumentAclFilter): Promise<FulltextHit[]> {
+    await this.ensureIndex();
+    const filter: unknown[] = [{ term: { workspaceId } }];
+    // #83: only the live projection. must_not rather than a term on true, so
+    // documents indexed before the field existed still match.
+    const mustNot: unknown[] = [{ term: { live: false } }];
+    if (acl.kind !== 'all') {
+      const ids = acl.documentIds.size ? [...acl.documentIds] : [''];
+      if (acl.kind === 'allow') {
+        if (acl.pushdown) filter.push({ terms: { documentId: ids } });
+      } else if (acl.pushdown) {
+        mustNot.push({ terms: { documentId: ids } });
+      } else {
+        mustNot.push({ terms: { aclNodes: acl.nodeIds } });
+      }
+    }
     const res = await fetch(`${this.baseUrl}/${this.index}/_search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -138,17 +201,15 @@ export class OpenSearchFulltextProvider implements FulltextProvider {
           bool: {
             must: [{ match: { text: { query } } }],
             // Mandatory server-side workspace predicate (plan.md §6).
-            filter: [{ term: { workspaceId } }],
-            // #83: only the live projection. must_not rather than a term on
-            // true, so documents indexed before the field existed still match.
-            must_not: [{ term: { live: false } }],
+            filter,
+            must_not: mustNot,
           },
         },
       }),
     });
     if (!res.ok) throw new Error(`OpenSearch search failed (${res.status})`);
     const body = (await res.json()) as { hits?: { hits?: SearchHit[] } };
-    return (body.hits?.hits ?? []).map((h) => ({
+    return (body.hits?.hits ?? []).filter((h) => aclAdmits(acl, h._source.documentId)).map((h) => ({
       chunkId: h._source.chunkId,
       documentId: h._source.documentId,
       revisionId: h._source.revisionId,

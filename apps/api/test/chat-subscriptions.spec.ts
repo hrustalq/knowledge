@@ -300,7 +300,7 @@ describe('ChatSubscriptionsService.deliver', () => {
     // The stored rule holds folded tags; pass them as the service stores them.
     h.stored.tags = foldTags(['Billing']);
     await h.svc.deliver(h.snapshot() as never, NOW);
-    expect(h.graph.getDocumentIdsByTags).toHaveBeenCalledWith(WS, ['tag:billing']);
+    expect(h.graph.getDocumentIdsByTags).toHaveBeenCalledWith(WS, ['tag:billing'], { kind: 'all' });
     expect(h.reads[0].workspaceId).toBe(WS);
     const view = h.sent[0];
     expect(view.kind === 'updates' && view.items.map((i) => i.title)).toEqual(['Billing runbook']);

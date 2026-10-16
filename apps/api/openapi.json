@@ -24985,6 +24985,128 @@
           "mcp"
         ]
       }
+    },
+    "/v1/mcp/capture-kit": {
+      "get": {
+        "operationId": "McpController_captureKit",
+        "parameters": [
+          {
+            "name": "client",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "claude-code",
+                "cursor"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Capture kit for a coding agent: the skill/rule, the hook script and its entries, generated for the caller. 403 for a key offered no capture tools",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
+    "/v1/mcp/capture-kit/install": {
+      "get": {
+        "operationId": "McpController_captureKitInstaller",
+        "parameters": [
+          {
+            "name": "client",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "claude-code",
+                "cursor"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The capture kit as a POSIX shell script that installs it into the git repository it runs in",
+        "tags": [
+          "mcp"
+        ]
+      }
     }
   },
   "info": {

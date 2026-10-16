@@ -80,6 +80,18 @@ in the pull request that introduces them — see
   amend thresholds, and the parent page for new captured pages. The Connect AI
   key form can pin a Read & propose key to projects, and the key list shows the
   pin. Glossary terms approved from captures are badged and filterable. (#73)
+- A **capture kit** for Claude Code and Cursor: a skill (or rule) that says
+  what is worth capturing, and a hook that, once per session and only after
+  the agent edited a file, reminds it to propose what it learned. The hook
+  holds no key and calls nothing. Step 4 of the Connect AI page installs it
+  with one command run inside the repository; an existing
+  `.claude/settings.json` or `.cursor/hooks.json` is merged into with `jq`
+  (re-running updates, never duplicates) or left alone with the entries
+  printed. Over HTTP: `GET /v1/mcp/capture-kit?client=claude-code|cursor`
+  returns the files, `/v1/mcp/capture-kit/install` the installer script; a
+  read-only key gets 403. The generated `SKILL.md` gains a "Capture memory"
+  section when the key is offered the capture tools, and `knowledge_whoami`
+  reports a capture key's project pin. (#73)
 
 ### Changed
 

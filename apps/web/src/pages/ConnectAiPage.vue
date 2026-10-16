@@ -6,10 +6,11 @@
  * row until then, and `/settings/connect` still redirects here. Its `<h1>` is
  * the section's, as every other section's is.
  *
- * Three numbered steps, because that is the order the work has to happen in
- * and each one needs something from the one before: a key, then a client
+ * Numbered steps, because that is the order the work has to happen in and
+ * each one needs something from the one before: a key, then a client
  * configured with that key, then the skill that tells the client's model how
- * to use what it can now reach. Numbered cards rather than one long form so a
+ * to use what it can now reach, then (issue #73) the capture kit that has it
+ * offer back what a session learned. Numbered cards rather than one long form so a
  * person coming back to add a second client can skip straight to step 2.
  *
  * The key minted on this page is the only moment the plaintext exists outside
@@ -23,22 +24,32 @@
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { Download, ExternalLink, FileText, KeyRound, Plus, TriangleAlert } from 'lucide-vue-next'
+import { ChevronRight, Download, ExternalLink, FileCode, FileText, KeyRound, Plus, Settings2, TriangleAlert } from 'lucide-vue-next'
 import type {
   ApiKeyInfo,
   ApiKeyScope,
+  CaptureKitClient,
+  CaptureKitFile,
+  CaptureKitResponse,
   CreateApiKeyResponse,
   ListApiKeysResponse,
   ListProjectsResponse,
   McpConnectionInfo,
   ProjectSummary,
 } from '@knowledge/contracts'
-import { API_KEY_SCOPES } from '@knowledge/contracts'
-import { apiFetch, apiFetchText, getProjectId, getWorkspaceId } from '@/lib/api'
+import { API_KEY_SCOPES, CAPTURE_KIT_CLIENTS } from '@knowledge/contracts'
+import { ApiError, apiFetch, apiFetchText, getProjectId, getWorkspaceId } from '@/lib/api'
 import { formatDate, formatRelative } from '@/lib/format'
-import { KEY_ENV, SKILL_NAME, mcpClients, skillInstallCommand } from '@/lib/mcp-clients'
+import {
+  KEY_ENV,
+  SKILL_NAME,
+  captureKitFileRole,
+  captureKitInstallCommand,
+  mcpClients,
+  skillInstallCommand,
+} from '@/lib/mcp-clients'
 import { useWorkspacesStore } from '@/stores/workspaces'
 import { useProjectsStore } from '@/stores/projects'
 import { Button } from '@/components/ui/button'
@@ -234,6 +245,54 @@ function downloadSkill() {
   a.download = 'SKILL.md'
   a.click()
   URL.revokeObjectURL(href)
+}
+
+/* ---------------------------------------------------- step 4: capture kit */
+
+// The kit follows the client picked in step 2 when that client has one, and
+// keeps its own pick otherwise — the other clients capture through the skill.
+const kitPick = ref<CaptureKitClient>('claude-code')
+watch(
+  () => client.value?.captureKit,
+  (kit) => {
+    if (kit) kitPick.value = kit
+  },
+  { immediate: true },
+)
+const kitName = (id: CaptureKitClient) => clients.value.find((c) => c.captureKit === id)?.name ?? id
+
+const kitUrl = computed(() => (connection.value ? `${connection.value.url}/capture-kit` : ''))
+const kit = ref<CaptureKitResponse | null>(null)
+/** `refused`: the credential is offered no capture tools, so the server will not render a kit for it. */
+const kitState = ref<'idle' | 'loading' | 'ready' | 'refused' | 'failed'>('idle')
+const openFile = ref<string | null>(null)
+
+// Fetched as the key just minted when there is one, like the skill: a read
+// key is refused a kit, and a pinned capture key's kit names only its projects.
+watch(
+  [() => connection.value, kitPick, () => fresh.value?.apiKey],
+  async ([info, pick, asKey]) => {
+    if (!info) return
+    kitState.value = 'loading'
+    openFile.value = null
+    try {
+      kit.value = await apiFetch<CaptureKitResponse>(
+        `/v1/mcp/capture-kit?client=${pick}`,
+        asKey ? { headers: { Authorization: `Bearer ${asKey}` } } : {},
+      )
+      kitState.value = 'ready'
+    } catch (e) {
+      kit.value = null
+      kitState.value = e instanceof ApiError && e.status === 403 ? 'refused' : 'failed'
+    }
+  },
+  { immediate: true },
+)
+
+const KIT_FILE_ICON = { instructions: FileText, script: FileCode, entries: Settings2 } as const
+
+function toggleFile(file: CaptureKitFile) {
+  openFile.value = openFile.value === file.path ? null : file.path
 }
 
 /* ---------------------------------------------------------------- llms.txt */
@@ -490,6 +549,102 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
           <p class="text-[11px] text-muted-foreground">{{ t('connect.skill.alsoServed') }}</p>
 
           <CopyBlock v-if="showSkill && skill" :code="skill" label="SKILL.md" />
+        </div>
+      </section>
+
+      <!-- Step 4 ---------------------------------------------------------- -->
+      <section class="min-w-0 rounded-xl border bg-card">
+        <h2 class="flex items-center gap-2.5 border-b px-5 py-3.5 font-display text-[15px] font-semibold tracking-tight">
+          <span class="kn-step">4</span>{{ t('connect.capture.title') }}
+        </h2>
+
+        <!-- Two kits only, so a segmented pick rather than step 2's strip. -->
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-5 py-2">
+          <div role="tablist" :aria-label="t('connect.capture.title')" class="flex gap-1">
+            <button
+              v-for="id in CAPTURE_KIT_CLIENTS"
+              :key="id"
+              type="button"
+              role="tab"
+              :aria-selected="id === kitPick"
+              class="shrink-0 rounded-md px-2.5 py-1 text-xs transition-colors"
+              :class="id === kitPick ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+              @click="kitPick = id"
+            >
+              {{ kitName(id) }}
+            </button>
+          </div>
+          <p v-if="client && !client.captureKit" class="text-[11px] text-muted-foreground">
+            {{ t('connect.capture.noKit', { client: client.name }) }}
+          </p>
+        </div>
+
+        <div role="tabpanel" class="grid gap-3 px-5 py-4">
+          <p class="max-w-3xl text-xs text-muted-foreground">{{ t('connect.capture.hint', { client: kitName(kitPick) }) }}</p>
+
+          <template v-if="kitState === 'loading' && !kit">
+            <Skeleton class="h-14 w-full rounded-lg" />
+            <Skeleton class="h-28 w-full rounded-lg" />
+          </template>
+
+          <p
+            v-else-if="kitState === 'refused'"
+            class="flex max-w-3xl items-start gap-2 rounded-lg border border-dashed px-3 py-2.5 text-xs text-muted-foreground"
+          >
+            <KeyRound class="size-3.5 shrink-0 translate-y-0.5" aria-hidden="true" />
+            <span>{{ t('connect.capture.refused') }}</span>
+          </p>
+
+          <p v-else-if="kitState === 'failed'" class="text-xs text-destructive">{{ t('connect.capture.loadFailed') }}</p>
+
+          <template v-else-if="kit">
+            <CopyBlock
+              :code="captureKitInstallCommand(kitUrl, kit.client, needsKey)"
+              :label="t('connect.capture.installLabel')"
+            />
+
+            <div class="min-w-0">
+              <h3 class="text-xs font-medium text-muted-foreground">{{ t('connect.capture.filesTitle', { n: kit.files.length }) }}</h3>
+              <ul class="mt-1.5 divide-y rounded-lg border">
+                <li v-for="file in kit.files" :key="file.path" class="min-w-0">
+                  <button
+                    type="button"
+                    class="flex w-full min-w-0 items-start gap-3 px-3 py-2.5 text-left transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+                    :aria-expanded="openFile === file.path"
+                    @click="toggleFile(file)"
+                  >
+                    <component
+                      :is="KIT_FILE_ICON[captureKitFileRole(file)]"
+                      class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span class="min-w-0 flex-1">
+                      <span class="flex flex-wrap items-center gap-1.5">
+                        <code class="truncate font-mono text-xs font-medium">{{ file.path }}</code>
+                        <Badge v-if="file.mode === 'merge'" variant="outline" class="font-normal">{{ t('connect.capture.merged') }}</Badge>
+                      </span>
+                      <span class="mt-0.5 block text-[11px] text-muted-foreground">
+                        {{ t(`connect.capture.files.${captureKitFileRole(file)}`) }}
+                      </span>
+                    </span>
+                    <ChevronRight
+                      class="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none"
+                      :class="openFile === file.path ? 'rotate-90' : ''"
+                      aria-hidden="true"
+                    />
+                  </button>
+                  <div v-if="openFile === file.path" class="px-3 pb-3">
+                    <CopyBlock :code="file.content" :label="file.path" />
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <p class="text-[11px] text-muted-foreground">
+              {{ t('connect.capture.footnote', { version: kit.version }) }}
+              <RouterLink to="/captures" class="ml-1 text-primary hover:underline">{{ t('connect.capture.review') }}</RouterLink>
+            </p>
+          </template>
         </div>
       </section>
 

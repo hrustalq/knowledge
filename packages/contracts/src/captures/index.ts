@@ -221,3 +221,34 @@ export interface CaptureAssistantMessageRequest {
   projectId?: string;
   title?: string;
 }
+
+// ---------------------------------------------------------------- the capture kit (phase 5)
+
+/**
+ * The coding agents `GET /v1/mcp/capture-kit` renders a kit for: the ones whose
+ * hooks can hand the model a follow-up when a turn ends. Every other client
+ * still captures through the tools and the skill's playbook.
+ */
+export const CAPTURE_KIT_CLIENTS = ['claude-code', 'cursor'] as const;
+export type CaptureKitClient = (typeof CAPTURE_KIT_CLIENTS)[number];
+
+/**
+ * One file of the kit, at a path relative to the repository root.
+ *
+ * `merge` is a config file the client already owns (`.claude/settings.json`,
+ * `.cursor/hooks.json`): its `content` is the entries to add, never a file to
+ * write over the person's own settings.
+ */
+export interface CaptureKitFile {
+  path: string;
+  content: string;
+  mode: 'write' | 'merge';
+  executable: boolean;
+}
+
+/** `GET /v1/mcp/capture-kit?client=`. `version` changes when the hook contract does; re-fetch to update. */
+export interface CaptureKitResponse {
+  client: CaptureKitClient;
+  version: number;
+  files: CaptureKitFile[];
+}

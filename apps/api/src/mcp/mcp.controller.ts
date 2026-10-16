@@ -1,9 +1,9 @@
-import { Controller, Delete, Get, Header, HttpCode, Logger, Post, Req, Res } from '@nestjs/common';
-import { ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
+import { Controller, Delete, Get, Header, HttpCode, Logger, Post, Query, Req, Res } from '@nestjs/common';
+import { ApiOperation, ApiProduces, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Request, Response } from 'express';
-import type { McpConnectionInfo } from '@knowledge/contracts';
+import { CAPTURE_KIT_CLIENTS, type CaptureKitResponse, type McpConnectionInfo } from '@knowledge/contracts';
 import { CurrentPrincipal, ReadKeyOk } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { MCP_SERVER_NAME } from './mcp-tools.js';
@@ -82,6 +82,31 @@ export class McpController {
   })
   skill(@CurrentPrincipal() principal: Principal): Promise<string> {
     return this.mcp.skillFor(principal);
+  }
+
+  /*
+   * The capture kit (issue #73): a skill or rule, a hook script and the hook
+   * entries for one coding agent, generated for the caller like the skill.
+   * The JSON is for a person or a tool; `install` is the same files as a
+   * script, for `curl … | sh` from the repository root.
+   */
+  @Get('capture-kit')
+  @ApiQuery({ name: 'client', enum: CAPTURE_KIT_CLIENTS })
+  @ApiOperation({
+    summary:
+      'Capture kit for a coding agent: the skill/rule, the hook script and its entries, generated for the caller. 403 for a key offered no capture tools',
+  })
+  captureKit(@CurrentPrincipal() principal: Principal, @Query('client') client: string): Promise<CaptureKitResponse> {
+    return this.mcp.captureKitFor(principal, client);
+  }
+
+  @Get('capture-kit/install')
+  @Header('Content-Type', 'text/x-shellscript; charset=utf-8')
+  @ApiProduces('text/x-shellscript')
+  @ApiQuery({ name: 'client', enum: CAPTURE_KIT_CLIENTS })
+  @ApiOperation({ summary: 'The capture kit as a POSIX shell script that installs it into the git repository it runs in' })
+  captureKitInstaller(@CurrentPrincipal() principal: Principal, @Query('client') client: string): Promise<string> {
+    return this.mcp.captureKitInstallerFor(principal, client);
   }
 
   @Get()

@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
-import { HttpException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { captureStateFor } from '@knowledge/contracts';
@@ -64,11 +64,29 @@ function matches(where: Record<string, unknown>, r: Record<string, unknown>): bo
     const c = cond as Record<string, unknown>;
     if ('not' in c) return value !== null && value !== c.not;
     if ('lt' in c) return value instanceof Date && value < (c.lt as Date);
+    if ('in' in c) return (c.in as unknown[]).includes(value);
     throw new Error(`unmodelled where on ${key}`);
   });
 }
 
-function harness(rows: Row[], opts: { ownerDisabled?: boolean; drive?: (id: string) => Promise<{ state: string }> } = {}) {
+type Key = { id: string; userId: string; workspaceId: string | null; name: string; prefix: string; revokedAt: Date | null };
+type Mr = { id: string; documentId: string; status: string };
+
+function harness(
+  rows: Row[],
+  opts: {
+    ownerDisabled?: boolean;
+    drive?: (id: string) => Promise<{ state: string }>;
+    keys?: Key[];
+    members?: string[];
+    mrs?: Mr[];
+    /** Pages the caller may read but not edit. */
+    readOnly?: string[];
+    /** The workspace role `requireRole` lets through. */
+    role?: 'viewer' | 'editor';
+  } = {},
+) {
+  const mrs = opts.mrs ?? [];
   const knowledgeCapture = {
     findUnique: vi.fn(async ({ where }: { where: { id: string } }) => rows.find((r) => r.id === where.id) ?? null),
     findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => rows.find((r) => r.id === where.id)!),
@@ -81,6 +99,7 @@ function harness(rows: Row[], opts: { ownerDisabled?: boolean; drive?: (id: stri
     update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) =>
       Object.assign(rows.find((r) => r.id === where.id)!, data),
     ),
+    count: vi.fn(async ({ where }: { where: Record<string, unknown> }) => rows.filter((r) => matches(where, r)).length),
   };
   const messages = [
     { id: 'm-q', threadId: 't-1', role: 'user', content: 'How is search fused?', createdAt: OLD },
@@ -100,8 +119,20 @@ function harness(rows: Row[], opts: { ownerDisabled?: boolean; drive?: (id: stri
   const prisma = {
     knowledgeCapture,
     withTransaction: vi.fn(async (fn: () => Promise<unknown>) => fn()),
-    document: { count: vi.fn(async () => 1) },
+    document: {
+      count: vi.fn(async () => 1),
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id }))),
+    },
     user: { findUnique: vi.fn(async () => ({ locale: 'ru' })) },
+    apiKey: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => (opts.keys ?? []).find((k) => k.id === where.id) ?? null) },
+    workspaceMember: {
+      count: vi.fn(async ({ where }: { where: { userId: string } }) => ((opts.members ?? ['u-1', 'u-2']).includes(where.userId) ? 1 : 0)),
+    },
+    mergeRequest: {
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; status: string } }) =>
+        mrs.filter((m) => where.id.in.includes(m.id) && m.status === where.status),
+      ),
+    },
     assistantMessage: {
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => messages.find((m) => m.id === where.id) ?? null),
       findFirst: vi.fn(async () => messages[0]),
@@ -117,9 +148,23 @@ function harness(rows: Row[], opts: { ownerDisabled?: boolean; drive?: (id: stri
       if (opts.ownerDisabled) throw new Error('runOwnerUnavailable');
       return { ...DEV_PRINCIPAL, userId, locale, mode: 'api-key' };
     }),
+    requireRole: vi.fn(async (_p: Principal, _ws: string, role: string) => {
+      if (role === 'editor' && (opts.role ?? 'editor') !== 'editor') throw new ForbiddenException('editor required');
+    }),
   };
   const scope = { workspaceId: WS, bypass: false, guest: false, denied: new Set<string>(), granted: new Set<string>() };
-  const permissions = { scopeFor: vi.fn(async () => scope) };
+  const permissions = {
+    scopeFor: vi.fn(async () => scope),
+    levelFor: vi.fn(async (_s: unknown, r: { id: string }) => ((opts.readOnly ?? []).includes(r.id) ? 'view' : 'edit')),
+  };
+  const mergeRequests = {
+    close: vi.fn(async (id: string) => {
+      const mr = mrs.find((m) => m.id === id)!;
+      if (mr.status !== 'open') throw new BadRequestException('not open');
+      mr.status = 'closed';
+      return { mergeRequest: mr };
+    }),
+  };
   const glossary = { create: vi.fn(async () => ({ termId: 'term-1' })) };
   const activity = { record: vi.fn(async () => undefined) };
   const config = { get: (key: string) => ({ CAPTURE_STALE_MS: 300_000 })[key] };
@@ -130,9 +175,10 @@ function harness(rows: Row[], opts: { ownerDisabled?: boolean; drive?: (id: stri
     permissions as never,
     glossary as never,
     activity as never,
+    mergeRequests as never,
     config as never,
   );
-  return { inbox, rows, prisma, captures, access, scope, glossary, activity };
+  return { inbox, rows, prisma, captures, access, scope, glossary, activity, mergeRequests, mrs };
 }
 
 const editor: Principal = { ...DEV_PRINCIPAL, userId: 'u-2', mode: 'api-key' };
@@ -295,6 +341,141 @@ describe('the routes', () => {
       expect(spec(CapturesController.prototype, m).capture).toBeUndefined();
     }
     expect(spec(CapturesController.prototype, 'get')).toMatchObject({ role: 'viewer', source: 'capture' });
+  });
+
+  it('keep bulk reject an editor decision a capture key cannot make', () => {
+    expect(spec(CapturesController.prototype, 'bulkReject')).toMatchObject({ role: 'editor', source: 'body' });
+    expect(spec(CapturesController.prototype, 'bulkReject').capture).toBeUndefined();
+  });
+
+  it("declare bulk-reject before ':id', so Nest never reads it as a capture id", () => {
+    const methods = Object.getOwnPropertyNames(CapturesController.prototype);
+    expect(methods.indexOf('bulkReject')).toBeLessThan(methods.indexOf('get'));
+  });
+});
+
+const KEY = '55555555-5555-4555-8555-555555555555';
+const OTHER_WS = '66666666-6666-4666-8666-666666666666';
+const agentKey = (over: Partial<Key> = {}): Key => ({
+  id: KEY,
+  userId: 'u-1',
+  workspaceId: null,
+  name: 'claude-code laptop',
+  prefix: 'kn_1a2b3c4d',
+  revokedAt: null,
+  ...over,
+});
+const viewer: Principal = { ...DEV_PRINCIPAL, userId: 'u-3', mode: 'api-key' };
+
+describe('narrowing the inbox to one key', () => {
+  it("names another person's key for an editor, never its hash", async () => {
+    const h = harness([], { keys: [agentKey({ revokedAt: OLD })] });
+    expect(await h.inbox.keyIn(WS, KEY, editor)).toEqual({ id: KEY, name: 'claude-code laptop', prefix: 'kn_1a2b3c4d', revoked: true });
+  });
+
+  it("refuses a viewer another person's key, and lets them look up their own", async () => {
+    const h = harness([], { keys: [agentKey()], members: ['u-1', 'u-3'], role: 'viewer' });
+    expect((await refusal(h.inbox.keyIn(WS, KEY, viewer))).status).toBe(403);
+    expect((await h.inbox.keyIn(WS, KEY, { ...viewer, userId: 'u-1' })).id).toBe(KEY);
+  });
+
+  it("403s another tenant's key and an unknown one alike", async () => {
+    const pinned = harness([], { keys: [agentKey({ workspaceId: OTHER_WS })] });
+    expect((await refusal(pinned.inbox.keyIn(WS, KEY, editor))).status).toBe(403);
+    const stranger = harness([], { keys: [agentKey({ userId: 'u-9' })] });
+    expect((await refusal(stranger.inbox.keyIn(WS, KEY, editor))).status).toBe(403);
+    expect((await refusal(stranger.inbox.keyIn(WS, '77777777-7777-4777-8777-777777777777', editor))).status).toBe(403);
+  });
+
+  it('still finds the key of an owner who has left, through what it captured here', async () => {
+    const h = harness([row({ id: 'c-1', apiKeyId: KEY })], { keys: [agentKey({ userId: 'u-9' })] });
+    expect((await h.inbox.keyIn(WS, KEY, editor)).id).toBe(KEY);
+  });
+
+  it('the list route checks the key before it narrows, and names it in the answer', async () => {
+    const captures = { list: vi.fn(async () => ({ captures: [], nextCursor: null })) };
+    const inbox = { keyIn: vi.fn(async () => ({ id: KEY, name: 'k', prefix: 'kn_x', revoked: false })) };
+    const permissions = { scopeFor: vi.fn(async () => ({})) };
+    const controller = new CapturesController(captures as never, inbox as never, permissions as never);
+    const res = await controller.list({ workspaceId: WS, apiKeyId: KEY }, editor);
+    expect(inbox.keyIn).toHaveBeenCalledWith(WS, KEY, editor);
+    expect(captures.list).toHaveBeenCalledWith(expect.objectContaining({ apiKeyId: KEY }), expect.anything());
+    expect(res.apiKey?.id).toBe(KEY);
+  });
+});
+
+describe("bulk-rejecting a key's pending captures", () => {
+  const PAGE_B = '88888888-8888-4888-8888-888888888888';
+  const setup = () =>
+    harness(
+      [
+        row({ id: 'c-term', apiKeyId: KEY }),
+        row({ id: 'c-busy', apiKeyId: KEY, kind: 'gotcha', outcome: null, claimedAt: new Date() }),
+        row({ id: 'c-open', apiKeyId: KEY, kind: 'decision', status: 'proposed', outcome: 'new-page', mergeRequestId: 'mr-1', targetDocumentId: PAGE }),
+        row({ id: 'c-merged', apiKeyId: KEY, kind: 'howto', status: 'proposed', outcome: 'new-page', mergeRequestId: 'mr-2' }),
+        row({ id: 'c-locked', apiKeyId: KEY, kind: 'gotcha', status: 'proposed', outcome: 'amend-page', mergeRequestId: 'mr-3', targetDocumentId: PAGE_B }),
+        row({ id: 'c-other', apiKeyId: null }),
+      ],
+      {
+        keys: [agentKey()],
+        mrs: [
+          { id: 'mr-1', documentId: PAGE, status: 'open' },
+          { id: 'mr-2', documentId: PAGE, status: 'merged' },
+          { id: 'mr-3', documentId: PAGE_B, status: 'open' },
+        ],
+        readOnly: [PAGE_B],
+      },
+    );
+
+  it('rejects the staged, closes the open, leaves the merged, and counts what it skipped', async () => {
+    const h = setup();
+    const res = await h.inbox.bulkReject({ workspaceId: WS, apiKeyId: KEY, reason: 'Looping agent' }, editor);
+
+    expect(res).toEqual({ rejected: 1, closed: 1, skippedInFlight: 1, skippedNoAccess: 1 });
+    const status = (id: string) => h.rows.find((r) => r.id === id)!.status;
+    expect(status('c-term')).toBe('rejected');
+    expect(status('c-busy')).toBe('staged');
+    expect(status('c-other')).toBe('staged');
+    expect(h.mergeRequests.close).toHaveBeenCalledTimes(1);
+    expect(h.mergeRequests.close).toHaveBeenCalledWith('mr-1', 'u-2');
+    expect(h.mrs.map((m) => m.status)).toEqual(['closed', 'merged', 'open']);
+  });
+
+  it('records each affected capture on its own, marked bulk', async () => {
+    const h = setup();
+    await h.inbox.bulkReject({ workspaceId: WS, apiKeyId: KEY, reason: 'Looping agent' }, editor);
+    const recorded = h.activity.record.mock.calls.map(([e]) => e as { action: string; subjectId: string; metadata: Record<string, unknown> });
+    expect(recorded.map((e) => e.subjectId).sort()).toEqual(['c-open', 'c-term']);
+    for (const e of recorded) {
+      expect(e.action).toBe('capture.rejected');
+      expect(e.metadata).toMatchObject({ bulk: true, apiKeyId: KEY, reason: 'Looping agent' });
+    }
+  });
+
+  it('counts the same rows on a dry run and changes nothing', async () => {
+    const h = setup();
+    const res = await h.inbox.bulkReject({ workspaceId: WS, apiKeyId: KEY, dryRun: true }, editor);
+    expect(res).toEqual({ rejected: 1, closed: 1, skippedInFlight: 1, skippedNoAccess: 1 });
+    expect(h.prisma.knowledgeCapture.updateMany).not.toHaveBeenCalled();
+    expect(h.mergeRequests.close).not.toHaveBeenCalled();
+    expect(h.activity.record).not.toHaveBeenCalled();
+  });
+
+  it('leaves out what the caller cannot see in the list, without counting it', async () => {
+    const h = setup();
+    h.scope.denied.add(PROJECT);
+    expect(await h.inbox.bulkReject({ workspaceId: WS, apiKeyId: KEY }, editor)).toEqual({
+      rejected: 0,
+      closed: 0,
+      skippedInFlight: 0,
+      skippedNoAccess: 0,
+    });
+  });
+
+  it("403s another tenant's key before touching anything", async () => {
+    const h = harness([row({ id: 'c-1', apiKeyId: KEY })], { keys: [agentKey({ workspaceId: OTHER_WS })] });
+    expect((await refusal(h.inbox.bulkReject({ workspaceId: WS, apiKeyId: KEY }, editor))).status).toBe(403);
+    expect(h.rows[0]!.status).toBe('staged');
   });
 });
 

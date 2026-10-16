@@ -92,7 +92,9 @@ export const CAPTURE_NOTE_KINDS = ['gotcha', 'convention', 'howto'] as const;
 export type CaptureNoteKind = (typeof CAPTURE_NOTE_KINDS)[number];
 
 /** The kinds that become page text, and so are deduplicated against pages. */
-export const CAPTURE_PAGE_KINDS: ReadonlySet<CaptureKind> = new Set(['decision', 'gotcha', 'convention', 'howto', 'answer']);
+export const CAPTURE_PAGE_KIND_LIST = ['decision', 'gotcha', 'convention', 'howto', 'answer'] as const;
+export type CapturePageKind = (typeof CAPTURE_PAGE_KIND_LIST)[number];
+export const CAPTURE_PAGE_KINDS: ReadonlySet<CaptureKind> = new Set(CAPTURE_PAGE_KIND_LIST);
 
 export const CAPTURE_TITLE_MAX_CHARS = 300;
 /** Alternatives, related pages, `appliesTo` paths, aliases, citations: each list at most this long. */
@@ -184,6 +186,15 @@ export type CapturePayload =
   | RelationCapturePayload
   | AnswerCapturePayload;
 
+/** The key that wrote a capture, as the inbox names it: its name and prefix, never its hash. */
+export interface CaptureApiKey {
+  id: string;
+  name: string;
+  /** `kn_` + 8 hex, as Connect AI shows it. */
+  prefix: string;
+  revoked: boolean;
+}
+
 /** One row of the captures list. */
 export interface CaptureInfo extends CaptureResult {
   workspaceId: string;
@@ -195,6 +206,8 @@ export interface CaptureInfo extends CaptureResult {
   session: CaptureSession;
   createdBy: string;
   apiKeyId: string | null;
+  /** Null for a capture written from a sign-in session, or by a key since deleted with its owner. */
+  apiKey: CaptureApiKey | null;
   error: string | null;
   createdAt: string;
 }
@@ -202,6 +215,8 @@ export interface CaptureInfo extends CaptureResult {
 export interface ListCapturesResponse {
   captures: CaptureInfo[];
   nextCursor: string | null;
+  /** The key `?apiKeyId=` narrowed to, so the filter can be named before any row of it loads. */
+  apiKey?: CaptureApiKey;
 }
 
 // ---------------------------------------------------------------- the inbox (phase 3)
@@ -220,6 +235,31 @@ export interface RejectCaptureRequest {
 export interface CaptureAssistantMessageRequest {
   projectId?: string;
   title?: string;
+}
+
+/**
+ * `POST /v1/captures/bulk-reject` (issue #235): everything one key proposed
+ * that is still pending, turned down in one act. Staged rows are rejected and
+ * the open merge requests its captures opened are closed, each capture still
+ * getting its own `capture.rejected` activity row. `dryRun` counts the same
+ * rows without touching them, for the confirmation.
+ */
+export interface BulkRejectCapturesRequest {
+  workspaceId: string;
+  apiKeyId: string;
+  reason?: string;
+  dryRun?: boolean;
+}
+
+export interface BulkRejectCapturesResponse {
+  /** Staged captures rejected. */
+  rejected: number;
+  /** Open merge requests closed. Merged ones are left alone. */
+  closed: number;
+  /** Staged captures being proposed right now, left for a second pass. */
+  skippedInFlight: number;
+  /** Merge requests on pages the caller may see but not edit, left open. */
+  skippedNoAccess: number;
 }
 
 // ---------------------------------------------------------------- the capture kit (phase 5)

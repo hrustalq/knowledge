@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { HttpException } from '@nestjs/common';
 import type { CreateCaptureRequest } from '@knowledge/contracts';
 import { CaptureService } from '../src/captures/capture.service.js';
-import { captureContentHash, decidePage, foldTermKeys, rankSimilar } from '../src/captures/capture-dedupe.js';
+import { captureContentHash, decidePage, dedupeText, foldTermKeys, rankSimilar } from '../src/captures/capture-dedupe.js';
 import { findSecret } from '../src/captures/secret-scan.js';
 import { parseMarkdown } from '../src/common/frontmatter.js';
 import type { Principal } from '../src/auth/principal.js';
@@ -170,7 +170,7 @@ function harness(opts: {
     config as never,
   );
   const written = () => storage.putObjectText.mock.calls.map((c) => parseMarkdown((c as unknown as [string, string])[1]));
-  return { svc, captures, prisma, documents, mergeRequests, relations, storage, activity, mrStatus, written };
+  return { svc, captures, prisma, documents, mergeRequests, relations, storage, embeddings, permissions, activity, mrStatus, written };
 }
 
 const principal = (projectIds: string[] | null = null): Principal => ({
@@ -284,6 +284,42 @@ describe('against what already exists', () => {
     const res = await h.svc.capture(decision(), principal());
     expect(res).toMatchObject({ state: 'duplicate', outcome: 'none', targetDocumentId: PAGE, webUrl: `https://kn.test/documents/${PAGE}` });
     expect(h.mergeRequests.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('knowledge_find_similar predicts the capture (#233)', () => {
+  const scope = { workspaceId: WS, bypass: true, guest: false, denied: new Set<string>(), granted: new Set<string>() };
+  const d = decision() as Extract<CreateCaptureRequest, { kind: 'decision' }>;
+  const probe = { title: `  ${d.title} `, kind: 'decision' as const, text: `${d.context}\n${d.decision}`, projectId: PROJECT };
+
+  it.each([
+    ['amend', 'amend-page', [{ documentId: PAGE, title: 'Search', score: 0.86 }]],
+    ['duplicate', 'none', [{ documentId: PAGE, title: 'Fuse vector and BM25 with RRF', score: 0.95 }]],
+    ['new-page', 'new-page', [{ documentId: PAGE, title: 'Search', score: 0.5 }]],
+  ] as const)('embeds what the capture embeds and decides %s where the capture says %s', async (said, outcome, similar) => {
+    const h = harness({ similar: [...similar] });
+    const res = await h.svc.findSimilar(principal(), scope as never, probe);
+    const captured = await h.svc.capture(d, principal());
+
+    const [probed, capturedText] = h.embeddings.embed.mock.calls.map((c) => (c as unknown as [string])[0]);
+    expect(probed).toBe(capturedText);
+    expect(probed).toBe('Fuse vector and BM25 with RRF\n\nScores from the two legs are not comparable.\nReciprocal rank fusion with k=60.');
+    expect(res.similar[0]).toEqual(captured.similar[0]);
+    expect(res.decision).toBe(said);
+    expect(captured.outcome).toBe(outcome);
+  });
+
+  it('calls an amendment its writer could not propose a new page, as the capture does', async () => {
+    const h = harness({ similar: [{ documentId: PAGE, title: 'Search', score: 0.86 }] });
+    h.permissions.requireResource.mockRejectedValue(new Error('no edit'));
+    expect((await h.svc.findSimilar(principal(), scope as never, probe)).decision).toBe('new-page');
+  });
+
+  it('embeds text alone and decides nothing without a title and kind, as before', async () => {
+    const h = harness({ similar: [{ documentId: PAGE, title: 'Search', score: 0.86 }] });
+    const res = await h.svc.findSimilar(principal(), scope as never, { text: 'how search fuses scores' });
+    expect(h.embeddings.embed).toHaveBeenCalledWith('how search fuses scores');
+    expect(res).toEqual({ similar: [{ documentId: PAGE, title: 'Search', score: 0.86 }] });
   });
 });
 
@@ -432,6 +468,11 @@ describe('dedupe helpers', () => {
     expect(decidePage([{ documentId: 'a', title: 'Use RRF', score: 0.97 }], 'use rrf.', t)).toEqual({ outcome: 'none', targetDocumentId: 'a' });
     expect(decidePage([{ documentId: 'a', title: 'Search', score: 0.5 }], 'x', t).outcome).toBe('new-page');
     expect(decidePage([], 'x', t).outcome).toBe('new-page');
+  });
+
+  it('embeds a page kind as its title, a blank line and its main text; any other kind as its title', () => {
+    expect(dedupeText('Use RRF', 'gotcha', 'Scores differ.')).toBe('Use RRF\n\nScores differ.');
+    expect(dedupeText('Use RRF', 'glossary', 'Scores differ.')).toBe('Use RRF');
   });
 
   it('folds a term and its aliases the way entity keys fold', () => {

@@ -13,6 +13,43 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.26.0] — 2026-10-16
+
+### Added
+
+- The captures inbox can be narrowed to one API key, and an editor can turn
+  down everything that key proposed and is still pending in one step: its
+  staged captures are rejected and the open merge requests they opened are
+  closed. Each capture still gets its own entry in the activity log, merged
+  captures are left alone, and the confirmation shows the counts before
+  anything changes. Every row now shows the key that wrote it (name and
+  prefix), and Connect AI links each key to its captures, including from the
+  toast after revoking one. Over the API: `GET /v1/captures?apiKeyId=` (another
+  person's key needs an editor) and `POST /v1/captures/bulk-reject`
+  `{ workspaceId, apiKeyId, reason?, dryRun? }`, which a capture key cannot
+  call. (#235)
+- `make backtest ARGS="--captures --workspace <id>"` measures the capture
+  dedupe and amend thresholds on a workspace's own pages: each case class's
+  score percentiles and, for every threshold from 0.50 to 0.98, how often it
+  would scatter a subject, amend the wrong page, miss a restatement or drop
+  new knowledge. `--reembed` measures whatever embedding model the env
+  names against the same pages without reindexing them, such as the stub, or
+  a model you are thinking of switching to. Read-only. On bge-m3 the 0.92 / 0.80 defaults came out within
+  noise of the best values, so they are unchanged. On the hash stub, which
+  production runs, no amend threshold works; a dedupe override of 0.78 is
+  suggested there. (#234)
+
+### Fixed
+
+- `knowledge_find_similar` could tell an agent a capture would amend a page
+  (or was a duplicate) and the capture then did something else, because the
+  probe scored the bare body while the capture scored its title and body. Pass
+  the `title` and `kind` you will capture with and the probe now scores the
+  same text and returns `decision` (`duplicate`, `amend` or `new-page`) as the
+  capture will decide it. A call with `text` alone behaves as before. The
+  capture playbook and the capture kit's hook reminder say so; the kit is now
+  v2, so re-fetch it to pick up the new reminder. (#233)
+
 ## [0.25.0] — 2026-10-16
 
 ### Added
@@ -2555,7 +2592,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.25.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/hrustalq/knowledge/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/hrustalq/knowledge/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/hrustalq/knowledge/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/hrustalq/knowledge/compare/v0.22.0...v0.23.0

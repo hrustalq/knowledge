@@ -280,5 +280,10 @@ use `knowledge_search`.
   through one person's scope. It asks only about the pages that person can
   open, so a restricted page is never counted as a miss. Run it beside the
   unfiltered `--generate` to see what the filter costs a reader.
+- `make backtest ARGS="--captures --workspace <id>"` measures the capture
+  dedupe and amend thresholds on raw cosine, the vector leg alone (#234). The
+  2026-10-16 run on bge-m3 and the stub, and why the defaults stayed at
+  0.92 / 0.80, are in
+  [feature 50 §Calibration](../features/50-agent-memory.md#calibration).
 - Entity keys are free-form strings (`service:identity`); nothing normalises two
   spellings of the same entity into one node.

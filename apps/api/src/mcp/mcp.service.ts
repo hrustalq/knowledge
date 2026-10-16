@@ -75,7 +75,7 @@ import { ComponentDraftsService } from '../components/component-drafts.service.j
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.25.0';
+export const MCP_SERVER_VERSION = '0.26.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -119,7 +119,7 @@ export const MCP_SERVER_VERSION = '0.25.0';
  *   knowledge_propose_glossary_term → a term → the captures inbox, approved by an editor
  *   knowledge_propose_relation      → a frontmatter relation → merge request
  *   knowledge_propose_answer        → a cited answer → merge request
- *   knowledge_find_similar          → the nearest pages by raw cosine, before capturing
+ *   knowledge_find_similar          → the nearest pages by raw cosine, and what a capture would decide
  *   knowledge_list_captures         → captures and where they went
  *
  * Two transports, one tool set (docs/features/33). `buildServer(principal)`

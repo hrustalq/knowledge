@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { createWriteStream, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FeedbackBacktestCase, FeedbackCaseScore, FeedbackMetrics } from '@knowledge/contracts';
@@ -12,6 +13,24 @@ import { systemScope, type AccessScope } from '../permissions/access-scope.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { AccessService } from '../auth/access.service.js';
 import { EXPORT_MAX_ROWS, FeedbackDatasetService } from '../feedback/feedback-dataset.service.js';
+import type { Env } from '../config/env.js';
+import { cosine, GraphService, type StoredChunk } from '../graph/graph.service.js';
+import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
+import { chunkEmbedText } from '../ingestion/markdown.js';
+import { LISTED_PAGE } from '../common/listed-page.js';
+import { visibilityWhere } from '../permissions/access-scope.js';
+import {
+  amendErrors,
+  dedupeErrors,
+  pickCase,
+  probeTexts,
+  TEMPLATE_MIN_PAGES,
+  splitScores,
+  templatedHeadings,
+  thresholdGrid,
+  type CalibrationCase,
+  type CaseScores,
+} from '../captures/capture-calibration.js';
 
 /**
  * Retrieval and pipeline backtest.
@@ -25,6 +44,10 @@ import { EXPORT_MAX_ROWS, FeedbackDatasetService } from '../feedback/feedback-da
  *   make backtest ARGS="--report"                                     aggregate the recorded stream
  *   make backtest ARGS="--export-feedback --workspace <id> --out f"   votes → labelled dataset (NDJSON)
  *   make backtest ARGS="--feedback f.ndjson --k 10"                   replay that dataset through search
+ *   make backtest ARGS="--captures --workspace <id> --limit 200"      capture dedupe/amend thresholds (#234)
+ *   EMBEDDINGS_PROVIDER=stub EMBEDDINGS_DIM=768 make backtest ARGS="--captures --reembed"
+ *                                                                     the same, for a model the workspace was not indexed with
+ *   make backtest ARGS="--captures --verbose"                         … and each case's scores and nearest other page
  *
  * The split is not arbitrary. **Recall needs ground truth.** The generator
  * makes its own: it issues each document's own title as a query and knows which
@@ -331,7 +354,161 @@ async function replayFeedback(): Promise<void> {
   process.exit(0);
 }
 
-if (flag('--generate')) {
+/**
+ * Capture threshold calibration (#234): labelled probes cut from the
+ * workspace's own pages (`captures/capture-calibration.ts` says which), scored
+ * the way `CaptureService.similarPages` scores a capture — raw cosine, best
+ * chunk per page, pages of the same project — then each class's score
+ * distribution and what every candidate threshold would get wrong.
+ *
+ * By default the probes are embedded with the configured provider and scored
+ * against the stored vectors, so the numbers are only meaningful when that
+ * provider is the one the workspace was indexed with. `--reembed` embeds the
+ * corpus too, with the configured provider and as ingestion would (title and
+ * heading path first), so another model — the stub production runs, or a
+ * candidate replacement — is measured by pointing the env at it, without
+ * reindexing anything. The stale sweeper that would notice the changed model
+ * runs only in the worker, so this process cannot schedule a reindex. Reads
+ * only.
+ */
+async function calibrateCaptures(): Promise<void> {
+  const workspaceId = option('--workspace', DEMO_WORKSPACE);
+  const limit = Number(option('--limit', '200'));
+  const reembed = flag('--reembed');
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: false, abortOnError: false });
+  const prisma = app.get(PrismaService);
+  const config = app.get<ConfigService<Env, true>>(ConfigService);
+  const embedder = app.get<EmbeddingProvider>(EMBEDDING_PROVIDER);
+  const provider = config.get('EMBEDDINGS_PROVIDER', { infer: true });
+  const model = [
+    provider,
+    provider === 'openai-compatible' ? config.get('EMBEDDINGS_MODEL', { infer: true }) : '',
+    `(${embedder.dimension}-d, ${reembed ? 'corpus re-embedded' : 'stored vectors'})`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const scope = systemScope(workspaceId);
+  const pages = await prisma.document.findMany({
+    where: { workspaceId, archivedAt: null, ...LISTED_PAGE, AND: [visibilityWhere(scope)] },
+    select: { id: true, title: true, projectId: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const pageById = new Map(pages.map((p) => [p.id, p]));
+  let chunks: StoredChunk[] = (await app.get(GraphService).liveChunks(workspaceId, await app.get(PermissionService).documentFilterFor(scope))).filter(
+    (c) => pageById.has(c.documentId),
+  );
+  if (reembed) {
+    const texts = chunks.map((c) => chunkEmbedText({ index: c.idx, text: c.text, headingPath: c.headingPath }, pageById.get(c.documentId)!.title));
+    const vectors: number[][] = [];
+    for (let i = 0; i < texts.length; i += 32) vectors.push(...(await embedder.embedBatch(texts.slice(i, i + 32))));
+    chunks = chunks.map((c, i) => ({ ...c, embedding: vectors[i] }));
+  }
+
+  const byPage = new Map<string, StoredChunk[]>();
+  const byProject = new Map<string, StoredChunk[]>();
+  for (const c of chunks) {
+    byPage.set(c.documentId, [...(byPage.get(c.documentId) ?? []), c]);
+    const projectId = pageById.get(c.documentId)!.projectId;
+    byProject.set(projectId, [...(byProject.get(projectId) ?? []), c]);
+  }
+  const templated = templatedHeadings(byPage.values());
+  const cases: CalibrationCase[] = [];
+  for (const page of pages) {
+    if (cases.length >= limit) break;
+    const picked = pickCase({ documentId: page.id, title: page.title }, byPage.get(page.id) ?? [], templated);
+    if (picked) cases.push(picked);
+  }
+  if (cases.length === 0) {
+    console.error(`No page in workspace ${workspaceId} has a removable section and a lead paragraph — nothing to measure.`);
+    await app.close();
+    process.exit(1);
+  }
+
+  const texts = cases.flatMap((c) => {
+    const t = probeTexts(c);
+    return [t.amend, t.sameTitle, t.restatement];
+  });
+  const vectors: number[][] = [];
+  for (let i = 0; i < texts.length; i += 16) vectors.push(...(await embedder.embedBatch(texts.slice(i, i + 16))));
+  if (chunks[0] && chunks[0].embedding.length !== vectors[0].length) {
+    console.error(`Stored vectors are ${chunks[0].embedding.length}-d, the probes ${vectors[0].length}-d: this workspace was indexed with another model.`);
+    await app.close();
+    process.exit(1);
+  }
+
+  const scores: CaseScores[] = cases.map((c, i) => {
+    const corpus = byProject.get(pageById.get(c.documentId)!.projectId) ?? [];
+    const score = (v: number[]) => corpus.map((ch) => ({ documentId: ch.documentId, headingPath: ch.headingPath, score: cosine(v, ch.embedding) }));
+    return {
+      amend: splitScores(c, score(vectors[i * 3]), true),
+      sameTitle: splitScores(c, score(vectors[i * 3 + 1]), true),
+      restatement: splitScores(c, score(vectors[i * 3 + 2]), false),
+    };
+  });
+
+  if (flag('--verbose')) {
+    console.log('');
+    console.log('own     other   page → section  |  best other page');
+    cases.forEach((c, i) => {
+      const a = scores[i].amend;
+      const other = a.otherDocumentId ? pageById.get(a.otherDocumentId)?.title : '—';
+      console.log(`${a.own.toFixed(4)}  ${a.other.toFixed(4)}  ${c.title} → ${c.sectionTitle}  |  ${other}`);
+    });
+  }
+
+  const dist = (label: string, values: number[]) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const p = (q: number) => percentile(sorted, q).toFixed(4);
+    return `${label.padEnd(30)} ${String(values.length).padStart(4)}  ${p(5)}  ${p(50)}  ${p(95)}`;
+  };
+  const pct = (share: number) => `${(share * 100).toFixed(1).padStart(5)}%`;
+  const lowest = <T extends { threshold: number }>(rows: T[], sum: (r: T) => number) =>
+    rows.reduce((best, r) => (sum(r) < sum(best) ? r : best), rows[0]).threshold;
+
+  console.log('');
+  console.log(`capture threshold calibration — workspace ${workspaceId}`);
+  console.log(`embeddings           ${model}`);
+  console.log(`cases                ${cases.length} of ${pages.length} pages (the rest have no removable section or no lead paragraph)`);
+  console.log(`template headings    ${templated.size} shared by ${TEMPLATE_MIN_PAGES}+ pages, never sampled`);
+  console.log('');
+  console.log(`${'class (score against)'.padEnd(30)} ${'n'.padStart(4)}  p5      p50     p95`);
+  console.log(dist('amend (own page − section)', scores.map((s) => s.amend.own)));
+  console.log(dist('new page (best other page)', scores.map((s) => s.amend.other)));
+  console.log(dist('restatement (own page)', scores.map((s) => s.restatement.own)));
+  console.log(dist('same-title new fact (own − s.)', scores.map((s) => s.sameTitle.own)));
+  console.log('');
+
+  const amendRows = thresholdGrid().map((t) => amendErrors(scores, t));
+  const amendSum = (r: (typeof amendRows)[number]) => r.scattered + r.wrongPage + r.falseAmend;
+  const bestAmend = lowest(amendRows, amendSum);
+  console.log('amend     scattered  wrong-page  false-amend     sum');
+  for (const r of amendRows) {
+    console.log(`  ${r.threshold.toFixed(2)}     ${pct(r.scattered)}      ${pct(r.wrongPage)}       ${pct(r.falseAmend)}  ${pct(amendSum(r))}${r.threshold === bestAmend ? '  ◀' : ''}`);
+  }
+  console.log('');
+  const dedupeRows = thresholdGrid().map((t) => dedupeErrors(scores, t));
+  const dedupeSum = (r: (typeof dedupeRows)[number]) => r.missed + r.dropped;
+  const bestDedupe = lowest(dedupeRows, dedupeSum);
+  console.log('dedupe    missed  dropped     sum');
+  for (const r of dedupeRows) {
+    console.log(`  ${r.threshold.toFixed(2)}    ${pct(r.missed)}   ${pct(r.dropped)}  ${pct(dedupeSum(r))}${r.threshold === bestDedupe ? '  ◀' : ''}`);
+  }
+  console.log('');
+  console.log('scattered    an amend case whose best page is under the threshold — it becomes a new page');
+  console.log('wrong-page   an amend case another page outranks, at or over the threshold — a section lands elsewhere');
+  console.log('false-amend  a new-page case some other page clears — an unrelated page gains a section');
+  console.log('missed       a restatement not dropped — a redundant section is proposed');
+  console.log('dropped      a new fact under the page\'s own title dropped as a duplicate — knowledge is lost');
+  console.log('◀ marks the lowest unweighted sum; the effective amend threshold never exceeds the dedupe one.');
+
+  await app.close();
+  process.exit(0);
+}
+
+if (flag('--captures')) {
+  await calibrateCaptures();
+} else if (flag('--generate')) {
   await generate();
 } else if (flag('--export-feedback')) {
   await exportFeedback();

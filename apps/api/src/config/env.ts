@@ -431,6 +431,9 @@ export const envSchema = z.object({
    * duplicate candidate, and above which it amends that page instead of
    * starting a new one. Defaults, not ceilings: a workspace tunes them to its
    * embedding model. Raw cosine from the vector leg — not a fused search score.
+   * Measured on bge-m3 with `make backtest ARGS="--captures"` (#234); the run
+   * and why these values held are in docs/features/50-agent-memory.md
+   * §Calibration. Re-run it when the embedding model changes.
    */
   CAPTURE_DEDUPE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.92),
   CAPTURE_AMEND_THRESHOLD: z.coerce.number().min(0).max(1).default(0.8),

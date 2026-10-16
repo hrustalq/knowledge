@@ -24722,6 +24722,15 @@
             }
           },
           {
+            "name": "apiKeyId",
+            "required": false,
+            "in": "query",
+            "description": "Only this key's captures. Another person's key takes an editor (403 otherwise)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cursor",
             "required": false,
             "in": "query",
@@ -24781,6 +24790,65 @@
           }
         },
         "summary": "Captures in a workspace, newest first; ones on pages or projects the caller cannot open are left out",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/v1/captures/bulk-reject": {
+      "post": {
+        "operationId": "CapturesController_bulkReject",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRejectCapturesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Turn down everything one key proposed that is still pending: staged captures rejected, open merge requests closed, merged ones left alone. dryRun counts without changing anything",
         "tags": [
           "captures"
         ]
@@ -25401,7 +25469,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.24.0",
+    "version": "0.25.0",
     "contact": {}
   },
   "tags": [],
@@ -30420,6 +30488,30 @@
           "workspaceId",
           "kind",
           "session"
+        ]
+      },
+      "BulkRejectCapturesDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "apiKeyId": {
+            "type": "string",
+            "description": "The key whose pending captures are turned down"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, for the activity log of each capture"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "Count what would be rejected and closed, and change nothing. Defaults to false"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "apiKeyId"
         ]
       },
       "RejectCaptureDto": {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { normalizeEntityKey, type CaptureSimilar } from '@knowledge/contracts';
+import { CAPTURE_PAGE_KINDS, normalizeEntityKey, type CaptureKind, type CaptureSimilar } from '@knowledge/contracts';
 
 /**
  * The pure half of capture dedupe (issue #73): what counts as the same
@@ -15,6 +15,24 @@ export function normalizeCaptureTitle(title: string): string {
     .replace(/\s+/g, ' ')
     .replace(/[\s.!?:;,]+$/, '')
     .trim();
+}
+
+/** A title as a capture stores it: single-spaced, trimmed, at most 300 characters. */
+export function cleanCaptureTitle(title: string): string {
+  return title.replace(/\s+/g, ' ').trim().slice(0, 300);
+}
+
+/** What is embedded for dedupe, at most. */
+export const DEDUPE_TEXT_CHARS = 4_000;
+
+/**
+ * What a capture is about, for the vector leg: a page kind's stored title, a
+ * blank line, then its main text (`context\ndecision`, `question\nanswer`, or
+ * the note's body). The capture and `knowledge_find_similar` both embed this,
+ * so the probe scores exactly what the capture will (#233).
+ */
+export function dedupeText(title: string, kind: CaptureKind, main: string): string {
+  return CAPTURE_PAGE_KINDS.has(kind) ? `${title}\n\n${main}` : title;
 }
 
 /**

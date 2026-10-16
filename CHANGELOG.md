@@ -28,6 +28,16 @@ in the pull request that introduces them — see
   person's key needs an editor) and `POST /v1/captures/bulk-reject`
   `{ workspaceId, apiKeyId, reason?, dryRun? }`, which a capture key cannot
   call. (#235)
+- `make backtest ARGS="--captures --workspace <id>"` measures the capture
+  dedupe and amend thresholds on a workspace's own pages: each case class's
+  score percentiles and, for every threshold from 0.50 to 0.98, how often it
+  would scatter a subject, amend the wrong page, miss a restatement or drop
+  new knowledge. `--reembed` measures whatever embedding model the env
+  names against the same pages without reindexing them, such as the stub, or
+  a model you are thinking of switching to. Read-only. On bge-m3 the 0.92 / 0.80 defaults came out within
+  noise of the best values, so they are unchanged. On the hash stub, which
+  production runs, no amend threshold works; a dedupe override of 0.78 is
+  suggested there. (#234)
 
 ### Fixed
 

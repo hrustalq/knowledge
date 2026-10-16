@@ -177,8 +177,8 @@ the same title is a no-op.
 trust ranking on, and RRF on the fused path. No threshold means anything
 against either, so `similarPages` embeds and calls `graph.searchChunks`
 directly, folds chunk hits to the best chunk per page and post-filters in PG.
-The 0.92 / 0.80 defaults are **not calibrated** against backtest data yet. On
-bge-m3 an end-to-end run put unrelated pages at about 0.55, well below amend.
+The 0.92 / 0.80 defaults are measured, not guessed: see
+[§Calibration](#calibration).
 
 **Terms go through the inbox, not a merge request.** A glossary term is a
 row, not a revision, so there is nothing to merge. It waits `staged` with
@@ -386,6 +386,95 @@ The workspace's parent page for new captured pages applies only when it is a
 live page of the capture's project. Otherwise the page is created at the
 project root.
 
+## Calibration
+
+`make backtest ARGS="--captures --workspace <id>"` measures the two
+thresholds on a workspace's own pages (#234). It reads only. For each page
+with a removable section and a lead paragraph it builds four labelled cases,
+scored the way `similarPages` scores a capture: raw cosine, best chunk per
+page, pages of the same project.
+
+| Class               | Probe (title + text)       | Scored against                    | Right answer |
+| ------------------- | -------------------------- | --------------------------------- | ------------ |
+| amend               | section heading + section  | its page without that section     | amend it     |
+| new page            | the same probe             | every other page (its page gone)  | new page     |
+| restatement         | page title + lead          | its whole page                    | duplicate    |
+| same-title new fact | page title + section       | its page without that section     | amend, never drop |
+
+Chunks never cross a heading, so dropping a section's chunks removes exactly
+that section. A section is sampled only if it is one chunk, at least 200
+characters, and its heading is not a **template slot**, meaning a heading at
+least 3 pages share ("Foreign keys", "Preconditions"). A templated corpus
+fills a slot with near-identical text on every page, so the slot scores
+closer to its siblings than to its own page, and no capture reads like one.
+The script then prints p5/p50/p95 per class and, for every threshold from
+0.50 to 0.98, the share of each class it gets wrong. `--verbose` lists every
+case with its nearest other page. `--reembed` embeds the corpus as well as
+the probes with whatever provider the env configures, so another model is
+measured without reindexing anything:
+`EMBEDDINGS_PROVIDER=stub EMBEDDINGS_DIM=768` for the stub production runs,
+or a candidate replacement before switching to it.
+
+**Run of 2026-10-16**, demo workspace (492 live pages, one project, mostly
+Russian OMS specifications), 90 cases, 47 template headings left out:
+
+| Class (p5 / p50 / p95)  | bge-m3, 1024-d (stored) | stub, 768-d (re-embedded) |
+| ----------------------- | ----------------------- | ------------------------- |
+| amend                   | 0.558 / 0.759 / 0.881   | 0.119 / 0.445 / 0.925     |
+| new page                | 0.597 / 0.720 / 0.866   | 0.299 / 0.500 / 0.908     |
+| restatement             | 0.748 / 0.971 / 1.000   | 0.371 / 0.973 / 1.000     |
+| same-title new fact     | 0.665 / 0.826 / 0.920   | 0.124 / 0.501 / 0.934     |
+
+Errors on bge-m3. Amend: *scattered* means a new page instead, *wrong page*
+means another page outranks its own, *false amend* means an unrelated page
+gains a section. Dedupe: *missed* means a redundant section is proposed,
+*dropped* means new knowledge is silently lost.
+
+| Amend | scattered | wrong page | false amend | sum    |
+| ----- | --------- | ---------- | ----------- | ------ |
+| 0.76  | 35.6%     | 24.4%      | 35.6%       | 95.6%  |
+| 0.78  | 46.7%     | 18.9%      | 27.8%       | 93.3%  |
+| 0.80  | 58.9%     | 15.6%      | 20.0%       | 94.4%  |
+| 0.84  | 80.0%     | 7.8%       | 7.8%        | 95.6%  |
+
+| Dedupe | missed | dropped | sum   |
+| ------ | ------ | ------- | ----- |
+| 0.88   | 22.2%  | 12.2%   | 34.4% |
+| 0.90   | 27.8%  | 7.8%    | 35.6% |
+| 0.92   | 32.2%  | 4.4%    | 36.7% |
+
+**The defaults stay at 0.92 / 0.80.** With 90 cases one case is 1.1 points.
+The unweighted optimum (amend 0.78, dedupe 0.88) beats the defaults by one
+and two cases, which is inside the noise. Within that band each default errs
+toward the cheaper mistake. A scattered capture is a new-page merge request
+that lists the similar pages, so its reviewer can redirect it. A false amend
+edits a page that had nothing to do with it. A missed restatement is a merge
+request someone rejects. A drop proposes nothing, so nobody ever reviews it,
+and 0.88 drops nearly three times as often as 0.92.
+
+What the run says beyond the two numbers:
+
+- **The amend decision is limited by ranking, not by the threshold.** On a
+  single-domain corpus another page outranks the section's own page in 43% of
+  amend cases at any threshold up to 0.58, and the amend and new-page
+  distributions overlap almost entirely. No threshold gets the sum under 90%.
+  The new-page labels are noisy too: the best other page in a corpus like this
+  is often a genuine sibling.
+- **The restatement is an upper bound.** Its probe is the page's verbatim
+  lead. A paraphrase scores lower and is missed more often.
+- **The stub cannot make the amend decision.** A section scores a median 0.445
+  against its own page and 0.500 against the nearest other one, and every amend
+  threshold sums to 100% or more. Production runs the stub
+  (`EMBEDDINGS_PROVIDER=stub` in the `production` environment). For a stub
+  workspace the run suggests a dedupe override of 0.78. It drops no more than
+  0.92 (6.7%) and misses 23.3% of restatements instead of 40%. Amend then
+  follows it down to 0.78, which on the stub is no worse than 0.80 (107.8%
+  both). The real fix is a real embedding model.
+
+To re-run after changing the embedding model, run the same command and
+compare against these tables. Run one backtest at a time, because ArcadeDB
+runs out of memory on concurrent scans.
+
 ## Verification
 
 - `test/captures.spec.ts`: dedupe outcomes, the 429 and its extras, credential
@@ -401,6 +490,9 @@ project root.
   preserved.
 - `test/capture-settings.spec.ts`: ceilings, overrides and the threshold
   order.
+- `test/capture-calibration.spec.ts`: which section stands in for a capture
+  (never a template slot, never the page's only section, the same one every
+  run), the section left out of its own page's score, and each error share.
 - `test/mcp-http.spec.ts`: the tool offer per key scope.
 - `src/mcp/capture-kit.spec.ts`: a snapshot per client, the hook script is
   POSIX sh and fires once per session id, and the skill has no capture section
@@ -413,8 +505,9 @@ knowledge base on a live reply.
 
 ## Not done
 
-- **Thresholds are uncalibrated.** The 0.92 / 0.80 defaults were chosen by
-  judgement and one end-to-end run, not against `make backtest` data.
+- **Production is not calibrated yet.** The [run above](#calibration) is the
+  demo workspace on the laptop. The same command against production's own
+  pages needs the API container on the production host.
 - **No integration.** An amend appends a deterministic section. It does not
   rewrite the page around the new fact. A drafter pass is the obvious next
   step.

@@ -13,7 +13,7 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
-## [Unreleased]
+## [0.25.0] — 2026-10-16
 
 ### Added
 
@@ -2555,7 +2555,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.24.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/hrustalq/knowledge/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/hrustalq/knowledge/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/hrustalq/knowledge/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/hrustalq/knowledge/compare/v0.21.1...v0.22.0

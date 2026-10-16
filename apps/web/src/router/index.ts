@@ -113,6 +113,8 @@ export function createRouter() {
       // verification state, bulk actions and the freshness policy.
 
       { path: '/knowledge-health', component: () => import('@/pages/KnowledgeHealthPage.vue') },
+      // What coding agents proposed from their sessions (issue #73).
+      { path: '/captures', component: () => import('@/pages/CapturesPage.vue') },
       // meta.fill: the chat owns the viewport — see App.vue's two content modes.
       { path: '/assistant', component: () => import('@/pages/AssistantPage.vue'), meta: { fill: true } },
       // Settings: shell with its own right-hand nav; the sections are nested pages.

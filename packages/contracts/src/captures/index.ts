@@ -176,12 +176,22 @@ export interface CaptureResult {
   similar: CaptureSimilar[];
 }
 
+/** What a capture stored, by kind — the body a reviewer reads before deciding. Agent-written: render as text, never as trusted markup. */
+export type CapturePayload =
+  | DecisionCapturePayload
+  | NoteCapturePayload
+  | GlossaryCapturePayload
+  | RelationCapturePayload
+  | AnswerCapturePayload;
+
 /** One row of the captures list. */
 export interface CaptureInfo extends CaptureResult {
   workspaceId: string;
   projectId: string;
   kind: CaptureKind;
   title: string;
+  /** Read alongside `kind`: a staged term has no merge request to show its definition, so the inbox shows this. */
+  payload: CapturePayload;
   session: CaptureSession;
   createdBy: string;
   apiKeyId: string | null;

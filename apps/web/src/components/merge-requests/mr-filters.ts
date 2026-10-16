@@ -1,8 +1,8 @@
 import { computed, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { GitBranch, GitMerge, UserRound, UserRoundCheck, UserRoundPlus } from 'lucide-vue-next'
+import { Bot, GitBranch, GitMerge, UserRound, UserRoundCheck, UserRoundPlus } from 'lucide-vue-next'
 import type { ActiveFilter, FilterField, FilterOperator } from '@/components/ui/filter-bar'
-import type { MergeRequestStatus, SavedFilterQuery } from '@knowledge/contracts'
+import { MR_PROVENANCES, type MergeRequestStatus, type SavedFilterQuery } from '@knowledge/contracts'
 import { useMembers } from './use-members'
 
 /**
@@ -19,6 +19,7 @@ export const MR_FILTER_PARAMS = {
   reviewer: 'reviewerId',
   sourceBranch: 'sourceBranch',
   targetBranch: 'targetBranch',
+  provenance: 'provenance',
 } as const
 
 export type MrFilterKey = keyof typeof MR_FILTER_PARAMS
@@ -86,6 +87,16 @@ export function useMrFilterFields(): {
       operators: ['contains'] as FilterOperator[],
       placeholder: 'feature/…',
     })),
+    // Who opened it (issue #73): a person, an agent's finding, or an agent
+    // session's capture. A closed vocabulary, so it is picked, not typed.
+    {
+      key: 'provenance',
+      label: t('filters.provenance'),
+      icon: Bot,
+      options: MR_PROVENANCES.map((p) => ({ value: p, label: t(`mr.provenance.${p}`) })),
+      multiple: false,
+      operators: ['is'] as FilterOperator[],
+    },
   ])
 
   const fieldsByKey = computed(() => new Map(fields.value.map((f) => [f.key, f])))

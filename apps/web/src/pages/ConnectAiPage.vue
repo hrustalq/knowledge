@@ -21,7 +21,7 @@
  * for your workspaces; the tool list is what *your* credential would be
  * offered. Nothing on this page needs a workspace role.
  */
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -31,7 +31,9 @@ import type {
   ApiKeyScope,
   CreateApiKeyResponse,
   ListApiKeysResponse,
+  ListProjectsResponse,
   McpConnectionInfo,
+  ProjectSummary,
 } from '@knowledge/contracts'
 import { API_KEY_SCOPES } from '@knowledge/contracts'
 import { apiFetch, apiFetchText, getProjectId, getWorkspaceId } from '@/lib/api'
@@ -98,7 +100,46 @@ const form = reactive({
   scope: 'write' as ApiKeyScope,
   workspaceId: ALL_WORKSPACES,
   expiry: 'never' as (typeof EXPIRY_CHOICES)[number],
+  /** A `capture` key's project pin (issue #73). Empty = every project. */
+  projectIds: [] as string[],
 })
+
+/*
+ * The pin is offered only on a `capture` key — the API refuses it on any other
+ * scope — and lists the projects of the workspace the key is pinned to, or of
+ * the current one when it is not. Switching either clears it, so a pin can
+ * never carry ids the list above it no longer shows.
+ */
+const pinProjects = ref<ProjectSummary[]>([])
+const pinWorkspace = computed(() => (form.workspaceId === ALL_WORKSPACES ? getWorkspaceId() : form.workspaceId))
+
+watch(
+  [() => form.scope, pinWorkspace],
+  async ([scope, ws], [prevScope, prevWs]) => {
+    if (scope !== prevScope || ws !== prevWs) form.projectIds = []
+    if (scope !== 'capture') return
+    try {
+      pinProjects.value = (await apiFetch<ListProjectsResponse>(`/v1/projects?workspaceId=${ws}`)).projects
+    } catch {
+      pinProjects.value = []
+    }
+  },
+)
+
+function togglePin(projectId: string) {
+  form.projectIds = form.projectIds.includes(projectId)
+    ? form.projectIds.filter((id) => id !== projectId)
+    : [...form.projectIds, projectId]
+}
+
+/** A pinned project's name, when this page has met it; otherwise the start of its id. */
+function projectName(id: string): string {
+  return (
+    pinProjects.value.find((p) => p.projectId === id)?.name ??
+    projects.items.find((p) => p.projectId === id)?.name ??
+    id.slice(0, 8)
+  )
+}
 const creating = ref(false)
 const fresh = ref<{ key: ApiKeyInfo; apiKey: string } | null>(null)
 
@@ -113,6 +154,7 @@ async function createKey() {
         scope: form.scope,
         ...(form.workspaceId !== ALL_WORKSPACES ? { workspaceId: form.workspaceId } : {}),
         ...(form.expiry !== 'never' ? { expiresInDays: Number(form.expiry) } : {}),
+        ...(form.scope === 'capture' && form.projectIds.length ? { projectIds: form.projectIds } : {}),
       }),
     })
     fresh.value = { key: res.key, apiKey: res.apiKey }
@@ -311,6 +353,33 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
               </div>
             </div>
             <p class="text-[11px] text-muted-foreground">{{ t(`connect.keys.scopeHint.${form.scope}`) }}</p>
+
+            <!-- Where a capture key may propose. Toggles rather than a
+                 multi-select: a workspace has a handful of projects, and seeing
+                 them all at once is the decision. -->
+            <fieldset v-if="form.scope === 'capture'" class="grid gap-1.5">
+              <legend class="text-xs font-medium">{{ t('connect.keys.projects') }}</legend>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="p in pinProjects"
+                  :key="p.projectId"
+                  type="button"
+                  class="rounded-full border px-2.5 py-0.5 text-xs transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  :class="form.projectIds.includes(p.projectId)
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'"
+                  :aria-pressed="form.projectIds.includes(p.projectId)"
+                  @click="togglePin(p.projectId)"
+                >
+                  {{ p.name }}
+                </button>
+              </div>
+              <p class="text-[11px] text-muted-foreground">
+                {{ form.projectIds.length
+                  ? t('connect.keys.projectsPinned', { n: form.projectIds.length }, form.projectIds.length)
+                  : t('connect.keys.projectsAll') }}
+              </p>
+            </fieldset>
             <div>
               <Button type="submit" size="sm" class="gap-1.5" :disabled="creating || !form.name.trim()">
                 <Plus class="size-3.5" />
@@ -342,6 +411,7 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                     <span class="truncate text-sm font-medium">{{ k.name }}</span>
                     <Badge :variant="k.scope === 'read' ? 'secondary' : 'outline'">{{ t(`connect.keys.scopes.${k.scope}`) }}</Badge>
                     <Badge v-if="k.workspaceId" variant="outline">{{ workspaceName(k.workspaceId) }}</Badge>
+                    <Badge v-for="id in k.projectIds ?? []" :key="id" variant="outline" class="font-normal">{{ projectName(id) }}</Badge>
                   </div>
                   <p class="mt-0.5 text-[11px] text-muted-foreground">
                     <code class="font-mono">{{ k.prefix }}…</code>

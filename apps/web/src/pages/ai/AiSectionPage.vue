@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/auth'
 import { aiSectionLabel } from '@/lib/ai-sections'
 import AiConfigPanel from '@/components/ai/AiConfigPanel.vue'
+import AiCapturePanel from '@/components/ai/AiCapturePanel.vue'
 import AiAgentsPanel from '@/components/ai/AiAgentsPanel.vue'
 import AgentRunsPanel from '@/components/ai/AgentRunsPanel.vue'
 import AiCoveragePanel from '@/components/ai/AiCoveragePanel.vue'
@@ -48,6 +49,7 @@ const canManage = computed(() => auth.canAdminWorkspace)
 
     <div class="min-h-0 flex-1">
       <AiConfigPanel v-if="section === 'config'" :can-manage="canManage" />
+      <AiCapturePanel v-else-if="section === 'capture'" :can-manage="canManage" />
       <AiAgentsPanel v-else-if="section === 'agents'" :can-manage="canManage" />
       <AgentRunsPanel v-else-if="section === 'runs'" />
       <AiCoveragePanel v-else-if="section === 'coverage'" :can-manage="canManage" />

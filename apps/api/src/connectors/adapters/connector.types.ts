@@ -103,6 +103,11 @@ export interface CodeImportIndex {
   /** The commit the edges were read at, or null when the host did not say. */
   headSha: string | null;
   edges: CodeImportEdge[];
+  /**
+   * Every file at the head, read or not (#236, phase 6). Absent from an
+   * adapter that cannot list them, and then nothing is ever reported missing.
+   */
+  files?: string[];
 }
 
 export interface ConnectorContext {

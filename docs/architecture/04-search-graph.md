@@ -159,7 +159,7 @@ what exists. Without this note the plan reads as simply wrong against the code.
 
 ## Fact classes and inference
 
-Four provenance classes share one edge table, ordered by how much a human
+Five provenance classes share one edge table, ordered by how much a human
 vouched for them ([plan.md §5](../../plan.md)):
 
 | `extractor`   | Source                                               | Confidence |
@@ -168,6 +168,7 @@ vouched for them ([plan.md §5](../../plan.md)):
 | `frontmatter` | Parsed from the document — see [03](03-ingestion.md) | 1          |
 | `inferred`    | The LLM extractor                                    | clamped    |
 | `curated`     | A human confirming or correcting a fact              | 1          |
+| `code`        | A codebase connector's import index ([51](../features/51-component-pages.md)) | 1 |
 
 Extraction is pluggable behind the `RELATION_EXTRACTOR` token (`src/extraction/`),
 mirroring embeddings: `none` (default) or `openai-compatible`

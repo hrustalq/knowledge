@@ -323,6 +323,22 @@ export function declaredPathFixes(
   return fixes;
 }
 
+/**
+ * The declared paths no file at the indexed head answers to (#236, phase 6): a
+ * file that is gone, a directory with nothing left under it, a glob matching
+ * nothing. Unknown files (`null`, a connector never indexed with its file
+ * list) report nothing — a guess here would put a healthy page on the
+ * dashboard.
+ */
+export function missingPaths(paths: readonly string[], files: ReadonlySet<string> | null): string[] {
+  if (!files) return [];
+  return paths.filter((p) => {
+    if (!GLOB.test(p) && files.has(p.replace(/\/+$/, ''))) return false;
+    for (const f of files) if (pathCovers(p, f)) return false;
+    return true;
+  });
+}
+
 /** `paths` with `fixes` applied, moves in place and removals dropped. */
 export function applyPathFixes(paths: readonly string[], fixes: ReadonlyArray<{ from: string; to: string | null }>): string[] {
   const byFrom = new Map(fixes.map((f) => [f.from, f.to]));

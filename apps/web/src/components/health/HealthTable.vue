@@ -167,6 +167,14 @@ function expiryLine(row: KnowledgeHealthRow): string | null {
               <Badge v-if="row.empty" variant="outline" class="text-muted-foreground" :title="t('health.emptyHint')">
                 {{ t('health.emptyChip') }}
               </Badge>
+              <Badge
+                v-if="row.missingPaths.length > 0 && !row.archivedAt"
+                variant="outline"
+                class="text-amber-700 dark:text-amber-400"
+                :title="row.missingPaths.join('\n')"
+              >
+                {{ t('health.missingPathsChip', { n: row.missingPaths.length }, row.missingPaths.length) }}
+              </Badge>
             </div>
             <!-- The note is user or agent text: rendered as text, never as markup. -->
             <q v-if="row.verificationNote" class="mt-1 line-clamp-2 block text-xs text-muted-foreground italic" :title="row.verificationNote">

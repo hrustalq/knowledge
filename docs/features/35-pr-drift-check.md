@@ -77,6 +77,14 @@ shape, pointed at a diff. `agents/drift.ts` is Nest-free and tested:
 - *Searched* — at most three hits for the change's title and file names, because
   the page most likely to drift is a hand-written one no link reaches.
 
+Component pages ([51](51-component-pages.md)) add two ties. *Declared*, the
+strongest: a page whose `component.paths` covers a changed file. *Used*: a page
+documenting a file that imports a declared component the change touches,
+against the default-branch index overlaid with the pull request's head. The
+comment lists those usages under **Affected usages**, and a deleted or moved
+declared file yields a finding whose Propose fixes `component.paths` with no
+model call.
+
 Strongest tie first, eight pages at most: one model call each is the cost. A
 `markdown-git` page the change **itself** edits is excluded — it is the change
 documenting itself, and the next sync after merge updates it.

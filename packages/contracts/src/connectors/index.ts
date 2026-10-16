@@ -1411,6 +1411,8 @@ export interface ComponentDeclarationView {
   connector: { id: string; name: string } | null;
   paths: string[];
   symbols: string[];
+  /** The declared paths no file answers to at the connector's indexed head, as of its last pull. */
+  missingPaths: string[];
   warning: ComponentDeclarationWarning | null;
   /** The revision the declaration was read from. */
   revisionId: string;

@@ -3836,6 +3836,7 @@
       "requested": "Requested",
       "flagged": "Reported",
       "inactive": "Inactive",
+      "missing-paths": "Missing code",
       "archived": "Archived"
     },
     "presetHint": {
@@ -3849,6 +3850,7 @@
       "requested": "Somebody asked for a check",
       "flagged": "A reader or an agent reported a problem",
       "inactive": "No edit, comment or check for the inactivity window",
+      "missing-paths": "A component page declares a path no file matches at the indexed head",
       "archived": "Put away; hidden from lists, search and the assistant"
     },
     "search": "Search by title…",
@@ -3874,6 +3876,7 @@
     "previewRoot": "Top level",
     "openPage": "Open page",
     "emptyChip": "Empty",
+    "missingPathsChip": "{n} missing path | {n} missing paths",
     "emptyHint": "The body is under the workspace's empty-page threshold",
     "children": "{n} page under it | {n} pages under it",
     "verifiedBy": "{who}, {when}",
@@ -4659,6 +4662,8 @@
       "no-connector": "The workspace has no codebase connector. Connect the repository to track where this code is used.",
       "ambiguous-repository": "Several code connectors could hold it. Set component.repository to owner/repo to pick one.",
       "unknown-repository": "No code connector reads “{repository}”. Check component.repository against the connector’s repository.",
+      "missingTitle": "Some declared code is gone.",
+      "missing": "No file at the indexed head matches {paths}. Fix component.paths, or the page documents code that no longer exists.",
       "no-paths": "component.paths names no file. List the files or directories this page documents."
     },
     "usedBy": {

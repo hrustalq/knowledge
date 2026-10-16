@@ -693,12 +693,12 @@ export class CodebaseAdapter implements ConnectorAdapter {
    */
   async codeImports(ctx: ConnectorContext): Promise<CodeImportIndex> {
     const plan = await this.plan(ctx);
-    const { files, headSha } = plan.archive;
+    const { files, headSha, skippedPaths = [] } = plan.archive;
     const { edges, barrels } = await collectImportEdges(files.keys(), createFileResolver(files), (path) =>
       SFC_FILE.test(path) ? sfcOutline(this.treeSitter, files.get(path)) : this.outline(ctx, plan, path),
     );
     ctx.debug('code imports indexed', { files: files.size, edges: edges.length, barrels, headSha });
-    return { headSha, edges };
+    return { headSha, edges, files: [...files.keys(), ...skippedPaths].sort() };
   }
 
   // --- the deterministic page ---

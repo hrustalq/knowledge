@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import {
   componentKeyFor,
   componentUsageEdges,
+  missingPaths,
   resolveDeclaration,
   type CodeConnectorRef,
   type ResolvedDeclaration,
@@ -86,15 +87,26 @@ export class ComponentsService {
     const connectors = await this.codeConnectors(workspaceId);
     const rows = await this.prisma.componentDeclaration.findMany({ where: { workspaceId } });
 
-    for (const row of rows) {
-      const next = resolveDeclaration(row, connectors);
-      if (next.connectorId === row.connectorId && next.warning === row.warning) continue;
+    const resolved = rows.map((row) => resolveDeclaration(row, connectors));
+    const used = connectors.filter((c) => resolved.some((r) => r.connectorId === c.id));
+    const headFiles = new Map(await Promise.all(used.map(async (c) => [c.id, await this.headFiles(c.id)] as const)));
+
+    for (const [i, row] of rows.entries()) {
+      const next = {
+        ...resolved[i],
+        missingPaths: resolved[i].connectorId ? missingPaths(row.paths, headFiles.get(resolved[i].connectorId!) ?? null) : [],
+      };
+      if (
+        next.connectorId === row.connectorId &&
+        next.warning === row.warning &&
+        next.missingPaths.join('\n') === row.missingPaths.join('\n')
+      ) {
+        continue;
+      }
       await this.prisma.componentDeclaration.update({ where: { documentId: row.documentId }, data: next });
-      row.connectorId = next.connectorId;
-      row.warning = next.warning;
+      Object.assign(row, next);
     }
 
-    const used = connectors.filter((c) => rows.some((r) => r.connectorId === c.id));
     const inputs = await Promise.all(
       used.map(async (connector) => {
         const [imports, links] = await Promise.all([
@@ -164,11 +176,18 @@ export class ComponentsService {
       connector: row.connector,
       paths: row.paths,
       symbols: row.symbols,
+      missingPaths: row.missingPaths,
       // A connector deleted since the last resolve leaves a null id behind the
       // FK; until the next pull re-resolves, that is "no connector" too.
       warning: (row.warning as ComponentDeclarationWarning | null) ?? (row.connectorId ? null : 'unknown-repository'),
       revisionId: row.revisionId,
     };
+  }
+
+  /** Every file at the connector's indexed head, or null when it was never indexed with its file list. */
+  private async headFiles(connectorId: string): Promise<Set<string> | null> {
+    const rows = await this.prisma.codeFile.findMany({ where: { connectorId }, select: { path: true } });
+    return rows.length > 0 ? new Set(rows.map((r) => r.path)) : null;
   }
 
   /** The workspace's codebase connectors that name a repository, oldest first. */

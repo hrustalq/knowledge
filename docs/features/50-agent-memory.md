@@ -471,6 +471,39 @@ What the run says beyond the two numbers:
   follows it down to 0.78, which on the stub is no worse than 0.80 (107.8%
   both). The real fix is a real embedding model.
 
+**Production run of 2026-10-17** (v0.26.0, inside the `api` container on the
+production host, stored stub vectors). Only one workspace has 20 or more live
+pages: RTech OMS, with 31 pages, 23 cases and 11 template headings left out.
+With 23 cases, one case is 4.3 points.
+
+| Class (p5 / p50 / p95) | stub, 768-d (stored)  |
+| ---------------------- | --------------------- |
+| amend                  | 0.128 / 0.274 / 0.405 |
+| new page               | 0.282 / 0.458 / 0.664 |
+| restatement            | 0.558 / 0.974 / 0.990 |
+| same-title new fact    | 0.173 / 0.299 / 0.491 |
+
+| Dedupe | missed | dropped |
+| ------ | ------ | ------- |
+| 0.78   | 8.7%   | 0.0%    |
+| 0.88   | 13.0%  | 0.0%    |
+| 0.92   | 17.4%  | 0.0%    |
+
+It confirms the stub finding on a corpus nobody tuned against:
+
+- **Production never amends.** No section scores above 0.44 against its own
+  page. At 0.80 every amend case scatters (100%) and none lands on a wrong page.
+  Each capture therefore becomes a new-page merge request that lists the
+  similar pages, which is the cheap error. In 21 of the 23 cases another page
+  outranks the section's own, so lowering amend would mostly put sections on
+  the wrong page: 39% wrong page at 0.50.
+- **0.78 is still the dedupe override to use.** It halves the missed
+  restatements (2 cases instead of 4) and drops nothing here: same-title new
+  facts score a p95 of 0.49. On the demo corpus it also dropped no more than
+  0.92 did (6.7%).
+
+The override is a workspace capture setting and has not been applied.
+
 To re-run after changing the embedding model, run the same command and
 compare against these tables. Run one backtest at a time, because ArcadeDB
 runs out of memory on concurrent scans.
@@ -505,9 +538,9 @@ knowledge base on a live reply.
 
 ## Not done
 
-- **Production is not calibrated yet.** The [run above](#calibration) is the
-  demo workspace on the laptop. The same command against production's own
-  pages needs the API container on the production host.
+- **Production runs the stub.** The [production run](#calibration) shows it
+  cannot make the amend decision at any threshold. Moving production to a real
+  embedding model, and reindexing, is what would make amend work there.
 - **No integration.** An amend appends a deterministic section. It does not
   rewrite the page around the new fact. A drafter pass is the obvious next
   step.

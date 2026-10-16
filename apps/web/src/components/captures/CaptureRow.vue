@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // One capture in the inbox (issue #73), shaped like a merge-request card: a
 // kind mark, the title, then one line of where it came from — the agent, the
-// repository at a commit, the branch, when, and whose key wrote it.
+// repository at a commit, the branch, when, whose it is and the key that wrote
+// it. The key narrows the inbox to everything it proposed (issue #235).
 //
 // The second line says what dedupe made of it, because that is what a reviewer
 // is deciding about: a new page, an amendment to an existing one, or nothing
@@ -12,7 +13,7 @@
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref } from 'vue'
 import { toast } from 'vue-sonner'
-import { ArrowUpRight, Check, ChevronDown, CircleAlert, GitPullRequestArrow, X } from 'lucide-vue-next'
+import { ArrowUpRight, Check, ChevronDown, CircleAlert, GitPullRequestArrow, KeyRound, X } from 'lucide-vue-next'
 import { CAPTURE_PAGE_KINDS } from '@knowledge/contracts'
 import type {
   AnswerCapturePayload,
@@ -47,7 +48,11 @@ const props = defineProps<{
   projectName?: string
   /** Approve and reject are an editor's; a viewer reads the inbox and decides nothing. */
   canDecide: boolean
+  /** Whether the key is offered as a filter: an editor's for any key, everyone's for their own (the API's rule). */
+  canFilterKey: boolean
 }>()
+
+const emit = defineEmits<{ filterKey: [apiKeyId: string] }>()
 
 const c = computed(() => props.capture)
 const repo = computed(() => repoAtCommit(c.value.session))
@@ -190,6 +195,22 @@ const bodyId = computed(() => `kn-capture-${c.value.captureId}`)
           <time :datetime="c.createdAt">{{ relativeTime(c.createdAt) }}</time>
           <span aria-hidden="true">·</span>
           <UserChip :user-id="c.createdBy" size="sm" />
+          <template v-if="c.apiKey">
+            <span aria-hidden="true">·</span>
+            <component
+              :is="canFilterKey ? 'button' : 'span'"
+              :type="canFilterKey ? 'button' : undefined"
+              class="inline-flex min-w-0 items-center gap-1"
+              :class="canFilterKey && 'rounded hover:text-foreground hover:underline'"
+              :title="canFilterKey ? t('captures.key.filterBy', { name: c.apiKey.name }) : c.apiKey.name"
+              @click="canFilterKey && emit('filterKey', c.apiKey.id)"
+            >
+              <KeyRound class="size-3 shrink-0" aria-hidden="true" />
+              <span class="max-w-40 truncate">{{ c.apiKey.name }}</span>
+              <code class="font-mono text-[0.6875rem]">{{ c.apiKey.prefix }}…</code>
+              <span v-if="c.apiKey.revoked" class="text-destructive">{{ t('captures.key.revoked') }}</span>
+            </component>
+          </template>
         </p>
 
         <p v-if="outcomeLine" class="mt-1.5 text-xs">

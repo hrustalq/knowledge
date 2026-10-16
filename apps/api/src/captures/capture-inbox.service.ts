@@ -1,10 +1,14 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { KnowledgeCapture } from '@prisma/client';
 import {
+  accessRank,
   captureStateFor,
   isWebSource,
   type AssistantSource,
+  type BulkRejectCapturesRequest,
+  type BulkRejectCapturesResponse,
+  type CaptureApiKey,
   type CaptureInfo,
   type CaptureResult,
   type CaptureStatus,
@@ -18,6 +22,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { visibilityWhere } from '../permissions/access-scope.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
 import { ActivityService } from '../activity/activity.service.js';
+import { MergeRequestsService } from '../documents/merge-requests.service.js';
 import { asLocale } from '../i18n/locale.js';
 import { t } from '../i18n/t.js';
 import { CAPTURE_MAX_ATTEMPTS, CaptureService } from './capture.service.js';
@@ -50,6 +55,7 @@ export class CaptureInboxService {
     private readonly permissions: PermissionService,
     private readonly glossary: GlossaryService,
     private readonly activity: ActivityService,
+    private readonly mergeRequests: MergeRequestsService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -150,6 +156,123 @@ export class CaptureInboxService {
       metadata: { kind: row.kind, title: row.title, ...(reason?.trim() ? { reason: reason.trim().slice(0, 1_000) } : {}) },
     });
     return this.get(id, principal);
+  }
+
+  /**
+   * The key `?apiKeyId=` narrows the inbox to, named for the filter chip
+   * (issue #235). Your own key is yours to look up at any role; anyone else's
+   * takes an editor, so a viewer cannot walk key ids to see who proposed what.
+   * A key that is neither pinned here nor held by a member here, and never
+   * captured here, is another tenant's: 403, the same answer as a key that
+   * does not exist.
+   */
+  async keyIn(workspaceId: string, apiKeyId: string, principal: Principal): Promise<CaptureApiKey> {
+    const key = await this.prisma.apiKey.findUnique({
+      where: { id: apiKeyId },
+      select: { id: true, userId: true, workspaceId: true, name: true, prefix: true, revokedAt: true },
+    });
+    if (key?.userId !== principal.userId) await this.access.requireRole(principal, workspaceId, 'editor');
+    // A key pinned elsewhere could never have captured here. An owner who has
+    // since left still leaves their key's captures behind to clean up.
+    const here =
+      !!key &&
+      (key.workspaceId === null || key.workspaceId === workspaceId) &&
+      ((await this.prisma.workspaceMember.count({ where: { workspaceId, userId: key.userId } })) > 0 ||
+        (await this.prisma.knowledgeCapture.count({ where: { workspaceId, apiKeyId } })) > 0);
+    if (!key || !here) throw new ForbiddenException(t('error.capture.keyNotHere'));
+    return { id: key.id, name: key.name, prefix: key.prefix, revoked: key.revokedAt !== null };
+  }
+
+  /**
+   * Everything one key proposed that is still pending, turned down at once
+   * (issue #235): its staged captures rejected with the single reject's
+   * guarded update, and the open merge requests its captures opened closed as
+   * the caller. Each capture still gets its own `capture.rejected` row.
+   *
+   * Only what the caller can see in the list is touched. A row someone is
+   * proposing right now is skipped rather than raced, and a merge request on a
+   * page the caller may read but not edit is left open; both are counted so
+   * the answer adds up. Merged captures are left alone — undoing one is a
+   * revert. `dryRun` counts the same rows and writes nothing.
+   */
+  async bulkReject(req: BulkRejectCapturesRequest, principal: Principal): Promise<BulkRejectCapturesResponse> {
+    const { workspaceId, apiKeyId } = req;
+    await this.keyIn(workspaceId, apiKeyId, principal);
+    const scope = await this.permissions.scopeFor(principal, workspaceId);
+    const reason = req.reason?.trim() ? req.reason.trim().slice(0, 1_000) : undefined;
+    const out: BulkRejectCapturesResponse = { rejected: 0, closed: 0, skippedInFlight: 0, skippedNoAccess: 0 };
+
+    const candidates = await this.prisma.knowledgeCapture.findMany({
+      where: { workspaceId, apiKeyId, OR: [{ status: 'staged' }, { status: 'proposed', mergeRequestId: { not: null } }] },
+      orderBy: { createdAt: 'asc' },
+    });
+    const targets = [...new Set(candidates.map((r) => r.targetDocumentId).filter((id): id is string => !!id))];
+    const visible = new Set(
+      targets.length
+        ? (await this.prisma.document.findMany({ where: { id: { in: targets }, AND: [visibilityWhere(scope)] }, select: { id: true } })).map(
+            (d) => d.id,
+          )
+        : [],
+    );
+    const rows = candidates.filter((r) => !scope.denied.has(r.projectId) && (!r.targetDocumentId || visible.has(r.targetDocumentId)));
+    const record = (row: KnowledgeCapture, extra: Record<string, unknown> = {}) =>
+      void this.activity.record({
+        workspaceId,
+        actor: principal.userId,
+        action: 'capture.rejected',
+        projectId: row.projectId,
+        ...(row.targetDocumentId ? { documentId: row.targetDocumentId } : {}),
+        subjectId: row.id,
+        metadata: { kind: row.kind, title: row.title, bulk: true, apiKeyId, ...extra, ...(reason ? { reason } : {}) },
+      });
+
+    const stale = new Date(Date.now() - this.config.get('CAPTURE_STALE_MS', { infer: true }));
+    for (const row of rows.filter((r) => r.status === 'staged')) {
+      if (req.dryRun) {
+        if (row.claimedAt && row.claimedAt >= stale) out.skippedInFlight++;
+        else out.rejected++;
+        continue;
+      }
+      const done = await this.prisma.knowledgeCapture.updateMany({
+        where: { id: row.id, status: 'staged', OR: [{ claimedAt: null }, { claimedAt: { lt: stale } }] },
+        data: { status: 'rejected', claimedAt: null },
+      });
+      if (done.count !== 1) {
+        out.skippedInFlight++;
+        continue;
+      }
+      out.rejected++;
+      record(row);
+    }
+
+    // One merge request may carry more than one capture; it is closed once and each capture is recorded.
+    const byMr = new Map<string, KnowledgeCapture[]>();
+    for (const row of rows) {
+      if (row.status !== 'proposed' || !row.mergeRequestId) continue;
+      byMr.set(row.mergeRequestId, [...(byMr.get(row.mergeRequestId) ?? []), row]);
+    }
+    const open = byMr.size
+      ? await this.prisma.mergeRequest.findMany({ where: { id: { in: [...byMr.keys()] }, status: 'open' }, select: { id: true, documentId: true } })
+      : [];
+    for (const mr of open) {
+      const level = await this.permissions.levelFor(scope, { type: 'document', id: mr.documentId });
+      if (accessRank(level) < accessRank('edit')) {
+        out.skippedNoAccess++;
+        continue;
+      }
+      if (!req.dryRun) {
+        try {
+          await this.mergeRequests.close(mr.id, principal.userId);
+        } catch (err) {
+          // Merged or closed since it was read: nothing left to turn down.
+          if (err instanceof BadRequestException) continue;
+          throw err;
+        }
+        for (const row of byMr.get(mr.id)!) record(row, { mergeRequestId: mr.id });
+      }
+      out.closed++;
+    }
+    return out;
   }
 
   /**

@@ -979,6 +979,7 @@ export type I18nTranslations = {
             "messageNotAssistant": string;
             "kitClient": string;
             "kitNotOffered": string;
+            "keyNotHere": string;
         };
     };
     "import": {

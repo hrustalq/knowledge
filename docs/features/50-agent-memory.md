@@ -45,8 +45,14 @@ revision DAG and graph as the pages people write, not in a separate store.
 - **The Captures inbox** (`/captures`, "Предложения агентов" in Russian) lists
   every capture by Staged, Proposed, Duplicates, Rejected and Failed. A row
   shows the agent, repository, branch and commit, what dedupe decided and the
-  pages it was compared with. Terms are approved or rejected there. Page and
-  relation captures link to their merge request.
+  pages it was compared with, and the key that wrote it. Terms are approved or
+  rejected there. Page and relation captures link to their merge request.
+- **Cleanup by key** (#235). A row's key, or "Its captures" on a key in Connect
+  AI (offered again in the toast after revoking it), narrows the inbox to
+  everything that key proposed. From there an editor turns down what is still
+  pending in one act: staged captures are rejected and the open merge requests
+  they opened are closed, after a confirmation that shows the server's own
+  dry-run counts.
 - **Merge request provenance.** Every merge request records who opened it:
   `manual`, `agent` (an agent finding or an assistant proposal) or `captured`.
   The list badges it and filters on it, and a captured merge request's page
@@ -325,10 +331,11 @@ line names the pin.
 | Route                                                                  | Access                                                                        |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `POST /v1/captures` (body discriminated by `kind`)                     | editor · body, `{ capture: true }`                                            |
-| `GET /v1/captures?workspaceId&status&kind&projectId&mine&cursor&limit` | viewer · query; rows on pages or projects the caller cannot open are left out |
+| `GET /v1/captures?workspaceId&status&kind&projectId&mine&apiKeyId&cursor&limit` | viewer · query; rows on pages or projects the caller cannot open are left out; `apiKeyId` of another person's key takes an editor, a key from another tenant 403s |
 | `GET /v1/captures/:id`                                                 | viewer · capture (resolved in PG)                                             |
 | `POST /v1/captures/:id/approve`                                        | editor · capture; terms only; a capture key is refused                        |
 | `POST /v1/captures/:id/reject` `{ reason? }`                           | editor · capture; staged rows only; a capture key is refused                  |
+| `POST /v1/captures/bulk-reject` `{ workspaceId, apiKeyId, reason?, dryRun? }` | editor · body; a capture key is refused; returns `{ rejected, closed, skippedInFlight, skippedNoAccess }` |
 | `POST /v1/assistant/messages/:id/capture` `{ projectId?, title? }`     | editor · assistant-message, `{ capture: true }`                               |
 | `GET /v1/mcp/capture-kit?client=` · `…/capture-kit/install?client=`    | authenticated; 403 `capture-not-offered` for a read key                       |
 | `GET /v1/merge-requests?provenance=`                                   | the existing list, filtered                                                   |
@@ -385,7 +392,11 @@ project root.
   refusal, a capture key unable to merge or approve, provenance on the merge
   request, and an idempotent re-post returning `duplicate`.
 - `test/capture-inbox.spec.ts`: approve/reject roles, a capture key unable to
-  approve, a cross-tenant 403, and the sweeper's recovery.
+  approve, a cross-tenant 403, and the sweeper's recovery. For #235: the key
+  filter's editor rule and tenant check, and bulk reject rejecting staged rows,
+  closing open merge requests, leaving merged ones and skipping in-flight rows
+  and read-only pages, with one activity row per capture and a dry run that
+  writes nothing.
 - `test/capture-templates.spec.ts`: en and ru rendering, frontmatter
   preserved.
 - `test/capture-settings.spec.ts`: ceilings, overrides and the threshold
@@ -412,10 +423,11 @@ knowledge base on a live reply.
   graph milestone.
 - **No auto-merge**, even for a trusted key. That waits for page verification
   to be the signal it would rest on.
-- **No cleanup by key.** Revoking a key does not retract its open merge
-  requests. The inbox filters by kind, project and "only mine", not by key, so
-  a bad key's output is found by its owner's captures and rejected or closed
-  one at a time.
+- **Revoking does not reject.** Revoking a key stops new captures and leaves
+  its pending ones for review, because a revoked key's past output may still
+  be good. Cleanup by key (above) is one deliberate step away.
+- **Merged captures stay merged.** Bulk reject leaves them alone; undoing one
+  is an ordinary revert merge request.
 - **No server-side distillation.** The agent decides what to capture. The
   platform never receives a transcript and has nothing to distill from.
 - **Kits for two clients.** Codex, Gemini CLI and the rest get the skill's

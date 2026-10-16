@@ -17,6 +17,7 @@ import {
   isAuthorableRelationType,
   type AnswerCapturePayload,
   type AuthorableRelationType,
+  type CaptureApiKey,
   type CaptureInfo,
   type CaptureKind,
   type CaptureOutcome,
@@ -332,6 +333,7 @@ export class CaptureService {
       kind?: CaptureKind;
       projectId?: string;
       createdBy?: string;
+      apiKeyId?: string;
       cursor?: string;
       limit?: number;
     },
@@ -345,6 +347,7 @@ export class CaptureService {
         ...(query.kind ? { kind: query.kind } : {}),
         ...(query.projectId ? { projectId: query.projectId } : {}),
         ...(query.createdBy ? { createdBy: query.createdBy } : {}),
+        ...(query.apiKeyId ? { apiKeyId: query.apiKeyId } : {}),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
@@ -372,15 +375,29 @@ export class CaptureService {
           )
         : [],
     );
-    const captures = page
-      .filter((r) => !scope.denied.has(r.projectId) && (!r.targetDocumentId || visible.has(r.targetDocumentId)))
-      .map((r) => this.toInfo(r, r.mergeRequestId ? (statuses.get(r.mergeRequestId) ?? null) : null));
+    const shown = page.filter((r) => !scope.denied.has(r.projectId) && (!r.targetDocumentId || visible.has(r.targetDocumentId)));
+    const keys = await this.apiKeys(shown.map((r) => r.apiKeyId));
+    const captures = shown.map((r) =>
+      this.toInfo(r, r.mergeRequestId ? (statuses.get(r.mergeRequestId) ?? null) : null, r.apiKeyId ? (keys.get(r.apiKeyId) ?? null) : null),
+    );
     return { captures, nextCursor: hasMore ? page[page.length - 1]!.id : null };
   }
 
-  /** One row as the inbox shows it, its merge request's status read alongside. */
+  /** One row as the inbox shows it, its merge request's status and its key read alongside. */
   async info(row: KnowledgeCapture): Promise<CaptureInfo> {
-    return this.toInfo(row, await this.mergeRequestStatus(row.mergeRequestId));
+    const keys = await this.apiKeys([row.apiKeyId]);
+    return this.toInfo(row, await this.mergeRequestStatus(row.mergeRequestId), row.apiKeyId ? (keys.get(row.apiKeyId) ?? null) : null);
+  }
+
+  /** The keys that wrote these captures, by id: name and prefix only — the hash never leaves `api_keys`. */
+  async apiKeys(ids: Array<string | null>): Promise<Map<string, CaptureApiKey>> {
+    const wanted = [...new Set(ids.filter((id): id is string => !!id))];
+    if (!wanted.length) return new Map();
+    const rows = await this.prisma.apiKey.findMany({
+      where: { id: { in: wanted } },
+      select: { id: true, name: true, prefix: true, revokedAt: true },
+    });
+    return new Map(rows.map((k) => [k.id, { id: k.id, name: k.name, prefix: k.prefix, revoked: k.revokedAt !== null }]));
   }
 
   // ------------------------------------------------------------------ staging
@@ -869,7 +886,7 @@ export class CaptureService {
     };
   }
 
-  private toInfo(row: KnowledgeCapture, mergeRequestStatus: string | null): CaptureInfo {
+  private toInfo(row: KnowledgeCapture, mergeRequestStatus: string | null, apiKey: CaptureApiKey | null): CaptureInfo {
     return {
       ...this.toResult(row, mergeRequestStatus),
       workspaceId: row.workspaceId,
@@ -880,6 +897,7 @@ export class CaptureService {
       session: row.session as unknown as CaptureSession,
       createdBy: row.createdBy,
       apiKeyId: row.apiKeyId,
+      apiKey,
       error: row.error,
       createdAt: row.createdAt.toISOString(),
     };

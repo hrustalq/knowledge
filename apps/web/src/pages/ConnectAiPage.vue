@@ -24,7 +24,7 @@
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { ChevronRight, Download, ExternalLink, FileCode, FileText, KeyRound, Plus, Settings2, TriangleAlert } from 'lucide-vue-next'
 import type {
@@ -72,6 +72,7 @@ import CopyBlock from '@/components/connect/CopyBlock.vue'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const workspaces = useWorkspacesStore()
 const projects = useProjectsStore()
 
@@ -184,6 +185,16 @@ async function createKey() {
 
 const revoking = ref<ApiKeyInfo | null>(null)
 
+/**
+ * Where what a key proposed is reviewed (issue #235): the captures inbox
+ * narrowed to it. Only a key that may capture has anything there, and only in
+ * the workspace open now — the inbox is that workspace's.
+ */
+function capturesOf(key: ApiKeyInfo): string | null {
+  if (key.scope === 'read' || (key.workspaceId && key.workspaceId !== getWorkspaceId())) return null
+  return `/captures?apiKeyId=${key.id}`
+}
+
 async function revoke() {
   const key = revoking.value
   if (!key) return
@@ -191,7 +202,12 @@ async function revoke() {
     await apiFetch(`/v1/me/api-keys/${key.id}`, { method: 'DELETE' })
     keys.value = keys.value.filter((k) => k.id !== key.id)
     if (fresh.value?.key.id === key.id) fresh.value = null
-    toast.success(t('connect.keys.revoked', { name: key.name }))
+    // Revoking stops new captures and leaves the old ones pending: point at them
+    // rather than rejecting them, since a revoked key's past output may be good.
+    const review = capturesOf(key)
+    toast.success(t('connect.keys.revoked', { name: key.name }), {
+      ...(review ? { action: { label: t('connect.keys.reviewCaptures'), onClick: () => void router.push(review) } } : {}),
+    })
   } catch (e) {
     toast.error((e as Error).message || t('connect.keys.revokeFailed'))
   } finally {
@@ -476,6 +492,9 @@ const writeTools = computed(() => connection.value?.tools.filter((tool) => !tool
                     <code class="font-mono">{{ k.prefix }}…</code>
                     · {{ k.lastUsedAt ? t('connect.keys.lastUsed', { when: formatRelative(k.lastUsedAt) }) : t('connect.keys.neverUsed') }}
                     · {{ k.expiresAt ? t('connect.keys.expires', { when: formatDate(k.expiresAt) }) : t('connect.keys.noExpiry') }}
+                    <template v-if="capturesOf(k)">
+                      · <RouterLink :to="capturesOf(k)!" class="text-primary hover:underline">{{ t('connect.keys.captures') }}</RouterLink>
+                    </template>
                   </p>
                 </div>
                 <Button variant="ghost" size="sm" class="shrink-0 text-destructive hover:text-destructive" @click="revoking = k">

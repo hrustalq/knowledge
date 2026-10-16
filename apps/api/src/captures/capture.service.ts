@@ -11,7 +11,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { KnowledgeCapture, Prisma } from '@prisma/client';
 import {
-  CAPTURE_PAGE_KINDS,
   CAPTURE_SESSION_MAX_FILES,
   captureStateFor,
   entityTypeOf,
@@ -21,6 +20,7 @@ import {
   type CaptureInfo,
   type CaptureKind,
   type CaptureOutcome,
+  type CapturePageKind,
   type CaptureResult,
   type CaptureSession,
   type CaptureSettings,
@@ -54,7 +54,16 @@ import { composeFrontmatter } from '../common/frontmatter.js';
 import { LISTED_PAGE } from '../common/listed-page.js';
 import { t } from '../i18n/t.js';
 import { findSecret } from './secret-scan.js';
-import { captureContentHash, decidePage, foldTermKeys, normalizeCaptureTitle, rankSimilar } from './capture-dedupe.js';
+import {
+  captureContentHash,
+  cleanCaptureTitle,
+  decidePage,
+  dedupeText,
+  foldTermKeys,
+  normalizeCaptureTitle,
+  rankSimilar,
+  type PageDecision,
+} from './capture-dedupe.js';
 import {
   appendCaptureSection,
   CAPTURE_HEADING_KEYS,
@@ -75,6 +84,9 @@ const SIMILAR_LIMIT = 5;
 const CHUNKS_PER_PAGE = 8;
 /** What is embedded for dedupe, at most. */
 const DEDUPE_TEXT_CHARS = 4_000;
+/** A page decision in the playbook's words, as `knowledge_find_similar` reports it. */
+export type SimilarDecision = 'duplicate' | 'amend' | 'new-page';
+const SIMILAR_DECISION: Record<PageDecision['outcome'], SimilarDecision> = { none: 'duplicate', 'amend-page': 'amend', 'new-page': 'new-page' };
 /** Proposing attempts before a capture that keeps failing is given up. */
 export const CAPTURE_MAX_ATTEMPTS = 3;
 
@@ -288,6 +300,27 @@ export class CaptureService {
   }
 
   /**
+   * `knowledge_find_similar`. With only `text`, the pages nearest it. Given
+   * the `title` and page `kind` a capture would carry, it embeds what that
+   * capture embeds and says what the capture would do: `duplicate` (nothing
+   * is proposed), `amend` (the top page gets a section) or `new-page` (#233).
+   */
+  async findSimilar(
+    principal: Principal,
+    scope: AccessScope,
+    query: { text: string; title?: string; kind?: CapturePageKind; projectId?: string; limit?: number },
+  ): Promise<{ similar: CaptureSimilar[]; decision?: SimilarDecision }> {
+    const opts = { ...(query.projectId ? { projectId: query.projectId } : {}), ...(query.limit ? { limit: query.limit } : {}) };
+    const title = query.title ? cleanCaptureTitle(query.title) : '';
+    if (!title || !query.kind) return { similar: await this.similarPages(scope, query.text, opts) };
+
+    const similar = await this.similarPages(scope, dedupeText(title, query.kind, query.text), opts);
+    const settings = await this.aiConfig.captureSettings(scope.workspaceId);
+    const decision = await this.decide(principal, scope.workspaceId, similar, title, settings);
+    return { similar, decision: SIMILAR_DECISION[decision.outcome] };
+  }
+
+  /**
    * Captures in a workspace, newest first. A capture whose page the caller
    * may not open, or in a project kept from them, is left out (#76) — its
    * title would say what the page is about.
@@ -363,13 +396,13 @@ export class CaptureService {
           ...(req.alternatives?.length ? { alternatives: req.alternatives } : {}),
           ...(req.relatedDocumentIds?.length ? { relatedDocumentIds: unique(req.relatedDocumentIds) } : {}),
         };
-        return { kind: 'decision', projectId: req.projectId, title: cleanTitle(req.title), payload, linked: payload.relatedDocumentIds ?? [] };
+        return { kind: 'decision', projectId: req.projectId, title: cleanCaptureTitle(req.title), payload, linked: payload.relatedDocumentIds ?? [] };
       }
       case 'gotcha':
       case 'convention':
       case 'howto': {
         const payload: NoteCapturePayload = { body: req.body, ...(req.appliesTo?.length ? { appliesTo: req.appliesTo } : {}) };
-        return { kind: req.kind, projectId: req.projectId, title: cleanTitle(req.title), payload, linked: [] };
+        return { kind: req.kind, projectId: req.projectId, title: cleanCaptureTitle(req.title), payload, linked: [] };
       }
       case 'glossary': {
         const payload: GlossaryCapturePayload = {
@@ -378,7 +411,7 @@ export class CaptureService {
           ...(req.aliases?.length ? { aliases: unique(req.aliases.map((a) => a.trim()).filter(Boolean)) } : {}),
           ...(req.documentId ? { documentId: req.documentId } : {}),
         };
-        return { kind: 'glossary', projectId: req.projectId, title: cleanTitle(payload.term), payload, linked: req.documentId ? [req.documentId] : [] };
+        return { kind: 'glossary', projectId: req.projectId, title: cleanCaptureTitle(payload.term), payload, linked: req.documentId ? [req.documentId] : [] };
       }
       case 'relation': {
         if (!isAuthorableRelationType(req.type)) {
@@ -401,7 +434,7 @@ export class CaptureService {
           targetKey: req.targetKey.trim(),
           rationale: req.rationale,
         };
-        return { kind: 'relation', projectId: doc.projectId, title: cleanTitle(`${payload.type} ${payload.targetKey}`), payload, linked: [] };
+        return { kind: 'relation', projectId: doc.projectId, title: cleanCaptureTitle(`${payload.type} ${payload.targetKey}`), payload, linked: [] };
       }
       case 'answer': {
         const cited = unique(req.citedDocumentIds ?? []);
@@ -418,7 +451,7 @@ export class CaptureService {
           projectId = first.projectId;
         }
         const payload: AnswerCapturePayload = { question: req.question, answer: req.answer, citedDocumentIds: cited };
-        const title = cleanTitle(req.title?.trim() || firstLine(req.question));
+        const title = cleanCaptureTitle(req.title?.trim() || firstLine(req.question));
         return { kind: 'answer', projectId, title, payload, linked: cited };
       }
     }
@@ -540,12 +573,9 @@ export class CaptureService {
     const scope = await this.permissions.scopeFor(principal, row.workspaceId);
     const payload = row.payload as unknown as StoredPayload;
     const kind = row.kind as CaptureKind;
-    const similar = await this.similarPages(scope, dedupeText(row.title, kind, payload), { projectId: row.projectId });
+    const similar = await this.similarPages(scope, dedupeText(row.title, kind, mainText(kind, payload)), { projectId: row.projectId });
 
-    let decision = decidePage(similar, row.title, {
-      dedupe: settings.dedupeThreshold.effective,
-      amend: settings.amendThreshold.effective,
-    });
+    const decision = await this.decide(principal, row.workspaceId, similar, row.title, settings);
     if (decision.outcome === 'none') {
       return this.settle(row.id, claimedAt, {
         status: 'duplicate',
@@ -554,12 +584,6 @@ export class CaptureService {
         similar: similar as unknown as Prisma.InputJsonValue,
       });
     }
-    // A page close enough to amend but one its writer may only read gets a
-    // page of its own instead: a capture never proposes what its person could not.
-    if (decision.outcome === 'amend-page' && !(await this.canEdit(principal, row.workspaceId, decision.targetDocumentId))) {
-      decision = { outcome: 'new-page', targetDocumentId: null };
-    }
-
     const lang = principal.locale;
     const h = this.headings(lang, row.title);
     const input = await this.bodyInput(kind, payload);
@@ -724,6 +748,30 @@ export class CaptureService {
 
   // ------------------------------------------------------------------ helpers
 
+  /**
+   * What the nearest pages make of a page-kind capture titled `title`, under
+   * the workspace's thresholds. `proposePage` acts on it; `findSimilar` only
+   * reports it, so the probe and the capture cannot disagree (#233).
+   */
+  private async decide(
+    principal: Principal,
+    workspaceId: string,
+    similar: readonly CaptureSimilar[],
+    title: string,
+    settings: CaptureSettings,
+  ): Promise<PageDecision> {
+    const decision = decidePage(similar, title, {
+      dedupe: settings.dedupeThreshold.effective,
+      amend: settings.amendThreshold.effective,
+    });
+    // A page close enough to amend but one its writer may only read gets a
+    // page of its own instead: a capture never proposes what its person could not.
+    if (decision.outcome === 'amend-page' && !(await this.canEdit(principal, workspaceId, decision.targetDocumentId))) {
+      return { outcome: 'new-page', targetDocumentId: null };
+    }
+    return decision;
+  }
+
   private async canEdit(principal: Principal, workspaceId: string, documentId: string): Promise<boolean> {
     if (principal.mode === 'dev') return true;
     try {
@@ -859,20 +907,11 @@ function stringsOf(value: unknown): string[] {
   return [];
 }
 
-/** What a page-kind capture is about, for the vector leg: its title and its main text. */
-function dedupeText(title: string, kind: CaptureKind, payload: StoredPayload): string {
-  if (!CAPTURE_PAGE_KINDS.has(kind)) return title;
-  const main =
-    kind === 'decision'
-      ? `${(payload as DecisionCapturePayload).context}\n${(payload as DecisionCapturePayload).decision}`
-      : kind === 'answer'
-        ? `${(payload as AnswerCapturePayload).question}\n${(payload as AnswerCapturePayload).answer}`
-        : (payload as NoteCapturePayload).body;
-  return `${title}\n\n${main}`;
-}
-
-function cleanTitle(title: string): string {
-  return title.replace(/\s+/g, ' ').trim().slice(0, 300);
+/** A page-kind capture's main text, as `dedupeText` takes it — what `knowledge_find_similar` asks an agent to pass as `text`. */
+function mainText(kind: CaptureKind, payload: StoredPayload): string {
+  if (kind === 'decision') return `${(payload as DecisionCapturePayload).context}\n${(payload as DecisionCapturePayload).decision}`;
+  if (kind === 'answer') return `${(payload as AnswerCapturePayload).question}\n${(payload as AnswerCapturePayload).answer}`;
+  return (payload as NoteCapturePayload).body;
 }
 
 function firstLine(text: string): string {

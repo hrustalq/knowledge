@@ -7,6 +7,7 @@ import {
   CAPTURE_KINDS,
   CAPTURE_LIST_MAX,
   CAPTURE_NOTE_KINDS,
+  CAPTURE_PAGE_KIND_LIST,
   CAPTURE_SESSION_MAX_FILES,
   CAPTURE_STATUSES,
   CAPTURE_TITLE_MAX_CHARS,
@@ -234,20 +235,34 @@ export function registerCaptureTools(server: McpServer, deps: CaptureToolDeps): 
     {
       description:
         'Before capturing, check whether the knowledge base already says it: the pages nearest the text, by cosine ' +
-        'similarity (0–1), only pages you can open. Returns { similar: [{ documentId, title, score }] }.',
+        'similarity (0–1), only pages you can open. Pass the title and kind you will capture with, and the projectId, ' +
+        'and text is scored exactly as that capture will be; the reply then carries decision — duplicate (the capture ' +
+        'would propose nothing: skip it), amend (it would become a section of similar[0]) or new-page. Returns ' +
+        '{ similar: [{ documentId, title, score }], decision? }.',
       inputSchema: {
         workspaceId: z.string().uuid(),
         projectId: z.string().uuid().optional(),
-        text: text(8_000),
+        text: text(8_000).describe(
+          "The capture's main text: a note's body; a decision's context, a newline, then the decision; an answer's " +
+            'question, a newline, then the answer',
+        ),
+        title: z.string().trim().max(CAPTURE_TITLE_MAX_CHARS).optional().describe('The title you will capture with'),
+        kind: z.enum(CAPTURE_PAGE_KIND_LIST).optional().describe('The kind you will capture as; with title, adds decision'),
         limit: z.number().int().min(1).max(20).optional(),
       },
     },
-    async ({ workspaceId, projectId, text: query, limit }) => {
+    async ({ workspaceId, projectId, text: query, title, kind, limit }) => {
       await guard.ws(workspaceId, 'viewer');
       const scope = await guard.scope(workspaceId);
-      return run(async () => ({
-        similar: await captures.similarPages(scope, query, { ...(projectId ? { projectId } : {}), ...(limit ? { limit } : {}) }),
-      }));
+      return run(() =>
+        captures.findSimilar(principal, scope, {
+          text: query,
+          ...(title ? { title } : {}),
+          ...(kind ? { kind } : {}),
+          ...(projectId ? { projectId } : {}),
+          ...(limit ? { limit } : {}),
+        }),
+      );
     },
   );
 

@@ -92,7 +92,9 @@ export const CAPTURE_NOTE_KINDS = ['gotcha', 'convention', 'howto'] as const;
 export type CaptureNoteKind = (typeof CAPTURE_NOTE_KINDS)[number];
 
 /** The kinds that become page text, and so are deduplicated against pages. */
-export const CAPTURE_PAGE_KINDS: ReadonlySet<CaptureKind> = new Set(['decision', 'gotcha', 'convention', 'howto', 'answer']);
+export const CAPTURE_PAGE_KIND_LIST = ['decision', 'gotcha', 'convention', 'howto', 'answer'] as const;
+export type CapturePageKind = (typeof CAPTURE_PAGE_KIND_LIST)[number];
+export const CAPTURE_PAGE_KINDS: ReadonlySet<CaptureKind> = new Set(CAPTURE_PAGE_KIND_LIST);
 
 export const CAPTURE_TITLE_MAX_CHARS = 300;
 /** Alternatives, related pages, `appliesTo` paths, aliases, citations: each list at most this long. */

@@ -13,6 +13,19 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Fixed
+
+- `knowledge_find_similar` could tell an agent a capture would amend a page
+  (or was a duplicate) and the capture then did something else, because the
+  probe scored the bare body while the capture scored its title and body. Pass
+  the `title` and `kind` you will capture with and the probe now scores the
+  same text and returns `decision` (`duplicate`, `amend` or `new-page`) as the
+  capture will decide it. A call with `text` alone behaves as before. The
+  capture playbook and the capture kit's hook reminder say so; the kit is now
+  v2, so re-fetch it to pick up the new reminder. (#233)
+
 ## [0.25.0] — 2026-10-16
 
 ### Added

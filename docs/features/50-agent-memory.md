@@ -108,6 +108,17 @@ called anywhere on the path.
      An amend target the writer may only read becomes a new page instead,
      because a capture never proposes what its person could not.
 
+     The text embedded is `dedupeText` (`capture-dedupe.ts`): the stored
+     title, a blank line, then the main text (a note's body,
+     `context\ndecision`, or `question\nanswer`). `knowledge_find_similar`
+     embeds the same thing when it is given the `title` and `kind` the capture
+     will carry, and runs the same `decide` (thresholds, then the edit check),
+     so it answers `decision: duplicate | amend | new-page` exactly as the
+     capture will (#233). Given only `text`, it embeds that text as is and
+     returns no decision. The probe used to embed the bare body: in the
+     v0.24.0 run a gotcha scored 0.8192 there and 0.7968 at capture, so the
+     agent was told "amend" and the capture opened a new page.
+
    - **Relation:** `DocumentRelationsService.propose`, the same path a person's
      relation edit takes. A relation the page already declares is a
      `duplicate`.
@@ -260,7 +271,8 @@ The hook does exactly this:
 - **The reminder** asks the model to record any decision, gotcha, convention
   or hard-won answer with the kit's skill or rule, passing `session.client` and
   `session.sessionId`. It tells the model to call `knowledge_find_similar`
-  first, never to include secrets, and to say so in one line if nothing is
+  first with the title and kind it will capture with and to skip a
+  `duplicate` (kit v2), never to include secrets, and to say so in one line if nothing is
   worth keeping.
   - Claude Code receives it as `hookSpecificOutput.additionalContext` on
     `Stop`, not `decision: "block"`. Claude Code's docs recommend this for

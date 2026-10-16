@@ -18,7 +18,7 @@ import type { CaptureKitClient, CaptureKitFile, CaptureKitResponse } from '@know
  * `followup_message`. When one changes, bump CAPTURE_KIT_VERSION: an installed
  * kit names its version, and re-fetching is how it updates.
  */
-export const CAPTURE_KIT_VERSION = 1;
+export const CAPTURE_KIT_VERSION = 2;
 
 /** The marker the installer looks for when it merges hook entries — and the script's file name. */
 const HOOK_FILE = 'knowledge-capture.sh';
@@ -60,7 +60,8 @@ person or agent would otherwise have to rediscover:
 
 - Secrets, credentials, tokens or personal data. A capture carrying one is refused; never rephrase around the check.
 - Transient debugging, the steps of this session, or what the diff already shows.
-- Anything the knowledge base already says. Call \`knowledge_find_similar\` first and skip what a hit covers.
+- Anything the knowledge base already says. Call \`knowledge_find_similar\` first with the \`title\`, \`kind\` and
+  \`projectId\` you will capture with, so it scores what the capture will, and skip it when \`decision\` is \`duplicate\`.
 - Text copied from a page. Point at the page (\`relatedDocumentIds\`) instead.
 
 ### How
@@ -263,7 +264,8 @@ function hookScript(input: CaptureKitInput, client: CaptureKitClient): string {
     `convention or answered a question that took real digging, record each one with the knowledge-capture ${
       claude ? 'skill' : 'rule'
     } (knowledge_capture_decision, knowledge_capture_note) and session.client ${client}, session.sessionId %s. ` +
-    `Call knowledge_find_similar first and skip what the knowledge base already says. Never include secrets. ` +
+    `Call knowledge_find_similar first with the title and kind you will capture with, and skip it when decision is duplicate. ` +
+    `Never include secrets. ` +
     `If nothing is worth keeping, say so in one line and stop. This reminder comes once per session.`;
   const emit = claude
     ? `printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\\n' "$msg"`

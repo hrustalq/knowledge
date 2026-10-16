@@ -22,6 +22,7 @@ import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { PublishingCoreModule } from '../publishing/publishing-core.module.js';
 import { ExportCoreModule } from '../export/export-core.module.js';
 import { AiCoreModule } from '../ai/ai-core.module.js';
+import { CapturesCoreModule } from '../captures/captures-core.module.js';
 import { McpService } from './mcp.service.js';
 
 /**
@@ -74,6 +75,8 @@ import { McpService } from './mcp.service.js';
     ExportCoreModule,
     // knowledge_list_agent_learnings / knowledge_propose_agent_learning (#70). Controller-free.
     AiCoreModule,
+    // The agent-memory tools (issue #73). Controller-free; API-side, as it opens merge requests.
+    CapturesCoreModule,
   ],
   providers: [McpService],
   exports: [McpService],

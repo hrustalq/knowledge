@@ -76,6 +76,12 @@ model Document {
   /// the pages made from it. Null = the page did not start from a template.
   templateRef           String?   @map("template_ref")
   templateVersion       Int?      @map("template_version")
+  /// A page that exists only as a merge request (issue #73, Option A): created
+  /// head-less by a capture or a chat save, its first content on a branch. Set
+  /// to that merge request; listing surfaces (tree, lists, health, export,
+  /// sites, llms.txt) leave it out while it is set, and the merge clears it.
+  /// Readable by id meanwhile, so the reviewer can open it. No FK, house policy.
+  pendingMergeRequestId String?   @map("pending_merge_request_id") @db.Uuid
   /// Page restriction switch (#76). On: only grantees (and admins) pass this
   /// node, and so its whole subtree.
   restricted            Boolean   @default(false)
@@ -1118,18 +1124,18 @@ model AiUserBudget {
 /// system prompt — trusted text, unlike document content. Selected explicitly
 /// from the composer or by keyword match against the user's message.
 model AiSkill {
-  id           String   @id @default(uuid()) @db.Uuid
-  workspaceId  String   @map("workspace_id") @db.Uuid
-  name         String
-  description  String
-  instructions String
+  id                  String    @id @default(uuid()) @db.Uuid
+  workspaceId         String    @map("workspace_id") @db.Uuid
+  name                String
+  description         String
+  instructions        String
   /// string[] — keywords that pull this skill into a turn. Json, not text[]:
   /// the schema uses no Postgres arrays (AssistantMessage.toolCalls precedent).
-  triggers     Json     @default("[]")
-  enabled      Boolean  @default(true)
-  createdBy    String?  @map("created_by") @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  triggers            Json      @default("[]")
+  enabled             Boolean   @default(true)
+  createdBy           String?   @map("created_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   /// 'manual' | 'repo' (AI_SKILL_SOURCES, #70). A `repo` skill was read from a
   /// guidance file of a repository connector and imported disabled.
   source              String    @default("manual")

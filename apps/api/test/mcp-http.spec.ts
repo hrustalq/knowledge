@@ -266,6 +266,11 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
       list: vi.fn(async (_ws: string, filter: { status?: string }) => [{ id: 'l-1', text: 'Cite the MR id', status: filter.status }]),
       create: vi.fn(async (input: { text: string; status: string }) => ({ id: 'l-2', text: input.text, status: input.status })),
     },
+    captures: {
+      capture: vi.fn(async (req: { kind: string }) => ({ captureId: 'c-1', state: 'proposed', outcome: 'new-page', kind: req.kind })),
+      similarPages: vi.fn(async () => [{ documentId: 'd-1', title: 'Billing', score: 0.91 }]),
+      list: vi.fn(async () => ({ captures: [], nextCursor: null })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -282,6 +287,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     resourceAccess: deps.resourceAccess,
     accessRequests: deps.accessRequests,
     learnings: deps.learnings,
+    captures: deps.captures,
   };
 }
 
@@ -295,10 +301,11 @@ async function connect(mcp: McpService, principal: Principal) {
 }
 
 describe('McpService over a principal', () => {
-  it('names only tools that exist in WRITE_TOOLS', () => {
+  it('names only tools that exist in WRITE_TOOLS and CAPTURE_TOOLS', () => {
     const { mcp } = service(accessWith('admin'));
     const names = new Set(mcp.toolsFor(DEV_PRINCIPAL).map((t) => t.name));
     for (const name of WRITE_TOOLS) expect(names, name).toContain(name);
+    for (const name of CAPTURE_TOOLS) expect(names, name).toContain(name);
   });
 
   it('annotates reads read-only, and hides writes from a read-only key', async () => {
@@ -332,7 +339,51 @@ describe('McpService over a principal', () => {
       expect(offered).not.toContain(name);
     }
     const reader = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
-    expect(offered).toEqual((await reader.listTools()).tools.map((t) => t.name));
+    const read = (await reader.listTools()).tools.map((t) => t.name);
+    for (const name of CAPTURE_TOOLS) expect(read).not.toContain(name);
+    // The reads (find_similar and list_captures among them) plus the five capture tools, nothing else.
+    expect([...offered].sort()).toEqual([...read, ...CAPTURE_TOOLS].sort());
+    expect(read).toEqual(expect.arrayContaining(['knowledge_find_similar', 'knowledge_list_captures']));
+  });
+
+  it('runs a capture tool as its caller through the capture guard (#73)', async () => {
+    const { mcp, captures } = service(accessWith('editor'));
+    const principal = keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null });
+    const agent = await connect(mcp, principal);
+    const res = await agent.callTool({
+      name: 'knowledge_capture_decision',
+      arguments: {
+        workspaceId: WS_A,
+        projectId: WS_A,
+        title: 'Fuse vector and BM25 with RRF',
+        context: 'Two rankings, incomparable scores.',
+        decision: 'Reciprocal rank fusion, k=60.',
+        session: { client: 'claude-code', repo: 'acme/kb', commit: 'abc123' },
+      },
+    });
+    expect(res.isError).toBeFalsy();
+    expect(captures.capture).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'decision', workspaceId: WS_A, session: expect.objectContaining({ client: 'claude-code' }) }),
+      principal,
+    );
+  });
+
+  it('refuses a capture tool to a capture key whose person is only a viewer (#73)', async () => {
+    const { mcp, captures } = service(accessWith('viewer'));
+    const agent = await connect(mcp, keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null }));
+    const res = await agent.callTool({
+      name: 'knowledge_capture_note',
+      arguments: {
+        workspaceId: WS_A,
+        projectId: WS_A,
+        kind: 'gotcha',
+        title: 'x',
+        body: 'y',
+        session: { client: 'cursor' },
+      },
+    });
+    expect(res.isError).toBe(true);
+    expect(captures.capture).not.toHaveBeenCalled();
   });
 
   it('settles a capture tool as offered to a capture or write key and hidden from a read key (#73)', () => {

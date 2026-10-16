@@ -18,6 +18,7 @@ import { HEALTH_FILTERS, isInactive, OPEN_KNOWLEDGE_ISSUE_STATUSES } from '@know
 import { DocumentsService } from '../documents/documents.service.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { visibilitySql, visibilityWhere, type AccessScope } from '../permissions/access-scope.js';
+import { listedSql } from '../common/listed-page.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
@@ -238,7 +239,7 @@ export class KnowledgeHealthService {
       SELECT d.id, d.project_id, d.title, d.owner_id, d.verified_by, d.verified_at, d.verification_expires_at,
              d.verification_flag, d.verification_note, d.last_activity_at, d.archived_at,
              rev.body_chars,
-             (SELECT count(*)::int FROM documents c WHERE c.parent_id = d.id AND ${visibilitySql(access, 'c')}) AS child_count,
+             (SELECT count(*)::int FROM documents c WHERE c.parent_id = d.id AND ${listedSql('c')} AND ${visibilitySql(access, 'c')}) AS child_count,
              CASE
                WHEN d.verification_flag = 'outdated' THEN 'outdated'
                WHEN EXISTS (
@@ -255,7 +256,9 @@ export class KnowledgeHealthService {
         LEFT JOIN document_branches b ON b.document_id = d.id AND b.name = d.default_branch
         LEFT JOIN document_revisions rev ON rev.id = b.head_revision_id
        WHERE d.workspace_id = ${access.workspaceId}::uuid ${project} ${owner} ${q}
-         -- Pages the caller may not open are not on the dashboard (#76).
+         -- Pages the caller may not open are not on the dashboard (#76), nor a
+         -- page that is still only a merge request (#73).
+         AND ${listedSql('d')}
          AND ${visibilitySql(access, 'd')}
     `;
   }

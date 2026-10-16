@@ -98,7 +98,6 @@
     "sameBranches": "Source and target branches must differ",
     "sourceNotFinalized": "Branch {branch} has no finalized revisions to merge",
     "branchNoRevisions": "Branch {branch} has no revisions",
-    "targetNoRevisions": "Branch {branch} has no revisions to diff against",
     "notOpenForEdit": "Merge request {id} is {status} — only open merge requests can be edited",
     "notOpenForApproval": "Merge request {id} is {status} — only open merge requests can be approved",
     "notOpenForClose": "Merge request {id} is {status} — only open merge requests can be closed",
@@ -541,5 +540,17 @@
     "alreadyGranted": "You can already open this at the level you asked for",
     "levelAboveRole": "Your workspace role does not allow editing, so edit access cannot be requested or granted",
     "requestSelf": "You manage this already — nothing to ask for"
+  },
+  "capture": {
+    "disabled": "Capturing is switched off for this workspace.",
+    "projectNotFound": "Project {projectId} is not in this workspace.",
+    "projectNotAllowed": "This key cannot capture into project {projectId}.",
+    "unreadablePages": "These pages do not exist here or you cannot open them: {ids}.",
+    "noCitations": "An answer is written back only with at least one cited page.",
+    "relationType": "\"{type}\" is not a relation type a capture can propose.",
+    "tooLong": "The capture is {size} characters; the limit is {limit}.",
+    "secretDetected": "The capture contains what looks like a credential ({pattern}). Remove it and capture again; nothing was stored.",
+    "rateLimited": "This key has made {limit} captures in the last hour. Try again in {retryAfterSec} s.",
+    "workspaceRateLimited": "This workspace has taken {limit} captures in the last day. Try again in {retryAfterSec} s."
   }
 }

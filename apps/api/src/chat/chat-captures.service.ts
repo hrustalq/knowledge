@@ -242,6 +242,9 @@ export class ChatCapturesService {
             description: t('chat.capture.mrDescription', { platform: req.integration.name }),
             markdown: composeFrontmatter(body, { source: `chat:${req.integration.kind}`, generatedBy: agent.key }),
             userId: principal.userId,
+            // The page is born with this merge request and hidden until it merges (#73).
+            provenance: 'captured',
+            newPage: true,
             onCreated: (id) => this.settlePublished(capture.id, { title, documentId: created.documentId, mergeRequestId: id }),
           },
         );

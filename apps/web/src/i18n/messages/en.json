@@ -1047,6 +1047,9 @@
       "branch": {
         "created": "created a branch on"
       },
+      "capture": {
+        "proposed": "proposed a capture from an agent session"
+      },
       "relations": {
         "curated": "curated a relation on",
         "deleted": "removed a relation from"

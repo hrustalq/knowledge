@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import type { Env } from '../config/env.js';
 import { hasRealPath } from '../documents/documents.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { LISTED_PAGE } from '../common/listed-page.js';
 import { SiteAudienceStamper } from './site-audience.stamper.js';
 import { planSiteBuild, resolveRevision, type PlanDocument, type ResolvedRevision } from './site-build.plan.js';
 import { SiteSearchTextService } from './site-search-text.service.js';
@@ -140,6 +141,8 @@ export class SiteBuildService {
         // A site is public: a restricted page never enters a snapshot, and the
         // subtree under it inherits the restriction and stays out with it (#76).
         restrictedBy: { isEmpty: true },
+        // Nor does a page that is still only a merge request (#73).
+        ...LISTED_PAGE,
         ...(pathPrefix ? { path: { startsWith: pathPrefix } } : {}),
       },
       select: { id: true, parentId: true, title: true, position: true, path: true, category: true },

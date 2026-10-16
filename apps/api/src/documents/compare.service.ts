@@ -94,6 +94,34 @@ export class CompareService {
   }
 
   /**
+   * `toId` against nothing: every line added. The merge request that brings a
+   * page its first content has a target branch with no head (#73, Option A;
+   * a chat save), and a reviewer still needs to read what it proposes. Not
+   * cached — there is no `from` revision to key a cache row on.
+   */
+  async compareWithNothing(documentId: string, toId: string, opts: CompareOptions = {}): Promise<CompareResponse> {
+    const to = await this.getComparableRevision(documentId, toId);
+    const text = await this.storage.getObjectText(to.s3Key);
+    const { additions, deletions, hunks } = toHunks('', text);
+    let structural: StructuralDiff | null | undefined;
+    if (opts.structural !== false) {
+      const parsed = parseStructured(to.contentType, text);
+      structural = parsed ? structuralDiff(parsed.source, {}, parsed.data) : null;
+    }
+    return {
+      documentId,
+      from: null,
+      to: this.toRef(to),
+      comparisonMode: 'merge-base',
+      mergeBaseRevisionId: null,
+      summary: { additions, deletions },
+      hunks,
+      structural,
+      ...(opts.semantic ? { semantic: null } : {}),
+    };
+  }
+
+  /**
    * Nearest common ancestor over the revision_parents DAG (BFS by depth).
    * Returns null when the two revisions share no history.
    */
@@ -168,40 +196,7 @@ export class CompareService {
       this.storage.getObjectText(to.s3Key),
     ]);
 
-    const patch = structuredPatch('content.md', 'content.md', fromText, toText, undefined, undefined, {
-      context: 3,
-    });
-
-    let additions = 0;
-    let deletions = 0;
-    const hunks: DiffHunk[] = patch.hunks.map((h) => {
-      let oldLine = h.oldStart;
-      let newLine = h.newStart;
-      const lines: DiffLine[] = [];
-      for (const raw of h.lines) {
-        const marker = raw[0];
-        const text = raw.slice(1);
-        if (marker === '+') {
-          additions += 1;
-          lines.push({ kind: 'added', new: newLine++, text });
-        } else if (marker === '-') {
-          deletions += 1;
-          lines.push({ kind: 'deleted', old: oldLine++, text });
-        } else if (marker === '\\') {
-          // "\ No newline at end of file" — metadata, not content.
-          continue;
-        } else {
-          lines.push({ kind: 'context', old: oldLine++, new: newLine++, text });
-        }
-      }
-      return {
-        oldStart: h.oldStart,
-        oldLines: h.oldLines,
-        newStart: h.newStart,
-        newLines: h.newLines,
-        lines,
-      };
-    });
+    const { additions, deletions, hunks } = toHunks(fromText, toText);
 
     await this.prisma.revisionDiff
       .create({
@@ -334,4 +329,43 @@ export class CompareService {
       contentHash: r.contentHash,
     };
   }
+}
+
+/** A unified line diff as the contract's hunks, with the added/deleted line counts. */
+function toHunks(fromText: string, toText: string): { additions: number; deletions: number; hunks: DiffHunk[] } {
+  const patch = structuredPatch('content.md', 'content.md', fromText, toText, undefined, undefined, {
+    context: 3,
+  });
+
+  let additions = 0;
+  let deletions = 0;
+  const hunks: DiffHunk[] = patch.hunks.map((h) => {
+    let oldLine = h.oldStart;
+    let newLine = h.newStart;
+    const lines: DiffLine[] = [];
+    for (const raw of h.lines) {
+      const marker = raw[0];
+      const text = raw.slice(1);
+      if (marker === '+') {
+        additions += 1;
+        lines.push({ kind: 'added', new: newLine++, text });
+      } else if (marker === '-') {
+        deletions += 1;
+        lines.push({ kind: 'deleted', old: oldLine++, text });
+      } else if (marker === '\\') {
+        // "\ No newline at end of file" — metadata, not content.
+        continue;
+      } else {
+        lines.push({ kind: 'context', old: oldLine++, new: newLine++, text });
+      }
+    }
+    return {
+      oldStart: h.oldStart,
+      oldLines: h.oldLines,
+      newStart: h.newStart,
+      newLines: h.newLines,
+      lines,
+    };
+  });
+  return { additions, deletions, hunks };
 }

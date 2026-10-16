@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { LISTED_PAGE } from '../common/listed-page.js';
 
 /**
  * Which pages a principal may read as AI-readable output (docs: issue #68).
@@ -46,7 +47,11 @@ export function readableDocumentsWhere(scope: AiReadableScope): Prisma.DocumentW
   const where: Prisma.DocumentWhereInput = { workspaceId: scope.workspaceId };
   if (scope.projectId) where.projectId = scope.projectId;
   if (scope.documentId) where.id = scope.documentId;
-  else where.restrictedBy = { isEmpty: true };
+  else {
+    where.restrictedBy = { isEmpty: true };
+    // A page still behind its first merge request is not listed (#73).
+    where.pendingMergeRequestId = LISTED_PAGE.pendingMergeRequestId;
+  }
   return where;
 }
 

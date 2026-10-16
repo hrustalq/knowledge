@@ -5,6 +5,7 @@ import {
   driftCheckMode,
   driftFlagPages,
   type AgentFinding,
+  type AgentRunDetails,
   type AgentRunInput,
   type AgentRunPullRequest,
   type Locale,
@@ -27,8 +28,17 @@ const BATCH = 5;
 /** A run older than this is history, not news — a restart after a long outage must not comment on last month. */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-/** What a sibling check of the same pull request contributes: when it ran, and what it proposed. */
-type Sibling = { createdAt: Date; findings: unknown };
+/** What a sibling check of the same pull request contributes: when it ran, what it proposed, what it listed. */
+type Sibling = { createdAt: Date; findings: unknown; details?: unknown };
+
+/** The proposable part of a finding: a corrected body, or a `component.paths` edit (#236). */
+const proposable = (f: AgentFinding) => !!f.draft || !!f.componentPaths?.length;
+
+/** Whether a run listed any affected usage (#236) — a comment worth keeping current. */
+const listsUsages = (details: unknown) => {
+  const usages = (details as AgentRunDetails | null)?.affectedUsages;
+  return !!usages && (usages.pages.length > 0 || usages.hiddenPages > 0 || usages.undocumentedTotal > 0);
+};
 
 /**
  * Publishes a finished drift check (docs/features/35): the merge requests it
@@ -171,7 +181,7 @@ export class DriftPublishSweeper implements OnModuleInit, OnModuleDestroy {
 
     const entries: DriftReportEntry[] = [];
     let principal: Awaited<ReturnType<AccessService['principalFor']>> | null = null;
-    if (mode === 'propose' && findings.some((f) => f.draft)) {
+    if (mode === 'propose' && findings.some(proposable)) {
       principal = await this.editorPrincipal(run, 'proposals');
     }
 
@@ -181,7 +191,7 @@ export class DriftPublishSweeper implements OnModuleInit, OnModuleDestroy {
       // The same page proposed by an earlier push and still open: point at that
       // merge request rather than opening a second one for one page.
       if (!mergeRequestId && documentId) mergeRequestId = proposedBefore.get(documentId) ?? null;
-      if (!mergeRequestId && principal && finding.draft && documentId) {
+      if (!mergeRequestId && principal && proposable(finding) && documentId) {
         try {
           const res = await this.findings.propose(run.workspaceId, run.id, index, principal);
           mergeRequestId = res.mergeRequestId;
@@ -199,14 +209,20 @@ export class DriftPublishSweeper implements OnModuleInit, OnModuleDestroy {
 
     // A clean check on a pull request nobody was warned about stays quiet; a
     // clean check after a warning updates the comment to say it is resolved.
-    const warnedBefore = siblings.some((s) => Array.isArray(s.findings) && s.findings.length > 0);
-    if (entries.length === 0 && !warnedBefore) return;
+    // Affected usages (#236) are worth a comment on their own: they name the
+    // docs downstream of a component change before anything has drifted.
+    const affected = listsUsages(run.details) ? (run.details as AgentRunDetails).affectedUsages! : null;
+    const warnedBefore = siblings.some(
+      (s) => (Array.isArray(s.findings) && s.findings.length > 0) || listsUsages(s.details),
+    );
+    if (entries.length === 0 && !affected && !warnedBefore) return;
 
     const body = renderDriftComment({
       webBaseUrl: this.webBaseUrl,
       connectorName: row.name,
       pullRequest: pr,
       entries,
+      affected,
     });
     const ctx = await this.connectors.contextFor(row, async () => undefined);
     await upsertPullRequestComment(ctx, pr.number, driftCommentMarker(row.id), body);
@@ -294,7 +310,7 @@ export class DriftPublishSweeper implements OnModuleInit, OnModuleDestroy {
           { input: { path: ['pullRequest', 'number'], equals: number } },
         ],
       },
-      select: { createdAt: true, findings: true },
+      select: { createdAt: true, findings: true, details: true },
     });
   }
 

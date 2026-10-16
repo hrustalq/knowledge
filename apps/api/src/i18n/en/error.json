@@ -209,6 +209,7 @@
     "findingNoDocument": "This finding cites no page to change.",
     "findingOrphan": "An orphan finding is about missing relations, not page content. Use Apply relations instead, or add one in the page's frontmatter.",
     "findingNotStale": "Only a stale finding can mark its page outdated.",
+    "findingPathsCurrent": "The page no longer declares the paths this finding would change, so there is nothing to fix.",
     "findingNoRelations": "This finding proposes no relations, so there is nothing to declare. Propose it as a page change instead.",
     "findingDocumentGone": "The page this finding cites ({documentId}) is no longer in this workspace.",
     "assistantDisabled": "The AI assistant is disabled for this workspace.",

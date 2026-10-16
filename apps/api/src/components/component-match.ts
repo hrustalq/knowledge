@@ -252,3 +252,84 @@ export function importedPathPrefilter(paths: readonly string[]): Array<{ equals:
     return [{ equals: dir }, { startsWith: `${dir}/` }];
   });
 }
+
+// ---- a pull request against the index (#236, phase 4) ------------------------
+
+/** What the rules need of one changed file — `PullRequestFile` without the patch. */
+export interface ChangedFile {
+  path: string;
+  previousPath: string | null;
+  status: 'added' | 'modified' | 'removed' | 'renamed';
+}
+
+/** The changed files a declaration covers, by their path or the path they had. */
+export function declaredChanges(paths: readonly string[], files: readonly ChangedFile[]): string[] {
+  return files
+    .filter((f) => coversFile(paths, f.path) || (f.previousPath !== null && coversFile(paths, f.previousPath)))
+    .map((f) => f.path);
+}
+
+/**
+ * The default-branch index as the pull request would leave it: the rows of
+ * every `replaced` importer give way to what it imports at the head
+ * (`overlay`), so a removed or moved-away importer imports nothing. Rows
+ * importing a removed file stay — they are the usages the change breaks.
+ */
+export function overlayImports(base: readonly ImportRow[], overlay: readonly ImportRow[], replaced: Iterable<string>): ImportRow[] {
+  const gone = new Set(replaced);
+  return [...base.filter((r) => !gone.has(r.importerPath)), ...overlay];
+}
+
+/**
+ * The `component.paths` edits a change makes necessary: a declared file it
+ * removed or moved, and a declared directory every file of which it removed or
+ * moved — to the one directory they all moved to, else gone. A glob is never
+ * edited: it may match something new, and phase 6's health filter catches one
+ * that matches nothing. `baseFiles` (the default branch's files) is what tells
+ * a directory from a file; without it only exact files are fixed.
+ */
+export function declaredPathFixes(
+  paths: readonly string[],
+  files: readonly ChangedFile[],
+  baseFiles: ReadonlySet<string> | null,
+): Array<{ from: string; to: string | null }> {
+  const gone = new Map<string, string | null>();
+  for (const f of files) {
+    if (f.status === 'removed') gone.set(f.path, null);
+    else if (f.status === 'renamed' && f.previousPath) gone.set(f.previousPath, f.path);
+  }
+  const fixes: Array<{ from: string; to: string | null }> = [];
+  for (const path of paths) {
+    if (GLOB.test(path)) continue;
+    if (gone.has(path)) {
+      fixes.push({ from: path, to: gone.get(path) ?? null });
+      continue;
+    }
+    if (!baseFiles) continue;
+    const dir = path.replace(/\/+$/, '');
+    const under = [...baseFiles].filter((f) => f.startsWith(`${dir}/`));
+    if (under.length === 0 || under.some((f) => !gone.has(f))) continue;
+    // `a/x.ts → b/x.ts` for every file means the directory moved to `b`.
+    const targets = new Set(
+      under.map((f) => {
+        const to = gone.get(f);
+        const rest = f.slice(dir.length);
+        return to && to.endsWith(rest) && to.length > rest.length ? to.slice(0, to.length - rest.length) : null;
+      }),
+    );
+    const [only] = targets;
+    fixes.push({ from: path, to: targets.size === 1 && only ? only : null });
+  }
+  return fixes;
+}
+
+/** `paths` with `fixes` applied, moves in place and removals dropped. */
+export function applyPathFixes(paths: readonly string[], fixes: ReadonlyArray<{ from: string; to: string | null }>): string[] {
+  const byFrom = new Map(fixes.map((f) => [f.from, f.to]));
+  const out: string[] = [];
+  for (const path of paths) {
+    const next = byFrom.has(path) ? byFrom.get(path) : path;
+    if (next && !out.includes(next)) out.push(next);
+  }
+  return out;
+}

@@ -1,7 +1,9 @@
-import type { AgentFinding, AgentRunPullRequest, KnowledgeIssueEvidence } from '@knowledge/contracts';
+import type { AgentFinding, AgentRunDetails, AgentRunPullRequest, KnowledgeIssueEvidence } from '@knowledge/contracts';
 import { isManifestPath, OVERVIEW_KEY } from '../connectors/adapters/repo-map.js';
 import type { PullRequestFile } from '../connectors/adapters/pull-request.js';
 import { wrapUntrusted } from '../common/untrusted.js';
+import { t } from '../i18n/t.js';
+import { applyPathFixes } from '../components/component-match.js';
 import { isCovered, MIN_DRAFT_CHARS } from './archaeology.js';
 
 /**
@@ -24,8 +26,14 @@ export const MAX_PAGE_CHARS = 30_000;
 /** Search hits taken as candidates; they are the weakest tie, so the fewest. */
 export const MAX_SEARCHED_PAGES = 3;
 
-/** Why a page is thought to be about a change. Strongest first. */
-export type DriftTie = 'linked' | 'mentioned' | 'searched';
+/**
+ * Why a page is thought to be about a change. Strongest first: a page that
+ * declares a changed file in `component.paths` said so itself (#236); the
+ * connector wrote a linked page about exactly that code; a used page documents
+ * code that imports a changed declared file; the last two are a filename in
+ * the text and a search hit.
+ */
+export type DriftTie = 'declared' | 'linked' | 'used' | 'mentioned' | 'searched';
 
 export interface DriftCandidate {
   documentId: string;
@@ -149,6 +157,39 @@ export function diffExcerpt(files: PullRequestFile[], maxChars: number): string 
   return parts.join('\n\n');
 }
 
+/** Usage files the drift comment lists with no page, past which it only counts them. */
+export const MAX_UNDOCUMENTED_SITES = 10;
+
+/**
+ * The Affected usages a run keeps for the pull request comment (#236): every
+ * page documenting a usage of changed declared code, whether this run judged
+ * it or the cap left it unread. Undefined when the change touched no usage.
+ */
+export function affectedUsagesDetails(
+  impact: {
+    affected: Array<{ documentId: string; title: string; sites: string[]; uses: string[] }>;
+    hiddenPages: number;
+    undocumented: string[];
+  } | null,
+  judged: ReadonlySet<string>,
+): AgentRunDetails | undefined {
+  if (!impact || (impact.affected.length === 0 && impact.undocumented.length === 0 && impact.hiddenPages === 0)) return undefined;
+  return {
+    affectedUsages: {
+      pages: impact.affected.map((p) => ({ ...p, judged: judged.has(p.documentId) })),
+      hiddenPages: impact.hiddenPages,
+      undocumented: impact.undocumented.slice(0, MAX_UNDOCUMENTED_SITES),
+      undocumentedTotal: impact.undocumented.length,
+    },
+  };
+}
+
+/** `a, b, c and 4 more` — a reason line for the prompt, not a list to read. */
+export function listOf(items: readonly string[], max = 3): string {
+  const shown = items.slice(0, max).join(', ');
+  return items.length > max ? `${shown} and ${items.length - max} more` : shown;
+}
+
 /** A short search query for pages about this change: its title and the names of what it touches. */
 export function searchQueryFor(pr: AgentRunPullRequest, files: PullRequestFile[]): string {
   const names = files
@@ -210,13 +251,6 @@ export function readDriftVerdict(
 ): AgentFinding | null {
   const verdict = readVerdict(value, page);
   if (!verdict) return null;
-
-  let site = '';
-  try {
-    site = new URL(pr.url).hostname.replace(/^www\./, '');
-  } catch {
-    site = '';
-  }
   return {
     kind: 'stale',
     severity: verdict.severity,
@@ -224,8 +258,49 @@ export function readDriftVerdict(
     detail: verdict.detail.slice(0, 2_000),
     documentIds: [page.id],
     documentTitles: [page.title],
-    ...(site ? { sources: [{ kind: 'web' as const, url: pr.url, site, title: `#${pr.number} ${pr.title}`.slice(0, 300) }] } : {}),
+    ...pullRequestSources(pr),
     ...(verdict.markdown ? { draft: { title: page.title, markdown: verdict.markdown } } : {}),
+  };
+}
+
+/** The pull request as a finding's source, its URL built from the run's input rather than anything a model wrote. */
+export function pullRequestSources(pr: AgentRunPullRequest): Pick<AgentFinding, 'sources'> {
+  let site = '';
+  try {
+    site = new URL(pr.url).hostname.replace(/^www\./, '');
+  } catch {
+    site = '';
+  }
+  return site ? { sources: [{ kind: 'web' as const, url: pr.url, site, title: `#${pr.number} ${pr.title}`.slice(0, 300) }] } : {};
+}
+
+/**
+ * A page whose `component.paths` the change breaks (#236): the declared paths
+ * it removes or moves, as a finding no model wrote. When some path is left the
+ * finding carries the edit, which `propose` applies to the page's frontmatter;
+ * when none is, the component is gone and that is a person's call.
+ */
+export function componentPathFinding(
+  page: { id: string; title: string },
+  paths: readonly string[],
+  fixes: ReadonlyArray<{ from: string; to: string | null }>,
+  pr: AgentRunPullRequest,
+): AgentFinding {
+  const remaining = applyPathFixes(paths, fixes);
+  const moves = fixes.map((f) => (f.to ? `${f.from} → ${f.to}` : t('agent.drift.paths.removed', { path: f.from }))).join(', ');
+  const detail =
+    remaining.length > 0
+      ? t('agent.drift.paths.moved', { number: pr.number, moves })
+      : t('agent.drift.paths.gone', { number: pr.number, paths: fixes.map((f) => f.from).join(', ') });
+  return {
+    kind: 'stale',
+    severity: 'warning',
+    title: t('agent.drift.paths.title', { title: page.title }).slice(0, 300),
+    detail: detail.slice(0, 2_000),
+    documentIds: [page.id],
+    documentTitles: [page.title],
+    ...pullRequestSources(pr),
+    ...(remaining.length > 0 ? { componentPaths: fixes.map((f) => ({ from: f.from, to: f.to })) } : {}),
   };
 }
 

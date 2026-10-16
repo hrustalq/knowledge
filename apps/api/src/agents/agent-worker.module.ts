@@ -10,6 +10,7 @@ import { AssistantClientModule } from '../assistant/assistant-client.module.js';
 import { AssistantReadToolsModule } from '../assistant/assistant-read-tools.module.js';
 import { WebResearchModule } from '../assistant/web-research.module.js';
 import { CodeResearchModule } from '../connectors/code-research/code-research.module.js';
+import { ComponentsCoreModule } from '../components/components-core.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
 import { SearchCoreModule } from '../search/search-core.module.js';
@@ -74,6 +75,9 @@ import { AgentTriggerListener } from './agent-trigger.listener.js';
     SearchCoreModule,
     // The owner's page visibility and the audience clamp (#76).
     PermissionsCoreModule,
+    // The sentinel's component ties (#236): which pages declare a changed
+    // file, and which document the code that uses it.
+    ComponentsCoreModule,
     // The surveyor (docs/features/38, phase 4) embeds the questions answers
     // failed on, to cluster them — the same provider the ingestion worker
     // indexes with, so a question and the chunk that would answer it share a

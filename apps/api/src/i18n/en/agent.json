@@ -108,8 +108,25 @@
       "clean": "No page in {connector} drifts from this change as of {sha}.",
       "intro": "As of {sha}, {count} page(s) in {connector} may need updating after this change:",
       "proposed": "proposed update",
-      "footer": "Updated on every push. Pages are only changed through the merge requests linked above."
-    }
+      "footer": "Updated on every push. Pages are only changed through the merge requests linked above.",
+      "usagesHeading": "Affected usages",
+      "usagesIntro": "Code that uses the components this change touches, by the page that documents it:",
+      "uses": "uses {files}",
+      "notChecked": "not checked",
+      "morePages": "{count} more page(s)",
+      "hiddenPages": "{count} restricted page(s) not listed",
+      "undocumented": "Documented by no page: {files}",
+      "andMore": "{list} and {count} more"
+    },
+    "paths": {
+      "title": "\"{title}\" declares paths this change removes or moves",
+      "moved": "Change #{number} removes or moves files this page declares in component.paths: {moves}.",
+      "gone": "Change #{number} removes every path this page declares ({paths}), so the code it documents is gone.",
+      "removed": "{path} (removed)"
+    },
+    "overlayFailed": "The change's own files could not be read, so usages are counted from the configured branch only.",
+    "overlayPartial": "{files} changed files could not be read at the head of the change; their usages are counted from the configured branch.",
+    "usagesFailed": "Finding the code that uses the changed components failed, so only the pages tied to the changed files were checked."
   },
   "report": {
     "noContent": "\"{title}\" has no readable content to judge the report against.",

@@ -1270,6 +1270,9 @@ model AgentRun {
   findings Json?
   /// Free-text summary the agent wrote for a human.
   summary  String?
+  /// AgentRunDetails — what a run found that is not a finding: the drift
+  /// check's affected usages (#236). Null when the run had nothing to add.
+  details  Json?
   error    String?
   /// Incremented by the sweeper when a run is re-queued after going stale.
   attempt  Int     @default(0)

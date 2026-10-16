@@ -6,8 +6,12 @@ import type { EntityRef } from '@knowledge/contracts/documents';
  * Fact classes (plan.md §5), by trust: explicit > frontmatter (deterministic)
  * > curated (user-confirmed) > inferred (LLM). Curated facts are never
  * silently overwritten by automated re-extraction.
+ *
+ * `code` (#236) is derived from a codebase connector's import index: a page
+ * documenting a file that imports a declared component `DEPENDS_ON` it. No
+ * author writes one — every pull replaces them — so no input path accepts it.
  */
-export type FactExtractor = 'explicit' | 'frontmatter' | 'inferred' | 'curated';
+export type FactExtractor = 'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code';
 
 /**
  * Relation edge types allowed in the graph (plan.md §6).

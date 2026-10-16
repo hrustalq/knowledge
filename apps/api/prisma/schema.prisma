@@ -106,6 +106,7 @@ model Document {
   threads           DocumentThread[]
   shareLinks        ShareLink[]
   siteAudienceRules SiteAudienceRule[]
+  componentDeclaration ComponentDeclaration?
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -1843,6 +1844,7 @@ model Connector {
   workItems  ConnectorWorkItem[]
   identities ExternalIdentity[]
   codeImports CodeImport[]
+  componentDeclarations ComponentDeclaration[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId, kind])
@@ -1913,6 +1915,41 @@ model CodeImport {
   /// "What imports this file" — the question the index exists to answer.
   @@index([connectorId, importedPath])
   @@map("code_imports")
+}
+
+/// The code a page declares it documents (#236, phase 2): its `component:`
+/// frontmatter, read from the head of the page's default branch and resolved
+/// to a code connector. One row per page. Written by ingestion when the page
+/// indexes, and re-resolved on every codebase pull, so a connector added after
+/// the page is picked up without a re-edit.
+model ComponentDeclaration {
+  documentId   String   @id @map("document_id") @db.Uuid
+  /// No FK, as for every workspace id.
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  /// The revision the declaration was read from.
+  revisionId   String   @map("revision_id") @db.Uuid
+  /// `component:<name>`, canonically folded — the vertex usage edges point at.
+  componentKey String   @map("component_key")
+  /// The component as the page spells it — the vertex's label, never folded.
+  componentName String  @map("component_name")
+  /// As the page wrote it (`owner/repo` or a URL); null when it named none.
+  repository   String?
+  /// Null while unresolved; `warning` says why.
+  connectorId  String?  @map("connector_id") @db.Uuid
+  /// Repo-relative files, directories (`dir/`) or globs.
+  paths        String[]
+  /// Narrows "used" to these exported names; empty means any import.
+  symbols      String[]
+  /// A ComponentDeclarationWarning, or null when the declaration resolved.
+  warning      String?
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  document  Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  connector Connector? @relation(fields: [connectorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([connectorId])
+  @@map("component_declarations")
 }
 
 /// An upstream person a connector's ACLs name (#76, phase 6), and who they are

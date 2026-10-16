@@ -16,6 +16,7 @@ import { ExtractorFactory } from '../extraction/extractor-factory.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { IngestionProducer } from './ingestion.producer.js';
 import { UNFILTERED } from '../common/document-acl.js';
+import { ComponentsService } from '../components/components.service.js';
 import { bindTrace, currentTrace, emitBacktest, startTrace, withTrace } from '@knowledge/observability';
 
 interface IngestionJobData {
@@ -36,6 +37,7 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
     private readonly config: ConfigService<Env, true>,
     private readonly events: EventsPublisher,
     private readonly producer: IngestionProducer,
+    private readonly components: ComponentsService,
   ) {
     super();
   }
@@ -220,6 +222,26 @@ export class IngestionProcessor extends WorkerHost implements OnModuleInit {
         live,
       });
       mark('relations', facts.length);
+
+      // 7b. #236: a `component:` block on the default-branch head declares the
+      //     code the page documents. A branch revision declares nothing until it
+      //     merges. Recording may throw (the job retries); the edge rebuild is
+      //     non-fatal, because the next codebase pull rebuilds them anyway.
+      if (live) {
+        const changed = await this.components.record({
+          workspaceId: revision.document.workspaceId,
+          documentId: revision.documentId,
+          revisionId: revision.id,
+          title: revision.document.title,
+          frontmatter: parsed.data ?? {},
+        });
+        if (changed) {
+          await this.components
+            .rebuild(revision.document.workspaceId)
+            .catch((e) => this.logger.warn(`Code edge rebuild failed (non-fatal): ${(e as Error).message}`));
+        }
+      }
+      mark('component');
 
       // 8. Inferred relation extraction (plan.md §11 Phase 4): LLM-derived
       //    edges tagged 'inferred' with confidence + source chunk. Non-fatal —

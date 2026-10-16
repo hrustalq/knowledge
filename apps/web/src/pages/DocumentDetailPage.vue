@@ -57,6 +57,7 @@ import type {
 import { apiFetch, getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
 import { isOpenIssueStatus } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import ComponentDeclarationNotice from '@/components/code/ComponentDeclarationNotice.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useEventsStore } from '@/stores/events'
@@ -788,6 +789,8 @@ watch(
           {{ t('documents.viewingRevision', { id: viewingRevision.slice(0, 8) }) }}
           <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
         </p>
+        <!-- About the head, like the verification stamp. -->
+        <ComponentDeclarationNotice v-if="!viewingRevision" :document-id="documentId" />
         <PageState v-if="contentError" state="error" :description="contentError" />
         <PageState v-else-if="!content" state="loading" :rows="1" row-class="h-96" />
         <DocumentCanvas

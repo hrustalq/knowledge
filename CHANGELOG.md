@@ -25,6 +25,16 @@ in the pull request that introduces them — see
   Python resolves relative imports only; other languages resolve none yet.
   Nothing reads the index yet. It is the base for component pages and
   "Used by" in the next phases. (#236)
+- A page can declare the code it documents with a `component:` frontmatter
+  block (`repository`, `paths`, `symbols`), and a new built-in **Component**
+  template writes one. After each codebase pull, a page documenting a file
+  that imports a declared component gains a `DEPENDS_ON component:<name>`
+  edge, derived from code and never editable. So `knowledge_impact_analysis`
+  on the component lists the pages documenting its users. A page "documents"
+  a file when its own `component.paths` cover it, or else the wiki module
+  page for the file's directory does. When a declaration matches no
+  connector (none in the workspace, an unknown or ambiguous `repository`, or
+  no paths), the page shows a warning and gets no edges. (#236)
 
 ### Changed
 
@@ -39,6 +49,10 @@ in the pull request that introduces them — see
   table starts empty and fills on each codebase connector's next pull. A
   failure to write it shows as a run warning and never fails the pull.
   (#236)
+- Migration `20261031100000_component_declarations` adds the
+  `component_declarations` table. It is additive, so rolling back is safe.
+  It fills as pages with a `component:` block are next indexed. Existing
+  pages need an edit or a reindex to be picked up. (#236)
 
 ## [0.24.0] — 2026-10-16
 

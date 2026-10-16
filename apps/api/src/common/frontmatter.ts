@@ -81,3 +81,38 @@ export function writeFrontmatter(raw: string, patch: Record<string, unknown>): s
   if (Object.keys(merged).length === 0) return body;
   return matter.stringify(body, merged);
 }
+
+/** A page's `component:` block (#236), as written — not yet resolved to a connector. */
+export interface ComponentFrontmatter {
+  /** `owner/repo` or a repository URL; null when the page names none. */
+  repository: string | null;
+  /** Repo-relative files, directories or globs, leading `./` and `/` removed. */
+  paths: string[];
+  symbols: string[];
+  /** `component.name`, when the block gives one. */
+  name: string | null;
+}
+
+/** One string or a list of them; anything else is nothing. */
+function stringList(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  return items.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter(Boolean);
+}
+
+/**
+ * The `component:` block, or null when the page has none.
+ *
+ * Lenient about shape, like the relation reader: a single `paths: x.ts` string
+ * is a list of one, and blank entries (a template placeholder left empty) are
+ * dropped. A block that keeps no path is still returned, with `paths` empty,
+ * so the page can say its declaration is unusable rather than look undeclared.
+ */
+export function readComponentFrontmatter(data: Record<string, unknown> | null | undefined): ComponentFrontmatter | null {
+  const entry = Object.entries(data ?? {}).find(([key]) => key.trim().toLowerCase() === 'component');
+  if (!entry || entry[1] === null || entry[1] === undefined) return null;
+  const block = typeof entry[1] === 'object' && !Array.isArray(entry[1]) ? (entry[1] as Record<string, unknown>) : {};
+  const repository = typeof block.repository === 'string' && block.repository.trim() ? block.repository.trim() : null;
+  const name = typeof block.name === 'string' && block.name.trim() ? block.name.trim() : null;
+  const paths = [...new Set(stringList(block.paths).map((p) => p.replace(/^(\.\/)+|^\/+/, '')).filter(Boolean))];
+  return { repository, paths, symbols: [...new Set(stringList(block.symbols))], name };
+}

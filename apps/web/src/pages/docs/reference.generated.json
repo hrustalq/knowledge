@@ -1882,6 +1882,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/documents/{id}/component",
+      "tag": "documents",
+      "summary": "The code the page declares it documents (its `component:` frontmatter), as resolved to a codebase connector at its default-branch head; null when it declares none. `warning` says why a declaration resolved to no connector",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/documents/{id}/connectors",
       "tag": "documents",
       "summary": "External systems this page is linked to (docs/features/19)",

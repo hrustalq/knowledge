@@ -384,7 +384,7 @@ Component: {{component}}
 `;
 
 describe('TemplatesService', () => {
-  it('an empty table is exactly the seven built-ins, in the caller’s language', async () => {
+  it('an empty table is exactly the built-ins, in the caller’s language', async () => {
     const { service } = makeService();
     const en = await service.list({ workspaceId: WS });
     expect(en.templates.map((t) => t.ref)).toEqual(BUILT_IN_TEMPLATE_KEYS.map((k) => `builtin:${k}`));

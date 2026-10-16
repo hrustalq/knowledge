@@ -1445,7 +1445,8 @@
         "explicit": "From the page text",
         "frontmatter": "From frontmatter",
         "inferred": "Inferred relation",
-        "curated": "Curated relation"
+        "curated": "Curated relation",
+        "code": "Derived from code"
       }
     },
     "saveToKb": {
@@ -4647,6 +4648,15 @@
         "title": "Nothing failed",
         "hint": "A capture that could not be proposed after three attempts shows up here with its error."
       }
+    }
+  },
+  "component": {
+    "notice": {
+      "title": "This page declares a component, but no usages are tracked.",
+      "no-connector": "The workspace has no codebase connector. Connect the repository to track where this code is used.",
+      "ambiguous-repository": "Several code connectors could hold it. Set component.repository to owner/repo to pick one.",
+      "unknown-repository": "No code connector reads “{repository}”. Check component.repository against the connector’s repository.",
+      "no-paths": "component.paths names no file. List the files or directories this page documents."
     }
   }
 }

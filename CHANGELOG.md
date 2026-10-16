@@ -35,6 +35,15 @@ in the pull request that introduces them — see
   page for the file's directory does. When a declaration matches no
   connector (none in the workspace, an unknown or ambiguous `repository`, or
   no paths), the page shows a warning and gets no edges. (#236)
+- A component page has a **Used by** panel in its right rail. It lists every
+  file that imports the declared code at the connector's indexed head, what
+  each one imports, and the pages documenting each file. With `symbols`
+  declared, a file that imports the module but none of those names is left
+  out. Every path is shown. A documenting page the reader cannot open shows
+  as a count, never a title. The same answer is available by page or by path
+  through `GET /v1/documents/:id/component/usages`, `GET /v1/code-usages`
+  and the new read-only MCP tool `knowledge_code_usages`, so an agent can ask
+  "what uses this file, and which docs move?" before editing it. (#236)
 
 ### Changed
 

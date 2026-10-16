@@ -1415,3 +1415,45 @@ export interface ComponentDeclarationView {
   /** The revision the declaration was read from. */
   revisionId: string;
 }
+
+/** A page a usage answer names: only ever one the caller may open. */
+export interface CodeUsagePage {
+  id: string;
+  title: string;
+}
+
+/** One file that uses a component, and the pages that document that file. */
+export interface CodeUsageSite {
+  /** The importing file. */
+  path: string;
+  /** The component's files it imports, and the names it takes from each (`default`, `*`, or none for a side-effect import). */
+  imports: Array<{ path: string; names: string[] }>;
+  /** Component pages covering `path`, else the wiki module page containing it. */
+  pages: CodeUsagePage[];
+  /** Pages documenting `path` that the caller may not open: counted, never titled. */
+  hiddenPages: number;
+}
+
+/**
+ * GET /v1/documents/:id/component/usages, GET /v1/code-usages and the
+ * `knowledge_code_usages` tool (#236, phase 3): where a component's code is
+ * used at the connector's indexed head, computed on read.
+ */
+export interface CodeUsagesResponse {
+  connector: { id: string; name: string } | null;
+  /** The head the usage index was built from; null when the connector has none yet. */
+  headSha: string | null;
+  /** The files or globs asked about. */
+  paths: string[];
+  /** The names a use must import; empty means any import counts. */
+  symbols: string[];
+  /** Component pages whose declared paths cover what was asked about, the asking page excluded. */
+  components: CodeUsagePage[];
+  hiddenComponents: number;
+  /** Usage sites, in path order. */
+  usages: CodeUsageSite[];
+  /** Usage sites past the limit, counted and not listed. */
+  truncated: number;
+  /** Why the answer is empty when the declaration resolved to no connector. */
+  warning: ComponentDeclarationWarning | null;
+}

@@ -209,3 +209,46 @@ export function componentUsageEdges(
   for (const byKey of out.values()) for (const files of byKey.values()) files.sort();
   return out;
 }
+
+/** Usage sites one answer lists by default, and at most; the rest are counted. */
+export const DEFAULT_USAGE_LIMIT = 200;
+export const MAX_USAGE_LIMIT = 1_000;
+
+/** A usage site before pages are attached: the importing file and what it takes from the component. */
+export interface UsageSite {
+  path: string;
+  imports: Array<{ path: string; names: string[] }>;
+}
+
+/**
+ * The files that use the code under `paths`, in path order — the read-side
+ * twin of `componentUsageEdges`, under the same two rules: an import from
+ * inside `paths` is the component using itself, and with `symbols` declared
+ * only an import taking one of them counts.
+ */
+export function usageSites(paths: readonly string[], symbols: readonly string[], rows: readonly ImportRow[]): UsageSite[] {
+  const sites = new Map<string, UsageSite>();
+  for (const row of rows) {
+    if (!coversFile(paths, row.importedPath) || coversFile(paths, row.importerPath)) continue;
+    if (!usesSymbols(symbols, row.names, row.importedPath)) continue;
+    const site = sites.get(row.importerPath) ?? { path: row.importerPath, imports: [] };
+    site.imports.push({ path: row.importedPath, names: row.names });
+    sites.set(row.importerPath, site);
+  }
+  const out = [...sites.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  for (const site of out) site.imports.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return out;
+}
+
+/**
+ * `importedPath` filters narrowing the index read to rows `usageSites` can
+ * keep: exact files and directory prefixes narrow it, a glob anywhere means
+ * the whole index (null).
+ */
+export function importedPathPrefilter(paths: readonly string[]): Array<{ equals: string } | { startsWith: string }> | null {
+  if (paths.some((p) => GLOB.test(p))) return null;
+  return paths.flatMap((p) => {
+    const dir = p.replace(/\/+$/, '');
+    return [{ equals: dir }, { startsWith: `${dir}/` }];
+  });
+}

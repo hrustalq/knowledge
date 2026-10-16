@@ -1452,6 +1452,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/code-usages",
+      "tag": "connectors",
+      "summary": "Where a file, directory or glob is used in one of the workspace's code connectors, the pages documenting each usage site, and the component pages covering the path. Pages the caller may not open are counted, never titled",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/connectors",
       "tag": "connectors",
       "summary": "List the connectors configured in a workspace",
@@ -1885,6 +1895,16 @@
       "path": "/v1/documents/{id}/component",
       "tag": "documents",
       "summary": "The code the page declares it documents (its `component:` frontmatter), as resolved to a codebase connector at its default-branch head; null when it declares none. `warning` says why a declaration resolved to no connector",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/component/usages",
+      "tag": "documents",
+      "summary": "Where the code this page declares is used, at the connector's indexed head: each importing file, what it imports, and the pages documenting it. Pages the caller may not open are counted, never titled. 404 when the page declares no component",
       "role": "viewer",
       "source": "document",
       "public": false,
@@ -3909,6 +3929,36 @@
         {
           "name": "mergeRequestId",
           "optional": false
+        }
+      ]
+    },
+    {
+      "name": "knowledge_code_usages",
+      "description": "Where code is used, from a codebase connector's import index at its indexed head: every file importing the given path (a file, directory or glob) or the code a component page declares, what each imports, and the pages documenting each usage site — component pages covering it first, else its repo wiki module page. Also lists the component pages covering the path. Give documentId, or workspaceId + path. Use it before editing a file, to find which callers and which docs a change reaches. TS/JS resolves relative imports, tsconfig path aliases and workspace packages; other languages relative imports only.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": true
+        },
+        {
+          "name": "workspaceId",
+          "optional": true
+        },
+        {
+          "name": "path",
+          "optional": true
+        },
+        {
+          "name": "repository",
+          "optional": true
+        },
+        {
+          "name": "symbols",
+          "optional": true
+        },
+        {
+          "name": "limit",
+          "optional": true
         }
       ]
     },

@@ -1583,7 +1583,8 @@
     "connected": "{n} connected | {n} connected",
     "workflows": "no workflows | {n} workflow | {n} workflows",
     "tools": "no tools | {n} tool | {n} tools",
-    "openIssues": "{n} open report | {n} open reports"
+    "openIssues": "{n} open report | {n} open reports",
+    "usages": "{n} usage site | {n} usage sites"
   },
   "chat": {
     "needsAgentMode": "This needs Agent mode",
@@ -2501,7 +2502,8 @@
     "people": "People",
     "pages": "Pages",
     "glossary": "Glossary",
-    "site": "Site"
+    "site": "Site",
+    "usedBy": "Used by"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -4657,6 +4659,17 @@
       "ambiguous-repository": "Several code connectors could hold it. Set component.repository to owner/repo to pick one.",
       "unknown-repository": "No code connector reads “{repository}”. Check component.repository against the connector’s repository.",
       "no-paths": "component.paths names no file. List the files or directories this page documents."
+    },
+    "usedBy": {
+      "none": "Nothing imports this code at the indexed head.",
+      "notIndexed": "The connector has not indexed its repository yet. Usages appear after its next pull.",
+      "unresolved": "No usages: the declaration matches no code connector.",
+      "undocumented": "No page documents this file",
+      "hiddenPages": "{n} page you cannot open | {n} pages you cannot open",
+      "sideEffect": "side-effect import",
+      "everything": "everything (namespace import)",
+      "alsoDeclaredBy": "Also declared by",
+      "unresolvedShort": "not tracked"
     }
   }
 }

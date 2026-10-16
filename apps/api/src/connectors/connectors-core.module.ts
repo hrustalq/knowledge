@@ -6,6 +6,7 @@ import { ProjectsCoreModule } from '../projects/projects-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { ConnectorAdaptersModule } from './adapters/adapters.module.js';
+import { CodeImportsService } from './code-imports.service.js';
 import { ConnectorAclService } from './connector-acl.service.js';
 import { ConnectorDiscoveryService } from './connector-discovery.service.js';
 import { ConnectorLinksService } from './connector-links.service.js';
@@ -45,6 +46,7 @@ import { RepoWikiService } from './repo-wiki.service.js';
     ConnectorStagingService,
     ConnectorSyncService,
     RepoWikiService,
+    CodeImportsService,
   ],
   exports: [
     ConnectorsService,
@@ -56,6 +58,9 @@ import { RepoWikiService } from './repo-wiki.service.js';
     // The repo wiki's read side and regenerate (docs/features/46): shared by
     // the REST routes and the MCP tools, so exported like the rest.
     RepoWikiService,
+    // The code-usage index (#236): written by the pull, read by the usage
+    // routes and MCP tools of later phases.
+    CodeImportsService,
   ],
 })
 export class ConnectorsCoreModule {}

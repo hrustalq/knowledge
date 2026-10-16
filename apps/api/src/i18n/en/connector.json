@@ -33,7 +33,8 @@
       "oversize": "{count} file(s) were too large to read and were skipped.",
       "unparsed": "{count} file(s) in this module could not be parsed and were skipped.",
       "truncated": "This module has {total} source files; its API surface was read from the first {limit}.",
-      "modulesOmitted": "{count} module(s) beyond the configured limit are not documented. Raise the module limit to include them."
+      "modulesOmitted": "{count} module(s) beyond the configured limit are not documented. Raise the module limit to include them.",
+      "indexFailed": "The code-usage index could not be updated, so it still describes the previous pull: {error}"
     },
     "wiki": {
       "configInvalid": "The repository's .knowledge/wiki.yml was ignored and the defaults applied: {errors}",

@@ -13,6 +13,33 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- Every pull of a codebase connector now records which files import which,
+  and which names they take, for the commit it read. It covers relative
+  imports, `tsconfig` path aliases (`@/…`), workspace packages
+  (`@knowledge/contracts/core`), `.vue` / `.svelte` script blocks, lazy
+  `import()`s, and imports that reach a file through a barrel `index.ts`.
+  Python resolves relative imports only; other languages resolve none yet.
+  Nothing reads the index yet. It is the base for component pages and
+  "Used by" in the next phases. (#236)
+
+### Changed
+
+- The repo wiki's Architecture page now counts `export … from` re-exports as
+  dependencies between modules. If that adds an arrow, the page is
+  regenerated once on the next pull. (#236)
+
+### Operations
+
+- Migration `20261030100000_code_imports` adds the `code_imports` table. The
+  change is additive, so rolling back to the previous image is safe. The
+  table starts empty and fills on each codebase connector's next pull. A
+  failure to write it shows as a run warning and never fails the pull.
+  (#236)
+
 ## [0.24.0] — 2026-10-16
 
 ### Added

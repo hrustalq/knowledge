@@ -91,6 +91,20 @@ export interface OutboundDocument {
   ref?: ExternalRef;
 }
 
+/** One importer → imported file pair at a code connector's head (#236). Paths are repo-relative. */
+export interface CodeImportEdge {
+  importer: string;
+  imported: string;
+  /** Names taken: `default`, `*` (namespace, star or dynamic import), empty for a side-effect import. */
+  names: string[];
+}
+
+export interface CodeImportIndex {
+  /** The commit the edges were read at, or null when the host did not say. */
+  headSha: string | null;
+  edges: CodeImportEdge[];
+}
+
 export interface ConnectorContext {
   connectorId: string;
   workspaceId: string;
@@ -181,6 +195,13 @@ export interface ConnectorAdapter {
    * this connector's scope mentions.
    */
   groupMembers?(ctx: ConnectorContext, group: ExternalPrincipal): Promise<ExternalGroupMember[]>;
+
+  /**
+   * The repository's reverse-import index at the head this run read (#236).
+   * Present on code connectors only. Asked once per pull, when discovery
+   * finishes, and stored whole in place of the previous head's index.
+   */
+  codeImports?(ctx: ConnectorContext): Promise<CodeImportIndex>;
 
   /**
    * Verify an inbound webhook and say which items changed. Returning null means

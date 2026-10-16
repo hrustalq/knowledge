@@ -7,7 +7,10 @@
 # Images are built and tagged by .github/workflows/deploy.yml, NOT here — there
 # is deliberately no `build:` section, because the deploy dir holds no source
 # tree and a stray `compose up` must never try to build one.
-#   TAG=<sha> docker compose -f docker-compose.prod.yml up -d
+#   DOCKER_HOST=unix:///Users/hrustalq/.colima/default/docker.sock \
+#     TAG=<sha> docker compose -f docker-compose.prod.yml up -d
+# Always name the Colima socket by hand, as deploy.yml does: the box's default
+# docker context can be Docker Desktop, which holds none of these images.
 #
 # EXPOSURE: nothing publishes publicly. The public path is a Cloudflare Worker
 # on knowledge.hrustalq.dev -> Tailscale Funnel on the Mac mini -> caddy on

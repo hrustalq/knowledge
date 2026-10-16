@@ -405,6 +405,10 @@ previous release's image:
 
 ```bash
 ssh macmini
+# Production runs on Colima. Name its socket, as deploy.yml does: the box's
+# default docker context can be Docker Desktop, where these images do not exist.
+export DOCKER_HOST=unix:///Users/hrustalq/.colima/default/docker.sock
+docker info --format '{{.Name}}'   # must print: colima
 docker tag knowledge-api:vX.Y.Z knowledge-api:latest
 docker tag knowledge-web:vX.Y.Z knowledge-web:latest
 docker compose -f ~/Homelab/infra/knowledge/docker-compose.prod.yml up -d

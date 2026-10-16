@@ -551,6 +551,12 @@
     "tooLong": "The capture is {size} characters; the limit is {limit}.",
     "secretDetected": "The capture contains what looks like a credential ({pattern}). Remove it and capture again; nothing was stored.",
     "rateLimited": "This key has made {limit} captures in the last hour. Try again in {retryAfterSec} s.",
-    "workspaceRateLimited": "This workspace has taken {limit} captures in the last day. Try again in {retryAfterSec} s."
+    "workspaceRateLimited": "This workspace has taken {limit} captures in the last day. Try again in {retryAfterSec} s.",
+    "notFound": "Unknown capture {id}",
+    "notApprovable": "Only a term waits for approval here. A page or relation capture is approved by merging its merge request.",
+    "notStaged": "This capture is {state}; only a staged one can be approved or rejected.",
+    "useMergeRequest": "This capture is already a merge request — review it there, and close the merge request to turn it down.",
+    "inFlight": "This capture is being proposed right now. Try again in a moment.",
+    "messageNotAssistant": "Only an assistant reply can be saved to the knowledge base."
   }
 }

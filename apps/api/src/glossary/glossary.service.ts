@@ -6,6 +6,7 @@ import {
   type GlossaryExclusion,
   type GlossaryExclusionAnchor,
   type GlossaryTerm,
+  type GlossaryTermSource,
   type GlossaryTermSuggestion,
   type ListGlossaryExclusionsResponse,
   type ListGlossaryResponse,
@@ -96,7 +97,11 @@ export class GlossaryService {
     return (await this.withDocumentTitles([row]))[0]!;
   }
 
-  async create(dto: CreateGlossaryTermDto, actorId?: string): Promise<GlossaryTerm> {
+  /** `source: 'captured'` is the captures inbox approving a term (#73); the REST DTO only admits manual/ai. */
+  async create(
+    dto: Omit<CreateGlossaryTermDto, 'source'> & { source?: GlossaryTermSource },
+    actorId?: string,
+  ): Promise<GlossaryTerm> {
     const term = dto.term.trim();
     await this.projects.requireProjectInWorkspace(dto.projectId, dto.workspaceId);
     await this.assertNameFree(dto.projectId, term);
@@ -389,7 +394,7 @@ export class GlossaryService {
       definition: row.definition,
       documentId: row.documentId,
       documentTitle: row.documentId ? (titles.get(row.documentId) ?? null) : null,
-      source: row.source === 'ai' ? 'ai' : 'manual',
+      source: row.source === 'ai' || row.source === 'captured' ? row.source : 'manual',
       enabled: row.enabled,
       matchAliases: row.matchAliases,
       caseSensitive: row.caseSensitive,

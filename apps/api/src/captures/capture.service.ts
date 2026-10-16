@@ -344,6 +344,11 @@ export class CaptureService {
     return { captures, nextCursor: hasMore ? page[page.length - 1]!.id : null };
   }
 
+  /** One row as the inbox shows it, its merge request's status read alongside. */
+  async info(row: KnowledgeCapture): Promise<CaptureInfo> {
+    return this.toInfo(row, await this.mergeRequestStatus(row.mergeRequestId));
+  }
+
   // ------------------------------------------------------------------ staging
 
   /** The project, title and stored body of a request, per kind. */
@@ -661,7 +666,7 @@ export class CaptureService {
   /**
    * A term is a row, not a revision, so there is no merge request to open: it
    * waits in the captures inbox, `staged` with outcome `glossary`, until an
-   * editor approves it (phase 3). A term or alias the project already has, or
+   * editor approves it (`CaptureInboxService.approve`). A term or alias the project already has, or
    * one already waiting, is a duplicate.
    */
   private async stageTerm(row: KnowledgeCapture, claimedAt: Date): Promise<void> {
@@ -772,7 +777,11 @@ export class CaptureService {
 
   /** The merge request description: where it came from, what it does, what it was compared with. */
   private describe(session: CaptureSession, similar: readonly CaptureSimilar[], lang: Principal['locale'], what?: string): string {
-    const lines = [t('capture.mergeRequest.intro', { source: describeSession(session) }, lang)];
+    const lines = [
+      session.client === 'assistant'
+        ? t('capture.mergeRequest.introAssistant', undefined, lang)
+        : t('capture.mergeRequest.intro', { source: describeSession(session) }, lang),
+    ];
     if (what) lines.push('', what);
     if (similar.length) {
       lines.push('', t('capture.mergeRequest.similar', undefined, lang));
@@ -801,7 +810,7 @@ export class CaptureService {
         : null;
     return {
       captureId: row.id,
-      state: captureStateFor(row.status as CaptureStatus, mergeRequestStatus),
+      state: captureStateFor(row.status as CaptureStatus, mergeRequestStatus, row.glossaryTermId),
       outcome: (row.outcome as CaptureOutcome | null) ?? null,
       mergeRequestId: row.mergeRequestId,
       targetDocumentId: row.targetDocumentId,

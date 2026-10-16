@@ -43,6 +43,7 @@ export type WorkspaceSource =
   | 'chat-subscription' // :id path param is a chat subscription id (issue #71, phase 3)
   | 'group' // :id path param is a user group id (issue #76)
   | 'access-request' // :id path param is an access request id (issue #76, phase 5)
+  | 'capture' // :id path param is a knowledge capture id (issue #73, phase 3)
   | 'workspace'; // :id path param IS the workspace id (existence-checked)
 
 export interface AccessSpec {

@@ -19,8 +19,12 @@ import type { DocumentCategory } from '@knowledge/contracts/documents';
 export const GLOSSARY_BOUNDARY_BEFORE = '(?<![\\p{L}\\p{N}_])';
 export const GLOSSARY_BOUNDARY_AFTER = '(?![\\p{L}\\p{N}_])';
 
-/** Where a term came from: hand-written, or accepted from an AI suggestion. */
-export type GlossaryTermSource = 'manual' | 'ai';
+/**
+ * Where a term came from: hand-written, accepted from an AI suggestion, or
+ * approved from an agent-session capture (issue #73). Only the first two can
+ * be sent to `POST /v1/glossary`; `captured` is written by the approve route.
+ */
+export type GlossaryTermSource = 'manual' | 'ai' | 'captured';
 
 export interface GlossaryTerm {
   termId: string;

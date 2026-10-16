@@ -28,8 +28,12 @@ export type CaptureState = CaptureStatus | 'merged' | 'closed';
 export const CAPTURE_OUTCOMES = ['new-page', 'amend-page', 'glossary', 'relation', 'none'] as const;
 export type CaptureOutcome = (typeof CAPTURE_OUTCOMES)[number];
 
-/** The coding agent that wrote the capture, as it says. `other` rather than free text, so the inbox can filter on it. */
-export const CAPTURE_CLIENTS = ['claude-code', 'cursor', 'codex', 'gemini', 'other'] as const;
+/**
+ * The coding agent that wrote the capture, as it says. `other` rather than free
+ * text, so the inbox can filter on it. `assistant` is the app's own chat pane
+ * ("Save to knowledge base" on a reply), where there is no session to report.
+ */
+export const CAPTURE_CLIENTS = ['claude-code', 'cursor', 'codex', 'gemini', 'assistant', 'other'] as const;
 export type CaptureClient = (typeof CAPTURE_CLIENTS)[number];
 
 /** `session.files` is paths only, and at most this many. */
@@ -64,9 +68,18 @@ export type MergeRequestProvenance = (typeof MR_PROVENANCES)[number];
  * The state a capture is shown in. Derived, never stored: a `proposed` capture
  * whose merge request merged reads `merged`, one whose merge request was
  * closed reads `closed`, and everything else reads its stored status.
+ *
+ * A term has no merge request: approving it creates the glossary row at once,
+ * so a `proposed` capture holding a `glossaryTermId` and no merge request is
+ * already in the knowledge base and reads `merged` too.
  */
-export function captureStateFor(status: CaptureStatus, mergeRequestStatus: string | null | undefined): CaptureState {
+export function captureStateFor(
+  status: CaptureStatus,
+  mergeRequestStatus: string | null | undefined,
+  approvedTermId?: string | null,
+): CaptureState {
   if (status !== 'proposed') return status;
+  if (!mergeRequestStatus && approvedTermId) return 'merged';
   if (mergeRequestStatus === 'merged') return 'merged';
   if (mergeRequestStatus === 'closed') return 'closed';
   return 'proposed';
@@ -179,4 +192,22 @@ export interface CaptureInfo extends CaptureResult {
 export interface ListCapturesResponse {
   captures: CaptureInfo[];
   nextCursor: string | null;
+}
+
+// ---------------------------------------------------------------- the inbox (phase 3)
+
+/** `POST /v1/captures/:id/reject`. The reason goes to the activity log; the row keeps no free text of the reviewer's. */
+export interface RejectCaptureRequest {
+  reason?: string;
+}
+
+/**
+ * `POST /v1/assistant/messages/:id/capture`: an assistant reply written back as
+ * an `answer` capture. The question is the user turn before it and the
+ * citations are the reply's own sources, so the body names only what the
+ * reply cannot: which project, and a title other than the question.
+ */
+export interface CaptureAssistantMessageRequest {
+  projectId?: string;
+  title?: string;
 }

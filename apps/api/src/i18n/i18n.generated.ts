@@ -204,6 +204,7 @@ export type I18nTranslations = {
         "mergeRequest": {
             "title": string;
             "intro": string;
+            "introAssistant": string;
             "amends": string;
             "newPage": string;
             "similar": string;
@@ -927,6 +928,12 @@ export type I18nTranslations = {
             "secretDetected": string;
             "rateLimited": string;
             "workspaceRateLimited": string;
+            "notFound": string;
+            "notApprovable": string;
+            "notStaged": string;
+            "useMergeRequest": string;
+            "inFlight": string;
+            "messageNotAssistant": string;
         };
     };
     "import": {
@@ -1164,6 +1171,7 @@ export type I18nTranslations = {
         "chatIdentity": string;
         "group": string;
         "accessRequest": string;
+        "capture": string;
     };
     "validation": {
         "isDefined": string;

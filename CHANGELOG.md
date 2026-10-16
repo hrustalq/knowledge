@@ -46,6 +46,21 @@ in the pull request that introduces them — see
   agent finding or an assistant proposal) or `captured` (an agent session or
   a chat save), with `captureId` for a capture's. `GET /v1/merge-requests`
   filters on `provenance`. (#73)
+- Captures over REST: `POST /v1/captures` takes the same captures as the MCP
+  tools (one body, discriminated by `kind`), `GET /v1/captures` and
+  `GET /v1/captures/:id` list and read them. `POST /v1/captures/:id/approve`
+  turns a term waiting in the inbox into a glossary entry with source
+  `captured`; `POST /v1/captures/:id/reject` turns down anything still
+  staged. A page or relation capture is already a merge request, so both
+  answer 409 for it and point at the merge request. A capture key can create
+  captures but never approve or reject them. (#73)
+- `POST /v1/assistant/messages/:id/capture` saves an assistant reply to the
+  knowledge base as a merge request: the question before it, the answer
+  without its `[S#]` labels, and its cited pages. A reply that cites no page
+  is refused. (#73)
+- A capture interrupted by an API restart between staging and proposing is
+  now finished by a sweeper within `CAPTURE_STALE_MS`, as the person who
+  wrote it, instead of staying staged. (#73)
 
 ### Changed
 

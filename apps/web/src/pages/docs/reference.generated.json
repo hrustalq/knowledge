@@ -791,6 +791,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/assistant/messages/{id}/capture",
+      "tag": "assistant",
+      "summary": "Write an assistant reply back as an answer capture: its question, its cited pages, a merge request to review (400 when it cites no page)",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "DELETE",
       "path": "/v1/assistant/messages/{id}/feedback",
       "tag": "assistant",
@@ -1199,6 +1209,56 @@
       "source": null,
       "public": false,
       "platformAdmin": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/captures",
+      "tag": "captures",
+      "summary": "Captures in a workspace, newest first; ones on pages or projects the caller cannot open are left out",
+      "role": "viewer",
+      "source": "query",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/captures",
+      "tag": "captures",
+      "summary": "Stage a capture and propose it: page and relation captures open a merge request with provenance captured, a term waits in the inbox (429 past the rate limits, 400 on a credential)",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/captures/{id}",
+      "tag": "captures",
+      "summary": "One capture, with its state read through its merge request",
+      "role": "viewer",
+      "source": "capture",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/captures/{id}/approve",
+      "tag": "captures",
+      "summary": "Approve a term waiting in the inbox: it becomes a glossary entry with source captured. A page or relation capture is approved by merging its merge request (409)",
+      "role": "editor",
+      "source": "capture",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/captures/{id}/reject",
+      "tag": "captures",
+      "summary": "Reject a staged capture. A proposed one is turned down by closing its merge request (409 with mergeRequestId)",
+      "role": "editor",
+      "source": "capture",
+      "public": false,
+      "platformAdmin": false
     },
     {
       "method": "DELETE",

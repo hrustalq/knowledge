@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
 import { PermissionsModule } from './permissions/permissions.module.js';
+import { CapturesModule } from './captures/captures.module.js';
 import { ProfilesModule } from './profiles/profiles.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { GraphQueryModule } from './graph/graph-query.module.js';
@@ -89,6 +90,9 @@ import { ChatModule } from './chat/chat.module.js';
     // Chat bots (issue #71). API-only: the webhook, settings, and the answer
     // turn, which runs here on a detached continuation with a reaper.
     ChatModule,
+    // Agent-session captures (issue #73): the REST routes, the inbox and the
+    // stranded-capture sweeper. API-only; MCP loads CapturesCoreModule alone.
+    CapturesModule,
     // MCP over Streamable HTTP at /v1/mcp (docs/features/33) — the stdio
     // server's tools, bound per request to the caller's principal.
     McpHttpModule,

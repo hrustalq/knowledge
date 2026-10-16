@@ -364,6 +364,11 @@ export const KNOWN_EVENT_TYPES = [
   // A trigger started a run (#70): `subjectId` is the run, `documentId` the
   // page it is about, when it is about one.
   'agent.trigger.fired',
+  // Agent-session captures (issue #73): `subjectId` is the capture. Proposed
+  // when its merge request opened; approved/rejected from the inbox.
+  'capture.proposed',
+  'capture.approved',
+  'capture.rejected',
   'connector.created',
   'connector.updated',
   'connector.deleted',

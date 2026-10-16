@@ -61,6 +61,25 @@ in the pull request that introduces them — see
 - A capture interrupted by an API restart between staging and proposing is
   now finished by a sweeper within `CAPTURE_STALE_MS`, as the person who
   wrote it, instead of staying staged. (#73)
+- A **Captures** page in the sidebar ("Предложения агентов" in Russian) lists
+  what agents proposed, by Staged, Proposed, Duplicates, Rejected and Failed,
+  filterable by kind, project and "only mine". Each row shows which agent sent
+  it, from which repository, branch and commit, what dedupe made of it and the
+  pages it was compared with. Glossary terms are approved or rejected there;
+  page and relation captures link to their merge request. The list updates
+  live as captures arrive and their merge requests merge or close. `GET
+  /v1/captures` rows now carry the capture's `payload`. (#73)
+- Merge requests opened by an agent carry an **Agent** or **Captured** badge in
+  the list, the search bar offers "Captured from agent sessions" and an
+  "Opened by" filter, and a captured merge request's page shows the agent,
+  repository, branch and session it came from. (#73)
+- Assistant replies that cite a page have a **Save to knowledge base** action,
+  which proposes the answer as a merge request and links to it. (#73)
+- **Settings → AI → Agent memory** sets whether agents may propose, the two
+  rate limits (with the deployment's cap shown beside them), the duplicate and
+  amend thresholds, and the parent page for new captured pages. The Connect AI
+  key form can pin a Read & propose key to projects, and the key list shows the
+  pin. Glossary terms approved from captures are badged and filterable. (#73)
 
 ### Changed
 

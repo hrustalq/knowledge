@@ -41,6 +41,7 @@ import DocumentCanvas from '@/components/knowledge/DocumentCanvas.vue'
 import MergeWidget from '@/components/merge-requests/MergeWidget.vue'
 import MrSidebar from '@/components/merge-requests/MrSidebar.vue'
 import MrActivityFeed from '@/components/merge-requests/MrActivityFeed.vue'
+import MrProvenance from '@/components/merge-requests/MrProvenance.vue'
 import ThreadCard from '@/components/merge-requests/ThreadCard.vue'
 import CommentComposer from '@/components/merge-requests/CommentComposer.vue'
 import { matchAnchoredThreads } from '@/components/merge-requests/thread-anchors'
@@ -370,6 +371,7 @@ function refresh() {
           {{ t('mr.viewDocument') }}
         </RouterLink>
       </p>
+      <MrProvenance :merge-request="mr" />
     </header>
 
     <MergeWidget :merge-request="mr" :unresolved-threads="unresolvedCount" @changed="refresh" />

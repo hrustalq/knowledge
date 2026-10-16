@@ -157,7 +157,8 @@
     "templates": "Templates",
     "publishing": "Publishing",
     "exports": "Exports",
-    "chatBots": "Chat bots"
+    "chatBots": "Chat bots",
+    "captures": "Captures"
   },
   "role": {
     "guest": "Guest",
@@ -1048,7 +1049,9 @@
         "created": "created a branch on"
       },
       "capture": {
-        "proposed": "proposed a capture from an agent session"
+        "proposed": "proposed a capture from an agent session",
+        "approved": "approved a captured glossary term",
+        "rejected": "rejected a capture"
       },
       "relations": {
         "curated": "curated a relation on",
@@ -1325,7 +1328,19 @@
     "threadsUnresolvedOf": "{n} of {total} threads unresolved",
     "passed": "Passed",
     "editAssignee": "Edit assignee",
-    "stopEditingAssignee": "Stop editing assignee"
+    "stopEditingAssignee": "Stop editing assignee",
+    "provenance": {
+      "manual": "A person",
+      "agent": "Agent",
+      "captured": "Captured",
+      "capturedView": "Captured from agent sessions",
+      "reportedHint": "Reported by the agent that opened this merge request. Nothing here was checked by the server.",
+      "agentStrip": "Opened by an agent from its findings.",
+      "capturedFrom": "Captured from",
+      "anAgent": "an agent session",
+      "session": "session",
+      "viewCaptures": "View in captures"
+    }
   },
   "assistant": {
     "askAi": "Ask AI",
@@ -1432,6 +1447,16 @@
         "inferred": "Inferred relation",
         "curated": "Curated relation"
       }
+    },
+    "saveToKb": {
+      "label": "Save to knowledge base",
+      "done": "Saved to knowledge base",
+      "proposed": "Proposed as a new page. It waits for review.",
+      "amended": "Proposed as an addition to an existing page. It waits for review.",
+      "duplicate": "The knowledge base already says this.",
+      "staged": "Saved. It will be proposed shortly.",
+      "openPage": "Open page",
+      "openMergeRequest": "Open merge request"
     }
   },
   "review": {
@@ -1716,7 +1741,8 @@
       "yours": "Yours",
       "assistant": "Assistant",
       "quality": "Quality",
-      "activity": "Activity"
+      "activity": "Activity",
+      "connected": "Connected agents"
     },
     "addProvider": "Add provider",
     "editProvider": "Edit provider",
@@ -2251,6 +2277,47 @@
       "updated": "Learning updated",
       "savedActive": "Saved. The agent follows it from its next turn.",
       "savedProposed": "Proposed. A workspace admin approves it under AI settings, Learnings."
+    },
+    "tabCapture": "Agent memory",
+    "capture": {
+      "intro": "Coding agents connected with a Read & propose key can send back what they learned in a session. Each proposal becomes a merge request for review, never a direct edit.",
+      "openInbox": "Open the captures inbox",
+      "saved": "Agent memory settings saved.",
+      "applies": "Applies:",
+      "on": "On",
+      "off": "Off",
+      "inherit": "Default ({value})",
+      "clampedOff": "Turned off by the deployment (CAPTURE_ENABLED).",
+      "clamped": "asked for {asked}, capped by the deployment",
+      "ceiling": "Deployment limit: {value}",
+      "amendHeld": "held at the duplicate threshold",
+      "enabled": {
+        "label": "Accept captures",
+        "hint": "Whether agents may propose into this workspace at all."
+      },
+      "perKeyPerHour": {
+        "label": "Per key, per hour",
+        "hint": "How many captures one API key may send in a rolling hour."
+      },
+      "perWorkspacePerDay": {
+        "label": "Per workspace, per day",
+        "hint": "How many captures the workspace accepts in a rolling day, all keys together."
+      },
+      "dedupeThreshold": {
+        "label": "Duplicate threshold",
+        "hint": "A capture this close to an existing page, with the same title, is recorded as a duplicate and opens nothing."
+      },
+      "amendThreshold": {
+        "label": "Amend threshold",
+        "hint": "A capture this close to an existing page is proposed as an addition to it instead of a new page. Never above the duplicate threshold."
+      },
+      "parent": {
+        "label": "Parent for new pages",
+        "hint": "New captured pages nest under this page. Captures in other projects land at their project's root.",
+        "search": "Find a page…"
+      },
+      "parentRoot": "Project root",
+      "parentMissing": "A page that no longer exists"
     }
   },
   "search": {
@@ -3002,7 +3069,8 @@
       "isNot": "is not",
       "contains": "contains",
       "notContains": "excludes"
-    }
+    },
+    "capturedFromSession": "Captured from an agent session"
   },
   "tool": {
     "search_knowledge": {
@@ -3137,7 +3205,8 @@
     "showRail": "Show filters",
     "hideRail": "Hide filters",
     "saveFailed": "Could not save this filter",
-    "railLabel": "Filters"
+    "railLabel": "Filters",
+    "provenance": "Opened by"
   },
   "api": {
     "changeMethod": "Change method",
@@ -3518,7 +3587,10 @@
       "revokeTitle": "Revoke “{name}”?",
       "revokeBody": "Any client configured with this key gets 401 from its next request. This cannot be undone — create a new key to reconnect.",
       "revoked": "“{name}” revoked.",
-      "revokeFailed": "The key could not be revoked."
+      "revokeFailed": "The key could not be revoked.",
+      "projects": "Projects",
+      "projectsAll": "Proposes into every project. Pick some to narrow it.",
+      "projectsPinned": "Proposes into {n} project only. | Proposes into these {n} projects only."
     },
     "clients": {
       "title": "Add the server to your client",
@@ -4456,6 +4528,108 @@
       "lastSent": "Last sent {when}",
       "neverSent": "Nothing sent yet",
       "refused": "The last message was refused: {error}"
+    }
+  },
+  "captures": {
+    "badge": "Captured",
+    "subtitle": "What coding agents learned in their sessions and proposed back. Pages and relations are decided on their merge requests; glossary terms are decided here.",
+    "tab": {
+      "staged": "Staged",
+      "proposed": "Proposed",
+      "duplicate": "Duplicates",
+      "rejected": "Rejected",
+      "failed": "Failed"
+    },
+    "kind": {
+      "decision": "Decision",
+      "gotcha": "Gotcha",
+      "convention": "Convention",
+      "howto": "How-to",
+      "glossary": "Glossary term",
+      "relation": "Relation",
+      "answer": "Answer"
+    },
+    "state": {
+      "merged": "merged",
+      "closed": "closed"
+    },
+    "client": {
+      "assistant": "Assistant chat",
+      "other": "Another agent"
+    },
+    "outcome": {
+      "duplicate": "Already in the knowledge base:",
+      "newPage": "Proposed as a new page.",
+      "amendPage": "Proposed as an addition to",
+      "termWaiting": "Waiting for approval.",
+      "term": "Added to the glossary.",
+      "relation": "Proposed as a relation on its page.",
+      "pending": "Not proposed yet. It is retried automatically."
+    },
+    "openPage": "Open page",
+    "openMergeRequest": "Open merge request",
+    "thisPage": "This page",
+    "approve": "Approve",
+    "approving": "Approving…",
+    "approved": "“{term}” is in the glossary.",
+    "reject": "Reject",
+    "rejecting": "Rejecting…",
+    "confirmReject": "Reject capture",
+    "rejected": "Rejected “{title}”.",
+    "reason": "Reason for rejecting",
+    "reasonPlaceholder": "Why not? (optional, goes to the activity log)",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details",
+    "similarCount": "{n} similar page | {n} similar pages",
+    "similarTitle": "Compared with",
+    "similarNone": "No existing page came close.",
+    "scoreTitle": "Cosine similarity to this page, 0 to 1",
+    "field": {
+      "context": "Context",
+      "decision": "Decision",
+      "consequences": "Consequences",
+      "alternatives": "Alternatives considered",
+      "appliesTo": "Applies to",
+      "term": "Term",
+      "definition": "Definition",
+      "definedIn": "Defined in",
+      "relation": "Relation",
+      "rationale": "Rationale",
+      "question": "Question",
+      "answer": "Answer",
+      "files": "Files the session touched"
+    },
+    "filter": {
+      "kind": "Kind",
+      "allKinds": "All kinds",
+      "project": "Project",
+      "allProjects": "All projects",
+      "mine": "Only mine",
+      "clear": "Clear"
+    },
+    "empty": {
+      "narrowedTitle": "No captures match",
+      "narrowedHint": "Nothing here fits these filters. Clear them to see the whole tab.",
+      "staged": {
+        "title": "Nothing waiting",
+        "hint": "Glossary terms an agent proposes wait here for approval. Everything else goes straight to a merge request."
+      },
+      "proposed": {
+        "title": "No proposals yet",
+        "hint": "Connect a coding agent with a Read & propose key, and what it learns arrives here as merge requests to review."
+      },
+      "duplicate": {
+        "title": "No duplicates",
+        "hint": "A capture the knowledge base already holds lands here instead of opening a merge request."
+      },
+      "rejected": {
+        "title": "Nothing rejected",
+        "hint": "Captures turned down from this inbox are kept here, with who rejected them in the activity log."
+      },
+      "failed": {
+        "title": "Nothing failed",
+        "hint": "A capture that could not be proposed after three attempts shows up here with its error."
+      }
     }
   }
 }

@@ -3,7 +3,7 @@
 // branches, assignee + reviewer avatars, approval/thread stats, age.
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
-import { MessageSquare, ThumbsUp } from 'lucide-vue-next'
+import { Bot, MessageSquare, ThumbsUp } from 'lucide-vue-next'
 import type { MergeRequestInfo } from '@knowledge/contracts'
 import { relativeTime } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +33,11 @@ const state = computed(() => mrIcon(mr.value))
             {{ mr.title }}
           </RouterLink>
           <Badge v-if="mr.isDraft" variant="outline" class="text-xs">{{ t('mr.draft') }}</Badge>
+          <!-- Not opened by a person (issue #73): an agent's finding, or a
+               session capture. Named, so it never reads as an icon to decode. -->
+          <Badge v-if="mr.provenance !== 'manual'" variant="outline" class="gap-1 text-xs font-normal">
+            <Bot class="size-3" aria-hidden="true" />{{ t(`mr.provenance.${mr.provenance}`) }}
+          </Badge>
         </div>
         <p class="mt-0.5 truncate text-xs text-muted-foreground">
           <span class="font-mono">{{ mr.sourceBranch }} → {{ mr.targetBranch }}</span>

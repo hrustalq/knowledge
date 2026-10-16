@@ -109,7 +109,16 @@ export const defaultLiveCacheRules: LiveCacheRule[] = [
           ]
         : []),
       ...(e.documentId ? [['/v1/documents/{id}/merge-requests', { id: e.documentId }]] : []),
+      // A capture's merged/closed state is its merge request's (captureStateFor),
+      // so the inbox reads stale the moment one is merged or closed.
+      ['/v1/captures'],
     ],
+  },
+  {
+    // The captures inbox (issue #73): proposed from an agent session, approved
+    // or rejected by a person. subjectId is the capture.
+    on: 'capture.*',
+    invalidate: (e) => [['/v1/captures'], ...(e.subjectId ? [['/v1/captures/{id}', { id: e.subjectId }]] : [])],
   },
   {
     // subjectId carries the run id on every workflow-run.*/workflow-node.* event.

@@ -11,8 +11,9 @@
 import { useI18n } from 'vue-i18n'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, Copy, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
-import type { AssistantMessageInfo, AssistantUiBlock } from '@knowledge/contracts'
+import { BookmarkCheck, BookmarkPlus, Check, Copy, Pencil, RotateCcw, Sparkles, X } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+import type { AssistantMessageInfo, AssistantUiBlock, CaptureResult } from '@knowledge/contracts'
 import { assistantSourceKey, isWebSource } from '@knowledge/contracts'
 import { Button } from '@/components/ui/button'
 import MarkdownView from '@/components/knowledge/MarkdownView.vue'
@@ -23,6 +24,9 @@ import AnswerFeedback from './AnswerFeedback.vue'
 import SourceChip from './SourceChip.vue'
 import { toolVocabulary } from './tool-vocabulary'
 import { citeOfEvent, decorateCitations, highlightCite, sourceByCite, sourceHref } from '@/lib/citations'
+import { api } from '@/api/client'
+import { errorMessage } from '@/api/errors'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 
@@ -114,6 +118,46 @@ async function copy() {
   } catch {
     // Denied permission or an insecure origin: the button simply does nothing
     // rather than throwing a toast at someone who can still select the text.
+  }
+}
+
+// "Save to knowledge base" (issue #73): the reply goes back as an answer
+// capture — its question, the pages it cited, a merge request someone reviews.
+// Offered only when the reply cites a page of this base: an answer is written
+// back with the pages it stands on (the API refuses one without), and a web
+// citation is not a page anyone here can review. Editors only — it opens a
+// merge request in the reader's name.
+const auth = useAuthStore()
+const canSave = computed(() => auth.canEdit && props.message.sources.some((s) => !isWebSource(s)))
+const saving = ref(false)
+const saved = ref<CaptureResult | null>(null)
+
+async function saveToBase() {
+  if (saving.value || saved.value) return
+  saving.value = true
+  try {
+    const result = (await api.post('/v1/assistant/messages/{id}/capture', {
+      path: { id: props.message.id },
+      body: {},
+    })) as CaptureResult
+    saved.value = result
+    if (result.state === 'duplicate' && result.targetDocumentId) {
+      const page = result.targetDocumentId
+      toast.info(t('assistant.saveToKb.duplicate'), {
+        action: { label: t('assistant.saveToKb.openPage'), onClick: () => void router.push(`/documents/${page}`) },
+      })
+    } else if (result.mergeRequestId) {
+      const mr = result.mergeRequestId
+      toast.success(result.outcome === 'amend-page' ? t('assistant.saveToKb.amended') : t('assistant.saveToKb.proposed'), {
+        action: { label: t('assistant.saveToKb.openMergeRequest'), onClick: () => void router.push(`/merge-requests/${mr}`) },
+      })
+    } else {
+      toast.success(t('assistant.saveToKb.staged'))
+    }
+  } catch (e) {
+    toast.error(errorMessage(e, t))
+  } finally {
+    saving.value = false
   }
 }
 
@@ -274,6 +318,19 @@ function saveEdit() {
             <Copy v-else class="size-3.5" />
           </button>
           <button
+            v-if="canSave"
+            type="button"
+            class="kn-msg-action"
+            :aria-label="saved ? t('assistant.saveToKb.done') : t('assistant.saveToKb.label')"
+            :title="saved ? t('assistant.saveToKb.done') : t('assistant.saveToKb.label')"
+            :disabled="saving || !!saved"
+            :aria-busy="saving"
+            @click="saveToBase"
+          >
+            <BookmarkCheck v-if="saved" class="size-3.5 text-primary" />
+            <BookmarkPlus v-else class="size-3.5" :class="saving && 'animate-pulse'" />
+          </button>
+          <button
             type="button"
             class="kn-msg-action"
             :aria-label="t('chat.discardReply')"
@@ -325,6 +382,12 @@ function saveEdit() {
 .kn-msg-action:hover {
   background: var(--accent);
   color: var(--foreground);
+}
+.kn-msg-action:disabled {
+  cursor: default;
+}
+.kn-msg-action:disabled:hover {
+  background: transparent;
 }
 .kn-msg-action:focus-visible {
   outline: 2px solid var(--ring);

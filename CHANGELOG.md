@@ -13,6 +13,85 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.23.0] — 2026-10-16
+
+### Added
+
+- Search on a published site can be narrowed by **category** and **tag**.
+  The filter rail offers only the categories and tags of pages the reader can
+  see in the version they are on, with page counts, and results show each
+  page's tags. A frozen version filters by the categories and tags it was
+  built with. Search on a site still never offers a workspace, project or
+  mode, and the public search route now refuses those parameters (400)
+  instead of ignoring them. (#205)
+
+### Changed
+
+- A published site's search is now drawn by the app's own search sheet,
+  result list and filter fields, so the two look and behave the same. On a
+  phone the search field and its button no longer get pushed off-screen by a
+  long result, in the app's search sheet too. (#205)
+
+- A published site's page list now looks and behaves like the app's sidebar
+  tree. Pages expand and collapse with a chevron, and opening a branch loads
+  only that level, with a spinner on the row while it loads. Before, a site
+  sent every page title on every page load, which slowed down large sites.
+  Without JavaScript, the top level and the path to the current page still
+  render as plain links. (#204)
+- The site reader now uses the full window width. The page list is pinned to
+  the left edge and scrolls to the current page; the content fills the rest,
+  and prose keeps a readable line length. On narrow screens the page list is
+  a drawer behind the header's menu button. It also opens without
+  JavaScript. (#204)
+
+### Fixed
+
+- The **⋯** menu on a page in the sidebar tree opened in the top-left corner
+  of the window instead of beside the row. It now opens next to the row and
+  stays there when the pointer leaves it. (#203)
+- Search no longer fails when OpenSearch is down, restarting or slow.
+  `/v1/search`, the search widget, MCP `knowledge_search` and the assistant's
+  search tools now answer from vector results alone and report
+  `degraded: ["fulltext"]`. Before, any OpenSearch error failed the whole
+  request. A keyword search falls back to the vector index instead of
+  returning nothing. (#173)
+- Pages indexed or re-pointed while OpenSearch was down no longer drop out of
+  keyword search, and superseded text no longer stays ranked there. The
+  worker's stale sweeper repairs them from the graph within a few sweeps of
+  OpenSearch coming back, with no reindex and no re-embedding. (#173)
+- Per-IP limits on public routes count each visitor again. In production
+  every request reached the API with Cloudflare's address, so all visitors
+  behind one Cloudflare location shared a single allowance: one person's
+  share-link password guesses or published-site questions used up everyone
+  else's. The web server's site-host check also saw the Funnel name instead of
+  the visitor's host, which would have served a published site's domain as the
+  member app once base or custom domains are turned on. (#174)
+
+### Operations
+
+- Migration `20261027100000_site_search_facets` adds `category` (backfilled
+  from each page's current category) and a nullable `tags` column to
+  `site_version_pages`. It survives a rollback: the previous release neither
+  reads nor writes them. On first boot the worker reads the frontmatter of
+  every published revision once to fill `tags`; until it finishes, site
+  search returns those pages untagged and a tag filter does not match them. (#205)
+- New env var `FULLTEXT_TIMEOUT_MS` (default `1500`): how long a search waits
+  for OpenSearch before answering without it. Only read when
+  `FULLTEXT_PROVIDER=opensearch`.
+- Migration `20261026100000_fulltext_stale_at` adds a nullable
+  `document_revisions.fulltext_stale_at` column and its index. It survives a
+  rollback: the previous release neither reads nor writes it. Revisions that
+  drifted before this release are not stamped; run `POST /v1/ingestion/reindex`
+  once if keyword search has been missing pages.
+- New **required** secret `EDGE_SECRET` (#174), for Caddy, and the same value
+  as the edge Worker's binding. Set it in the GitHub `production` environment
+  as a **secret** (`openssl rand -hex 32`, hex only) before tagging: without it
+  the deploy stops at "Render .env". Then deploy the Worker, which now lives in
+  `deploy/edge/`: `EDGE_SECRET=<value> deploy/edge/deploy.sh`. The order does
+  not matter; until both hold the same value, requests are counted against
+  Cloudflare's address as before. To rotate: new value → Worker → environment
+  → redeploy (`gh workflow run deploy.yml --ref vX.Y.Z`).
+
 ## [0.22.0] — 2026-10-15
 
 ### Added
@@ -2256,7 +2335,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.22.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/hrustalq/knowledge/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/hrustalq/knowledge/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/hrustalq/knowledge/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/hrustalq/knowledge/compare/v0.20.0...v0.21.0

@@ -68,6 +68,7 @@ export class SiteBuildService {
       const texts = await this.searchText.texts(plan.pages.map((p) => p.revisionId));
       const rules = await this.audiences.rules(site.id);
       const pathOf = new Map(documents.map((d) => [d.id, d.path]));
+      const categoryOf = new Map(documents.map((d) => [d.id, d.category]));
 
       await this.prisma.$transaction([
         this.prisma.siteVersionPage.deleteMany({ where: { versionId } }),
@@ -79,6 +80,9 @@ export class SiteBuildService {
               ...p,
               searchHeadings: text?.headings ?? '',
               searchBody: text?.body ?? '',
+              // The facets the reader filters by (#205), frozen with the rest of the row.
+              category: categoryOf.get(p.documentId) ?? 'other',
+              tags: (text?.tags ?? []) as unknown as Prisma.InputJsonValue,
               ...SiteAudienceStamper.columns(this.audiences.stampFor(p.documentId, pathOf.get(p.documentId), rules)),
             };
           }),
@@ -116,7 +120,7 @@ export class SiteBuildService {
     workspaceId: string,
     projectId: string,
     rootDocumentId: string | null,
-  ): Promise<(PlanDocument & { path: string })[]> {
+  ): Promise<(PlanDocument & { path: string; category: string })[]> {
     let pathPrefix: string | undefined;
     if (rootDocumentId) {
       const root = await this.prisma.document.findUnique({
@@ -138,7 +142,7 @@ export class SiteBuildService {
         restrictedBy: { isEmpty: true },
         ...(pathPrefix ? { path: { startsWith: pathPrefix } } : {}),
       },
-      select: { id: true, parentId: true, title: true, position: true, path: true },
+      select: { id: true, parentId: true, title: true, position: true, path: true, category: true },
     });
   }
 

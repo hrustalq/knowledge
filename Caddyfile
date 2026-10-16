@@ -19,8 +19,13 @@
 	auto_https off
 	servers {
 		# Funnel reaches Caddy through Docker's loopback port forward, so the
-		# peer is always private; the Worker puts the visitor's address in
-		# X-Forwarded-For.
+		# peer is always private. Trusting it is what makes reverse_proxy pass
+		# the X-Forwarded-For / X-Forwarded-Host written below to the API and
+		# web (appending the peer) instead of replacing them.
+		#
+		# Caddy resolves {client_ip} before any handler runs, so the access
+		# log's client_ip is Funnel's view (Cloudflare's egress), never the
+		# visitor; the visitor is the logged X-Knowledge-Client-IP header.
 		trusted_proxies static private_ranges
 		client_ip_headers X-Forwarded-For
 	}
@@ -30,6 +35,25 @@
 # answers the loopback smoke check on 127.0.0.1:8088.
 :80 {
 	encode zstd gzip
+
+	# The visitor (#174). Funnel overwrites X-Forwarded-For with Cloudflare's
+	# egress address and X-Forwarded-Host with the *.ts.net name, so the Worker
+	# (deploy/edge/worker.js) carries the visitor's address and host in
+	# X-Knowledge-Client-IP / X-Knowledge-Host, which Funnel leaves alone. The
+	# *.ts.net URL is public, so those are believed only alongside the shared
+	# secret; then they become the X-Forwarded-For / X-Forwarded-Host that
+	# clientIp (public-rate-limit.ts) and requestHost (server/site-files.js)
+	# already read. Anything else keeps Funnel's values, so a forged header on a
+	# direct request is ignored, and all three are dropped before any upstream.
+	#
+	# Same-directive order: the @edge rewrites sort ahead of the unmatched
+	# deletes, so the placeholders are read before their headers go.
+	@edge header X-Knowledge-Edge {$EDGE_SECRET}
+	request_header @edge X-Forwarded-For {header.X-Knowledge-Client-IP}
+	request_header @edge X-Forwarded-Host {header.X-Knowledge-Host}
+	request_header -X-Knowledge-Edge
+	request_header -X-Knowledge-Client-IP
+	request_header -X-Knowledge-Host
 
 	# handle_path strips the matched prefix before proxying: /api/v1/documents
 	# reaches the API as /v1/documents. WebSocket upgrades (/api/v1/events/ws)
@@ -66,7 +90,8 @@
 	# `?token=` still authenticates SSE and <img> requests (the @QueryTokenOk
 	# routes, #102), and a presigned object URL is a bearer credential until it
 	# expires, so mask both before the URI reaches the access log.
-	# Authorization and Cookie headers are already redacted by Caddy's default.
+	# Authorization and Cookie headers are already redacted by Caddy's default;
+	# the edge secret is not, and the log records headers as they arrived.
 	log {
 		output stderr
 		format filter {
@@ -76,6 +101,7 @@
 					replace token REDACTED
 					replace X-Amz-Signature REDACTED
 				}
+				request>headers>X-Knowledge-Edge replace REDACTED
 			}
 		}
 	}

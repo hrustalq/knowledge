@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -18,22 +19,27 @@ import {
   type NestInterceptor,
 } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiProperty, ApiPropertyOptional, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import type { Request, Response } from 'express';
 import type { Observable } from 'rxjs';
 import {
   SITE_ASK_MAX_CHARS,
   SITE_ASK_MIN_CHARS,
   SITE_SEARCH_MAX_CHARS,
+  SITE_SEARCH_MAX_FILTER_VALUES,
+  SITE_SEARCH_PARAMS,
   siteSessionCookieName,
   type PublicSiteAskResponse,
+  type PublicSiteFacetsResponse,
   type PublicSiteResolveResponse,
+  type PublicSiteTreeResponse,
   type PublicSiteWidgetResponse,
   type PublicSiteSearchResponse,
 } from '@knowledge/contracts';
 import { Public } from '../auth/access.decorator.js';
 import { ParseUuidPipe as ParseUUIDPipe, vmsg } from '../common/validation.js';
-import { currentLocale } from '../i18n/t.js';
+import { currentLocale, t } from '../i18n/t.js';
 import { PublicAskService } from './public-ask.service.js';
 import { PublicRateLimitGuard, clientIp } from './public-rate-limit.js';
 import { PublicSiteSearchService } from './public-site-search.service.js';
@@ -72,6 +78,76 @@ export class SearchSiteQueryDto {
   @IsString()
   @MaxLength(SITE_SEARCH_MAX_CHARS)
   q?: string;
+
+  @ApiPropertyOptional({ description: 'A version slug; omitted = the default version' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  version?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Only pages of any of these categories, as the version was built. Repeat the parameter for more than one',
+  })
+  @IsOptional()
+  @Transform(asList)
+  @IsArray()
+  @ArrayMaxSize(SITE_SEARCH_MAX_FILTER_VALUES, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  @MaxLength(64, { each: true })
+  category?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Only pages carrying any of these tags (`billing` or `tag:billing`), as their published revision does',
+  })
+  @IsOptional()
+  @Transform(asList)
+  @IsArray()
+  @ArrayMaxSize(SITE_SEARCH_MAX_FILTER_VALUES, { message: vmsg('arrayMaxSize') })
+  @IsString({ each: true })
+  @MaxLength(128, { each: true })
+  tag?: string[];
+}
+
+/** `?category=a` arrives as a string, `?category=a&category=b` as an array: both read as a list. */
+function asList({ value }: { value: unknown }): unknown {
+  return value === undefined || Array.isArray(value) ? value : [value];
+}
+
+/**
+ * The search route reads only the facets a snapshot carries (#205). A
+ * parameter it does not know — a workspace, a project, a mode the app's
+ * search takes — is a 400, so a reader never believes a filter applied that
+ * was dropped. The global pipe strips unknown properties before the handler
+ * sees the DTO, so this reads the raw query.
+ */
+export function assertSiteSearchParams(query: Request['query']): void {
+  const known: readonly string[] = SITE_SEARCH_PARAMS;
+  const unknown = Object.keys(query).filter((key) => !known.includes(key));
+  if (unknown.length) {
+    throw new BadRequestException({
+      statusCode: 400,
+      message: t('error.site.searchParamUnknown', { params: unknown.join(', '), known: known.join(', ') }),
+      params: unknown,
+    });
+  }
+}
+
+export class FacetsSiteQueryDto {
+  @ApiPropertyOptional({ description: 'A version slug; omitted = the default version' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  version?: string;
+}
+
+export class TreeSiteQueryDto {
+  @ApiPropertyOptional({ description: 'The page whose children to list; omitted = the top level' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  parent?: string;
 
   @ApiPropertyOptional({ description: 'A version slug; omitted = the default version' })
   @IsOptional()
@@ -223,15 +299,44 @@ export class PublicSitesController {
     return this.asks.ask(siteId, body, { ip: clientIp(req), cookieHeader: req.headers.cookie, locale: currentLocale() });
   }
 
+  /**
+   * One level of the reader's nav (issue #204): what expanding a branch
+   * loads. The same visibility as the rest of the reader — a parent the
+   * viewer may not see is a 404, and a hidden child is simply not listed.
+   */
+  @Get(':siteId/tree')
+  @ApiOperation({ summary: 'The children of one page of a live site (or its top level), as the viewer sees them' })
+  @ApiResponse({ status: 404, description: 'No live site with this id, no such version, or a parent the viewer may not see' })
+  treeLevel(
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Query() query: TreeSiteQueryDto,
+    @Req() req: Request,
+  ): Promise<PublicSiteTreeResponse> {
+    return this.sites.children(siteId, query, req.headers.cookie);
+  }
+
   @Get(':siteId/search')
   @ApiOperation({ summary: "Search one version of a live site: its published pages only, at the revisions it shows" })
+  @ApiResponse({ status: 400, description: 'A parameter the route does not read, such as a workspace or project filter' })
   @ApiResponse({ status: 404, description: 'No live site with this id, or no such version' })
   searchSite(
     @Param('siteId', ParseUUIDPipe) siteId: string,
     @Query() query: SearchSiteQueryDto,
     @Req() req: Request,
   ): Promise<PublicSiteSearchResponse> {
+    assertSiteSearchParams(req.query);
     return this.search.search(siteId, query, req.headers.cookie);
+  }
+
+  @Get(':siteId/facets')
+  @ApiOperation({ summary: 'The categories and tags a viewer can filter one version of a live site by, with page counts' })
+  @ApiResponse({ status: 404, description: 'No live site with this id, or no such version' })
+  facets(
+    @Param('siteId', ParseUUIDPipe) siteId: string,
+    @Query() query: FacetsSiteQueryDto,
+    @Req() req: Request,
+  ): Promise<PublicSiteFacetsResponse> {
+    return this.search.facets(siteId, query, req.headers.cookie);
   }
 
   /**

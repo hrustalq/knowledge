@@ -12,8 +12,10 @@ import {
   siteViewerCanSee,
   type PublicSiteLogo,
   type PublicSitePage,
+  type PublicSitePageRef,
   type PublicSiteResolveResponse,
   type PublicSiteTreeNode,
+  type PublicSiteTreeResponse,
   type PublicSiteVersionRef,
   type PublicSiteWidgetResponse,
   type SiteViewer,
@@ -34,7 +36,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const MAX_PATH_CHARS = 2000;
 
 /** Bumped when the resolve answer changes shape, so every cached render goes stale. */
-const RESOLVE_FORMAT_VERSION = 3;
+const RESOLVE_FORMAT_VERSION = 4;
 
 /**
  * A snapshot row without its search text (up to 100k characters a page),
@@ -74,6 +76,48 @@ export function visibleRows<T extends Pick<SnapshotRow, 'documentId' | 'parentId
     return ok;
   });
 }
+
+/**
+ * Visible rows in reading order: depth first, siblings by position then title
+ * — the order of the reader's nav, its prev/next and the site's home rule.
+ */
+export function readingOrder<T extends Pick<SnapshotRow, 'documentId' | 'parentId' | 'position' | 'title'>>(rows: T[]): T[] {
+  const children = new Map<string | null, T[]>();
+  for (const r of rows) children.set(r.parentId, [...(children.get(r.parentId) ?? []), r]);
+  const out: T[] = [];
+  const walk = (parent: string | null) => {
+    const list = (children.get(parent) ?? []).sort((a, b) => a.position - b.position || a.title.localeCompare(b.title));
+    for (const r of list) {
+      out.push(r);
+      walk(r.documentId);
+    }
+  };
+  walk(null);
+  return out;
+}
+
+/**
+ * One level of the visible tree as nav nodes: the children of `parentId`
+ * (null = the top level), each with how many children of its own the viewer
+ * may see. `rows` are already filtered by `visibleRows`.
+ */
+export function treeLevel(rows: SnapshotRow[], parentIds: ReadonlySet<string | null>): PublicSiteTreeNode[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) if (r.parentId) counts.set(r.parentId, (counts.get(r.parentId) ?? 0) + 1);
+  return readingOrder(rows)
+    .filter((r) => parentIds.has(r.parentId))
+    .map((r) => ({
+      documentId: r.documentId,
+      parentId: r.parentId,
+      title: r.title,
+      slugPath: r.slugPath,
+      position: r.position,
+      childCount: counts.get(r.documentId) ?? 0,
+    }));
+}
+
+/** `/documents/<id>` references in a page body: the targets its links and mentions name. */
+const PAGE_LINK_RE = /\/documents\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/g;
 
 /** How a request names a site: its slug (path mode, or a base-domain host), or a custom hostname. */
 export type SiteKey = { slug: string } | { hostname: string };
@@ -161,6 +205,13 @@ export class PublicSitesService {
     const restricted = all.some((r) => r.audience !== 'public');
     const page = this.pickPage(rows, slugPath, query.from);
 
+    // The nav's first render (issue #204): the top level and the children of
+    // every page on the open path, never the whole tree. Expanding anything
+    // else asks the tree route for that one level.
+    const byId = new Map(rows.map((r) => [r.documentId, r]));
+    const openPath = new Set<string | null>([null]);
+    for (let id: string | null = page?.documentId ?? null; id; id = byId.get(id)?.parentId ?? null) openPath.add(id);
+
     const project = await this.prisma.project.findUnique({
       where: { id: site.projectId },
       select: { name: true, avatarKey: true, avatarEmoji: true, avatarColor: true, avatarUpdatedAt: true },
@@ -183,19 +234,14 @@ export class PublicSitesService {
       viewer: viewer.kind,
       version: { ...this.versionRef(version, site), id: version.id, builtAt: version.builtAt.toISOString() },
       versions: site.versions.map((v) => this.versionRef(v, site)),
-      tree: rows.map(
-        (r): PublicSiteTreeNode => ({
-          documentId: r.documentId,
-          parentId: r.parentId,
-          title: r.title,
-          slugPath: r.slugPath,
-          position: r.position,
-        }),
-      ),
-      page: page ? await this.pageMeta(page, site, version, viewer) : null,
+      tree: treeLevel(rows, openPath),
+      page: page ? await this.pageMeta(page, rows, site, version, viewer) : null,
     };
     const etag = `"${createHash('sha256')
-      .update(JSON.stringify([RESOLVE_FORMAT_VERSION, body, page?.revisionId ?? null]))
+      // The visible set, not just the trimmed tree: the body's links are
+      // resolved against it after this tag, so two viewers who see different
+      // pages must never share one.
+      .update(JSON.stringify([RESOLVE_FORMAT_VERSION, body, page?.revisionId ?? null, rows.map((r) => r.documentId)]))
       .digest('hex')
       .slice(0, 32)}"`;
     if (etagMatches(ifNoneMatch, etag)) return { etag, body: null };
@@ -205,10 +251,41 @@ export class PublicSitesService {
       // A revision that can no longer be read (its page was deleted) is as
       // absent as a page that was never published.
       const content = await this.documents.getContent(page.documentId, page.revisionId).catch(() => null);
-      if (content) body.page.markdown = content.markdown;
-      else body.page = null;
+      if (content) {
+        body.page.markdown = content.markdown;
+        body.page.links = this.pageLinks(content.markdown, byId);
+      } else body.page = null;
     }
     return { etag, body };
+  }
+
+  /**
+   * One level of a version's tree as this viewer sees it (issue #204): what
+   * the reader asks for when someone expands a branch. A parent the viewer may
+   * not see — or that is not in the version — is a 404 like a missing site, so
+   * the answer never confirms a hidden page exists.
+   */
+  async children(
+    siteId: string,
+    query: { parent?: string; version?: string },
+    cookieHeader?: string,
+  ): Promise<PublicSiteTreeResponse> {
+    const site = await this.liveSite({ id: siteId });
+    const version = query.version ? site.versions.find((v) => v.slug === query.version) : site.defaultVersion;
+    if (!version) throw this.notFound();
+    const parent = query.parent ?? null;
+    if (parent !== null && !UUID_RE.test(parent)) throw this.notFound();
+    const [all, viewer] = await Promise.all([
+      this.prisma.siteVersionPage.findMany({
+        where: { versionId: version.id },
+        orderBy: [{ depth: 'asc' }, { position: 'asc' }],
+        select: SNAPSHOT_ROW,
+      }),
+      this.sessions.viewer(site, cookieHeader),
+    ]);
+    const rows = visibleRows(all, viewer);
+    if (parent !== null && !rows.some((r) => r.documentId === parent)) throw this.notFound();
+    return { nodes: treeLevel(rows, new Set([parent])) };
   }
 
   /**
@@ -456,11 +533,23 @@ export class PublicSitesService {
   }
 
   /** Everything about a page but its body, which `resolveTagged` reads only when the tag has changed. */
-  private async pageMeta(row: SnapshotRow, site: LiveSite, version: BuiltVersion, viewer: SiteViewer): Promise<PublicSitePage> {
+  private async pageMeta(
+    row: SnapshotRow,
+    rows: SnapshotRow[],
+    site: LiveSite,
+    version: BuiltVersion,
+    viewer: SiteViewer,
+  ): Promise<PublicSitePage> {
     const revision = await this.prisma.documentRevision.findUnique({
       where: { id: row.revisionId },
       select: { finalizedAt: true },
     });
+    // Prev/next walk the whole reading order, which the trimmed tree no longer
+    // carries, so they are settled here.
+    const order = readingOrder(rows);
+    const at = order.findIndex((r) => r.documentId === row.documentId);
+    const ref = (r: SnapshotRow | undefined): PublicSitePageRef | null =>
+      r ? { documentId: r.documentId, title: r.title, slugPath: r.slugPath } : null;
     return {
       documentId: row.documentId,
       title: row.title,
@@ -468,7 +557,20 @@ export class PublicSitesService {
       markdown: '',
       updatedAt: revision?.finalizedAt?.toISOString() ?? null,
       alternates: await this.alternates(row.documentId, site, version, viewer),
+      prev: at > 0 ? ref(order[at - 1]) : null,
+      next: at >= 0 ? ref(order[at + 1]) : null,
+      // Filled in with the body, which is read only when the ETag has changed.
+      links: [],
     };
+  }
+
+  /** The visible pages a body links to, with where each lives. */
+  private pageLinks(markdown: string, byId: Map<string, SnapshotRow>): PublicSitePage['links'] {
+    const ids = new Set(Array.from(markdown.matchAll(PAGE_LINK_RE), (m) => m[1].toLowerCase()));
+    return [...ids].flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [{ documentId: row.documentId, slugPath: row.slugPath }] : [];
+    });
   }
 
   /**

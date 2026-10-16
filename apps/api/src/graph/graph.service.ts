@@ -273,6 +273,30 @@ export class GraphService {
   }
 
   /**
+   * A revision's chunks in full, as written, for re-mirroring them into the
+   * BM25 index after a failed write (#173). Reading what the graph holds rather
+   * than re-chunking the source keeps the chunk ids the two stores fuse on in
+   * step, whatever the chunker has become since.
+   */
+  async getRevisionChunkTexts(
+    workspaceId: string,
+    revisionId: string,
+  ): Promise<Array<{ chunkId: string; documentId: string; index: number; text: string; headingPath: string[] }>> {
+    const rows = await this.arcade.query<{ chunkId: string; documentId: string; idx: number; text: string; headingPath: string[] }>(
+      'sql',
+      'SELECT chunkId, documentId, idx, text, headingPath FROM Chunk WHERE workspaceId = :workspaceId AND revisionId = :revisionId ORDER BY idx',
+      { workspaceId, revisionId },
+    );
+    return rows.map((r) => ({
+      chunkId: r.chunkId,
+      documentId: r.documentId,
+      index: r.idx,
+      text: r.text ?? '',
+      headingPath: r.headingPath ?? [],
+    }));
+  }
+
+  /**
    * Embedding shift between two revisions (plan.md §8 semantic diff):
    * 1 - cosine(mean chunk embedding). Null when either side has no indexed
    * chunks. Lives here so raw vectors never leave the graph layer.

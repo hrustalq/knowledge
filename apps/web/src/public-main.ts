@@ -1,6 +1,7 @@
 import { createSSRApp, h } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { DEFAULT_LOCALE, type Locale } from '@knowledge/contracts'
+import { russianPluralRule } from './lib/plural'
 // The reader's own catalog, not the app's: a JSON module shared with the app
 // would put both whole app catalogs into the reader's bundle.
 import en from './i18n/reader/en.json'
@@ -43,6 +44,8 @@ export function createPublicApp(state: PublicReaderState) {
       missingWarn: false,
       fallbackWarn: false,
       messages: { en, ru },
+      // The shared search sheet's filter counts are plural strings (#205).
+      pluralRules: { ru: russianPluralRule },
     }),
   )
   return { app }

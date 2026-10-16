@@ -32,6 +32,10 @@ services:
       # with Host set to the one they are signed for: S3_PUBLIC_ENDPOINT's host.
       S3_BUCKET: ${S3_BUCKET:-knowledge}
       S3_PUBLIC_HOST: ${S3_PUBLIC_HOST:-knowledge.hrustalq.dev}
+      # Proves a request came through the Worker, whose visitor headers the
+      # Caddyfile then believes (#174). No default: an empty value would make
+      # the matcher accept any request that merely carries the header.
+      EDGE_SECRET: ${EDGE_SECRET:?set EDGE_SECRET in .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

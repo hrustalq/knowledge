@@ -434,6 +434,7 @@
   "site": {
     "notFound": "This site does not exist",
     "versionNotFound": "This site version does not exist",
+    "searchParamUnknown": "This search does not take {params}. A site is searched by {known} only",
     "disabledByWorkspace": "Public sites are turned off for this workspace",
     "exists": "This project already has a site",
     "slugInvalid": "A site address is 2–40 lowercase letters, digits and single hyphens, starting and ending with a letter or digit",

@@ -134,29 +134,34 @@ model DocumentBranch {
 }
 
 model DocumentRevision {
-  id             String    @id @default(uuid()) @db.Uuid
-  documentId     String    @map("document_id") @db.Uuid
-  branchId       String?   @map("branch_id") @db.Uuid
-  revisionNumber Int       @map("revision_number")
+  id              String    @id @default(uuid()) @db.Uuid
+  documentId      String    @map("document_id") @db.Uuid
+  branchId        String?   @map("branch_id") @db.Uuid
+  revisionNumber  Int       @map("revision_number")
   // Unknown until finalize (presigned upload flow); PG unique constraints ignore NULLs.
-  contentHash    String?   @map("content_hash")
-  contentType    String    @map("content_type")
-  s3Key          String    @map("s3_key")
-  s3VersionId    String?   @map("s3_version_id")
-  authorId       String    @map("author_id") @db.Uuid
-  message        String?
-  status         String    @default("draft")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  finalizedAt    DateTime? @map("finalized_at") @db.Timestamptz
+  contentHash     String?   @map("content_hash")
+  contentType     String    @map("content_type")
+  s3Key           String    @map("s3_key")
+  s3VersionId     String?   @map("s3_version_id")
+  authorId        String    @map("author_id") @db.Uuid
+  message         String?
+  status          String    @default("draft")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  finalizedAt     DateTime? @map("finalized_at") @db.Timestamptz
   // Phase 5 stale detection: when + with which embedding signature this
   // revision was last indexed (provider:model:dim); drift triggers reindex.
-  indexedAt      DateTime? @map("indexed_at") @db.Timestamptz
-  embeddingModel String?   @map("embedding_model")
+  indexedAt       DateTime? @map("indexed_at") @db.Timestamptz
+  embeddingModel  String?   @map("embedding_model")
   // Body length without frontmatter, written by the ingestion normalizer
   // (docs/features/39) so "empty page" is answerable in PG. Null for revisions
   // indexed before the column existed — read as "unknown", never as "empty" —
   // until the verification sweeper's bounded catch-up fills it.
-  bodyChars      Int?      @map("body_chars")
+  bodyChars       Int?      @map("body_chars")
+  // #173: set when a write to the optional BM25 index (OpenSearch) failed for
+  // this revision — its chunks never reached it, or its live flip did not.
+  // The stale sweeper re-mirrors it from the graph and clears the stamp only
+  // if it is still the one it read. Null means in step, or no BM25 layer.
+  fulltextStaleAt DateTime? @map("fulltext_stale_at") @db.Timestamptz
 
   document Document         @relation(fields: [documentId], references: [id])
   branch   DocumentBranch?  @relation(fields: [branchId], references: [id])
@@ -167,6 +172,7 @@ model DocumentRevision {
   // Branch-scoped: a merge revision legitimately repeats the source head's
   // content on the target branch (plan.md §8); dedupe stays per-branch.
   @@unique([documentId, branchId, contentHash])
+  @@index([fulltextStaleAt])
   @@map("document_revisions")
 }
 
@@ -2555,6 +2561,12 @@ model SiteVersionPage {
   /// which stems English words too. Set by raw SQL after the rows are written;
   /// null = not indexed yet (SiteSearchTextService backfills it).
   searchVector   Unsupported("tsvector")? @map("search_vector")
+  /// Search facets (issue #205), so the reader filters inside the snapshot,
+  /// never against a head: the page's category when the version was built,
+  /// and its pinned revision's frontmatter tags as SiteSearchTag[] — null =
+  /// not read yet (SiteSearchTextService backfills it).
+  category       String                   @default("other")
+  tags           Json?
   /// SITE_AUDIENCES (issue #77 phase 3): the site's audience rules folded down
   /// this page's path. Written by the build and restamped on every rule change,
   /// so a frozen version follows today's rules without changing its content.

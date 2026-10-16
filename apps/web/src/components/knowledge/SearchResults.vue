@@ -1,22 +1,28 @@
 <script setup lang="ts">
-// Result list for the search sheet. Denser than the /search page's card stack —
-// a sheet earns its keep by showing more at once.
+// Result list for every search surface: the app's sheet and /search page, and a
+// published site's reader (#205), so a change to a row changes it everywhere.
+// Denser than a card stack — a sheet earns its keep by showing more at once.
+// Rows come as a source-neutral SearchView; a row links by router path in the
+// app and by plain href in the reader, which has no router.
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { SearchX } from 'lucide-vue-next'
-import type { SearchResponse } from '@knowledge/contracts'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import VerificationBadge from '@/components/verification/VerificationBadge.vue'
+import type { SearchFailure, SearchHit, SearchView } from './use-search'
 
 const { t } = useI18n()
 
 defineProps<{
-  response: SearchResponse | null
+  response: SearchView | null
   busy: boolean
-  error: string | null
+  error: SearchFailure | null
   activeFilterCount: number
 }>()
+
+/** A router link in the app, a plain link in the reader. */
+const linkIs = (r: SearchHit) => (r.to ? RouterLink : 'a')
 const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
 </script>
 
@@ -30,8 +36,11 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
       </div>
     </div>
 
+    <p v-else-if="error?.notice" class="py-16 text-center text-sm text-muted-foreground">
+      {{ error.message }}
+    </p>
     <p v-else-if="error" class="text-sm text-destructive">
-      {{ t('search.failedCheckConnection', { error }) }}
+      {{ t('search.failedCheckConnection', { error: error.message }) }}
     </p>
 
     <!-- First run: name what the filters do rather than showing a blank panel. -->
@@ -69,9 +78,11 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
 
     <div v-else :class="busy ? 'opacity-60 transition-opacity' : ''">
       <ul class="divide-y">
-        <li v-for="r in response.results" :key="r.chunkId">
-          <RouterLink
-            :to="`/documents/${r.documentId}`"
+        <li v-for="r in response.results" :key="r.key">
+          <component
+            :is="linkIs(r)"
+            :to="r.to"
+            :href="r.to ? undefined : r.href"
             class="block rounded-md px-2 py-3 transition-colors hover:bg-muted/60"
             @click="emit('navigate')"
           >
@@ -82,42 +93,45 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
                      see why a weaker match sits above a stronger one. Unverified
                      is the ordinary state and says nothing. -->
                 <VerificationBadge
-                  v-if="r.trust && r.trust.status !== 'unverified'"
-                  :state="r.trust.status"
+                  v-if="r.trust && r.trust !== 'unverified'"
+                  :state="r.trust"
                   size="xs"
                 />
               </span>
               <!-- Scores round to 0 under the stub embedding provider; a column
                    of zeroes reads as broken, so show one only when it says something. -->
               <span
-                v-if="r.score > 0"
+                v-if="r.score && r.score > 0"
                 class="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
               >
                 {{ r.score }}
               </span>
             </div>
-            <p class="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-              {{ r.snippet }}…
+            <p v-if="r.snippet.length" class="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+              <template v-for="(part, j) in r.snippet" :key="j">
+                <mark v-if="part.hit" class="rounded-sm bg-primary/15 px-0.5 text-foreground">{{ part.text }}</mark>
+                <template v-else>{{ part.text }}</template>
+              </template>
             </p>
-            <div v-if="r.entities?.length" class="mt-1.5 flex flex-wrap gap-1">
-              <Badge v-for="e in r.entities" :key="e.key" variant="secondary" class="text-[10px]">
-                {{ e.name }}
+            <div v-if="r.badges.length" class="mt-1.5 flex flex-wrap gap-1">
+              <Badge v-for="b in r.badges" :key="b.key" variant="secondary" class="text-[10px]">
+                {{ b.label }}
               </Badge>
             </div>
-          </RouterLink>
+          </component>
         </li>
       </ul>
 
-      <template v-if="response.related?.length">
+      <template v-if="response.related.length">
         <h3
           class="mt-6 mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
           {{ t('search.relatedViaGraph') }}
         </h3>
         <ul class="divide-y">
-          <li v-for="r in response.related" :key="r.documentId">
+          <li v-for="r in response.related" :key="r.key">
             <RouterLink
-              :to="`/documents/${r.documentId}`"
+              :to="r.to"
               class="block rounded-md px-2 py-2.5 transition-colors hover:bg-muted/60"
               @click="emit('navigate')"
             >
@@ -128,7 +142,7 @@ const emit = defineEmits<{ navigate: []; 'clear-filters': [] }>()
                 </span>
               </div>
               <p class="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                {{ t('search.via', { path: r.via.map((v) => `${v.relationType} ${v.entityKey}`).join(', ') }) }}
+                {{ t('search.via', { path: r.via }) }}
               </p>
             </RouterLink>
           </li>

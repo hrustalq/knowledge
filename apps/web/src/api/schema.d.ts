@@ -4390,6 +4390,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/sites/{siteId}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The children of one page of a live site (or its top level), as the viewer sees them */
+        get: operations["PublicSitesController_treeLevel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/sites/{siteId}/search": {
         parameters: {
             query?: never;
@@ -4399,6 +4416,23 @@ export interface paths {
         };
         /** Search one version of a live site: its published pages only, at the revisions it shows */
         get: operations["PublicSitesController_searchSite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/sites/{siteId}/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The categories and tags a viewer can filter one version of a live site by, with page counts */
+        get: operations["PublicSitesController_facets"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21122,11 +21156,112 @@ export interface operations {
             };
         };
     };
+    PublicSitesController_treeLevel: {
+        parameters: {
+            query?: {
+                /** @description The page whose children to list; omitted = the top level */
+                parent?: string;
+                /** @description A version slug; omitted = the default version */
+                version?: string;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No live site with this id, no such version, or a parent the viewer may not see */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     PublicSitesController_searchSite: {
         parameters: {
             query?: {
                 /** @description The words to look for; fewer than 2 characters answers no results */
                 q?: string;
+                /** @description A version slug; omitted = the default version */
+                version?: string;
+                /** @description Only pages of any of these categories, as the version was built. Repeat the parameter for more than one */
+                category?: string[];
+                /** @description Only pages carrying any of these tags (`billing` or `tag:billing`), as their published revision does */
+                tag?: string[];
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A parameter the route does not read, such as a workspace or project filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No live site with this id, or no such version */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    PublicSitesController_facets: {
+        parameters: {
+            query?: {
                 /** @description A version slug; omitted = the default version */
                 version?: string;
             };

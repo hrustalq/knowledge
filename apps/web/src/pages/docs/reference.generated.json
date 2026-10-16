@@ -3062,6 +3062,16 @@
     },
     {
       "method": "GET",
+      "path": "/v1/public/sites/{siteId}/facets",
+      "tag": "public",
+      "summary": "The categories and tags a viewer can filter one version of a live site by, with page counts",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/public/sites/{siteId}/search",
       "tag": "public",
       "summary": "Search one version of a live site: its published pages only, at the revisions it shows",
@@ -3085,6 +3095,16 @@
       "path": "/v1/public/sites/{siteId}/session/end",
       "tag": "public",
       "summary": "Sign out of the site: the session ends at once and the cookie is cleared",
+      "role": null,
+      "source": null,
+      "public": true,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/public/sites/{siteId}/tree",
+      "tag": "public",
+      "summary": "The children of one page of a live site (or its top level), as the viewer sees them",
       "role": null,
       "source": null,
       "public": true,

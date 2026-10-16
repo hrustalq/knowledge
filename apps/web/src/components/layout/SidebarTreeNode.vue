@@ -1,19 +1,22 @@
 <script setup lang="ts">
 // Navigation tree node — the page tree drawn as a graph: indent rails,
-// live indexing-status dots, active-trail auto-expansion.
+// live indexing-status dots, active-trail auto-expansion. The row and the
+// branch are drawn by TreeRow / TreeBranch, which the public site reader
+// shares; this wrapper adds the stores, DnD, the row menu and RouterLink.
 import { computed, inject, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { ChevronRight, Loader2, Lock } from 'lucide-vue-next'
-import { Collapse } from '@/components/ui/collapse'
+import { Lock } from 'lucide-vue-next'
+import TreeBranch from '@/components/tree/TreeBranch.vue'
+import TreeRow from '@/components/tree/TreeRow.vue'
 import type { DocumentTreeNode as TreeNode } from '@knowledge/contracts'
 import { statusDot } from '@/lib/api'
 import { useTreeDndRow } from '@/components/knowledge/tree-dnd'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
-import { TREE_INDENT, useSidebarStore } from '@/stores/sidebar'
+import { useSidebarStore } from '@/stores/sidebar'
 import TreeRowMenu from '@/components/knowledge/TreeRowMenu.vue'
-import { TreeWindowKey } from './tree-window'
+import { TREE_INDENT, TreeWindowKey } from '@/lib/tree-window'
 import { needsAttention, verificationDotClass } from '@/components/verification/verification-ui'
 
 defineOptions({ name: 'SidebarTreeNode' })
@@ -118,14 +121,15 @@ const dnd = useTreeDndRow({
 
 <template>
   <li class="kn-tree-row" :class="{ 'kn-drop-before': dnd.dropBefore.value, 'kn-drop-after': dnd.dropAfter.value }">
-    <div
+    <TreeRow
       :ref="dnd.setEl"
-      data-tree-row
-      class="group relative flex items-center gap-1 rounded-md pr-1 text-sm transition-[background-color,color,opacity]"
+      :title="node.title"
+      :href="`/documents/${node.documentId}`"
+      :has-children="hasChildren"
+      :open="open"
+      :loading="loading"
+      :active="isActive"
       :class="[
-        isActive
-          ? 'bg-primary/10 font-medium text-primary'
-          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground',
         dnd.isSource.value ? 'opacity-40' : '',
         // A locked subtree is still readable and still navigable — only the
         // grip is withdrawn. Greying it out entirely would read as an error.
@@ -136,34 +140,26 @@ const dnd = useTreeDndRow({
       :aria-grabbed="dnd.isSource.value || undefined"
       @pointerdown="dnd.onPointerdown"
       @keydown="(e: KeyboardEvent) => dnd.onKeydown(e, auth.canEdit)"
+      @toggle="toggle"
     >
-      <button
-        v-if="hasChildren"
-        data-no-drag
-        class="grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:bg-sidebar-accent"
-        :aria-label="open ? t('tree.collapse') : t('tree.expand')"
-        :aria-expanded="open"
-        @click.prevent="toggle"
-      >
-        <Loader2 v-if="loading" class="size-3.5 animate-spin" />
-        <ChevronRight v-else class="size-3.5 transition-transform" :class="open ? 'rotate-90' : ''" />
-      </button>
-      <span v-else class="grid size-5 shrink-0 place-items-center">
+      <template #leaf>
         <span
           class="size-1.5 rounded-full"
           :class="statusDot(node.headRevisionStatus)"
           :title="node.headRevisionStatus ?? 'draft'"
         />
-      </span>
-      <RouterLink
-        :to="`/documents/${node.documentId}`"
-        class="min-w-0 flex-1 truncate py-1.5"
-        :class="archived ? 'line-through decoration-current/40 opacity-70' : ''"
-        :title="archived ? `${node.title} · ${t('verification.archived.badge')}` : node.title"
-        draggable="false"
-      >
-        {{ node.title }}
-      </RouterLink>
+      </template>
+      <template #link="link">
+        <RouterLink
+          :to="`/documents/${node.documentId}`"
+          :class="[link.cls, archived ? 'line-through decoration-current/40 opacity-70' : '']"
+          :aria-current="link.current"
+          :title="archived ? `${node.title} · ${t('verification.archived.badge')}` : node.title"
+          draggable="false"
+        >
+          {{ node.title }}
+        </RouterLink>
+      </template>
       <!-- Restricted (#76): this page, an ancestor or the project is not open
            to the whole workspace. A glyph rather than a word, for the width. -->
       <span
@@ -187,7 +183,8 @@ const dnd = useTreeDndRow({
       />
       <!-- The status dot yields its slot to the menu on hover rather than
            sitting beside it: at 256px a second permanent affordance is the
-           difference between a readable title and an ellipsis. -->
+           difference between a readable title and an ellipsis. It stays
+           yielded while the menu is open, when the row has neither. -->
       <TreeRowMenu
         v-if="auth.canEdit"
         :document-id="node.documentId"
@@ -199,28 +196,18 @@ const dnd = useTreeDndRow({
       <span
         v-if="hasChildren"
         class="size-1.5 shrink-0 rounded-full"
-        :class="[statusDot(node.headRevisionStatus), auth.canEdit ? 'group-focus-within:hidden group-hover:hidden' : '']"
+        :class="[statusDot(node.headRevisionStatus), auth.canEdit ? 'group-focus-within:hidden group-hover:hidden group-has-[[data-state=open]]:hidden' : '']"
         :title="node.headRevisionStatus ?? 'draft'"
       />
-    </div>
-    <!-- The branch grows out of its parent row rather than appearing beneath
-         it: on a rail this dense, a subtree arriving in one frame shifts every
-         row below it and you lose the page you were aiming at. -->
-    <Collapse v-if="hasChildren" :open="open">
-      <ul class="ml-[13px] border-l border-sidebar-border pl-2">
-        <SidebarTreeNode
-          v-for="child in node.children"
-          :key="child.documentId"
-          :node="child"
-          :depth="depth + 1"
-          :active-id="activeId"
-        />
-        <!-- Placeholder rows sized to the real ones, so the branch does not
-             open onto nothing and then jolt when the children land. -->
-        <li v-if="!node.children.length" class="space-y-1 py-1 pl-1">
-          <div v-for="i in Math.min(node.childCount, 3)" :key="i" class="h-4 w-full animate-pulse rounded bg-sidebar-accent" />
-        </li>
-      </ul>
-    </Collapse>
+    </TreeRow>
+    <TreeBranch v-if="hasChildren" :open="open" :child-count="node.childCount" :loaded="node.children.length > 0">
+      <SidebarTreeNode
+        v-for="child in node.children"
+        :key="child.documentId"
+        :node="child"
+        :depth="depth + 1"
+        :active-id="activeId"
+      />
+    </TreeBranch>
   </li>
 </template>

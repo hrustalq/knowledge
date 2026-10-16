@@ -90,7 +90,10 @@ two commands a request need no dependency.
   must not mean unlimited guesses.
 
 `clientIp` trusts `X-Forwarded-For` only from an internal peer. Caddy and the
-web SSR are the only things that reach the API, and both are internal.
+web SSR are the only things that reach the API, and both are internal. In
+production Caddy writes that header from the Worker's `X-Knowledge-Client-IP`,
+believed only alongside the edge secret, because Funnel replaces the Worker's
+own `X-Forwarded-For` with Cloudflare's egress address (#174).
 
 ## The public reader (web)
 

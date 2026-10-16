@@ -1,9 +1,14 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { embeddingSignature } from '../embedding/embedding.provider.js';
+import { GraphService } from '../graph/graph.service.js';
+import { FULLTEXT_PROVIDER, type FulltextProvider } from '../fulltext/fulltext.provider.js';
 import { IngestionProducer } from './ingestion.producer.js';
+
+/** Revisions re-mirrored into the BM25 index per sweep; the next sweep continues. */
+const FULLTEXT_REPAIR_BATCH = 25;
 
 /**
  * Phase 5 stale-document detection & reindex scheduling (plan.md §11):
@@ -11,7 +16,9 @@ import { IngestionProducer } from './ingestion.producer.js';
  *  b) 'failed' jobs under STALE_MAX_ATTEMPTS are retried;
  *  c) branch heads indexed under a different embedding signature (provider/
  *     model/dim change — or before signatures existed) are reindexed, capped
- *     per sweep so a model swap rolls through the corpus gradually.
+ *     per sweep so a model swap rolls through the corpus gradually;
+ *  d) revisions whose BM25 write failed (#173) are re-mirrored into the
+ *     fulltext index from the graph's chunks — no re-embedding.
  */
 @Injectable()
 export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
@@ -23,6 +30,8 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly producer: IngestionProducer,
     private readonly config: ConfigService<Env, true>,
+    private readonly graph: GraphService,
+    @Inject(FULLTEXT_PROVIDER) private readonly fulltext: FulltextProvider,
   ) {}
 
   onModuleInit() {
@@ -47,6 +56,7 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
       await this.requeueStuck();
       await this.retryFailed();
       await this.reindexDrifted();
+      await this.repairFulltext();
     } catch (e) {
       this.logger.warn(`Stale sweep failed: ${(e as Error).message}`);
     } finally {
@@ -128,5 +138,62 @@ export class StaleSweeper implements OnModuleInit, OnModuleDestroy {
       );
       await this.producer.enqueue(job.id);
     }
+  }
+
+  /**
+   * Re-mirror revisions whose BM25 write failed (#173): their chunks never
+   * reached the fulltext index, or their live flip did not, so keyword search
+   * missed the page or kept ranking superseded text.
+   *
+   * The chunks come from the graph, which holds them as indexed, so nothing is
+   * re-chunked or re-embedded. The stamp clears only if it is still the one this
+   * sweep read: a failure that landed meanwhile keeps the revision due. The
+   * first failure ends the sweep — an index still down would fail every row.
+   */
+  async repairFulltext(): Promise<number> {
+    if (!this.fulltext.enabled) return 0;
+    const due = await this.prisma.documentRevision.findMany({
+      where: { fulltextStaleAt: { not: null }, status: 'indexed' },
+      select: {
+        id: true,
+        documentId: true,
+        fulltextStaleAt: true,
+        document: {
+          select: {
+            workspaceId: true,
+            restrictedBy: true,
+            defaultBranch: true,
+            branches: { select: { name: true, headRevisionId: true } },
+          },
+        },
+      },
+      orderBy: { fulltextStaleAt: 'asc' },
+      take: FULLTEXT_REPAIR_BATCH,
+    });
+    let repaired = 0;
+    for (const rev of due) {
+      const { workspaceId, restrictedBy, defaultBranch, branches } = rev.document;
+      const live = branches.find((b) => b.name === defaultBranch)?.headRevisionId === rev.id;
+      try {
+        const chunks = await this.graph.getRevisionChunkTexts(workspaceId, rev.id);
+        await this.fulltext.indexRevisionChunks(
+          workspaceId,
+          rev.id,
+          chunks.map((c) => ({ ...c, revisionId: rev.id })),
+          { live, aclNodes: restrictedBy },
+        );
+        if (live) await this.fulltext.setLiveRevision(workspaceId, rev.documentId, rev.id);
+      } catch (e) {
+        this.logger.warn(`Fulltext repair failed for revision ${rev.id}; retrying next sweep: ${(e as Error).message}`);
+        break;
+      }
+      const { count } = await this.prisma.documentRevision.updateMany({
+        where: { id: rev.id, fulltextStaleAt: rev.fulltextStaleAt },
+        data: { fulltextStaleAt: null },
+      });
+      repaired += count;
+    }
+    if (repaired) this.logger.log(`Re-mirrored ${repaired} revision(s) into the fulltext index`);
+    return repaired;
   }
 }

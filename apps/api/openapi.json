@@ -21894,6 +21894,81 @@
         ]
       }
     },
+    "/v1/public/sites/{siteId}/tree": {
+      "get": {
+        "operationId": "PublicSitesController_treeLevel",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent",
+            "required": false,
+            "in": "query",
+            "description": "The page whose children to list; omitted = the top level",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "A version slug; omitted = the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "No live site with this id, no such version, or a parent the viewer may not see"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The children of one page of a live site (or its top level), as the viewer sees them",
+        "tags": [
+          "public"
+        ]
+      }
+    },
     "/v1/public/sites/{siteId}/search": {
       "get": {
         "operationId": "PublicSitesController_searchSite",
@@ -21911,6 +21986,99 @@
             "required": false,
             "in": "query",
             "description": "The words to look for; fewer than 2 characters answers no results",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "description": "A version slug; omitted = the default version",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Only pages of any of these categories, as the version was built. Repeat the parameter for more than one",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "tag",
+            "required": false,
+            "in": "query",
+            "description": "Only pages carrying any of these tags (`billing` or `tag:billing`), as their published revision does",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "A parameter the route does not read, such as a workspace or project filter"
+          },
+          "404": {
+            "description": "No live site with this id, or no such version"
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Search one version of a live site: its published pages only, at the revisions it shows",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/sites/{siteId}/facets": {
+      "get": {
+        "operationId": "PublicSitesController_facets",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
             "schema": {
               "type": "string"
             }
@@ -21963,7 +22131,7 @@
             }
           }
         },
-        "summary": "Search one version of a live site: its published pages only, at the revisions it shows",
+        "summary": "The categories and tags a viewer can filter one version of a live site by, with page counts",
         "tags": [
           "public"
         ]
@@ -24376,7 +24544,7 @@
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.21.1",
+    "version": "0.22.0",
     "contact": {}
   },
   "tags": [],

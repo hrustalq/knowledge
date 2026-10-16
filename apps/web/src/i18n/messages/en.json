@@ -3624,6 +3624,23 @@
       "noSkillDir": "{client} has no skills directory. Use the server's “guide” prompt instead, or paste the skill into the conversation or a project's instructions.",
       "alsoServed": "The same skill is served by the MCP server itself — as the resource knowledge://skill and the prompt “guide” — so any client can load it without installing a file."
     },
+    "capture": {
+      "title": "Capture what sessions learn",
+      "hint": "A hook for {client} that, once per session that changed files, asks the agent to propose the decisions, gotchas and conventions it settled — as merge requests a person reviews. Nothing reaches a page until someone merges it. The hook holds no key and calls nothing; the agent captures through the tools it is already connected with.",
+      "noKit": "{client} has no hooks the kit can use. Its skill’s “Capture memory” section covers the same ground without a reminder.",
+      "installLabel": "Terminal — inside the repository the agent works in",
+      "filesTitle": "What it installs ({n})",
+      "merged": "merged in",
+      "files": {
+        "instructions": "Tells the agent what is worth capturing and how, and which projects it can capture into.",
+        "script": "The reminder: silent until the session edits a file, then once per session.",
+        "entries": "Hook entries. Merged into your existing file with jq, or printed for you to merge — never written over it."
+      },
+      "footnote": "Kit v{version}. Run the command again to update it, or after you join a workspace.",
+      "review": "Review captures",
+      "refused": "This key is offered no capture tools, so there is no kit to install with it. Create a “Read and propose” or read-write key in step 1.",
+      "loadFailed": "Could not load the capture kit."
+    },
     "llms": {
       "title": "llms.txt and markdown",
       "hint": "For tools that fetch URLs instead of speaking MCP. Every page is also plain markdown at /documents/<id>.md. These URLs need the same credential as the app: send the API key as an Authorization header, never in the URL.",

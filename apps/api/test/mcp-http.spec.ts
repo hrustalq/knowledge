@@ -920,7 +920,7 @@ describe('renderSkill', () => {
       email: 'a@example.com',
       displayName: 'Ada | Ops',
       mode: 'api-key' as const,
-      apiKey: { scope: 'write' as const, workspaceId: null },
+      apiKey: { scope: 'write' as const, workspaceId: null, projectIds: null },
       workspaces: [
         { workspaceId: WS_A, name: 'Eng', role: 'editor' as const, projects: [{ projectId: WS_B, name: 'Billing' }] },
       ],
@@ -952,7 +952,7 @@ describe('renderSkill', () => {
   it('does not describe edits to a read-only key', () => {
     const md = renderSkill({
       ...base,
-      whoami: { ...base.whoami, apiKey: { scope: 'read', workspaceId: WS_A } },
+      whoami: { ...base.whoami, apiKey: { scope: 'read', workspaceId: WS_A, projectIds: null } },
       tools: base.tools.filter((t) => t.readOnly),
     });
     expect(md).toContain('read-only');
@@ -963,11 +963,81 @@ describe('renderSkill', () => {
   it('names a capture key, and does not describe edits its capture tools cannot make (#73)', () => {
     const md = renderSkill({
       ...base,
-      whoami: { ...base.whoami, apiKey: { scope: 'capture', workspaceId: null } },
+      whoami: { ...base.whoami, apiKey: { scope: 'capture', workspaceId: null, projectIds: [WS_B] } },
       tools: [...base.tools.filter((t) => t.readOnly), { name: 'knowledge_capture_note', description: 'Capture.', readOnly: false }],
     });
     expect(md).toContain('capture-only');
+    expect(md).toContain(`captures only into \`${WS_B}\``);
     expect(md).not.toContain('Change an existing page');
+    expect(md).not.toContain('is **read-only**');
+  });
+
+  it('carries the capture playbook and the kit install line only when the capture tools are offered (#73)', () => {
+    const capturing = renderSkill({
+      ...base,
+      tools: [...base.tools, { name: 'knowledge_capture_decision', description: 'Capture.', readOnly: false }],
+    });
+    expect(capturing).toContain('## Capture memory');
+    expect(capturing).toContain('knowledge_find_similar');
+    expect(capturing).toContain(
+      'curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh',
+    );
+
+    const reader = renderSkill({
+      ...base,
+      whoami: { ...base.whoami, apiKey: { scope: 'read', workspaceId: null, projectIds: null } },
+      tools: base.tools.filter((t) => t.readOnly),
+    });
+    expect(reader).not.toContain('Capture memory');
+    expect(reader).not.toContain('capture-kit');
+  });
+});
+
+describe('capture kit (#73)', () => {
+  it('refuses a client it has no kit for', async () => {
+    const { mcp } = service(accessWith('editor'));
+    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }), 'codex')).rejects.toMatchObject({
+      status: 400,
+      response: { reason: 'capture-kit-client' },
+    });
+  });
+
+  it('refuses a read-only key, whose kit would describe calls it cannot make', async () => {
+    const { mcp } = service(accessWith('editor'));
+    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }), 'cursor')).rejects.toMatchObject({
+      status: 403,
+      response: { reason: 'capture-not-offered' },
+    });
+  });
+
+  it('names only the projects a pinned capture key may capture into', async () => {
+    const { mcp } = service(accessWith('editor'));
+    const principal = keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null, projectIds: [WS_B] });
+    vi.spyOn(mcp, 'whoami').mockResolvedValue({
+      userId: 'u',
+      email: 'a@example.com',
+      displayName: 'Ada',
+      mode: 'api-key',
+      apiKey: { scope: 'capture', workspaceId: null, projectIds: [WS_B] },
+      workspaces: [
+        {
+          workspaceId: WS_A,
+          name: 'Eng',
+          role: 'viewer',
+          projects: [
+            { projectId: WS_B, name: 'Billing' },
+            { projectId: WS_A, name: 'Search' },
+          ],
+        },
+      ],
+    });
+    const kit = await mcp.captureKitFor(principal, 'claude-code');
+    const skill = kit.files.find((f) => f.path.endsWith('SKILL.md'))!.content;
+    expect(skill).toContain('Billing');
+    expect(skill).not.toContain('Search —');
+    const script = await mcp.captureKitInstallerFor(principal, 'claude-code');
+    expect(script.startsWith('#!/bin/sh\n')).toBe(true);
+    expect(script).toContain('https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code');
   });
 });
 

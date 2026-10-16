@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -20,8 +20,10 @@ import {
   VERIFICATION_NOTE_MAX_CHARS,
   WIKI_SECTIONS,
   REQUESTABLE_ACCESS_LEVELS,
+  CAPTURE_KIT_CLIENTS,
+  type CaptureKitClient,
 } from '@knowledge/contracts';
-import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
+import type { AiAgentChoice, CaptureKitResponse, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -57,8 +59,10 @@ import { ShareLinksService } from '../publishing/share-links.service.js';
 import { ExportService } from '../export/export.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
+import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
-import { MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
+import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
+import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderSkill, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
 import { CaptureService } from '../captures/capture.service.js';
@@ -1410,10 +1414,51 @@ export class McpService {
       serverName: MCP_SERVER_NAME,
       version: MCP_SERVER_VERSION,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
-      webUrl: String(this.config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(/\/+$/, ''),
+      webUrl: this.webUrl(),
       whoami: await this.whoami(principal),
       tools: this.toolsFor(principal),
     });
+  }
+
+  /**
+   * The capture kit for `client`, generated for `principal` (issue #73) — see
+   * capture-kit.ts. Refused to a credential offered no capture tools, whose
+   * kit would remind its model to make calls it cannot make.
+   */
+  async captureKitFor(principal: Principal, client: string): Promise<CaptureKitResponse> {
+    if (!(CAPTURE_KIT_CLIENTS as readonly string[]).includes(client)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: t('error.capture.kitClient', { client, clients: CAPTURE_KIT_CLIENTS.join(', ') }),
+        reason: 'capture-kit-client',
+      });
+    }
+    if (!this.toolsFor(principal).some((tool) => CAPTURE_TOOLS.has(tool.name))) {
+      throw new ForbiddenException({ statusCode: 403, message: t('error.capture.kitNotOffered'), reason: 'capture-not-offered' });
+    }
+    const whoami = await this.whoami(principal);
+    // A capture key pinned to projects captures into those alone, so the kit names no other.
+    const pin = whoami.apiKey?.projectIds ?? null;
+    return renderCaptureKit({
+      client: client as CaptureKitClient,
+      url: this.publicUrl(),
+      serverName: MCP_SERVER_NAME,
+      webUrl: this.webUrl(),
+      workspaces: whoami.workspaces.map((w) => ({
+        workspaceId: w.workspaceId,
+        name: w.name,
+        projects: pin ? w.projects.filter((p) => pin.includes(p.projectId)) : w.projects,
+      })),
+    });
+  }
+
+  /** The same kit as a shell script that installs it — `curl … | sh`. */
+  async captureKitInstallerFor(principal: Principal, client: string): Promise<string> {
+    return renderCaptureKitInstaller(await this.captureKitFor(principal, client), `${this.publicUrl()}/capture-kit/install`);
+  }
+
+  private webUrl(): string {
+    return String(this.config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(/\/+$/, '');
   }
 
   /** `$API_PUBLIC_URL/v1/mcp` — what every generated config points at. */
@@ -1450,7 +1495,11 @@ export class McpService {
       displayName: principal.displayName,
       mode: principal.mode,
       apiKey: principal.apiKey
-        ? { scope: principal.apiKey.scope, workspaceId: principal.apiKey.workspaceId }
+        ? {
+            scope: principal.apiKey.scope,
+            workspaceId: principal.apiKey.workspaceId,
+            projectIds: principal.apiKey.projectIds?.length ? principal.apiKey.projectIds : null,
+          }
         : null,
       workspaces: reachable
         // A key pinned to a workspace its owner has since left reaches nothing.

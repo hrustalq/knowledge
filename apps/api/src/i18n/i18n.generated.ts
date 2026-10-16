@@ -934,6 +934,8 @@ export type I18nTranslations = {
             "useMergeRequest": string;
             "inFlight": string;
             "messageNotAssistant": string;
+            "kitClient": string;
+            "kitNotOffered": string;
         };
     };
     "import": {

@@ -2682,6 +2682,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/mcp/capture-kit",
+      "tag": "mcp",
+      "summary": "Capture kit for a coding agent: the skill/rule, the hook script and its entries, generated for the caller. 403 for a key offered no capture tools",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/mcp/capture-kit/install",
+      "tag": "mcp",
+      "summary": "The capture kit as a POSIX shell script that installs it into the git repository it runs in",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/mcp/connection",
       "tag": "mcp",
       "summary": "What an MCP client needs to connect: endpoint URL, auth mode, and the tools it would get",

@@ -7,6 +7,7 @@ import { POSTMORTEM_TEMPLATE } from './postmortem.js';
 import { API_SPEC_TEMPLATE } from './api-spec.js';
 import { USE_CASE_TEMPLATE } from './use-case.js';
 import { ENTITY_TEMPLATE } from './entity.js';
+import { COMPONENT_TEMPLATE } from './component.js';
 
 export type { BuiltInTemplate, BuiltInTemplateText } from './types.js';
 
@@ -23,4 +24,5 @@ export const BUILT_IN_TEMPLATES: Readonly<Record<BuiltInTemplateKey, BuiltInTemp
   'api-spec': API_SPEC_TEMPLATE,
   'use-case': USE_CASE_TEMPLATE,
   entity: ENTITY_TEMPLATE,
+  component: COMPONENT_TEMPLATE,
 };

@@ -183,6 +183,7 @@ describe('IngestionProcessor stamps and reconciles the live projection (#83)', (
       { get: vi.fn(() => 0) } as never,
       { publish: vi.fn() } as never,
       { enqueue: vi.fn() } as never,
+      { record: vi.fn(async () => false), rebuild: vi.fn() } as never,
     );
     return { processor, graph, fulltext };
   }

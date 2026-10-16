@@ -335,6 +335,7 @@ export type I18nTranslations = {
                 "truncated": string;
                 "modulesOmitted": string;
                 "indexFailed": string;
+                "edgesFailed": string;
             };
             "wiki": {
                 "configInvalid": string;

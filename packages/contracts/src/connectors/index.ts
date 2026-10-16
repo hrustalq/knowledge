@@ -1378,3 +1378,40 @@ export interface CreateConnectorWorkItemInput {
   /** Attach the new issue to this page, so events on it can reach a workflow. */
   documentId?: string;
 }
+
+// --- component pages (#236) -----------------------------------------------------
+
+/**
+ * Why a page's `component:` block resolved to no code connector. Each one
+ * means the page gets no usage index and no derived edges, and the page says
+ * so — a declaration that silently matches nothing is the failure this exists
+ * to prevent.
+ *
+ * - `no-connector`         — the workspace has no codebase connector.
+ * - `ambiguous-repository` — no `repository` and several connectors, or a
+ *                            `repository` several connectors match.
+ * - `unknown-repository`   — `repository` matches no connector.
+ * - `no-paths`             — the block declares no usable path.
+ */
+export const COMPONENT_DECLARATION_WARNINGS = [
+  'no-connector',
+  'ambiguous-repository',
+  'unknown-repository',
+  'no-paths',
+] as const;
+export type ComponentDeclarationWarning = (typeof COMPONENT_DECLARATION_WARNINGS)[number];
+
+/** GET /v1/documents/:id/component — the page's declaration as the server resolved it. */
+export interface ComponentDeclarationView {
+  documentId: string;
+  /** `component:<name>`: the entity usage pages `DEPENDS_ON`. */
+  componentKey: string;
+  /** As the page wrote it; null when it named none. */
+  repository: string | null;
+  connector: { id: string; name: string } | null;
+  paths: string[];
+  symbols: string[];
+  warning: ComponentDeclarationWarning | null;
+  /** The revision the declaration was read from. */
+  revisionId: string;
+}

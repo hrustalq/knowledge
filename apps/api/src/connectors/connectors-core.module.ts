@@ -5,6 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { ProjectsCoreModule } from '../projects/projects-core.module.js';
 import { PermissionsCoreModule } from '../permissions/permissions-core.module.js';
 import { StorageModule } from '../storage/storage.module.js';
+import { ComponentsCoreModule } from '../components/components-core.module.js';
 import { ConnectorAdaptersModule } from './adapters/adapters.module.js';
 import { CodeImportsService } from './code-imports.service.js';
 import { ConnectorAclService } from './connector-acl.service.js';
@@ -37,6 +38,9 @@ import { RepoWikiService } from './repo-wiki.service.js';
     GithubCoreModule,
     // Access mirroring (#76): restricting a page it writes, and announcing it.
     PermissionsCoreModule,
+    // Component declarations re-resolve and their code edges rebuild after
+    // each codebase pull (#236).
+    ComponentsCoreModule,
   ],
   providers: [
     ConnectorsService,

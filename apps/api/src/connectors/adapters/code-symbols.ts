@@ -103,32 +103,177 @@ export function extractSymbols(language: CodeLanguage, tree: Tree): CodeSymbol[]
 }
 
 /**
+ * One import as written, with the names it takes (#236).
+ *
+ * `names` is what the code-usage index filters a component's `symbols` on:
+ * `default` for a default import, `*` for a namespace, star or dynamic import
+ * (any export may be used), empty for a side-effect import (`import './x'`),
+ * and the exported name — not the local alias — for everything else.
+ */
+export interface ImportRef {
+  specifier: string;
+  names: string[];
+  /**
+   * What this file re-exports from the specifier, when it is a barrel:
+   * `names` maps each name it exports to the name it takes (`*` for
+   * `export * as ns`), and `star` is `export * from`.
+   */
+  reexport?: { star: boolean; names: Record<string, string> };
+}
+
+/**
  * The module's imports, as written.
  *
  * Bare specifiers (`react`, `fmt`) are dependencies on the outside world;
  * relative ones (`./thing`) are internal edges the caller resolves against the
  * module map. Both are returned verbatim — deciding which is which needs the
  * repository layout, which this file deliberately knows nothing about.
+ *
+ * ECMAScript re-exports (`export … from`) count as imports, because a barrel
+ * file uses what it re-exports. Python yields its relative imports only
+ * (`from .x import y`, specifier `.x`): an absolute one names a package root
+ * this file cannot know, and the callers before #236 never saw Python imports
+ * at all, so adding the absolute ones would change every wiki page that lists
+ * dependencies.
  */
-export function extractImports(language: CodeLanguage, tree: Tree): string[] {
-  const out = new Set<string>();
+export function extractImports(language: CodeLanguage, tree: Tree): ImportRef[] {
+  const out = new Map<string, Set<string>>();
+  const reexports = new Map<string, NonNullable<ImportRef['reexport']>>();
+  const add = (specifier: string | null, names: string[]): void => {
+    if (!specifier) return;
+    const set = out.get(specifier) ?? new Set<string>();
+    for (const name of names) set.add(name);
+    out.set(specifier, set);
+  };
+  const ecma = language === 'typescript' || language === 'tsx' || language === 'javascript';
   const visit = (node: Node, depth: number): void => {
     if (depth > 2) return; // imports live at the top; do not walk whole bodies
     const type = node.type;
-    if (
+    if (ecma && type === 'import_statement') {
+      add(sourceOf(node), ecmaImportNames(node));
+    } else if (ecma && type === 'export_statement') {
+      const source = sourceOf(node);
+      if (source) {
+        add(source, ecmaExportNames(node));
+        const reexport = reexports.get(source) ?? { star: false, names: {} };
+        ecmaReexport(node, reexport);
+        reexports.set(source, reexport);
+      }
+    } else if (type === 'import_from_statement') {
+      const module = node.childForFieldName('module_name');
+      if (module?.type === 'relative_import') add(module.text, pythonNames(node));
+    } else if (
       type === 'import_statement' ||
-      type === 'import_from_statement' ||
       type === 'import_declaration' ||
       type === 'import_spec' ||
       type === 'use_declaration'
     ) {
-      const literal = firstString(node);
-      if (literal) out.add(literal);
+      add(firstString(node), []);
     }
     for (const child of node.namedChildren) if (child) visit(child, depth + 1);
   };
   visit(tree.rootNode, 0);
+  // `import('./x')` sits anywhere — a lazy route, an async component — so it
+  // is the one import worth a whole-tree query.
+  if (ecma) {
+    for (const call of tree.rootNode.descendantsOfType('call_expression')) {
+      if (call?.childForFieldName('function')?.type !== 'import') continue;
+      add(firstString(call.childForFieldName('arguments') ?? call), ['*']);
+    }
+  }
+  return [...out].map(([specifier, names]) => {
+    const reexport = reexports.get(specifier);
+    return { specifier, names: [...names].sort(), ...(reexport ? { reexport } : {}) };
+  });
+}
+
+/**
+ * The names an ECMAScript file exports itself — declarations, local
+ * `export { a as b }` lists and `default`. What it re-exports from elsewhere is
+ * on its `ImportRef`s; the code-usage index adds the two together, because
+ * only it can follow a specifier to a file. Empty for other languages.
+ */
+export function extractExportNames(language: CodeLanguage, tree: Tree): string[] {
+  if (language !== 'typescript' && language !== 'tsx' && language !== 'javascript') return [];
+  const out = new Set<string>();
+  for (const node of children(tree.rootNode, 'export_statement')) {
+    if (node.childForFieldName('source')) continue;
+    if (node.children.some((c) => c?.type === 'default')) out.add('default');
+    const clause = children(node, 'export_clause')[0];
+    for (const spec of children(clause, 'export_specifier')) {
+      const name = (spec.childForFieldName('alias') ?? spec.childForFieldName('name'))?.text;
+      if (name) out.add(name);
+    }
+    const decl = node.childForFieldName('declaration');
+    if (!decl) continue;
+    const declarators = children(decl, 'variable_declarator');
+    for (const d of declarators.length > 0 ? declarators : [decl]) {
+      const name = d.childForFieldName('name');
+      if (name?.type === 'identifier' || name?.type === 'type_identifier') out.add(name.text);
+    }
+  }
   return [...out];
+}
+
+function ecmaReexport(node: Node, into: NonNullable<ImportRef['reexport']>): void {
+  const clause = children(node, 'export_clause')[0];
+  const namespace = children(node, 'namespace_export')[0];
+  if (namespace) {
+    const name = children(namespace)[0]?.text;
+    if (name) into.names[name] = '*';
+  } else if (clause) {
+    for (const spec of children(clause, 'export_specifier')) {
+      const name = spec.childForFieldName('name')?.text;
+      const alias = spec.childForFieldName('alias')?.text ?? name;
+      if (name && alias) into.names[alias] = name;
+    }
+  } else {
+    into.star = true;
+  }
+}
+
+/** The `source` string of an import/export statement, without its quotes. */
+function sourceOf(node: Node): string | null {
+  const source = node.childForFieldName('source');
+  return source ? firstString(source) ?? (source.text.replace(/^["'`]|["'`]$/g, '') || null) : null;
+}
+
+function ecmaImportNames(node: Node): string[] {
+  const clause = children(node, 'import_clause')[0];
+  if (!clause) return [];
+  const out: string[] = [];
+  for (const child of children(clause)) {
+    if (child.type === 'identifier') out.push('default');
+    else if (child.type === 'namespace_import') out.push('*');
+    else if (child.type === 'named_imports') {
+      for (const spec of children(child, 'import_specifier')) {
+        const name = spec.childForFieldName('name')?.text;
+        if (name) out.push(name);
+      }
+    }
+  }
+  return out;
+}
+
+function ecmaExportNames(node: Node): string[] {
+  const clause = children(node, 'export_clause')[0];
+  // `export * from` and `export * as ns from` both pass every name through.
+  if (!clause) return ['*'];
+  return children(clause, 'export_specifier').flatMap((spec) => {
+    const name = spec.childForFieldName('name')?.text;
+    return name ? [name] : [];
+  });
+}
+
+function pythonNames(node: Node): string[] {
+  const module = node.childForFieldName('module_name');
+  return node.namedChildren.flatMap((child) => {
+    if (!child || child.id === module?.id) return [];
+    if (child.type === 'wildcard_import') return ['*'];
+    if (child.type === 'aliased_import') return [child.childForFieldName('name')?.text ?? ''].filter(Boolean);
+    if (child.type === 'dotted_name') return [child.text];
+    return [];
+  });
 }
 
 // --- per-language collectors ---

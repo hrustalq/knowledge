@@ -7,6 +7,7 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CodeImportsService } from './code-imports.service.js';
 import { ConnectorsService, MAX_WARNINGS } from './connectors.service.js';
 import { ConnectorDiscoveryService } from './connector-discovery.service.js';
 import { sha256 } from './connector-markdown.js';
@@ -68,6 +69,7 @@ export class ConnectorSyncService {
     // staging service instead.
     private readonly documents: DocumentsService,
     private readonly events: EventsPublisher,
+    private readonly codeImports: CodeImportsService,
   ) {
     this.maxItems = this.config.get('CONNECTOR_SYNC_MAX_ITEMS', { infer: true });
     this.batchSize = this.config.get('CONNECTOR_SYNC_BATCH', { infer: true });
@@ -157,6 +159,8 @@ export class ConnectorSyncService {
 
       const orphans = await this.discovery.repairOrphans(runRow, adapter, ctx);
       if (orphans > 0) pushWarning(warnings, null, null, t('connector.warning.orphansFound', { count: orphans }));
+
+      if (adapter.codeImports) await this.indexCode(row, adapter, ctx, warnings);
 
       await this.setPhase(runRow.id, 'fetching');
       await this.checkpoint(runRow.id, totals, warnings);
@@ -458,6 +462,29 @@ export class ConnectorSyncService {
       where: { id: runId },
       data: { ...totals, warnings: warnings.slice(0, MAX_WARNINGS) as unknown as Prisma.InputJsonValue },
     });
+  }
+
+  /**
+   * The code-usage index (#236) follows the head discovery just read — on
+   * every pull, reviewed or not, because it describes the code, not the pages.
+   * A failure warns and leaves the previous head's index in place; it never
+   * fails the run, whose pages are a separate matter.
+   */
+  private async indexCode(
+    row: Connector,
+    adapter: ConnectorAdapter,
+    ctx: ConnectorContext,
+    warnings: RunWarning[],
+  ): Promise<void> {
+    try {
+      const index = await adapter.codeImports!(ctx);
+      const rows = await this.codeImports.replace(row, index);
+      ctx.debug('code imports stored', { rows, headSha: index.headSha });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`code index for connector ${row.id} failed: ${message}`);
+      pushWarning(warnings, null, null, t('connector.warning.codebase.indexFailed', { error: message }));
+    }
   }
 
   private async setPhase(runId: string, phase: ConnectorRunPhase): Promise<void> {

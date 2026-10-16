@@ -1842,6 +1842,7 @@ model Connector {
   conflicts  ConnectorConflict[]
   workItems  ConnectorWorkItem[]
   identities ExternalIdentity[]
+  codeImports CodeImport[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId, kind])
@@ -1886,6 +1887,32 @@ model ConnectorLink {
   @@unique([connectorId, externalId])
   @@index([documentId])
   @@map("connector_links")
+}
+
+/// The reverse-import index of a code connector's head (#236): one row per
+/// importer → imported file pair. Replaced whole on every pull, in one
+/// transaction, so only one head's rows exist at a time — an index like a
+/// revision's chunks, not an aggregate.
+model CodeImport {
+  connectorId  String   @map("connector_id") @db.Uuid
+  /// No FK, as for every workspace id.
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  /// The commit the row was read at; null when the host did not say.
+  headSha      String?  @map("head_sha")
+  /// Repo-relative paths.
+  importerPath String   @map("importer_path")
+  importedPath String   @map("imported_path")
+  /// The names the importer takes: `default`, `*` for a namespace, star or
+  /// dynamic import, empty for a side-effect import.
+  names        String[]
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@id([connectorId, importerPath, importedPath])
+  /// "What imports this file" — the question the index exists to answer.
+  @@index([connectorId, importedPath])
+  @@map("code_imports")
 }
 
 /// An upstream person a connector's ACLs name (#76, phase 6), and who they are

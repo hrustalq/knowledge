@@ -23,8 +23,18 @@ import { wrapUntrusted } from '../../common/untrusted.js';
 import type { Env } from '../../config/env.js';
 import { t } from '../../i18n/t.js';
 import { codeToolDefinitions, SnapshotCodeTools, type CodeToolSnapshot } from '../code-research/code-tools.js';
-import { extractImports, extractSymbols, type CodeSymbol } from './code-symbols.js';
-import { edgeDigest, reachableFiles, resolveModuleEdges, type ModuleEdges } from './import-resolver.js';
+import { extractExportNames, extractImports, extractSymbols, type CodeSymbol, type ImportRef } from './code-symbols.js';
+import {
+  createFileResolver,
+  edgeDigest,
+  foldReexports,
+  reachableFiles,
+  resolveModuleEdges,
+  type FileResolver,
+  type ImportEdges,
+  type ModuleEdges,
+  type Reexport,
+} from './import-resolver.js';
 import {
   OVERVIEW_KEY,
   buildRepoMap,
@@ -60,7 +70,7 @@ import {
   resolveHeadSha,
   type RepoTag,
 } from './repo-history.js';
-import { TreeSitterService } from './tree-sitter.service.js';
+import { TreeSitterService, type CodeLanguage } from './tree-sitter.service.js';
 import { readWikiSteering, wikiPathFilter, type WikiSteering } from './wiki-steering.js';
 import { architectureFlowchart, mermaidBlock, moduleClassDiagram, sequenceFromJson } from './wiki-diagrams.js';
 import {
@@ -71,6 +81,8 @@ import {
   type ExternalDocument,
   type ExternalGroupMember,
   type ExternalPrincipal,
+  type CodeImportEdge,
+  type CodeImportIndex,
   type ExternalRef,
 } from './connector.types.js';
 import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
@@ -144,6 +156,13 @@ interface ModuleAnalysis {
 const FLOW_DEPTH = 2;
 const MAX_FLOW_FILES = 12;
 
+/** Single-file components: tree-sitter has no grammar for them, so their `<script>` blocks are parsed. */
+const SFC_FILE = /\.(?:vue|svelte)$/;
+const SCRIPT_BLOCK = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+
+/** One file's outline: `undefined` = not source, `null` = unparseable. */
+type FileOutline = { symbols: CodeSymbol[]; imports: ImportRef[]; exports: string[] } | null | undefined;
+
 /** Everything a run decides once, from the archive alone. */
 interface RepoPlan {
   archive: RepoArchive;
@@ -190,8 +209,11 @@ export class CodebaseAdapter implements ConnectorAdapter {
   private readonly tagCache = new WeakMap<object, Promise<{ tags: RepoTag[]; error: string | null }>>();
   /** Merged requests carrying a breaking label, per run: one search per label, shared by every release. */
   private readonly labelCache = new WeakMap<object, Promise<Map<number, string[]>>>();
-  /** File outlines per run, for the flows; a file shared by two flows is parsed once. */
-  private readonly outlines = new WeakMap<object, Map<string, Promise<{ symbols: CodeSymbol[]; imports: string[] } | null>>>();
+  /**
+   * File outlines per run: the module analyses, the flows and the code-usage
+   * index (#236) all read through here, so a file is parsed once per run.
+   */
+  private readonly outlines = new WeakMap<object, Map<string, Promise<FileOutline>>>();
 
   private readonly maxEffort: Env['WIKI_MAX_EFFORT'];
   private readonly maxDiagramNodes: number;
@@ -569,18 +591,14 @@ export class CodebaseAdapter implements ConnectorAdapter {
     }
     let pending = perRun.get(module.key);
     if (!pending) {
-      pending = this.analyse(ctx, module, plan.archive.files);
+      pending = this.analyse(ctx, plan, module);
       perRun.set(module.key, pending);
     }
     return pending;
   }
 
   /** Parse a module's files and collect what they declare. Never throws. */
-  private async analyse(
-    ctx: ConnectorContext,
-    module: RepoModule,
-    files: Map<string, Uint8Array>,
-  ): Promise<ModuleAnalysis> {
+  private async analyse(ctx: ConnectorContext, plan: RepoPlan, module: RepoModule): Promise<ModuleAnalysis> {
     const symbols: CodeSymbol[] = [];
     const external = new Set<string>();
     const imports = new Map<string, string[]>();
@@ -588,16 +606,17 @@ export class CodebaseAdapter implements ConnectorAdapter {
     let unreadable = 0;
 
     for (const path of module.files.slice(0, MAX_FILES_PER_UNIT)) {
-      const read = await this.readFile(path, files);
+      const read = await this.outline(ctx, plan, path);
       if (read === undefined) continue;
       if (!read) {
         unreadable += 1;
         continue;
       }
       parsed += 1;
-      imports.set(path, read.imports);
+      const specifiers = read.imports.map((i) => i.specifier);
+      imports.set(path, specifiers);
       for (const symbol of read.symbols) symbols.push(symbol);
-      for (const specifier of read.imports) {
+      for (const specifier of specifiers) {
         // Relative specifiers describe this module's own internals, which the
         // file list already shows. What a reader cannot see is what it rests on.
         if (!specifier.startsWith('.') && !specifier.startsWith('/')) external.add(specifier);
@@ -626,12 +645,8 @@ export class CodebaseAdapter implements ConnectorAdapter {
     return pending;
   }
 
-  /** One file's outline, parsed once per run however many flows reach it. */
-  private outline(
-    ctx: ConnectorContext,
-    plan: RepoPlan,
-    path: string,
-  ): Promise<{ symbols: CodeSymbol[]; imports: string[] } | null> {
+  /** One file's outline, parsed once per run however many readers reach it. */
+  private outline(ctx: ConnectorContext, plan: RepoPlan, path: string): Promise<FileOutline> {
     let perRun = this.outlines.get(ctx.config);
     if (!perRun) {
       perRun = new Map();
@@ -639,7 +654,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
     }
     let pending = perRun.get(path);
     if (!pending) {
-      pending = this.readFile(path, plan.archive.files).then((r) => r ?? null);
+      pending = this.readFile(path, plan.archive.files);
       perRun.set(path, pending);
     }
     return pending;
@@ -650,7 +665,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
     if (!plan.archive.files.has(entry)) return [];
     return reachableFiles(
       entry,
-      async (file) => (await this.outline(ctx, plan, file))?.imports ?? [],
+      async (file) => (await this.outline(ctx, plan, file))?.imports.map((i) => i.specifier) ?? [],
       plan.map,
       plan.archive.files,
       FLOW_DEPTH,
@@ -659,10 +674,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
   }
 
   /** One file's symbols and imports; `undefined` = not source, `null` = unparseable. */
-  private async readFile(
-    path: string,
-    files: Map<string, Uint8Array>,
-  ): Promise<{ symbols: CodeSymbol[]; imports: string[] } | null | undefined> {
+  private async readFile(path: string, files: Map<string, Uint8Array>): Promise<FileOutline> {
     const language = this.treeSitter.languageForPath(path);
     const bytes = files.get(path);
     if (!language || !bytes) return undefined;
@@ -670,7 +682,79 @@ export class CodebaseAdapter implements ConnectorAdapter {
     return this.treeSitter.withTree(language, source, (tree) => ({
       symbols: extractSymbols(language, tree),
       imports: extractImports(language, tree),
+      exports: extractExportNames(language, tree),
     }));
+  }
+
+  // --- the code-usage index (#236) ---
+
+  /**
+   * Every importer → imported file pair at the head this run read, with the
+   * names each import takes.
+   *
+   * Every source file in the archive is read — not the `MAX_FILES_PER_UNIT`
+   * sample a module page parses, and not only the files of documented modules
+   * (`maxModules`, the wiki's include/exclude): a usage index that silently
+   * misses importers would answer "nothing uses this" wrongly. A file that
+   * does not parse contributes nothing; an import that resolves to no file in
+   * the repository (a package from npm, a path that does not exist) is dropped.
+   */
+  async codeImports(ctx: ConnectorContext): Promise<CodeImportIndex> {
+    const plan = await this.plan(ctx);
+    const { files, headSha } = plan.archive;
+    const resolve = createFileResolver(files);
+    const direct: ImportEdges = new Map();
+    const barrels = new Map<string, Reexport[]>();
+    const ownExports = new Map<string, string[]>();
+
+    for (const importer of files.keys()) {
+      const outline = SFC_FILE.test(importer)
+        ? await this.sfcOutline(importer, files)
+        : await this.outline(ctx, plan, importer);
+      if (!outline) continue;
+      if (outline.exports.length > 0) ownExports.set(importer, outline.exports);
+      const row = new Map<string, Set<string>>();
+      for (const ref of outline.imports) {
+        for (const [target, names] of importTargets(resolve, importer, ref)) {
+          if (target === importer) continue;
+          const set = row.get(target) ?? new Set<string>();
+          for (const name of names) set.add(name);
+          row.set(target, set);
+          if (ref.reexport) barrels.set(importer, [...(barrels.get(importer) ?? []), { target, ...ref.reexport }]);
+        }
+      }
+      if (row.size > 0) direct.set(importer, row);
+    }
+
+    const edges: CodeImportEdge[] = [];
+    for (const [importer, row] of foldReexports(direct, barrels, ownExports)) {
+      for (const [imported, names] of row) edges.push({ importer, imported, names: [...names].sort() });
+    }
+    ctx.debug('code imports indexed', { files: files.size, edges: edges.length, barrels: barrels.size, headSha });
+    return { headSha, edges };
+  }
+
+  /**
+   * A `.vue` / `.svelte` file's imports, from its `<script>` blocks
+   * (`lang="ts"` parsed as TypeScript). The component itself is its default
+   * export, whether or not a block says so.
+   */
+  private async sfcOutline(path: string, files: Map<string, Uint8Array>): Promise<NonNullable<FileOutline>> {
+    const outline: NonNullable<FileOutline> = { symbols: [], imports: [], exports: ['default'] };
+    const bytes = files.get(path);
+    if (!bytes) return outline;
+    for (const [, attrs, body] of Buffer.from(bytes).toString('utf8').matchAll(SCRIPT_BLOCK)) {
+      const lang = /\blang\s*=\s*["']?(\w+)/.exec(attrs)?.[1];
+      const language: CodeLanguage = lang === 'tsx' ? 'tsx' : lang === 'ts' ? 'typescript' : 'javascript';
+      const read = await this.treeSitter.withTree(language, body, (tree) => ({
+        imports: extractImports(language, tree),
+        exports: extractExportNames(language, tree),
+      }));
+      if (!read) continue;
+      outline.imports.push(...read.imports);
+      for (const name of read.exports) if (!outline.exports.includes(name)) outline.exports.push(name);
+    }
+    return outline;
   }
 
   // --- the deterministic page ---
@@ -1582,4 +1666,27 @@ function escapePipes(text: string): string {
 /** Steering text becomes a heading: one line, no markdown that could open a block. */
 function escapeHeading(text: string): string {
   return text.replace(/[\r\n]+/g, ' ').replace(/[`<>[\]#*_]/g, '').trim().slice(0, 120) || '—';
+}
+
+/**
+ * The files one import lands on, with the names it takes there. One import is
+ * one target, except Python's `from . import a, b`, where each name may be a
+ * sibling module (`a.py`) rather than something the package's `__init__.py`
+ * defines — so each is tried as a module first.
+ */
+function importTargets(resolve: FileResolver, importer: string, ref: ImportRef): Array<[string, string[]]> {
+  if (/\.pyi?$/.test(importer) && /^\.+$/.test(ref.specifier)) {
+    const out: Array<[string, string[]]> = [];
+    const rest: string[] = [];
+    for (const name of ref.names) {
+      const module = name === '*' ? null : resolve(importer, `${ref.specifier}${name}`);
+      if (module) out.push([module, ['*']]);
+      else rest.push(name);
+    }
+    const init = rest.length > 0 || ref.names.length === 0 ? resolve(importer, ref.specifier) : null;
+    if (init) out.push([init, rest]);
+    return out;
+  }
+  const target = resolve(importer, ref.specifier);
+  return target ? [[target, ref.names]] : [];
 }

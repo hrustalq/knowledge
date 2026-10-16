@@ -315,7 +315,7 @@ export class SnapshotCodeTools {
     const text = Buffer.from(bytes).toString('utf8');
     return this.treeSitter.withTree(language, text, (tree) => ({
       symbols: extractSymbols(language, tree),
-      imports: extractImports(language, tree),
+      imports: extractImports(language, tree).map((i) => i.specifier),
     }));
   }
 

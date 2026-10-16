@@ -17,12 +17,17 @@ and work in its knowledge base **as the person who connected it**:
   authority.
 - **Named API keys** (`api_keys`), many per person, each optionally
   **read-only**, **pinned to one workspace**, or **expiring**; revoked
-  individually; `last_used_at` so a stale one can be found.
+  individually; `last_used_at` so a stale one can be found. A third scope,
+  **capture** ("Read & propose"), reads like a read-only key and may only
+  propose agent-session captures, optionally pinned to projects
+  ([50](50-agent-memory.md)).
 - **Settings → AI → Connect AI** (`/settings/ai/connect`; it was its own
   settings row at `/settings/connect` until issue #182, and that URL — printed
   in every SKILL.md already handed out — redirects): create a key, pick a client,
   copy its CLI one-liner and config file (with the key already in it, the one
-  time it is on screen), then install the skill.
+  time it is on screen), then install the skill. For Claude Code and Cursor,
+  step 4 **Capture memory** installs the capture kit with one command run
+  inside the repository (below).
 - **The skill.** A `SKILL.md` generated per caller at `GET /v1/mcp/skill`: the
   workspaces and project ids that credential reaches, the tools it is offered,
   and the playbooks — answer with citations, change a page only through a merge
@@ -61,7 +66,10 @@ a tool that always 403s spends the model's context on a dead end. Offering is no
 the check — each write tool still runs `requireRole`. `WRITE_TOOLS` is one closed
 list that drives both that filter and MCP's `readOnlyHint` annotation, which is
 what lets clients auto-approve reads and still ask before a write. A test fails
-if the list names a tool that does not exist.
+if the list names a tool that does not exist. The agent-memory tools are a
+second closed list, `CAPTURE_TOOLS`, disjoint from `WRITE_TOOLS`. A capture key
+is offered the reads plus that list, and they are the only calls that pass the
+`{ capture: true }` flag which lifts such a key to editor.
 
 **Keys are managed from a session, never by a key.** Every `/v1/me/api-keys`
 route refuses an API-key principal: a leaked key that could mint its own
@@ -85,6 +93,21 @@ workspace and project ids saves an agent its first three calls, and a read-only
 key's skill must not describe an edit flow it cannot perform. It fetches with a
 bearer header, so the install command can be re-run to pick up new workspaces.
 
+**The capture kit is a reminder, not an agent.** Step 4 runs
+`curl -H "Authorization: Bearer …" $API_PUBLIC_URL/v1/mcp/capture-kit/install?client=… | sh`.
+`GET /v1/mcp/capture-kit?client=` returns the same files as JSON
+(`CaptureKitResponse`). The kit is a skill (Claude Code) or an agent-requested
+rule (Cursor) carrying the capture playbook, plus a hook script that reminds
+the model, once per session and only after it edited a file, to propose what
+it learned. The script holds no key and calls nothing: the model captures
+through the MCP server it is already connected to. Kits exist for
+`claude-code` and `cursor` only (`CAPTURE_KIT_CLIENTS`); other clients get 400
+and rely on the skill's "Capture memory" section. A credential offered no
+capture tool gets 403 `capture-not-offered`. The installer never overwrites
+`.claude/settings.json` or `.cursor/hooks.json`: it merges its entries with
+`jq`, or prints them when `jq` is missing. The exact hook behaviour is in
+[50 §The capture kit](50-agent-memory.md#the-capture-kit).
+
 **Per-client snippets, not one JSON blob.** `apps/web/src/lib/mcp-clients.ts`
 has a generator per client because the differences break connections, silently:
 the env-var syntax differs in every client (`${VAR}`, `${env:VAR}`,
@@ -106,7 +129,8 @@ drops it in a later release.
 | Tool set, guard, whoami, skill wiring                  | `apps/api/src/mcp/mcp.service.ts`                                           |
 | Write list, annotations, read-key filter, instructions | `apps/api/src/mcp/mcp-tools.ts`                                             |
 | SKILL.md renderer                                      | `apps/api/src/mcp/skill.ts`                                                 |
-| HTTP transport + `/connection` + `/skill`              | `apps/api/src/mcp/mcp.controller.ts`                                        |
+| HTTP transport + `/connection` + `/skill` + `/capture-kit` | `apps/api/src/mcp/mcp.controller.ts`                                    |
+| Capture kit renderers + installer                      | `apps/api/src/mcp/capture-kit.ts`                                           |
 | Module split: core / stdio / HTTP                      | `mcp-core.module.ts`, `mcp.module.ts`, `mcp-http.module.ts`                 |
 | Key narrowing                                          | `AccessService.requireKeyAllows`, `AclGuard` (read keys on unscoped routes) |
 | Key resolution + `last_used_at`                        | `apps/api/src/auth/token-auth.service.ts`                                   |
@@ -127,7 +151,8 @@ Behind the production Caddyfile that is `https://<host>/api`.
   native connectors, claude.ai) connect through `mcp-remote` for now. An OAuth
   authorization server would let them connect natively and is the obvious next
   step.
-- **Per-tool key scopes.** Read/write is the one axis; a key limited to, say,
-  search only is not expressible.
+- **Per-tool key scopes.** There are three scopes: read, capture (reads plus
+  the agent-memory tools, [50](50-agent-memory.md)) and write. A key limited to
+  an arbitrary tool set, say search only, is still not expressible.
 - **Server push.** Stateless mode has no SSE stream, so no `tools/list_changed`
   notifications; clients see a new tool on reconnect.

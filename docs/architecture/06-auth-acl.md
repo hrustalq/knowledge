@@ -217,7 +217,23 @@ never retrievable. A key may be **read-only**, **pinned to one workspace**, or
 enforced inside `requireRole`, ahead of the platform-admin shortcut, so it can
 only ever take rights away. A read-only key is also refused any non-GET route
 without `@Access` unless the route is `@ReadKeyOk()` (only `POST /v1/mcp`). Keys
-are managed from a session only — never with another key. See
+are managed from a session only — never with another key.
+
+A third scope, **`capture`** (#73, [features/50](../features/50-agent-memory.md)),
+is read-like everywhere except on calls flagged `{ capture: true }`. On those it
+passes up to `editor` and never past it. The flag rides through
+`requireRole(…, { capture })`, `PermissionService.requireResource(…, { capture })`,
+`@Access(role, source, { capture: true })` and the MCP guards
+`guard.captureWs` / `guard.captureDoc`. Only the capture tools,
+`POST /v1/captures` and `POST /v1/assistant/messages/:id/capture` set it. Approve,
+reject, merge and approving a merge request do not, so what proposes a capture
+can never decide it. On a flagged page call, `requireResource` lifts the key's
+page level from view-capped to the person's own. A capture key may carry a
+project pin (`api_keys.project_ids`). Only capture keys accept one, and it
+narrows where the key may capture, not what it reads. `CaptureService`
+enforces it. A stored scope is parsed fail-closed by `apiKeyScopeOf`: an
+unknown value reads as `read`, never `write`. For the `AclGuard` rule on
+unscoped non-GET routes, a capture key counts as read-only. See
 [features/33](../features/33-connect-ai.md). Disabled users
 401 on both token kinds. Resetting a password, disabling a user, or an admin
 overriding a password all **revoke sessions**.

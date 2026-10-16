@@ -221,11 +221,48 @@ row written by an older client cannot put a non-array where the bar expects one.
 `@@unique([ownerId, workspaceId, name])`: re-saving under an existing name is an
 update, and the UI offers exactly that rather than a second "My reviews".
 
+## Provenance: who opened it
+
+Issue #73. `merge_requests.provenance` records who opened a merge request:
+`manual` (a person, the column default), `agent` (an `AgentFindingsService`
+finding or relation, or the assistant's propose-change and relation tools) or
+`captured` (an agent-session capture or a chat save, with `capture_id` for a
+capture's). The closed list is `MR_PROVENANCES` in contracts, and a CHECK
+constraint mirrors it.
+
+- **An argument, never a DTO field.** `MergeRequestsService.create(…, {
+  provenance, captureId })` and `openDraftMergeRequest` take it from the code
+  path that opens the merge request, so a client cannot label its own merge
+  request `agent`. `POST /v1/documents/:id/merge-requests` always writes
+  `manual`.
+- **It changes no gate.** A captured merge request merges under the same
+  approvals, draft and divergence rules as any other. It is authored by the
+  person whose key captured it, so their own approval does not count.
+- **Filtering stays in SQL.** `GET /v1/merge-requests?provenance=` and the
+  web's "Opened by" token filter on the column. The list card badges `agent`
+  and `captured`, and a captured merge request's detail page shows a
+  provenance strip with the agent, repository, branch and session
+  (`MrProvenance.vue`).
+- The migration backfilled existing rows: merge requests referenced from
+  `agent_runs.findings[*].mergeRequestId` became `agent`, and chat saves became
+  `captured`.
+
+**A target with no head.** A captured new page, like a chat save, is created
+with no revision on its default branch and its content behind the merge
+request ([features/50](../features/50-agent-memory.md)). `merge` already
+handled a head-less target: `parentOrder` is 1 and there is no fast-forward
+check. The diff now renders it as all-added through
+`CompareService.compareWithNothing`, with `compare.from: null`, where it used
+to answer 400. While such a merge request is open,
+`documents.pending_merge_request_id` keeps the page out of every list. The
+merge clears it in the same transaction, and closing leaves the stub hidden so
+a reopen still merges.
+
 ## Data model
 
 | Table                     | Notes                                                                                                                                                 |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `merge_requests`          | `status` open \| merged \| closed, `is_draft`, `author_id`, `assignee_id` (no FK — advisory), `approved_by` Json, `strategy`, `merged_revision_id`.     |
+| `merge_requests`          | `status` open \| merged \| closed, `is_draft`, `author_id`, `assignee_id` (no FK — advisory), `approved_by` Json, `strategy`, `merged_revision_id`, `provenance` manual \| agent \| captured, `capture_id`. |
 | `merge_request_reviewers` | Join table with `added_by`. Advisory; validated against `workspace_members`.                                                                            |
 | `merge_request_threads`   | `resolvable` (default true), `resolved`/`resolved_by`/`resolved_at`, `source` human \| ai, `anchor_type` line \| text \| section \| entity, `anchor` Json. |
 | `merge_request_comments`  | Flat, `createdAt`-ordered. `reply_to_id` self-FK `SetNull` (attribution), nullable `updated_at`, `agent_key`, `pending`.                                 |
@@ -237,7 +274,7 @@ update, and the UI offers exactly that rather than a second "My reviews".
 | ------------------------------------------------------ | ------------------ | ------------------------------------------------ |
 | `POST /v1/documents/:id/merge-requests`                | editor · document  | 409 when an open MR exists for the same pair     |
 | `GET /v1/documents/:id/merge-requests`                 | viewer · document  | newest first, no merge base                      |
-| `GET /v1/merge-requests`                               | viewer · query     | cursor-paginated, filters + `counts`             |
+| `GET /v1/merge-requests`                               | viewer · query     | cursor-paginated, filters (incl. `provenance`) + `counts` |
 | `GET/POST /v1/merge-requests/filters`                  | viewer · query/body| declared **before** `merge-requests/:id`         |
 | `GET/PATCH/DELETE /v1/merge-requests/filters/:filterId`| viewer ·saved-filter| integer id; other owners' rows 404               |
 | `GET /v1/merge-requests/:id`                           | viewer ·merge-request| heads, merge base, approvals, reviewers        |

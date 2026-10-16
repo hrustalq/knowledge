@@ -77,6 +77,15 @@ in the pull request that introduces them — see
   waiting in an open merge request. It is also refused when the
   archaeologist has no model. Model spend shows as **Component draft** on
   the usage page. (#236)
+- The knowledge-health dashboard has a **Missing code** filter: component
+  pages that declare a path no file matches at the connector's indexed
+  head, such as a file that was deleted or moved, a directory that was
+  emptied, or a glob that matches nothing. Each row shows how many paths
+  are missing and names them on hover, and the page itself says which
+  declared paths are gone. Fixing `component.paths` clears the page right
+  away. A file the index skips for size or for being binary still counts
+  as present. The feature is documented in
+  [docs/features/51](docs/features/51-component-pages.md). (#236)
 
 ### Changed
 
@@ -103,6 +112,12 @@ in the pull request that introduces them — see
   `CODE_SNAPSHOT_TTL_MS`, the cache the code tools already use) and makes
   one host request per changed source file, at most 60 per check. A check
   that touches no component page does neither. (#236)
+- Migration `20261102100000_component_missing_paths` adds the `code_files`
+  table (every file at a codebase connector's indexed head) and the
+  `component_declarations.missing_paths` column, which defaults to empty.
+  It is additive, so rolling back is safe. Both fill on each codebase
+  connector's next pull; until then the Missing code filter is empty.
+  (#236)
 
 ## [0.24.0] — 2026-10-16
 

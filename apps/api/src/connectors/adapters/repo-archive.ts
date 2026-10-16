@@ -53,6 +53,11 @@ export interface RepoArchive {
   /** Skipped for size or for being binary — reported so a thin result is explainable. */
   skipped: { oversize: number; binary: number };
   /**
+   * The paths behind `skipped`, and empty files: absent from `files`, present
+   * in the repository — what tells "too big to read" from "not there" (#236).
+   */
+  skippedPaths?: string[];
+  /**
    * The branch actually read, which is not the configured one when Branch was
    * left empty (#28). Carried here so `blobUrl` callers that already await the
    * archive do not have to resolve it a second time.
@@ -256,27 +261,35 @@ async function download(ctx: ConnectorContext, tag?: string): Promise<RepoArchiv
 
   const files = new Map<string, Uint8Array>();
   const skipped = { oversize: 0, binary: 0 };
+  const skippedPaths: string[] = [];
 
   for (const [name, bytes] of Object.entries(zip)) {
     // Archives are wrapped in a single `<repo>-<ref>/` directory.
     const path = name.split('/').slice(1).join('/');
-    if (!path || bytes.length === 0) continue;
+    // A directory entry ends in `/`.
+    if (!path || path.endsWith('/')) continue;
 
     const segments = path.split('/');
     if (segments.some((s) => IGNORED_SEGMENTS.has(s))) continue;
+    if (bytes.length === 0) {
+      skippedPaths.push(path);
+      continue;
+    }
     if (bytes.length > MAX_FILE_BYTES) {
       skipped.oversize += 1;
+      skippedPaths.push(path);
       continue;
     }
     if (isBinary(bytes)) {
       skipped.binary += 1;
+      skippedPaths.push(path);
       continue;
     }
     files.set(path, bytes);
   }
 
   ctx.debug('archive', { files: files.size, branch, headSha, ...skipped });
-  return { files, skipped, branch, headSha };
+  return { files, skipped, skippedPaths, branch, headSha };
 }
 
 /**

@@ -257,12 +257,25 @@ describe('CodebaseAdapter.codeImports', () => {
     const index = await adapter().codeImports(ctx());
     expect(index.edges.filter((e) => e.imported === 'apps/api/src/users.ts')).toHaveLength(206);
   });
+
+  it('lists every file at the head, the ones the archive skipped included (#236, phase 6)', async () => {
+    download.mockResolvedValue({
+      files: files(REPO),
+      skipped: { oversize: 1, binary: 1 },
+      skippedPaths: ['assets/logo.png', 'vendor/bundle.js'],
+      branch: 'main',
+      headSha: 'abc',
+    });
+    const index = await adapter().codeImports(ctx());
+    expect(index.files).toEqual([...Object.keys(REPO), 'assets/logo.png', 'vendor/bundle.js'].sort());
+  });
 });
 
 describe('CodeImportsService', () => {
   type Row = { connectorId: string; headSha: string | null; importerPath: string };
   function store() {
     let rows: Row[] = [];
+    let paths: Array<{ connectorId: string; path: string }> = [];
     const tx = {
       codeImport: {
         deleteMany: async ({ where }: { where: { connectorId: string } }) => {
@@ -272,9 +285,21 @@ describe('CodeImportsService', () => {
           rows.push(...data);
         },
       },
+      codeFile: {
+        deleteMany: async ({ where }: { where: { connectorId: string } }) => {
+          paths = paths.filter((r) => r.connectorId !== where.connectorId);
+        },
+        createMany: async ({ data }: { data: Array<{ connectorId: string; path: string }> }) => {
+          paths.push(...data);
+        },
+      },
     };
     const prisma = { $transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx) };
-    return { service: new CodeImportsService(prisma as never), rows: () => rows };
+    return {
+      service: new CodeImportsService(prisma as never),
+      rows: () => rows,
+      files: () => paths.map((p) => `${p.connectorId}:${p.path}`),
+    };
   }
   const edge = (importer: string) => ({ importer, imported: 'x.ts', names: [] });
 
@@ -284,5 +309,14 @@ describe('CodeImportsService', () => {
     await service.replace({ id: 'c1', workspaceId: 'w1' }, { headSha: 'a', edges: [edge('a.ts'), edge('b.ts')] });
     expect(await service.replace({ id: 'c1', workspaceId: 'w1' }, { headSha: 'b', edges: [edge('c.ts')] })).toBe(1);
     expect(rows().map((r) => `${r.connectorId}@${r.headSha}:${r.importerPath}`)).toEqual(['other@z:o.ts', 'c1@b:c.ts']);
+  });
+
+  it('replaces the file list with the index, and keeps it when an adapter lists none', async () => {
+    const { service, files } = store();
+    await service.replace({ id: 'c1', workspaceId: 'w1' }, { headSha: 'a', edges: [], files: ['a.ts', 'b.ts'] });
+    await service.replace({ id: 'c1', workspaceId: 'w1' }, { headSha: 'b', edges: [], files: ['b.ts'] });
+    expect(files()).toEqual(['c1:b.ts']);
+    await service.replace({ id: 'c1', workspaceId: 'w1' }, { headSha: 'c', edges: [] });
+    expect(files()).toEqual(['c1:b.ts']);
   });
 });

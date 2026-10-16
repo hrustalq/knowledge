@@ -38,11 +38,24 @@ export class CodeImportsService {
       importedPath: edge.imported,
       names: edge.names,
     }));
+    // An adapter that cannot list its files leaves the previous list alone
+    // rather than claiming every declared path vanished.
+    const files = index.files?.map((path) => ({
+      connectorId: connector.id,
+      workspaceId: connector.workspaceId,
+      headSha: index.headSha,
+      path,
+    }));
     await this.prisma.$transaction(
       async (tx) => {
         await tx.codeImport.deleteMany({ where: { connectorId: connector.id } });
         for (let i = 0; i < rows.length; i += INSERT_BATCH) {
           await tx.codeImport.createMany({ data: rows.slice(i, i + INSERT_BATCH) });
+        }
+        if (!files) return;
+        await tx.codeFile.deleteMany({ where: { connectorId: connector.id } });
+        for (let i = 0; i < files.length; i += INSERT_BATCH) {
+          await tx.codeFile.createMany({ data: files.slice(i, i + INSERT_BATCH), skipDuplicates: true });
         }
       },
       { timeout: REPLACE_TIMEOUT_MS },

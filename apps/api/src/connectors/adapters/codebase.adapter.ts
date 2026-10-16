@@ -23,8 +23,15 @@ import { wrapUntrusted } from '../../common/untrusted.js';
 import type { Env } from '../../config/env.js';
 import { t } from '../../i18n/t.js';
 import { codeToolDefinitions, SnapshotCodeTools, type CodeToolSnapshot } from '../code-research/code-tools.js';
-import { extractImports, extractSymbols, type CodeSymbol } from './code-symbols.js';
-import { edgeDigest, reachableFiles, resolveModuleEdges, type ModuleEdges } from './import-resolver.js';
+import { extractExportNames, extractImports, extractSymbols, type CodeSymbol, type ImportRef } from './code-symbols.js';
+import { collectImportEdges, SFC_FILE, sfcOutline } from './import-edges.js';
+import {
+  createFileResolver,
+  edgeDigest,
+  reachableFiles,
+  resolveModuleEdges,
+  type ModuleEdges,
+} from './import-resolver.js';
 import {
   OVERVIEW_KEY,
   buildRepoMap,
@@ -60,7 +67,7 @@ import {
   resolveHeadSha,
   type RepoTag,
 } from './repo-history.js';
-import { TreeSitterService } from './tree-sitter.service.js';
+import { TreeSitterService, type CodeLanguage } from './tree-sitter.service.js';
 import { readWikiSteering, wikiPathFilter, type WikiSteering } from './wiki-steering.js';
 import { architectureFlowchart, mermaidBlock, moduleClassDiagram, sequenceFromJson } from './wiki-diagrams.js';
 import {
@@ -71,6 +78,7 @@ import {
   type ExternalDocument,
   type ExternalGroupMember,
   type ExternalPrincipal,
+  type CodeImportIndex,
   type ExternalRef,
 } from './connector.types.js';
 import { githubRepoAcl, githubTeamMembers } from './github-acl.js';
@@ -144,6 +152,9 @@ interface ModuleAnalysis {
 const FLOW_DEPTH = 2;
 const MAX_FLOW_FILES = 12;
 
+/** One file's outline: `undefined` = not source, `null` = unparseable. */
+type FileOutline = { symbols: CodeSymbol[]; imports: ImportRef[]; exports: string[] } | null | undefined;
+
 /** Everything a run decides once, from the archive alone. */
 interface RepoPlan {
   archive: RepoArchive;
@@ -190,8 +201,11 @@ export class CodebaseAdapter implements ConnectorAdapter {
   private readonly tagCache = new WeakMap<object, Promise<{ tags: RepoTag[]; error: string | null }>>();
   /** Merged requests carrying a breaking label, per run: one search per label, shared by every release. */
   private readonly labelCache = new WeakMap<object, Promise<Map<number, string[]>>>();
-  /** File outlines per run, for the flows; a file shared by two flows is parsed once. */
-  private readonly outlines = new WeakMap<object, Map<string, Promise<{ symbols: CodeSymbol[]; imports: string[] } | null>>>();
+  /**
+   * File outlines per run: the module analyses, the flows and the code-usage
+   * index (#236) all read through here, so a file is parsed once per run.
+   */
+  private readonly outlines = new WeakMap<object, Map<string, Promise<FileOutline>>>();
 
   private readonly maxEffort: Env['WIKI_MAX_EFFORT'];
   private readonly maxDiagramNodes: number;
@@ -569,18 +583,14 @@ export class CodebaseAdapter implements ConnectorAdapter {
     }
     let pending = perRun.get(module.key);
     if (!pending) {
-      pending = this.analyse(ctx, module, plan.archive.files);
+      pending = this.analyse(ctx, plan, module);
       perRun.set(module.key, pending);
     }
     return pending;
   }
 
   /** Parse a module's files and collect what they declare. Never throws. */
-  private async analyse(
-    ctx: ConnectorContext,
-    module: RepoModule,
-    files: Map<string, Uint8Array>,
-  ): Promise<ModuleAnalysis> {
+  private async analyse(ctx: ConnectorContext, plan: RepoPlan, module: RepoModule): Promise<ModuleAnalysis> {
     const symbols: CodeSymbol[] = [];
     const external = new Set<string>();
     const imports = new Map<string, string[]>();
@@ -588,16 +598,17 @@ export class CodebaseAdapter implements ConnectorAdapter {
     let unreadable = 0;
 
     for (const path of module.files.slice(0, MAX_FILES_PER_UNIT)) {
-      const read = await this.readFile(path, files);
+      const read = await this.outline(ctx, plan, path);
       if (read === undefined) continue;
       if (!read) {
         unreadable += 1;
         continue;
       }
       parsed += 1;
-      imports.set(path, read.imports);
+      const specifiers = read.imports.map((i) => i.specifier);
+      imports.set(path, specifiers);
       for (const symbol of read.symbols) symbols.push(symbol);
-      for (const specifier of read.imports) {
+      for (const specifier of specifiers) {
         // Relative specifiers describe this module's own internals, which the
         // file list already shows. What a reader cannot see is what it rests on.
         if (!specifier.startsWith('.') && !specifier.startsWith('/')) external.add(specifier);
@@ -626,12 +637,8 @@ export class CodebaseAdapter implements ConnectorAdapter {
     return pending;
   }
 
-  /** One file's outline, parsed once per run however many flows reach it. */
-  private outline(
-    ctx: ConnectorContext,
-    plan: RepoPlan,
-    path: string,
-  ): Promise<{ symbols: CodeSymbol[]; imports: string[] } | null> {
+  /** One file's outline, parsed once per run however many readers reach it. */
+  private outline(ctx: ConnectorContext, plan: RepoPlan, path: string): Promise<FileOutline> {
     let perRun = this.outlines.get(ctx.config);
     if (!perRun) {
       perRun = new Map();
@@ -639,7 +646,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
     }
     let pending = perRun.get(path);
     if (!pending) {
-      pending = this.readFile(path, plan.archive.files).then((r) => r ?? null);
+      pending = this.readFile(path, plan.archive.files);
       perRun.set(path, pending);
     }
     return pending;
@@ -650,7 +657,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
     if (!plan.archive.files.has(entry)) return [];
     return reachableFiles(
       entry,
-      async (file) => (await this.outline(ctx, plan, file))?.imports ?? [],
+      async (file) => (await this.outline(ctx, plan, file))?.imports.map((i) => i.specifier) ?? [],
       plan.map,
       plan.archive.files,
       FLOW_DEPTH,
@@ -659,10 +666,7 @@ export class CodebaseAdapter implements ConnectorAdapter {
   }
 
   /** One file's symbols and imports; `undefined` = not source, `null` = unparseable. */
-  private async readFile(
-    path: string,
-    files: Map<string, Uint8Array>,
-  ): Promise<{ symbols: CodeSymbol[]; imports: string[] } | null | undefined> {
+  private async readFile(path: string, files: Map<string, Uint8Array>): Promise<FileOutline> {
     const language = this.treeSitter.languageForPath(path);
     const bytes = files.get(path);
     if (!language || !bytes) return undefined;
@@ -670,7 +674,31 @@ export class CodebaseAdapter implements ConnectorAdapter {
     return this.treeSitter.withTree(language, source, (tree) => ({
       symbols: extractSymbols(language, tree),
       imports: extractImports(language, tree),
+      exports: extractExportNames(language, tree),
     }));
+  }
+
+  // --- the code-usage index (#236) ---
+
+  /**
+   * Every importer → imported file pair at the head this run read, with the
+   * names each import takes.
+   *
+   * Every source file in the archive is read — not the `MAX_FILES_PER_UNIT`
+   * sample a module page parses, and not only the files of documented modules
+   * (`maxModules`, the wiki's include/exclude): a usage index that silently
+   * misses importers would answer "nothing uses this" wrongly. A file that
+   * does not parse contributes nothing; an import that resolves to no file in
+   * the repository (a package from npm, a path that does not exist) is dropped.
+   */
+  async codeImports(ctx: ConnectorContext): Promise<CodeImportIndex> {
+    const plan = await this.plan(ctx);
+    const { files, headSha, skippedPaths = [] } = plan.archive;
+    const { edges, barrels } = await collectImportEdges(files.keys(), createFileResolver(files), (path) =>
+      SFC_FILE.test(path) ? sfcOutline(this.treeSitter, files.get(path)) : this.outline(ctx, plan, path),
+    );
+    ctx.debug('code imports indexed', { files: files.size, edges: edges.length, barrels, headSha });
+    return { headSha, edges, files: [...files.keys(), ...skippedPaths].sort() };
   }
 
   // --- the deterministic page ---

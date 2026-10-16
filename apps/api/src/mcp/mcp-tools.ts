@@ -60,6 +60,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'knowledge_request_access',
   // Writes a proposed learning (#70); an admin approves it in the app.
   'knowledge_propose_agent_learning',
+  // Queues a model run that opens a merge request with a drafted component page (#236).
+  'knowledge_document_component',
 ]);
 
 /**

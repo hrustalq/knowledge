@@ -81,3 +81,72 @@ export function writeFrontmatter(raw: string, patch: Record<string, unknown>): s
   if (Object.keys(merged).length === 0) return body;
   return matter.stringify(body, merged);
 }
+
+/** A page's `component:` block (#236), as written — not yet resolved to a connector. */
+export interface ComponentFrontmatter {
+  /** `owner/repo` or a repository URL; null when the page names none. */
+  repository: string | null;
+  /** Repo-relative files, directories or globs, leading `./` and `/` removed. */
+  paths: string[];
+  symbols: string[];
+  /** `component.name`, when the block gives one. */
+  name: string | null;
+}
+
+/** One string or a list of them; anything else is nothing. */
+function stringList(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  return items.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter(Boolean);
+}
+
+/**
+ * The `component:` block, or null when the page has none.
+ *
+ * Lenient about shape, like the relation reader: a single `paths: x.ts` string
+ * is a list of one, and blank entries (a template placeholder left empty) are
+ * dropped. A block that keeps no path is still returned, with `paths` empty,
+ * so the page can say its declaration is unusable rather than look undeclared.
+ */
+export function readComponentFrontmatter(data: Record<string, unknown> | null | undefined): ComponentFrontmatter | null {
+  const entry = Object.entries(data ?? {}).find(([key]) => key.trim().toLowerCase() === 'component');
+  if (!entry || entry[1] === null || entry[1] === undefined) return null;
+  const block = typeof entry[1] === 'object' && !Array.isArray(entry[1]) ? (entry[1] as Record<string, unknown>) : {};
+  const repository = typeof block.repository === 'string' && block.repository.trim() ? block.repository.trim() : null;
+  const name = typeof block.name === 'string' && block.name.trim() ? block.name.trim() : null;
+  const paths = [...new Set(stringList(block.paths).map((p) => p.replace(/^(\.\/)+|^\/+/, '')).filter(Boolean))];
+  return { repository, paths, symbols: [...new Set(stringList(block.symbols))], name };
+}
+
+/**
+ * `data` with fixes applied to its `component.paths` (#236): each entry the
+ * change removed is dropped, each it moved is rewritten, and every other byte
+ * of the block is kept as written. Null when nothing would change — the block
+ * is gone, or someone already made the edit — or when no path would be left,
+ * which is not a fix but a component that no longer exists.
+ */
+export function withComponentPaths(
+  data: Record<string, unknown>,
+  fixes: ReadonlyArray<{ from: string; to: string | null }>,
+): Record<string, unknown> | null {
+  const entry = Object.entries(data).find(([key]) => key.trim().toLowerCase() === 'component');
+  if (!entry || !entry[1] || typeof entry[1] !== 'object' || Array.isArray(entry[1])) return null;
+  const [key, value] = entry;
+  const block = value as Record<string, unknown>;
+  const byFrom = new Map(fixes.map((f) => [f.from, f.to]));
+  const written = Array.isArray(block.paths) ? block.paths : block.paths === undefined ? [] : [block.paths];
+
+  let changed = false;
+  const paths: unknown[] = [];
+  for (const raw of written) {
+    const normalized = typeof raw === 'string' ? raw.trim().replace(/^(\.\/)+|^\/+/, '') : null;
+    if (normalized === null || !byFrom.has(normalized)) {
+      paths.push(raw);
+      continue;
+    }
+    changed = true;
+    const to = byFrom.get(normalized);
+    if (to && !paths.includes(to)) paths.push(to);
+  }
+  if (!changed || !paths.some((p) => typeof p === 'string' && p.trim())) return null;
+  return { ...data, [key]: { ...block, paths } };
+}

@@ -61,6 +61,19 @@ function aclClause(acl: DocumentAclFilter): { sql: string; params: { aclDocs: st
   };
 }
 
+/** A code edge's provenance: the usage files, cut at a whole path. */
+function usageSnippet(usages: readonly string[], max = 1000): string {
+  const shown: string[] = [];
+  let used = 0;
+  for (const path of usages) {
+    if (shown.length > 0 && used + path.length + 2 > max) break;
+    shown.push(path);
+    used += path.length + 2;
+  }
+  const rest = usages.length - shown.length;
+  return rest > 0 ? `${shown.join(', ')} and ${rest} more` : shown.join(', ');
+}
+
 /** Fact classes whose edges belong to one revision and so follow its liveness. */
 const REVISION_SCOPED_EXTRACTORS = ['frontmatter', 'inferred'] as const;
 
@@ -80,8 +93,8 @@ export { RELATION_EDGE_TYPES };
 export interface FactInput {
   type: string;
   target: { key: string; type: string; name: string };
-  /** plan.md §5 fact classes: explicit / frontmatter (deterministic) / inferred (LLM) / curated. */
-  extractor: 'explicit' | 'frontmatter' | 'inferred' | 'curated';
+  /** plan.md §5 fact classes: explicit / frontmatter (deterministic) / inferred (LLM) / curated, plus code (#236). */
+  extractor: 'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code';
   confidence: number;
   /** Inferred facts carry their source span (plan.md §5). */
   sourceChunkId?: string;
@@ -449,6 +462,56 @@ export class GraphService {
           /* edge type may hold no rows yet */
         });
     }
+  }
+
+  /**
+   * Replace every `code` edge in the workspace (#236): a page documenting a
+   * file that imports a declared component `DEPENDS_ON` that component. The
+   * edges are derived from the connectors' import indexes, so they are
+   * document-level (no revision, always live) and owned by nothing but this
+   * method — rebuilt whole after each pull, never edited.
+   *
+   * Workspace-wide rather than per connector: a usage page and the component
+   * it depends on may sit behind different connectors' declarations, and a
+   * whole rebuild is a few hundred edges. Two pulls finishing together can
+   * leave a duplicate until the next one; nothing reads a code edge's count.
+   *
+   * `snippet` carries the provenance: the usage files the edge stands for.
+   */
+  async replaceCodeFacts(input: {
+    workspaceId: string;
+    edges: Array<{ documentId: string; title: string; componentKey: string; componentName: string; usages: string[] }>;
+  }): Promise<number> {
+    const { workspaceId } = input;
+    // Folded before the DELETE for the reason `canonicalFacts` gives — though
+    // this DELETE is by extractor, the keys written must be the canonical ones.
+    const facts = await this.canonicalFacts(
+      workspaceId,
+      input.edges.map((e) => ({
+        type: 'DEPENDS_ON',
+        // The page's own spelling, or this rebuild would relabel the vertex the
+        // component page's DESCRIBES edge named.
+        target: { key: normalizeEntityKey(e.componentKey), type: 'component', name: e.componentName },
+        extractor: 'code' as const,
+        confidence: 1,
+        snippet: usageSnippet(e.usages),
+      })),
+    );
+    await this.arcade
+      .command('sql', `DELETE FROM DEPENDS_ON WHERE workspaceId = :workspaceId AND extractor = 'code'`, { workspaceId })
+      .catch(() => {
+        /* the edge type may hold no rows yet */
+      });
+    const titled = new Set<string>();
+    for (const [i, fact] of facts.entries()) {
+      const { documentId, title } = input.edges[i];
+      if (!titled.has(documentId)) {
+        await this.upsertDocumentVertex(workspaceId, documentId, title);
+        titled.add(documentId);
+      }
+      await this.createRelationEdge(workspaceId, documentId, null, fact);
+    }
+    return facts.length;
   }
 
   /** Explicit relations from the REST payload; re-posting the same relation replaces it. */

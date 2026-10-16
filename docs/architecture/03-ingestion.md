@@ -166,7 +166,16 @@ declares.
 Provenance is stamped by the caller rather than the parser — the processor maps
 `{ ...f, extractor: 'frontmatter', confidence: 1 }` — so `relations.ts` stays a
 pure function of the frontmatter. The `extractor` union across the whole system
-is `'explicit' | 'frontmatter' | 'inferred' | 'curated'`.
+is `'explicit' | 'frontmatter' | 'inferred' | 'curated' | 'code'`.
+
+The fifth class is not read from a page. A `component:` block
+([feature 51](../features/51-component-pages.md)) is recorded by the processor
+into `component_declarations` (`ComponentsService.record`), and the `code` edges
+are derived from it and the connector's import index by
+`ComponentsService.rebuild`, which runs after every codebase pull and after a
+declaration changes. The same rebuild stores each declaration's
+`missing_paths` against the head's `code_files`. A frontmatter relation cannot
+claim the `code` extractor.
 
 Reindexing replaces only that revision's frontmatter edges:
 `GraphService.replaceRevisionFrontmatterFacts` loops the edge-type allowlist
@@ -283,6 +292,8 @@ rows with ids of their own.
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ingestion_jobs`     | The outbox. Created in the finalize transaction; its `id` is the BullMQ `jobId`. `payload.reason = 'dependent-reindex'` marks a cascade job so it never cascades. |
 | `document_revisions` | `embedding_model` holds the four-segment signature stamped at index time; `indexed_at` is set in the same transaction that completes the job.                     |
+| `code_imports`, `code_files` | A codebase connector's head: importer → imported file with the names taken, and every file. Replaced whole per pull, in one transaction (feature 51).        |
+| `component_declarations` | One row per page with a `component:` block: resolved connector, paths, symbols, warning, `missing_paths`. Written by ingestion, re-resolved per pull.       |
 
 Chunks, vectors and relation edges live in ArcadeDB, reached only through
 `GraphService` — see [04](04-search-graph.md).

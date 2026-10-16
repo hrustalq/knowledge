@@ -59,6 +59,7 @@ interface HealthSqlRow {
   archived_at: Date | null;
   body_chars: number | null;
   child_count: number;
+  missing_paths: string[];
   status: SourceVerificationState;
 }
 
@@ -240,6 +241,9 @@ export class KnowledgeHealthService {
              d.verification_flag, d.verification_note, d.last_activity_at, d.archived_at,
              rev.body_chars,
              (SELECT count(*)::int FROM documents c WHERE c.parent_id = d.id AND ${listedSql('c')} AND ${visibilitySql(access, 'c')}) AS child_count,
+             -- Only a declaration that still resolves: a connector deleted
+             -- since the last pull leaves a stale list behind its null id.
+             COALESCE(cd.missing_paths, '{}') AS missing_paths,
              CASE
                WHEN d.verification_flag = 'outdated' THEN 'outdated'
                WHEN EXISTS (
@@ -255,6 +259,7 @@ export class KnowledgeHealthService {
         FROM documents d
         LEFT JOIN document_branches b ON b.document_id = d.id AND b.name = d.default_branch
         LEFT JOIN document_revisions rev ON rev.id = b.head_revision_id
+        LEFT JOIN component_declarations cd ON cd.document_id = d.id AND cd.connector_id IS NOT NULL
        WHERE d.workspace_id = ${access.workspaceId}::uuid ${project} ${owner} ${q}
          -- Pages the caller may not open are not on the dashboard (#76), nor a
          -- page that is still only a merge request (#73).
@@ -281,6 +286,7 @@ export class KnowledgeHealthService {
       childCount: r.child_count,
       verificationFlag: (r.verification_flag as VerificationFlag | null) ?? null,
       verificationNote: r.verification_note,
+      missingPaths: r.missing_paths,
     };
   }
 }
@@ -314,6 +320,8 @@ export function healthFilterSql(
       return Prisma.sql`${live} AND ${inactive}`;
     case 'stale':
       return Prisma.sql`${live} AND (r.status IN ('expired', 'outdated') OR ${inactive})`;
+    case 'missing-paths':
+      return Prisma.sql`${live} AND cardinality(r.missing_paths) > 0`;
     case 'expired':
     case 'edited':
     case 'outdated':

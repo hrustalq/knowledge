@@ -122,7 +122,7 @@ export function renderSkill(input: SkillInput): string {
 
 Decisions, proposals, runbooks and incident reviews have a house shape. ${toolRef('knowledge_list_templates')} lists them
 (\`builtin:adr\`, \`builtin:rfc\`, \`builtin:runbook\`, \`builtin:postmortem\`, \`builtin:api-spec\`, \`builtin:use-case\`,
-\`builtin:entity\`, plus the workspace's own); ${toolRef('knowledge_get_template')} shows a template's sections and the
+\`builtin:entity\`, \`builtin:component\`, plus the workspace's own); ${toolRef('knowledge_get_template')} shows a template's sections and the
 placeholders it expects. Pass \`templateRef\` and \`values\` to ${toolRef('knowledge_create_document')}: without \`content\`
 the server fills the skeleton in, with \`content\` (the skeleton, written out) yours is published and the template is
 recorded as the page's origin. Either way the template's tags and relations link the page into the graph.
@@ -266,6 +266,15 @@ are stale or waiting in a merge request. Read those pages before describing how 
 from the code, not remembered.${
     tools.some((tool) => tool.name === 'knowledge_regenerate_wiki')
       ? ` After a change lands, ${toolRef('knowledge_regenerate_wiki')} re-derives what moved.`
+      : ''
+  }
+
+Before editing a file, ${toolRef('knowledge_code_usages')} with its \`path\` lists the files that import it and the pages
+documenting each of them, plus the component pages declaring it. Those are the callers and the docs your change reaches.
+A component page declares its code in a \`component:\` frontmatter block (\`paths\`, optional \`symbols\`), and
+\`knowledge_impact_analysis("component:<name>")\` walks the same usages through the graph.${
+    tools.some((tool) => tool.name === 'knowledge_document_component')
+      ? ` When code you touched has no page, ${toolRef('knowledge_document_component')} drafts one from the files and opens it as a merge request.`
       : ''
   }
 

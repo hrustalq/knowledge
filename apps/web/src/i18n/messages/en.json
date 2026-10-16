@@ -1445,7 +1445,8 @@
         "explicit": "From the page text",
         "frontmatter": "From frontmatter",
         "inferred": "Inferred relation",
-        "curated": "Curated relation"
+        "curated": "Curated relation",
+        "code": "Derived from code"
       }
     },
     "saveToKb": {
@@ -1582,7 +1583,8 @@
     "connected": "{n} connected | {n} connected",
     "workflows": "no workflows | {n} workflow | {n} workflows",
     "tools": "no tools | {n} tool | {n} tools",
-    "openIssues": "{n} open report | {n} open reports"
+    "openIssues": "{n} open report | {n} open reports",
+    "usages": "{n} usage site | {n} usage sites"
   },
   "chat": {
     "needsAgentMode": "This needs Agent mode",
@@ -2091,7 +2093,8 @@
       "suggest": "Suggest",
       "glossary": "Glossary",
       "public_ask": "Site Ask",
-      "chat-capture": "Saved from chat"
+      "chat-capture": "Saved from chat",
+      "component-draft": "Component draft"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -2500,7 +2503,8 @@
     "people": "People",
     "pages": "Pages",
     "glossary": "Glossary",
-    "site": "Site"
+    "site": "Site",
+    "usedBy": "Used by"
   },
   "knowledgeIssue": {
     "report": "Report a problem",
@@ -3832,6 +3836,7 @@
       "requested": "Requested",
       "flagged": "Reported",
       "inactive": "Inactive",
+      "missing-paths": "Missing code",
       "archived": "Archived"
     },
     "presetHint": {
@@ -3845,6 +3850,7 @@
       "requested": "Somebody asked for a check",
       "flagged": "A reader or an agent reported a problem",
       "inactive": "No edit, comment or check for the inactivity window",
+      "missing-paths": "A component page declares a path no file matches at the indexed head",
       "archived": "Put away; hidden from lists, search and the assistant"
     },
     "search": "Search by title…",
@@ -3870,6 +3876,7 @@
     "previewRoot": "Top level",
     "openPage": "Open page",
     "emptyChip": "Empty",
+    "missingPathsChip": "{n} missing path | {n} missing paths",
     "emptyHint": "The body is under the workspace's empty-page threshold",
     "children": "{n} page under it | {n} pages under it",
     "verifiedBy": "{who}, {when}",
@@ -4647,6 +4654,37 @@
         "title": "Nothing failed",
         "hint": "A capture that could not be proposed after three attempts shows up here with its error."
       }
+    }
+  },
+  "component": {
+    "notice": {
+      "title": "This page declares a component, but no usages are tracked.",
+      "no-connector": "The workspace has no codebase connector. Connect the repository to track where this code is used.",
+      "ambiguous-repository": "Several code connectors could hold it. Set component.repository to owner/repo to pick one.",
+      "unknown-repository": "No code connector reads “{repository}”. Check component.repository against the connector’s repository.",
+      "missingTitle": "Some declared code is gone.",
+      "missing": "No file at the indexed head matches {paths}. Fix component.paths, or the page documents code that no longer exists.",
+      "no-paths": "component.paths names no file. List the files or directories this page documents."
+    },
+    "usedBy": {
+      "none": "Nothing imports this code at the indexed head.",
+      "notIndexed": "The connector has not indexed its repository yet. Usages appear after its next pull.",
+      "unresolved": "No usages: the declaration matches no code connector.",
+      "undocumented": "No page documents this file",
+      "hiddenPages": "{n} page you cannot open | {n} pages you cannot open",
+      "sideEffect": "side-effect import",
+      "everything": "everything (namespace import)",
+      "alsoDeclaredBy": "Also declared by",
+      "unresolvedShort": "not tracked"
+    },
+    "draft": {
+      "action": "Document",
+      "hint": "Draft a component page for this file from its code. It opens as a merge request for review; nothing is published until it merges.",
+      "drafting": "Drafting a page from the code…",
+      "opening": "Opening the merge request…",
+      "review": "Review the drafted page",
+      "failed": "The draft failed.",
+      "notOpened": "The page was drafted but could not be opened as a merge request. It is on the archaeologist's run."
     }
   }
 }

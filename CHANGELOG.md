@@ -13,6 +13,112 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.25.0] — 2026-10-16
+
+### Added
+
+- Every pull of a codebase connector now records which files import which,
+  and which names they take, for the commit it read. It covers relative
+  imports, `tsconfig` path aliases (`@/…`), workspace packages
+  (`@knowledge/contracts/core`), `.vue` / `.svelte` script blocks, lazy
+  `import()`s, and imports that reach a file through a barrel `index.ts`.
+  Python resolves relative imports only; other languages resolve none yet.
+  Nothing reads the index yet. It is the base for component pages and
+  "Used by" in the next phases. (#236)
+- A page can declare the code it documents with a `component:` frontmatter
+  block (`repository`, `paths`, `symbols`), and a new built-in **Component**
+  template writes one. After each codebase pull, a page documenting a file
+  that imports a declared component gains a `DEPENDS_ON component:<name>`
+  edge, derived from code and never editable. So `knowledge_impact_analysis`
+  on the component lists the pages documenting its users. A page "documents"
+  a file when its own `component.paths` cover it, or else the wiki module
+  page for the file's directory does. When a declaration matches no
+  connector (none in the workspace, an unknown or ambiguous `repository`, or
+  no paths), the page shows a warning and gets no edges. (#236)
+- A component page has a **Used by** panel in its right rail. It lists every
+  file that imports the declared code at the connector's indexed head, what
+  each one imports, and the pages documenting each file. With `symbols`
+  declared, a file that imports the module but none of those names is left
+  out. Every path is shown. A documenting page the reader cannot open shows
+  as a count, never a title. The same answer is available by page or by path
+  through `GET /v1/documents/:id/component/usages`, `GET /v1/code-usages`
+  and the new read-only MCP tool `knowledge_code_usages`, so an agent can ask
+  "what uses this file, and which docs move?" before editing it. (#236)
+- The pull request drift check now follows component declarations. A page
+  whose `component.paths` cover a changed file is checked first. Next come
+  the pages documenting the files that use the changed component, under the
+  same per-check page limit. Importers the pull request itself adds or
+  removes are counted, because the changed files are read again at the
+  head of the pull request. The check's comment gains an **Affected usages**
+  section: the usage files grouped by the page that documents them, with
+  pages past the limit marked "not checked", restricted pages counted and
+  undocumented usage files listed. A pull request that touches a component
+  now gets this comment even when no page drifted. (#236)
+- When a pull request removes or moves a file a component page declares,
+  the check reports it without a model. In `propose` mode it opens a merge
+  request that rewrites the page's `component.paths`, together with the
+  corrected text when the page also drifted. Propose on that finding in the
+  runs panel does the same, and it never calls the drafter. If nothing in
+  the declaration would be left, the finding says the component is gone and
+  proposes nothing. (#236)
+- **Document this component**: in a component page's Used by panel, an
+  editor can press **Document** on a usage file that no page documents.
+  The archaeologist reads the file from the codebase connector, fills the
+  Component template's sections from the code, and the page opens as a
+  merge request by the person who pressed it. The page stays hidden from
+  lists and search until the merge request merges. Its `component:` block
+  names exactly the files that were read. The panel shows the draft's
+  progress and then links to the merge request. The same action is
+  available as `POST /v1/components/drafts` (one to ten files, an optional
+  name, symbols and placement) and as the MCP write tool
+  `knowledge_document_component`, which read-only keys are not offered.
+  A request is refused when a page you can open already declares one of
+  the files, or when a draft of the same files is still running or
+  waiting in an open merge request. It is also refused when the
+  archaeologist has no model. Model spend shows as **Component draft** on
+  the usage page. (#236)
+- The knowledge-health dashboard has a **Missing code** filter: component
+  pages that declare a path no file matches at the connector's indexed
+  head, such as a file that was deleted or moved, a directory that was
+  emptied, or a glob that matches nothing. Each row shows how many paths
+  are missing and names them on hover, and the page itself says which
+  declared paths are gone. Fixing `component.paths` clears the page right
+  away. A file the index skips for size or for being binary still counts
+  as present. The feature is documented in
+  [docs/features/51](docs/features/51-component-pages.md). (#236)
+
+### Changed
+
+- The repo wiki's Architecture page now counts `export … from` re-exports as
+  dependencies between modules. If that adds an arrow, the page is
+  regenerated once on the next pull. (#236)
+
+### Operations
+
+- Migration `20261030100000_code_imports` adds the `code_imports` table. The
+  change is additive, so rolling back to the previous image is safe. The
+  table starts empty and fills on each codebase connector's next pull. A
+  failure to write it shows as a run warning and never fails the pull.
+  (#236)
+- Migration `20261031100000_component_declarations` adds the
+  `component_declarations` table. It is additive, so rolling back is safe.
+  It fills as pages with a `component:` block are next indexed. Existing
+  pages need an edit or a reindex to be picked up. (#236)
+- Migration `20261101100000_agent_run_details` adds the nullable
+  `agent_runs.details` column, where a drift check keeps its affected
+  usages for the comment. It is additive, so rolling back is safe; the
+  previous image ignores the column. Each component-touching check now
+  downloads the connector's repository snapshot (once per process per
+  `CODE_SNAPSHOT_TTL_MS`, the cache the code tools already use) and makes
+  one host request per changed source file, at most 60 per check. A check
+  that touches no component page does neither. (#236)
+- Migration `20261102100000_component_missing_paths` adds the `code_files`
+  table (every file at a codebase connector's indexed head) and the
+  `component_declarations.missing_paths` column, which defaults to empty.
+  It is additive, so rolling back is safe. Both fill on each codebase
+  connector's next pull; until then the Missing code filter is empty.
+  (#236)
+
 ## [0.24.0] — 2026-10-16
 
 ### Added
@@ -2449,7 +2555,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.24.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/hrustalq/knowledge/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/hrustalq/knowledge/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/hrustalq/knowledge/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/hrustalq/knowledge/compare/v0.21.1...v0.22.0

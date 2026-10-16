@@ -34,6 +34,7 @@ export const BUILT_IN_TEMPLATE_KEYS = [
   'api-spec',
   'use-case',
   'entity',
+  'component',
 ] as const;
 export type BuiltInTemplateKey = (typeof BUILT_IN_TEMPLATE_KEYS)[number];
 

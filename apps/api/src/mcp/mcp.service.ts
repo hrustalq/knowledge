@@ -66,12 +66,16 @@ import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderSkill, type McpWhoami } from './skill.js';
 import { registerCaptureTools } from './capture-tools.js';
 import { CaptureService } from '../captures/capture.service.js';
+import { MAX_USAGE_LIMIT } from '../components/component-match.js';
+import { COMPONENT_DRAFT_MAX_PATHS } from '@knowledge/contracts';
+import { ComponentUsagesService } from '../components/component-usages.service.js';
+import { ComponentDraftsService } from '../components/component-drafts.service.js';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.24.0';
+export const MCP_SERVER_VERSION = '0.25.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -86,6 +90,8 @@ export const MCP_SERVER_VERSION = '0.24.0';
  *   knowledge_find_relations    → knowledge.find_relations    (Phase 4)
  *   knowledge_impact_analysis   → knowledge.impact_analysis   (Phase 4)
  *   knowledge_trace_relation    → knowledge.trace_relation    (Phase 4)
+ *   knowledge_code_usages       → where code is used, and the pages documenting it (#236)
+ *   knowledge_document_component → draft a component page from code → merge request (#236)
  *   knowledge_create_relation   → knowledge.create_relation   (Phase 4, curated)
  *   knowledge_query_graph       → knowledge.query_graph       (Phase 5, audited)
  *   knowledge_get_historical_context → knowledge.get_historical_context (Phase 5)
@@ -163,6 +169,8 @@ export class McpService {
     private readonly accessRequests: AccessRequestsService,
     private readonly learnings: AgentLearningsService,
     private readonly captures: CaptureService,
+    private readonly componentUsages: ComponentUsagesService,
+    private readonly componentDrafts: ComponentDraftsService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -787,6 +795,83 @@ export class McpService {
       async ({ workspaceId, entityId, direction, maxDepth }) => {
         await guard.ws(workspaceId, 'viewer');
         return this.json(await this.entities.impactAnalysis(await guard.scope(workspaceId), entityId, direction ?? 'dependents', maxDepth ?? 3));
+      },
+    );
+
+    // Read-only (#236, phase 3), the twin of GET /v1/documents/:id/component/usages
+    // and GET /v1/code-usages: both viewer. Pages are resolved under the
+    // caller's scope, so a page they cannot open is a count, never a title.
+    server.registerTool(
+      'knowledge_code_usages',
+      {
+        description:
+          'Where code is used, from a codebase connector\'s import index at its indexed head: every file importing ' +
+          'the given path (a file, directory or glob) or the code a component page declares, what each imports, and ' +
+          'the pages documenting each usage site — component pages covering it first, else its repo wiki module ' +
+          'page. Also lists the component pages covering the path. Give documentId, or workspaceId + path. Use it ' +
+          'before editing a file, to find which callers and which docs a change reaches. TS/JS resolves relative ' +
+          'imports, tsconfig path aliases and workspace packages; other languages relative imports only.',
+        inputSchema: {
+          documentId: z.string().uuid().optional().describe('A component page: its declared paths and symbols'),
+          workspaceId: z.string().uuid().optional().describe('With path'),
+          path: z.string().min(1).max(1000).optional().describe('A file, directory or glob, relative to the repository root'),
+          repository: z
+            .string()
+            .max(500)
+            .optional()
+            .describe('With path: owner/repo; optional when the workspace has exactly one code connector'),
+          symbols: z
+            .array(z.string().min(1))
+            .max(50)
+            .optional()
+            .describe('Only uses importing one of these names; with documentId, replaces the declared symbols'),
+          limit: z.number().int().min(1).max(MAX_USAGE_LIMIT).optional(),
+        },
+      },
+      async ({ documentId, workspaceId, path, repository, symbols, limit }) => {
+        if (!documentId === !path) throw new Error('Give exactly one of documentId or path');
+        if (documentId) {
+          await guard.doc(documentId, 'viewer');
+          const scope = await guard.scope(await this.access.workspaceOfDocument(documentId));
+          return this.json(await this.componentUsages.forDocument(scope, documentId, { symbols, limit }));
+        }
+        if (!workspaceId) throw new Error('path needs a workspaceId');
+        await guard.ws(workspaceId, 'viewer');
+        return this.json(
+          await this.componentUsages.forPath(await guard.scope(workspaceId), { path: path!, repository, symbols, limit }),
+        );
+      },
+    );
+
+    // A write (#236, phase 5), the twin of POST /v1/components/drafts: editor.
+    // It never publishes — the draft opens as a merge request by the caller.
+    server.registerTool(
+      'knowledge_document_component',
+      {
+        description:
+          'Draft a component page from code. The archaeologist reads the given files of a codebase connector and ' +
+          'fills the Component template (purpose, public surface, behaviour & invariants, usage notes); the page then ' +
+          'opens as a merge request by you, hidden until a person merges it — nothing is published directly. Returns ' +
+          'the run and the title; the merge request appears under knowledge_list_merge_requests with that title once ' +
+          'the run finishes, usually within a few minutes. Refused when a page already declares one of the files. ' +
+          'Use knowledge_code_usages first to see whether the code is documented.',
+        inputSchema: {
+          workspaceId: z.string().uuid(),
+          paths: z
+            .array(z.string().min(1).max(1000))
+            .min(1)
+            .max(COMPONENT_DRAFT_MAX_PATHS)
+            .describe('Repo-relative files the component is made of — not globs or directories'),
+          connectorId: z.string().uuid().optional().describe('The codebase connector; optional when the workspace has one'),
+          symbols: z.array(z.string().min(1).max(200)).max(50).optional().describe('Only these exports are documented'),
+          name: z.string().min(1).max(200).optional().describe('Component name and page title; the first file\'s name when absent'),
+          projectId: z.string().uuid().optional().describe('Where the page goes; the connector\'s destination when absent'),
+          parentId: z.string().uuid().optional().describe('A page to nest it under'),
+        },
+      },
+      async (input) => {
+        await guard.ws(input.workspaceId, 'editor');
+        return this.json(await this.componentDrafts.start(principal, input));
       },
     );
 

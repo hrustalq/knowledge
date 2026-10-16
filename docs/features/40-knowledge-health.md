@@ -30,8 +30,13 @@ count, and the declared flag with its note.
 ### Filters
 
 `HEALTH_FILTERS` in `@knowledge/contracts`: `stale`, `unowned`, `empty`,
-`expired`, `edited`, `outdated`, `requested`, `flagged`, `inactive`, `archived`.
-`stale` is the "needs attention" union — expired ∪ outdated ∪ inactive. Every
+`expired`, `edited`, `outdated`, `requested`, `flagged`, `inactive`,
+`missing-paths`, `archived`.
+`stale` is the "needs attention" union — expired ∪ outdated ∪ inactive.
+`missing-paths` is a component page ([51](51-component-pages.md)) declaring a
+path no file matches at its connector's indexed head; the CTE joins
+`component_declarations.missing_paths`, which each codebase pull computes, and
+the row carries the paths (`missingPaths`). Every
 filter but `archived` is implicitly "and not archived": an archived page is
 neither stale nor unowned, it is put away. No filter lists every live page.
 

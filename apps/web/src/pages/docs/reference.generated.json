@@ -1452,6 +1452,26 @@
     },
     {
       "method": "GET",
+      "path": "/v1/code-usages",
+      "tag": "connectors",
+      "summary": "Where a file, directory or glob is used in one of the workspace's code connectors, the pages documenting each usage site, and the component pages covering the path. Pages the caller may not open are counted, never titled",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/components/drafts",
+      "tag": "connectors",
+      "summary": "Draft a component page from code: the archaeologist reads the files and fills the Component template, and the page opens as a merge request by the caller, hidden until it merges. Returns the run; its finding carries `mergeRequestId` once the merge request is open. 409 when a page already declares one of the files, or a draft of them is running or waiting for review",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
       "path": "/v1/connectors",
       "tag": "connectors",
       "summary": "List the connectors configured in a workspace",
@@ -1875,6 +1895,26 @@
       "path": "/v1/documents/{id}/compare",
       "tag": "documents",
       "summary": "Compare two revisions (direct or merge-base mode, plan.md §8)",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/component",
+      "tag": "documents",
+      "summary": "The code the page declares it documents (its `component:` frontmatter), as resolved to a codebase connector at its default-branch head; null when it declares none. `warning` says why a declaration resolved to no connector",
+      "role": "viewer",
+      "source": "document",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/documents/{id}/component/usages",
+      "tag": "documents",
+      "summary": "Where the code this page declares is used, at the connector's indexed head: each importing file, what it imports, and the pages documenting it. Pages the caller may not open are counted, never titled. 404 when the page declares no component",
       "role": "viewer",
       "source": "document",
       "public": false,
@@ -3903,6 +3943,36 @@
       ]
     },
     {
+      "name": "knowledge_code_usages",
+      "description": "Where code is used, from a codebase connector's import index at its indexed head: every file importing the given path (a file, directory or glob) or the code a component page declares, what each imports, and the pages documenting each usage site — component pages covering it first, else its repo wiki module page. Also lists the component pages covering the path. Give documentId, or workspaceId + path. Use it before editing a file, to find which callers and which docs a change reaches. TS/JS resolves relative imports, tsconfig path aliases and workspace packages; other languages relative imports only.",
+      "inputs": [
+        {
+          "name": "documentId",
+          "optional": true
+        },
+        {
+          "name": "workspaceId",
+          "optional": true
+        },
+        {
+          "name": "path",
+          "optional": true
+        },
+        {
+          "name": "repository",
+          "optional": true
+        },
+        {
+          "name": "symbols",
+          "optional": true
+        },
+        {
+          "name": "limit",
+          "optional": true
+        }
+      ]
+    },
+    {
       "name": "knowledge_comment_merge_request",
       "description": "Comment on an open merge request: replies into the given thread, or starts a new (unanchored) discussion thread when threadId is omitted.",
       "inputs": [
@@ -4054,6 +4124,40 @@
         },
         {
           "name": "message",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_document_component",
+      "description": "Draft a component page from code. The archaeologist reads the given files of a codebase connector and fills the Component template (purpose, public surface, behaviour & invariants, usage notes); the page then opens as a merge request by you, hidden until a person merges it — nothing is published directly. Returns the run and the title; the merge request appears under knowledge_list_merge_requests with that title once the run finishes, usually within a few minutes. Refused when a page already declares one of the files. Use knowledge_code_usages first to see whether the code is documented.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "paths",
+          "optional": false
+        },
+        {
+          "name": "connectorId",
+          "optional": true
+        },
+        {
+          "name": "symbols",
+          "optional": true
+        },
+        {
+          "name": "name",
+          "optional": true
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        },
+        {
+          "name": "parentId",
           "optional": true
         }
       ]

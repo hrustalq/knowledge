@@ -131,6 +131,7 @@ export class AgentProcessor extends WorkerHost {
             status: 'succeeded',
             summary: result.summary,
             findings: result.findings as unknown as object,
+            ...(result.details ? { details: result.details as unknown as object } : {}),
             warnings,
             stage: null,
             progress: 1,

@@ -430,6 +430,84 @@ describe('page permissions (e2e, #76)', () => {
     });
   });
 
+  // #236, phase 3: a usage site's path is code and always listed; a page
+  // documenting it is titled only for someone who may open it.
+  describe('component usages', () => {
+    let code: Connector;
+
+    beforeAll(async () => {
+      code = await prisma.connector.create({
+        data: {
+          workspaceId: WORKSPACE,
+          projectId,
+          kind: 'codebase',
+          name: `Code ${nonce}`,
+          config: { repoUrl: `https://github.com/acl-e2e/repo-${nonce}` },
+        },
+      });
+      // O documents lib/money.ts; P (restricted to the group) documents its only importer.
+      await prisma.codeImport.create({
+        data: {
+          connectorId: code.id,
+          workspaceId: WORKSPACE,
+          headSha: 'e2e',
+          importerPath: 'app/payroll.ts',
+          importedPath: 'lib/money.ts',
+          names: ['Money'],
+        },
+      });
+      const declare = (documentId: string, path: string) =>
+        prisma.componentDeclaration.create({
+          data: {
+            documentId,
+            workspaceId: WORKSPACE,
+            revisionId: randomUUID(),
+            componentKey: `component:${path}`,
+            componentName: path,
+            connectorId: code.id,
+            paths: [path],
+            symbols: [],
+          },
+        });
+      await declare(ids.O, 'lib/money.ts');
+      await declare(ids.P, 'app/payroll.ts');
+    });
+
+    afterAll(async () => {
+      await prisma.componentDeclaration.deleteMany({ where: { documentId: { in: [ids.O, ids.P] } } });
+      if (code) await prisma.connector.delete({ where: { id: code.id } });
+    });
+
+    const usagesAs = async (p: Person) =>
+      (await http().get(`/v1/documents/${ids.O}/component/usages`).set(as(p)).expect(ok(200))).body;
+
+    it('shows a non-admin outside the group the path and a count, never the title', async () => {
+      const body = await usagesAs(people.bob);
+      expect(body.usages).toEqual([
+        { path: 'app/payroll.ts', imports: [{ path: 'lib/money.ts', names: ['Money'] }], pages: [], hiddenPages: 1 },
+      ]);
+      expect(JSON.stringify(body)).not.toContain(titles.P);
+    });
+
+    it('titles the page for a group member', async () => {
+      const body = await usagesAs(people.alice);
+      expect(body.usages[0]).toMatchObject({ pages: [{ id: ids.P, title: titles.P }], hiddenPages: 0 });
+    });
+
+    it('answers the same over MCP, by page and by path', async () => {
+      const rest = await usagesAs(people.bob);
+      const byPage = await mcp(people.bob, 'knowledge_code_usages', { documentId: ids.O });
+      const byPath = await mcp(people.bob, 'knowledge_code_usages', { workspaceId: WORKSPACE, path: 'lib/money.ts' });
+      expect(JSON.parse(byPage.content[0].text).usages).toEqual(rest.usages);
+      expect(JSON.parse(byPath.content[0].text).usages).toEqual(rest.usages);
+      expect(byPath.content[0].text).not.toContain(titles.P);
+    });
+
+    it('is a 404 for a guest, like the page itself', async () => {
+      expect(await status(people.gus, `/v1/documents/${ids.O}/component/usages`)).toBe(404);
+    });
+  });
+
   describe('access requests', () => {
     it('request → duplicate 409 → approve opens the subtree to the requester', async () => {
       const body = { workspaceId: WORKSPACE, resourceType: 'document', resourceId: ids.C, level: 'view' };

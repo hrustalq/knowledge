@@ -105,6 +105,14 @@ export type I18nTranslations = {
             "budgetSpent": string;
             "summary": string;
         };
+        "component": {
+            "noModel": string;
+            "pathsMissing": string;
+            "draftUnusable": string;
+            "findingTitle": string;
+            "findingDetail": string;
+            "summary": string;
+        };
         "drift": {
             "truncated": string;
             "noFiles": string;
@@ -122,7 +130,24 @@ export type I18nTranslations = {
                 "intro": string;
                 "proposed": string;
                 "footer": string;
+                "usagesHeading": string;
+                "usagesIntro": string;
+                "uses": string;
+                "notChecked": string;
+                "morePages": string;
+                "hiddenPages": string;
+                "undocumented": string;
+                "andMore": string;
             };
+            "paths": {
+                "title": string;
+                "moved": string;
+                "gone": string;
+                "removed": string;
+            };
+            "overlayFailed": string;
+            "overlayPartial": string;
+            "usagesFailed": string;
         };
         "report": {
             "noContent": string;
@@ -334,6 +359,8 @@ export type I18nTranslations = {
                 "unparsed": string;
                 "truncated": string;
                 "modulesOmitted": string;
+                "indexFailed": string;
+                "edgesFailed": string;
             };
             "wiki": {
                 "configInvalid": string;
@@ -583,6 +610,7 @@ export type I18nTranslations = {
             "findingNoDocument": string;
             "findingOrphan": string;
             "findingNotStale": string;
+            "findingPathsCurrent": string;
             "findingNoRelations": string;
             "findingDocumentGone": string;
             "assistantDisabled": string;
@@ -613,6 +641,7 @@ export type I18nTranslations = {
             "agentWebhookStale": string;
             "agentWebhookDeliveryId": string;
             "skillNoUpstream": string;
+            "findingComponentDraft": string;
         };
         "assistant": {
             "providerDisabled": string;
@@ -750,6 +779,20 @@ export type I18nTranslations = {
             "connectorDisabled": string;
             "fileNotFound": string;
             "notAFile": string;
+        };
+        "component": {
+            "notDeclared": string;
+            "draftNoModel": string;
+            "draftNoConnector": string;
+            "draftConnector": string;
+            "draftAmbiguous": string;
+            "draftPath": string;
+            "draftTooMany": string;
+            "draftDocumented": string;
+            "draftInFlight": string;
+            "draftProposed": string;
+            "draftQueueFull": string;
+            "draftPlace": string;
         };
         "web": {
             "notFound": string;

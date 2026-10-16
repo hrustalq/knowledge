@@ -699,6 +699,8 @@ export interface DocumentTrust {
 /**
  * The knowledge-health dashboard's filters (docs/features/40). `stale` is the
  * union of expired, outdated and inactive — the "needs attention" view.
+ * `missing-paths` is a component page (docs/features/51) declaring a path no
+ * file answers to at its connector's indexed head.
  * `whereForHealthFilter` in the API is this list's SQL inverse, so a filter
  * here with no clause there fails the spec rather than returning everything.
  */
@@ -712,6 +714,7 @@ export const HEALTH_FILTERS = [
   'requested',
   'flagged',
   'inactive',
+  'missing-paths',
   'archived',
 ] as const;
 export type HealthFilter = (typeof HEALTH_FILTERS)[number];
@@ -743,6 +746,8 @@ export interface KnowledgeHealthRow {
   childCount: number;
   verificationFlag: VerificationFlag | null;
   verificationNote: string | null;
+  /** A component page's declared paths that match no file at the indexed head; empty otherwise. */
+  missingPaths: string[];
 }
 
 // GET /v1/knowledge-health?workspaceId=&projectId=&filter=&ownerId=&q=&cursor=&limit=

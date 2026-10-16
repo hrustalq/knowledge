@@ -98,14 +98,15 @@ model Document {
   aclStampedVersion     Int       @default(0) @map("acl_stamped_version")
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  project           Project            @relation(fields: [projectId], references: [id])
-  branches          DocumentBranch[]
-  revisions         DocumentRevision[]
-  mergeRequests     MergeRequest[]
-  attachments       Attachment[]
-  threads           DocumentThread[]
-  shareLinks        ShareLink[]
-  siteAudienceRules SiteAudienceRule[]
+  project              Project               @relation(fields: [projectId], references: [id])
+  branches             DocumentBranch[]
+  revisions            DocumentRevision[]
+  mergeRequests        MergeRequest[]
+  attachments          Attachment[]
+  threads              DocumentThread[]
+  shareLinks           ShareLink[]
+  siteAudienceRules    SiteAudienceRule[]
+  componentDeclaration ComponentDeclaration?
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, category])
@@ -1269,6 +1270,9 @@ model AgentRun {
   findings Json?
   /// Free-text summary the agent wrote for a human.
   summary  String?
+  /// AgentRunDetails — what a run found that is not a finding: the drift
+  /// check's affected usages (#236). Null when the run had nothing to add.
+  details  Json?
   error    String?
   /// Incremented by the sweeper when a run is re-queued after going stale.
   attempt  Int     @default(0)
@@ -1836,12 +1840,15 @@ model Connector {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  project    Project             @relation(fields: [projectId], references: [id])
-  links      ConnectorLink[]
-  runs       ConnectorRun[]
-  conflicts  ConnectorConflict[]
-  workItems  ConnectorWorkItem[]
-  identities ExternalIdentity[]
+  project               Project                @relation(fields: [projectId], references: [id])
+  links                 ConnectorLink[]
+  runs                  ConnectorRun[]
+  conflicts             ConnectorConflict[]
+  workItems             ConnectorWorkItem[]
+  identities            ExternalIdentity[]
+  codeImports           CodeImport[]
+  codeFiles             CodeFile[]
+  componentDeclarations ComponentDeclaration[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId, kind])
@@ -1886,6 +1893,89 @@ model ConnectorLink {
   @@unique([connectorId, externalId])
   @@index([documentId])
   @@map("connector_links")
+}
+
+/// The reverse-import index of a code connector's head (#236): one row per
+/// importer → imported file pair. Replaced whole on every pull, in one
+/// transaction, so only one head's rows exist at a time — an index like a
+/// revision's chunks, not an aggregate.
+model CodeImport {
+  connectorId  String   @map("connector_id") @db.Uuid
+  /// No FK, as for every workspace id.
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  /// The commit the row was read at; null when the host did not say.
+  headSha      String?  @map("head_sha")
+  /// Repo-relative paths.
+  importerPath String   @map("importer_path")
+  importedPath String   @map("imported_path")
+  /// The names the importer takes: `default`, `*` for a namespace, star or
+  /// dynamic import, empty for a side-effect import.
+  names        String[]
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@id([connectorId, importerPath, importedPath])
+  /// "What imports this file" — the question the index exists to answer.
+  @@index([connectorId, importedPath])
+  @@map("code_imports")
+}
+
+/// Every file of a code connector's head (#236, phase 6), so "does this
+/// declared path still exist" has an answer: `code_imports` cannot give one,
+/// because a file that imports nothing and is imported by nothing has no row
+/// there. Replaced with `code_imports`, in the same transaction.
+model CodeFile {
+  connectorId String   @map("connector_id") @db.Uuid
+  /// No FK, as for every workspace id.
+  workspaceId String   @map("workspace_id") @db.Uuid
+  headSha     String?  @map("head_sha")
+  /// Repo-relative; includes files the archive skipped for size or for being binary.
+  path        String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  connector Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@id([connectorId, path])
+  @@map("code_files")
+}
+
+/// The code a page declares it documents (#236, phase 2): its `component:`
+/// frontmatter, read from the head of the page's default branch and resolved
+/// to a code connector. One row per page. Written by ingestion when the page
+/// indexes, and re-resolved on every codebase pull, so a connector added after
+/// the page is picked up without a re-edit.
+model ComponentDeclaration {
+  documentId    String   @id @map("document_id") @db.Uuid
+  /// No FK, as for every workspace id.
+  workspaceId   String   @map("workspace_id") @db.Uuid
+  /// The revision the declaration was read from.
+  revisionId    String   @map("revision_id") @db.Uuid
+  /// `component:<name>`, canonically folded — the vertex usage edges point at.
+  componentKey  String   @map("component_key")
+  /// The component as the page spells it — the vertex's label, never folded.
+  componentName String   @map("component_name")
+  /// As the page wrote it (`owner/repo` or a URL); null when it named none.
+  repository    String?
+  /// Null while unresolved; `warning` says why.
+  connectorId   String?  @map("connector_id") @db.Uuid
+  /// Repo-relative files, directories (`dir/`) or globs.
+  paths         String[]
+  /// Narrows "used" to these exported names; empty means any import.
+  symbols       String[]
+  /// A ComponentDeclarationWarning, or null when the declaration resolved.
+  warning       String?
+  /// The declared paths that match no file at the connector's indexed head,
+  /// set by `ComponentsService.rebuild`. Empty while unresolved or never pulled.
+  missingPaths  String[] @default([]) @map("missing_paths")
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  document  Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  connector Connector? @relation(fields: [connectorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([connectorId])
+  @@map("component_declarations")
 }
 
 /// An upstream person a connector's ACLs name (#76, phase 6), and who they are

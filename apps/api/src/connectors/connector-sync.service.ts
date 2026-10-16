@@ -7,9 +7,11 @@ import { DocumentsService } from '../documents/documents.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CodeImportsService } from './code-imports.service.js';
 import { ConnectorsService, MAX_WARNINGS } from './connectors.service.js';
 import { ConnectorDiscoveryService } from './connector-discovery.service.js';
 import { sha256 } from './connector-markdown.js';
+import { ComponentsService } from '../components/components.service.js';
 import { ConnectorStagingService } from './connector-staging.service.js';
 import type { ConnectorTask } from './connector.producer.js';
 import type { ConnectorAdapter, ConnectorContext } from './adapters/connector.types.js';
@@ -68,6 +70,8 @@ export class ConnectorSyncService {
     // staging service instead.
     private readonly documents: DocumentsService,
     private readonly events: EventsPublisher,
+    private readonly codeImports: CodeImportsService,
+    private readonly components: ComponentsService,
   ) {
     this.maxItems = this.config.get('CONNECTOR_SYNC_MAX_ITEMS', { infer: true });
     this.batchSize = this.config.get('CONNECTOR_SYNC_BATCH', { infer: true });
@@ -158,6 +162,8 @@ export class ConnectorSyncService {
       const orphans = await this.discovery.repairOrphans(runRow, adapter, ctx);
       if (orphans > 0) pushWarning(warnings, null, null, t('connector.warning.orphansFound', { count: orphans }));
 
+      if (adapter.codeImports) await this.indexCode(row, adapter, ctx, warnings);
+
       await this.setPhase(runRow.id, 'fetching');
       await this.checkpoint(runRow.id, totals, warnings);
       return { done: false };
@@ -217,6 +223,9 @@ export class ConnectorSyncService {
       });
       if (staged > 0 && runRow.mode !== 'auto') return this.parkForReview(row, runRow, totals, warnings);
 
+      // Again after applying: a first pull only now has the module pages a
+      // usage site falls back to (#236).
+      if (adapter.codeImports) await this.rebuildCodeEdges(row, warnings);
       await this.finish(row, runRow, totals, warnings);
       return { done: true };
     }
@@ -458,6 +467,44 @@ export class ConnectorSyncService {
       where: { id: runId },
       data: { ...totals, warnings: warnings.slice(0, MAX_WARNINGS) as unknown as Prisma.InputJsonValue },
     });
+  }
+
+  /**
+   * The code-usage index (#236) follows the head discovery just read — on
+   * every pull, reviewed or not, because it describes the code, not the pages.
+   * A failure warns and leaves the previous head's index in place; it never
+   * fails the run, whose pages are a separate matter.
+   */
+  private async indexCode(
+    row: Connector,
+    adapter: ConnectorAdapter,
+    ctx: ConnectorContext,
+    warnings: RunWarning[],
+  ): Promise<void> {
+    try {
+      const index = await adapter.codeImports!(ctx);
+      const rows = await this.codeImports.replace(row, index);
+      ctx.debug('code imports stored', { rows, headSha: index.headSha });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`code index for connector ${row.id} failed: ${message}`);
+      pushWarning(warnings, null, null, t('connector.warning.codebase.indexFailed', { error: message }));
+      return;
+    }
+    // A reviewed run may park before it applies; its declarations still see
+    // the new head now rather than whenever the review ends.
+    await this.rebuildCodeEdges(row, warnings);
+  }
+
+  /** Re-resolve component declarations and rebuild the workspace's `code` edges (#236). */
+  private async rebuildCodeEdges(row: Connector, warnings: RunWarning[]): Promise<void> {
+    try {
+      await this.components.rebuild(row.workspaceId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`code edges for workspace ${row.workspaceId} failed: ${message}`);
+      pushWarning(warnings, null, null, t('connector.warning.codebase.edgesFailed', { error: message }));
+    }
   }
 
   private async setPhase(runId: string, phase: ConnectorRunPhase): Promise<void> {

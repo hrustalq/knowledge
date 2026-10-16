@@ -36,12 +36,15 @@ import {
   MoreHorizontal,
   Plug,
   Info,
+  Network,
   Pencil,
   Share2,
   Workflow as WorkflowIcon,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type {
+  CodeUsagesResponse,
+  ComponentDeclarationView,
   DocumentConnectorResponse,
   DocumentContentResponse,
   DocumentDetailResponse,
@@ -57,6 +60,8 @@ import type {
 import { apiFetch, getWorkspaceId, relativeTime, statusVariant } from '@/lib/api'
 import { isOpenIssueStatus } from '@knowledge/contracts'
 import { apiQueryOptions, useApiMutation } from '@/api/queries'
+import ComponentDeclarationNotice from '@/components/code/ComponentDeclarationNotice.vue'
+import UsedByRail from '@/components/code/UsedByRail.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentsStore } from '@/stores/documents'
 import { useEventsStore } from '@/stores/events'
@@ -114,6 +119,9 @@ const RAIL_WIDGETS = [
   // agents said is wrong, and where each report is on its way to a fix.
   { id: 'issues', label: t('rail.issues'), icon: Flag, expandable: false },
   { id: 'graph', label: t('rail.graph'), icon: Share2, expandable: true },
+  // Where the code a component page declares is used (#236): only on a page
+  // that declares one.
+  { id: 'used-by', label: t('rail.usedBy'), icon: Network, expandable: false },
   { id: 'workflows', label: t('rail.workflows'), icon: WorkflowIcon, expandable: false },
   { id: 'connectors', label: t('rail.connectors'), icon: Plug, expandable: false },
   { id: 'activity', label: t('rail.activity'), icon: ActivityIcon, expandable: false },
@@ -148,7 +156,10 @@ onMounted(() => {
  * answer is "this page has none" is a row that costs a glance to dismiss.
  */
 const visibleWidgets = computed(() =>
-  RAIL_WIDGETS.filter((w) => w.id !== 'frontmatter' || !!content.value?.frontmatter),
+  RAIL_WIDGETS.filter(
+    (w) =>
+      (w.id !== 'frontmatter' || !!content.value?.frontmatter) && (w.id !== 'used-by' || !!declaration.value),
+  ),
 )
 
 /** The widget currently blown up into the dialog, if any. */
@@ -438,6 +449,19 @@ const issuesPreview = useQuery(
   ),
 )
 
+// The same query the declaration notice runs, which vue-query dedupes; the
+// usages are read only once a declaration resolved to a connector.
+const declarationPreview = useQuery(
+  computed(() => apiQueryOptions('/v1/documents/{id}/component', { path: { id: documentId.value } })),
+)
+const declaration = computed(() => declarationPreview.data.value as ComponentDeclarationView | null | undefined)
+const usagesPreview = useQuery(
+  computed(() => ({
+    ...apiQueryOptions('/v1/documents/{id}/component/usages', { path: { id: documentId.value } }),
+    enabled: !!declaration.value && !declaration.value.warning,
+  })),
+)
+
 const previewFor = computed<Record<RailWidget, string | null>>(() => {
   const revisions = (revisionsPreview.data.value as ListRevisionsResponse | undefined)?.revisions
   const mrs = (mergeRequestsPreview.data.value as ListMergeRequestsResponse | undefined)?.mergeRequests
@@ -492,6 +516,13 @@ const previewFor = computed<Record<RailWidget, string | null>>(() => {
           : 'none'
       : null,
     activity: latest ? relativeTime(latest.createdAt) : null,
+    'used-by': (() => {
+      const u = usagesPreview.data.value as CodeUsagesResponse | undefined
+      if (declaration.value?.warning) return t('component.usedBy.unresolvedShort')
+      if (!u) return null
+      const n = u.usages.length + u.truncated
+      return t('count.usages', { n }, n)
+    })(),
   }
 })
 
@@ -757,6 +788,13 @@ watch(
             />
           </template>
           <template #widget-graph><GraphView :document-id="documentId" /></template>
+          <template #widget-used-by>
+            <UsedByRail
+              :document-id="documentId"
+              :project-id="detail?.document.projectId"
+              :parent-id="detail?.document.parentId"
+            />
+          </template>
           <template #widget-workflows><WorkflowRail :document-id="documentId" /></template>
           <template #widget-connectors><ConnectorRail :document-id="documentId" /></template>
           <!-- Bounded to sit inside the widget's own cap rather than past it.
@@ -788,6 +826,8 @@ watch(
           {{ t('documents.viewingRevision', { id: viewingRevision.slice(0, 8) }) }}
           <RouterLink :to="`/documents/${documentId}`" class="underline">{{ t('documents.backToHead') }}</RouterLink>
         </p>
+        <!-- About the head, like the verification stamp. -->
+        <ComponentDeclarationNotice v-if="!viewingRevision" :document-id="documentId" />
         <PageState v-if="contentError" state="error" :description="contentError" />
         <PageState v-else-if="!content" state="loading" :rows="1" row-class="h-96" />
         <DocumentCanvas

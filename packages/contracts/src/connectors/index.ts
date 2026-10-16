@@ -1378,3 +1378,117 @@ export interface CreateConnectorWorkItemInput {
   /** Attach the new issue to this page, so events on it can reach a workflow. */
   documentId?: string;
 }
+
+// --- component pages (#236) -----------------------------------------------------
+
+/**
+ * Why a page's `component:` block resolved to no code connector. Each one
+ * means the page gets no usage index and no derived edges, and the page says
+ * so — a declaration that silently matches nothing is the failure this exists
+ * to prevent.
+ *
+ * - `no-connector`         — the workspace has no codebase connector.
+ * - `ambiguous-repository` — no `repository` and several connectors, or a
+ *                            `repository` several connectors match.
+ * - `unknown-repository`   — `repository` matches no connector.
+ * - `no-paths`             — the block declares no usable path.
+ */
+export const COMPONENT_DECLARATION_WARNINGS = [
+  'no-connector',
+  'ambiguous-repository',
+  'unknown-repository',
+  'no-paths',
+] as const;
+export type ComponentDeclarationWarning = (typeof COMPONENT_DECLARATION_WARNINGS)[number];
+
+/** GET /v1/documents/:id/component — the page's declaration as the server resolved it. */
+export interface ComponentDeclarationView {
+  documentId: string;
+  /** `component:<name>`: the entity usage pages `DEPENDS_ON`. */
+  componentKey: string;
+  /** As the page wrote it; null when it named none. */
+  repository: string | null;
+  connector: { id: string; name: string } | null;
+  paths: string[];
+  symbols: string[];
+  /** The declared paths no file answers to at the connector's indexed head, as of its last pull. */
+  missingPaths: string[];
+  warning: ComponentDeclarationWarning | null;
+  /** The revision the declaration was read from. */
+  revisionId: string;
+}
+
+/** A page a usage answer names: only ever one the caller may open. */
+export interface CodeUsagePage {
+  id: string;
+  title: string;
+}
+
+/** One file that uses a component, and the pages that document that file. */
+export interface CodeUsageSite {
+  /** The importing file. */
+  path: string;
+  /** The component's files it imports, and the names it takes from each (`default`, `*`, or none for a side-effect import). */
+  imports: Array<{ path: string; names: string[] }>;
+  /** Component pages covering `path`, else the wiki module page containing it. */
+  pages: CodeUsagePage[];
+  /** Pages documenting `path` that the caller may not open: counted, never titled. */
+  hiddenPages: number;
+}
+
+/**
+ * GET /v1/documents/:id/component/usages, GET /v1/code-usages and the
+ * `knowledge_code_usages` tool (#236, phase 3): where a component's code is
+ * used at the connector's indexed head, computed on read.
+ */
+export interface CodeUsagesResponse {
+  connector: { id: string; name: string } | null;
+  /** The head the usage index was built from; null when the connector has none yet. */
+  headSha: string | null;
+  /** The files or globs asked about. */
+  paths: string[];
+  /** The names a use must import; empty means any import counts. */
+  symbols: string[];
+  /** Component pages whose declared paths cover what was asked about, the asking page excluded. */
+  components: CodeUsagePage[];
+  hiddenComponents: number;
+  /** Usage sites, in path order. */
+  usages: CodeUsageSite[];
+  /** Usage sites past the limit, counted and not listed. */
+  truncated: number;
+  /** Why the answer is empty when the declaration resolved to no connector. */
+  warning: ComponentDeclarationWarning | null;
+}
+
+/** Files one "Document this component" request may cover (#236, phase 5). */
+export const COMPONENT_DRAFT_MAX_PATHS = 10;
+
+/**
+ * POST /v1/components/drafts — draft a component page from code (#236,
+ * phase 5). The archaeologist reads the files in the worker and fills the
+ * `component` template; the API then opens the page as a merge request, as the
+ * person who asked. Nothing is published until that merge request merges.
+ */
+export interface DraftComponentRequest {
+  workspaceId: string;
+  /** Repo-relative files — never globs: a draft is written from files it can read. */
+  paths: string[];
+  /** The codebase connector; optional when the workspace has exactly one. */
+  connectorId?: string;
+  /** Narrows the page's `component.symbols`. */
+  symbols?: string[];
+  /** The component's name and the page's title; derived from the first path when absent. */
+  name?: string;
+  /** Where the page goes once merged; the connector's destination when absent. */
+  projectId?: string;
+  parentId?: string;
+}
+
+export interface DraftComponentResponse {
+  /** The archaeologist run drafting the page. Its finding carries `mergeRequestId` once the merge request is open. */
+  runId: string;
+  connectorId: string;
+  /** The page's title, and the merge request's. */
+  title: string;
+  paths: string[];
+}

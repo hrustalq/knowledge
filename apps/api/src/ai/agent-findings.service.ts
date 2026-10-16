@@ -4,13 +4,14 @@ import type {
   AgentRunInput,
   CreatePageFromFindingResponse,
   DismissAgentFindingResponse,
+  DraftPageProposalResponse,
   DocumentCategory,
   FlagFindingOutdatedResponse,
   Locale,
   ProposeAgentFindingResponse,
   ProposeRelationsResponse,
 } from '@knowledge/contracts';
-import { composeFrontmatter } from '../common/frontmatter.js';
+import { composeFrontmatter, withComponentPaths } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -303,6 +304,9 @@ export class AgentFindingsService {
     const finding = findings[index];
     if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
     if (!finding.draft?.title || !finding.draft.markdown) throw new BadRequestException(t('error.ai.findingNoDraft'));
+    // A component draft (#236) is never published directly: it opens as a
+    // merge request (`proposePage`), and this button must not be a way round it.
+    if ((run.input as AgentRunInput | null)?.component) throw new BadRequestException(t('error.ai.findingComponentDraft'));
     if (finding.documentIds.length > 0) {
       throw new ConflictException({
         statusCode: 409,
@@ -361,6 +365,93 @@ export class AgentFindingsService {
     } catch (error) {
       await this.release(runId, index).catch(() => {
         this.logger.warn(`Could not release the create-page claim on run ${runId} finding ${index}`);
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Open the page a finding drafted as a merge request (#236, phase 5).
+   *
+   * `createPage`'s sibling for a draft that must be reviewed before anyone
+   * reads it — a component page, written by a model from code. The page is
+   * created head-less and hidden until the merge request merges (#73's
+   * `newPage`), so nothing reaches the default branch, a list or search
+   * before a person merges it. The draft is published byte for byte: its
+   * frontmatter was computed in the worker, and no model is called here.
+   *
+   * The claim/write-back/release trio is `propose`'s, so the sweeper and a
+   * retry cannot open two merge requests for one finding. The finding records
+   * both the merge request and the page it opened.
+   */
+  async proposePage(
+    workspaceId: string,
+    runId: string,
+    index: number,
+    principal: Principal,
+    place: { projectId: string; parentId?: string | null },
+  ): Promise<DraftPageProposalResponse> {
+    const run = await this.prisma.agentRun.findUnique({ where: { id: runId } });
+    if (!run || run.workspaceId !== workspaceId) throw new NotFoundException(t('error.ai.agentRunNotFound', { id: runId }));
+    const findings = Array.isArray(run.findings) ? (run.findings as unknown as AgentFinding[]) : [];
+    const finding = findings[index];
+    if (!finding) throw new NotFoundException(t('error.ai.findingNotFound', { runId, index }));
+    const draft = finding.draft;
+    if (!draft?.title || !draft.markdown) throw new BadRequestException(t('error.ai.findingNoDraft'));
+    if (finding.mergeRequestId) {
+      throw new ConflictException({
+        statusCode: 409,
+        message: t('error.ai.findingAlreadyProposed'),
+        reason: 'already-proposed',
+        mergeRequestId: finding.mergeRequestId,
+      });
+    }
+    if (!(await this.claim(runId, index))) {
+      throw new ConflictException({ statusCode: 409, message: t('error.ai.findingInFlight'), reason: 'in-flight' });
+    }
+
+    try {
+      const title = draft.title.trim().slice(0, 300);
+      return await this.prisma.withTransaction(
+        async () => {
+          const created = await this.documents.createDocument(
+            {
+              workspaceId,
+              projectId: place.projectId,
+              title,
+              ...(place.parentId ? { parentId: place.parentId } : {}),
+              // Provenance only: the body is the draft, uploaded as the merge
+              // request's revision — rendering the template here would publish
+              // the skeleton as the page's head.
+              ...(draft.template ? { template: { ...draft.template, provenanceOnly: true } } : {}),
+            },
+            principal.userId,
+          );
+          const mergeRequestId = await openDraftMergeRequest(this, {
+            documentId: created.documentId,
+            branch: `agent/${run.agentKey}-${Date.now()}`,
+            title,
+            description:
+              `Proposed from a ${run.agentKey} run.\n\n${finding.detail}` +
+              (finding.sources?.length ? `\n\n${finding.sources.map((src) => `- [${src.title}](${src.url})`).join('\n')}` : ''),
+            markdown: draft.markdown,
+            userId: principal.userId,
+            provenance: 'agent',
+            newPage: true,
+            onCreated: async (id) => {
+              await this.writeBack(runId, index, id);
+              await this.writeBackPage(runId, index, created.documentId, title);
+            },
+          });
+          return { mergeRequestId, documentId: created.documentId, title };
+        },
+        { timeout: 30_000, maxWait: 10_000 },
+      );
+    } catch (error) {
+      // Outside the boundary, for `propose`'s reason: the release must commit
+      // on its own after everything else rolled back.
+      await this.release(runId, index).catch(() => {
+        this.logger.warn(`Could not release the page proposal claim on run ${runId} finding ${index}`);
       });
       throw error;
     }
@@ -478,6 +569,19 @@ export class AgentFindingsService {
   ): Promise<string> {
     const current = await this.documents.getContent(document.id).catch(() => null);
     let body = finding.draft?.markdown?.trim() ?? '';
+    let frontmatter = current?.frontmatter ?? {};
+    // A declared path the change removed or moved (#236) is a frontmatter
+    // edit decided from the diff — no model, and the body stays as it is
+    // unless the same finding also carries a corrected one.
+    if (finding.componentPaths?.length) {
+      const fixed = withComponentPaths(frontmatter, finding.componentPaths);
+      if (fixed) frontmatter = fixed;
+      else if (!body) throw new BadRequestException(t('error.ai.findingPathsCurrent'));
+      if (!body) {
+        if (!current) throw new BadRequestException(t('error.ai.noReadableContent', { title: document.title }));
+        body = current.markdown;
+      }
+    }
     if (!body) {
       const drafter = await this.registry.resolve(workspaceId, 'drafter');
       if (!drafter.enabled || !drafter.config.enabled) {
@@ -489,7 +593,7 @@ export class AgentFindingsService {
       await this.usage.assertWithinBudget(workspaceId, principal.userId);
       body = await this.draft(finding, document, drafter, principal, locale);
     }
-    return composeFrontmatter(body, current?.frontmatter ?? {});
+    return composeFrontmatter(body, frontmatter);
   }
 
   /** The replacement page body, grounded in what the page says now. */

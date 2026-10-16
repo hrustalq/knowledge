@@ -1,4 +1,4 @@
-import type { AgentFinding, AgentRunPullRequest } from '@knowledge/contracts';
+import type { AgentFinding, AgentRunPullRequest, DriftAffectedUsages } from '@knowledge/contracts';
 import { t } from '../../i18n/t.js';
 
 /**
@@ -24,18 +24,26 @@ export interface DriftReportEntry {
   mergeRequestId: string | null;
 }
 
+/** Pages the Affected usages section lists before it only counts them; usage files per page likewise. */
+const MAX_AFFECTED_PAGES = 15;
+const MAX_SITES_PER_PAGE = 3;
+
 export function renderDriftComment(input: {
   webBaseUrl: string;
   connectorName: string;
   pullRequest: AgentRunPullRequest;
   entries: DriftReportEntry[];
+  /** Where the changed component code is used (#236); absent when the change touched none. */
+  affected?: DriftAffectedUsages | null;
 }): string {
   const base = input.webBaseUrl.replace(/\/+$/, '');
   const sha = input.pullRequest.headSha.slice(0, 7);
   const lines = [`### ${t('agent.drift.comment.heading')}`, ''];
+  const usages = input.affected ? affectedSection(input.affected, base) : [];
 
   if (input.entries.length === 0) {
     lines.push(t('agent.drift.comment.clean', { sha, connector: input.connectorName }));
+    if (usages.length > 0) lines.push('', ...usages, '', `<sub>${t('agent.drift.comment.footer')}</sub>`);
     return lines.join('\n');
   }
 
@@ -51,8 +59,48 @@ export function renderDriftComment(input: {
     // comment that scrolls is one nobody reads to the end.
     lines.push(`- ${page}${fix}  \n  ${oneLine(finding.detail)}`);
   }
+  if (usages.length > 0) lines.push('', ...usages);
   lines.push('', `<sub>${t('agent.drift.comment.footer')}</sub>`);
   return lines.join('\n');
+}
+
+/**
+ * Affected usages (#236): the files that use the changed component code,
+ * grouped by the page documenting them, so a reviewer sees which docs sit
+ * downstream of the change even where nothing has drifted yet. A page the
+ * check did not read — past the page cap, or with no model — says so; a page
+ * the run's owner may not open is a count; a usage file no page documents is
+ * listed on its own line.
+ */
+function affectedSection(affected: DriftAffectedUsages, base: string): string[] {
+  const lines: string[] = [];
+  for (const page of affected.pages.slice(0, MAX_AFFECTED_PAGES)) {
+    const sites = andMore(page.sites.map(code), MAX_SITES_PER_PAGE);
+    const uses = t('agent.drift.comment.uses', { files: andMore(page.uses.map(code), MAX_SITES_PER_PAGE) });
+    const unread = page.judged ? '' : ` · _${t('agent.drift.comment.notChecked')}_`;
+    lines.push(`- [${escapeLink(page.title)}](${base}/documents/${page.documentId}) — ${sites} · ${uses}${unread}`);
+  }
+  const more = affected.pages.length - MAX_AFFECTED_PAGES;
+  if (more > 0) lines.push(`- ${t('agent.drift.comment.morePages', { count: more })}`);
+  if (affected.hiddenPages > 0) lines.push(`- ${t('agent.drift.comment.hiddenPages', { count: affected.hiddenPages })}`);
+  if (affected.undocumentedTotal > 0) {
+    const shown = affected.undocumented.map(code);
+    const rest = affected.undocumentedTotal - shown.length;
+    const files = rest > 0 ? t('agent.drift.comment.andMore', { list: shown.join(', '), count: rest }) : shown.join(', ');
+    lines.push(`- ${t('agent.drift.comment.undocumented', { files })}`);
+  }
+  if (lines.length === 0) return [];
+  return [`#### ${t('agent.drift.comment.usagesHeading')}`, '', t('agent.drift.comment.usagesIntro'), '', ...lines];
+}
+
+/** A path as inline code. A backtick cannot appear in one, so it cannot close the span early. */
+function code(path: string): string {
+  return `\`${path.replace(/`/g, '')}\``;
+}
+
+function andMore(items: string[], max: number): string {
+  const shown = items.slice(0, max).join(', ');
+  return items.length > max ? t('agent.drift.comment.andMore', { list: shown, count: items.length - max }) : shown;
 }
 
 /** Text from a model inside a link label must not close the label or open another. */

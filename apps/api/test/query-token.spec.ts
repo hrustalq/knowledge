@@ -170,7 +170,9 @@ describe('@QueryTokenOk allowlist', () => {
       'EventsController.events',
       'ImportController.image',
     ]);
-  });
+    // It imports every controller module in the app: ~2.5 s alone, and past
+    // vitest's 5 s default when the full suite runs in parallel beside it.
+  }, 30_000);
 });
 
 describe('live WebSocket keeps its own ?token= path', () => {

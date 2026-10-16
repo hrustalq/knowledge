@@ -4,6 +4,7 @@ import type { AgentRun } from '@prisma/client';
 import type {
   AgentFinding,
   AgentFindingKind,
+  AgentRunDetails,
   AgentRunInput,
   AnswerSignalKind,
   AnswerSurface,
@@ -26,6 +27,8 @@ import { CODE_TOOLS } from '../assistant/assistant-tool-types.js';
 import { CodeResearchService } from '../connectors/code-research/code-research.service.js';
 import { RepoSnapshotService } from '../connectors/code-research/repo-snapshot.service.js';
 import { PullRequestService } from '../connectors/code-research/pull-request.service.js';
+import { ComponentUsagesService, type ChangeImpact } from '../components/component-usages.service.js';
+import { declaredPathFixes } from '../components/component-match.js';
 import { wrapUntrusted } from '../common/untrusted.js';
 import { SearchService } from '../search/search.service.js';
 import { visibilityWhere, WORKSPACE_AUDIENCE, type AccessScope } from '../permissions/access-scope.js';
@@ -62,7 +65,10 @@ import {
   MAX_DRIFT_PAGES,
   MAX_PAGE_CHARS,
   MAX_SEARCHED_PAGES,
+  affectedUsagesDetails,
+  componentPathFinding,
   diffExcerpt,
+  listOf,
   linkedCandidates,
   mentionedFiles,
   readDriftVerdict,
@@ -145,6 +151,8 @@ const MAX_SOURCES_PER_FINDING = 8;
 export interface AgentRunResult {
   summary: string;
   findings: AgentFinding[];
+  /** What the run found that is not a finding; only the sentinel writes it (#236). */
+  details?: AgentRunDetails;
 }
 
 /**
@@ -200,6 +208,7 @@ export class AgentExecutor {
     private readonly config: ConfigService<Env, true>,
     private readonly permissions: PermissionService,
     private readonly learnings: AgentLearningsService,
+    private readonly componentUsages: ComponentUsagesService,
   ) {}
 
   /**
@@ -923,9 +932,24 @@ export class AgentExecutor {
 
     // --- which pages it touches, strongest tie first
     await report({ stage: 'related', progress: 0.2 });
-    const candidates = await this.driftCandidates(await this.runScope(run, principal), connector, pr, files, report);
+    const scope = await this.runScope(run, principal);
+    const impact = await this.changeImpact(scope, connector, pr, files, report);
+    const all = await this.driftCandidates(scope, connector, pr, files, impact, report);
+    // Past the cap a page is listed, never judged — one model call each.
+    const candidates = all.slice(0, MAX_DRIFT_PAGES);
+
+    // A declared path the change removes or moves is known from the diff
+    // alone, so it is a finding whatever the model says, or whether one runs.
+    const pathFindings = new Map<string, AgentFinding>();
+    for (const page of impact?.declared ?? []) {
+      const fixes = declaredPathFixes(page.paths, files, impact?.overlay?.baseFiles ?? null);
+      if (fixes.length > 0) pathFindings.set(page.documentId, componentPathFinding({ id: page.documentId, title: page.title }, page.paths, fixes, pr));
+    }
+    const judged = new Set<string>();
+    const details = (): AgentRunDetails | undefined => affectedUsagesDetails(impact, judged);
+
     if (candidates.length === 0) {
-      return { summary: t('agent.drift.noRelated', { number: pr.number, files: files.length }), findings: [] };
+      return { summary: t('agent.drift.noRelated', { number: pr.number, files: files.length }), findings: [], details: details() };
     }
 
     // 'tools' is a preference, not a prerequisite — the curator's rule.
@@ -937,17 +961,24 @@ export class AgentExecutor {
       await report({ warning: t('agent.drift.noModel') });
       const findings: AgentFinding[] = candidates
         .filter((c) => c.tie !== 'searched')
-        .map((c) => ({
-          kind: 'stale',
-          severity: 'info',
-          title: t('agent.drift.mayDriftTitle', { title: c.title }),
-          detail: t('agent.drift.mayDriftDetail', { number: pr.number, files: c.files.slice(0, 5).join(', ') }),
-          documentIds: [c.documentId],
-          documentTitles: [c.title],
-        }));
+        .map(
+          (c) =>
+            pathFindings.get(c.documentId) ?? {
+              kind: 'stale',
+              severity: 'info',
+              title: t('agent.drift.mayDriftTitle', { title: c.title }),
+              detail: t('agent.drift.mayDriftDetail', { number: pr.number, files: c.files.slice(0, 5).join(', ') }),
+              documentIds: [c.documentId],
+              documentTitles: [c.title],
+            },
+        );
+      for (const [documentId, finding] of pathFindings) {
+        if (!candidates.some((c) => c.documentId === documentId)) findings.push(finding);
+      }
       return {
         summary: t('agent.drift.summaryNoModel', { number: pr.number, pages: findings.length }),
         findings,
+        details: details(),
       };
     }
 
@@ -1018,12 +1049,19 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
           ? await this.client.chat(call, messages, { json: true })
           : (await this.client.runWithTools(call, messages, tools, execute, { jsonFinalRound: true })).content;
         checked += 1;
+        judged.add(candidate.documentId);
         const finding = readDriftVerdict(
           safeJson(raw),
           { id: candidate.documentId, title: candidate.title, markdown: content.markdown },
           pr,
         );
-        if (finding) findings.push(finding);
+        // One finding per page, so one merge request: the path edit rides on
+        // the corrected body when the model wrote one.
+        const paths = pathFindings.get(candidate.documentId);
+        if (finding && paths) {
+          pathFindings.delete(candidate.documentId);
+          findings.push({ ...finding, detail: `${paths.detail} ${finding.detail}`.slice(0, 2_000), componentPaths: paths.componentPaths });
+        } else if (finding) findings.push(finding);
       } catch (error) {
         if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
           await report({ warning: t('agent.drift.budgetSpent', { checked, pages: candidates.length }) });
@@ -1038,6 +1076,8 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
       }
     }
 
+    // Path findings first: they are certain, and the cap must not drop them.
+    findings.unshift(...pathFindings.values());
     return {
       summary: t('agent.drift.summary', {
         number: pr.number,
@@ -1046,7 +1086,41 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
         drifted: findings.length,
       }),
       findings: findings.slice(0, MAX_FINDINGS),
+      details: details(),
     };
+  }
+
+  /**
+   * The component pages a change touches and the pages documenting where that
+   * code is used (#236), or null when it touches none. The head's imports of
+   * the changed files are read only once a declaration is known to be
+   * touched; any failure costs the two new ties, never the run.
+   */
+  private async changeImpact(
+    scope: AccessScope,
+    connector: { id: string; kind: string },
+    pr: NonNullable<AgentRunInput['pullRequest']>,
+    files: ReturnType<typeof scopeFiles>,
+    report: AgentReporter,
+  ): Promise<ChangeImpact | null> {
+    if (connector.kind !== 'codebase') return null;
+    try {
+      return await this.componentUsages.forChange(scope, connector.id, files, async () => {
+        try {
+          const head = await this.pullRequests.headImports(connector.id, scope.workspaceId, pr.headSha, files);
+          if (head.unread > 0) await report({ warning: t('agent.drift.overlayPartial', { files: head.unread }) });
+          return head;
+        } catch (error) {
+          this.logger.warn(`Sentinel could not read the head of #${pr.number}: ${String(error)}`);
+          await report({ warning: t('agent.drift.overlayFailed') });
+          return null;
+        }
+      });
+    } catch (error) {
+      this.logger.warn(`Sentinel could not find component usages for #${pr.number}: ${String(error)}`);
+      await report({ warning: t('agent.drift.usagesFailed') });
+      return null;
+    }
   }
 
   /**
@@ -1161,16 +1235,19 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
   }
 
   /**
-   * The pages a change is tied to, and why. Linked beats mentioned beats
-   * searched, because each is a weaker claim than the one before: the
-   * connector wrote the first about exactly that code, a person named the file
-   * in the second, and the third merely reads like the change's title.
+   * The pages a change is tied to, and why, strongest first and uncapped — the
+   * caller judges the first `MAX_DRIFT_PAGES`. Each tie is a weaker claim than
+   * the one before: a page declared the changed file as its component (#236),
+   * the connector wrote a page about exactly that code, a page documents code
+   * that uses a changed component, a person named the file, and last, a page
+   * merely reads like the change's title.
    */
   private async driftCandidates(
     scope: AccessScope,
     connector: { id: string; kind: string; projectId: string; parentId: string | null },
     pr: NonNullable<AgentRunInput['pullRequest']>,
     files: ReturnType<typeof scopeFiles>,
+    impact: ChangeImpact | null,
     report: AgentReporter,
   ): Promise<DriftCandidate[]> {
     const workspaceId = scope.workspaceId;
@@ -1180,6 +1257,17 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
     });
     const { ties, inChange } = linkedCandidates(connector.kind, links, files);
     const out = new Map<string, DriftCandidate>();
+
+    // `impact` was read under `scope` already: every page in it may be opened.
+    for (const page of impact?.declared ?? []) {
+      out.set(page.documentId, {
+        documentId: page.documentId,
+        title: page.title,
+        tie: 'declared',
+        reasons: [`declares ${listOf(page.files)} in component.paths`],
+        files: page.files,
+      });
+    }
 
     const titles = new Map(
       (
@@ -1191,7 +1279,18 @@ ${diffExcerpt(shown, MAX_DIFF_CHARS)}`,
     );
     for (const [documentId, tie] of ties) {
       const title = titles.get(documentId);
-      if (title) out.set(documentId, { documentId, title, tie: 'linked', ...tie });
+      if (title && !out.has(documentId)) out.set(documentId, { documentId, title, tie: 'linked', ...tie });
+    }
+
+    for (const page of impact?.affected ?? []) {
+      if (out.has(page.documentId) || inChange.has(page.documentId)) continue;
+      out.set(page.documentId, {
+        documentId: page.documentId,
+        title: page.title,
+        tie: 'used',
+        reasons: [`documents ${listOf(page.sites)}, which use${page.sites.length === 1 ? 's' : ''} ${listOf(page.uses)} (changed)`],
+        files: page.uses,
+      });
     }
 
     for (const page of await this.destinationPages(scope, connector)) {
@@ -1239,7 +1338,7 @@ ${page.markdown}`, files);
       await report({ warning: t('agent.drift.searchFailed') });
     }
 
-    return [...out.values()].slice(0, MAX_DRIFT_PAGES);
+    return [...out.values()];
   }
 
   /** The one enabled repository connector, when there is exactly one to mean. */

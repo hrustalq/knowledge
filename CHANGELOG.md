@@ -44,6 +44,23 @@ in the pull request that introduces them — see
   through `GET /v1/documents/:id/component/usages`, `GET /v1/code-usages`
   and the new read-only MCP tool `knowledge_code_usages`, so an agent can ask
   "what uses this file, and which docs move?" before editing it. (#236)
+- The pull request drift check now follows component declarations. A page
+  whose `component.paths` cover a changed file is checked first. Next come
+  the pages documenting the files that use the changed component, under the
+  same per-check page limit. Importers the pull request itself adds or
+  removes are counted, because the changed files are read again at the
+  head of the pull request. The check's comment gains an **Affected usages**
+  section: the usage files grouped by the page that documents them, with
+  pages past the limit marked "not checked", restricted pages counted and
+  undocumented usage files listed. A pull request that touches a component
+  now gets this comment even when no page drifted. (#236)
+- When a pull request removes or moves a file a component page declares,
+  the check reports it without a model. In `propose` mode it opens a merge
+  request that rewrites the page's `component.paths`, together with the
+  corrected text when the page also drifted. Propose on that finding in the
+  runs panel does the same, and it never calls the drafter. If nothing in
+  the declaration would be left, the finding says the component is gone and
+  proposes nothing. (#236)
 
 ### Changed
 
@@ -62,6 +79,14 @@ in the pull request that introduces them — see
   `component_declarations` table. It is additive, so rolling back is safe.
   It fills as pages with a `component:` block are next indexed. Existing
   pages need an edit or a reindex to be picked up. (#236)
+- Migration `20261101100000_agent_run_details` adds the nullable
+  `agent_runs.details` column, where a drift check keeps its affected
+  usages for the comment. It is additive, so rolling back is safe; the
+  previous image ignores the column. Each component-touching check now
+  downloads the connector's repository snapshot (once per process per
+  `CODE_SNAPSHOT_TTL_MS`, the cache the code tools already use) and makes
+  one host request per changed source file, at most 60 per check. A check
+  that touches no component page does neither. (#236)
 
 ## [0.24.0] — 2026-10-16
 

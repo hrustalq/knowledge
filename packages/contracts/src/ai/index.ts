@@ -2073,6 +2073,55 @@ export interface AgentFinding {
    * draft are the model's proposal for closing it.
    */
   coverage?: AgentFindingCoverage;
+  /**
+   * The `component.paths` edits this finding proposes for the first cited page
+   * (#236): a declared path the change removed (`to: null`) or moved. Set only
+   * by the sentinel, from the diff, never by a model. Applied by `propose` as a
+   * frontmatter edit against the page's head, beside the corrected body when
+   * the finding has a draft.
+   */
+  componentPaths?: ComponentPathFix[];
+}
+
+/** One declared path a change removed or moved (#236). */
+export interface ComponentPathFix {
+  from: string;
+  /** The path it moved to; null when it is gone. */
+  to: string | null;
+}
+
+/**
+ * One page that documents code using what a pull request changed (#236): the
+ * drift check's Affected usages, grouped by page.
+ */
+export interface DriftAffectedPage {
+  documentId: string;
+  title: string;
+  /** The usage files this page documents, sorted. */
+  sites: string[];
+  /** The changed files those sites import. */
+  uses: string[];
+  /** Whether this run judged the page. False past `MAX_DRIFT_PAGES`, or when no model ran. */
+  judged: boolean;
+}
+
+/** What a drift check found that is not a finding: where the changed code is used. */
+export interface DriftAffectedUsages {
+  pages: DriftAffectedPage[];
+  /** Pages documenting a usage that the run's scope may not open — counted, never titled. */
+  hiddenPages: number;
+  /** Usage files no page documents, sorted and capped. */
+  undocumented: string[];
+  undocumentedTotal: number;
+}
+
+/**
+ * A finished run's output beside its findings (`agent_runs.details`). Only the
+ * sentinel writes it today; every field is optional so a run that has nothing
+ * to say writes nothing.
+ */
+export interface AgentRunDetails {
+  affectedUsages?: DriftAffectedUsages;
 }
 
 /**

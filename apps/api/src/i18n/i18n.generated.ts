@@ -122,7 +122,24 @@ export type I18nTranslations = {
                 "intro": string;
                 "proposed": string;
                 "footer": string;
+                "usagesHeading": string;
+                "usagesIntro": string;
+                "uses": string;
+                "notChecked": string;
+                "morePages": string;
+                "hiddenPages": string;
+                "undocumented": string;
+                "andMore": string;
             };
+            "paths": {
+                "title": string;
+                "moved": string;
+                "gone": string;
+                "removed": string;
+            };
+            "overlayFailed": string;
+            "overlayPartial": string;
+            "usagesFailed": string;
         };
         "report": {
             "noContent": string;
@@ -585,6 +602,7 @@ export type I18nTranslations = {
             "findingNoDocument": string;
             "findingOrphan": string;
             "findingNotStale": string;
+            "findingPathsCurrent": string;
             "findingNoRelations": string;
             "findingDocumentGone": string;
             "assistantDisabled": string;

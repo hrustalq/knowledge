@@ -24,16 +24,13 @@ import type { Env } from '../../config/env.js';
 import { t } from '../../i18n/t.js';
 import { codeToolDefinitions, SnapshotCodeTools, type CodeToolSnapshot } from '../code-research/code-tools.js';
 import { extractExportNames, extractImports, extractSymbols, type CodeSymbol, type ImportRef } from './code-symbols.js';
+import { collectImportEdges, SFC_FILE, sfcOutline } from './import-edges.js';
 import {
   createFileResolver,
   edgeDigest,
-  foldReexports,
   reachableFiles,
   resolveModuleEdges,
-  type FileResolver,
-  type ImportEdges,
   type ModuleEdges,
-  type Reexport,
 } from './import-resolver.js';
 import {
   OVERVIEW_KEY,
@@ -81,7 +78,6 @@ import {
   type ExternalDocument,
   type ExternalGroupMember,
   type ExternalPrincipal,
-  type CodeImportEdge,
   type CodeImportIndex,
   type ExternalRef,
 } from './connector.types.js';
@@ -155,10 +151,6 @@ interface ModuleAnalysis {
 /** Hops a flow is followed from its entry, and files it may reach — the sequence prompt's horizon. */
 const FLOW_DEPTH = 2;
 const MAX_FLOW_FILES = 12;
-
-/** Single-file components: tree-sitter has no grammar for them, so their `<script>` blocks are parsed. */
-const SFC_FILE = /\.(?:vue|svelte)$/;
-const SCRIPT_BLOCK = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
 
 /** One file's outline: `undefined` = not source, `null` = unparseable. */
 type FileOutline = { symbols: CodeSymbol[]; imports: ImportRef[]; exports: string[] } | null | undefined;
@@ -702,59 +694,11 @@ export class CodebaseAdapter implements ConnectorAdapter {
   async codeImports(ctx: ConnectorContext): Promise<CodeImportIndex> {
     const plan = await this.plan(ctx);
     const { files, headSha } = plan.archive;
-    const resolve = createFileResolver(files);
-    const direct: ImportEdges = new Map();
-    const barrels = new Map<string, Reexport[]>();
-    const ownExports = new Map<string, string[]>();
-
-    for (const importer of files.keys()) {
-      const outline = SFC_FILE.test(importer)
-        ? await this.sfcOutline(importer, files)
-        : await this.outline(ctx, plan, importer);
-      if (!outline) continue;
-      if (outline.exports.length > 0) ownExports.set(importer, outline.exports);
-      const row = new Map<string, Set<string>>();
-      for (const ref of outline.imports) {
-        for (const [target, names] of importTargets(resolve, importer, ref)) {
-          if (target === importer) continue;
-          const set = row.get(target) ?? new Set<string>();
-          for (const name of names) set.add(name);
-          row.set(target, set);
-          if (ref.reexport) barrels.set(importer, [...(barrels.get(importer) ?? []), { target, ...ref.reexport }]);
-        }
-      }
-      if (row.size > 0) direct.set(importer, row);
-    }
-
-    const edges: CodeImportEdge[] = [];
-    for (const [importer, row] of foldReexports(direct, barrels, ownExports)) {
-      for (const [imported, names] of row) edges.push({ importer, imported, names: [...names].sort() });
-    }
-    ctx.debug('code imports indexed', { files: files.size, edges: edges.length, barrels: barrels.size, headSha });
+    const { edges, barrels } = await collectImportEdges(files.keys(), createFileResolver(files), (path) =>
+      SFC_FILE.test(path) ? sfcOutline(this.treeSitter, files.get(path)) : this.outline(ctx, plan, path),
+    );
+    ctx.debug('code imports indexed', { files: files.size, edges: edges.length, barrels, headSha });
     return { headSha, edges };
-  }
-
-  /**
-   * A `.vue` / `.svelte` file's imports, from its `<script>` blocks
-   * (`lang="ts"` parsed as TypeScript). The component itself is its default
-   * export, whether or not a block says so.
-   */
-  private async sfcOutline(path: string, files: Map<string, Uint8Array>): Promise<NonNullable<FileOutline>> {
-    const outline: NonNullable<FileOutline> = { symbols: [], imports: [], exports: ['default'] };
-    const bytes = files.get(path);
-    if (!bytes) return outline;
-    for (const [, attrs, body] of Buffer.from(bytes).toString('utf8').matchAll(SCRIPT_BLOCK)) {
-      const lang = /\blang\s*=\s*["']?(\w+)/.exec(attrs)?.[1];
-      const language: CodeLanguage = lang === 'tsx' ? 'tsx' : lang === 'ts' ? 'typescript' : 'javascript';
-      const read = await this.treeSitter.withTree(language, body, (tree) => ({
-        imports: extractImports(language, tree),
-        exports: extractExportNames(language, tree),
-      }));
-      if (!read) continue;
-      outline.imports.push(...read.imports);
-      for (const name of read.exports) if (!outline.exports.includes(name)) outline.exports.push(name);
-    }
-    return outline;
   }
 
   // --- the deterministic page ---
@@ -1666,27 +1610,4 @@ function escapePipes(text: string): string {
 /** Steering text becomes a heading: one line, no markdown that could open a block. */
 function escapeHeading(text: string): string {
   return text.replace(/[\r\n]+/g, ' ').replace(/[`<>[\]#*_]/g, '').trim().slice(0, 120) || '—';
-}
-
-/**
- * The files one import lands on, with the names it takes there. One import is
- * one target, except Python's `from . import a, b`, where each name may be a
- * sibling module (`a.py`) rather than something the package's `__init__.py`
- * defines — so each is tried as a module first.
- */
-function importTargets(resolve: FileResolver, importer: string, ref: ImportRef): Array<[string, string[]]> {
-  if (/\.pyi?$/.test(importer) && /^\.+$/.test(ref.specifier)) {
-    const out: Array<[string, string[]]> = [];
-    const rest: string[] = [];
-    for (const name of ref.names) {
-      const module = name === '*' ? null : resolve(importer, `${ref.specifier}${name}`);
-      if (module) out.push([module, ['*']]);
-      else rest.push(name);
-    }
-    const init = rest.length > 0 || ref.names.length === 0 ? resolve(importer, ref.specifier) : null;
-    if (init) out.push([init, rest]);
-    return out;
-  }
-  const target = resolve(importer, ref.specifier);
-  return target ? [[target, ref.names]] : [];
 }

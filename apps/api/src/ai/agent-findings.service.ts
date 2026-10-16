@@ -10,7 +10,7 @@ import type {
   ProposeAgentFindingResponse,
   ProposeRelationsResponse,
 } from '@knowledge/contracts';
-import { composeFrontmatter } from '../common/frontmatter.js';
+import { composeFrontmatter, withComponentPaths } from '../common/frontmatter.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -478,6 +478,19 @@ export class AgentFindingsService {
   ): Promise<string> {
     const current = await this.documents.getContent(document.id).catch(() => null);
     let body = finding.draft?.markdown?.trim() ?? '';
+    let frontmatter = current?.frontmatter ?? {};
+    // A declared path the change removed or moved (#236) is a frontmatter
+    // edit decided from the diff — no model, and the body stays as it is
+    // unless the same finding also carries a corrected one.
+    if (finding.componentPaths?.length) {
+      const fixed = withComponentPaths(frontmatter, finding.componentPaths);
+      if (fixed) frontmatter = fixed;
+      else if (!body) throw new BadRequestException(t('error.ai.findingPathsCurrent'));
+      if (!body) {
+        if (!current) throw new BadRequestException(t('error.ai.noReadableContent', { title: document.title }));
+        body = current.markdown;
+      }
+    }
     if (!body) {
       const drafter = await this.registry.resolve(workspaceId, 'drafter');
       if (!drafter.enabled || !drafter.config.enabled) {
@@ -489,7 +502,7 @@ export class AgentFindingsService {
       await this.usage.assertWithinBudget(workspaceId, principal.userId);
       body = await this.draft(finding, document, drafter, principal, locale);
     }
-    return composeFrontmatter(body, current?.frontmatter ?? {});
+    return composeFrontmatter(body, frontmatter);
   }
 
   /** The replacement page body, grounded in what the page says now. */

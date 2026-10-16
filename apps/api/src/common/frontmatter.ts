@@ -116,3 +116,37 @@ export function readComponentFrontmatter(data: Record<string, unknown> | null | 
   const paths = [...new Set(stringList(block.paths).map((p) => p.replace(/^(\.\/)+|^\/+/, '')).filter(Boolean))];
   return { repository, paths, symbols: [...new Set(stringList(block.symbols))], name };
 }
+
+/**
+ * `data` with fixes applied to its `component.paths` (#236): each entry the
+ * change removed is dropped, each it moved is rewritten, and every other byte
+ * of the block is kept as written. Null when nothing would change — the block
+ * is gone, or someone already made the edit — or when no path would be left,
+ * which is not a fix but a component that no longer exists.
+ */
+export function withComponentPaths(
+  data: Record<string, unknown>,
+  fixes: ReadonlyArray<{ from: string; to: string | null }>,
+): Record<string, unknown> | null {
+  const entry = Object.entries(data).find(([key]) => key.trim().toLowerCase() === 'component');
+  if (!entry || !entry[1] || typeof entry[1] !== 'object' || Array.isArray(entry[1])) return null;
+  const [key, value] = entry;
+  const block = value as Record<string, unknown>;
+  const byFrom = new Map(fixes.map((f) => [f.from, f.to]));
+  const written = Array.isArray(block.paths) ? block.paths : block.paths === undefined ? [] : [block.paths];
+
+  let changed = false;
+  const paths: unknown[] = [];
+  for (const raw of written) {
+    const normalized = typeof raw === 'string' ? raw.trim().replace(/^(\.\/)+|^\/+/, '') : null;
+    if (normalized === null || !byFrom.has(normalized)) {
+      paths.push(raw);
+      continue;
+    }
+    changed = true;
+    const to = byFrom.get(normalized);
+    if (to && !paths.includes(to)) paths.push(to);
+  }
+  if (!changed || !paths.some((p) => typeof p === 'string' && p.trim())) return null;
+  return { ...data, [key]: { ...block, paths } };
+}

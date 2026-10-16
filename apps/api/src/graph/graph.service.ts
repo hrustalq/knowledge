@@ -27,6 +27,16 @@ export interface ChunkHit {
   score: number;
 }
 
+/** A live chunk as stored, vector included (`liveChunks`). */
+export interface StoredChunk {
+  chunkId: string;
+  documentId: string;
+  idx: number;
+  text: string;
+  headingPath: string[];
+  embedding: number[];
+}
+
 /**
  * Phase 1 ranks by cosine in Node, so every candidate chunk crosses the wire.
  * This caps that fan-out. It is a correctness ceiling, not a tuning knob: past
@@ -954,6 +964,25 @@ export class GraphService {
   }
 
   /**
+   * Every live chunk of a workspace with its stored vector, unranked — the
+   * corpus `searchChunks` scans, handed over whole so the capture calibration
+   * backtest (#234) can score many probes against one read instead of one
+   * full scan per probe. Same scan cap, same ACL pushdown.
+   */
+  async liveChunks(workspaceId: string, acl: DocumentAclFilter): Promise<StoredChunk[]> {
+    const pushed = aclClause(acl);
+    const rows = await this.arcade.query<StoredChunk>(
+      'sql',
+      `SELECT chunkId, documentId, idx, text, headingPath, embedding FROM Chunk WHERE workspaceId = :workspaceId AND ${LIVE}${pushed?.sql ?? ''} LIMIT ${CHUNK_SCAN_LIMIT}`,
+      { workspaceId, ...pushed?.params },
+    );
+    if (rows.length >= CHUNK_SCAN_LIMIT) this.logger.error(`Workspace ${workspaceId} has at least ${CHUNK_SCAN_LIMIT} chunks — the scan cap.`);
+    return rows
+      .filter((r) => aclAdmits(acl, r.documentId) && Array.isArray(r.embedding))
+      .map((r) => ({ ...r, idx: r.idx ?? 0, text: r.text ?? '', headingPath: r.headingPath ?? [] }));
+  }
+
+  /**
    * Semantic search over the chunks of the given revisions only, live or not —
    * a published version pins revisions that may since have become history
    * (issue #77 phase 3, a site's Ask). The caller owns the list, so nothing
@@ -1018,7 +1047,7 @@ export class GraphService {
   }
 }
 
-function cosine(a: number[], b: number[]): number {
+export function cosine(a: number[], b: number[]): number {
   let dot = 0;
   let na = 0;
   let nb = 0;

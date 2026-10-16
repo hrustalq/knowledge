@@ -22,6 +22,9 @@ export function cleanCaptureTitle(title: string): string {
   return title.replace(/\s+/g, ' ').trim().slice(0, 300);
 }
 
+/** What is embedded for dedupe, at most. */
+export const DEDUPE_TEXT_CHARS = 4_000;
+
 /**
  * What a capture is about, for the vector leg: a page kind's stored title, a
  * blank line, then its main text (`context\ndecision`, `question\nanswer`, or

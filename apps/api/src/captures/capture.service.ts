@@ -58,6 +58,7 @@ import { findSecret } from './secret-scan.js';
 import {
   captureContentHash,
   cleanCaptureTitle,
+  DEDUPE_TEXT_CHARS,
   decidePage,
   dedupeText,
   foldTermKeys,
@@ -83,8 +84,6 @@ const DAY_MS = 24 * HOUR_MS;
 const SIMILAR_LIMIT = 5;
 /** Chunk hits fetched per page wanted: one page owns many chunks. */
 const CHUNKS_PER_PAGE = 8;
-/** What is embedded for dedupe, at most. */
-const DEDUPE_TEXT_CHARS = 4_000;
 /** A page decision in the playbook's words, as `knowledge_find_similar` reports it. */
 export type SimilarDecision = 'duplicate' | 'amend' | 'new-page';
 const SIMILAR_DECISION: Record<PageDecision['outcome'], SimilarDecision> = { none: 'duplicate', 'amend-page': 'amend', 'new-page': 'new-page' };

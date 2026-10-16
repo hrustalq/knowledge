@@ -1422,7 +1422,8 @@ export class McpService {
         return scope ? this.projects.list({ workspaceId: w.id }, scope) : { projects: [], nextCursor: null };
       }),
     );
-    const readOnly = principal.apiKey?.scope === 'read';
+    // A capture key proposes, it does not edit (issue #73): viewer is what it may do with a page.
+    const readOnly = principal.apiKey !== undefined && principal.apiKey.scope !== 'write';
     return {
       userId: principal.userId,
       email: principal.email,
@@ -1460,17 +1461,27 @@ export class McpService {
    * included. The dev principal skips the lookup exactly as AclGuard does.
    */
   private guardFor(principal: Principal) {
-    const check = async (resolve: () => Promise<string>, role: WorkspaceRole, operator = false) => {
+    const check = async (resolve: () => Promise<string>, role: WorkspaceRole, operator = false, capture = false) => {
       if (principal.mode === 'dev') return;
-      await this.access.requireRole(principal, await resolve(), role, operator);
+      await this.access.requireRole(principal, await resolve(), role, operator, { capture });
     };
     return {
       ws: (workspaceId: string, role: WorkspaceRole, operator = false) =>
         check(() => this.access.workspaceExists(workspaceId), role, operator),
+      /**
+       * `ws` for a CAPTURE_TOOLS handler (issue #73): the one guard that lets a
+       * `capture` key reach editor. Never call it from any other tool.
+       */
+      captureWs: (workspaceId: string) => check(() => this.access.workspaceExists(workspaceId), 'editor', false, true),
       // A page, its merge request or a project: the same page-level check the
       // REST guard makes (#76), so an MCP client opens exactly what its person can.
       doc: async (id: string, role: WorkspaceRole) =>
         this.permissions.requireResource(principal, await this.access.workspaceOfDocument(id), { type: 'document', id }, role, false),
+      /** `doc` at editor for a CAPTURE_TOOLS handler, the page twin of `captureWs`. */
+      captureDoc: async (id: string) =>
+        this.permissions.requireResource(principal, await this.access.workspaceOfDocument(id), { type: 'document', id }, 'editor', false, {
+          capture: true,
+        }),
       project: async (id: string, role: WorkspaceRole) =>
         this.permissions.requireResource(principal, await this.access.workspaceOfProject(id), { type: 'project', id }, role, false),
       mr: async (id: string, role: WorkspaceRole) => {

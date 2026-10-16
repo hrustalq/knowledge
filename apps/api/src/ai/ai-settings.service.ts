@@ -38,6 +38,13 @@ export interface UpdateAiSettingsInput {
   webAccessMode?: WebAccessMode | null;
   /** Issue #68 — null clears the override and inherits AI_EXTERNAL_ACTIONS_ENABLED. */
   externalAiActions?: boolean | null;
+  /** Issue #73 — each null clears the override and inherits its CAPTURE_* env value. */
+  captureEnabled?: boolean | null;
+  capturePerKeyPerHour?: number | null;
+  capturePerWorkspacePerDay?: number | null;
+  captureDedupeThreshold?: number | null;
+  captureAmendThreshold?: number | null;
+  captureParentDocumentId?: string | null;
   pricePromptPerMTok?: number | null;
   priceCompletionPerMTok?: number | null;
   workspaceMonthlyTokenBudget?: number | null;
@@ -79,9 +86,10 @@ export class AiSettingsService {
   }
 
   async get(workspaceId: string): Promise<AiSettingsResponse> {
-    const [row, effective] = await Promise.all([
+    const [row, effective, capture] = await Promise.all([
       this.prisma.aiSettings.findUnique({ where: { workspaceId } }),
       this.aiConfig.resolve(workspaceId),
+      this.aiConfig.captureSettings(workspaceId),
     ]);
     return {
       workspaceId,
@@ -98,6 +106,7 @@ export class AiSettingsService {
       agentModeEnabled: effective.agentModeEnabled,
       webAccess: effective.webAccess,
       externalAiActions: effective.externalAiActions,
+      capture,
       pricePromptPerMTok: effective.pricePromptPerMTok,
       priceCompletionPerMTok: effective.priceCompletionPerMTok,
       workspaceMonthlyTokenBudget:
@@ -125,6 +134,7 @@ export class AiSettingsService {
     if (input.webAccessMode !== undefined) {
       await this.sourcePolicies.assertModeSavable(workspaceId, input.webAccessMode);
     }
+    await this.assertCaptureSavable(workspaceId, input);
     const data = {
       ...pick(input, 'provider'),
       ...pick(input, 'baseUrl'),
@@ -144,6 +154,12 @@ export class AiSettingsService {
       ...(input.agentModeEnabled === undefined ? {} : { agentModeEnabled: input.agentModeEnabled }),
       ...pick(input, 'webAccessMode'),
       ...pick(input, 'externalAiActions'),
+      ...pick(input, 'captureEnabled'),
+      ...pick(input, 'capturePerKeyPerHour'),
+      ...pick(input, 'capturePerWorkspacePerDay'),
+      ...pick(input, 'captureDedupeThreshold'),
+      ...pick(input, 'captureAmendThreshold'),
+      ...pick(input, 'captureParentDocumentId'),
       ...(input.enforceBudget === undefined ? {} : { enforceBudget: input.enforceBudget }),
       ...(input.apiKey === undefined ? {} : { apiKeyCipher: this.encryptKey(input.apiKey) }),
       updatedBy: actorId ?? null,
@@ -183,6 +199,40 @@ export class AiSettingsService {
         latencyMs: Date.now() - startedAt,
         error: err instanceof Error ? err.message : String(err),
       };
+    }
+  }
+
+  /**
+   * The capture parent must be a page of this workspace, and the amend
+   * threshold may not sit above the dedupe one once both are resolved — a
+   * page close enough to be a duplicate must be close enough to amend.
+   */
+  private async assertCaptureSavable(workspaceId: string, input: UpdateAiSettingsInput): Promise<void> {
+    if (input.captureParentDocumentId) {
+      const doc = await this.prisma.document.findUnique({
+        where: { id: input.captureParentDocumentId },
+        select: { workspaceId: true },
+      });
+      if (doc?.workspaceId !== workspaceId) {
+        throw new BadRequestException(t('error.ai.captureParentNotInWorkspace', { id: input.captureParentDocumentId }));
+      }
+    }
+    if (input.captureDedupeThreshold === undefined && input.captureAmendThreshold === undefined) return;
+    const current = await this.aiConfig.captureSettings(workspaceId);
+    const resolve = (asked: number | null | undefined, kept: number | null, fallback: number) =>
+      asked === undefined ? (kept ?? fallback) : (asked ?? fallback);
+    const dedupe = resolve(
+      input.captureDedupeThreshold,
+      current.dedupeThreshold.requested,
+      this.config.get('CAPTURE_DEDUPE_THRESHOLD', { infer: true }),
+    );
+    const amend = resolve(
+      input.captureAmendThreshold,
+      current.amendThreshold.requested,
+      this.config.get('CAPTURE_AMEND_THRESHOLD', { infer: true }),
+    );
+    if (amend > dedupe) {
+      throw new BadRequestException(t('error.ai.captureThresholdOrder', { amend, dedupe }));
     }
   }
 

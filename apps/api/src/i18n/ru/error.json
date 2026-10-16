@@ -27,9 +27,12 @@
     "noApiKeyInDevMode": "API-ключи принадлежат реальной учётной записи. Запустите API с AUTH_MODE=api-key, чтобы создать ключ.",
     "apiKeyWorkspace": "Этот API-ключ ограничен другим рабочим пространством ({workspaceId} в него не входит).",
     "apiKeyReadOnly": "Этот API-ключ только для чтения; для доступа «{role}» нужен ключ с правом записи.",
+    "apiKeyCaptureOnly": "Этот API-ключ может только читать и предлагать записи памяти; для доступа «{role}» нужен ключ с правом записи.",
     "apiKeyNeedsSession": "API-ключами управляют из сеанса входа, а не с помощью другого API-ключа.",
     "apiKeyNotFound": "API-ключ {id} не найден.",
     "apiKeyWorkspaceNotMember": "Ключ можно привязать только к рабочему пространству, в котором вы состоите ({workspaceId}).",
+    "apiKeyProjectsNeedCapture": "К проектам можно привязать только ключ с областью «capture».",
+    "apiKeyProjectNotAllowed": "Ключ можно привязать только к доступному вам проекту в рабочем пространстве ключа ({projectId}).",
     "apiKeyLimit": "У вас уже {max} активных API-ключей — отзовите один, прежде чем создавать новый."
   },
   "workspace": {
@@ -175,6 +178,8 @@
     "providerNameTaken": "Провайдер с названием «{name}» уже есть в этом рабочем пространстве",
     "providerUnavailable": "Провайдер {id} недоступен в этом рабочем пространстве",
     "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY не задан, поэтому API-ключи негде хранить. Задайте его (openssl rand -base64 32) и перезапустите API либо настройте провайдера через ASSISTANT_API_KEY.",
+    "captureParentNotInWorkspace": "Родительская страница для записей памяти {id} не принадлежит этому рабочему пространству.",
+    "captureThresholdOrder": "Порог дополнения ({amend}) не может быть выше порога дубликата ({dedupe}).",
     "pluginUrlInvalid": "Адрес плагина не является корректным URL",
     "pluginUrlNotHttps": "Адрес плагина должен использовать https (http допустим только при AI_PLUGINS_ALLOW_PRIVATE_URLS)",
     "pluginHostUnresolved": "Узел плагина {host} не разрешается в адрес",

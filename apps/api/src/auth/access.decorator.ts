@@ -57,19 +57,26 @@ export interface AccessSpec {
    * Absent unless set, so every other route's metadata reads as it always did.
    */
   guests?: true;
+  /**
+   * A `capture` API key passes this `editor` route (issue #73). Only for a
+   * route that stages a capture and at most opens a merge request — never one
+   * that writes a default branch, merges or approves. Absent unless set.
+   */
+  capture?: true;
 }
 
 /** Declare a route's ACL: minimum workspace role + where the workspace id comes from. */
 export const Access = (
   role: WorkspaceRole,
   source: WorkspaceSource,
-  opts?: { operator?: boolean; guests?: boolean },
+  opts?: { operator?: boolean; guests?: boolean; capture?: boolean },
 ) =>
   SetMetadata(ACCESS_META, {
     role,
     source,
     operator: opts?.operator ?? false,
     ...(opts?.guests ? { guests: true as const } : {}),
+    ...(opts?.capture ? { capture: true as const } : {}),
   } satisfies AccessSpec);
 
 /** Route reachable without authentication (health checks, login/signup/reset). */

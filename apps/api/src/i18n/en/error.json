@@ -27,9 +27,12 @@
     "noApiKeyInDevMode": "API keys belong to a real account. Run the API with AUTH_MODE=api-key to mint one.",
     "apiKeyWorkspace": "This API key is limited to another workspace ({workspaceId} is outside it).",
     "apiKeyReadOnly": "This API key is read-only; {role} access needs a key with write scope.",
+    "apiKeyCaptureOnly": "This API key may only read and propose captures; {role} access needs a key with write scope.",
     "apiKeyNeedsSession": "API keys are managed from a signed-in session, not with another API key.",
     "apiKeyNotFound": "API key {id} not found.",
     "apiKeyWorkspaceNotMember": "You can only pin a key to a workspace you belong to ({workspaceId}).",
+    "apiKeyProjectsNeedCapture": "Only a key with capture scope can be pinned to projects.",
+    "apiKeyProjectNotAllowed": "You can only pin a key to a project you can reach, inside the key's workspace ({projectId}).",
     "apiKeyLimit": "You already have {max} active API keys — revoke one before creating another."
   },
   "workspace": {
@@ -175,6 +178,8 @@
     "providerNameTaken": "A provider named \"{name}\" already exists in this workspace",
     "providerUnavailable": "Provider {id} is not available in this workspace",
     "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY is not configured, so API keys cannot be stored. Set it (openssl rand -base64 32) and restart the API, or configure the provider through ASSISTANT_API_KEY.",
+    "captureParentNotInWorkspace": "The capture parent page {id} is not a page of this workspace.",
+    "captureThresholdOrder": "The amend threshold ({amend}) cannot be above the duplicate threshold ({dedupe}).",
     "pluginUrlInvalid": "Plugin URL is not a valid URL",
     "pluginUrlNotHttps": "Plugin URL must use https (http is allowed only with AI_PLUGINS_ALLOW_PRIVATE_URLS)",
     "pluginHostUnresolved": "Plugin host {host} does not resolve",

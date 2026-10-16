@@ -13,6 +13,37 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [Unreleased]
+
+### Added
+
+- API keys have a third scope, **capture** ("Read & propose" on the Connect AI
+  page), for coding agents that will propose what they learned in a session
+  as merge requests. A capture key reads like a read-only key and can never
+  write a page, merge, approve, sync or ingest. Only the agent-memory tools
+  and routes may lift it to editor, and none of them ship yet, so for now it
+  behaves as read-only. `POST /v1/me/api-keys` takes `projectIds` to pin a
+  capture key to up to 20 projects; any other scope with a pin is refused.
+  (#73)
+- The workspace AI settings carry the capture switch, the per-key hourly and
+  per-workspace daily limits, the two dedupe thresholds and a default parent
+  page (`PATCH /v1/ai/settings`; `capture` in the response shows asked against
+  applied for each). (#73)
+
+### Operations
+
+- New env vars, all with defaults: `CAPTURE_ENABLED` (true),
+  `CAPTURE_PER_KEY_PER_HOUR` (30), `CAPTURE_PER_WORKSPACE_PER_DAY` (500),
+  `CAPTURE_DEDUPE_THRESHOLD` (0.92), `CAPTURE_AMEND_THRESHOLD` (0.8),
+  `CAPTURE_MAX_CHARS` (8000), `CAPTURE_SWEEP_INTERVAL_MS` (60000) and
+  `CAPTURE_STALE_MS` (300000). The switch and the two limits cap the
+  workspace settings. (#73)
+- Migration `20261028100000_agent_captures` adds the `knowledge_captures`
+  table, `merge_requests.provenance` (default `manual`) and `capture_id`,
+  `api_keys.project_ids`, and six nullable `ai_settings` columns. It is purely
+  additive and survives a rollback: the previous release ignores all of it.
+  (#73)
+
 ## [0.23.0] — 2026-10-16
 
 ### Added

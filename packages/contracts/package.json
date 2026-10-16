@@ -18,6 +18,7 @@
     "./publishing": "./src/publishing/index.ts",
     "./connectors": "./src/connectors/index.ts",
     "./chat": "./src/chat/index.ts",
+    "./captures": "./src/captures/index.ts",
     "./observability": "./src/observability/index.ts"
   },
   "scripts": {

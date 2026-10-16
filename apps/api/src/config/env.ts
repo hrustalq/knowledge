@@ -415,6 +415,31 @@ export const envSchema = z.object({
    */
   AI_ACTION_INLINE_MAX_CHARS: z.coerce.number().int().positive().default(6000),
 
+  /**
+   * Agent-session memory (issue #73): coding agents propose what they learned
+   * as merge requests. CAPTURE_ENABLED and the two limits are CEILINGS for the
+   * workspace's AI settings — a workspace may ask for less, never more — and
+   * the settings page shows both values. The limits are counted over the
+   * capture rows themselves, per key per rolling hour and per workspace per
+   * rolling day.
+   */
+  CAPTURE_ENABLED: boolish(true),
+  CAPTURE_PER_KEY_PER_HOUR: z.coerce.number().int().min(0).default(30),
+  CAPTURE_PER_WORKSPACE_PER_DAY: z.coerce.number().int().min(0).default(500),
+  /**
+   * Cosine similarity against the nearest page above which a capture is a
+   * duplicate candidate, and above which it amends that page instead of
+   * starting a new one. Defaults, not ceilings: a workspace tunes them to its
+   * embedding model. Raw cosine from the vector leg — not a fused search score.
+   */
+  CAPTURE_DEDUPE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.92),
+  CAPTURE_AMEND_THRESHOLD: z.coerce.number().min(0).max(1).default(0.8),
+  /** Longest capture payload, in characters, summed over its text fields. */
+  CAPTURE_MAX_CHARS: z.coerce.number().int().positive().default(8000),
+  /** The capture sweeper's tick, and how old a claim must be before it re-drives the row. */
+  CAPTURE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  CAPTURE_STALE_MS: z.coerce.number().int().positive().default(300_000),
+
   /** Allow web targets on private/loopback ranges (self-hosted SearXNG, intranet). */
   WEB_ALLOW_PRIVATE_URLS: boolish(false),
 

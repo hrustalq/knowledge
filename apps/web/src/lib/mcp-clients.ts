@@ -20,6 +20,8 @@
  * Pure: the page decides which key to show, this decides where it goes.
  */
 
+import type { CaptureKitClient, CaptureKitFile } from '@knowledge/contracts'
+
 export const KEY_ENV = 'KNOWLEDGE_API_KEY'
 export const SKILL_NAME = 'knowledge-platform'
 
@@ -43,6 +45,8 @@ export interface McpClientGuide {
   skillDir: string | null
   /** Reads the key from KNOWLEDGE_API_KEY, so the page shows the `export` line. */
   usesEnv: boolean
+  /** The capture kit this client's hooks can run (issue #73), or null — it then captures through the skill alone. */
+  captureKit: CaptureKitClient | null
   /** i18n key under connect.clients.notes — the one thing that goes wrong with this client. */
   note: string
   docs: string
@@ -69,6 +73,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: '~/.claude/skills',
       usesEnv: auth,
+      captureKit: 'claude-code',
       note: 'claudeCode',
       docs: 'https://code.claude.com/docs/en/mcp',
     },
@@ -85,6 +90,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: '~/.agents/skills',
       usesEnv: auth,
+      captureKit: null,
       note: 'codex',
       docs: 'https://developers.openai.com/codex/mcp',
     },
@@ -101,6 +107,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: '~/.agents/skills',
       usesEnv: auth,
+      captureKit: null,
       note: 'gemini',
       docs: 'https://geminicli.com/docs/tools/mcp-server/',
     },
@@ -115,6 +122,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: '~/.agents/skills',
       usesEnv: auth,
+      captureKit: 'cursor',
       note: 'cursor',
       docs: 'https://cursor.com/docs/context/mcp',
     },
@@ -138,6 +146,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: '~/.agents/skills',
       usesEnv: false,
+      captureKit: null,
       note: 'vscode',
       docs: 'https://code.visualstudio.com/docs/copilot/customization/mcp-servers',
     },
@@ -170,6 +179,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: null,
       usesEnv: false,
+      captureKit: null,
       note: 'claudeDesktop',
       docs: 'https://github.com/geelen/mcp-remote',
     },
@@ -184,6 +194,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: '~/.agents/skills',
       usesEnv: auth,
+      captureKit: null,
       note: 'windsurf',
       docs: 'https://docs.devin.ai/desktop/cascade/mcp',
     },
@@ -203,6 +214,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: '~/.agents/skills',
       usesEnv: auth,
+      captureKit: null,
       note: 'opencode',
       docs: 'https://opencode.ai/docs/mcp-servers/',
     },
@@ -217,6 +229,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: '~/.agents/skills',
       usesEnv: false,
+      captureKit: null,
       note: 'zed',
       docs: 'https://zed.dev/docs/ai/mcp',
     },
@@ -239,6 +252,7 @@ export function mcpClients(input: McpClientInput): McpClientGuide[] {
       },
       skillDir: null,
       usesEnv: auth,
+      captureKit: null,
       note: 'http',
       docs: 'https://modelcontextprotocol.io/specification/2025-06-18/basic/transports',
     },
@@ -256,4 +270,19 @@ export function skillInstallCommand(skillUrl: string, dir: string, auth: boolean
     `curl -fsSL${auth ? ` -H "Authorization: Bearer $${KEY_ENV}"` : ''} \\`,
     `  ${skillUrl} -o ${target}/SKILL.md`,
   ].join('\n')
+}
+
+/**
+ * Install the capture kit (issue #73) into the repository the command runs in.
+ * The server renders the installer, so a re-run picks up a new kit version,
+ * and it never overwrites a settings file the person already has.
+ */
+export function captureKitInstallCommand(kitUrl: string, client: CaptureKitClient, auth: boolean): string {
+  return `curl -fsSL${auth ? ` -H "Authorization: Bearer $${KEY_ENV}"` : ''} \\\n  "${kitUrl}/install?client=${client}" | sh`
+}
+
+/** What a kit file is for — an i18n key under connect.capture.files. */
+export function captureKitFileRole(file: CaptureKitFile): 'instructions' | 'script' | 'entries' {
+  if (file.mode === 'merge') return 'entries'
+  return file.executable ? 'script' : 'instructions'
 }

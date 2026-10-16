@@ -566,6 +566,8 @@ export class AssistantToolsService {
             : {}),
         },
         ctx.principal,
+        // The model proposed it, in a person's turn (#73).
+        { provenance: 'agent' },
       );
 
       if (!result.changed) {
@@ -697,6 +699,7 @@ export class AssistantToolsService {
         documentId,
         { sourceBranch: branchName, title, ...(description ? { description } : {}) },
         authorId,
+        { provenance: 'agent' },
       );
       return {
         content: JSON.stringify({

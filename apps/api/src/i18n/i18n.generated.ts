@@ -179,6 +179,38 @@ export type I18nTranslations = {
             "agentOffered": string;
         };
     };
+    "capture": {
+        "heading": {
+            "context": string;
+            "decision": string;
+            "consequences": string;
+            "alternatives": string;
+            "related": string;
+            "appliesTo": string;
+            "question": string;
+            "answer": string;
+            "sources": string;
+            "captured": string;
+        };
+        "kind": {
+            "decision": string;
+            "gotcha": string;
+            "convention": string;
+            "howto": string;
+            "glossary": string;
+            "relation": string;
+            "answer": string;
+        };
+        "mergeRequest": {
+            "title": string;
+            "intro": string;
+            "introAssistant": string;
+            "amends": string;
+            "newPage": string;
+            "similar": string;
+            "rationale": string;
+        };
+    };
     "chat": {
         "help": string;
         "helpTime": string;
@@ -369,9 +401,12 @@ export type I18nTranslations = {
             "noApiKeyInDevMode": string;
             "apiKeyWorkspace": string;
             "apiKeyReadOnly": string;
+            "apiKeyCaptureOnly": string;
             "apiKeyNeedsSession": string;
             "apiKeyNotFound": string;
             "apiKeyWorkspaceNotMember": string;
+            "apiKeyProjectsNeedCapture": string;
+            "apiKeyProjectNotAllowed": string;
             "apiKeyLimit": string;
         };
         "workspace": {
@@ -437,7 +472,6 @@ export type I18nTranslations = {
             "sameBranches": string;
             "sourceNotFinalized": string;
             "branchNoRevisions": string;
-            "targetNoRevisions": string;
             "notOpenForEdit": string;
             "notOpenForApproval": string;
             "notOpenForClose": string;
@@ -517,6 +551,8 @@ export type I18nTranslations = {
             "providerNameTaken": string;
             "providerUnavailable": string;
             "encryptionKeyMissing": string;
+            "captureParentNotInWorkspace": string;
+            "captureThresholdOrder": string;
             "pluginUrlInvalid": string;
             "pluginUrlNotHttps": string;
             "pluginHostUnresolved": string;
@@ -881,6 +917,26 @@ export type I18nTranslations = {
             "levelAboveRole": string;
             "requestSelf": string;
         };
+        "capture": {
+            "disabled": string;
+            "projectNotFound": string;
+            "projectNotAllowed": string;
+            "unreadablePages": string;
+            "noCitations": string;
+            "relationType": string;
+            "tooLong": string;
+            "secretDetected": string;
+            "rateLimited": string;
+            "workspaceRateLimited": string;
+            "notFound": string;
+            "notApprovable": string;
+            "notStaged": string;
+            "useMergeRequest": string;
+            "inFlight": string;
+            "messageNotAssistant": string;
+            "kitClient": string;
+            "kitNotOffered": string;
+        };
     };
     "import": {
         "stage": {
@@ -1117,6 +1173,7 @@ export type I18nTranslations = {
         "chatIdentity": string;
         "group": string;
         "accessRequest": string;
+        "capture": string;
     };
     "validation": {
         "isDefined": string;

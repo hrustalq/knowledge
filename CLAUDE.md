@@ -136,6 +136,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 | 47 | Chat bots            | Telegram + Time bots answer as the **linked** person, never a bot principal; groups silent until bound; turns run API-side via `AssistantService.runChatTurn`                          |
 | 48 | Page permissions     | Page/project restrictions, groups, guests, access requests; view is intersective down the tree; every retrieval path takes an `AccessScope`, PG has the final say; connectors mirror source ACLs |
 | 49 | Agent triggers       | Events, a signed webhook, a mention or a time of day start agent runs; `AgentTriggerService` is the only `trigger:'event'` writer; recipes, admin-approved learnings, repo guidance as disabled skills |
+| 50 | Agent memory         | `knowledge_capture_*` → staged row → raw-cosine dedupe → MR with `provenance: 'captured'`; `capture` key passes editor only on `{ capture: true }` calls; head-less new pages hidden via `pending_merge_request_id`; terms via the inbox |
 
 ## Conventions
 
@@ -145,7 +146,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - Controllers pull `AccessService` and therefore the global `AuthModule`; **a controller-bearing module must never load in the worker.** When the worker needs a service, extract a `*CoreModule` and re-export it from the existing module so no call site changes.
 - **The worker generates, the API publishes.** Anything that creates a page, opens a merge request or attributes an act to a person happens API-side, where a principal exists. The worker stages it and an API-side sweeper finishes it — which doubles as crash recovery.
 - Any service injected into `McpService` must be **exported** by its module.
-- Every MCP tool handler starts with its `guard.*(…, role)` call — the per-tool twin of `@Access`, same role as the REST route it mirrors. A new write tool also joins `WRITE_TOOLS` (`mcp-tools.ts`), which drives `readOnlyHint` and hides it from read-only keys; the spec fails if that list names a missing tool.
+- Every MCP tool handler starts with its `guard.*(…, role)` call — the per-tool twin of `@Access`, same role as the REST route it mirrors. A new write tool also joins `WRITE_TOOLS` (`mcp-tools.ts`), which drives `readOnlyHint` and hides it from read-only keys; the spec fails if that list names a missing tool. An agent-memory write joins `CAPTURE_TOOLS` instead (disjoint from `WRITE_TOOLS`) and guards with `guard.captureWs` / `guard.captureDoc` — the only calls that lift a `capture` key to editor.
 - An API key only narrows (`principal.apiKey`, enforced in `requireRole`). A non-GET route without `@Access` refuses read-only keys unless marked `@ReadKeyOk()`.
 - A provider registered in a module that imports you is invisible — pass it as a call argument, not a DI token.
 - Lift a shared helper into a leaf module rather than closing an import cycle.
@@ -199,6 +200,7 @@ See [`docs/architecture/01-entrypoints-modules.md`](docs/architecture/01-entrypo
 - A relation type is normalized before the guard, never inside it: `normalizeRelationType` accepts `depends_on`, `Depends On` and `зависит_от`; `isAuthorableRelationType` stays exact-case.
 - `documents.path` is `/rootId/…/selfId/`, **delimited at both ends** — that is what makes the cycle check `parent.path.includes('/' + id + '/')` and stops `/a/ab/` matching `/a/abc/`. Maintained app-side in `DocumentsService` only (every other writer routes through `createDocument`); a move shifts the subtree in **one** statement inside the same transaction.
 - Hierarchy still does not enter the graph. Features 08/11 stand: it reaches the model through `list_document_tree` and breadcrumbs on tool results, not through a `PART_OF` edge, and `EMBED_RECIPE` is untouched so nothing re-embeds.
+- A page created head-less behind a merge request (a capture, a chat save) carries `documents.pending_merge_request_id` until the merge. **Every new surface that enumerates pages applies `LISTED_PAGE` / `listedSql`** (`common/listed-page.ts`). It is not part of `visibilityWhere`: that decides who may open a page, and the page stays readable by id for its reviewer.
 
 **Vocabulary**
 

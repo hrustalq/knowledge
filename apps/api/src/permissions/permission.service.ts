@@ -58,7 +58,9 @@ export class PermissionService {
    * `requireRole` would refuse them.
    */
   async scopeFor(principal: Principal, workspaceId: string): Promise<AccessScope> {
-    const readOnly = principal.apiKey?.scope === 'read';
+    // A capture key reads like a read key; `requireResource` lifts it for the
+    // one call that passes `capture` (issue #73).
+    const readOnly = principal.apiKey !== undefined && principal.apiKey.scope !== 'write';
     if (principal.mode === 'dev') {
       return {
         workspaceId,
@@ -138,12 +140,16 @@ export class PermissionService {
     resource: AccessResource,
     role: WorkspaceRole,
     operator: boolean,
+    opts: { capture?: boolean } = {},
   ): Promise<void> {
-    if (principal.apiKey) this.access.requireKeyAllows(principal.apiKey, workspaceId, role);
+    if (principal.apiKey) this.access.requireKeyAllows(principal.apiKey, workspaceId, role, opts);
     if (principal.mode === 'dev') return;
-    const scope = await this.scopeFor(principal, workspaceId);
+    const read = await this.scopeFor(principal, workspaceId);
+    // requireKeyAllows has just let a capture key through for this call, so its
+    // page level is the person's own, not capped at view.
+    const scope = opts.capture && principal.apiKey?.scope === 'capture' ? { ...read, readOnly: false } : read;
     if (!scope.guest || ROLE_ORDER[role] > ROLE_ORDER.editor || operator) {
-      await this.access.requireRole(principal, workspaceId, role, operator);
+      await this.access.requireRole(principal, workspaceId, role, operator, opts);
     }
 
     const resolved = await this.resolveChain(resource);

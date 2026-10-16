@@ -1,0 +1,32 @@
+{
+  "heading": {
+    "context": "Context",
+    "decision": "Decision",
+    "consequences": "Consequences",
+    "alternatives": "Alternatives considered",
+    "related": "Related pages",
+    "appliesTo": "Applies to",
+    "question": "Question",
+    "answer": "Answer",
+    "sources": "Sources",
+    "captured": "Captured: {title}"
+  },
+  "kind": {
+    "decision": "Decision",
+    "gotcha": "Gotcha",
+    "convention": "Convention",
+    "howto": "How-to",
+    "glossary": "Term",
+    "relation": "Relation",
+    "answer": "Answer"
+  },
+  "mergeRequest": {
+    "title": "{kind}: {title}",
+    "intro": "Captured by an agent session ({source}). Nothing reaches the knowledge base until a person merges this.",
+    "introAssistant": "Saved from an assistant reply. Nothing reaches the knowledge base until a person merges this.",
+    "amends": "Adds a section to the existing page \"{page}\", the closest match ({score}).",
+    "newPage": "Starts a new page: no existing page was close enough to amend.",
+    "similar": "Closest existing pages:",
+    "rationale": "Why:"
+  }
+}

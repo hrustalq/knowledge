@@ -27,9 +27,12 @@
     "noApiKeyInDevMode": "API keys belong to a real account. Run the API with AUTH_MODE=api-key to mint one.",
     "apiKeyWorkspace": "This API key is limited to another workspace ({workspaceId} is outside it).",
     "apiKeyReadOnly": "This API key is read-only; {role} access needs a key with write scope.",
+    "apiKeyCaptureOnly": "This API key may only read and propose captures; {role} access needs a key with write scope.",
     "apiKeyNeedsSession": "API keys are managed from a signed-in session, not with another API key.",
     "apiKeyNotFound": "API key {id} not found.",
     "apiKeyWorkspaceNotMember": "You can only pin a key to a workspace you belong to ({workspaceId}).",
+    "apiKeyProjectsNeedCapture": "Only a key with capture scope can be pinned to projects.",
+    "apiKeyProjectNotAllowed": "You can only pin a key to a project you can reach, inside the key's workspace ({projectId}).",
     "apiKeyLimit": "You already have {max} active API keys — revoke one before creating another."
   },
   "workspace": {
@@ -95,7 +98,6 @@
     "sameBranches": "Source and target branches must differ",
     "sourceNotFinalized": "Branch {branch} has no finalized revisions to merge",
     "branchNoRevisions": "Branch {branch} has no revisions",
-    "targetNoRevisions": "Branch {branch} has no revisions to diff against",
     "notOpenForEdit": "Merge request {id} is {status} — only open merge requests can be edited",
     "notOpenForApproval": "Merge request {id} is {status} — only open merge requests can be approved",
     "notOpenForClose": "Merge request {id} is {status} — only open merge requests can be closed",
@@ -175,6 +177,8 @@
     "providerNameTaken": "A provider named \"{name}\" already exists in this workspace",
     "providerUnavailable": "Provider {id} is not available in this workspace",
     "encryptionKeyMissing": "SETTINGS_ENCRYPTION_KEY is not configured, so API keys cannot be stored. Set it (openssl rand -base64 32) and restart the API, or configure the provider through ASSISTANT_API_KEY.",
+    "captureParentNotInWorkspace": "The capture parent page {id} is not a page of this workspace.",
+    "captureThresholdOrder": "The amend threshold ({amend}) cannot be above the duplicate threshold ({dedupe}).",
     "pluginUrlInvalid": "Plugin URL is not a valid URL",
     "pluginUrlNotHttps": "Plugin URL must use https (http is allowed only with AI_PLUGINS_ALLOW_PRIVATE_URLS)",
     "pluginHostUnresolved": "Plugin host {host} does not resolve",
@@ -536,5 +540,25 @@
     "alreadyGranted": "You can already open this at the level you asked for",
     "levelAboveRole": "Your workspace role does not allow editing, so edit access cannot be requested or granted",
     "requestSelf": "You manage this already — nothing to ask for"
+  },
+  "capture": {
+    "disabled": "Capturing is switched off for this workspace.",
+    "projectNotFound": "Project {projectId} is not in this workspace.",
+    "projectNotAllowed": "This key cannot capture into project {projectId}.",
+    "unreadablePages": "These pages do not exist here or you cannot open them: {ids}.",
+    "noCitations": "An answer is written back only with at least one cited page.",
+    "relationType": "\"{type}\" is not a relation type a capture can propose.",
+    "tooLong": "The capture is {size} characters; the limit is {limit}.",
+    "secretDetected": "The capture contains what looks like a credential ({pattern}). Remove it and capture again; nothing was stored.",
+    "rateLimited": "This key has made {limit} captures in the last hour. Try again in {retryAfterSec} s.",
+    "workspaceRateLimited": "This workspace has taken {limit} captures in the last day. Try again in {retryAfterSec} s.",
+    "notFound": "Unknown capture {id}",
+    "notApprovable": "Only a term waits for approval here. A page or relation capture is approved by merging its merge request.",
+    "notStaged": "This capture is {state}; only a staged one can be approved or rejected.",
+    "useMergeRequest": "This capture is already a merge request — review it there, and close the merge request to turn it down.",
+    "inFlight": "This capture is being proposed right now. Try again in a moment.",
+    "messageNotAssistant": "Only an assistant reply can be saved to the knowledge base.",
+    "kitClient": "There is no capture kit for \"{client}\". Kits exist for: {clients}.",
+    "kitNotOffered": "This key is offered no capture tools, so a capture kit would describe calls it cannot make. Use a capture or read-write key."
   }
 }

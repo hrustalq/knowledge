@@ -6,9 +6,11 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { McpController } from '../src/mcp/mcp.controller.js';
 import { AccessService } from '../src/auth/access.service.js';
+import { AclGuard } from '../src/auth/acl.guard.js';
+import { READ_KEY_OK_META, type AccessSpec } from '../src/auth/access.decorator.js';
 import { DEV_PRINCIPAL, type Principal } from '../src/auth/principal.js';
 import { McpService } from '../src/mcp/mcp.service.js';
-import { WRITE_TOOLS } from '../src/mcp/mcp-tools.js';
+import { CAPTURE_TOOLS, WRITE_TOOLS, settleTools } from '../src/mcp/mcp-tools.js';
 import { renderSkill } from '../src/mcp/skill.js';
 import { AiReadableService } from '../src/ai-readable/ai-readable.service.js';
 import { AiReadableController } from '../src/ai-readable/ai-readable.controller.js';
@@ -83,6 +85,63 @@ describe('AccessService key narrowing', () => {
     const access = accessWith('viewer');
     const p = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
     await expect(access.requireRole(p, WS_A, 'editor')).rejects.toThrow(/roleRequired/);
+  });
+
+  describe('capture scope (issue #73)', () => {
+    const capture = () => keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null });
+
+    it('reads like a read key, and reaches editor only on a capture call', async () => {
+      const access = accessWith('admin');
+      await expect(access.requireRole(capture(), WS_A, 'viewer')).resolves.toBeUndefined();
+      await expect(access.requireRole(capture(), WS_A, 'editor')).rejects.toThrow(/apiKeyCaptureOnly/);
+      await expect(access.requireRole(capture(), WS_A, 'editor', false, { capture: true })).resolves.toBeUndefined();
+    });
+
+    it('is never lifted past editor, whatever the owner holds', async () => {
+      const access = accessWith('admin');
+      await expect(access.requireRole(capture(), WS_A, 'admin', false, { capture: true })).rejects.toThrow(/apiKeyCaptureOnly/);
+      const admin = keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null }, { isAdmin: true });
+      await expect(access.requireRole(admin, WS_A, 'admin', false, { capture: true })).rejects.toThrow(/apiKeyCaptureOnly/);
+    });
+
+    it('does not widen: the flag is no help to a read key, and the owner role still bounds it', async () => {
+      const read = keyPrincipal({ id: 'k', scope: 'read', workspaceId: null });
+      await expect(accessWith('editor').requireRole(read, WS_A, 'editor', false, { capture: true })).rejects.toThrow(/apiKeyReadOnly/);
+      await expect(accessWith('viewer').requireRole(capture(), WS_A, 'editor', false, { capture: true })).rejects.toThrow(/roleRequired/);
+    });
+
+    it('keeps its workspace pin', async () => {
+      const pinned = keyPrincipal({ id: 'k', scope: 'capture', workspaceId: WS_A });
+      await expect(accessWith('editor').requireRole(pinned, WS_B, 'editor', false, { capture: true })).rejects.toThrow(/apiKeyWorkspace/);
+    });
+
+    /** The REST guard over one route: `spec` is its @Access, `readKeyOk` its @ReadKeyOk. */
+    const guardOver = (spec: AccessSpec | undefined, method: string, readKeyOk = false) => {
+      const reflector = {
+        getAllAndOverride: (meta: string) => (meta === READ_KEY_OK_META ? readKeyOk : false),
+        get: () => spec,
+      };
+      const guard = new AclGuard(reflector as never, accessWith('editor'), {} as never);
+      const request = { principal: capture(), method, params: {}, query: {}, body: { workspaceId: WS_A } };
+      return guard.canActivate({
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({ getRequest: () => request }),
+      } as never);
+    };
+
+    it('is refused a non-GET route with no @Access, unless the route admits read keys', async () => {
+      await expect(guardOver(undefined, 'POST')).rejects.toThrow(/apiKeyCaptureOnly/);
+      await expect(guardOver(undefined, 'GET')).resolves.toBe(true);
+      await expect(guardOver(undefined, 'POST', true)).resolves.toBe(true);
+    });
+
+    it('passes an editor route only when the route says capture', async () => {
+      const editor: AccessSpec = { role: 'editor', source: 'body', operator: false };
+      await expect(guardOver(editor, 'POST')).rejects.toThrow(/apiKeyCaptureOnly/);
+      await expect(guardOver({ ...editor, capture: true }, 'POST')).resolves.toBe(true);
+      await expect(guardOver({ ...editor, role: 'admin', capture: true }, 'POST')).rejects.toThrow(/apiKeyCaptureOnly/);
+    });
   });
 });
 
@@ -207,6 +266,11 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
       list: vi.fn(async (_ws: string, filter: { status?: string }) => [{ id: 'l-1', text: 'Cite the MR id', status: filter.status }]),
       create: vi.fn(async (input: { text: string; status: string }) => ({ id: 'l-2', text: input.text, status: input.status })),
     },
+    captures: {
+      capture: vi.fn(async (req: { kind: string }) => ({ captureId: 'c-1', state: 'proposed', outcome: 'new-page', kind: req.kind })),
+      similarPages: vi.fn(async () => [{ documentId: 'd-1', title: 'Billing', score: 0.91 }]),
+      list: vi.fn(async () => ({ captures: [], nextCursor: null })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -223,6 +287,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     resourceAccess: deps.resourceAccess,
     accessRequests: deps.accessRequests,
     learnings: deps.learnings,
+    captures: deps.captures,
   };
 }
 
@@ -236,10 +301,11 @@ async function connect(mcp: McpService, principal: Principal) {
 }
 
 describe('McpService over a principal', () => {
-  it('names only tools that exist in WRITE_TOOLS', () => {
+  it('names only tools that exist in WRITE_TOOLS and CAPTURE_TOOLS', () => {
     const { mcp } = service(accessWith('admin'));
     const names = new Set(mcp.toolsFor(DEV_PRINCIPAL).map((t) => t.name));
     for (const name of WRITE_TOOLS) expect(names, name).toContain(name);
+    for (const name of CAPTURE_TOOLS) expect(names, name).toContain(name);
   });
 
   it('annotates reads read-only, and hides writes from a read-only key', async () => {
@@ -253,6 +319,99 @@ describe('McpService over a principal', () => {
     const offered = (await reader.listTools()).tools.map((t) => t.name);
     expect(offered).toContain('knowledge_search');
     for (const name of WRITE_TOOLS) expect(offered).not.toContain(name);
+  });
+
+  it('offers a capture key the reads and nothing that writes, merges, approves or syncs (#73)', async () => {
+    const { mcp } = service(accessWith('editor'));
+    const agent = await connect(mcp, keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null }));
+    const offered = (await agent.listTools()).tools.map((t) => t.name);
+    expect(offered).toContain('knowledge_search');
+    for (const name of WRITE_TOOLS) if (!CAPTURE_TOOLS.has(name)) expect(offered).not.toContain(name);
+    for (const name of [
+      'knowledge_create_revision',
+      'knowledge_merge_revision',
+      'knowledge_approve_merge_request',
+      'knowledge_sync_connector',
+      'knowledge_ingest',
+      'knowledge_start_workflow',
+      'knowledge_create_document',
+    ]) {
+      expect(offered).not.toContain(name);
+    }
+    const reader = await connect(mcp, keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }));
+    const read = (await reader.listTools()).tools.map((t) => t.name);
+    for (const name of CAPTURE_TOOLS) expect(read).not.toContain(name);
+    // The reads (find_similar and list_captures among them) plus the five capture tools, nothing else.
+    expect([...offered].sort()).toEqual([...read, ...CAPTURE_TOOLS].sort());
+    expect(read).toEqual(expect.arrayContaining(['knowledge_find_similar', 'knowledge_list_captures']));
+  });
+
+  it('runs a capture tool as its caller through the capture guard (#73)', async () => {
+    const { mcp, captures } = service(accessWith('editor'));
+    const principal = keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null });
+    const agent = await connect(mcp, principal);
+    const res = await agent.callTool({
+      name: 'knowledge_capture_decision',
+      arguments: {
+        workspaceId: WS_A,
+        projectId: WS_A,
+        title: 'Fuse vector and BM25 with RRF',
+        context: 'Two rankings, incomparable scores.',
+        decision: 'Reciprocal rank fusion, k=60.',
+        session: { client: 'claude-code', repo: 'acme/kb', commit: 'abc123' },
+      },
+    });
+    expect(res.isError).toBeFalsy();
+    expect(captures.capture).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'decision', workspaceId: WS_A, session: expect.objectContaining({ client: 'claude-code' }) }),
+      principal,
+    );
+  });
+
+  it('refuses a capture tool to a capture key whose person is only a viewer (#73)', async () => {
+    const { mcp, captures } = service(accessWith('viewer'));
+    const agent = await connect(mcp, keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null }));
+    const res = await agent.callTool({
+      name: 'knowledge_capture_note',
+      arguments: {
+        workspaceId: WS_A,
+        projectId: WS_A,
+        kind: 'gotcha',
+        title: 'x',
+        body: 'y',
+        session: { client: 'cursor' },
+      },
+    });
+    expect(res.isError).toBe(true);
+    expect(captures.capture).not.toHaveBeenCalled();
+  });
+
+  it('settles a capture tool as offered to a capture or write key and hidden from a read key (#73)', () => {
+    const [captureTool] = CAPTURE_TOOLS;
+    const handles = () => {
+      const handle = (name: string) => ({ description: name, annotations: {}, remove: vi.fn(), update: vi.fn() });
+      return new Map([
+        ['knowledge_search', handle('knowledge_search')],
+        ['knowledge_merge_revision', handle('knowledge_merge_revision')],
+        [captureTool, handle(captureTool)],
+      ]) as unknown as Parameters<typeof settleTools>[0];
+    };
+    const writes = new Set([...WRITE_TOOLS, ...CAPTURE_TOOLS]);
+    const offer = (scope: 'read' | 'capture' | 'write') =>
+      settleTools(handles(), keyPrincipal({ id: 'k', scope, workspaceId: null }))
+        .map((t) => t.name)
+        .filter((name) => name === 'knowledge_search' || writes.has(name));
+    const captureOffer = offer('capture');
+    expect(captureOffer).toContain('knowledge_search');
+    expect(captureOffer).not.toContain('knowledge_merge_revision');
+    expect(offer('read')).toEqual(['knowledge_search']);
+    expect(offer('write')).toEqual(expect.arrayContaining(['knowledge_search', 'knowledge_merge_revision', captureTool]));
+    const annotated = settleTools(handles(), keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null }));
+    expect(annotated.find((t) => t.name === captureTool)?.readOnly).toBe(false);
+  });
+
+  it('keeps CAPTURE_TOOLS out of WRITE_TOOLS — a tool is a write when it is in either', () => {
+    for (const name of CAPTURE_TOOLS) expect(WRITE_TOOLS.has(name), name).toBe(false);
   });
 
   it('offers the template reads to a read-only key and fills a page in from a template (issue #69)', async () => {
@@ -761,7 +920,7 @@ describe('renderSkill', () => {
       email: 'a@example.com',
       displayName: 'Ada | Ops',
       mode: 'api-key' as const,
-      apiKey: { scope: 'write' as const, workspaceId: null },
+      apiKey: { scope: 'write' as const, workspaceId: null, projectIds: null },
       workspaces: [
         { workspaceId: WS_A, name: 'Eng', role: 'editor' as const, projects: [{ projectId: WS_B, name: 'Billing' }] },
       ],
@@ -793,12 +952,92 @@ describe('renderSkill', () => {
   it('does not describe edits to a read-only key', () => {
     const md = renderSkill({
       ...base,
-      whoami: { ...base.whoami, apiKey: { scope: 'read', workspaceId: WS_A } },
+      whoami: { ...base.whoami, apiKey: { scope: 'read', workspaceId: WS_A, projectIds: null } },
       tools: base.tools.filter((t) => t.readOnly),
     });
     expect(md).toContain('read-only');
     expect(md).not.toContain('Change an existing page');
     expect(md).not.toContain('proposes edits');
+  });
+
+  it('names a capture key, and does not describe edits its capture tools cannot make (#73)', () => {
+    const md = renderSkill({
+      ...base,
+      whoami: { ...base.whoami, apiKey: { scope: 'capture', workspaceId: null, projectIds: [WS_B] } },
+      tools: [...base.tools.filter((t) => t.readOnly), { name: 'knowledge_capture_note', description: 'Capture.', readOnly: false }],
+    });
+    expect(md).toContain('capture-only');
+    expect(md).toContain(`captures only into \`${WS_B}\``);
+    expect(md).not.toContain('Change an existing page');
+    expect(md).not.toContain('is **read-only**');
+  });
+
+  it('carries the capture playbook and the kit install line only when the capture tools are offered (#73)', () => {
+    const capturing = renderSkill({
+      ...base,
+      tools: [...base.tools, { name: 'knowledge_capture_decision', description: 'Capture.', readOnly: false }],
+    });
+    expect(capturing).toContain('## Capture memory');
+    expect(capturing).toContain('knowledge_find_similar');
+    expect(capturing).toContain(
+      'curl -fsSL -H "Authorization: Bearer $KNOWLEDGE_API_KEY" "https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code" | sh',
+    );
+
+    const reader = renderSkill({
+      ...base,
+      whoami: { ...base.whoami, apiKey: { scope: 'read', workspaceId: null, projectIds: null } },
+      tools: base.tools.filter((t) => t.readOnly),
+    });
+    expect(reader).not.toContain('Capture memory');
+    expect(reader).not.toContain('capture-kit');
+  });
+});
+
+describe('capture kit (#73)', () => {
+  it('refuses a client it has no kit for', async () => {
+    const { mcp } = service(accessWith('editor'));
+    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'write', workspaceId: null }), 'codex')).rejects.toMatchObject({
+      status: 400,
+      response: { reason: 'capture-kit-client' },
+    });
+  });
+
+  it('refuses a read-only key, whose kit would describe calls it cannot make', async () => {
+    const { mcp } = service(accessWith('editor'));
+    await expect(mcp.captureKitFor(keyPrincipal({ id: 'k', scope: 'read', workspaceId: null }), 'cursor')).rejects.toMatchObject({
+      status: 403,
+      response: { reason: 'capture-not-offered' },
+    });
+  });
+
+  it('names only the projects a pinned capture key may capture into', async () => {
+    const { mcp } = service(accessWith('editor'));
+    const principal = keyPrincipal({ id: 'k', scope: 'capture', workspaceId: null, projectIds: [WS_B] });
+    vi.spyOn(mcp, 'whoami').mockResolvedValue({
+      userId: 'u',
+      email: 'a@example.com',
+      displayName: 'Ada',
+      mode: 'api-key',
+      apiKey: { scope: 'capture', workspaceId: null, projectIds: [WS_B] },
+      workspaces: [
+        {
+          workspaceId: WS_A,
+          name: 'Eng',
+          role: 'viewer',
+          projects: [
+            { projectId: WS_B, name: 'Billing' },
+            { projectId: WS_A, name: 'Search' },
+          ],
+        },
+      ],
+    });
+    const kit = await mcp.captureKitFor(principal, 'claude-code');
+    const skill = kit.files.find((f) => f.path.endsWith('SKILL.md'))!.content;
+    expect(skill).toContain('Billing');
+    expect(skill).not.toContain('Search —');
+    const script = await mcp.captureKitInstallerFor(principal, 'claude-code');
+    expect(script.startsWith('#!/bin/sh\n')).toBe(true);
+    expect(script).toContain('https://kb.example.com/api/v1/mcp/capture-kit/install?client=claude-code');
   });
 });
 

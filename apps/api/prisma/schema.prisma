@@ -76,6 +76,12 @@ model Document {
   /// the pages made from it. Null = the page did not start from a template.
   templateRef           String?   @map("template_ref")
   templateVersion       Int?      @map("template_version")
+  /// A page that exists only as a merge request (issue #73, Option A): created
+  /// head-less by a capture or a chat save, its first content on a branch. Set
+  /// to that merge request; listing surfaces (tree, lists, health, export,
+  /// sites, llms.txt) leave it out while it is set, and the merge clears it.
+  /// Readable by id meanwhile, so the reviewer can open it. No FK, house policy.
+  pendingMergeRequestId String?   @map("pending_merge_request_id") @db.Uuid
   /// Page restriction switch (#76). On: only grantees (and admins) pass this
   /// node, and so its whole subtree.
   restricted            Boolean   @default(false)
@@ -268,6 +274,13 @@ model MergeRequest {
   // merge-commit | squash — set when merged.
   strategy         String?
   mergedRevisionId String?   @map("merged_revision_id") @db.Uuid
+  /// MR_PROVENANCES: manual | agent | captured (issue #73). Who opened it, not
+  /// who wrote the code: an agent-session capture is still authored by the
+  /// key's owner, and the merge gates treat it exactly as theirs.
+  provenance       String    @default("manual")
+  /// The knowledge_captures row this merge request was proposed from. No FK,
+  /// like merged_revision_id: the capture is the record of where it came from.
+  captureId        String?   @map("capture_id") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
   mergedAt         DateTime? @map("merged_at") @db.Timestamptz
   closedAt         DateTime? @map("closed_at") @db.Timestamptz
@@ -524,10 +537,13 @@ model ApiKey {
   // First 11 characters of the plaintext (`kn_` + 8 hex): recognisable in a
   // config file, far too short to be worth anything on its own.
   prefix      String
-  // 'read' | 'write' — API_KEY_SCOPES in contracts.
+  // 'read' | 'capture' | 'write' — API_KEY_SCOPES in contracts.
   scope       String    @default("write")
   // Pinned to one workspace, or null for all of the owner's. No FK, house policy.
   workspaceId String?   @map("workspace_id") @db.Uuid
+  /// string[] — a `capture` key's project pin (issue #73); null for every
+  /// project. Json, not uuid[]: the schema uses no Postgres arrays.
+  projectIds  Json?     @map("project_ids")
   expiresAt   DateTime? @map("expires_at") @db.Timestamptz
   lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
   revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
@@ -860,6 +876,56 @@ model AnswerFeedback {
 /// No FK on workspace_id / created_by / resolved_by (house policy); none on
 /// agent_run_id / merge_request_id either — a run or an MR that is deleted
 /// leaves the report standing.
+/// One thing a coding agent learned in a session, proposed back into the
+/// knowledge base (issue #73). The agent distills; this row is the staging
+/// record between its tool call and the merge request a person reviews — the
+/// MR (or, for a glossary term, the inbox) is where it is decided. No
+/// transcript is ever stored. No FK on workspace_id, project_id or
+/// created_by (house policy).
+model KnowledgeCapture {
+  id               String    @id @default(uuid()) @db.Uuid
+  workspaceId      String    @map("workspace_id") @db.Uuid
+  /// Resolved at write time; a capture always belongs to one project.
+  projectId        String    @map("project_id") @db.Uuid
+  /// CAPTURE_KINDS: decision | gotcha | convention | howto | glossary | relation | answer
+  kind             String
+  /// CAPTURE_STATUSES: staged | proposed | duplicate | rejected | failed.
+  /// merged/closed are the merge request's status, derived by captureStateFor.
+  status           String    @default("staged")
+  /// CAPTURE_OUTCOMES: new-page | amend-page | glossary | relation | none. Null until dedupe ran.
+  outcome          String?
+  title            String
+  /// Kind-specific body (rationale, term + definition, relation triple,
+  /// question + answer + citations). Untrusted: wrapped before any model sees it.
+  payload          Json
+  /// sha256 of the normalized payload — the exact-duplicate check.
+  contentHash      String    @map("content_hash")
+  /// CaptureSession: client, sessionId, repo, branch, commit, files (paths only).
+  session          Json
+  /// Top dedupe hits [{ documentId, title, score }], kept for the reviewer.
+  similar          Json      @default("[]")
+  targetDocumentId String?   @map("target_document_id") @db.Uuid
+  mergeRequestId   String?   @map("merge_request_id") @db.Uuid
+  glossaryTermId   String?   @map("glossary_term_id") @db.Uuid
+  /// The key that wrote it: the rate limit counts by it, and a revoked key's
+  /// output can be found and rejected together.
+  apiKeyId         String?   @map("api_key_id") @db.Uuid
+  createdBy        String    @map("created_by") @db.Uuid
+  error            String?
+  /// Set by whoever is proposing it; a stale claim is the sweeper's to re-drive.
+  claimedAt        DateTime? @map("claimed_at") @db.Timestamptz
+  attempts         Int       @default(0)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([workspaceId, status, createdAt])
+  @@index([apiKeyId, createdAt])
+  // Not unique: two concurrent posts of one payload race to two rows at worst,
+  // and the second reads as a duplicate of the first (house rule).
+  @@index([projectId, contentHash])
+  @@map("knowledge_captures")
+}
+
 model KnowledgeIssue {
   id                String    @id @default(uuid()) @db.Uuid
   workspaceId       String    @map("workspace_id") @db.Uuid
@@ -950,6 +1016,19 @@ model AiSettings {
   /// inherits AI_EXTERNAL_ACTIONS_ENABLED; the effective value is the NARROWER
   /// of the two.
   externalAiActions Boolean? @map("external_ai_actions")
+
+  /// Agent-session memory (issue #73). Null inherits the CAPTURE_* env value.
+  /// `captureEnabled` and the two limits are clamped by that env value — a
+  /// workspace may ask for less, never more. The thresholds are plain
+  /// overrides: tuning dedupe to an embedding model widens nothing.
+  captureEnabled            Boolean? @map("capture_enabled")
+  capturePerKeyPerHour      Int?     @map("capture_per_key_per_hour")
+  capturePerWorkspacePerDay Int?     @map("capture_per_workspace_per_day")
+  captureDedupeThreshold    Float?   @map("capture_dedupe_threshold")
+  captureAmendThreshold     Float?   @map("capture_amend_threshold")
+  /// The page new captured pages are nested under. No FK, mirroring
+  /// documents.parent_id; null puts them at the project root.
+  captureParentDocumentId   String?  @map("capture_parent_document_id") @db.Uuid
 
   updatedBy String?  @map("updated_by") @db.Uuid
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
@@ -1045,18 +1124,18 @@ model AiUserBudget {
 /// system prompt — trusted text, unlike document content. Selected explicitly
 /// from the composer or by keyword match against the user's message.
 model AiSkill {
-  id           String   @id @default(uuid()) @db.Uuid
-  workspaceId  String   @map("workspace_id") @db.Uuid
-  name         String
-  description  String
-  instructions String
+  id                  String    @id @default(uuid()) @db.Uuid
+  workspaceId         String    @map("workspace_id") @db.Uuid
+  name                String
+  description         String
+  instructions        String
   /// string[] — keywords that pull this skill into a turn. Json, not text[]:
   /// the schema uses no Postgres arrays (AssistantMessage.toolCalls precedent).
-  triggers     Json     @default("[]")
-  enabled      Boolean  @default(true)
-  createdBy    String?  @map("created_by") @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  triggers            Json      @default("[]")
+  enabled             Boolean   @default(true)
+  createdBy           String?   @map("created_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   /// 'manual' | 'repo' (AI_SKILL_SOURCES, #70). A `repo` skill was read from a
   /// guidance file of a repository connector and imported disabled.
   source              String    @default("manual")

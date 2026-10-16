@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -20,8 +20,10 @@ import {
   VERIFICATION_NOTE_MAX_CHARS,
   WIKI_SECTIONS,
   REQUESTABLE_ACCESS_LEVELS,
+  CAPTURE_KIT_CLIENTS,
+  type CaptureKitClient,
 } from '@knowledge/contracts';
-import type { AiAgentChoice, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
+import type { AiAgentChoice, CaptureKitResponse, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
@@ -57,15 +59,19 @@ import { ShareLinksService } from '../publishing/share-links.service.js';
 import { ExportService } from '../export/export.service.js';
 import { currentTrace, newTraceId } from '@knowledge/observability';
 import { keepFrontmatter } from '../common/frontmatter.js';
+import { t } from '../i18n/t.js';
 import { DEV_PRINCIPAL, type Principal } from '../auth/principal.js';
-import { MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
+import { CAPTURE_TOOLS, MCP_INSTRUCTIONS, MCP_SERVER_NAME, settleTools, trackTools } from './mcp-tools.js';
+import { renderCaptureKit, renderCaptureKitInstaller } from './capture-kit.js';
 import { renderSkill, type McpWhoami } from './skill.js';
+import { registerCaptureTools } from './capture-tools.js';
+import { CaptureService } from '../captures/capture.service.js';
 
 /**
  * Bumped by hand at every release, with swagger.ts (docs/versioning.md#known-drift).
  * Named because the connection page and the skill report it too.
  */
-export const MCP_SERVER_VERSION = '0.23.0';
+export const MCP_SERVER_VERSION = '0.24.0';
 
 /**
  * MCP tools (plan.md §9). Tool names use underscores (MCP tool names must
@@ -100,6 +106,15 @@ export const MCP_SERVER_VERSION = '0.23.0';
  *   knowledge_create_document   → a new page with inline markdown
  *   knowledge_feedback          → rate an answer built from knowledge_search (docs/features/38)
  *   knowledge_report_issue      → report a page as wrong / stale; checked by the sentinel (docs/features/38)
+ *
+ *   Agent-session memory (issue #73, capture-tools.ts) — writes propose, never publish:
+ *   knowledge_capture_decision      → a decision + rationale → merge request (new page or amended page)
+ *   knowledge_capture_note          → a gotcha / convention / how-to → merge request
+ *   knowledge_propose_glossary_term → a term → the captures inbox, approved by an editor
+ *   knowledge_propose_relation      → a frontmatter relation → merge request
+ *   knowledge_propose_answer        → a cited answer → merge request
+ *   knowledge_find_similar          → the nearest pages by raw cosine, before capturing
+ *   knowledge_list_captures         → captures and where they went
  *
  * Two transports, one tool set (docs/features/33). `buildServer(principal)`
  * binds every tool to a caller: each one runs the same `requireRole` its REST
@@ -147,6 +162,7 @@ export class McpService {
     private readonly resourceAccess: ResourceAccessService,
     private readonly accessRequests: AccessRequestsService,
     private readonly learnings: AgentLearningsService,
+    private readonly captures: CaptureService,
   ) {}
 
   async serveStdio(): Promise<void> {
@@ -1380,6 +1396,14 @@ export class McpService {
       );
     }
 
+    registerCaptureTools(server, {
+      captures: this.captures,
+      principal,
+      guard,
+      workspaceOfDocument: (id) => this.access.workspaceOfDocument(id),
+      json: (value) => this.json(value),
+    });
+
     return { server, tools: settleTools(handles, principal) };
   }
 
@@ -1390,10 +1414,51 @@ export class McpService {
       serverName: MCP_SERVER_NAME,
       version: MCP_SERVER_VERSION,
       authMode: this.config.get('AUTH_MODE') === 'api-key' ? 'api-key' : 'none',
-      webUrl: String(this.config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(/\/+$/, ''),
+      webUrl: this.webUrl(),
       whoami: await this.whoami(principal),
       tools: this.toolsFor(principal),
     });
+  }
+
+  /**
+   * The capture kit for `client`, generated for `principal` (issue #73) — see
+   * capture-kit.ts. Refused to a credential offered no capture tools, whose
+   * kit would remind its model to make calls it cannot make.
+   */
+  async captureKitFor(principal: Principal, client: string): Promise<CaptureKitResponse> {
+    if (!(CAPTURE_KIT_CLIENTS as readonly string[]).includes(client)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: t('error.capture.kitClient', { client, clients: CAPTURE_KIT_CLIENTS.join(', ') }),
+        reason: 'capture-kit-client',
+      });
+    }
+    if (!this.toolsFor(principal).some((tool) => CAPTURE_TOOLS.has(tool.name))) {
+      throw new ForbiddenException({ statusCode: 403, message: t('error.capture.kitNotOffered'), reason: 'capture-not-offered' });
+    }
+    const whoami = await this.whoami(principal);
+    // A capture key pinned to projects captures into those alone, so the kit names no other.
+    const pin = whoami.apiKey?.projectIds ?? null;
+    return renderCaptureKit({
+      client: client as CaptureKitClient,
+      url: this.publicUrl(),
+      serverName: MCP_SERVER_NAME,
+      webUrl: this.webUrl(),
+      workspaces: whoami.workspaces.map((w) => ({
+        workspaceId: w.workspaceId,
+        name: w.name,
+        projects: pin ? w.projects.filter((p) => pin.includes(p.projectId)) : w.projects,
+      })),
+    });
+  }
+
+  /** The same kit as a shell script that installs it — `curl … | sh`. */
+  async captureKitInstallerFor(principal: Principal, client: string): Promise<string> {
+    return renderCaptureKitInstaller(await this.captureKitFor(principal, client), `${this.publicUrl()}/capture-kit/install`);
+  }
+
+  private webUrl(): string {
+    return String(this.config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(/\/+$/, '');
   }
 
   /** `$API_PUBLIC_URL/v1/mcp` — what every generated config points at. */
@@ -1422,14 +1487,19 @@ export class McpService {
         return scope ? this.projects.list({ workspaceId: w.id }, scope) : { projects: [], nextCursor: null };
       }),
     );
-    const readOnly = principal.apiKey?.scope === 'read';
+    // A capture key proposes, it does not edit (issue #73): viewer is what it may do with a page.
+    const readOnly = principal.apiKey !== undefined && principal.apiKey.scope !== 'write';
     return {
       userId: principal.userId,
       email: principal.email,
       displayName: principal.displayName,
       mode: principal.mode,
       apiKey: principal.apiKey
-        ? { scope: principal.apiKey.scope, workspaceId: principal.apiKey.workspaceId }
+        ? {
+            scope: principal.apiKey.scope,
+            workspaceId: principal.apiKey.workspaceId,
+            projectIds: principal.apiKey.projectIds?.length ? principal.apiKey.projectIds : null,
+          }
         : null,
       workspaces: reachable
         // A key pinned to a workspace its owner has since left reaches nothing.
@@ -1460,17 +1530,27 @@ export class McpService {
    * included. The dev principal skips the lookup exactly as AclGuard does.
    */
   private guardFor(principal: Principal) {
-    const check = async (resolve: () => Promise<string>, role: WorkspaceRole, operator = false) => {
+    const check = async (resolve: () => Promise<string>, role: WorkspaceRole, operator = false, capture = false) => {
       if (principal.mode === 'dev') return;
-      await this.access.requireRole(principal, await resolve(), role, operator);
+      await this.access.requireRole(principal, await resolve(), role, operator, { capture });
     };
     return {
       ws: (workspaceId: string, role: WorkspaceRole, operator = false) =>
         check(() => this.access.workspaceExists(workspaceId), role, operator),
+      /**
+       * `ws` for a CAPTURE_TOOLS handler (issue #73): the one guard that lets a
+       * `capture` key reach editor. Never call it from any other tool.
+       */
+      captureWs: (workspaceId: string) => check(() => this.access.workspaceExists(workspaceId), 'editor', false, true),
       // A page, its merge request or a project: the same page-level check the
       // REST guard makes (#76), so an MCP client opens exactly what its person can.
       doc: async (id: string, role: WorkspaceRole) =>
         this.permissions.requireResource(principal, await this.access.workspaceOfDocument(id), { type: 'document', id }, role, false),
+      /** `doc` at editor for a CAPTURE_TOOLS handler, the page twin of `captureWs`. */
+      captureDoc: async (id: string) =>
+        this.permissions.requireResource(principal, await this.access.workspaceOfDocument(id), { type: 'document', id }, 'editor', false, {
+          capture: true,
+        }),
       project: async (id: string, role: WorkspaceRole) =>
         this.permissions.requireResource(principal, await this.access.workspaceOfProject(id), { type: 'project', id }, role, false),
       mr: async (id: string, role: WorkspaceRole) => {

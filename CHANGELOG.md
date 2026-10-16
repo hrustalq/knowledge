@@ -13,6 +13,120 @@ tag is pushed. Entries are written
 in the pull request that introduces them — see
 [docs/templates/changelog-entry.md](docs/templates/changelog-entry.md).
 
+## [0.24.0] — 2026-10-16
+
+### Added
+
+- API keys have a third scope, **capture** ("Read & propose" on the Connect AI
+  page), for coding agents that will propose what they learned in a session
+  as merge requests. A capture key reads like a read-only key and can never
+  write a page, merge, approve, sync or ingest. Only the agent-memory tools
+  may lift it to editor. `POST /v1/me/api-keys` takes `projectIds` to pin a
+  capture key to up to 20 projects; any other scope with a pin is refused.
+  (#73)
+- The workspace AI settings carry the capture switch, the per-key hourly and
+  per-workspace daily limits, the two dedupe thresholds and a default parent
+  page (`PATCH /v1/ai/settings`; `capture` in the response shows asked against
+  applied for each). (#73)
+- Coding agents connected over MCP can now hand back what they learned in a
+  session: `knowledge_capture_decision`, `knowledge_capture_note` (gotcha,
+  convention, how-to), `knowledge_propose_relation` and
+  `knowledge_propose_answer` (cited pages required) each open a merge request
+  for a person to review, and change nothing until it is merged. A capture
+  close to an existing page becomes a section on that page; one the knowledge
+  base already says, or the same capture sent twice, comes back as
+  `duplicate` and opens nothing. `knowledge_propose_glossary_term` holds a
+  term for an editor's approval. `knowledge_find_similar` lets an agent check
+  first, and `knowledge_list_captures` shows where captures went. Captures
+  carrying something that looks like a credential are refused without being
+  stored; over the per-key or per-workspace limit they get a 429 with
+  `retryAfterSec`; a capture key pinned to projects cannot write outside
+  them. (#73)
+- Merge requests say who opened them: `provenance` is `manual`, `agent` (an
+  agent finding or an assistant proposal) or `captured` (an agent session or
+  a chat save), with `captureId` for a capture's. `GET /v1/merge-requests`
+  filters on `provenance`. (#73)
+- Captures over REST: `POST /v1/captures` takes the same captures as the MCP
+  tools (one body, discriminated by `kind`), `GET /v1/captures` and
+  `GET /v1/captures/:id` list and read them. `POST /v1/captures/:id/approve`
+  turns a term waiting in the inbox into a glossary entry with source
+  `captured`; `POST /v1/captures/:id/reject` turns down anything still
+  staged. A page or relation capture is already a merge request, so both
+  answer 409 for it and point at the merge request. A capture key can create
+  captures but never approve or reject them. (#73)
+- `POST /v1/assistant/messages/:id/capture` saves an assistant reply to the
+  knowledge base as a merge request: the question before it, the answer
+  without its `[S#]` labels, and its cited pages. A reply that cites no page
+  is refused. (#73)
+- A capture interrupted by an API restart between staging and proposing is
+  now finished by a sweeper within `CAPTURE_STALE_MS`, as the person who
+  wrote it, instead of staying staged. (#73)
+- A **Captures** page in the sidebar ("Предложения агентов" in Russian) lists
+  what agents proposed, by Staged, Proposed, Duplicates, Rejected and Failed,
+  filterable by kind, project and "only mine". Each row shows which agent sent
+  it, from which repository, branch and commit, what dedupe made of it and the
+  pages it was compared with. Glossary terms are approved or rejected there;
+  page and relation captures link to their merge request. The list updates
+  live as captures arrive and their merge requests merge or close. `GET
+  /v1/captures` rows now carry the capture's `payload`. (#73)
+- Merge requests opened by an agent carry an **Agent** or **Captured** badge in
+  the list, the search bar offers "Captured from agent sessions" and an
+  "Opened by" filter, and a captured merge request's page shows the agent,
+  repository, branch and session it came from. (#73)
+- Assistant replies that cite a page have a **Save to knowledge base** action,
+  which proposes the answer as a merge request and links to it. (#73)
+- **Settings → AI → Agent memory** sets whether agents may propose, the two
+  rate limits (with the deployment's cap shown beside them), the duplicate and
+  amend thresholds, and the parent page for new captured pages. The Connect AI
+  key form can pin a Read & propose key to projects, and the key list shows the
+  pin. Glossary terms approved from captures are badged and filterable. (#73)
+- A **capture kit** for Claude Code and Cursor: a skill (or rule) that says
+  what is worth capturing, and a hook that, once per session and only after
+  the agent edited a file, reminds it to propose what it learned. The hook
+  holds no key and calls nothing. Step 4 of the Connect AI page installs it
+  with one command run inside the repository; an existing
+  `.claude/settings.json` or `.cursor/hooks.json` is merged into with `jq`
+  (re-running updates, never duplicates) or left alone with the entries
+  printed. Over HTTP: `GET /v1/mcp/capture-kit?client=claude-code|cursor`
+  returns the files, `/v1/mcp/capture-kit/install` the installer script; a
+  read-only key gets 403. The generated `SKILL.md` gains a "Capture memory"
+  section when the key is offered the capture tools, and `knowledge_whoami`
+  reports a capture key's project pin. (#73)
+
+### Changed
+
+- A page saved from a chat, and a page a capture proposes, no longer appears
+  in the page tree, page lists, knowledge health, exports, published sites or
+  `llms.txt` while its merge request is open. It joins them when the merge
+  request merges, and stays readable by its link meanwhile. Closing the merge
+  request leaves the empty page hidden. (#73)
+
+### Fixed
+
+- Opening the diff of a merge request that gives a page its first content
+  (a page saved from a chat) failed with 400 "has no revisions to diff
+  against". It now shows every line as added; `compare.from` is `null` in
+  that case. (#73)
+
+### Operations
+
+- New env vars, all with defaults: `CAPTURE_ENABLED` (true),
+  `CAPTURE_PER_KEY_PER_HOUR` (30), `CAPTURE_PER_WORKSPACE_PER_DAY` (500),
+  `CAPTURE_DEDUPE_THRESHOLD` (0.92), `CAPTURE_AMEND_THRESHOLD` (0.8),
+  `CAPTURE_MAX_CHARS` (8000), `CAPTURE_SWEEP_INTERVAL_MS` (60000) and
+  `CAPTURE_STALE_MS` (300000). The switch and the two limits cap the
+  workspace settings. (#73)
+- Migration `20261028100000_agent_captures` adds the `knowledge_captures`
+  table, `merge_requests.provenance` (default `manual`) and `capture_id`,
+  `api_keys.project_ids`, and six nullable `ai_settings` columns. It is purely
+  additive and survives a rollback: the previous release ignores all of it.
+  (#73)
+- Migration `20261029100000_capture_pending_pages` adds
+  `documents.pending_merge_request_id`, hides the chat-saved pages whose merge
+  request has not merged, and marks existing merge requests opened from agent
+  findings `agent` and from chat saves `captured`. Additive; a rollback shows
+  those empty chat-saved pages in the tree again, as before. (#73)
+
 ## [0.23.0] — 2026-10-16
 
 ### Added
@@ -2335,7 +2449,8 @@ it.
   Caddy, `prisma migrate deploy` on rollout, health gating on loopback and on the
   public endpoint.
 
-[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.23.0...HEAD
+[unreleased]: https://github.com/hrustalq/knowledge/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/hrustalq/knowledge/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/hrustalq/knowledge/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/hrustalq/knowledge/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/hrustalq/knowledge/compare/v0.21.0...v0.21.1

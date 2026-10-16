@@ -4923,6 +4923,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/captures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Captures in a workspace, newest first; ones on pages or projects the caller cannot open are left out */
+        get: operations["CapturesController_list"];
+        put?: never;
+        /** Stage a capture and propose it: page and relation captures open a merge request with provenance captured, a term waits in the inbox (429 past the rate limits, 400 on a credential) */
+        post: operations["CapturesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/captures/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One capture, with its state read through its merge request */
+        get: operations["CapturesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/captures/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a term waiting in the inbox: it becomes a glossary entry with source captured. A page or relation capture is approved by merging its merge request (409) */
+        post: operations["CapturesController_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/captures/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject a staged capture. A proposed one is turned down by closing its merge request (409 with mergeRequestId) */
+        post: operations["CapturesController_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assistant/messages/{id}/capture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write an assistant reply back as an answer capture: its question, its cited pages, a merge request to review (400 when it cites no page) */
+        post: operations["AssistantCaptureController_capture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mcp": {
         parameters: {
             query?: never;
@@ -4968,6 +5054,40 @@ export interface paths {
         };
         /** SKILL.md for an AI agent using this knowledge base over MCP, generated for the caller (workspaces, projects, offered tools) */
         get: operations["McpController_skill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp/capture-kit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Capture kit for a coding agent: the skill/rule, the hook script and its entries, generated for the caller. 403 for a key offered no capture tools */
+        get: operations["McpController_captureKit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mcp/capture-kit/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The capture kit as a POSIX shell script that installs it into the git repository it runs in */
+        get: operations["McpController_captureKitInstaller"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5022,15 +5142,17 @@ export interface components {
             /** @description What the key is for — "Claude Code on my laptop". Shown in the key list. */
             name: string;
             /**
-             * @description 'read' caps every workspace at the viewer role. Omitted means 'write' (the owner's own role).
+             * @description 'read' caps every workspace at the viewer role. 'capture' reads like 'read' and may also propose agent-session captures as merge requests, never write or merge. Omitted means 'write' (the owner's own role).
              * @enum {string}
              */
-            scope?: "read" | "write";
+            scope?: "read" | "capture" | "write";
             /**
              * Format: uuid
              * @description Pin the key to one workspace; omit for all of yours.
              */
             workspaceId?: string;
+            /** @description Pin a 'capture' key to these projects (at most 20); omit for every project. Refused on any other scope. */
+            projectIds?: string[];
             /** @description Days until the key stops working (1–365); omit for no expiry. */
             expiresInDays?: number;
         };
@@ -5639,6 +5761,21 @@ export interface components {
             webAccessMode?: "off" | "allowlist" | "open" | null;
             /** @description Whether the page AI actions menu may offer "Open in ChatGPT / Claude / Cursor" (issue #68). Clamped by the AI_EXTERNAL_ACTIONS_ENABLED ceiling: true under a false ceiling is stored, but the effective value stays false and the response reports source=clamped. null = inherit the ceiling. */
             externalAiActions?: boolean | null;
+            /** @description Whether coding agents may propose agent-session captures (issue #73). Clamped by the CAPTURE_ENABLED ceiling; the response reports source=clamped. null = inherit the ceiling. */
+            captureEnabled?: boolean | null;
+            /** @description Captures one API key may stage per rolling hour. Clamped by CAPTURE_PER_KEY_PER_HOUR. null = inherit. */
+            capturePerKeyPerHour?: number | null;
+            /** @description Captures the workspace accepts per rolling day. Clamped by CAPTURE_PER_WORKSPACE_PER_DAY. null = inherit. */
+            capturePerWorkspacePerDay?: number | null;
+            /** @description Cosine to the nearest page at or above which a capture is a duplicate candidate (0–1). null = CAPTURE_DEDUPE_THRESHOLD. */
+            captureDedupeThreshold?: number | null;
+            /** @description Cosine at or above which a capture amends the nearest page (0–1, never above the dedupe threshold). null = CAPTURE_AMEND_THRESHOLD. */
+            captureAmendThreshold?: number | null;
+            /**
+             * Format: uuid
+             * @description The page new captured pages nest under; null for the project root.
+             */
+            captureParentDocumentId?: string | null;
             /**
              * Format: uuid
              * @description Provider profile serving chat and agent turns
@@ -6766,6 +6903,64 @@ export interface components {
         ChatLinkCodeDto: {
             /** @description The code from the link the bot sent */
             code: string;
+        };
+        CaptureSessionDto: {
+            /** @enum {string} */
+            client: "claude-code" | "cursor" | "codex" | "gemini" | "assistant" | "other";
+            clientVersion?: string;
+            sessionId?: string;
+            /** @description owner/name or the remote URL */
+            repo?: string;
+            branch?: string;
+            commit?: string;
+            /** @description Repository paths the session touched — paths only */
+            files?: string[];
+            startedAt?: string;
+        };
+        CreateCaptureDto: {
+            workspaceId: string;
+            /** @enum {string} */
+            kind: "decision" | "gotcha" | "convention" | "howto" | "glossary" | "relation" | "answer";
+            session: components["schemas"]["CaptureSessionDto"];
+            /** @description Required except for a relation (the page's project) and an answer (defaults to the first cited page's) */
+            projectId?: string;
+            /** @description Required for a decision and a note; an answer defaults to its question */
+            title?: string;
+            /** @description decision: the problem and the forces at play */
+            context?: string;
+            /** @description decision: what was decided and why */
+            decision?: string;
+            consequences?: string;
+            alternatives?: string[];
+            relatedDocumentIds?: string[];
+            /** @description gotcha/convention/howto: markdown */
+            body?: string;
+            /** @description Repository paths or entity keys the note is about */
+            appliesTo?: string[];
+            term?: string;
+            definition?: string;
+            aliases?: string[];
+            /** @description relation: the page to add it to (required); glossary: a page that defines the term */
+            documentId?: string;
+            /** @enum {string} */
+            type?: "DESCRIBES" | "DEPENDS_ON" | "IMPLEMENTS" | "RELATED_TO" | "OWNED_BY" | "SUPERSEDES" | "CONTRADICTS";
+            /** @description relation: entity key, e.g. "service:billing" */
+            targetKey?: string;
+            rationale?: string;
+            question?: string;
+            answer?: string;
+            /** @description answer: at least one */
+            citedDocumentIds?: string[];
+        };
+        RejectCaptureDto: {
+            /** @description Why, for the activity log */
+            reason?: string;
+        };
+        CaptureAssistantMessageDto: {
+            /** @description Defaults to the first cited page's project */
+            projectId?: string;
+            /** @description Defaults to the question */
+            title?: string;
         };
         ApiErrorResponse: {
             /**
@@ -10581,6 +10776,8 @@ export interface operations {
                 targetBranch?: string;
                 /** @description Case-insensitive title substring match */
                 search?: string;
+                /** @description Only merge requests opened this way, e.g. captured (issue #73) */
+                provenance?: "manual" | "agent" | "captured";
                 /** @description Opaque cursor from a previous page */
                 cursor?: string;
                 limit?: number;
@@ -22787,6 +22984,266 @@ export interface operations {
             };
         };
     };
+    CapturesController_list: {
+        parameters: {
+            query: {
+                workspaceId: string;
+                /** @description Stored status; merged/closed read from the merge request */
+                status?: "staged" | "proposed" | "duplicate" | "rejected" | "failed";
+                kind?: "decision" | "gotcha" | "convention" | "howto" | "glossary" | "relation" | "answer";
+                projectId?: string;
+                /** @description '1' or 'true': only the caller's own captures */
+                mine?: string;
+                /** @description The last capture id of the previous page */
+                cursor?: string;
+                /** @description Defaults to 50 */
+                limit?: number;
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CapturesController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCaptureDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CapturesController_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CapturesController_approve: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CapturesController_reject: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectCaptureDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    AssistantCaptureController_capture: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaptureAssistantMessageDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     McpController_noStream: {
         parameters: {
             query?: never;
@@ -22942,6 +23399,86 @@ export interface operations {
     McpController_skill: {
         parameters: {
             query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    McpController_captureKit: {
+        parameters: {
+            query: {
+                client: "claude-code" | "cursor";
+            };
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    McpController_captureKitInstaller: {
+        parameters: {
+            query: {
+                client: "claude-code" | "cursor";
+            };
             header?: {
                 /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
                 "Accept-Language"?: "en" | "ru";

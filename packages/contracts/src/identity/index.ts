@@ -316,11 +316,25 @@ export interface RotateApiKeyResponse {
 
 /**
  * `read` caps every workspace at the viewer role; `write` leaves the owner's
- * own role in force. Closed: the guard, the form and the MCP tool filter all
- * read this one list.
+ * own role in force. `capture` (issue #73) reads like `read` and may also
+ * propose — the agent-memory tools and routes, which only ever open a merge
+ * request — but never write, merge, approve or sync. Narrowest first. Closed:
+ * the guard, the form and the MCP tool filter all read this one list.
  */
-export const API_KEY_SCOPES = ['read', 'write'] as const;
+export const API_KEY_SCOPES = ['read', 'capture', 'write'] as const;
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
+
+/**
+ * The scope a stored `api_keys.scope` grants. Anything this release does not
+ * know reads as `read` — the narrowest — so a value from a newer release, or
+ * a typo in a hand-edited row, can never widen a key.
+ */
+export function apiKeyScopeOf(stored: string): ApiKeyScope {
+  return (API_KEY_SCOPES as readonly string[]).includes(stored) ? (stored as ApiKeyScope) : 'read';
+}
+
+/** How many projects a `capture` key may be pinned to. */
+export const API_KEY_MAX_PROJECTS = 20;
 
 export interface ApiKeyInfo {
   id: string;
@@ -330,6 +344,11 @@ export interface ApiKeyInfo {
   scope: ApiKeyScope;
   /** Pinned to one workspace, or null for every workspace the owner belongs to. */
   workspaceId: string | null;
+  /**
+   * A `capture` key pinned to these projects: it may propose into them and no
+   * other (issue #73). Null for every project. Reads are not narrowed by it.
+   */
+  projectIds: string[] | null;
   expiresAt: string | null;
   /** Coarse — refreshed at most once a minute, so it answers "is this still in use", not "when exactly". */
   lastUsedAt: string | null;

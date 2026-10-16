@@ -13,6 +13,9 @@ export const AI_SECTION_GROUPS = [
   // Yours, and open to every role: the one section that acts on your own keys
   // rather than on the workspace, which is why it carries no read-only badge.
   { label: 'ai.rail.yours', sections: [{ key: 'connect', label: 'nav.connect' }] },
+  // What connected coding agents may propose back (issue #73). Its own group:
+  // it governs the agents Connect sets up, not the workspace's assistant.
+  { label: 'ai.rail.connected', sections: [{ key: 'capture', label: 'ai.tabCapture' }] },
   {
     label: 'ai.rail.assistant',
     sections: [

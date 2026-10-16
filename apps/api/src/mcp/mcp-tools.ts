@@ -18,6 +18,7 @@ export const MCP_INSTRUCTIONS = [
   'Rate an answer you built from knowledge_search with knowledge_feedback (quote its traceId). If a page you read is wrong or out of date, call knowledge_report_issue with the evidence — a report is checked and may become a merge request, never a silent edit.',
   'Every search hit carries trust.status (verified | expired | edited | requested | outdated | flagged | unverified). Prefer verified pages; say so when you rely on an outdated, expired or edited one. knowledge_flag_document marks a page requested (please check) or outdated (known wrong) — verifying is a person\'s act and has no tool.',
   'To change an existing page: knowledge_create_branch → knowledge_create_revision → knowledge_create_merge_request. Do not merge your own merge request unless asked to.',
+  'When the session settles something durable — a decision and why, a non-obvious gotcha, a team convention — record it with knowledge_capture_decision / knowledge_capture_note (check knowledge_find_similar first). Captures become merge requests a person reviews.',
   'Read the knowledge://skill resource (or the "guide" prompt) for the full playbook.',
 ].join('\n');
 
@@ -62,6 +63,23 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The agent-memory tools (issue #73): writes that only ever stage a capture
+ * and open a merge request for a person to review. They are the one kind of
+ * write a `capture` key is offered — and the only calls whose guard passes
+ * `capture: true`, which is what lets that key through `requireKeyAllows`.
+ * Writes like WRITE_TOOLS, and kept apart from it so neither list needs a
+ * second flag: a tool is read-only when it is in neither. Registered by
+ * `registerCaptureTools` (capture-tools.ts).
+ */
+export const CAPTURE_TOOLS: ReadonlySet<string> = new Set([
+  'knowledge_capture_decision',
+  'knowledge_capture_note',
+  'knowledge_propose_glossary_term',
+  'knowledge_propose_relation',
+  'knowledge_propose_answer',
+]);
+
+/**
  * Keep a handle on every tool registered from here on.
  *
  * Wraps the instance rather than each call site, because `server.registerTool(
@@ -79,17 +97,19 @@ export function trackTools(server: McpServer): Map<string, RegisteredTool> {
 }
 
 /**
- * Annotate every tool read-only or not, and drop the writes a read-only key
+ * Annotate every tool read-only or not, and drop the writes a narrowed key
  * could never run — offering a tool that always 403s spends the model's
- * context on a dead end. Offering is not the check: each write tool still runs
- * `requireRole`, which refuses a read key on its own.
+ * context on a dead end. A read key keeps the reads; a capture key the reads
+ * and CAPTURE_TOOLS. Offering is not the check: each write tool still runs
+ * `requireRole`, which refuses the key on its own.
  */
 export function settleTools(handles: Map<string, RegisteredTool>, principal: Principal): McpToolSummary[] {
-  const readKey = principal.apiKey?.scope === 'read';
+  const scope = principal.apiKey?.scope ?? 'write';
   const offered: McpToolSummary[] = [];
   for (const [name, handle] of handles) {
-    const readOnly = !WRITE_TOOLS.has(name);
-    if (readKey && !readOnly) {
+    const readOnly = !WRITE_TOOLS.has(name) && !CAPTURE_TOOLS.has(name);
+    const kept = readOnly || scope === 'write' || (scope === 'capture' && CAPTURE_TOOLS.has(name));
+    if (!kept) {
       handle.remove();
       continue;
     }

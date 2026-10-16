@@ -99,6 +99,9 @@ const filterFields = computed<FilterField[]>(() => [
     options: [
       { value: 'manual', label: t('filter.writtenByHand') },
       { value: 'ai', label: t('filter.acceptedFromAi') },
+      // A term an agent session proposed and an editor approved in the
+      // captures inbox (issue #73) — reviewed, but not written here.
+      { value: 'captured', label: t('filter.capturedFromSession') },
     ],
   },
   {
@@ -455,6 +458,7 @@ watch(highlighted, (id) => {
               </span>
             </button>
             <Badge v-if="term.source === 'ai'" variant="outline" class="mt-1 font-normal">{{ t('common.ai') }}</Badge>
+            <Badge v-else-if="term.source === 'captured'" variant="outline" class="mt-1 font-normal">{{ t('captures.badge') }}</Badge>
           </TableCell>
           <TableCell class="align-top text-sm">
             <MarkdownView :markdown="term.definition" />

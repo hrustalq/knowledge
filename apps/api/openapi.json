@@ -5816,6 +5816,20 @@
             }
           },
           {
+            "name": "provenance",
+            "required": false,
+            "in": "query",
+            "description": "Only merge requests opened this way, e.g. captured (issue #73)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "manual",
+                "agent",
+                "captured"
+              ]
+            }
+          },
+          {
             "name": "cursor",
             "required": false,
             "in": "query",
@@ -24299,6 +24313,438 @@
         ]
       }
     },
+    "/v1/captures": {
+      "post": {
+        "operationId": "CapturesController_create",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCaptureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stage a capture and propose it: page and relation captures open a merge request with provenance captured, a term waits in the inbox (429 past the rate limits, 400 on a credential)",
+        "tags": [
+          "captures"
+        ]
+      },
+      "get": {
+        "operationId": "CapturesController_list",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Stored status; merged/closed read from the merge request",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "staged",
+                "proposed",
+                "duplicate",
+                "rejected",
+                "failed"
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "decision",
+                "gotcha",
+                "convention",
+                "howto",
+                "glossary",
+                "relation",
+                "answer"
+              ]
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mine",
+            "required": false,
+            "in": "query",
+            "description": "'1' or 'true': only the caller's own captures",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The last capture id of the previous page",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Defaults to 50",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Captures in a workspace, newest first; ones on pages or projects the caller cannot open are left out",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/v1/captures/{id}": {
+      "get": {
+        "operationId": "CapturesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One capture, with its state read through its merge request",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/v1/captures/{id}/approve": {
+      "post": {
+        "operationId": "CapturesController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Approve a term waiting in the inbox: it becomes a glossary entry with source captured. A page or relation capture is approved by merging its merge request (409)",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/v1/captures/{id}/reject": {
+      "post": {
+        "operationId": "CapturesController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectCaptureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reject a staged capture. A proposed one is turned down by closing its merge request (409 with mergeRequestId)",
+        "tags": [
+          "captures"
+        ]
+      }
+    },
+    "/v1/assistant/messages/{id}/capture": {
+      "post": {
+        "operationId": "AssistantCaptureController_capture",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptureAssistantMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Write an assistant reply back as an answer capture: its question, its cited pages, a merge request to review (400 when it cites no page)",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/v1/mcp": {
       "post": {
         "operationId": "McpController_handle",
@@ -24539,12 +24985,134 @@
           "mcp"
         ]
       }
+    },
+    "/v1/mcp/capture-kit": {
+      "get": {
+        "operationId": "McpController_captureKit",
+        "parameters": [
+          {
+            "name": "client",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "claude-code",
+                "cursor"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Capture kit for a coding agent: the skill/rule, the hook script and its entries, generated for the caller. 403 for a key offered no capture tools",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
+    "/v1/mcp/capture-kit/install": {
+      "get": {
+        "operationId": "McpController_captureKitInstaller",
+        "parameters": [
+          {
+            "name": "client",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "claude-code",
+                "cursor"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The capture kit as a POSIX shell script that installs it into the git repository it runs in",
+        "tags": [
+          "mcp"
+        ]
+      }
     }
   },
   "info": {
     "title": "Knowledge API",
     "description": "Dynamic Knowledge Platform — documents, revisions, ingestion, search",
-    "version": "0.22.0",
+    "version": "0.23.0",
     "contact": {}
   },
   "tags": [],
@@ -24682,14 +25250,23 @@
             "type": "string",
             "enum": [
               "read",
+              "capture",
               "write"
             ],
-            "description": "'read' caps every workspace at the viewer role. Omitted means 'write' (the owner's own role)."
+            "description": "'read' caps every workspace at the viewer role. 'capture' reads like 'read' and may also propose agent-session captures as merge requests, never write or merge. Omitted means 'write' (the owner's own role)."
           },
           "workspaceId": {
             "type": "string",
             "format": "uuid",
             "description": "Pin the key to one workspace; omit for all of yours."
+          },
+          "projectIds": {
+            "description": "Pin a 'capture' key to these projects (at most 20); omit for every project. Refused on any other scope.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "expiresInDays": {
             "type": "number",
@@ -26418,6 +26995,37 @@
             "type": "boolean",
             "nullable": true,
             "description": "Whether the page AI actions menu may offer \"Open in ChatGPT / Claude / Cursor\" (issue #68). Clamped by the AI_EXTERNAL_ACTIONS_ENABLED ceiling: true under a false ceiling is stored, but the effective value stays false and the response reports source=clamped. null = inherit the ceiling."
+          },
+          "captureEnabled": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether coding agents may propose agent-session captures (issue #73). Clamped by the CAPTURE_ENABLED ceiling; the response reports source=clamped. null = inherit the ceiling."
+          },
+          "capturePerKeyPerHour": {
+            "type": "number",
+            "nullable": true,
+            "description": "Captures one API key may stage per rolling hour. Clamped by CAPTURE_PER_KEY_PER_HOUR. null = inherit."
+          },
+          "capturePerWorkspacePerDay": {
+            "type": "number",
+            "nullable": true,
+            "description": "Captures the workspace accepts per rolling day. Clamped by CAPTURE_PER_WORKSPACE_PER_DAY. null = inherit."
+          },
+          "captureDedupeThreshold": {
+            "type": "number",
+            "nullable": true,
+            "description": "Cosine to the nearest page at or above which a capture is a duplicate candidate (0–1). null = CAPTURE_DEDUPE_THRESHOLD."
+          },
+          "captureAmendThreshold": {
+            "type": "number",
+            "nullable": true,
+            "description": "Cosine at or above which a capture amends the nearest page (0–1, never above the dedupe threshold). null = CAPTURE_AMEND_THRESHOLD."
+          },
+          "captureParentDocumentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The page new captured pages nest under; null for the project root."
           },
           "chatProviderId": {
             "type": "string",
@@ -29318,6 +29926,191 @@
         "required": [
           "code"
         ]
+      },
+      "CaptureSessionDto": {
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "cursor",
+              "codex",
+              "gemini",
+              "assistant",
+              "other"
+            ]
+          },
+          "clientVersion": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string",
+            "description": "owner/name or the remote URL"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "files": {
+            "description": "Repository paths the session touched — paths only",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "client"
+        ]
+      },
+      "CreateCaptureDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "decision",
+              "gotcha",
+              "convention",
+              "howto",
+              "glossary",
+              "relation",
+              "answer"
+            ]
+          },
+          "session": {
+            "$ref": "#/components/schemas/CaptureSessionDto"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "Required except for a relation (the page's project) and an answer (defaults to the first cited page's)"
+          },
+          "title": {
+            "type": "string",
+            "description": "Required for a decision and a note; an answer defaults to its question"
+          },
+          "context": {
+            "type": "string",
+            "description": "decision: the problem and the forces at play"
+          },
+          "decision": {
+            "type": "string",
+            "description": "decision: what was decided and why"
+          },
+          "consequences": {
+            "type": "string"
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "relatedDocumentIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "type": "string",
+            "description": "gotcha/convention/howto: markdown"
+          },
+          "appliesTo": {
+            "description": "Repository paths or entity keys the note is about",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "term": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "documentId": {
+            "type": "string",
+            "description": "relation: the page to add it to (required); glossary: a page that defines the term"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "DESCRIBES",
+              "DEPENDS_ON",
+              "IMPLEMENTS",
+              "RELATED_TO",
+              "OWNED_BY",
+              "SUPERSEDES",
+              "CONTRADICTS"
+            ]
+          },
+          "targetKey": {
+            "type": "string",
+            "description": "relation: entity key, e.g. \"service:billing\""
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "citedDocumentIds": {
+            "description": "answer: at least one",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "workspaceId",
+          "kind",
+          "session"
+        ]
+      },
+      "RejectCaptureDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Why, for the activity log"
+          }
+        }
+      },
+      "CaptureAssistantMessageDto": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "Defaults to the first cited page's project"
+          },
+          "title": {
+            "type": "string",
+            "description": "Defaults to the question"
+          }
+        }
       },
       "ApiErrorResponse": {
         "type": "object",

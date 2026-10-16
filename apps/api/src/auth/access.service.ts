@@ -20,11 +20,11 @@ export class AccessService {
     workspaceId: string,
     role: WorkspaceRole,
     operator = false,
-    opts: { allowGuest?: boolean } = {},
+    opts: { allowGuest?: boolean; capture?: boolean } = {},
   ): Promise<void> {
     // A key narrows its owner before anything widens them: checked ahead of the
     // platform-admin shortcut, or an admin's read-only key would write anyway.
-    if (principal.apiKey) this.requireKeyAllows(principal.apiKey, workspaceId, role);
+    if (principal.apiKey) this.requireKeyAllows(principal.apiKey, workspaceId, role, opts);
     if (principal.mode === 'dev') return; // AUTH_MODE=none — full access
     if (principal.isAdmin) return; // platform admin — implicit admin + operator everywhere
     const member = await this.prisma.workspaceMember.findUnique({
@@ -52,14 +52,27 @@ export class AccessService {
    * The narrowing a `kn_` key carries (docs/features/33). Exposed separately so
    * a caller with no workspace to resolve (the MCP tool filter) asks the same
    * question the guard does rather than a copy of it.
+   *
+   * A `capture` key (issue #73) is a read key everywhere except the calls that
+   * say `capture: true` — the agent-memory tools and routes, which only ever
+   * stage a capture and open a merge request. Even there it reaches editor and
+   * no further, so no flag can lift it to merge, approve or administer.
    */
-  requireKeyAllows(key: NonNullable<Principal['apiKey']>, workspaceId: string, role: WorkspaceRole): void {
+  requireKeyAllows(
+    key: NonNullable<Principal['apiKey']>,
+    workspaceId: string,
+    role: WorkspaceRole,
+    opts: { capture?: boolean } = {},
+  ): void {
     if (key.workspaceId && key.workspaceId !== workspaceId) {
       throw new ForbiddenException(t('error.auth.apiKeyWorkspace', { workspaceId }));
     }
-    if (key.scope === 'read' && ROLE_ORDER[role] > ROLE_ORDER.viewer) {
-      throw new ForbiddenException(t('error.auth.apiKeyReadOnly', { role: t(`role.${role}`) }));
+    if (ROLE_ORDER[role] <= ROLE_ORDER.viewer || key.scope === 'write') return;
+    if (key.scope === 'capture') {
+      if (opts.capture && role === 'editor') return;
+      throw new ForbiddenException(t('error.auth.apiKeyCaptureOnly', { role: t(`role.${role}`) }));
     }
+    throw new ForbiddenException(t('error.auth.apiKeyReadOnly', { role: t(`role.${role}`) }));
   }
 
   /**
@@ -391,6 +404,12 @@ export class AccessService {
   async workspaceOfAccessRequest(requestId: string): Promise<string> {
     const row = await this.prisma.accessRequest.findUnique({ where: { id: requestId }, select: { workspaceId: true } });
     if (!row) throw new NotFoundException(t('error.access.requestNotFound', { id: requestId }));
+    return row.workspaceId;
+  }
+
+  async workspaceOfCapture(captureId: string): Promise<string> {
+    const row = await this.prisma.knowledgeCapture.findUnique({ where: { id: captureId }, select: { workspaceId: true } });
+    if (!row) throw new NotFoundException(t('error.capture.notFound', { id: captureId }));
     return row.workspaceId;
   }
 

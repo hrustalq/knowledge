@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type {
   AiPurpose,
   AiSettingsSourceMap,
+  CaptureSettings,
   ExternalAiActionsSettings,
   WebAccessSettings,
 } from '@knowledge/contracts';
@@ -12,6 +13,7 @@ import { AiProvidersService } from './ai-providers.service.js';
 import { SourcePolicyService } from './source-policy.service.js';
 import { decryptSecret, parseKey } from './secret-box.js';
 import { resolveExternalAiActions } from './external-ai-actions.js';
+import { resolveCaptureSettings } from './capture-settings.js';
 
 /**
  * Per-provider defaults so `provider=deepseek` works with nothing but an API
@@ -198,6 +200,22 @@ export class AiConfigService {
 
     this.cache.set(workspaceId, { at: Date.now(), config });
     return config;
+  }
+
+  /**
+   * A workspace's agent-session memory settings (issue #73), clamped by the
+   * CAPTURE_* env block. Read uncached: it is asked once per capture, which
+   * the same settings rate-limit, and a lowered limit must bite at once.
+   */
+  async captureSettings(workspaceId: string): Promise<CaptureSettings> {
+    const row = await this.prisma.aiSettings.findUnique({ where: { workspaceId } });
+    return resolveCaptureSettings(row, {
+      enabled: this.config.get('CAPTURE_ENABLED', { infer: true }),
+      perKeyPerHour: this.config.get('CAPTURE_PER_KEY_PER_HOUR', { infer: true }),
+      perWorkspacePerDay: this.config.get('CAPTURE_PER_WORKSPACE_PER_DAY', { infer: true }),
+      dedupeThreshold: this.config.get('CAPTURE_DEDUPE_THRESHOLD', { infer: true }),
+      amendThreshold: this.config.get('CAPTURE_AMEND_THRESHOLD', { infer: true }),
+    });
   }
 
   /**

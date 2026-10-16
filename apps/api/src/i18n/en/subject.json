@@ -33,5 +33,6 @@
   "chatSubscription": "chat subscription id",
   "chatIdentity": "linked chat account id",
   "group": "group id",
-  "accessRequest": "access request id"
+  "accessRequest": "access request id",
+  "capture": "capture id"
 }

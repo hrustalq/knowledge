@@ -118,7 +118,17 @@ async function loadTokens(query: string): Promise<AutocompleteOption[]> {
         add(`me:${f.key}`, t(f.mine), t(f.label), { kind: 'set', key: f.key, operator: 'is', value: meId })
       }
     }
-    for (const f of [...PEOPLE_FIELDS, ...BRANCH_FIELDS]) {
+    // What agents proposed from their sessions (issue #73) is a review queue of
+    // its own, so it is one pick away rather than behind the field's value list.
+    if (!props.filters.some((active) => active.key === 'provenance')) {
+      add('provenance:captured', t('mr.provenance.capturedView'), t('filters.provenance'), {
+        kind: 'set',
+        key: 'provenance',
+        operator: 'is',
+        value: 'captured',
+      })
+    }
+    for (const f of [...PEOPLE_FIELDS, ...BRANCH_FIELDS, { key: 'provenance' as const, label: 'filters.provenance' }]) {
       if (props.filters.some((active) => active.key === f.key)) continue
       add(`field:${f.key}`, t(f.label), t('common.filter'), { kind: 'field', key: f.key })
     }

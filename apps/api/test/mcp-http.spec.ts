@@ -271,6 +271,15 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
       similarPages: vi.fn(async () => [{ documentId: 'd-1', title: 'Billing', score: 0.91 }]),
       list: vi.fn(async () => ({ captures: [], nextCursor: null })),
     },
+    componentUsages: {},
+    componentDrafts: {
+      start: vi.fn(async (_p: Principal, input: { paths: string[] }) => ({
+        runId: 'run-9',
+        connectorId: 'c-1',
+        title: 'ResponsivePopover',
+        paths: input.paths,
+      })),
+    },
   };
   const mcp = new McpService(...(Object.values(deps) as ConstructorParameters<typeof McpService>));
   return {
@@ -288,6 +297,7 @@ function service(access: AccessService, aiReadable: unknown = { enabled: () => t
     accessRequests: deps.accessRequests,
     learnings: deps.learnings,
     captures: deps.captures,
+    componentDrafts: deps.componentDrafts,
   };
 }
 
@@ -319,6 +329,25 @@ describe('McpService over a principal', () => {
     const offered = (await reader.listTools()).tools.map((t) => t.name);
     expect(offered).toContain('knowledge_search');
     for (const name of WRITE_TOOLS) expect(offered).not.toContain(name);
+    // Spelled out for #236: drafting a component queues a model run that ends in a merge request.
+    expect(offered).not.toContain('knowledge_document_component');
+    expect(tools.find((t) => t.name === 'knowledge_document_component')?.annotations?.readOnlyHint).toBe(false);
+  });
+
+  it('drafts a component as its caller, and refuses a viewer (#236)', async () => {
+    const editor = service(accessWith('editor'));
+    const principal = keyPrincipal({ id: 'k', scope: 'write', workspaceId: null });
+    const writer = await connect(editor.mcp, principal);
+    const paths = ['apps/web/src/components/ResponsivePopover.vue'];
+    const res = await writer.callTool({ name: 'knowledge_document_component', arguments: { workspaceId: WS_A, paths } });
+    expect(res.isError).toBeFalsy();
+    expect(editor.componentDrafts.start).toHaveBeenCalledWith(principal, { workspaceId: WS_A, paths });
+
+    const viewer = service(accessWith('viewer'));
+    const reader = await connect(viewer.mcp, principal);
+    const refused = await reader.callTool({ name: 'knowledge_document_component', arguments: { workspaceId: WS_A, paths } });
+    expect(refused.isError).toBe(true);
+    expect(viewer.componentDrafts.start).not.toHaveBeenCalled();
   });
 
   it('offers a capture key the reads and nothing that writes, merges, approves or syncs (#73)', async () => {

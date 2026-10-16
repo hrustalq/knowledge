@@ -239,7 +239,8 @@
     "agentWebhookBadSignature": "The X-Knowledge-Signature header does not match this delivery.",
     "agentWebhookStale": "X-Knowledge-Timestamp is more than {seconds} seconds away from the server's clock.",
     "agentWebhookDeliveryId": "X-Knowledge-Delivery is missing or invalid: 1–200 letters, digits and . _ : -",
-    "skillNoUpstream": "Skill {id} has no upstream change to accept"
+    "skillNoUpstream": "Skill {id} has no upstream change to accept",
+    "findingComponentDraft": "A component draft opens as a merge request, never as a published page."
   },
   "assistant": {
     "providerDisabled": "Assistant provider is disabled for this workspace",
@@ -377,7 +378,18 @@
     "notAFile": "{path} is a directory, not a file"
   },
   "component": {
-    "notDeclared": "Page {id} declares no component: add a `component:` block to its frontmatter"
+    "notDeclared": "Page {id} declares no component: add a `component:` block to its frontmatter",
+    "draftNoModel": "No model is configured for the archaeologist, which drafts component pages. Configure one in AI settings, or write the page from the Component template.",
+    "draftNoConnector": "There is no codebase connector to read the component from.",
+    "draftConnector": "Connector {id} is not a codebase connector in this workspace.",
+    "draftAmbiguous": "This workspace has more than one codebase connector; say which one the component lives in.",
+    "draftPath": "“{path}” is not a file path: give repo-relative files, not globs or directories.",
+    "draftTooMany": "A component page covers at most {max} files.",
+    "draftDocumented": "A page already declares {path}.",
+    "draftInFlight": "This component is already being drafted.",
+    "draftProposed": "A draft of this component is already waiting in a merge request.",
+    "draftQueueFull": "{n} component drafts are already queued in this workspace; try again when one finishes.",
+    "draftPlace": "The page cannot go there: the project or parent page is not in this workspace, or you cannot open it."
   },
   "web": {
     "notFound": "Source policy {id} not found",

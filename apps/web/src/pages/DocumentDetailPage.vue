@@ -788,7 +788,13 @@ watch(
             />
           </template>
           <template #widget-graph><GraphView :document-id="documentId" /></template>
-          <template #widget-used-by><UsedByRail :document-id="documentId" /></template>
+          <template #widget-used-by>
+            <UsedByRail
+              :document-id="documentId"
+              :project-id="detail?.document.projectId"
+              :parent-id="detail?.document.parentId"
+            />
+          </template>
           <template #widget-workflows><WorkflowRail :document-id="documentId" /></template>
           <template #widget-connectors><ConnectorRail :document-id="documentId" /></template>
           <!-- Bounded to sit inside the widget's own cap rather than past it.

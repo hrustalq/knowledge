@@ -1461,6 +1461,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/components/drafts",
+      "tag": "connectors",
+      "summary": "Draft a component page from code: the archaeologist reads the files and fills the Component template, and the page opens as a merge request by the caller, hidden until it merges. Returns the run; its finding carries `mergeRequestId` once the merge request is open. 409 when a page already declares one of the files, or a draft of them is running or waiting for review",
+      "role": null,
+      "source": null,
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "GET",
       "path": "/v1/connectors",
       "tag": "connectors",
@@ -4114,6 +4124,40 @@
         },
         {
           "name": "message",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "knowledge_document_component",
+      "description": "Draft a component page from code. The archaeologist reads the given files of a codebase connector and fills the Component template (purpose, public surface, behaviour & invariants, usage notes); the page then opens as a merge request by you, hidden until a person merges it — nothing is published directly. Returns the run and the title; the merge request appears under knowledge_list_merge_requests with that title once the run finishes, usually within a few minutes. Refused when a page already declares one of the files. Use knowledge_code_usages first to see whether the code is documented.",
+      "inputs": [
+        {
+          "name": "workspaceId",
+          "optional": false
+        },
+        {
+          "name": "paths",
+          "optional": false
+        },
+        {
+          "name": "connectorId",
+          "optional": true
+        },
+        {
+          "name": "symbols",
+          "optional": true
+        },
+        {
+          "name": "name",
+          "optional": true
+        },
+        {
+          "name": "projectId",
+          "optional": true
+        },
+        {
+          "name": "parentId",
           "optional": true
         }
       ]

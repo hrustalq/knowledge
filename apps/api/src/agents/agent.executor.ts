@@ -5,6 +5,7 @@ import type {
   AgentFinding,
   AgentFindingKind,
   AgentRunDetails,
+  AgentRunComponent,
   AgentRunInput,
   AnswerSignalKind,
   AnswerSurface,
@@ -15,7 +16,7 @@ import type {
 } from '@knowledge/contracts';
 import type { Env } from '../config/env.js';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from '../embedding/embedding.provider.js';
-import { AGENT_FINDING_KINDS, AGENT_RUN_MAX_DOCUMENTS, isAuthorableRelationType } from '@knowledge/contracts';
+import { AGENT_FINDING_KINDS, AGENT_RUN_MAX_DOCUMENTS, builtInTemplateRef, isAuthorableRelationType } from '@knowledge/contracts';
 import { normalizeRelation } from '../common/relations.js';
 import { t } from '../i18n/t.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -39,6 +40,8 @@ import { AiSkillsService } from '../ai/ai-skills.service.js';
 import { AgentLearningsService } from '../ai/agent-learnings.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { GlossaryService } from '../glossary/glossary.service.js';
+import { TemplatesService } from '../templates/templates.service.js';
+import { composeFrontmatter } from '../common/frontmatter.js';
 import type { Principal } from '../auth/principal.js';
 import {
   CODE_OUTPUT_CONTRACT,
@@ -59,6 +62,7 @@ import {
   selectRepoDocs,
   type Candidate,
 } from './archaeology.js';
+import { COMPONENT_DRAFT_CONTRACT, componentFrontmatter, componentPreviews, readComponentDraft } from './component-draft.js';
 import {
   DRIFT_OUTPUT_CONTRACT,
   MAX_DIFF_CHARS,
@@ -209,6 +213,7 @@ export class AgentExecutor {
     private readonly permissions: PermissionService,
     private readonly learnings: AgentLearningsService,
     private readonly componentUsages: ComponentUsagesService,
+    private readonly templates: TemplatesService,
   ) {}
 
   /**
@@ -723,6 +728,7 @@ export class AgentExecutor {
     report: AgentReporter,
   ): Promise<AgentRunResult> {
     const input = (run.input ?? {}) as AgentRunInput;
+    if (input.component) return this.draftComponent(run, agent, input.component, principal, report);
     await report({ stage: 'snapshot', progress: 0.05 });
     // The API settled the scope at enqueue; a scheduled run never went through
     // it, so the only-repository fallback lives here too.
@@ -884,6 +890,127 @@ export class AgentExecutor {
     return {
       summary: t('agent.archaeology.summary', { ...counts, files: filesRead, findings: kept.length }),
       findings: kept,
+    };
+  }
+
+  /**
+   * "Document this component" (#236, phase 5): one page, from the files the
+   * run was asked about, written into the `component` template.
+   *
+   * The archaeologist's reading loop over a different question. The files
+   * are given rather than ranked, so nothing here decides what to document,
+   * only how: the template is rendered with the component's name and first
+   * path, the model fills its sections from the code (`readComponentDraft`
+   * refuses a body that drops one), and the frontmatter is computed — the
+   * `component:` block names every file the run read. Nothing is written:
+   * the draft rides on the finding, and `ComponentDraftSweeper` opens it as a
+   * merge request API-side, as the person who asked.
+   *
+   * Failing loudly is the right answer to every problem here — a missing
+   * file, no model, an unusable draft — because a person is waiting on this
+   * one run and the failure is what they read.
+   */
+  private async draftComponent(
+    run: AgentRun,
+    agent: ResolvedAgent,
+    component: AgentRunComponent,
+    principal: Principal,
+    report: AgentReporter,
+  ): Promise<AgentRunResult> {
+    const input = (run.input ?? {}) as AgentRunInput;
+    if (!input.connectorId) throw new Error(t('error.ai.agentNeedsConnector', { key: agent.key }));
+    if (!agent.config.enabled || agent.missing.some((capability) => capability !== 'tools')) {
+      throw new Error(t('agent.component.noModel'));
+    }
+    await report({ stage: 'snapshot', progress: 0.1 });
+    const snapshot = await this.snapshots.open(input.connectorId, run.workspaceId);
+    // Settled at enqueue against the request, not the archive: the API cannot
+    // afford a download per press, and the head may have moved since anyway.
+    const missing = component.paths.filter((path) => !snapshot.files.has(path));
+    if (missing.length > 0) {
+      throw new Error(t('agent.component.pathsMissing', { paths: missing.join(', '), repository: snapshot.name }));
+    }
+
+    const ref = builtInTemplateRef('component');
+    const repository = `${snapshot.host.owner}/${snapshot.host.repo}`;
+    const [template, rendered, skills] = await Promise.all([
+      this.templates.resolve(run.workspaceId, ref),
+      this.templates.render(
+        {
+          workspaceId: run.workspaceId,
+          ref,
+          title: component.name,
+          values: { name: component.name, path: component.paths[0], repository },
+          ...(component.projectId ? { projectId: component.projectId } : {}),
+          ...(component.parentId ? { parentId: component.parentId } : {}),
+        },
+        { id: run.createdBy },
+      ),
+      this.guidance(run, agent),
+    ]);
+    const notes = template.parsed.meta.aiInstructions?.trim();
+    const files = componentPreviews(snapshot, component.paths)
+      .map((f) => `<file path=${JSON.stringify(f.path)} lines=${f.lines}>\n${f.text}\n</file>`)
+      .join('\n');
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: `${agent.instructions}\n\n${COMPONENT_DRAFT_CONTRACT}${skills}` },
+      {
+        role: 'user',
+        content:
+          runBrief(input) +
+          `Repository: ${snapshot.name} (${repository} @ ${snapshot.branch}). ` +
+          `Every code tool call reads this repository; connectorId is ${input.connectorId}.\n\n` +
+          `The component: ${component.name}, declared by ${component.paths.join(', ')}` +
+          (component.symbols?.length ? `, documenting only the exports ${component.symbols.join(', ')}` : '') +
+          `.\n\nThe page skeleton to fill:\n${wrapUntrusted(rendered.body, 'component_template', 'template')}` +
+          (notes ? `\n\nThe template's notes for whoever fills it:\n${wrapUntrusted(notes, 'component_template', 'template')}` : '') +
+          `\n\nThe start of each file (use code_read for the rest):\n${wrapUntrusted(files, 'code_read', 'repo')}`,
+      },
+    ];
+
+    await report({ stage: 'reading', progress: 0.3 });
+    const toolCtx = this.toolCtx(run, principal);
+    const { content, readPaths } = await runCodeReadingLoop({
+      client: this.client,
+      call: { config: agent.config, userId: run.createdBy, operation: 'component-draft', locale: run.locale as Locale },
+      messages,
+      tools: [...this.readTools.definitions(), ...this.code.definitions()],
+      // One repository: whatever connectorId the model wrote, this is the one it reads.
+      execute: (name, args) =>
+        CODE_TOOLS.has(name)
+          ? this.code.execute(name, { ...args, connectorId: input.connectorId }, toolCtx)
+          : this.readTools.execute(name, args, toolCtx),
+      toolless: agent.missing.includes('tools'),
+      json: true,
+      seen: component.paths,
+    });
+    const body = readComponentDraft(safeJson(content), rendered.body, snapshot, readPaths, component.paths);
+    if (!body) throw new Error(t('agent.component.draftUnusable'));
+
+    const title = rendered.title?.trim() || component.name;
+    const markdown = composeFrontmatter(
+      body.markdown,
+      componentFrontmatter(rendered.frontmatter, {
+        repository,
+        component,
+        source: snapshot.blobUrl(component.paths[0]),
+        generatedBy: agent.key,
+      }),
+    );
+    return {
+      summary: t('agent.component.summary', { name: component.name, files: readPaths.size, repository: snapshot.name }),
+      findings: [
+        {
+          kind: 'gap',
+          severity: 'info',
+          title: t('agent.component.findingTitle', { name: component.name }),
+          detail: t('agent.component.findingDetail', { paths: component.paths.join(', ') }),
+          documentIds: [],
+          documentTitles: [],
+          sources: body.sources,
+          draft: { title: title.slice(0, 300), markdown, template: { ref: rendered.templateRef, version: rendered.templateVersion } },
+        },
+      ],
     };
   }
 

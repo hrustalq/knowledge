@@ -61,6 +61,22 @@ in the pull request that introduces them — see
   runs panel does the same, and it never calls the drafter. If nothing in
   the declaration would be left, the finding says the component is gone and
   proposes nothing. (#236)
+- **Document this component**: in a component page's Used by panel, an
+  editor can press **Document** on a usage file that no page documents.
+  The archaeologist reads the file from the codebase connector, fills the
+  Component template's sections from the code, and the page opens as a
+  merge request by the person who pressed it. The page stays hidden from
+  lists and search until the merge request merges. Its `component:` block
+  names exactly the files that were read. The panel shows the draft's
+  progress and then links to the merge request. The same action is
+  available as `POST /v1/components/drafts` (one to ten files, an optional
+  name, symbols and placement) and as the MCP write tool
+  `knowledge_document_component`, which read-only keys are not offered.
+  A request is refused when a page you can open already declares one of
+  the files, or when a draft of the same files is still running or
+  waiting in an open merge request. It is also refused when the
+  archaeologist has no model. Model spend shows as **Component draft** on
+  the usage page. (#236)
 
 ### Changed
 

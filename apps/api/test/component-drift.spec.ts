@@ -268,6 +268,7 @@ describe('the sentinel with component ties', () => {
       } as never,
       { promptFor: async () => '', dismissedPrompt: async () => '' } as never,
       componentUsages as never,
+      {} as never,
     );
     const run = {
       id: 'run-1',

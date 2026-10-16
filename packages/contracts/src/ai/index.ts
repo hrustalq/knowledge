@@ -1011,6 +1011,8 @@ export type AiUsageOperation =
   | 'changelog'
   /** Drafting a page from a chat conversation somebody saved (issue #71). */
   | 'chat-capture'
+  /** Drafting a component page from its code, for "Document this component" (#236). */
+  | 'component-draft'
   /**
    * Inferring graph relations from a chunk during ingestion. One row per chunk
    * call, so a reindex of a large corpus is visible as the spend it is.
@@ -1209,8 +1211,9 @@ export interface AgentRunInput {
   coverage?: { windowDays: number };
   /**
    * Set once the API has acted on a finished sentinel run — proposals opened,
-   * the pull request commented on. The claim that stops two sweeps doing it
-   * twice; never set by anything else.
+   * the pull request commented on — or on a component draft (#236), its merge
+   * request opened. The claim that stops two sweeps doing it twice; never set
+   * by anything else.
    */
   publishedAt?: string;
   /**
@@ -1235,6 +1238,25 @@ export interface AgentRunInput {
    * only ever shows it to a model inside `wrapUntrusted`.
    */
   payload?: string;
+  /**
+   * An archaeologist run asked to document one component (#236, phase 5)
+   * rather than to excavate the repository: the files to read, and the name
+   * the page gets. Settled by the API at enqueue — the files exist in the
+   * connector's head, the name is final — so the worker only reads and writes.
+   * `connectorId` names the repository. `ComponentDraftSweeper` opens the draft
+   * as a merge request, as the run's owner, and stamps `publishedAt`.
+   */
+  component?: AgentRunComponent;
+}
+
+/** What a "Document this component" run documents (#236). */
+export interface AgentRunComponent {
+  name: string;
+  paths: string[];
+  symbols?: string[];
+  /** Where the page goes once merged; the connector's destination when absent. */
+  projectId?: string;
+  parentId?: string;
 }
 
 export interface AgentRunEvent {
@@ -2150,6 +2172,11 @@ export interface AgentFindingCoverage {
 export interface AgentFindingDraft {
   title: string;
   markdown: string;
+  /**
+   * The template the draft was written into (#236): recorded on the page as
+   * its provenance when the draft is published. Absent for a free-form draft.
+   */
+  template?: { ref: string; version: number };
 }
 
 // POST /v1/ai/agents/runs/:id/findings/:index/propose
@@ -2171,6 +2198,14 @@ export interface FlagFindingOutdatedResponse {
 
 // POST /v1/ai/agents/runs/:id/findings/:index/create-page
 export interface CreatePageFromFindingResponse {
+  documentId: string;
+  title: string;
+}
+
+/** A finding's draft opened as a new page behind a merge request (#236). */
+export interface DraftPageProposalResponse {
+  mergeRequestId: string;
+  /** The page, hidden until the merge request merges. */
   documentId: string;
   title: string;
 }

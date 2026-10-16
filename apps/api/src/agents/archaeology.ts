@@ -270,13 +270,8 @@ export const CODE_OUTPUT_CONTRACT =
 // ---- reading the model's answer ---------------------------------------------
 
 /**
- * One proposed page, validated rather than trusted.
- *
- * The rule `readFinding` applies to page ids, applied to files: a source must
- * name a path that is in the snapshot, or the citation is to nothing. The URL
- * is built here from the path — the model never supplies one, so a finding
- * cannot claim to cite the repository while linking elsewhere. A draft too
- * short to be a page, or a finding with no valid source, is dropped.
+ * One proposed page, validated rather than trusted. A draft too short to be
+ * a page, or a finding with no valid source (`readCodeSources`), is dropped.
  */
 export function readExcavation(value: unknown, snapshot: RepoSnapshot, readPaths: ReadonlySet<string>): AgentFinding | null {
   if (!value || typeof value !== 'object') return null;
@@ -288,9 +283,33 @@ export function readExcavation(value: unknown, snapshot: RepoSnapshot, readPaths
   const draftMarkdown = typeof draft?.markdown === 'string' ? draft.markdown.trim() : '';
   if (!title || !detail || !draftTitle || draftMarkdown.length < MIN_DRAFT_CHARS) return null;
 
+  const sources = readCodeSources(raw.sources, snapshot, readPaths);
+  if (sources.length === 0) return null;
+
+  return {
+    kind: 'gap',
+    severity: raw.severity === 'warning' ? 'warning' : 'info',
+    title: title.slice(0, 300),
+    detail: detail.slice(0, 2_000),
+    documentIds: [],
+    documentTitles: [],
+    sources,
+    draft: { title: draftTitle.slice(0, 300), markdown: draftMarkdown.slice(0, 40_000) },
+  };
+}
+
+/**
+ * The files a model cited, as web sources (also the component drafter's, #236).
+ *
+ * The rule `readFinding` applies to page ids, applied to files: a source must
+ * name a path in the snapshot that the run actually opened, or the citation is
+ * to nothing. The URL is built here from the path — the model never supplies
+ * one, so a draft cannot claim to cite the repository while linking elsewhere.
+ */
+export function readCodeSources(value: unknown, snapshot: RepoSnapshot, readPaths: ReadonlySet<string>): AssistantWebSource[] {
   const sources: AssistantWebSource[] = [];
   const seen = new Set<string>();
-  for (const entry of Array.isArray(raw.sources) ? raw.sources : []) {
+  for (const entry of Array.isArray(value) ? value : []) {
     if (!entry || typeof entry !== 'object') continue;
     const s = entry as Record<string, unknown>;
     const path = typeof s.path === 'string' ? s.path.trim().replace(/^\.?\//, '') : '';
@@ -312,16 +331,5 @@ export function readExcavation(value: unknown, snapshot: RepoSnapshot, readPaths
     });
     if (sources.length >= MAX_SOURCES_PER_FINDING) break;
   }
-  if (sources.length === 0) return null;
-
-  return {
-    kind: 'gap',
-    severity: raw.severity === 'warning' ? 'warning' : 'info',
-    title: title.slice(0, 300),
-    detail: detail.slice(0, 2_000),
-    documentIds: [],
-    documentTitles: [],
-    sources,
-    draft: { title: draftTitle.slice(0, 300), markdown: draftMarkdown.slice(0, 40_000) },
-  };
+  return sources;
 }

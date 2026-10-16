@@ -2093,7 +2093,8 @@
       "suggest": "Suggest",
       "glossary": "Glossary",
       "public_ask": "Site Ask",
-      "chat-capture": "Saved from chat"
+      "chat-capture": "Saved from chat",
+      "component-draft": "Component draft"
     },
     "anyOutcome": "Any",
     "failedOnly": "Failed only",
@@ -4670,6 +4671,15 @@
       "everything": "everything (namespace import)",
       "alsoDeclaredBy": "Also declared by",
       "unresolvedShort": "not tracked"
+    },
+    "draft": {
+      "action": "Document",
+      "hint": "Draft a component page for this file from its code. It opens as a merge request for review; nothing is published until it merges.",
+      "drafting": "Drafting a page from the code…",
+      "opening": "Opening the merge request…",
+      "review": "Review the drafted page",
+      "failed": "The draft failed.",
+      "notOpened": "The page was drafted but could not be opened as a merge request. It is on the archaeologist's run."
     }
   }
 }

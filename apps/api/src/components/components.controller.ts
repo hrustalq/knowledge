@@ -1,13 +1,14 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { CodeUsagesResponse, ComponentDeclarationView } from '@knowledge/contracts';
+import type { CodeUsagesResponse, ComponentDeclarationView, DraftComponentResponse } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
 import { PermissionService } from '../permissions/permission.service.js';
 import { ComponentUsagesService } from './component-usages.service.js';
+import { ComponentDraftsService } from './component-drafts.service.js';
 import { ComponentsService } from './components.service.js';
-import { CodeUsagesQueryDto, ComponentUsagesQueryDto } from './components.dto.js';
+import { CodeUsagesQueryDto, ComponentUsagesQueryDto, DraftComponentDto } from './components.dto.js';
 
 /**
  * A page's component declaration (#236). Mounted on `v1/documents` beside
@@ -73,5 +74,31 @@ export class CodeUsagesController {
   async list(@CurrentPrincipal() principal: Principal, @Query() query: CodeUsagesQueryDto): Promise<CodeUsagesResponse> {
     const scope = await this.permissions.scopeFor(principal, query.workspaceId);
     return this.usages.forPath(scope, query);
+  }
+}
+
+/**
+ * "Document this component" (#236, phase 5). Editor: the run ends in a merge
+ * request attributed to the caller. 202, because nothing exists yet — the
+ * archaeologist drafts the page in the worker, and the merge request opens
+ * when it finishes; the run's finding says which.
+ */
+@ApiTags('connectors')
+@Controller('v1/components')
+export class ComponentDraftsController {
+  constructor(private readonly drafts: ComponentDraftsService) {}
+
+  @Post('drafts')
+  @HttpCode(202)
+  @Access('editor', 'body')
+  @ApiOperation({
+    summary:
+      'Draft a component page from code: the archaeologist reads the files and fills the Component template, and ' +
+      'the page opens as a merge request by the caller, hidden until it merges. Returns the run; its finding ' +
+      'carries `mergeRequestId` once the merge request is open. 409 when a page already declares one of the files, ' +
+      'or a draft of them is running or waiting for review',
+  })
+  start(@CurrentPrincipal() principal: Principal, @Body() dto: DraftComponentDto): Promise<DraftComponentResponse> {
+    return this.drafts.start(principal, dto);
   }
 }

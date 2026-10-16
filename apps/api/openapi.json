@@ -18387,6 +18387,65 @@
         ]
       }
     },
+    "/v1/components/drafts": {
+      "post": {
+        "operationId": "ComponentDraftsController_start",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "description": "Response language (docs/features/18). Supported: en, ru. Default: en.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ru"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftComponentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          },
+          "4XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Error envelope — all non-2xx responses conform to ApiErrorResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Draft a component page from code: the archaeologist reads the files and fills the Component template, and the page opens as a merge request by the caller, hidden until it merges. Returns the run; its finding carries `mergeRequestId` once the merge request is open. 409 when a page already declares one of the files, or a draft of them is running or waiting for review",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
     "/v1/documents/{id}/markdown": {
       "get": {
         "operationId": "AiReadableController_markdown",
@@ -29208,6 +29267,48 @@
             "type": "boolean"
           }
         }
+      },
+      "DraftComponentDto": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          },
+          "paths": {
+            "description": "Repo-relative files the component is made of — not globs or directories; at most 10",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "connectorId": {
+            "type": "string",
+            "description": "The codebase connector; optional when the workspace has exactly one"
+          },
+          "symbols": {
+            "description": "Export names the page documents; narrows its usages to them",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "The component name and page title; the first file's name when absent"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "The project the page goes in; the connector's destination when absent"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "The page to nest it under"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "paths"
+        ]
       },
       "SetMessageFeedbackDto": {
         "type": "object",

@@ -1457,3 +1457,36 @@ export interface CodeUsagesResponse {
   /** Why the answer is empty when the declaration resolved to no connector. */
   warning: ComponentDeclarationWarning | null;
 }
+
+/** Files one "Document this component" request may cover (#236, phase 5). */
+export const COMPONENT_DRAFT_MAX_PATHS = 10;
+
+/**
+ * POST /v1/components/drafts — draft a component page from code (#236,
+ * phase 5). The archaeologist reads the files in the worker and fills the
+ * `component` template; the API then opens the page as a merge request, as the
+ * person who asked. Nothing is published until that merge request merges.
+ */
+export interface DraftComponentRequest {
+  workspaceId: string;
+  /** Repo-relative files — never globs: a draft is written from files it can read. */
+  paths: string[];
+  /** The codebase connector; optional when the workspace has exactly one. */
+  connectorId?: string;
+  /** Narrows the page's `component.symbols`. */
+  symbols?: string[];
+  /** The component's name and the page's title; derived from the first path when absent. */
+  name?: string;
+  /** Where the page goes once merged; the connector's destination when absent. */
+  projectId?: string;
+  parentId?: string;
+}
+
+export interface DraftComponentResponse {
+  /** The archaeologist run drafting the page. Its finding carries `mergeRequestId` once the merge request is open. */
+  runId: string;
+  connectorId: string;
+  /** The page's title, and the merge request's. */
+  title: string;
+  paths: string[];
+}

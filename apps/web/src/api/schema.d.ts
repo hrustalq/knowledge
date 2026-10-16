@@ -3664,6 +3664,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/components/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draft a component page from code: the archaeologist reads the files and fills the Component template, and the page opens as a merge request by the caller, hidden until it merges. Returns the run; its finding carries `mergeRequestId` once the merge request is open. 409 when a page already declares one of the files, or a draft of them is running or waiting for review */
+        post: operations["ComponentDraftsController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{id}/markdown": {
         parameters: {
             query?: never;
@@ -6591,6 +6608,21 @@ export interface components {
             /** @description A changed source appends a new version; an identical one does not */
             source?: string;
             enabled?: boolean;
+        };
+        DraftComponentDto: {
+            workspaceId: string;
+            /** @description Repo-relative files the component is made of — not globs or directories; at most 10 */
+            paths: string[];
+            /** @description The codebase connector; optional when the workspace has exactly one */
+            connectorId?: string;
+            /** @description Export names the page documents; narrows its usages to them */
+            symbols?: string[];
+            /** @description The component name and page title; the first file's name when absent */
+            name?: string;
+            /** @description The project the page goes in; the connector's destination when absent */
+            projectId?: string;
+            /** @description The page to nest it under */
+            parentId?: string;
         };
         SetMessageFeedbackDto: {
             /** @enum {string} */
@@ -19032,6 +19064,48 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ComponentDraftsController_start: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftComponentDto"];
+            };
+        };
+        responses: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

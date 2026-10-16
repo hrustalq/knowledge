@@ -333,3 +333,32 @@ export function applyPathFixes(paths: readonly string[], fixes: ReadonlyArray<{ 
   }
   return out;
 }
+
+/** The names a module's front door goes by: its directory names it instead. */
+const ENTRY_BASENAMES = new Set(['index', 'main', 'mod', 'lib', '__init__', '__main__']);
+
+/**
+ * The name a component page gets when "Document this component" is not told
+ * one (#236, phase 5): the file's base name, or its directory's for an entry
+ * file — `ResponsivePopover.vue` is `ResponsivePopover`, `billing/index.ts`
+ * is `billing`. Spelled as the code spells it; the entity key folds it.
+ */
+export function componentNameFor(path: string): string {
+  const parts = path.split('/').filter(Boolean);
+  const file = parts.pop() ?? path;
+  const base = file.replace(/\.[^.]+$/, '');
+  return (ENTRY_BASENAMES.has(base.toLowerCase()) && parts.length ? parts.pop()! : base) || file;
+}
+
+/**
+ * A path "Document this component" can read, or null: one repo-relative file,
+ * never a glob, a directory or a walk out of the repository — a draft is
+ * written from files the run opens, and the declaration it writes must name
+ * exactly those.
+ */
+export function draftablePath(raw: string): string | null {
+  const path = raw.trim().replace(/^(\.\/)+|^\/+/, '');
+  if (!path || path.endsWith('/') || /[*?[\]{}]/.test(path)) return null;
+  if (path.split('/').some((segment) => segment === '..' || segment === '.' || segment === '')) return null;
+  return path;
+}

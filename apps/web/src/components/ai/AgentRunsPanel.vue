@@ -127,8 +127,9 @@ function canApplyRelations(f: AgentFinding): boolean {
   return !f.mergeRequestId && (f.relations?.length ?? 0) > 0 && f.documentIds.length > 0
 }
 
-function canCreatePage(f: AgentFinding): boolean {
-  return !!f.draft && f.documentIds.length === 0 && !f.proposedAt
+/** A component draft (#236) opens as a merge request on its own, so it is never created directly. */
+function canCreatePage(run: AgentRunSummary, f: AgentFinding): boolean {
+  return !run.input?.component && !!f.draft && f.documentIds.length === 0 && !f.proposedAt
 }
 
 /**
@@ -450,7 +451,7 @@ const severityClass = (f: AgentFinding) =>
                 {{ t('ai.runs.propose') }}
               </Button>
               <Button
-                v-else-if="canCreatePage(f)"
+                v-else-if="canCreatePage(run, f)"
                 variant="outline"
                 size="sm"
                 :disabled="proposing !== null"

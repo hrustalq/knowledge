@@ -105,6 +105,14 @@ export type I18nTranslations = {
             "budgetSpent": string;
             "summary": string;
         };
+        "component": {
+            "noModel": string;
+            "pathsMissing": string;
+            "draftUnusable": string;
+            "findingTitle": string;
+            "findingDetail": string;
+            "summary": string;
+        };
         "drift": {
             "truncated": string;
             "noFiles": string;
@@ -633,6 +641,7 @@ export type I18nTranslations = {
             "agentWebhookStale": string;
             "agentWebhookDeliveryId": string;
             "skillNoUpstream": string;
+            "findingComponentDraft": string;
         };
         "assistant": {
             "providerDisabled": string;
@@ -773,6 +782,17 @@ export type I18nTranslations = {
         };
         "component": {
             "notDeclared": string;
+            "draftNoModel": string;
+            "draftNoConnector": string;
+            "draftConnector": string;
+            "draftAmbiguous": string;
+            "draftPath": string;
+            "draftTooMany": string;
+            "draftDocumented": string;
+            "draftInFlight": string;
+            "draftProposed": string;
+            "draftQueueFull": string;
+            "draftPlace": string;
         };
         "web": {
             "notFound": string;

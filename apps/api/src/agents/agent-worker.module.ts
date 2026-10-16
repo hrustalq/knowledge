@@ -13,6 +13,7 @@ import { CodeResearchModule } from '../connectors/code-research/code-research.mo
 import { ComponentsCoreModule } from '../components/components-core.module.js';
 import { DocumentsCoreModule } from '../documents/documents-core.module.js';
 import { GlossaryCoreModule } from '../glossary/glossary-core.module.js';
+import { TemplatesCoreModule } from '../templates/templates-core.module.js';
 import { SearchCoreModule } from '../search/search-core.module.js';
 import { EmbeddingModule } from '../embedding/embedding.module.js';
 import { AgentCoreModule } from './agent-core.module.js';
@@ -85,6 +86,8 @@ import { AgentTriggerListener } from './agent-trigger.listener.js';
     EmbeddingModule,
     DocumentsCoreModule,
     GlossaryCoreModule,
+    // The `component` template a "Document this component" run fills (#236).
+    TemplatesCoreModule,
     // Event triggers (#70): the bus listener is here, the service it fires
     // through is in the core module so the API can fire it too.
     EventsSubscriberModule,

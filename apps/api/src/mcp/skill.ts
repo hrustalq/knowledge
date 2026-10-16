@@ -1,4 +1,5 @@
 import type { ApiKeyScope, McpToolSummary, WorkspaceRole } from '@knowledge/contracts';
+import { CAPTURE_TOOLS } from './mcp-tools.js';
 
 /** knowledge_whoami's answer — also the "your access" table in the skill. */
 export interface McpWhoami {
@@ -43,9 +44,17 @@ export interface SkillInput {
  * `description`; the name is lowercase-hyphenated because opencode and VS Code
  * require it to match the folder). Pure: no I/O, so a test can pin its shape.
  */
+const KEY_SCOPE_LABEL: Record<ApiKeyScope, string> = {
+  read: 'read-only',
+  capture: 'capture-only (reads, and proposes captures for review)',
+  write: 'read-write',
+};
+
 export function renderSkill(input: SkillInput): string {
   const { whoami, tools, serverName, webUrl } = input;
-  const canWrite = tools.some((tool) => !tool.readOnly);
+  // The capture tools write only a proposal (issue #73); a capture key holding
+  // nothing else cannot run the branch → revision → merge request flow below.
+  const canWrite = tools.some((tool) => !tool.readOnly && !CAPTURE_TOOLS.has(tool.name));
   const host = hostOf(input.url);
   const toolRef = (name: string) => `\`${name}\``;
   // A vote is a write (docs/features/38): the step is described only to a key
@@ -87,7 +96,7 @@ export function renderSkill(input: SkillInput): string {
     : '_No workspaces are reachable with this credential. Ask a workspace admin to add you._';
 
   const keyLine = whoami.apiKey
-    ? `Connected with a **${whoami.apiKey.scope === 'read' ? 'read-only' : 'read-write'}** API key${
+    ? `Connected with a **${KEY_SCOPE_LABEL[whoami.apiKey.scope]}** API key${
         whoami.apiKey.workspaceId ? `, pinned to workspace \`${whoami.apiKey.workspaceId}\`` : ''
       }.`
     : input.authMode === 'none'

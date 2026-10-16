@@ -43,7 +43,7 @@ export interface Principal {
    * narrows the person down to. Enforced in AccessService.requireRole, so every
    * `@Access` route and every MCP tool applies it without knowing it exists.
    */
-  apiKey?: { id: string; scope: ApiKeyScope; workspaceId: string | null };
+  apiKey?: { id: string; scope: ApiKeyScope; workspaceId: string | null; projectIds?: string[] | null };
 }
 
 /** AUTH_MODE=none principal. Matches the Phase 1 author stub id on purpose. */

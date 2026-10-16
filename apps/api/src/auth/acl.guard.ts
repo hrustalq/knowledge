@@ -49,12 +49,17 @@ export class AclGuard implements CanActivate {
     if (!spec) {
       // No workspace to check a role in, so requireRole never sees these — a
       // read-only key would otherwise create workspaces or rename its owner.
+      // A capture key is not a write key either (issue #73).
+      const scope = principal.apiKey?.scope;
       if (
-        principal.apiKey?.scope === 'read' &&
+        scope &&
+        scope !== 'write' &&
         !SAFE_METHODS.has(req.method) &&
         !this.reflector.getAllAndOverride<boolean>(READ_KEY_OK_META, [ctx.getHandler(), ctx.getClass()])
       ) {
-        throw new ForbiddenException(t('error.auth.apiKeyReadOnly', { role: t('role.editor') }));
+        throw new ForbiddenException(
+          t(scope === 'capture' ? 'error.auth.apiKeyCaptureOnly' : 'error.auth.apiKeyReadOnly', { role: t('role.editor') }),
+        );
       }
       return true;
     }
@@ -75,9 +80,14 @@ export class AclGuard implements CanActivate {
     if (resource) {
       // A page, its merge request or a project: the page level must cover the
       // route as well as the workspace role (#76).
-      await this.permissions.requireResource(principal, workspaceId, resource, spec.role, spec.operator);
+      await this.permissions.requireResource(principal, workspaceId, resource, spec.role, spec.operator, {
+        capture: spec.capture === true,
+      });
     } else {
-      await this.access.requireRole(principal, workspaceId, spec.role, spec.operator, { allowGuest: spec.guests === true });
+      await this.access.requireRole(principal, workspaceId, spec.role, spec.operator, {
+        allowGuest: spec.guests === true,
+        capture: spec.capture === true,
+      });
     }
     return true;
   }

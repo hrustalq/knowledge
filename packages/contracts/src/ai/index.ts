@@ -560,6 +560,51 @@ export interface ExternalAiActionsSettings {
   source: AiSettingsSource;
 }
 
+/**
+ * A workspace setting the deployment caps: `requested` beside `ceiling` and
+ * what applies, so the settings page can say the deployment overrode the
+ * workspace instead of silently showing the lower value. The shape of
+ * ExternalAiActionsSettings, for any value type.
+ */
+export interface CeilingSetting<T> {
+  /** What the workspace asked for. Null = inherit the ceiling. */
+  requested: T | null;
+  /** The deployment ceiling (the env var). */
+  ceiling: T;
+  /** What applies: `requested ?? ceiling`, never above `ceiling`. */
+  effective: T;
+  /** 'clamped' when the workspace asked for more than the ceiling. */
+  source: AiSettingsSource;
+}
+
+/** A workspace override of an env default that is not a ceiling — raising it widens nothing. */
+export interface OverrideSetting<T> {
+  /** What the workspace set. Null = inherit the env default. */
+  requested: T | null;
+  /** What applies. */
+  effective: T;
+  source: 'db' | 'env';
+}
+
+/**
+ * Agent-session memory settings (issue #73). The switch and the two rate
+ * limits are capped by CAPTURE_*; the thresholds are tuning — an embedding
+ * model's cosine scale differs, and moving them widens nothing.
+ */
+export interface CaptureSettings {
+  enabled: CeilingSetting<boolean>;
+  /** Captures one API key may stage per rolling hour. */
+  perKeyPerHour: CeilingSetting<number>;
+  /** Captures the workspace accepts per rolling day, all keys together. */
+  perWorkspacePerDay: CeilingSetting<number>;
+  /** Cosine to the nearest page at or above which a capture is a duplicate candidate. */
+  dedupeThreshold: OverrideSetting<number>;
+  /** Cosine at or above which a capture amends that page instead of starting a new one. Never above `dedupeThreshold`. */
+  amendThreshold: OverrideSetting<number>;
+  /** The page new captured pages nest under; null for the project root. */
+  parentDocumentId: string | null;
+}
+
 // ---- Web research: access mode and source policies (docs/features/25) ------
 
 /**
@@ -682,6 +727,8 @@ export interface AiSettingsResponse {
   webAccess: WebAccessSettings;
   /** Whether the page AI actions menu may open external AI vendors (issue #68). */
   externalAiActions: ExternalAiActionsSettings;
+  /** Agent-session memory: whether coding agents may propose captures, and how many (issue #73). */
+  capture: CaptureSettings;
   /** Per-purpose routing into the workspace's provider profiles. */
   routing: AiRouting;
   /** False when SETTINGS_ENCRYPTION_KEY is unset — the UI must disable key entry. */

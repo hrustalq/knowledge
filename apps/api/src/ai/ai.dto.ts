@@ -207,6 +207,77 @@ export class UpdateAiSettingsDto {
   @IsBoolean()
   externalAiActions?: boolean | null;
 
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    description:
+      'Whether coding agents may propose agent-session captures (issue #73). Clamped by the CAPTURE_ENABLED ' +
+      'ceiling; the response reports source=clamped. null = inherit the ceiling.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('captureEnabled')
+  @IsBoolean()
+  captureEnabled?: boolean | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Captures one API key may stage per rolling hour. Clamped by CAPTURE_PER_KEY_PER_HOUR. null = inherit.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('capturePerKeyPerHour')
+  @IsInt()
+  @Min(0, { message: vmsg('min') })
+  capturePerKeyPerHour?: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Captures the workspace accepts per rolling day. Clamped by CAPTURE_PER_WORKSPACE_PER_DAY. null = inherit.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('capturePerWorkspacePerDay')
+  @IsInt()
+  @Min(0, { message: vmsg('min') })
+  capturePerWorkspacePerDay?: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: 'Cosine to the nearest page at or above which a capture is a duplicate candidate (0–1). null = CAPTURE_DEDUPE_THRESHOLD.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('captureDedupeThreshold')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  captureDedupeThreshold?: number | null;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description:
+      'Cosine at or above which a capture amends the nearest page (0–1, never above the dedupe threshold). ' +
+      'null = CAPTURE_AMEND_THRESHOLD.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('captureAmendThreshold')
+  @IsNumber()
+  @Min(0, { message: vmsg('min') })
+  @Max(1, { message: vmsg('max') })
+  captureAmendThreshold?: number | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: 'The page new captured pages nest under; null for the project root.',
+  })
+  @IsOptional()
+  @NULLABLE<UpdateAiSettingsDto>('captureParentDocumentId')
+  @IsUUID()
+  captureParentDocumentId?: string | null;
+
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'Provider profile serving chat and agent turns' })
   @IsOptional()
   @NULLABLE<UpdateAiSettingsDto>('chatProviderId')

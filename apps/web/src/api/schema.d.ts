@@ -5022,15 +5022,17 @@ export interface components {
             /** @description What the key is for — "Claude Code on my laptop". Shown in the key list. */
             name: string;
             /**
-             * @description 'read' caps every workspace at the viewer role. Omitted means 'write' (the owner's own role).
+             * @description 'read' caps every workspace at the viewer role. 'capture' reads like 'read' and may also propose agent-session captures as merge requests, never write or merge. Omitted means 'write' (the owner's own role).
              * @enum {string}
              */
-            scope?: "read" | "write";
+            scope?: "read" | "capture" | "write";
             /**
              * Format: uuid
              * @description Pin the key to one workspace; omit for all of yours.
              */
             workspaceId?: string;
+            /** @description Pin a 'capture' key to these projects (at most 20); omit for every project. Refused on any other scope. */
+            projectIds?: string[];
             /** @description Days until the key stops working (1–365); omit for no expiry. */
             expiresInDays?: number;
         };
@@ -5639,6 +5641,21 @@ export interface components {
             webAccessMode?: "off" | "allowlist" | "open" | null;
             /** @description Whether the page AI actions menu may offer "Open in ChatGPT / Claude / Cursor" (issue #68). Clamped by the AI_EXTERNAL_ACTIONS_ENABLED ceiling: true under a false ceiling is stored, but the effective value stays false and the response reports source=clamped. null = inherit the ceiling. */
             externalAiActions?: boolean | null;
+            /** @description Whether coding agents may propose agent-session captures (issue #73). Clamped by the CAPTURE_ENABLED ceiling; the response reports source=clamped. null = inherit the ceiling. */
+            captureEnabled?: boolean | null;
+            /** @description Captures one API key may stage per rolling hour. Clamped by CAPTURE_PER_KEY_PER_HOUR. null = inherit. */
+            capturePerKeyPerHour?: number | null;
+            /** @description Captures the workspace accepts per rolling day. Clamped by CAPTURE_PER_WORKSPACE_PER_DAY. null = inherit. */
+            capturePerWorkspacePerDay?: number | null;
+            /** @description Cosine to the nearest page at or above which a capture is a duplicate candidate (0–1). null = CAPTURE_DEDUPE_THRESHOLD. */
+            captureDedupeThreshold?: number | null;
+            /** @description Cosine at or above which a capture amends the nearest page (0–1, never above the dedupe threshold). null = CAPTURE_AMEND_THRESHOLD. */
+            captureAmendThreshold?: number | null;
+            /**
+             * Format: uuid
+             * @description The page new captured pages nest under; null for the project root.
+             */
+            captureParentDocumentId?: string | null;
             /**
              * Format: uuid
              * @description Provider profile serving chat and agent turns

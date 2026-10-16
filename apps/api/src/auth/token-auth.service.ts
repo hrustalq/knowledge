@@ -3,7 +3,9 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { userAvatarUrl } from '../common/avatar-url.js';
+import { apiKeyScopeOf } from '@knowledge/contracts';
 import { DEV_PRINCIPAL, type Principal } from './principal.js';
+import { projectPinOf } from './api-keys.service.js';
 import { SessionsService } from './sessions.service.js';
 import { UrlTicketsService } from './url-tickets.service.js';
 import { asLocale } from '../i18n/locale.js';
@@ -106,7 +108,12 @@ export class TokenAuthService {
       isAdmin: user.isAdmin,
       locale: asLocale(user.locale),
       emailVerified: user.emailVerifiedAt !== null,
-      apiKey: { id: row.id, scope: row.scope === 'read' ? 'read' : 'write', workspaceId: row.workspaceId },
+      apiKey: {
+        id: row.id,
+        scope: apiKeyScopeOf(row.scope),
+        workspaceId: row.workspaceId,
+        projectIds: projectPinOf(row.projectIds),
+      },
     };
   }
 

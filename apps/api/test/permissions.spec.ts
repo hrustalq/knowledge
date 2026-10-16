@@ -241,6 +241,18 @@ describe('PermissionService.requireResource', () => {
     );
   });
 
+  it('lets a capture key edit a page only on a capture call, and never administer it (#73)', async () => {
+    const { service } = permissionsAs('editor', [grant(CHILD, ALICE, 'edit')]);
+    const agent: Principal = { ...alice, mode: 'api-key', apiKey: { id: 'k', scope: 'capture', workspaceId: null } };
+    await expect(service.requireResource(agent, WS, page, 'viewer', false)).resolves.toBeUndefined();
+    await expect(service.requireResource(agent, WS, page, 'editor', false)).rejects.toThrow(/apiKeyCaptureOnly/);
+    // The flag lifts the key to its person's own page level, not past it.
+    await expect(service.requireResource(agent, WS, page, 'editor', false, { capture: true })).resolves.toBeUndefined();
+    await expect(service.requireResource(agent, WS, page, 'admin', false, { capture: true })).rejects.toThrow(/apiKeyCaptureOnly/);
+    const reader: Principal = { ...agent, apiKey: { id: 'k', scope: 'read', workspaceId: null } };
+    await expect(service.requireResource(reader, WS, page, 'editor', false, { capture: true })).rejects.toThrow(/apiKeyReadOnly/);
+  });
+
   it('does not audit an admin reading what is open to everyone', async () => {
     const { service, audit } = permissionsAs('admin');
     await service.requireResource(alice, WS, { type: 'project', id: PROJECT }, 'viewer', false);

@@ -369,9 +369,12 @@ export type I18nTranslations = {
             "noApiKeyInDevMode": string;
             "apiKeyWorkspace": string;
             "apiKeyReadOnly": string;
+            "apiKeyCaptureOnly": string;
             "apiKeyNeedsSession": string;
             "apiKeyNotFound": string;
             "apiKeyWorkspaceNotMember": string;
+            "apiKeyProjectsNeedCapture": string;
+            "apiKeyProjectNotAllowed": string;
             "apiKeyLimit": string;
         };
         "workspace": {
@@ -517,6 +520,8 @@ export type I18nTranslations = {
             "providerNameTaken": string;
             "providerUnavailable": string;
             "encryptionKeyMissing": string;
+            "captureParentNotInWorkspace": string;
+            "captureThresholdOrder": string;
             "pluginUrlInvalid": string;
             "pluginUrlNotHttps": string;
             "pluginHostUnresolved": string;

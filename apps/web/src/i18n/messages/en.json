@@ -3487,10 +3487,12 @@
       "scope": "Access",
       "scopes": {
         "read": "Read-only",
+        "capture": "Read & propose",
         "write": "Read & write"
       },
       "scopeHint": {
         "read": "Search, read and trace relations. The client is not even offered the tools that write.",
+        "capture": "Read, and propose what a session learned as merge requests for review. Cannot write pages, merge or approve.",
         "write": "Also create pages, branches, revisions and merge requests — within your own role in each workspace."
       },
       "workspace": "Workspace",

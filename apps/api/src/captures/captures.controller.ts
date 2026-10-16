@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { CaptureInfo, CaptureResult, ListCapturesResponse } from '@knowledge/contracts';
+import type { BulkRejectCapturesResponse, CaptureInfo, CaptureResult, ListCapturesResponse } from '@knowledge/contracts';
 import { ParseUuidPipe as ParseUUIDPipe } from '../common/validation.js';
 import { Access, CurrentPrincipal } from '../auth/access.decorator.js';
 import type { Principal } from '../auth/principal.js';
@@ -8,6 +8,7 @@ import { PermissionService } from '../permissions/permission.service.js';
 import { CaptureService } from './capture.service.js';
 import { CaptureInboxService } from './capture-inbox.service.js';
 import {
+  BulkRejectCapturesDto,
   CaptureAssistantMessageDto,
   CreateCaptureDto,
   ListCapturesQueryDto,
@@ -21,7 +22,8 @@ import {
  *
  * Creating is the one editor route a `capture` key passes (`{ capture: true }`).
  * Approving and rejecting are not flagged, so a capture key is refused there
- * by `requireRole`: what proposes a capture never decides it.
+ * by `requireRole`: what proposes a capture never decides it. Bulk reject is
+ * the same decision over one key's captures, and is not flagged either.
  */
 @ApiTags('captures')
 @Controller('v1/captures')
@@ -47,18 +49,32 @@ export class CapturesController {
   @ApiOperation({ summary: 'Captures in a workspace, newest first; ones on pages or projects the caller cannot open are left out' })
   async list(@Query() query: ListCapturesQueryDto, @CurrentPrincipal() principal: Principal): Promise<ListCapturesResponse> {
     const scope = await this.permissions.scopeFor(principal, query.workspaceId);
-    return this.captures.list(
+    const apiKey = query.apiKeyId ? await this.inbox.keyIn(query.workspaceId, query.apiKeyId, principal) : undefined;
+    const res = await this.captures.list(
       {
         workspaceId: query.workspaceId,
         ...(query.status ? { status: query.status } : {}),
         ...(query.kind ? { kind: query.kind } : {}),
         ...(query.projectId ? { projectId: query.projectId } : {}),
         ...(query.mine === '1' || query.mine === 'true' ? { createdBy: principal.userId } : {}),
+        ...(query.apiKeyId ? { apiKeyId: query.apiKeyId } : {}),
         ...(query.cursor ? { cursor: query.cursor } : {}),
         ...(query.limit ? { limit: query.limit } : {}),
       },
       scope,
     );
+    return apiKey ? { ...res, apiKey } : res;
+  }
+
+  // Declared before `:id`, which would otherwise take `bulk-reject` as an id.
+  @Post('bulk-reject')
+  @Access('editor', 'body')
+  @ApiOperation({
+    summary:
+      "Turn down everything one key proposed that is still pending: staged captures rejected, open merge requests closed, merged ones left alone. dryRun counts without changing anything",
+  })
+  bulkReject(@Body() dto: BulkRejectCapturesDto, @CurrentPrincipal() principal: Principal): Promise<BulkRejectCapturesResponse> {
+    return this.inbox.bulkReject(dto, principal);
   }
 
   @Get(':id')

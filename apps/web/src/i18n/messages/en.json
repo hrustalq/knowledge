@@ -3594,7 +3594,9 @@
       "revokeFailed": "The key could not be revoked.",
       "projects": "Projects",
       "projectsAll": "Proposes into every project. Pick some to narrow it.",
-      "projectsPinned": "Proposes into {n} project only. | Proposes into these {n} projects only."
+      "projectsPinned": "Proposes into {n} project only. | Proposes into these {n} projects only.",
+      "captures": "Its captures",
+      "reviewCaptures": "Review its captures"
     },
     "clients": {
       "title": "Add the server to your client",
@@ -4654,6 +4656,27 @@
         "title": "Nothing failed",
         "hint": "A capture that could not be proposed after three attempts shows up here with its error."
       }
+    },
+    "key": {
+      "filterBy": "Show everything key “{name}” proposed",
+      "revoked": "revoked",
+      "unnamed": "One key",
+      "clear": "Stop narrowing to this key"
+    },
+    "bulk": {
+      "open": "Reject pending…",
+      "title": "Turn down what “{name}” proposed?",
+      "counting": "Counting what is still pending…",
+      "nothing": "Nothing this key proposed is pending any more.",
+      "body": "Each capture is recorded in the activity log on its own. Merged captures stay merged: undo one with a revert.",
+      "willReject": "{n} staged captures will be rejected | {n} staged capture will be rejected | {n} staged captures will be rejected",
+      "willClose": "{n} open merge requests will be closed | {n} open merge request will be closed | {n} open merge requests will be closed",
+      "willSkip": "{n} more are left alone: being proposed right now, or on pages you can read but not edit. | {n} more is left alone: being proposed right now, or on a page you can read but not edit. | {n} more are left alone: being proposed right now, or on pages you can read but not edit.",
+      "confirm": "Reject all",
+      "done": "Turned down: {rejected}, {closed}.",
+      "rejectedN": "{n} captures rejected | {n} capture rejected | {n} captures rejected",
+      "closedN": "{n} merge requests closed | {n} merge request closed | {n} merge requests closed",
+      "skipped": "{n} were left alone. Run it again in a moment, or ask a page editor. | {n} was left alone. Run it again in a moment, or ask a page editor. | {n} were left alone. Run it again in a moment, or ask a page editor."
     }
   },
   "component": {

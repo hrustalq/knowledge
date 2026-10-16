@@ -15,6 +15,20 @@ in the pull request that introduces them — see
 
 ## [Unreleased]
 
+### Added
+
+- The captures inbox can be narrowed to one API key, and an editor can turn
+  down everything that key proposed and is still pending in one step: its
+  staged captures are rejected and the open merge requests they opened are
+  closed. Each capture still gets its own entry in the activity log, merged
+  captures are left alone, and the confirmation shows the counts before
+  anything changes. Every row now shows the key that wrote it (name and
+  prefix), and Connect AI links each key to its captures, including from the
+  toast after revoking one. Over the API: `GET /v1/captures?apiKeyId=` (another
+  person's key needs an editor) and `POST /v1/captures/bulk-reject`
+  `{ workspaceId, apiKeyId, reason?, dryRun? }`, which a capture key cannot
+  call. (#235)
+
 ### Fixed
 
 - `knowledge_find_similar` could tell an agent a capture would amend a page

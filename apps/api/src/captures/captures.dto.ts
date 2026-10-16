@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -309,6 +310,12 @@ export class ListCapturesQueryDto {
   @IsIn(['1', 'true', '0', 'false'])
   mine?: string;
 
+  @ApiPropertyOptional({ description: "Only this key's captures. Another person's key takes an editor (403 otherwise)" })
+  @IsOptional()
+  @IsString()
+  @Matches(UUID_RE)
+  apiKeyId?: string;
+
   @ApiPropertyOptional({ description: 'The last capture id of the previous page' })
   @IsOptional()
   @IsString()
@@ -330,6 +337,30 @@ export class RejectCaptureDto {
   @IsString()
   @MaxLength(1_000, { message: vmsg('maxLength') })
   reason?: string;
+}
+
+export class BulkRejectCapturesDto {
+  // Field name must stay `workspaceId`: @Access('editor','body') resolves it.
+  @ApiProperty()
+  @IsString()
+  @Matches(UUID_RE)
+  workspaceId!: string;
+
+  @ApiProperty({ description: 'The key whose pending captures are turned down' })
+  @IsString()
+  @Matches(UUID_RE)
+  apiKeyId!: string;
+
+  @ApiPropertyOptional({ description: 'Why, for the activity log of each capture' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1_000, { message: vmsg('maxLength') })
+  reason?: string;
+
+  @ApiPropertyOptional({ type: Boolean, description: 'Count what would be rejected and closed, and change nothing. Defaults to false' })
+  @IsOptional()
+  @IsBoolean()
+  dryRun?: boolean;
 }
 
 export class CaptureAssistantMessageDto {

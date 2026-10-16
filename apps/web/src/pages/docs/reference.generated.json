@@ -1261,6 +1261,16 @@
       "platformAdmin": false
     },
     {
+      "method": "POST",
+      "path": "/v1/captures/bulk-reject",
+      "tag": "captures",
+      "summary": "Turn down everything one key proposed that is still pending: staged captures rejected, open merge requests closed, merged ones left alone. dryRun counts without changing anything",
+      "role": "editor",
+      "source": "body",
+      "public": false,
+      "platformAdmin": false
+    },
+    {
       "method": "DELETE",
       "path": "/v1/chat/bindings/{id}",
       "tag": "chat",

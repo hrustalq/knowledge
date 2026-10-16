@@ -5009,6 +5009,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/captures/bulk-reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn down everything one key proposed that is still pending: staged captures rejected, open merge requests closed, merged ones left alone. dryRun counts without changing anything */
+        post: operations["CapturesController_bulkReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/captures/{id}": {
         parameters: {
             query?: never;
@@ -7034,6 +7051,15 @@ export interface components {
             answer?: string;
             /** @description answer: at least one */
             citedDocumentIds?: string[];
+        };
+        BulkRejectCapturesDto: {
+            workspaceId: string;
+            /** @description The key whose pending captures are turned down */
+            apiKeyId: string;
+            /** @description Why, for the activity log of each capture */
+            reason?: string;
+            /** @description Count what would be rejected and closed, and change nothing. Defaults to false */
+            dryRun?: boolean;
         };
         RejectCaptureDto: {
             /** @description Why, for the activity log */
@@ -23252,6 +23278,8 @@ export interface operations {
                 projectId?: string;
                 /** @description '1' or 'true': only the caller's own captures */
                 mine?: string;
+                /** @description Only this key's captures. Another person's key takes an editor (403 otherwise) */
+                apiKeyId?: string;
                 /** @description The last capture id of the previous page */
                 cursor?: string;
                 /** @description Defaults to 50 */
@@ -23305,6 +23333,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateCaptureDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Error envelope — all non-2xx responses conform to ApiErrorResponse */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    CapturesController_bulkReject: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Response language (docs/features/18). Supported: en, ru. Default: en. */
+                "Accept-Language"?: "en" | "ru";
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkRejectCapturesDto"];
             };
         };
         responses: {
